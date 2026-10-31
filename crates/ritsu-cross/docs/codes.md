@@ -27,7 +27,7 @@ message Order {
 
 ## E201 — A call can give a rule values that break its precondition
 
-**When**: Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a bound on the total or the length of the list it walks; the days of `range from koyomi`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door, so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does.
+**When**: Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a bound on the total or the length of the list it walks; the days of `range from koyomi`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date, or a date the `.flow` holds to a range (`range >=2026-01-01 <=2026-12-31`), is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door, so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does.
 
 **Fix**: Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). If the precondition is the part that is wrong, correct the rule's `constraint`.
 
@@ -104,9 +104,9 @@ See also: [W201](#w201)
 
 ## W201 — Whether a call keeps a rule's precondition cannot be decided
 
-**When**: Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call.
+**When**: Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input or a task's answer with no range, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call.
 
-**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time. In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`).
+**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input; a date takes one too, `range >=2026-01-01 <=2026-12-31`). Where none can be given, leave it: the workflow's code checks it at run time. In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`).
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -181,9 +181,9 @@ See also: [E201](#e201)
 
 ## E202 — A day given to a rule's date input falls outside its range
 
-**When**: Where a workflow or a function of kaname gives a day to a rule's date input, the day can lie outside the range the rule declares for the input. For a workflow, the day of a koyomi date (`due.day`) is given, and a day koyomi counts that date coming to lies outside: koyomi computes the date on every input of its range, so the day outside is an exact example, and the notes give it with the input at which koyomi comes to it. For a function of kaname, a run of the function's vectors gives a day outside, of the days of the koyomi dates the value comes from or of the range kaname finds; the notes give the function's input and the day. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to.
+**When**: Where a workflow or a function of kaname gives a day to a rule's date input, the day can lie outside the range the rule declares for the input. For a workflow, the day of a koyomi date (`due.day`) is given, and a day koyomi counts that date coming to lies outside: koyomi computes the date on every input of its range, so the day outside is an exact example, and the notes give it with the input at which koyomi comes to it. A date the `.flow` holds to a range (`range >=2026-01-01 <=2026-12-31` on an input, a field or a task's answer) is this error too when a day of the range lies outside: dandori checks the range when the workflow runs, and any day of it can come; the notes give the day and the range. For a function of kaname, a run of the function's vectors gives a day outside, of the days of the koyomi dates the value comes from or of the range kaname finds; the notes give the function's input and the day. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to.
 
-**Fix**: Widen the rule input's range, or make it `range from koyomi`, so that koyomi's days are the range.
+**Fix**: Widen the rule input's range, or make it `range from koyomi`, so that koyomi's days are the range. For a day of a date held to a range, narrowing that range does it too.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -269,9 +269,9 @@ See also: [W202](#w202), [E205](#e205)
 
 ## W202 — Whether a day given to a rule's date input stays inside its range cannot be decided
 
-**When**: The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). For a function of kaname, it is also the days kaname's ranges find holding one outside, which no run of the function's vectors gives. The rule's generated code checks the day at its door when it runs.
+**When**: The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input or a task's answer with no range, `now`) as well as from a koyomi date or a date held to a range, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). For a function of kaname, it is also the days kaname's ranges find holding one outside, which no run of the function's vectors gives. The rule's generated code checks the day at its door when it runs.
 
-**Fix**: Give the input days of koyomi dates only, and it can be decided; where koyomi does not count them, narrow the inputs of its file.
+**Fix**: Give the input days of koyomi dates, or of dates held to a range (a date takes `range >=2026-01-01 <=2026-12-31` where it comes from), only, and it can be decided; where koyomi does not count them, narrow the inputs of its file.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -720,9 +720,9 @@ See also: [E204](#e204)
 
 ## E205 — A day given to a koyomi date is outside its input's range
 
-**When**: Where a workflow or a function of kaname calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). For a workflow, the notes give the day outside and the input at which koyomi comes to it; for a function of kaname, a run of the function's vectors gives a day outside, and the notes give the function's input and the day.
+**When**: Where a workflow or a function of kaname calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date; a day that comes from a date or a time the `.flow` holds to a range, or from `now` in a workflow that says the period it runs in, with every day of that range, a time and `now` read as days at the offset of the dates file's calendar. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). For a workflow, the notes give the day outside and the input at which koyomi comes to it; for a function of kaname, a run of the function's vectors gives a day outside, and the notes give the function's input and the day.
 
-**Fix**: Widen the koyomi input's range (and the calendar's data), or give it a day that stays inside (in kaname, narrow it with an `if` before the call).
+**Fix**: Widen the koyomi input's range (and the calendar's data), or give it a day that stays inside (in kaname, narrow it with an `if` before the call); for a day from a range or from the period the workflow runs in, narrow that.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -800,9 +800,9 @@ See also: [W205](#w205), [E202](#e202)
 
 ## W205 — Whether a day given to a koyomi date stays inside its range cannot be decided
 
-**When**: dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date; koyomi's generated code refuses a day outside its range when the workflow runs. For a function of kaname, the days kaname's ranges find hold one outside the range, which no run of the function's vectors gives; kaname's generated code checks it there, and the function fails with `date` where koyomi refuses the day.
+**When**: dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input, a field or a task's answer with no range, from `now` in a workflow that says no period it runs in or in `on failure` and `on cancel`, or from a rule's date output says nothing of what day it is; koyomi's generated code refuses a day outside its range when the workflow runs. For a function of kaname, the days kaname's ranges find hold one outside the range, which no run of the function's vectors gives; kaname's generated code checks it there, and the function fails with `date` where koyomi refuses the day.
 
-**Fix**: Give it the day of another koyomi date, and it can be decided; otherwise leave it: koyomi refuses at run time.
+**Fix**: Give the place the value comes from a range (`received : date  range >=2026-01-01 <=2027-12-31`), or the workflow the period it runs in (`now range >=2026-01-01 <=2027-12-31` under `workflow`), and it can be decided; so it can with the day of another koyomi date. Otherwise leave it: koyomi refuses at run time.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 

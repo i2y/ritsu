@@ -21,6 +21,17 @@ open Lean (Json JsonNumber)
 /-- Where a run keeps what `now` reads: a name no variable can have (`interp::NOW_VAR`). -/
 def nowVar : String := "(now)"
 
+/-- Where a run keeps the moment it starts at, which the check of the period at the start reads
+    (`interp::START_VAR`). -/
+def startVar : String := "(start)"
+
+/-- Where a run keeps what the check of the period at `site` read (`interp::now_at`). -/
+def nowAtVar (site : Nat) : String := s!"(now@{site})"
+
+/-- The error a run fails with when it reads `now` outside the period the workflow runs in
+    (`model::OUT_OF_PERIOD`). -/
+def outOfPeriod : String := "Dandori.OutOfPeriod"
+
 /-- What `now` reads when the scenario says nothing else (`render::SCENARIO_NOW`). -/
 def scenarioNow : String := "2026-03-31T15:30:00Z"
 
@@ -45,6 +56,7 @@ mutual
     | .list items => Json.arr (evalList vars items).toArray
     | .interp parts => Json.str (String.join ((evalList vars parts).map valueText))
     | .now => lookupVar vars nowVar
+    | .nowAt site => lookupVar vars (nowAtVar site)
   def evalFields (vars : List (String × Json)) : List (String × Expr) → List (String × Json)
     | [] => []
     | (f, e) :: rest => (f, eval vars e) :: evalFields vars rest
@@ -81,8 +93,26 @@ def numInt (n : JsonNumber) : Option Int :=
 
 def inRange (rg : Option Range) (i : Int) : Bool :=
   match rg with
-  | none => true
-  | some r => r.lo.all (fun lo => decide (lo ≤ i)) && r.hi.all (fun hi => decide (i ≤ hi))
+  | some (.ints lo hi) => lo.all (fun lo => decide (lo ≤ i)) && hi.all (fun hi => decide (i ≤ hi))
+  | _ => true
+
+/-- The first 19 characters of a time, `2026-01-01T00:00:00`: what its range holds it to (a fraction
+    of a second after them stays in its second). -/
+def momentHead (s : String) : String := String.ofList (s.toList.take 19)
+
+/-- Whether a time is in a range of moments, as text (`render::moment_in`): its first 19
+    characters from the first second on and before the first second after. -/
+def momentFits (lo next : Option String) (s : String) : Bool :=
+  let head := momentHead s
+  lo.all (fun l => decide (l ≤ head)) && next.all (fun n => decide (head < n))
+
+/-- Whether a value of a type that holds ranges as text is in its range (`render::day_in`,
+    `render::moment_in`): a date between the first day and the last, a time by `momentFits`. -/
+def textInRange (rg : Option Range) (s : String) : Bool :=
+  match rg with
+  | some (.days lo hi) => lo.all (fun l => decide (l ≤ s)) && hi.all (fun h => decide (s ≤ h))
+  | some (.moments lo next) => momentFits lo next s
+  | _ => true
 
 /-- Whether a value is a well-formed value of the type, in the range (`render::value_fits`). -/
 def fits (recs : List (List Field)) : Nat → Json → Ty → Option Range → Bool
@@ -101,10 +131,10 @@ def fits (recs : List (List Field)) : Nat → Json → Ty → Option Range → B
       | .bool _ => true
       | _ => false
     | .timestamp => match v with
-      | .str s => isTimestamp s
+      | .str s => isTimestamp s && textInRange rg s
       | _ => false
     | .date => match v with
-      | .str s => isDate s
+      | .str s => isDate s && textInRange rg s
       | _ => false
     | .int => match v with
       | .num k => match numInt k with
@@ -333,6 +363,16 @@ mutual
             | none => st
           block f fuel body st
         | none => (.stop, st.failWith "Dandori.UnexpectedValue" (Json.str s!"line {line}: {shown} took a value that no arm names"))
+      | .period site _ start lo next before after =>
+        let st := st.visit s!"s{site}"
+        let v := lookupVar st.vars (if start then startVar else nowVar)
+        let st := if start then st else st.set (nowAtVar site) v
+        let t := (v.getStr?.toOption).getD ""
+        if momentFits lo next t then (.next, st)
+        -- at the start, the run fails as one whose input is outside its range does; later, it goes
+        -- to `on failure` as a task's error nothing handles does
+        else if start then (.stop, st.failWith outOfPeriod (Json.str (before ++ t ++ after)))
+        else raise f fuel outOfPeriod (before ++ t ++ after) (st.visit s!"u{site}")
       | .call site line target callee args handlers =>
         let st := st.visit s!"s{site}"
         let cname := f.calleeName callee
@@ -464,10 +504,12 @@ end
 
 /-- **One run**: the input checked against its declared shape, the flow, and `on cancel` when a
     cancellation stopped it. Err when the scenario does not fit the flow (an answer missing). -/
-def run (f : Flow) (input : Json) (answers : List Json) (reads : List ((Nat × Callee) × Json)) (now : String) :
+def run (f : Flow) (input : Json) (answers : List Json) (reads : List ((Nat × Callee) × Json)) (start now : String) :
     Except String St := Id.run do
   let mut st : St := { answers := answers, reads := reads }
-  -- what `now` reads: the scenario's moment, which the runners give the platforms' clocks too
+  -- what `now` reads: the scenario's moments, which the runners give the platforms' clocks too —
+  -- the one the run starts at, and the one every `now` after the start reads
+  st := st.set startVar (Json.str start)
   st := st.set nowVar (Json.str now)
   let mut ok := true
   for fd in f.inputs do

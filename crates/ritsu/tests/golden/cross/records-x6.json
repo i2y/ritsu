@@ -1,0 +1,139 @@
+{
+  "held": 2,
+  "failed": 1,
+  "undecided": 1,
+  "records": [
+    {
+      "check": "koyomi_date_input",
+      "about": "received",
+      "at": {
+        "tool": "dandori",
+        "file": "reminding.flow",
+        "line": 18
+      },
+      "to": {
+        "tool": "koyomi",
+        "file": "terms.cal",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "given": "received",
+      "takes": {
+        "from": "2026-01-01",
+        "to": "2026-12-20"
+      },
+      "from": [
+        {
+          "kind": "range",
+          "range": ">=2026-01-01 <=2026-12-20",
+          "days": {
+            "from": "2026-01-01",
+            "to": "2026-12-20"
+          }
+        }
+      ],
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "koyomi_date_input",
+      "about": "received",
+      "at": {
+        "tool": "dandori",
+        "file": "reminding.flow",
+        "line": 20
+      },
+      "to": {
+        "tool": "koyomi",
+        "file": "terms.cal",
+        "line": null
+      },
+      "result": "failed",
+      "code": "E205",
+      "given": "at",
+      "takes": {
+        "from": "2026-01-01",
+        "to": "2026-12-20"
+      },
+      "from": [
+        {
+          "kind": "moment",
+          "range": ">=2026-01-01 <=2026-12-20",
+          "days": {
+            "from": "2026-01-01",
+            "to": "2026-12-21"
+          }
+        }
+      ],
+      "example": {
+        "day": "2026-12-21",
+        "from": 0
+      },
+      "why": null
+    },
+    {
+      "check": "koyomi_date_input",
+      "about": "received",
+      "at": {
+        "tool": "dandori",
+        "file": "reminding.flow",
+        "line": 22
+      },
+      "to": {
+        "tool": "koyomi",
+        "file": "terms.cal",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "given": "now",
+      "takes": {
+        "from": "2026-01-01",
+        "to": "2026-12-20"
+      },
+      "from": [
+        {
+          "kind": "now",
+          "period": ">=2026-01-01 <=2026-12-20 offset +09:00",
+          "days": {
+            "from": "2026-01-01",
+            "to": "2026-12-20"
+          }
+        }
+      ],
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "koyomi_date_input",
+      "about": "received",
+      "at": {
+        "tool": "dandori",
+        "file": "reminding.flow",
+        "line": 26
+      },
+      "to": {
+        "tool": "koyomi",
+        "file": "terms.cal",
+        "line": null
+      },
+      "result": "undecided",
+      "code": "W205",
+      "given": "now",
+      "takes": {
+        "from": "2026-01-01",
+        "to": "2026-12-20"
+      },
+      "from": [
+        {
+          "kind": "now",
+          "period": null,
+          "days": null
+        }
+      ],
+      "example": null,
+      "why": "`now` can be any day"
+    }
+  ]
+}

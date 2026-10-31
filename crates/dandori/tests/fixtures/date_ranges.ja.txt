@@ -1,0 +1,15 @@
+エラー[E014]: tests/fixtures/date_ranges.flow:33:1: `visit.day` は `>=2026-01-01 <=2026-12-31` で、`book` の引数 `day` の範囲 `>=2026-03-01` を外れることがあります
+    33 |   let booked = book(id: visit.id, day: visit.day)
+エラー[E014]: tests/fixtures/date_ranges.flow:35:1: `visit.window` は `>=2026-01-01 <=2026-12-31 offset +09:00` で、`remind` の引数 `at` の範囲 `>=2026-01-01 <=2026-12-31` を外れることがあります
+    35 |   remind(id: visit.id, at: visit.window)
+警告[W104]: tests/fixtures/date_ranges.flow:37:1: `booked` の範囲が分かりません（`book` の結果に範囲がありません）。`hold` の引数 `day` が受け取るのは `>=2026-01-01 <=2027-12-31` です
+    37 |   hold(id: visit.id, day: booked)
+エラー[E014]: tests/fixtures/date_ranges.flow:39:1: `now` は `>=2026-01-01 <=2027-12-31` で、`remind` の引数 `at` の範囲 `>=2026-01-01 <=2026-12-31` を外れることがあります
+    39 |   remind(id: visit.id, at: now)
+エラー[E014]: tests/fixtures/date_ranges.flow:41:1: `due.day` は `>=2026-01-05 <=2028-01-04` で、`hold` の引数 `day` の範囲 `>=2026-01-01 <=2027-12-31` を外れることがあります
+    41 |   hold(id: visit.id, day: due.day)
+エラー[E014]: tests/fixtures/date_ranges.flow:44:1: `now` は `>=2026-01-01 <=2027-12-31` で、出力 `when` の範囲 `>=2026-06-01` を外れることがあります
+    44 |   succeed when = now
+警告[W104]: tests/fixtures/date_ranges.flow:47:1: `now` の範囲が分かりません（`on failure` と `on cancel` の中の `now` に範囲がありません）。`remind` の引数 `at` が受け取るのは `>=2026-01-01 <=2026-12-31` です
+    47 |   remind(id: visit.id, at: now)
+  = `on failure` と `on cancel` の中の `now` は、後始末を時計で止めないよう、動く期間で確かめません。どの時刻にもなりえます

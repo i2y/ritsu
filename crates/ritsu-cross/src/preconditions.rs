@@ -21,9 +21,12 @@
 //!
 //! A precondition that a date input takes only the days of a koyomi date (`range from koyomi`) is
 //! decided over the days the value given can be (X3 (a), DESIGN 7.5): when it can only be the day
-//! of koyomi dates, each of their days must be one of the rule's; the example is the first that is
-//! not. A value that can also come from an input, a task's answer or `now` says nothing of what day
-//! it is, and leaves it undecided, to be checked the same way when the workflow runs.
+//! of koyomi dates, or a day of a range the `.flow` writes, each of their days must be one of the
+//! rule's; the example is the first that is not (of a range with an open low end, the day before
+//! the rule's first). A value that can also come from an input or a task's answer without a range,
+//! or `now`, says nothing of what day it is, and leaves it undecided, to be checked the same way
+//! when the workflow runs. A date's range comes as day numbers, as rulec's port takes a date, so a
+//! relation between two dates (`check_in <= check_out`) is decided over them as over numbers.
 //!
 //! A value given to both inputs of a relation (`x` to `a` and to `b`) is the same value on both
 //! sides: `<=` and `>=` hold, `<` and `>` break at any value it takes.
@@ -33,7 +36,7 @@ use ritsu_base::diag::Diag;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
-use ritsu_ports::{day_text, Answer, CallArg, Dates, Finding, Flows, Found, Origin, Precondition, Rules, UndecidedPrecondition, Value};
+use ritsu_ports::{day_text, Answer, CallArg, ColumnType, Dates, Finding, Flows, Found, Origin, Precondition, Rules, UndecidedPrecondition, Value};
 use ritsu_project::{Joined, Project};
 use std::path::Path;
 use std::rc::Rc;
@@ -88,36 +91,52 @@ fn shown(v: &Value) -> String {
     }
 }
 
-/// A range as a `.flow` writes it: `>=1 <=30`.
-fn range_text(r: (Option<i128>, Option<i128>)) -> String {
+/// A range as a `.flow` writes it: `>=1 <=30`, and for a date `>=2026-01-01 <=2026-12-31`.
+fn range_text(r: (Option<i128>, Option<i128>), date: bool) -> String {
+    let one = |v: i128| if date { i64::try_from(v).map(day_text).unwrap_or_else(|_| v.to_string()) } else { v.to_string() };
     let mut parts = Vec::new();
     if let Some(lo) = r.0 {
-        parts.push(format!(">={lo}"));
+        parts.push(format!(">={}", one(lo)));
     }
     if let Some(hi) = r.1 {
-        parts.push(format!("<={hi}"));
+        parts.push(format!("<={}", one(hi)));
     }
     if parts.is_empty() { "any".into() } else { parts.join(" ") }
 }
 
+/// Whether the input of the rule is a date (a date that may be none too), whose range comes as day
+/// numbers.
+fn is_date(rules: &dyn Rules, rule: &Path, input: &str) -> bool {
+    rules.facts(rule).is_ok_and(|f| f.inputs.iter().any(|c| c.name == input && (c.ty == ColumnType::Date || c.ty == ColumnType::Opt(Box::new(ColumnType::Date)))))
+}
+
 /// A precondition that a date input takes only the days of a koyomi date, at one call: the value
-/// given can be the day of koyomi dates (`from`), each of whose days must be one of `days`.
+/// given can be the day of koyomi dates, or a day of a range (`from`), each of whose days must be
+/// one of `days`.
 fn days_kept(dates: &dyn Dates, a: &CallArg, days: &ritsu_ports::DaySet, file: &str, date: &str) -> Answer<Text> {
+    days_kept_at(dates, a, days, file, date).0
+}
+
+/// [`days_kept`], with the example's day and the place in `from` it comes from, where it fails.
+pub(crate) fn days_kept_at(dates: &dyn Dates, a: &CallArg, days: &ritsu_ports::DaySet, file: &str, date: &str) -> (Answer<Text>, Option<(usize, i64)>) {
     let shown = &a.shown;
     let mut other: Option<Text> = None;
     if a.from.is_empty() {
         other = Some(tr!("`{shown}` が何日になるかは分かりません", "nothing says what day `{shown}` is"));
     }
-    for o in &a.from {
+    for (i, o) in a.from.iter().enumerate() {
         match o {
             Origin::Day { file: from, date: d } => match dates.values(from, d) {
                 Ok(Found::Value(set)) => {
-                    if let Some(day) = set.iter().copied().find(|x| !days.contains(x)) {
-                        let day = day_text(day);
-                        return Answer::Fails(tr!(
-                            "`{shown}` は koyomi の日付 {d} の日で、{day} になることがありますが、{day} は koyomi \"{file}\" date {date} の日ではありません",
-                            "`{shown}` is a day of the koyomi date {d} and can be {day}, which is not a day of koyomi \"{file}\" date {date}"
-                        ));
+                    if let Some(at) = set.iter().copied().find(|x| !days.contains(x)) {
+                        let day = day_text(at);
+                        return (
+                            Answer::Fails(tr!(
+                                "`{shown}` は koyomi の日付 {d} の日で、{day} になることがありますが、{day} は koyomi \"{file}\" date {date} の日ではありません",
+                                "`{shown}` is a day of the koyomi date {d} and can be {day}, which is not a day of koyomi \"{file}\" date {date}"
+                            )),
+                            Some((i, at)),
+                        );
                     }
                 }
                 Ok(Found::Undecided(why)) => {
@@ -127,20 +146,38 @@ fn days_kept(dates: &dyn Dates, a: &CallArg, days: &ritsu_ports::DaySet, file: &
                     other.get_or_insert(tr!("koyomi から日付 {d} の情報を得られません", "koyomi does not answer for the date {d}"));
                 }
             },
+            // a day of a range the `.flow` writes, any of which can come
+            Origin::Range(lo, hi) => {
+                let r = (lo.and_then(|x| i64::try_from(x).ok()), hi.and_then(|x| i64::try_from(x).ok()));
+                if let Some(at) = crate::borders::day_not_in(days, r) {
+                    let (day, range) = (day_text(at), range_text((*lo, *hi), true));
+                    return (
+                        Answer::Fails(tr!(
+                            "`{shown}` は `{range}` の日で、{day} になることがありますが、{day} は koyomi \"{file}\" date {date} の日ではありません",
+                            "`{shown}` is a day of `{range}` and can be {day}, which is not a day of koyomi \"{file}\" date {date}"
+                        )),
+                        Some((i, at)),
+                    );
+                }
+            }
             Origin::Now => {
                 other.get_or_insert(if shown == "now" { tr!("`now` はどの日にもなりえます", "`now` can be any day") } else { tr!("`{shown}` は `now` のことがあり、どの日にもなりえます", "`{shown}` can be `now`, which can be any day") });
+            }
+            // a rule takes no time
+            Origin::Moment { .. } => {
+                other.get_or_insert(tr!("`{shown}` は時刻で、渡す先はそれを何日に読むかを言いません", "`{shown}` is a time, and where it is given says no day it reads it as"));
             }
             Origin::Unknown(t) => {
                 other.get_or_insert(tr!("`{shown}` が何日になるかは分かりません（{}）", "nothing says what day `{shown}` is ({} gives no range of days)", crate::then_ja(&t.ja, "には日付の範囲がありません"); t.en));
             }
-            Origin::Output { .. } | Origin::Range(..) => {
+            Origin::Output { .. } => {
                 other.get_or_insert(tr!("`{shown}` は koyomi の日付でないところから来ることがあります", "`{shown}` can come from somewhere other than a koyomi date"));
             }
         }
     }
     match other {
-        Some(why) => Answer::Undecided(why),
-        None => Answer::Holds,
+        Some(why) => (Answer::Undecided(why), None),
+        None => (Answer::Holds, None),
     }
 }
 
@@ -153,12 +190,14 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
             let (Some(l), Some(r)) = (arg(left), arg(right)) else {
                 return Answer::Undecided(tr!("呼び出しが `{left}` か `{right}` を渡していません", "the call does not give `{left}` or `{right}`"));
             };
+            let (ld, rd) = (is_date(rules, rule, left), is_date(rules, rule, right));
             // the same value on both sides
             if l.shown == r.shown {
                 return if op.contains('=') {
                     Answer::Holds
                 } else {
-                    let at = l.range.and_then(|r| r.0.or(r.1)).map(|v| v.to_string()).unwrap_or_else(|| "…".into());
+                    let one = |v: i128| if ld { i64::try_from(v).map(day_text).unwrap_or_else(|_| v.to_string()) } else { v.to_string() };
+                    let at = l.range.and_then(|r| r.0.or(r.1)).map(one).unwrap_or_else(|| "…".into());
                     Answer::Fails(tr!(
                         "`{}` を両方に渡しているので、`{left} {op} {right}` はどの値でも成り立ちません（たとえば {left} = {right} = {at}）",
                         "`{}` is given to both, so `{left} {op} {right}` holds for no value (for one, {left} = {right} = {at})",
@@ -189,9 +228,9 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
                             "`{}` は `{}`、`{}` は `{}` で、{at} のとき `{left} {op} {right}` が成り立ちません",
                             "`{}` is `{}` and `{}` is `{}`, and at {at} `{left} {op} {right}` does not hold",
                             l.shown,
-                            range_text(lr),
+                            range_text(lr, ld),
                             r.shown,
-                            range_text(rr)
+                            range_text(rr, rd)
                         ))
                     }
                     Some(Answer::Undecided(why)) => Answer::Undecided(why),
@@ -234,8 +273,8 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
                     Some(Answer::Fails(ex)) => {
                         let at: Vec<String> = ex.iter().map(|(n, v)| format!("{n} = {}", shown(v))).collect();
                         let at = at.join(", ");
-                        let each_ja: Vec<String> = given.iter().map(|a| format!("`{}` は `{}`", a.shown, range_text(a.range.unwrap_or((None, None))))).collect();
-                        let each_en: Vec<String> = given.iter().map(|a| format!("`{}` is `{}`", a.shown, range_text(a.range.unwrap_or((None, None))))).collect();
+                        let each_ja: Vec<String> = given.iter().map(|a| format!("`{}` は `{}`", a.shown, range_text(a.range.unwrap_or((None, None)), false))).collect();
+                        let each_en: Vec<String> = given.iter().map(|a| format!("`{}` is `{}`", a.shown, range_text(a.range.unwrap_or((None, None)), false))).collect();
                         Answer::Fails(tr!(
                             "{} で、{} のとき `{}` が成り立ちません",
                             "{}, and at {} `{}` does not hold",
@@ -296,7 +335,15 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                     Answer::Undecided(_) => Some("W201"),
                 };
                 let (at, to) = (Side::at(Tool::Dandori, &f.rel, call.line), Side::reached(project, Tool::Rulec, &call.rule, None));
-                borders.add(Border::new(Check::Precondition, pre.clone(), at, Some(to), Came::of(&answer), code));
+                let mut border = Border::new(Check::Precondition, pre.clone(), at, Some(to), Came::of(&answer), code);
+                // the days of a koyomi date a rule's input takes: where the value can come from, as at the other borders of days
+                if let Precondition::Days { input, file, date, days } = p {
+                    if let Some(a) = call.args.iter().find(|a| a.input == *input) {
+                        let (_, example) = days_kept_at(joined.koyomi.as_ref(), a, days, file, date);
+                        border.detail = crate::dates::kept_detail(project, joined, a, days, &answer, example, lang);
+                    }
+                }
+                borders.add(border);
                 match answer {
                     Answer::Holds => {}
                     Answer::Fails(why) => {

@@ -39,17 +39,34 @@ partial def readTy (j : Json) : Except String Ty :=
       return .opt (← readTy t)
     else throw "unknown type"
 
+/-- `[a, b]`, either end a string or `null`. -/
+def readEnds (j : Json) : Except String (Option String × Option String) := do
+  let xs ← j.getArr?
+  let at_ (i : Nat) : Except String (Option String) :=
+    match xs[i]? with
+    | some v => if v.isNull then pure none else some <$> v.getStr?
+    | none => pure none
+  return (← at_ 0, ← at_ 1)
+
+/-- `{"lo": n, "hi": n}` for numbers, `{"days": [first, last]}` for dates, `{"moments": [first,
+    next]}` for times, an end `null` where it is open. -/
 def readRange (j : Option Json) : Except String (Option Range) :=
   match j with
   | none => pure none
   | some r => do
+    if let some d := optField r "days" then
+      let (lo, hi) ← readEnds d
+      return some (.days lo hi)
+    if let some m := optField r "moments" then
+      let (lo, next) ← readEnds m
+      return some (.moments lo next)
     let lo ← match optField r "lo" with
       | some v => some <$> v.getInt?
       | none => pure none
     let hi ← match optField r "hi" with
       | some v => some <$> v.getInt?
       | none => pure none
-    return some { lo, hi }
+    return some (.ints lo hi)
 
 def readField (j : Json) : Except String Field := do
   return { name := ← (← field j "name").getStr?, ty := ← readTy (← field j "ty"), range := ← readRange (optField j "range") }
@@ -69,6 +86,8 @@ partial def readExpr (j : Json) : Except String Expr := do
     return .interp (← (← xs.getArr?).toList.mapM readExpr)
   if let .ok _ := j.getObjVal? "now" then
     return .now
+  if let some x := optField j "nowAt" then
+    return .nowAt (← x.getNat?)
   throw "unknown expression"
 
 def readHErr (j : Json) : Except String HErr :=
@@ -136,6 +155,10 @@ mutual
         | some c => some <$> readExpr c
         | none => pure none
       return .fail site (← (← field fl "error").getStr?) cause (← (← arrOf fl "leaving").mapM (·.getNat?))
+    if let some p := optField j "period" then
+      let (lo, next) ← readEnds (← field p "ends")
+      return .period site line (← (← field p "start").getBool?) lo next (← (← field p "before").getStr?)
+        (← (← field p "after").getStr?)
     throw "unknown statement"
 
   partial def readBlock (j : Json) : Except String (List Stmt) := do
@@ -215,14 +238,24 @@ def readReads (sc : Json) : List ((Nat × Callee) × Json) :=
       pure ((place, callee), a[2]?.getD Json.null))
   | _ => []
 
-/-- A scenario as `dandori scenarios` writes it — the input and the answers — with what dandori
-    reads some answers as. -/
+/-- What a scenario's `now` says (`interp::scenario_now`): the moment the run starts at, and the
+    moment every `now` after the start reads — one moment for both, or the two as a list, the start
+    first. -/
+def scenarioNows (sc : Json) : String × String :=
+  match sc.getObjValD "now" with
+  | .arr xs =>
+    let at_ (i : Nat) : String := ((xs[i]?.getD Json.null).getStr?.toOption).getD scenarioNow
+    (at_ 0, if xs.size > 1 then at_ 1 else at_ 0)
+  | v => let one := (v.getStr?.toOption).getD scenarioNow; (one, one)
+
+/-- A scenario as `dandori scenarios` writes it — the input, the answers and the moments — with what
+    dandori reads some answers as. -/
 def answer (f : Flow) (sc : Json) : Json :=
   let answers := match sc.getObjValD "answers" with
     | .arr xs => xs.toList
     | _ => []
-  let now := ((sc.getObjValD "now").getStr?.toOption).getD scenarioNow
-  match run f (sc.getObjValD "input") answers (readReads sc) now with
+  let (start, now) := scenarioNows sc
+  match run f (sc.getObjValD "input") answers (readReads sc) start now with
   | .ok st => runJson f st
   | .error e => Json.mkObj [("error", Json.str e)]
 

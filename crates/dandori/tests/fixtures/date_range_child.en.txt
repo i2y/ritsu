@@ -1,0 +1,10 @@
+error[E015]: tests/fixtures/date_range_child.flow:19:1: the parameter `day` is not what `visit` takes as its input `day`: it has no range, and `>=2026-01-01 <=2026-12-31` is taken
+    19 | task unheld(day: date, window: timestamp) -> Booked
+error[E015]: tests/fixtures/date_range_child.flow:19:1: the parameter `window` is not what `visit` takes as its input `window`: it has no range, and `>=2026-01-01 <=2026-12-31 offset +09:00` is taken
+    19 | task unheld(day: date, window: timestamp) -> Booked
+error[E015]: tests/fixtures/date_range_child.flow:24:1: the parameter `day` is not what `visit` takes as its input `day`: it is `>=2026-01-01 <=2027-12-31`, and `>=2026-01-01 <=2026-12-31` is taken
+    24 | task wide(day: date  range >=2026-01-01 <=2027-12-31, window: timestamp  range >=2026-01-01 <=2026-12-31) -> Within
+error[E015]: tests/fixtures/date_range_child.flow:24:1: the parameter `window` is not what `visit` takes as its input `window`: it is `>=2026-01-01 <=2026-12-31`, and `>=2026-01-01 <=2026-12-31 offset +09:00` is taken
+    24 | task wide(day: date  range >=2026-01-01 <=2027-12-31, window: timestamp  range >=2026-01-01 <=2026-12-31) -> Within
+error[E015]: tests/fixtures/date_range_child.flow:24:1: `visit` answers `on` with what the field `on` of `Within` does not take: it is `>=2026-01-01 <=2027-12-31`, and `>=2026-01-01 <=2026-12-31` is taken
+    24 | task wide(day: date  range >=2026-01-01 <=2027-12-31, window: timestamp  range >=2026-01-01 <=2026-12-31) -> Within

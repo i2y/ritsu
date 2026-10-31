@@ -1,0 +1,9 @@
+ok settlement.rule
+payment_terms.cal: ok — received 2026-01-01〜2026-12-20 の 354 日のすべてで、どの日付も計算できます
+billing.flow: 検査を通りました
+エラー[ritsu E201]: billing.flow:16:1: 規則 settlement を呼ぶところで、前提 `pay_day in koyomi "payment_terms.cal" date payment` を破る値を渡すことがあります
+    16 |   let pick = settlement(pay_day: paid)
+  = `paid` は `>=2026-02-10 <=2026-03-10` の日で、2026-02-11 になることがありますが、2026-02-11 は koyomi "payment_terms.cal" date payment の日ではありません
+  = 規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。
+  = koyomi "payment_terms.cal" date payment の日を渡すか、規則の範囲を直してください。
+ritsu check: ファイル 3 個（rulec 1、koyomi 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

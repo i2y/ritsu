@@ -8,7 +8,8 @@
 // runs.json: { "template": <the WorkflowTemplate as JSON>, "own": [ { "name", "callback", "declared" } ],
 //              "children": [name], "connectRules": [the activity name of each rule called at its service],
 //              "http": [...], "aws": [...],
-//              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ],
+//              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ],
+//                          "now": the moment `now` reads, or [the run's start, every later read] } ],
 //              "real": [index of a run to play again with real pods] }
 // results.json: { "runs": [ { steps, end, nodes, platform, nudged, seconds } ], "real": [ the same, for "real" ] }
 //
@@ -34,6 +35,12 @@
 // (tools/argo/mock.mjs). A real run whose pod the platform could not run (Error, or Unknown with
 // exit code 255: containerd in the kind node was seen to crash under load) is played again, at
 // most twice.
+//
+// `now` reads the run's moment, not the controller's clock: each played run's Workflow has the
+// moments of its own written into the templates that read the clock, the one of the check of the
+// period at the start (dd-period-start) the moment the run starts at, and every other the later
+// one. The runs with real pods are made from the WorkflowTemplate, which has the moments of those
+// runs, and so they must read the same ones.
 //
 // A wait goes on at once (its duration is set to 0); a callback's wait gets the scenario's answer
 // with `argo node set` and is resumed. A task's own timeout cannot be scripted this way, so
@@ -199,9 +206,24 @@ function podErrors(w) {
     .map((n) => `${w.metadata.name} ${n.displayName}: ${n.message ?? ""}`);
 }
 
-// `now` reads the scenarios' moment here (dandori's render::SCENARIO_NOW), not the controller's clock
+// `now` reads the run's moments here (see the top), not the controller's clock: dandori's
+// argo::ARGO_NOW, in the template that reads it for the check of the period at the start, and in
+// the others; the moment of a scenario that names none is dandori's render::SCENARIO_NOW
 const ARGO_NOW = 'now().UTC().Format("2006-01-02T15:04:05Z")';
-const wt = JSON.parse(JSON.stringify(spec.template).replaceAll(JSON.stringify(ARGO_NOW).slice(1, -1), '\\"2026-03-31T15:30:00Z\\"'));
+const PERIOD_START = "dd-period-start";
+const SCENARIO_NOW = "2026-03-31T15:30:00Z";
+const momentsOf = (r) => (Array.isArray(r.now) ? r.now : [r.now ?? SCENARIO_NOW, r.now ?? SCENARIO_NOW]);
+const nowAt = (x, m) => JSON.parse(JSON.stringify(x).replaceAll(JSON.stringify(ARGO_NOW).slice(1, -1), JSON.stringify(JSON.stringify(m)).slice(1, -1)));
+// the WorkflowTemplate (or a Workflow's spec of it) with the moments a run reads `now` at
+function withNows(t, [start, later]) {
+  const out = JSON.parse(JSON.stringify(t));
+  const templates = out.spec?.templates ?? out.templates;
+  templates.forEach((x, i) => {
+    if (x.name === PERIOD_START) templates[i] = nowAt(x, start);
+  });
+  return nowAt(out, later);
+}
+const wt = JSON.parse(JSON.stringify(spec.template));
 const name = wt.metadata.name;
 // seconds added to the deadline of every pod of a template under test, for the pod to start in (see below)
 const DEADLINE_ROOM = 120;
@@ -323,7 +345,10 @@ for (const t of wt.spec.templates) {
     t.resource.manifest = t.resource.manifest.replace(`workflowTemplateRef:\n    name: ${child}\n`, `workflowTemplateRef:\n    name: ${stubName(child)}\n`);
   }
 }
-await kubectl(["apply", "-f", "-"], JSON.stringify(wt));
+// the runs with real pods read the moments the WorkflowTemplate has
+const realNows = [...new Set((spec.real ?? []).map((i) => JSON.stringify(momentsOf(spec.runs[i]))))];
+if (realNows.length > 1) throw new Error(`the runs with real pods read different moments (${realNows.join(", ")}), and the WorkflowTemplate has one pair`);
+await kubectl(["apply", "-f", "-"], JSON.stringify(withNows(wt, realNows.length ? JSON.parse(realNows[0]) : momentsOf({}))));
 for (const child of spec.children ?? []) {
   const stub = {
     apiVersion: "argoproj.io/v1alpha1",
@@ -394,7 +419,7 @@ async function submit(p) {
     spec: p.real
       ? { workflowTemplateRef: { name }, arguments: { parameters: [input] }, podMetadata: { labels: { "dandori-batch": suffix } } }
       : {
-          ...wt.spec,
+          ...withNows(wt, momentsOf(spec.runs[p.i])).spec,
           arguments: { parameters: (wt.spec.arguments?.parameters ?? []).map((q) => (q.name === "input" ? input : q)) },
           podMetadata: { labels: { "dandori-batch": suffix } },
           podSpecPatch: PLAYED,

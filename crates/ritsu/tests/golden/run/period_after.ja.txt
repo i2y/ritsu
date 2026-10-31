@@ -1,0 +1,9 @@
+approval.flow（シナリオ after.json、2028-01-02T10:00:00Z から）
+走らせる前の帳簿 stock:
+  receive.do(delivery: "D-1", sku: "pen", qty: 10)  通る
+実行:
+終わり: fail Dandori.OutOfPeriod（"the run starts at 2028-01-02T10:00:00Z, outside the period the workflow runs in, >=2026-01-01 <=2027-12-31"）
+終わりの帳簿 stock（stock.book）:
+  勘定:
+    shelf(pen)  確定 10、出ていく仮押さえ 0、入ってくる仮押さえ 0
+    suppliers   確定 -10、出ていく仮押さえ 0、入ってくる仮押さえ 0

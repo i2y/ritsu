@@ -38,11 +38,20 @@ pub enum Origin {
     /// A numeric output of a rule the flow calls (`fee.amount`): the rule's file, as dandori reaches
     /// it (what `Rules` is asked with), and the output.
     Output { rule: PathBuf, output: String },
-    /// `now`, given where a day is taken: the moment the statement runs, which can be any day.
+    /// `now` in a workflow that does not say the period it runs in, or in its `on failure` and `on
+    /// cancel`, which the period does not hold: the moment the statement runs, which can be any day.
     Now,
     /// A number dandori knows the range of: a literal, or an input, a field or a task's answer with
-    /// a `range` (both ends included; None at an open end), as it goes on the wire.
+    /// a `range` (both ends included; None at an open end), as it goes on the wire. A date's range
+    /// is its days, as day numbers (days since 1970-01-01, as koyomi, rulec and kaname count them):
+    /// a date is never given where a number is taken, so the two are not taken for each other.
     Range(Option<i128>, Option<i128>),
+    /// A time dandori knows the range of: an input, a field or a task's answer with a `range`, or
+    /// `now` in a workflow that says the period it runs in (`now range`, `now` true), which every
+    /// statement that reads `now` is held to. In seconds since 1970-01-01T00:00:00Z, both ends
+    /// included (None at an open end), with the range as the `.flow` writes it. The day it is where
+    /// a date takes it is the dates file's calendar's to say, by its offset.
+    Moment { lo: Option<i64>, hi: Option<i64>, text: String, now: bool },
     /// A place that says nothing of what the value can be (an input or a task's answer without a
     /// `range`, a date that comes in), named in both languages.
     Unknown(Text),

@@ -1,7 +1,7 @@
 //! dandori's reference interpreter, held to `DandoriCore` (DESIGN 11.3).
 //!
 //! Every flow of dandori's examples and tests, the ones that use koyomi's dates and chobo's books
-//! too (`use dates`, `use book`, `now`): each scenario `dandori scenarios` writes for it is run by
+//! too (`use dates`, `use book`, `now`, `now range`): each scenario `dandori scenarios` writes for it is run by
 //! the reference interpreter (as Temporal sees a run: an error known by its kind) and by the Lean
 //! model, and the two are compared — everything the run went through (each statement, arm, answer,
 //! handler, round and loop's end, `on failure` and `on cancel`), how it ended (the outputs, or the
@@ -102,8 +102,22 @@ fn scenario_line(m: &Model, sc: &Value) -> String {
     json!({"input": input, "answers": sc["answers"], "reads": reads, "now": sc.get("now").cloned().unwrap_or(Value::Null)}).to_string()
 }
 
-fn range(r: Option<Range>) -> Value {
-    r.map(|r| json!({"lo": r.lo, "hi": r.hi})).unwrap_or(Value::Null)
+/// A range as `DandoriCore.readRange` reads it: a number's ends as they are; a date's and a time's,
+/// the ends the code of every platform compares the value with as text (`day_ends` and
+/// `moment_ends`, dandori's DESIGN 20), which the model compares it with the same way.
+fn range(t: &Ty, r: Option<Range>) -> Value {
+    fn base(t: &Ty) -> &Ty {
+        match t {
+            Ty::List(x) | Ty::Opt(x) => base(x),
+            other => other,
+        }
+    }
+    let Some(r) = r else { return Value::Null };
+    match base(t) {
+        Ty::Date => json!({"days": <[Option<String>; 2]>::from(day_ends(&r))}),
+        Ty::Timestamp => json!({"moments": <[Option<String>; 2]>::from(moment_ends(&r))}),
+        _ => json!({"lo": r.lo, "hi": r.hi}),
+    }
 }
 
 /// A place's type and range as `DandoriCore.readFlow` reads them: a number's range as it is, and
@@ -120,7 +134,7 @@ fn place(m: &Model, t: &Ty, r: Option<Range>) -> (Value, Value) {
     }
     match r {
         Some(r) if t.enum_inside().is_some() => (held(m, t, r), Value::Null),
-        _ => (ty(m, t), range(r)),
+        _ => (ty(m, t), range(t, r)),
     }
 }
 
@@ -148,6 +162,7 @@ fn expr(e: &TExpr) -> Value {
         TExpr::Enum(v, _) => json!({"lit": v}),
         TExpr::None(_) => json!({"lit": null}),
         TExpr::Now => json!({"now": null}),
+        TExpr::NowAt(site) => json!({"nowAt": site}),
         TExpr::Record { fields, .. } => json!({"record": fields.iter().map(|(f, x)| json!([f, expr(x)])).collect::<Vec<_>>()}),
         TExpr::List { items, .. } => json!({"list": items.iter().map(expr).collect::<Vec<_>>()}),
         TExpr::Interp(parts) => json!({"interp": parts.iter().map(|p| match p {
@@ -241,6 +256,13 @@ fn stmt(m: &Model, s: &TStmt) -> Value {
         TK::Pass => json!({"pass": true}),
         TK::Succeed { fields } => json!({"succeed": {"fields": fields.iter().map(|(f, e)| json!([f, expr(e)])).collect::<Vec<_>>()}}),
         TK::Fail { error, cause, leaving } => json!({"fail": {"error": error, "cause": cause.as_ref().map(expr), "leaving": leaving}}),
+        // the period the workflow runs in (dandori's DESIGN 20): the ends the moment is held to as
+        // text, and the cause a run outside it fails with, around the moment
+        TK::Period { start } => {
+            let p = m.period.as_ref().expect("a check of the period is in a flow with one");
+            let (before, after) = p.cause_around(if *start { None } else { Some(s.line) });
+            json!({"period": {"start": start, "ends": <[Option<String>; 2]>::from(p.ends()), "before": before, "after": after}})
+        }
         // put in only from the preconditions ritsu-cross could not decide (dandori's DESIGN 1.17), which
         // the flows are read here without
         TK::Check(_) => unreachable!("a check of a rule's precondition in a flow read without ritsu-cross"),
@@ -265,7 +287,7 @@ fn flow_json(m: &Model) -> Value {
         "tasks": m.tasks.iter().enumerate().map(|(i, t)| json!({
             "name": t.name,
             "result": t.result.as_ref().map(|r| place(m, r, t.result_range).0),
-            "range": t.result.as_ref().map_or(range(t.result_range), |r| place(m, r, t.result_range).1),
+            "range": t.result.as_ref().map_or(range(&Ty::Json, t.result_range), |r| place(m, r, t.result_range).1),
             "retriers": retriers(m, &Callee::Task(i)),
             "book": t.book().map(|b| json!({"book": b.book, "transfer": b.transfer, "op": b.op})),
         })).collect::<Vec<_>>(),

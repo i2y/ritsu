@@ -30,7 +30,12 @@ package harness
 //              "callbacks": [the function of each task that hands on a callback's id],
 //              "runs": [ { "id": workflow id, "input": {...},
 //                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ],
-//                          "events": { "<the index of an answer>": the event it is for } } ] }
+//                          "events": { "<the index of an answer>": the event it is for },
+//                          "now": the moment `now` reads, or [the run's start, every later read] } ] }
+//
+// `now` reads the run's moment, as in the reference: the runner gives each run's moments to the
+// package (Flow.SetNows) before it starts the run, and the histories' spec.json keeps them, for a
+// replay of them; the copy reads them by the workflow's id (../build says how).
 //
 // A task the user writes is found by its "name", which the generated OwnTasksBy hands over; the
 // "callbacks" are read by the build, which patches the copies (../build).
@@ -121,6 +126,23 @@ type scenario struct {
 	Input   any               `json:"input"`
 	Answers []map[string]any  `json:"answers"`
 	Events  map[string]string `json:"events"`
+	Now     json.RawMessage   `json:"now"`
+}
+
+// scenarioNow is the moment `now` reads in a scenario that names none (dandori's render::SCENARIO_NOW).
+const scenarioNow = "2026-03-31T15:30:00Z"
+
+// moments are the moments the run reads `now` at: the one it starts at, and the one of every later read.
+func (sc scenario) moments() [2]string {
+	var one string
+	if err := json.Unmarshal(sc.Now, &one); err == nil && one != "" {
+		return [2]string{one, one}
+	}
+	var two []string
+	if err := json.Unmarshal(sc.Now, &two); err == nil && len(two) == 2 {
+		return [2]string{two[0], two[1]}
+	}
+	return [2]string{scenarioNow, scenarioNow}
 }
 
 func readSpec(path string) (spec, error) {
@@ -788,6 +810,7 @@ func (r *runner) one(ctx context.Context, sc scenario) (ended, error) {
 	r.mu.Lock()
 	r.runs[sc.ID] = run
 	r.mu.Unlock()
+	r.flow.SetNows(sc.ID, sc.moments())
 	handle, err := r.flow.Start(ctx, r.client, sc.ID, sc.Input, true)
 	if err != nil {
 		return ended{}, fmt.Errorf("starting %s: %w", sc.ID, err)
@@ -1080,7 +1103,11 @@ func runAll(flow Flow, sp spec, s Settings, historiesDir string) ([]any, error) 
 		if children == nil {
 			children = []map[string]any{}
 		}
-		if err := writeJSON(filepath.Join(historiesDir, "spec.json"), map[string]any{"children": children}, false); err != nil {
+		nows := map[string][2]string{}
+		for _, sc := range sp.Runs {
+			nows[sc.ID] = sc.moments()
+		}
+		if err := writeJSON(filepath.Join(historiesDir, "spec.json"), map[string]any{"children": children, "nows": nows}, false); err != nil {
 			return nil, err
 		}
 	}
@@ -1125,6 +1152,18 @@ func replayDir(flow Flow, dir, outFile string) error {
 		}
 	}
 	sort.Strings(files)
+	// the moments each run read `now` at, which the histories' spec.json keeps
+	if b, err := os.ReadFile(filepath.Join(dir, "spec.json")); err == nil {
+		var sp struct {
+			Nows map[string][2]string `json:"nows"`
+		}
+		if err := json.Unmarshal(b, &sp); err != nil {
+			return fmt.Errorf("reading %s: %w", filepath.Join(dir, "spec.json"), err)
+		}
+		for id, n := range sp.Nows {
+			flow.SetNows(id, n)
+		}
+	}
 	var histories []History
 	for _, name := range files {
 		f, err := os.Open(filepath.Join(dir, name))

@@ -29,7 +29,13 @@
 #              "callbacks": [the function of each task that hands on a callback's id],
 #              "runs": [ { "id": workflow id, "input": {...},
 #                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ],
-#                          "events": { "<the index of an answer>": the event it is for } } ] }
+#                          "events": { "<the index of an answer>": the event it is for },
+#                          "now": the moment `now` reads, or [the run's start, every later read] } ] }
+#
+# `now` reads the run's moment, as in the reference: the copy of runtime.py finds it by the
+# workflow's id, in a table of every run's (which the histories' spec.json keeps too, for a replay
+# of them), the check of the period at the start reads the moment the run starts at (its read is
+# dd.now_at_start() in the copy of workflow.py), and every other read the later one.
 #
 # Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the id
 # of the workflow that called it (a child workflow's id starts with its parent's). The tasks that
@@ -115,6 +121,53 @@ HAND_ON_LATE = float(60 + 15)
 EVENT_SECONDS = 5
 # The limits as they are generated: the timeouts of the activities, and the timers (see the top).
 LIMITS = os.environ.get("DANDORI_LIMITS") == "1"
+# The moment `now` reads in a scenario that names none (dandori's render::SCENARIO_NOW).
+SCENARIO_NOW = "2026-03-31T15:30:00Z"
+
+
+def nows_of(spec: dict[str, Any]) -> dict[str, list[str]]:
+    """The moments each run reads `now` at, by its workflow's id: the one it starts at, and the one of every later read."""
+    out = {}
+    for r in spec.get("runs", []):
+        n = r.get("now")
+        out[r["id"]] = n if isinstance(n, list) else [n or SCENARIO_NOW, n or SCENARIO_NOW]
+    return out
+
+
+def at_start(text: str, read: str, by: str) -> str:
+    """The text with the clock's read for the check of the period at the start (the nearest `read` before a line that says "the run starts at ") made `by`."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if '"the run starts at "' not in line:
+            continue
+        j = i
+        while j >= 0 and read not in lines[j]:
+            j -= 1
+        assert j >= 0, f"workflow.py has no {read} before the check of the period at the start"
+        lines[j] = lines[j].replace(read, by, 1)
+    return "\n".join(lines)
+
+
+def with_nows(runtime: str, nows: dict[str, list[str]]) -> str:
+    """runtime.py with `now` reading the run's moment (see the top), when it reads the clock at all."""
+    clock = 'return workflow.now().strftime("%Y-%m-%dT%H:%M:%SZ")'
+    if clock not in runtime:
+        return runtime
+    return runtime.replace(clock, "return _dd_test_now(False)") + f"""
+
+# The moments `now` reads in each run, by its workflow's id (tools/temporal-python/run.py).
+_DD_TEST_NOWS: dict[str, list[str]] = {json.dumps(nows, ensure_ascii=False)}
+
+
+def now_at_start() -> str:
+    \"\"\"`now` for the check of the period at the start: the moment the run starts at.\"\"\"
+    return _dd_test_now(True)
+
+
+def _dd_test_now(start: bool) -> str:
+    n = _DD_TEST_NOWS.get(workflow.info().workflow_id, [{json.dumps(SCENARIO_NOW)}, {json.dumps(SCENARIO_NOW)}])
+    return n[0] if start else n[1]
+"""
 
 
 def child_stand_ins(children: list[dict[str, Any]]) -> str:
@@ -554,7 +607,7 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                 with open(os.path.join(histories_dir, name), "w", encoding="utf-8") as f:
                     f.write(h.to_json() + "\n")
             with open(os.path.join(histories_dir, "spec.json"), "w", encoding="utf-8") as f:
-                json.dump({"children": spec.get("children", [])}, f, ensure_ascii=False)
+                json.dump({"children": spec.get("children", []), "nows": nows_of(spec)}, f, ensure_ascii=False)
     finally:
         if other is not None and other.returncode is None:
             other.kill()
@@ -602,6 +655,7 @@ def main() -> None:
     text = "\n".join(lines)
     if not LIMITS:
         text = re.sub(r"execution_timeout=timedelta\(seconds=\d+\)", f"execution_timeout=timedelta(seconds={TIMEOUT})", text)
+    text = at_start(text, "dd.now()", "dd.now_at_start()")
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     path = os.path.join(copy, "runtime.py")
@@ -617,8 +671,8 @@ def main() -> None:
     event_wait = "await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=seconds(limit)))"
     assert event_wait in text, "runtime.py has no event's wait to shorten"
     text = text.replace(event_wait, f"await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=min(limit, {EVENT_SECONDS})))")
-    # the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
-    text = text.replace('return workflow.now().strftime("%Y-%m-%dT%H:%M:%SZ")', 'return "2026-03-31T15:30:00Z"')
+    # the clock `now` reads is the run's moment, as in the reference (see the top)
+    text = with_nows(text, spec.get("nows", {}) if replaying else nows_of(spec))
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     with open(os.path.join(copy, "dd_test_children.py"), "w", encoding="utf-8") as f:

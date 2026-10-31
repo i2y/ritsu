@@ -1,0 +1,9 @@
+approval.flow (scenario after.json, from 2028-01-02T10:00:00Z)
+before the run, book stock:
+  receive.do(delivery: "D-1", sku: "pen", qty: 10)  done
+the run:
+end: fail Dandori.OutOfPeriod ("the run starts at 2028-01-02T10:00:00Z, outside the period the workflow runs in, >=2026-01-01 <=2027-12-31")
+book stock (stock.book) at the end:
+  accounts:
+    shelf(pen)  posted 10, held out 0, held in 0
+    suppliers   posted -10, held out 0, held in 0

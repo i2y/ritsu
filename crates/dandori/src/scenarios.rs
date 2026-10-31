@@ -53,6 +53,9 @@ struct Ex<'a> {
     par_depth: usize,
     /// the current parallel round failed: by a task's error (true) or otherwise (false)
     pending: Option<bool>,
+    /// a workflow with a period: whether the moment every `now` after the start reads is in it,
+    /// which the first check of the period after the start chose (DESIGN 20)
+    later: Option<bool>,
     /// the `for` loops that went through a list with something in it, in this run
     done_loops: Vec<String>,
     /// how many values have been made in this run, so that no two are alike and a target
@@ -107,6 +110,8 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
     queue.push_back((vec![], false));
     queue.push_back((vec![], true));
     let mut runs = 0;
+    // the runs whose `now` is not the one `now_in` gives: a moment of its own for the start
+    let mut nows: BTreeMap<usize, Value> = BTreeMap::new();
     while let Some((prefix, sticky)) = queue.pop_front() {
         if runs >= MAX_RUNS {
             break;
@@ -131,6 +136,7 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
             stopped: false,
             par_depth: 0,
             pending: None,
+            later: None,
             done_loops: vec![],
             made_values: 0,
             sparse: false,
@@ -184,6 +190,10 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
             })
             .collect();
         out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": answers, "covers": ex.labels.iter().collect::<Vec<_>>() }));
+        // a run whose `now` after the start is outside the period: it starts in it
+        if ex.later == Some(false) {
+            nows.insert(out.len() - 1, json!([now_in(m), now_outside(m)]));
+        }
     }
     // the runs the walk kept, before the ones made from them
     let walked = out.len();
@@ -228,10 +238,34 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
             out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": run["answers"], "covers": ["input:left out"] }));
         }
     }
+    // a workflow that holds a date or a time of its input to a range: for each end of each, the
+    // first run again with that one value at the end, which every platform lets in, so that a
+    // platform that takes an end for outside shows. The run calls what the first run does, as a
+    // date or a time decides no arm; one that checks a rule's precondition, or that rulec answers
+    // the calls of rules of, may go another way with it, and has none of these runs
+    let steered = m.all_stmts().iter().any(|s| matches!(s.kind, TK::Check(_)));
+    if !computed && !steered {
+        for (at, x) in edge_inputs(m) {
+            if let Some(r) = out[..walked].first() {
+                if let Some(input) = put_at(&r["input"], &at, &x) {
+                    let answers = r["answers"].clone();
+                    out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": answers, "covers": ["input:at an end"] }));
+                }
+            }
+        }
+    }
+    // a workflow with a period: a run that starts just outside it, which every platform fails at
+    // once (`Dandori.OutOfPeriod`), before it calls anything, as an input outside its range
+    if let (Some(at), Some(r)) = (now_outside(m), out[..walked].first()) {
+        let input = r["input"].clone();
+        out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["now:outside"] }));
+        nows.insert(out.len() - 1, json!(at));
+    }
     // the moment `now` reads, which the runners give the platforms' clocks
     if m.uses_now() {
-        for sc in out.iter_mut() {
-            sc["now"] = json!(render::SCENARIO_NOW);
+        let at = now_in(m);
+        for (i, sc) in out.iter_mut().enumerate() {
+            sc["now"] = nows.get(&i).cloned().unwrap_or_else(|| json!(at));
         }
     }
     out
@@ -269,45 +303,120 @@ enum Step {
     First,
 }
 
-/// Every place of the inputs that holds a number or an ordered enum's value to a range with room
-/// outside it, in the order the inputs and the fields are declared: an input, a field of an input's
-/// record at any depth, the items of a list (as its first one), what a `T?` holds. Each is the way
-/// to it, and the value just outside its range there.
+/// Every place of the inputs that holds a number, an ordered enum's value, a date or a time to a
+/// range with room outside it, in the order the inputs and the fields are declared: an input, a
+/// field of an input's record at any depth, the items of a list (as its first one), what a `T?`
+/// holds. Each is the way to it, and the value just outside its range there: past its high end
+/// (the next day, the first second after it), else before its low end.
 fn ranged_inputs(m: &Model) -> Vec<(Vec<Step>, Value)> {
-    fn walk(m: &Model, t: &Ty, rg: Option<Range>, at: &mut Vec<Step>, out: &mut Vec<(Vec<Step>, Value)>) {
+    input_places(m, &|t, rg| {
+        let v = match t {
+            Ty::Int | Ty::Num(_) => rg.and_then(number_outside).map(|n| json!(n)),
+            Ty::Enum(e) => rg.and_then(|r| enum_outside(m, *e, r)).map(|v| json!(v)),
+            Ty::Date => rg.and_then(number_outside).map(|d| json!(day_text(d))),
+            Ty::Timestamp => rg.and_then(number_outside).map(|t| json!(moment_text(t))),
+            _ => None,
+        };
+        v.into_iter().collect()
+    })
+}
+
+/// Every place of the inputs that holds a date or a time to a range, as `ranged_inputs` finds them,
+/// with each end of its range there: the first day and the last, the first second and the last
+/// with a fraction of a second after them, which the comparison of the platforms' code keeps in
+/// their second. The values in the range a platform's comparison would turn away if it took an
+/// end for outside, or read a time's fraction against the end.
+fn edge_inputs(m: &Model) -> Vec<(Vec<Step>, Value)> {
+    input_places(m, &|t, rg| {
+        let Some(r) = rg else { return vec![] };
+        let mut ends: Vec<Value> = match t {
+            Ty::Date => [r.lo, r.hi].into_iter().flatten().map(|d| json!(day_text(d))).collect(),
+            Ty::Timestamp => [r.lo, r.hi].into_iter().flatten().map(|s| json!(format!("{}.5Z", moment_head(s)))).collect(),
+            _ => vec![],
+        };
+        ends.dedup();
+        ends
+    })
+}
+
+/// The places of the inputs, in the order the inputs and the fields are declared, with the values
+/// `at` gives for the type and the range there: see `ranged_inputs`.
+fn input_places(m: &Model, values: &dyn Fn(&Ty, Option<Range>) -> Vec<Value>) -> Vec<(Vec<Step>, Value)> {
+    fn walk(m: &Model, t: &Ty, rg: Option<Range>, values: &dyn Fn(&Ty, Option<Range>) -> Vec<Value>, at: &mut Vec<Step>, out: &mut Vec<(Vec<Step>, Value)>) {
         match t {
-            Ty::Int | Ty::Num(_) => {
-                if let Some(n) = rg.and_then(number_outside) {
-                    out.push((at.clone(), json!(n)));
-                }
-            }
-            Ty::Enum(e) => {
-                if let Some(v) = rg.and_then(|r| enum_outside(m, *e, r)) {
-                    out.push((at.clone(), json!(v)));
-                }
-            }
-            Ty::Opt(x) => walk(m, x, rg, at, out),
+            Ty::Opt(x) => walk(m, x, rg, values, at, out),
             Ty::List(x) => {
                 at.push(Step::First);
-                walk(m, x, rg, at, out);
+                walk(m, x, rg, values, at, out);
                 at.pop();
             }
             Ty::Record(r) => {
                 for (f, ft) in &m.records[*r].fields {
                     at.push(Step::Name(f.clone()));
-                    walk(m, ft, m.field_range(*r, f), at, out);
+                    walk(m, ft, m.field_range(*r, f), values, at, out);
                     at.pop();
                 }
             }
-            _ => {}
+            _ => {
+                for v in values(t, rg) {
+                    out.push((at.clone(), v));
+                }
+            }
         }
     }
     let mut out = Vec::new();
     for (n, t) in &m.inputs {
         let mut at = vec![Step::Name(n.clone())];
-        walk(m, t, m.input_ranges.get(n).copied(), &mut at, &mut out);
+        walk(m, t, m.input_ranges.get(n).copied(), values, &mut at, &mut out);
     }
     out
+}
+
+/// The moment the runs of a workflow read `now` at, which the runners give the platforms' clocks:
+/// `SCENARIO_NOW`, the last day of a month at 15:30:00Z, which is the first of the next month east
+/// of UTC, so that a platform that reads a moment in the wrong offset shows. A workflow with a
+/// period that does not hold it reads the last day of a month at 15:30:00Z nearest to it in the
+/// period, else the period's first second (DESIGN 20).
+pub fn now_in(m: &Model) -> String {
+    let Some(p) = &m.period else { return render::SCENARIO_NOW.into() };
+    let r = p.range;
+    let t0 = moment_of(render::SCENARIO_NOW).unwrap_or_default();
+    if r.contains(t0) {
+        return render::SCENARIO_NOW.into();
+    }
+    // the last day of the month the day `d` is in, at 15:30:00Z
+    let end_of = |d: i64| -> Option<i64> {
+        let text = day_text(d);
+        let (y, mo): (i64, i64) = (text.get(..4)?.parse().ok()?, text.get(5..7)?.parse().ok()?);
+        let (ny, nm) = if mo == 12 { (y + 1, 1) } else { (y, mo + 1) };
+        let next = ritsu_ports::day_of(&format!("{ny:04}-{nm:02}-01"))?;
+        Some((next - 1) * 86_400 + 15 * 3600 + 30 * 60)
+    };
+    let near = if t0 < r.lo.unwrap_or(i64::MIN) {
+        // the first such moment at or after the low end: in its month, else (the low end is after
+        // it, on the month's last day) in the next
+        let lo = r.lo.unwrap_or_default();
+        let d = lo.div_euclid(86_400);
+        end_of(d).filter(|t| *t >= lo).or_else(|| end_of(d + 1))
+    } else {
+        // the last such moment at or before the high end: in its month, else in the month before
+        let hi = r.hi.unwrap_or_default();
+        end_of(hi.div_euclid(86_400)).filter(|t| *t <= hi).or_else(|| {
+            let text = day_text(hi.div_euclid(86_400));
+            let first_day = ritsu_ports::day_of(&format!("{}-01", text.get(..7)?))?;
+            end_of(first_day - 1)
+        })
+    };
+    match near.filter(|t| r.contains(*t)) {
+        Some(t) => moment_text(t),
+        None => moment_text(r.lo.or(r.hi).unwrap_or(t0)),
+    }
+}
+
+/// A moment just outside the period of a workflow: the first second after its end, else the last
+/// second before its start. None for a workflow with no period.
+pub fn now_outside(m: &Model) -> Option<String> {
+    m.period.as_ref().and_then(|p| number_outside(p.range)).map(moment_text)
 }
 
 /// `v` with `x` put at the end of the way `at`: None when the way goes through what `v` does not
@@ -537,11 +646,39 @@ impl<'a> Ex<'a> {
                 self.made_values += 1;
                 json!(format!("{name}-{}", self.made_values))
             }
-            Ty::Timestamp => json!("2026-10-01T10:00:00Z"),
-            // a day of its own for each value, as a string is
+            // in its range: when the range does not hold the moment, its first day at 10:00 (as the
+            // range writes its days), else its last day at 10:00, else the end it has
+            Ty::Timestamp => {
+                const AT: &str = "2026-10-01T10:00:00Z";
+                match rg {
+                    Some(r) if !r.contains(moment_of(AT).unwrap_or_default()) => {
+                        let ten = match (r.lo, r.hi) {
+                            (Some(lo), _) => lo + 36_000,
+                            (None, Some(hi)) => hi + 1 - 86_400 + 36_000,
+                            (None, None) => 0,
+                        };
+                        json!(moment_text(if r.contains(ten) { ten } else { r.lo.or(r.hi).unwrap_or(ten) }))
+                    }
+                    _ => json!(AT),
+                }
+            }
+            // a day of its own for each value, as a string is, and in its range: when the range does
+            // not hold it, a day of the range, from its low end, as a number is made
             Ty::Date => {
                 self.made_values += 1;
-                let v = json!(format!("2026-{:02}-{:02}", 1 + (self.made_values / 28) % 12, 1 + self.made_values % 28));
+                let k = self.made_values as i64;
+                let text = format!("2026-{:02}-{:02}", 1 + (k / 28) % 12, 1 + k % 28);
+                let d = ritsu_ports::day_of(&text).unwrap_or_default();
+                let d = match rg {
+                    Some(r) if !r.contains(d) => match (r.lo, r.hi) {
+                        (Some(lo), Some(hi)) => lo + k % (hi - lo + 1),
+                        (Some(lo), None) => lo + k,
+                        (None, Some(hi)) => hi - k,
+                        (None, None) => d,
+                    },
+                    _ => d,
+                };
+                let v = json!(day_text(d));
                 self.steerable(t, v, rg)
             }
             Ty::Int | Ty::Num(_) => {
@@ -610,11 +747,14 @@ impl<'a> Ex<'a> {
         }
     }
 
-    /// A value of type `t` with a number outside its range, or a value of an enum its range does not
-    /// let in, the first there is: None when nothing in it has a range with room outside.
+    /// A value of type `t` with a number, a date or a time outside its range, or a value of an enum
+    /// its range does not let in, the first there is: None when nothing in it has a range with room
+    /// outside.
     fn outside(&mut self, t: &Ty, rg: Option<Range>) -> Option<Value> {
         match t {
             Ty::Int | Ty::Num(_) => rg?.beyond().map(|n| json!(n)),
+            Ty::Date => rg?.beyond().map(|d| json!(day_text(d))),
+            Ty::Timestamp => rg?.beyond().map(|t| json!(moment_text(t))),
             Ty::Enum(e) => enum_outside(self.m, *e, rg?).map(|v| json!(v)),
             Ty::Opt(inner) => self.outside(inner, rg),
             Ty::List(inner) => self.outside(inner, rg).map(|v| json!([v])),
@@ -633,10 +773,11 @@ impl<'a> Ex<'a> {
         }
     }
 
-    /// Whether `outside` finds a number or an enum's value with a range in a value of type `t`.
+    /// Whether `outside` finds a number, a date, a time or an enum's value with a range in a value
+    /// of type `t`.
     fn has_outside(&self, t: &Ty, rg: Option<Range>) -> bool {
         match t {
-            Ty::Int | Ty::Num(_) => rg.and_then(|r| r.beyond()).is_some(),
+            Ty::Int | Ty::Num(_) | Ty::Date | Ty::Timestamp => rg.and_then(|r| r.beyond()).is_some(),
             Ty::Enum(e) => rg.and_then(|r| enum_outside(self.m, *e, r)).is_some(),
             Ty::Opt(inner) | Ty::List(inner) => self.has_outside(inner, rg),
             Ty::Record(r) => self.m.records[*r].fields.iter().any(|(f, ft)| self.has_outside(ft, self.m.field_range(*r, f))),
@@ -836,6 +977,7 @@ impl<'a> Ex<'a> {
         for (v, _) in &self.m.vars {
             self.vars.insert(v.clone(), Value::Null);
         }
+        self.vars.insert(crate::interp::NOW_VAR.into(), json!(now_in(self.m)));
         let inputs = self.m.inputs.clone();
         // a workflow that implements a service: an input at its zero values, which its JSON goes without
         if let Some(s) = &self.m.service {
@@ -896,6 +1038,33 @@ impl<'a> Ex<'a> {
     fn stmt(&mut self, s: &TStmt) -> Ctl {
         match &s.kind {
             TK::Pass | TK::Wait { .. } | TK::WaitUntil { .. } => Ctl::Next,
+            // the period the workflow runs in: the runs walked here start in it, and the run that
+            // starts outside it is made after the walk (`now:outside`). The first check after the
+            // start chooses whether `now` is still in it then, for every check after it as well, as a
+            // run that goes on past the end of its period reads it; outside, the run goes to `on
+            // failure` there, as with a task's error nothing takes
+            TK::Period { start: true } => Ctl::Next,
+            TK::Period { start: false } => {
+                let inside = match self.later {
+                    Some(x) => x,
+                    None => {
+                        let x = now_outside(self.m).is_none() || self.choose(&format!("period {}", s.site), 2) == 0;
+                        self.later = Some(x);
+                        if !x {
+                            let at = now_outside(self.m).unwrap_or_default();
+                            self.vars.insert(crate::interp::NOW_VAR.into(), json!(at));
+                        }
+                        x
+                    }
+                };
+                let at = self.vars.get(crate::interp::NOW_VAR).cloned().unwrap_or(Value::Null);
+                self.vars.insert(crate::interp::now_at(s.site), at);
+                if inside {
+                    return Ctl::Next;
+                }
+                self.end_label(&format!("{}:outside", s.site));
+                self.unhandled()
+            }
             TK::Break => Ctl::Break,
             TK::Assign { name, expr } => {
                 let v = self.value(expr);

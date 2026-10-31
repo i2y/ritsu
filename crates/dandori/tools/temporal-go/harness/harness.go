@@ -66,6 +66,11 @@ type Flow struct {
 	Status    func(ctx context.Context, c client.Client, id string) (Where, error)
 	Histories func(ctx context.Context, c client.Client, query string) ([]History, error)
 
+	// SetNows gives the run of a workflow's id the moments `now` reads in it (the package's
+	// DDSetNows, which the build adds): the one it starts at, for the check of the period there,
+	// and the one of every later read.
+	SetNows func(id string, nows [2]string)
+
 	// NewTransport is the package's default Transport (its NewTransport), with TransportOptions'
 	// Headers and HTTPClient, and the rest of its options zero: its HTTP, and the OpenAI and
 	// Anthropic SDKs' clients, go through the client; the AWS SDK reads AWS_ENDPOINT_URL.

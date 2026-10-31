@@ -1,7 +1,9 @@
 //! The examples pass `check`; the fixtures print exactly the diagnostics in their golden
 //! files; every place of an input held to a range has a scenario of its own whose input is just
-//! outside it; and on every scenario `scenarios` finds, the generated state machine, run by
-//! tools/asl-run.mjs with JSONata 2.0.6, does exactly what the reference interpreter does.
+//! outside it, and one at each end of it for a date or a time; a workflow that runs in a period
+//! has runs whose clock is outside it; and on every scenario `scenarios` finds, the generated
+//! state machine, run by tools/asl-run.mjs with JSONata 2.0.6, does exactly what the reference
+//! interpreter does.
 //!
 //! The rules are read through rulec's own answer to ritsu's port of rules, in this process (ritsu's
 //! DESIGN 3.3), and the code rulec generates for them is made by rulec's library. The state
@@ -300,18 +302,25 @@ enum Step {
     First,
 }
 
-/// The places of a workflow's inputs that hold a number or an ordered enum's value to a range with
-/// room outside it, in the order the inputs and the fields are declared, each with the value just
-/// outside its range there: past its high end, else (a range with no high end, or an enum's range
-/// up to its last value) before its low end.
+/// The places of a workflow's inputs that hold a number, an ordered enum's value, a date or a time
+/// to a range with room outside it, in the order the inputs and the fields are declared, each with
+/// the value just outside its range there: past its high end, else (a range with no high end, or an
+/// enum's range up to its last value) before its low end. Past a range of dates is the day after its
+/// last; past a range of times, the second after its last (a time's range is held in seconds, from
+/// the first second of its first day to the last of its last, in its offset).
 fn ranged_inputs(m: &Model) -> Vec<(Vec<Step>, Value)> {
     use dandori::model::{Range, Ty};
     fn walk(m: &Model, t: &Ty, rg: Option<Range>, at: &mut Vec<Step>, out: &mut Vec<(Vec<Step>, Value)>) {
         match t {
-            Ty::Int | Ty::Num(_) => {
+            Ty::Int | Ty::Num(_) | Ty::Date | Ty::Timestamp => {
                 if let Some(r) = rg {
                     if let Some(n) = r.hi.map(|hi| hi + 1).or(r.lo.map(|lo| lo - 1)) {
-                        out.push((at.clone(), json!(n)));
+                        let v = match t {
+                            Ty::Date => json!(dandori::model::day_text(n)),
+                            Ty::Timestamp => json!(dandori::model::moment_text(n)),
+                            _ => json!(n),
+                        };
+                        out.push((at.clone(), v));
                     }
                 }
             }
@@ -366,11 +375,11 @@ fn put_at(v: &Value, at: &[Step], x: &Value) -> Option<Value> {
     }
 }
 
-/// Every place of an input held to a range, a number's or an ordered enum's, in an input or in a
-/// field of an input's record at any depth, is tried just outside its range by a scenario of its
-/// own (`input:outside`, dandori's DESIGN 9): the input of a run the walk kept, with that place alone
-/// given the value past its high end (before its low end when that is the only room), in the order
-/// of the places. The reference turns each away at its door, with `Dandori.BadInput` and no step;
+/// Every place of an input held to a range, a number's, an ordered enum's, a date's or a time's, in
+/// an input or in a field of an input's record at any depth, is tried just outside its range by a
+/// scenario of its own (`input:outside`, dandori's DESIGN 9 and 20): the input of a run the walk
+/// kept, with that place alone given the value past its high end (before its low end when that is
+/// the only room), in the order of the places. The reference turns each away at its door, with `Dandori.BadInput` and no step;
 /// the runners of the platforms play the same scenarios, so every check of a range at the door is
 /// tried on every platform.
 #[test]
@@ -406,6 +415,233 @@ fn every_input_held_to_a_range_is_tried_just_outside_it() {
     }
     assert!(flows >= 20 && places >= 30, "only {places} place(s) held to a range, in {flows} flow(s)");
     eprintln!("compared: {runs} run(s) just outside a range, one for each of the {places} place(s) of the inputs held to one, in {flows} flow(s)");
+}
+
+/// Every place of an input that holds a date or a time to a range is tried at each end of it by a
+/// run of its own (`input:at an end`, dandori's DESIGN 20), in the order of the places: the first
+/// run again, with that place alone at the first day of the range or its last, or, for a time, at
+/// its first second or its last with half a second after it. The reference lets each in and goes
+/// the first run's way; the runners of the platforms play the same runs, so a platform that takes
+/// an end for outside, or holds a time's fraction of a second to the end, shows. A flow that checks
+/// a rule's precondition may go another way with the value, and has none of these runs.
+#[test]
+fn every_date_or_time_held_to_a_range_is_tried_at_its_ends() {
+    use dandori::model::{Range, Ty};
+    fn walk(m: &Model, t: &Ty, rg: Option<Range>, at: &mut Vec<Step>, out: &mut Vec<(Vec<Step>, Value)>) {
+        match t {
+            Ty::Date | Ty::Timestamp => {
+                let Some(r) = rg else { return };
+                let mut ends: Vec<Value> = [r.lo, r.hi]
+                    .into_iter()
+                    .flatten()
+                    .map(|n| match t {
+                        Ty::Date => json!(dandori::model::day_text(n)),
+                        _ => json!(dandori::model::moment_text(n).replace('Z', ".5Z")),
+                    })
+                    .collect();
+                ends.dedup();
+                out.extend(ends.into_iter().map(|v| (at.clone(), v)));
+            }
+            Ty::Opt(x) => walk(m, x, rg, at, out),
+            Ty::List(x) => {
+                at.push(Step::First);
+                walk(m, x, rg, at, out);
+                at.pop();
+            }
+            Ty::Record(r) => {
+                for (f, ft) in &m.records[*r].fields {
+                    at.push(Step::Name(f.clone()));
+                    walk(m, ft, m.field_range(*r, f), at, out);
+                    at.pop();
+                }
+            }
+            _ => {}
+        }
+    }
+    let (mut flows, mut runs) = (0, 0);
+    for f in runnable() {
+        let (_, checked) = check_file(&f).unwrap();
+        let m = checked.model.expect("the flows the platforms run pass check");
+        let scenarios = dandori::scenarios::generate(&m);
+        let made = |sc: &Value, label: &str| sc["covers"].as_array().is_some_and(|c| c.iter().any(|l| l == label));
+        let ends: Vec<&Value> = scenarios.iter().filter(|sc| made(sc, "input:at an end")).collect();
+        let first = &scenarios[0];
+        let mut places = Vec::new();
+        if !m.all_stmts().iter().any(|s| matches!(s.kind, TK::Check(_))) {
+            for (n, t) in &m.inputs {
+                walk(&m, t, m.input_ranges.get(n).copied(), &mut vec![Step::Name(n.clone())], &mut places);
+            }
+        }
+        // the places the first run reaches: a record that is there, a list with an item
+        let want: Vec<Value> = places.iter().filter_map(|(at, x)| put_at(&first["input"], at, x)).collect();
+        assert_eq!(ends.len(), want.len(), "{}: {} run(s) at an end of a range, for the {} end(s) of the dates and times of the inputs held to one", rel(&f), ends.len(), want.len());
+        let reference = dandori::interp::run(&m, first, View::Temporal).unwrap();
+        let kind = |trace: &Value| trace["end"].as_object().and_then(|o| o.keys().next().cloned());
+        for (sc, input) in ends.iter().zip(&want) {
+            assert_eq!(&sc["input"], input, "{} {}: the input is not the first run's with one place at an end", rel(&f), sc["name"]);
+            assert_eq!(sc["answers"], first["answers"], "{} {}", rel(&f), sc["name"]);
+            let trace = dandori::interp::run(&m, sc, View::Temporal).unwrap();
+            assert!(
+                trace["end"]["fail"]["error"] != "Dandori.BadInput" && kind(&trace) == kind(&reference) && trace["steps"].as_array().map(|s| s.len()) == reference["steps"].as_array().map(|s| s.len()),
+                "{} {}: the reference does not let the end in and go the first run's way: {trace}",
+                rel(&f),
+                sc["name"]
+            );
+        }
+        if !want.is_empty() {
+            flows += 1;
+        }
+        runs += ends.len();
+    }
+    assert!(flows >= 2 && runs >= 10, "only {runs} run(s) at an end of a range, in {flows} flow(s)");
+    eprintln!("compared: {runs} run(s) at an end of a range of dates or of times, in {flows} flow(s)");
+}
+
+/// A workflow that says the period it runs in (`now range`, dandori's DESIGN 20) is tried outside
+/// it. One run starts just past the period's end (before its start when it has no end), and the
+/// reference fails it at once with `Dandori.OutOfPeriod`, before it calls anything and without `on
+/// failure`, as an input outside its range. A workflow whose flow reads `now` has runs that start
+/// in the period and whose clock is past its end after the start: the first statement that reads
+/// `now` fails them with `Dandori.OutOfPeriod`, through `on failure` when the workflow has one.
+/// Every other run's clock is in the period. The runners of the platforms play the same runs, with
+/// the clock of each set to the run's moments.
+#[test]
+fn a_workflow_that_runs_in_a_period_is_tried_outside_it() {
+    use dandori::interp::Visit;
+    let (mut flows, mut later) = (0, 0);
+    for f in runnable() {
+        let (_, checked) = check_file(&f).unwrap();
+        let m = checked.model.expect("the flows the platforms run pass check");
+        let Some(p) = m.period.clone() else { continue };
+        flows += 1;
+        let r = p.range;
+        let past = r.hi.map(|h| h + 1).or(r.lo.map(|l| l - 1)).map(dandori::model::moment_text).expect("a period has an end");
+        let inside = |v: &Value| v.as_str().and_then(dandori::model::moment_of).is_some_and(|t| r.contains(t));
+        let scenarios = dandori::scenarios::generate(&m);
+        let made = |sc: &Value, label: &str| sc["covers"].as_array().is_some_and(|c| c.iter().any(|l| l == label));
+        let at_start: Vec<&Value> = scenarios.iter().filter(|sc| made(sc, "now:outside")).collect();
+        assert_eq!(at_start.len(), 1, "{}: {} run(s) that start outside the period", rel(&f), at_start.len());
+        let sc = at_start[0];
+        assert_eq!(sc["now"], json!(past), "{} {}", rel(&f), sc["name"]);
+        assert_eq!(sc["answers"], json!([]), "{} {}", rel(&f), sc["name"]);
+        let (trace, visits) = dandori::interp::run_visits(&m, sc, View::Temporal).unwrap();
+        assert!(
+            trace["end"]["fail"]["error"] == "Dandori.OutOfPeriod" && trace["steps"] == json!([]) && !visits.contains(&Visit::OnFailure),
+            "{} {}: the reference does not fail a run that starts outside the period at once: {trace}",
+            rel(&f),
+            sc["name"]
+        );
+        // the checks before the statements that read `now`
+        let checks: Vec<usize> = m.all_stmts().iter().filter(|s| matches!(s.kind, TK::Period { start: false })).map(|s| s.site).collect();
+        let leaves: Vec<&Value> = scenarios.iter().filter(|sc| sc["now"].is_array()).collect();
+        assert_eq!(!leaves.is_empty(), !checks.is_empty(), "{}: {} run(s) whose clock leaves the period after the start, and {} statement(s) that read `now`", rel(&f), leaves.len(), checks.len());
+        for sc in &leaves {
+            assert!(inside(&sc["now"][0]) && sc["now"][1] == json!(past), "{} {}: the moments are not one in the period and one past it: {}", rel(&f), sc["name"], sc["now"]);
+            let (trace, visits) = dandori::interp::run_visits(&m, sc, View::Temporal).unwrap();
+            // the run fails at a check, with nothing to take it, and goes to `on failure`; it ends
+            // with `Dandori.OutOfPeriod` unless what `on failure` calls fails too
+            let failed = visits.iter().any(|v| matches!(v, Visit::Unhandled(s) if checks.contains(s)));
+            let settled = m.on_failure.is_none() || visits.contains(&Visit::OnFailureEnd);
+            assert!(
+                failed && visits.contains(&Visit::OnFailure) == m.on_failure.is_some() && (!settled || trace["end"]["fail"]["error"] == "Dandori.OutOfPeriod"),
+                "{} {}: the reference does not fail the run where it reads `now` past the period, through `on failure`: {trace}",
+                rel(&f),
+                sc["name"]
+            );
+        }
+        later += leaves.len();
+        for sc in scenarios.iter().filter(|sc| !made(sc, "now:outside") && !sc["now"].is_array()) {
+            assert!(inside(&sc["now"]), "{} {}: the clock is not in the period: {}", rel(&f), sc["name"], sc["now"]);
+        }
+    }
+    assert!(flows >= 4 && later >= 4, "only {later} run(s) whose clock leaves the period after the start, in {flows} flow(s) with a period");
+    eprintln!("compared: {flows} run(s) that start outside the period and {later} whose clock leaves it after the start, in {flows} flow(s) with a period");
+}
+
+/// One statement reads one moment, on every platform (dandori's DESIGN 20). The runners cannot
+/// show it, since they set each platform's clock to a run's moments, so the code is read. No try of
+/// a call reads the clock: a try runs the call's arguments again, after a timer that has moved the
+/// workflow's clock on (on Temporal and durable functions, the closure a try runs; in Python, its
+/// `lambda` and its `async def dd_call_…`). A node of pydantic-graph reads it once at the most, and
+/// so does a template of Argo, which evaluates each expression of a template on its own.
+#[test]
+fn a_statement_reads_the_clock_once() {
+    // the line where the braces the line at `i` opens close
+    fn closing(lines: &[&str], i: usize) -> usize {
+        let mut depth = 0i64;
+        for (j, l) in lines.iter().enumerate().skip(i) {
+            depth += l.matches('{').count() as i64 - l.matches('}').count() as i64;
+            if depth <= 0 {
+                return j;
+            }
+        }
+        lines.len() - 1
+    }
+    fn indent(l: &str) -> usize {
+        l.len() - l.trim_start().len()
+    }
+    fn file(built: Result<Vec<(String, String)>, Vec<dandori::diag::Diag>>, end: &str) -> Option<String> {
+        built.ok()?.into_iter().find(|(n, _)| n.ends_with(end)).map(|(_, t)| t)
+    }
+    let (mut flows, mut tries, mut reads) = (0, 0, 0);
+    // and a statement of each kind that says `now` more than once, which no flow the platforms run has
+    for f in runnable().into_iter().chain([root().join("tests/fixtures/now_twice.flow")]) {
+        let (_, checked) = check_file(&f).unwrap();
+        let m = checked.model.expect("the flows the platforms run pass check");
+        if !m.all_stmts().iter().any(|s| s.kind.reads_now()) {
+            continue;
+        }
+        flows += 1;
+        for (what, built, attempt, clock) in [
+            ("Temporal in TypeScript", file(dandori::temporal::build(&m), "workflow.ts"), "dd.attempt(", "dd.now()"),
+            ("durable functions", file(dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable), "workflow.ts"), "dd.attempt(", "dd.now()"),
+            ("Temporal in Go", file(dandori::temporal_go::build(&m), "workflow.go"), "ddAttempt(", "ddNow(ctx)"),
+        ] {
+            let Some(text) = built else { continue };
+            let lines: Vec<&str> = text.lines().collect();
+            for (i, _) in lines.iter().enumerate().filter(|(_, l)| l.contains(attempt)) {
+                let tried = &lines[i..=closing(&lines, i)];
+                assert!(!tried.iter().any(|x| x.contains(clock)), "{} on {what}: a try reads the clock again:\n{}", rel(&f), tried.join("\n"));
+                tries += 1;
+            }
+            reads += text.matches(clock).count();
+        }
+        // Python: a try is a `lambda` on the line of `dd.attempt(`, or an `async def dd_call…` above it
+        for (what, built, end, clock) in [
+            ("Temporal in Python", file(dandori::temporal_py::build(&m), "workflow.py"), "async def dd_call_", "dd.now()"),
+            ("pydantic-graph", file(dandori::pydantic_graph::build(&m), "graph.py"), "async def dd_call(", "dd.now(deps.clock)"),
+        ] {
+            let Some(text) = built else { continue };
+            let lines: Vec<&str> = text.lines().collect();
+            for (i, l) in lines.iter().enumerate() {
+                let tried: Vec<&str> = if l.contains("dd.attempt(") {
+                    vec![l]
+                } else if l.trim_start().starts_with(end) {
+                    std::iter::once(*l).chain(lines[i + 1..].iter().take_while(|x| x.trim().is_empty() || indent(x) > indent(l)).copied()).collect()
+                } else {
+                    continue;
+                };
+                assert!(!tried.iter().any(|x| x.contains(clock)), "{} on {what}: a try reads the clock again:\n{}", rel(&f), tried.join("\n"));
+                tries += 1;
+            }
+            reads += text.matches(clock).count();
+            if what == "pydantic-graph" {
+                for node in text.split("\nclass ").skip(1) {
+                    let n = node.matches(clock).count();
+                    assert!(n <= 1, "{} on pydantic-graph: the node {} reads the clock {n} times", rel(&f), node.lines().next().unwrap_or_default());
+                }
+            }
+        }
+        if let Ok(doc) = dandori::argo::document(&m) {
+            for t in doc["spec"]["templates"].as_array().expect("a workflow template has templates") {
+                let n = t.to_string().matches("now()").count();
+                assert!(n <= 1, "{} on Argo: the template {} reads the clock {n} times", rel(&f), t["name"]);
+                reads += n;
+            }
+        }
+    }
+    assert!(flows >= 8 && tries > 0, "only {flows} flow(s) read `now`, with {tries} tries");
+    eprintln!("compared: {reads} read(s) of the clock in the code of {flows} flow(s) that read `now`: none in {tries} tries, and at most one in a node or a template");
 }
 
 #[test]
@@ -504,7 +740,7 @@ fn asl_runs_as_the_reference_says() {
             let reference = dandori::interp::run(&m, sc, View::Asl).unwrap_or_else(|e| panic!("{} scenario {}: {e}", rel(&f), i + 1));
             let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
             let run_file = dir.join(format!("run-{:03}.json", i + 1));
-            std::fs::write(&run_file, serde_json::to_string(&json!({ "input": sc["input"], "answers": answers })).unwrap()).unwrap();
+            std::fs::write(&run_file, serde_json::to_string(&json!({ "input": sc["input"], "answers": answers, "now": sc["now"] })).unwrap()).unwrap();
             let out = Command::new("node").arg(root().join("tools/asl-run.mjs")).arg(&def).arg(&run_file).arg("test").output().unwrap();
             assert!(out.status.success(), "{} scenario {}: the runner failed:\n{}", rel(&f), i + 1, String::from_utf8_lossy(&out.stderr));
             let got: Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -629,7 +865,7 @@ fn localstack_runs_as_the_reference_says() {
             sc["execution"] = json!(id);
             let reference = dandori::interp::run(&m, &sc, View::Asl).unwrap_or_else(|e| panic!("{} scenario {}: {e}", rel(&f), i + 1));
             let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
-            runs.push(json!({ "id": id, "input": sc["input"], "answers": answers }));
+            runs.push(json!({ "id": id, "input": sc["input"], "answers": answers, "now": sc["now"] }));
             references.push((sc, reference));
         }
         flows.push(json!({ "name": key(&f), "definition": definition, "runs": runs }));
@@ -758,7 +994,8 @@ fn plays(m: &Model, view: View, named: bool, keep: impl Fn(&[CallInfo]) -> bool)
             .enumerate()
             .filter_map(|(i, s)| s["call"].get("event").map(|e| (i.to_string(), e.clone())))
             .collect();
-        runs.push(json!({ "id": id, "input": sc["input"], "answers": script, "events": events }));
+        // the moments `now` reads: the one of every read, or the one the run starts at and the one of every later read
+        runs.push(json!({ "id": id, "input": sc["input"], "answers": script, "events": events, "now": sc["now"] }));
         references.push((sc, reference));
     }
     (runs, references, left_out)

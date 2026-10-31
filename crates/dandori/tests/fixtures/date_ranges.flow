@@ -1,0 +1,47 @@
+workflow date_ranges v1
+  now range >=2026-01-01 <=2027-12-31
+description "Ranges of dates and times: what a workflow gives a place that holds a date or a time to a range has to be in it, wherever it comes from; the period the workflow runs in says what now is, but in on failure, which the period does not hold"
+
+use dates terms from "../flows/dates/answer_terms.cal"
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:answer-terms"
+
+record Visit
+  id     : string
+  day    : date       range >=2026-01-01 <=2026-12-31
+  window : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+inputs
+  visit : Visit
+
+outputs
+  when : timestamp  range >=2026-06-01
+
+task book(id: string, day: date  range >=2026-03-01) -> date
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:book"
+  idempotent
+
+task remind(id: string, at: timestamp  range >=2026-01-01 <=2026-12-31)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:remind"
+  idempotent
+
+task hold(id: string, day: date  range >=2026-01-01 <=2027-12-31)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:hold"
+  idempotent
+
+flow
+  # a day of the visit can be before the first day book takes
+  let booked = book(id: visit.id, day: visit.day)
+  # a window in +09:00 starts nine hours before the same days in UTC
+  remind(id: visit.id, at: visit.window)
+  # what book answers says no range
+  hold(id: visit.id, day: booked)
+  # the period goes on past the days remind takes, and so does the day koyomi counts
+  remind(id: visit.id, at: now)
+  let due = terms.due(received: now)
+  hold(id: visit.id, day: due.day)
+  # held: the days of the visit are in the days hold takes
+  hold(id: visit.id, day: visit.day)
+  succeed when = now
+
+on failure
+  remind(id: visit.id, at: now)

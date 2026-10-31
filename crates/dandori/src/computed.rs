@@ -15,8 +15,9 @@
 //! Time: the run starts at the scenario's `now`, and goes on by each `wait` (to the moment of a
 //! `wait until`), each wait before a retry, and the timeout of each try that timed out. A try that
 //! is answered takes no time: the scenario does not say how long it took, and none is the least it
-//! may have. The books are told the time as it goes by. `now` itself reads the scenario's moment
-//! throughout, as the reference interpreter reads it (crate::interp::NOW_VAR).
+//! may have. The books are told the time as it goes by. `now` itself reads the scenario's moments
+//! throughout, the start's and the one every `now` after it reads, as the reference interpreter
+//! reads them (crate::interp::scenario_now).
 
 use crate::interp::{Answers, Passing};
 use crate::model::*;
@@ -126,7 +127,7 @@ pub struct Computed {
 /// `dates` (koyomi), and an operation of a book by `books` (chobo), on books that start as the
 /// scenario's `books` leaves them; every other call is answered by the scenario.
 pub fn run(m: &Model, sc: &Value, view: View, rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>) -> Result<Ran, Stopped> {
-    let start = sc.get("now").and_then(|v| v.as_str()).unwrap_or(render::SCENARIO_NOW).to_string();
+    let start = crate::interp::scenario_now(sc).0;
     let Some(start_ms) = moment_ms(&start) else {
         return Err(Stopped::Scenario(ritsu_base::tr!(
             "シナリオの `now` の `{start}` は時刻（`2026-03-31T15:30:00Z` の形）ではありません",

@@ -82,9 +82,10 @@ fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<
         (Ty::Opt(_), _) => Err(tr!("`{an}` で無いことがありますが、`{bn}` は無いことがありません", "`{an}` may be absent, and `{bn}` may not")),
         (x, Ty::Opt(y)) => fits(am, x, arg, bm, y, brg, seen),
         (Ty::List(x), Ty::List(y)) => fits(am, x, arg, bm, y, brg, seen),
-        (Ty::Int, Ty::Int) => within(arg, brg),
-        (Ty::Num(u), Ty::Num(v)) if u.same(v) => within(arg, brg),
-        (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) => Ok(()),
+        // numbers, days and moments: what `a` can be is in what `b` takes
+        (Ty::Int, Ty::Int) | (Ty::Date, Ty::Date) | (Ty::Timestamp, Ty::Timestamp) => within(am, a, arg, bm, b, brg),
+        (Ty::Num(u), Ty::Num(v)) if u.same(v) => within(am, a, arg, bm, b, brg),
+        (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) => Ok(()),
         // each value `a` can be (its range's, every value without one) is one `b` takes: a value of
         // its enum, in its range when it has one
         (Ty::Enum(x), Ty::Enum(y)) => {
@@ -127,12 +128,18 @@ fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<
     }
 }
 
-/// Whether numbers in `have` are all in `want`, when `want` is a range at all.
-fn within(have: Option<Range>, want: Option<Range>) -> Result<(), Words> {
-    let Some(w) = want else { return Ok(()) };
+/// Whether the numbers, days or moments in `have` (of `a`, in `am`) are all in `want` (of `b`, in
+/// `bm`), when `want` is a range at all. Each range is shown as its type writes it: days as dates,
+/// moments as the flow wrote them.
+fn within(am: &Model, a: &Ty, have: Option<Range>, bm: &Model, b: &Ty, want: Option<Range>) -> Result<(), Words> {
+    let Some(want) = want else { return Ok(()) };
+    let w = bm.range_text(b, &want);
     match have {
-        Some(h) if h.within(&w) => Ok(()),
-        Some(h) => Err(tr!("`{}` で、受け取るのは `{}` です", "it is `{}`, and `{}` is taken", h.show(), w.show())),
-        None => Err(tr!("範囲が書かれていませんが、受け取るのは `{}` です", "it has no range, and `{}` is taken", w.show())),
+        Some(h) if h.within(&want) => Ok(()),
+        Some(h) => {
+            let h = am.range_text(a, &h);
+            Err(tr!("`{h}` で、受け取るのは `{w}` です", "it is `{h}`, and `{w}` is taken"))
+        }
+        None => Err(tr!("範囲が書かれていませんが、受け取るのは `{w}` です", "it has no range, and `{w}` is taken")),
     }
 }

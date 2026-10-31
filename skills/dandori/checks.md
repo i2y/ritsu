@@ -69,7 +69,10 @@ have it, since its parameters are the API's own (E007).
 **Ranges.** A value given to a rule, a task, a record or an output fits the range there (E014), and
 a value whose range nothing says is a warning (W104). So does a value of an ordered enum, held to a
 range by its values (`range >=basic <=gold`) on a rule's input or on a place of the flow, and a
-`match` on one takes the values its range lets in. [Ranges](tour.md#ranges)
+`match` on one takes the values its range lets in. A date or a time does too, held to a range of
+days (`range >=2026-01-01 <=2027-12-31`, with `offset +09:00` for a time read at that offset), and so
+does `now` in a workflow that says the period it runs in (`now range …`), which is a moment of that
+period. [Ranges](tour.md#ranges)
 
 **A rule's precondition.** Some of what a rule takes for granted its inputs' types cannot say: that
 one input stays at or below another (`constraint asked <= paid`), or that a day is one of the days a
@@ -79,6 +82,15 @@ the call can give (ritsu's E201, with an example that breaks it), and says when 
 runs, as soon as the values are made: right after the task whose answer they are, or later, where
 the run can no longer go another way before the call. A run whose values break it fails there with
 `Dandori.BrokenPrecondition`, on every platform.
+
+**The period a workflow runs in.** The period is checked when the workflow runs, as a precondition
+is, by the code that `build` writes: a run that starts outside it calls nothing and fails with
+`Dandori.OutOfPeriod`, and a statement that reads `now` checks the clock before it, going to
+`on failure` when it is outside, as after a task's error nothing handles. The checker counts that
+check as a place a run can fail from, as it counts a call that can fail: a workflow with no
+`on failure` that can fail there with a case left open is W101. `ritsu check` reads the days `now` can be at a dates file's calendar and holds
+them to the days a date takes (E205 when they can be outside, W205 when nothing says the period).
+[The period a workflow runs in](dates-and-books.md#the-period-a-workflow-runs-in)
 
 **What a task calls.** A task that runs another `.flow` fits the child's inputs, outputs and failures
 (E015), and a task that calls a described API fits the description (E016). A decision task (`jev`) answers what

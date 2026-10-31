@@ -1,0 +1,20 @@
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:2:46: `+25:00` というオフセットはありません。`+09:00` のように `±HH:MM` で書いてください（23:59 まで）
+     2 |   now range >=2026-01-01 <=2027-12-31 offset +25:00
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:8:36: `2026-02-30` という日はありません
+     8 |   無い日         : date       range >=2026-02-30
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:9:25: `>=2026-12-31 <=2026-01-01` に入る日はありません
+     9 |   入る日が無い   : date       range >=2026-12-31 <=2026-01-01
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:10:24: `>=2026-12-31 <=2026-01-01` に入る日はありません
+    10 |   入る時刻が無い : timestamp  range >=2026-12-31 <=2026-01-01 offset -05:00
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:11:30: 日付と時刻の範囲の端は、日付で書いてください（`>=2026-01-01`）。`1` は日付ではありません
+    11 |   数             : date       range >=1 <=31
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:12:37: 日付と時刻の範囲の端は、日付で書いてください（`>=2026-01-01`）。`今日` は日付ではありません
+    12 |   名前           : timestamp  range >=今日
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:13:34: 範囲の端 `2026-01-01` は `int` の値ではありません
+    13 |   日付の整数     : int        range >=2026-01-01
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:14:49: `offset` を書けるのは、時刻の範囲と `now range` だけです。日付は時刻を持たないので、オフセットで読み替えません
+    14 |   日付のオフセット : date     range >=2026-01-01 offset +09:00
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:15:50: `+09:60` というオフセットはありません。`+09:00` のように `±HH:MM` で書いてください（23:59 まで）
+    15 |   遠いオフセット : timestamp  range <=2026-12-31 offset +09:60
+エラー[E003]: tests/fixtures/date_range_syntax.ja.flow:16:28: 範囲を書けるのは、数（`int` か単位の付いた数）、順序のある列挙、日付と時刻だけです。これは `string` です
+    16 |   文字列         : string     range >=2026-01-01

@@ -1,0 +1,6 @@
+workflow period_offset v1
+  now range >=2026-01-01 <=2026-12-31 offset 9
+description "E001: an offset is written as +09:00"
+
+flow
+  pass

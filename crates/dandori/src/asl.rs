@@ -366,6 +366,10 @@ fn answered(task: &TaskDef) -> String {
     }
 }
 
+/// The Pass at the start of a workflow with a period that reads the clock for its check (DESIGN
+/// 20): the runners of the tests find it by this name, to give it the moment a run starts at.
+pub const PERIOD_AT_START: &str = "period at the start";
+
 fn arg_value(e: &TExpr) -> Value {
     render::literal(e).unwrap_or_else(|| json!(format!("{{% {} %}}", jsonata_expr(e))))
 }
@@ -492,6 +496,27 @@ impl<'a> Gen<'a> {
             TK::Fail { error, cause, .. } => {
                 let c = cause.as_ref().map(arg_value);
                 self.failing(&format!("{} fail {error}", s.line), Some(format!("line {}", s.line)), json!(error), c, false)
+            }
+            // the period the workflow runs in (DESIGN 20): a Pass that reads the clock once, as the
+            // moment it is entered, and a Choice that holds it to the period; outside it, the run fails
+            // at the start, and goes to `on failure` as a task's error does after
+            TK::Period { start } => {
+                let p = self.m.period.clone().expect("a check of the period is in a flow with one");
+                let now = render::now_name(s.site);
+                let holds = p.tests(|op, end| format!("$substring(${now}, 0, 19) {op} {}", json!(end))).join(" and ");
+                let (before, after) = p.cause_around((!*start).then_some(s.line));
+                let cause = format!("{{% {} & ${now} & {} %}}", json!(before), json!(after));
+                let (read, test, outside) = if *start {
+                    let outside = self.failing("out of period at the start", Some(format!("the period the workflow runs in, {}", p.text)), json!(OUT_OF_PERIOD), Some(json!(cause)), false);
+                    (self.name(PERIOD_AT_START), self.name("period at the start check"), outside)
+                } else {
+                    let outside = self.raising(&format!("{} out of period", s.line), OUT_OF_PERIOD, &cause);
+                    (self.name(&format!("{} now", s.line)), self.name(&format!("{} period", s.line)), outside)
+                };
+                let comment = if *start { format!("the period the workflow runs in, {}: a run that starts outside it calls nothing", p.text) } else { format!("line {}: now, held to the period the workflow runs in", s.line) };
+                self.states.insert(read.clone(), json!({ "Type": "Pass", "Comment": comment, "Assign": { now.clone(): format!("{{% {} %}}", render::JSONATA_NOW) }, "Next": test }));
+                self.states.insert(test, json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% {holds} %}}"), "Next": cont } ], "Default": outside }));
+                read
             }
             // a rule's precondition ritsu could not decide (DESIGN 1.17): a Choice that goes on when it
             // holds, and ends at a Fail when the values break it

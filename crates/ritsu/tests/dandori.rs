@@ -74,15 +74,16 @@ fn ritsu_dandori_reads_the_dates_and_the_books_of_a_flow() {
 }
 
 /// `ritsu check` joins koyomi and chobo for dandori as well: the flows of `examples/invoice` pass,
-/// and what ritsu-cross cannot decide about them (`now` against the range of the dates file, the
-/// expiry of the hold against the waits) comes as warnings.
+/// and what ritsu-cross cannot decide about them (the expiry of the hold against the waits) comes
+/// as warnings. The `now` they give the dates file is a moment of the period each runs in, which
+/// the file's range holds (dandori's DESIGN 20).
 #[test]
 fn ritsu_check_reads_the_dates_and_the_books_of_a_flow() {
     let (code, out, err) = ritsu(&["check", "examples/invoice"]);
     assert_eq!(code, 0, "{out}{err}");
     assert!(out.contains("examples/invoice/invoice.flow: ok\n") && out.contains("examples/invoice/invoice.ja.flow: ok\n"), "{out}");
     // the borders the languages share are ritsu-cross's to count; the files are what is held here
-    assert!(out.lines().last().is_some_and(|l| l.starts_with("ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); ")), "{out}");
+    assert!(out.lines().last().is_some_and(|l| l.starts_with("ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (6 warnings); ")), "{out}");
 }
 
 /// The preconditions of rules that ritsu leaves undecided, as dandori's tests take them: every

@@ -1,7 +1,10 @@
 # An order holds its goods in stock until its payment is due, by the payment terms counted from the
 # moment the order came in; paid, the goods ship, and unpaid, they go back on the shelves. The stock
-# is a book of chobo's, and the due date a date of koyomi's. It runs on every platform.
+# is a book of chobo's, and the due date a date of koyomi's. The workflow runs in the period the
+# terms take orders in: a run that starts outside it fails at once, and one whose clock leaves it
+# once the goods are held puts them back. It runs on every platform.
 workflow invoice v1
+  now range >=2026-01-01 <=2027-12-31
 description "An order holds its goods until its payment is due, then ships them once paid, or puts them back"
 
 use dates terms from "dates/payment_terms.cal"

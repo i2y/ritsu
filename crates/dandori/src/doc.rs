@@ -127,6 +127,9 @@ pub struct Graph {
     pub panels: Vec<Panel>,
     /// the title of each loop's frame, by the loop's site
     pub loops: BTreeMap<usize, String>,
+    /// the statement each check of the period after the start is for, by the check's site: the
+    /// checks draw nothing, and a run that fails at one lights the statement it is for
+    pub checks: BTreeMap<usize, usize>,
 }
 
 impl Graph {
@@ -158,7 +161,7 @@ pub fn graph(i: &Input) -> Graph {
         let end = b.node("oncEnd".into(), Kind::End, vec![tr(i.lang, "ends cancelled", "キャンセルで終わる")], 0, None);
         panels.push(Panel { key: "on-cancel", entry, body, end });
     }
-    Graph { nodes: b.nodes, panels, loops: b.loops }
+    Graph { nodes: b.nodes, panels, loops: b.loops, checks: period_checks(m) }
 }
 
 struct Builder<'a> {
@@ -182,7 +185,9 @@ impl<'a> Builder<'a> {
         let mut out = Vec::new();
         for s in ss {
             match &s.kind {
-                TK::Pass => {}
+                // the checks of the period draw nothing: the period is the start's, and the
+                // statements that read `now` are drawn
+                TK::Pass | TK::Period { .. } => {}
                 TK::Call { target, callee, args, handlers } => {
                     let (kind, lines) = call_lines(self.i, target.as_ref(), callee, args);
                     let n = self.stmt_node(s, kind, lines);
@@ -1001,6 +1006,61 @@ fn failing_lines(rows: &[CallRow], i: &Input) -> Vec<usize> {
     rows.iter().filter(|r| r.unhandled && flow_sites.contains(&r.site)).map(|r| r.line).collect()
 }
 
+/// The statement each check of the period after the start is for: the one after it, or the loop
+/// whose `yield` it reads `now` for, at the end of the loop's body.
+pub fn period_checks(m: &Model) -> BTreeMap<usize, usize> {
+    fn walk(ss: &[TStmt], up: Option<usize>, out: &mut BTreeMap<usize, usize>) {
+        for (k, s) in ss.iter().enumerate() {
+            if let TK::Period { start: false } = s.kind {
+                if let Some(next) = ss.get(k + 1).map(|x| x.site).or(up) {
+                    out.insert(s.site, next);
+                }
+            }
+            match &s.kind {
+                TK::Call { handlers, .. } => handlers.iter().for_each(|h| walk(&h.body, None, out)),
+                TK::Match { arms, .. } => arms.iter().for_each(|a| walk(&a.body, None, out)),
+                TK::Repeat { body, .. } => walk(body, None, out),
+                TK::For { body, .. } => walk(body, Some(s.site), out),
+                _ => {}
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk(&m.flow, None, &mut out);
+    out
+}
+
+/// The lines of the flow whose `now` the period holds: where a run whose `now` is outside it goes
+/// to `on failure`.
+fn period_lines(m: &Model) -> Vec<usize> {
+    let mut lines = BTreeSet::new();
+    Model::walk(&m.flow, &mut |s| {
+        if let TK::Period { start: false } = s.kind {
+            lines.insert(s.line);
+        }
+    });
+    lines.into_iter().collect()
+}
+
+/// What `on failure` says of the period: that it runs too when `now` on the lines that read it is
+/// outside the period. Empty for a workflow with no period.
+fn period_note(m: &Model, lang: Lang) -> String {
+    let (Some(p), lines) = (&m.period, period_lines(m)) else { return String::new() };
+    if lines.is_empty() {
+        return String::new();
+    }
+    match lang {
+        Lang::En => format!("It runs too when `now` on {} is outside the period the workflow runs in, `{}`.", list_lines(&lines, lang), p.text),
+        Lang::Ja => format!("{}の `now` がワークフローの動く期間 `{}` の外のときにも走ります。", list_lines(&lines, lang), p.text),
+    }
+}
+
+/// The node a run lights at a statement: the statement's, or for a check of the period the one of
+/// the statement it is for.
+fn at_id(g: &Graph, site: usize) -> Option<String> {
+    stmt_id(g, g.checks.get(&site).copied().unwrap_or(site))
+}
+
 fn list_lines(lines: &[usize], lang: Lang) -> String {
     let ns: Vec<String> = lines.iter().map(|n| n.to_string()).collect();
     match lang {
@@ -1087,6 +1147,9 @@ pub fn markdown(i: &Input) -> String {
             if !m.outputs.is_empty() {
                 let _ = write!(o, " Outputs: {}.", io(&m.outputs, &m.output_ranges));
             }
+            if let Some(p) = &m.period {
+                let _ = write!(o, " It runs in the period `now range {}`.", p.text);
+            }
             if let Some(s) = &m.service {
                 let _ = write!(o, " It implements `{}` (`{}`).", s.name, s.file);
             }
@@ -1100,6 +1163,9 @@ pub fn markdown(i: &Input) -> String {
             }
             if !m.outputs.is_empty() {
                 let _ = write!(o, "出力は {} です。", io(&m.outputs, &m.output_ranges));
+            }
+            if let Some(p) = &m.period {
+                let _ = write!(o, "動く期間は `now range {}` です。", p.text);
             }
             if let Some(s) = &m.service {
                 let _ = write!(o, "このワークフローは `{}`（`{}`）を実装します。", s.name, s.file);
@@ -1131,11 +1197,14 @@ pub fn markdown(i: &Input) -> String {
                     match lang {
                         Lang::En => {
                             let from = if lines.is_empty() { String::new() } else { format!(": from the calls on {}", list_lines(&lines, lang)) };
-                            format!("Runs when a call fails and nothing at the call handles the error{from}. When it runs to its end, the workflow fails with that error.")
+                            let note = period_note(m, lang);
+                            let note = if note.is_empty() { note } else { format!(" {note}") };
+                            format!("Runs when a call fails and nothing at the call handles the error{from}.{note} When it runs to its end, the workflow fails with that error.")
                         }
                         Lang::Ja => {
                             let from = if lines.is_empty() { String::new() } else { format!("（{}の呼び出しから）", list_lines(&lines, lang)) };
-                            format!("呼び出しが失敗し、そのエラーをその場で処理しないときに走ります{from}。最後まで走ると、ワークフローはそのエラーで失敗します。")
+                            let note = period_note(m, lang);
+                            format!("呼び出しが失敗し、そのエラーをその場で処理しないときに走ります{from}。{note}最後まで走ると、ワークフローはそのエラーで失敗します。")
                         }
                     }
                 );
@@ -1401,7 +1470,11 @@ pub fn lit_by_visits(g: &Graph, edges: &[EdgeInfo], visits: &[Visit]) -> Lit {
                 conds.insert(Cond::Handler(*site, *j));
             }
             Visit::Unhandled(site) => {
-                lit.failed.extend(stmt_id(g, *site));
+                // a check of the period: the statement it is for did not start, and is where the run failed
+                if g.checks.contains_key(site) {
+                    lit.nodes.extend(at_id(g, *site));
+                }
+                lit.failed.extend(at_id(g, *site));
             }
             Visit::Round(site, n) => {
                 if *n >= 1 {
@@ -1462,9 +1535,9 @@ pub fn lit_by_steps(g: &Graph, edges: &[EdgeInfo], d: &Diag) -> Lit {
                 conds.insert(Cond::Handler(site, j));
             }
             Some(At::Fails(site)) => {
-                lit.nodes.extend(stmt_id(g, site));
+                lit.nodes.extend(at_id(g, site));
                 handled.insert(site);
-                lit.failed.extend(stmt_id(g, site));
+                lit.failed.extend(at_id(g, site));
             }
             Some(At::OnFailure) => {
                 lit.nodes.insert("onf".into());
@@ -1565,12 +1638,13 @@ fn decl_block(src: &str, line: usize) -> String {
 /// What an error the generated code raises itself means.
 fn own_error(name: &str, lang: Lang) -> Option<String> {
     let (en, ja) = match name {
-        "Dandori.BadResponse" => ("an answer not of the declared type", "宣言した型に合わない結果"),
+        "Dandori.BadResponse" => ("an answer not of the declared type or range", "宣言した型か範囲に合わない結果"),
         "Dandori.UnexpectedState" => ("a case in a state the machine does not lead to there", "ステートマシンがそこでは行かない状態の案件"),
-        "Dandori.BadInput" => ("an input not of the declared type", "宣言した型に合わない入力"),
+        "Dandori.BadInput" => ("an input not of the declared type or range", "宣言した型か範囲に合わない入力"),
         "Dandori.TooManyItems" => ("a list longer than the loop's bound", "ループの上限より長いリスト"),
         "Dandori.UnexpectedValue" => ("a value no arm takes", "どの分岐にも当たらない値"),
         "Dandori.BrokenPrecondition" => ("values that break a precondition of the rule they go to", "渡す先の規則の前提を破る値"),
+        "Dandori.OutOfPeriod" => ("`now` outside the period the workflow runs in", "ワークフローが動く期間の外の `now`"),
         _ => return None,
     };
     Some(tr(lang, en, ja))
@@ -1692,6 +1766,9 @@ impl<'a> Page<'a> {
                 if !m.outputs.is_empty() {
                     let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Outputs", "出力"), io(&m.outputs, &m.output_ranges));
                 }
+                if let Some(p) = &m.period {
+                    let _ = write!(o, "<dt>{}</dt><dd><code>now range {}</code></dd>", tr(lang, "The period it runs in", "動く期間"), esc(&p.text));
+                }
                 if let Some(s) = &m.service {
                     let methods: Vec<String> = service_rows(s, lang)
                         .into_iter()
@@ -1708,7 +1785,9 @@ impl<'a> Page<'a> {
                     Lang::En => format!(" It comes here from the calls on {}.", list_lines(&lines, lang)),
                     Lang::Ja => format!("{}の呼び出しから、ここに来ます。", list_lines(&lines, lang)),
                 } };
-                let _ = write!(o, "<p>{}{from}</p>", tr(lang, "Runs when a call fails and nothing at the call handles the error. When it runs to its end, the workflow fails with that error.", "呼び出しが失敗し、そのエラーをその場で処理しないときに走ります。最後まで走ると、ワークフローはそのエラーで失敗します。"));
+                let note = period_note(m, lang);
+                let note = if note.is_empty() { note } else { format!("{}{}", if lang == Lang::En { " " } else { "" }, inline(&note)) };
+                let _ = write!(o, "<p>{}{from}{note}</p>", tr(lang, "Runs when a call fails and nothing at the call handles the error. When it runs to its end, the workflow fails with that error.", "呼び出しが失敗し、そのエラーをその場で処理しないときに走ります。最後まで走ると、ワークフローはそのエラーで失敗します。"));
                 return o;
             }
             "onc" => {
@@ -1781,11 +1860,26 @@ impl<'a> Page<'a> {
                 items.push(c);
             }
         };
-        for v in visits {
+        for (k, v) in visits.iter().enumerate() {
             match v {
                 Visit::Stmt(site) => {
-                    flush(&mut cur, &mut items);
                     let Some(s) = self.stmt_of.get(site) else { continue };
+                    // a check of the period is a step of its own only where the run fails at it:
+                    // the last thing the run went through, or what nothing takes the error of
+                    if let TK::Period { .. } = s.kind {
+                        let fails = match visits.get(k + 1) {
+                            None => true,
+                            Some(Visit::Unhandled(x)) => x == site,
+                            _ => false,
+                        };
+                        if fails {
+                            flush(&mut cur, &mut items);
+                            let text = format!("now range {}", m.period.as_ref().map(|p| p.text.as_str()).unwrap_or_default());
+                            cur = Some(format!("<span class=\"ln\">{}</span> <code>{}</code> <span class=\"chip bad\">{}</span>", s.line, esc(&text), tr(lang, "now is outside it", "now がその外")));
+                        }
+                        continue;
+                    }
+                    flush(&mut cur, &mut items);
                     let text = match &s.kind {
                         TK::Repeat { .. } | TK::For { .. } => self.g.loops.get(site).cloned().unwrap_or_default(),
                         TK::Pass => continue,

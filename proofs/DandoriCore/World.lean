@@ -100,8 +100,9 @@ def ArmMay (env : Env) (e : Expr) (arm : Arm) (w : World) : Prop :=
   | none => True
 
 /-- How a block comes out: it ends and the next statement begins, a `break` leaves it, a task's
-    error nothing handled leaves it, or the run ends there — where the check looks, handing over
-    `leaving`, or not (`none`: a match no arm takes, a list longer than a `for` allows). -/
+    error nothing handled leaves it — or `now` outside the period the workflow runs in, after the
+    start — or the run ends there: where the check looks, handing over `leaving`, or not (`none`: a
+    match no arm takes, a list longer than a `for` allows, a run that starts outside the period). -/
 inductive Out where
   | normal (w : World)
   | brk (w : World)
@@ -160,11 +161,21 @@ inductive Exec (env : Env) : List Stmt → World → Out → Prop
       h ∈ hs → h.takes k → Exec env h.body w2 o → o.stops → Exec env (.call site line tgt callee args hs :: rest) w o
   | callRaised {site line tgt callee args hs rest w w1 w2 k} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
       (∀ h ∈ hs, ¬ h.takes k) → Exec env (.call site line tgt callee args hs :: rest) w (.raised w2)
+  /-- A check of the period: the moment is inside, and the run goes on; at the start, it is outside,
+      and the run ends before it calls anything; later, it is outside, and the run leaves the block
+      as after a task's error nothing handles. -/
+  | periodIn {site line start lo next before after rest w o} : Exec env rest w o →
+      Exec env (.period site line start lo next before after :: rest) w o
+  | periodStart {site line lo next before after rest w} :
+      Exec env (.period site line true lo next before after :: rest) w (.ended none w)
+  | periodOut {site line lo next before after rest w} :
+      Exec env (.period site line false lo next before after :: rest) w (.raised w)
 
 /-- **A run that ends where the check looks**, handing over the cases `leaving`: at the end of
     the flow, at a `succeed` or a `fail`, or at the end of `on failure` after a task's error
-    nothing handled. A run that ends otherwise — an error nothing handles and no `on failure`
-    (W101), a match no arm takes, a list longer than its `for` allows — is not one. -/
+    nothing handled (or `now` outside the period). A run that ends otherwise — an error nothing
+    handles and no `on failure` (W101), a match no arm takes, a list longer than its `for` allows,
+    a run that starts outside the period it runs in — is not one. -/
 inductive Ends (env : Env) : List Nat → World → Prop
   | flowEnd {w} : Exec env env.flow.flow World.start (.normal w) → Ends env [] w
   | stopped {leaving w} : Exec env env.flow.flow World.start (.ended (some leaving) w) → Ends env leaving w

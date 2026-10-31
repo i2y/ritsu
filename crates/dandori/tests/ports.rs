@@ -104,11 +104,11 @@ fn a_flow_names_its_rules_apis_services_methods_and_children() {
     assert_eq!(
         show("examples/invoice/invoice.flow"),
         [
-            "7 koyomi \"examples/invoice/dates/payment_terms.cal\" [use dates … lambda]",
-            "9 chobo \"examples/invoice/books/stock.book\" [use book … lambda]",
-            "32 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
-            "37 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
-            "42 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
+            "10 koyomi \"examples/invoice/dates/payment_terms.cal\" [use dates … lambda]",
+            "12 chobo \"examples/invoice/books/stock.book\" [use book … lambda]",
+            "35 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
+            "40 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
+            "45 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
         ]
     );
     assert_eq!(ways_of("tests/flows/dates_and_books.flow", Tool::Koyomi), ["use dates … lambda, local"]);
@@ -237,6 +237,52 @@ fn a_flow_says_what_it_crosses_into() {
     // be a rule's output, and the flow is not followed for the calls of rules (X4)
     assert_eq!(c.transfers[0].amounts[0].from, vec![Origin::Range(Some(1), Some(100))]);
     assert_eq!(c.transfers[0].amounts[0].calls, None);
+}
+
+/// A date held to a range, and a time, as it goes to a koyomi date or a rule (ritsu's X6, X3 (a)
+/// and X2; dandori's DESIGN 20): a date's range is its days (`Origin::Range`, the day numbers
+/// rulec and kaname count), a time's its moments (`Origin::Moment`, seconds since 1970 in UTC,
+/// with the range as the `.flow` writes it), and so is `now` in a workflow that says the period it
+/// runs in, but in `on failure`, which the period does not hold (`Origin::Now`). A date given to a
+/// rule's date input from places that each have a range has their days as its range
+/// (`CallArg::range`), and none from a place without one.
+#[test]
+fn a_date_or_a_time_says_its_range_where_it_goes() {
+    use ritsu_ports::{day_of, Flows, Origin, Ports};
+    use std::rc::Rc;
+    let t = ritsu_testkit::TempDir::new("date-origins");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("weekdays.cal", "calendar weekdays v1\ndescription \"Open Monday to Friday, in Tokyo\"\noffset +09:00\n\nclosed weekly sat, sun\n");
+    write("terms.cal", "dates terms v1\ndescription \"Pays on the 10th of the month after a closing on the 20th\"\nuse calendar \"weekdays.cal\"\n\ninputs\n  received : date  range >=2025-12-01 <=2027-12-20\n\ndate closing = received\n  close day 20\n\ndate payment = closing\n  day 10 of month +1\n  roll preceding\n");
+    write("batch.rule", "rule batch v1\ndescription \"The billing batch a payment day falls in\"\n\nenum run = spring | autumn\n\ninputs\n  pay_day : date  range >=2026-03-01 <=2027-01-31\n\noutputs\n  batch : run\n\ntable pick\npolicy unique\n| pay_day      | -> batch : run |\n| <=2026-08-31 | spring         |\n| >=2026-09-01 | autumn         |\n");
+    write(
+        "given.flow",
+        "workflow given v1\n  now range >=2026-04-01 <=2026-06-30 offset +09:00\ndescription \"Gives dates and times held to ranges where they go\"\n\nuse dates terms from \"terms.cal\"\n\nrecord Visit\n  day : date  range >=2026-03-01 <=2026-08-31\n\ninputs\n  received : date       range >=2026-03-01 <=2026-08-31\n  at       : timestamp  range >=2026-03-01 <=2026-08-31 offset +09:00\n  visit    : Visit\n  open     : date\n\ntask pick_day() -> date  range >=2026-04-01 <=2026-05-31\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:pick-day\"\n  idempotent\n\ntask settle(day: date)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:settle\"\n  idempotent\n\nflow\n  let a = terms.payment(received: received)\n  let b = terms.payment(received: at)\n  let c = terms.payment(received: now)\n  let d = terms.payment(received: visit.day)\n  let picked = pick_day()\n  let e = terms.payment(received: picked)\n  let f = terms.payment(received: open)\n\non failure\n  let g = terms.payment(received: now)\n  settle(day: g.day)\n",
+    );
+    let ports = Ports { rules: Rc::new(rulec::ports::Engine::new()), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine) };
+    let c = dandori::ports::Engine.crossings(&t.path().join("given.flow"), &ports).unwrap_or_else(|e| panic!("{e:?}"));
+    let day = |d: &str| day_of(d).unwrap();
+    let days = |a: &str, b: &str| Origin::Range(Some(i128::from(day(a))), Some(i128::from(day(b))));
+    // a time's range in an offset: from the first second of its first day there to the last of its last
+    let moments = |a: &str, b: &str, text: &str, now: bool| Origin::Moment { lo: Some(day(a) * 86_400 - 9 * 3_600), hi: Some((day(b) + 1) * 86_400 - 9 * 3_600 - 1), text: text.into(), now };
+    let from: Vec<Vec<Origin>> = c.dates.iter().map(|d| d.from.clone()).collect();
+    assert_eq!(
+        from,
+        [
+            vec![days("2026-03-01", "2026-08-31")],
+            vec![moments("2026-03-01", "2026-08-31", ">=2026-03-01 <=2026-08-31 offset +09:00", false)],
+            vec![moments("2026-04-01", "2026-06-30", ">=2026-04-01 <=2026-06-30 offset +09:00", true)],
+            vec![days("2026-03-01", "2026-08-31")],
+            vec![days("2026-04-01", "2026-05-31")],
+            vec![Origin::Unknown(ritsu_base::text::Text { ja: "入力 `open`".into(), en: "the input `open`".into() })],
+            vec![Origin::Now],
+        ]
+    );
+    // the calls of rules alone, which the port of rules reads
+    write("billing.flow", "workflow billing v1\ndescription \"Picks the batch of a day held to a range, and of one that is not\"\n\nuse rule batch from \"batch.rule\"\n\ninputs\n  received : date  range >=2026-03-01 <=2026-08-31\n  open     : date\n\nflow\n  let p = batch(pay_day: received)\n  let q = batch(pay_day: open)\n");
+    let calls = dandori::ports::Engine.rule_calls(&t.path().join("billing.flow"), Rc::new(rulec::ports::Engine::new())).unwrap_or_else(|e| panic!("{e:?}"));
+    let ranges: Vec<_> = calls.iter().map(|c| c.args[0].range).collect();
+    assert_eq!(ranges, [Some((Some(i128::from(day("2026-03-01"))), Some(i128::from(day("2026-08-31"))))), None]);
 }
 
 /// The calls of rules whose outputs an amount given to a transfer can be, for ritsu's X4 (ritsu's

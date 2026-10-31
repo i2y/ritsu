@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/period/E001_オフセット.flow:2:46: write the offset after `offset` as `+09:00`
+     2 |   now range >=2026-01-01 <=2026-12-31 offset 9

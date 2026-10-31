@@ -7,7 +7,8 @@
 //
 // runs.json: { "own": [ { "name", "method", "callback" } ], "children": [arn],
 //              "http": [...], "aws": [...],
-//              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
+//              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ],
+//                          "now": the moment `now` reads, or [the run's start, every later read] } ] }
 //
 // The tasks that say `lambda`, `http` or `aws`, and the rules and the dates, run the generated
 // code, with a Transport that writes down what it would send (tools/transport.mjs). The tasks
@@ -18,6 +19,11 @@
 //
 // The rounds of `for … in parallel` run one at a time here, so that the calls come in the
 // order the reference interpreter makes them.
+//
+// `now` reads the run's moment, as in the reference: the runs go one after another, and the copy
+// of runtime.ts reads the moments of the one that is going. The check of the period at the start
+// reads the moment the run starts at (its read is dd.stampAtStart() in the copy of workflow.ts),
+// and every other read the later one.
 //
 // With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), time is not skipped, and a call
 // that the scenario times out is held for 15 seconds, past the 10 of the generated code's limit,
@@ -40,6 +46,24 @@ const LIMITS = process.env.DANDORI_LIMITS === "1";
 const LATE_MS = 15000;
 const HAND_ON_LATE_MS = (60 + 15) * 1000;
 
+/** The moment `now` reads in a scenario that names none (dandori's render::SCENARIO_NOW). */
+const SCENARIO_NOW = "2026-03-31T15:30:00Z";
+/** The moments a run reads `now` at: the one it starts at, and the one of every later read. */
+const momentsOf = (r) => (Array.isArray(r.now) ? r.now : [r.now ?? SCENARIO_NOW, r.now ?? SCENARIO_NOW]);
+
+/** The text with the clock's read for the check of the period at the start (the nearest `read` before a line that says "the run starts at ") made `by`. */
+function atStart(text, read, by) {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes('"the run starts at "')) continue;
+    let j = i;
+    while (j >= 0 && !lines[j].includes(read)) j--;
+    if (j < 0) throw new Error(`workflow.ts has no ${read} before the check of the period at the start`);
+    lines[j] = lines[j].replace(read, by);
+  }
+  return lines.join("\n");
+}
+
 // Node runs TypeScript by stripping the types, and wants the extension on a relative import.
 const work = workDir("dandori-durable-");
 for (const f of fs.readdirSync(dir)) {
@@ -50,8 +74,23 @@ for (const f of fs.readdirSync(dir)) {
   // once for a delay past 2^31 - 1 ms (24.8 days): a `timeout until` further off waits that long here
   // instead, which no run reaches, as no run here times a callback out
   if (f === "workflow.ts") text = text.replace(/\{ timeout: \{ seconds: ([^ }]+) \} \}/g, "{ timeout: { seconds: Math.min($1, 2147483) } }");
-  // the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
-  if (f === "runtime.ts") text = text.replace('return new Date(ms).toISOString().slice(0, 19) + "Z";', 'return "2026-03-31T15:30:00Z";');
+  if (f === "workflow.ts") text = atStart(text, "dd.stamp(", "dd.stampAtStart(");
+  // the clock `now` reads is the run's moment, as in the reference (see the top)
+  const clock = 'return new Date(ms).toISOString().slice(0, 19) + "Z";';
+  if (f === "runtime.ts" && text.includes(clock)) {
+    text = text.replace(clock, "return ddTestNow(false);");
+    text += `
+/** \`now\` for the check of the period at the start: the moment the run starts at (tools/durable/run.mjs). */
+export function stampAtStart(ms: number): string {
+  return ddTestNow(true);
+}
+
+function ddTestNow(start: boolean): string {
+  const n = (globalThis as { DD_TEST_NOW?: [string, string] }).DD_TEST_NOW ?? [${JSON.stringify(SCENARIO_NOW)}, ${JSON.stringify(SCENARIO_NOW)}];
+  return start ? n[0] : n[1];
+}
+`;
+  }
   fs.writeFileSync(path.join(work, f), text);
 }
 // the generated code imports the SDK; let it find the runner's copy
@@ -174,6 +213,7 @@ const results = [];
 try {
   for (const r of spec.runs) {
     current = { answers: r.answers, next: 0, steps: [], calls: [], began: Date.now() };
+    globalThis.DD_TEST_NOW = momentsOf(r);
     runner = new LocalDurableTestRunner({ handlerFunction: makeHandler(own, makeTransport(spec, run)) });
     // a durable function a task invokes: it fails as a dandori workflow does, with the error in ErrorData
     for (const arn of spec.children ?? []) {

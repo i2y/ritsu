@@ -32,9 +32,16 @@ inductive Ty where
   | opt (t : Ty)
   deriving Repr, Inhabited
 
-structure Range where
-  lo : Option Int
-  hi : Option Int
+/-- A range a value is held to (`render::value_fits`): of numbers, its ends, both in; of days or of
+    times, the ends the code of every platform compares the value with as text (dandori's
+    `day_ends` and `moment_ends`, DESIGN 20) — the first day and the last, `2026-01-01`; or the
+    first second and the first second after the range, as the first 19 characters of a time,
+    `2026-01-01T00:00:00`, which the first 19 characters of a time are held to (`lo ≤ x < next`).
+    `none` at an open end. -/
+inductive Range where
+  | ints (lo hi : Option Int)
+  | days (lo hi : Option String)
+  | moments (lo next : Option String)
   deriving Repr, Inhabited
 
 structure Field where
@@ -44,8 +51,10 @@ structure Field where
   deriving Repr, Inhabited
 
 /-- An expression: a variable and the fields read from it, a value written out, a record, a list,
-    a string with values put in (its parts, each a literal string or a value), or `now`, the moment
-    the statement runs as the platform's clock reads it. -/
+    a string with values put in (its parts, each a literal string or a value), `now`, the moment
+    the statement runs as the platform's clock reads it, or the moment the check of the period at
+    `site` read (`TExpr::NowAt`: in a workflow that writes the period it runs in, every `now` but
+    those of `on failure` and `on cancel`). -/
 inductive Expr where
   | var (name : String) (fields : List String)
   | lit (v : Json)
@@ -53,6 +62,7 @@ inductive Expr where
   | list (items : List Expr)
   | interp (parts : List Expr)
   | now
+  | nowAt (site : Nat)
   deriving Inhabited
 
 /-- An error a handler takes: one the task declares, `timeout`, or `failure` (any). A declared
@@ -98,6 +108,12 @@ mutual
     | pass (site : Nat)
     | succeed (site : Nat) (fields : List (String × Expr))
     | fail (site : Nat) (error : String) (cause : Option Expr) (leaving : List Nat)
+    /-- A check of the period the workflow runs in (`now range`, dandori's DESIGN 20), which dandori
+        puts in: at the start of the flow (`start`), the moment the run starts at; before a
+        statement that reads `now`, the moment it reads, which the statement's `now` is
+        (`Expr.nowAt` this site). The ends the moment is held to as text (`Range.moments`), and the
+        cause a run outside fails with, before the moment and after it. -/
+    | period (site line : Nat) (start : Bool) (lo next : Option String) (before after : String)
   inductive Handler where
     | mk (errors : List HErr) (body : List Stmt)
   inductive Arm where

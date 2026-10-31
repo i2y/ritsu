@@ -29,7 +29,11 @@
 //     the task that hands on a callback's id (the line after `func <callback>(`); in runtime.go,
 //     every duration of the workflow's timers is at most 10 ms (ddSeconds), an event is waited for
 //     5 seconds at most, and every history is long enough to go on in a new run (ddContinueAt);
-//     and the rules are stand-ins, so rules.go (when there is one) bundles none of rulec's code.
+//     and the rules are stand-ins, so rules.go (when there is one) bundles none of rulec's code;
+//     `now` reads the moments the runner gives each run (ddTestNow, by the workflow's id, in the
+//     file dd_now.go the build adds to every package): the check of the period at the start the
+//     moment the run starts at (its read is ddTestNow(ctx, true) in workflow.go), and every other
+//     read the later one.
 //   - "limits": as "full", but the activities keep their timeouts and the timers their durations
 //     (the tests of the limits, tests/limits): a rule's call the scenario times out is held until
 //     the server times it out after the generated 10 seconds, and the retry waits 1 and 2 seconds;
@@ -147,6 +151,7 @@ func build(out, manifestFile string) error {
 			return fmt.Errorf("%s: io.go has no package clause", e.Key)
 		}
 		files["dd_checks.go"] = strings.ReplaceAll(checksHooks, "{{PKG}}", m[1])
+		files["dd_now.go"] = strings.ReplaceAll(nowHooks, "{{PKG}}", m[1])
 		for name, text := range files {
 			if err := write(filepath.Join(work, "flows", dir, name), text); err != nil {
 				return err
@@ -243,7 +248,7 @@ const (
 	secondsMarker = "return time.Duration(n * float64(time.Second))"
 	secondsShort  = "return time.Duration(math.Min(n, 0.01) * float64(time.Second))"
 	nowMarker     = `return workflow.Now(ctx).UTC().Format("2006-01-02T15:04:05Z")`
-	nowFixed      = `return "2026-03-31T15:30:00Z"`
+	nowOfRun      = `return ddTestNow(ctx, false)`
 	continueAt    = "const ddContinueAt = 10000"
 	continueSoon  = "const ddContinueAt = 1"
 	// an event's wait is not a timer to shorten to nothing: the runner has to see it, and send the event
@@ -274,7 +279,11 @@ func patch(files map[string]string, e entry, timeout int) error {
 	if !ok {
 		return errors.New("no workflow.go")
 	}
-	files["workflow.go"] = atATime.ReplaceAllString(wf, "ddAtATime(1)")
+	wf, err := atStart(atATime.ReplaceAllString(wf, "ddAtATime(1)"), "ddNow(ctx)", "ddTestNow(ctx, true)")
+	if err != nil {
+		return err
+	}
+	files["workflow.go"] = wf
 	short := fmt.Sprintf("StartToCloseTimeout: %d * time.Second", timeout)
 	for name, text := range files {
 		if limits {
@@ -313,8 +322,8 @@ func patch(files map[string]string, e entry, timeout int) error {
 		}
 		rt = strings.Replace(rt, p.marker, p.by, 1)
 	}
-	// the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
-	rt = strings.Replace(rt, nowMarker, nowFixed, 1)
+	// the clock `now` reads is the run's moment, as in the reference (see the top)
+	rt = strings.Replace(rt, nowMarker, nowOfRun, 1)
 	files["runtime.go"] = withMath(rt)
 	// the rules are stand-ins here, so the build needs none of rulec's packages
 	if rules, ok := files["rules.go"]; ok {
@@ -326,6 +335,62 @@ func patch(files map[string]string, e entry, timeout int) error {
 	}
 	return nil
 }
+
+// atStart is the text with the clock's read for the check of the period at the start (the nearest
+// read before a line that says "the run starts at ") made by.
+func atStart(text, read, by string) (string, error) {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, `"the run starts at "`) {
+			continue
+		}
+		j := i
+		for j >= 0 && !strings.Contains(lines[j], read) {
+			j--
+		}
+		if j < 0 {
+			return "", fmt.Errorf("workflow.go has no %s before the check of the period at the start", read)
+		}
+		lines[j] = strings.Replace(lines[j], read, by, 1)
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// nowHooks is a file the build adds to each package: the moments `now` reads in each run, which
+// the harness gives (Flow.SetNows), and the read of them that the patched ddNow makes.
+const nowHooks = `// Written by tools/temporal-go/build, for the runner: the moments ` + "`now`" + ` reads in each run.
+
+package {{PKG}}
+
+import (
+	"sync"
+
+	"go.temporal.io/sdk/workflow"
+)
+
+// ddTestNows holds the moments ` + "`now`" + ` reads in each run, by its workflow's id: the one it starts at,
+// for the check of the period there, and the one of every later read.
+var ddTestNows sync.Map
+
+// DDSetNows gives the run of the workflow's id its moments.
+func DDSetNows(id string, nows [2]string) {
+	ddTestNows.Store(id, nows)
+}
+
+// ddTestNow is the moment a read of ` + "`now`" + ` gets in the run that reads it: the one the run starts at
+// for the check of the period there, the later one for every other read (dandori's
+// render::SCENARIO_NOW for a run the harness gave none).
+func ddTestNow(ctx workflow.Context, start bool) string {
+	n := [2]string{"2026-03-31T15:30:00Z", "2026-03-31T15:30:00Z"}
+	if v, ok := ddTestNows.Load(workflow.GetInfo(ctx).WorkflowExecution.ID); ok {
+		n = v.([2]string)
+	}
+	if start {
+		return n[0]
+	}
+	return n[1]
+}
+`
 
 // checksHooks is a file the build adds to each package: its own readings of a rule's answer from
 // the rule's Connect service and of Jev's answer, which the checks call (--connect-read, --jev).
@@ -499,7 +564,8 @@ func {{.Alias}}Flow() harness.Flow {
 			}
 			return out
 		},
-		Start: {{.Alias}}.Start,
+		Start:   {{.Alias}}.Start,
+		SetNows: {{.Alias}}.DDSetNows,
 		Answer: func(ctx context.Context, c client.Client, callbackID string, a harness.CallbackAnswer) error {
 			return {{.Alias}}.Answer(ctx, c, callbackID, {{.Alias}}.CallbackAnswer(a))
 		},

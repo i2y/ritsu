@@ -1,0 +1,68 @@
+# Ranges of dates and times, and the period a workflow runs in (DESIGN 20). An input, a field of a
+# record, a task's argument and its answer, an output and the inputs of a child hold a date or a
+# time to a range, a time in an offset too, and each is held where it comes in. The workflow runs
+# in a period: the start of a run is held to it, and so is each statement that reads `now`, after
+# the wait as well; a `now` goes to a dates file's input, whose range takes every day of the
+# period. A run whose clock leaves the period after it starts goes to `on failure`, whose `now`
+# the period does not hold. It runs on every platform.
+workflow date_ranges v1
+  now range >=2026-04-01 <=2027-12-31
+description "A visit is booked on a day of its range, confirmed by a child workflow, and reminded of after the wait for its answer; the workflow runs in a period, which the start of a run and each now it reads are held to"
+
+use dates terms from "dates/answer_terms.cal"
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:answer-terms"
+
+record Visit
+  id     : string
+  day    : date       range >=2026-01-01 <=2026-12-31
+  window : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+record Booking
+  day : date       range >=2026-01-01 <=2027-12-31
+  at  : timestamp  range >=2026-01-01
+
+record Confirmed
+  by : string
+
+inputs
+  visit : Visit
+  after : date       range >=2026-01-01
+  until : timestamp  range <=2027-12-31
+
+outputs
+  booked   : date       range >=2026-01-01 <=2027-12-31
+  answer   : timestamp
+  reminded : timestamp  range >=2026-01-01 <=2027-12-31
+  done     : timestamp  range >=2026-01-01 <=2027-12-31
+
+task book(id: string, after: date  range >=2026-01-01, until: timestamp) -> Booking
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:book"
+  idempotent
+
+# The child holds the day and the window to ranges of its own, which the ones passed here are in.
+task confirm(id: string, day: date  range >=2026-01-01 <=2027-12-31, window: timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00) -> Confirmed
+  flow "date_ranges_child.flow"
+  state machine "arn:aws:states:us-east-1:123456789012:stateMachine:confirm-visit"
+  durable function "arn:aws:lambda:us-east-1:123456789012:function:confirm-visit:live"
+
+task remind(id: string, at: timestamp  range >=2026-01-01 <=2027-12-31) -> timestamp  range >=2026-01-01 <=2027-12-31
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:remind"
+  idempotent
+
+task release(id: string, at: timestamp)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:release"
+  idempotent
+
+flow
+  let booking = book(id: visit.id, after: after, until: until)
+  let confirmed = confirm(id: visit.id, day: booking.day, window: visit.window)
+  # every day of the period is one the dates file takes
+  let due = terms.due(received: now)
+  wait until due.at
+  # read after the wait, `now` is held to the period again
+  let sent = remind(id: confirmed.by, at: now)
+  succeed booked = booking.day, answer = due.at, reminded = sent, done = now
+
+on failure
+  # the period does not hold this `now`: what settles a run is not stopped by the clock
+  release(id: visit.id, at: now)

@@ -8,9 +8,10 @@
 //!   against one in 1% steps, a rate against a number), asked about every pair of ranges a grid of
 //!   ends makes, open ends and empty ranges among them.
 //! - X2 at the call (`ritsu check`): small projects whose flow calls a rule with a `constraint`, or
-//!   with an input whose range is a koyomi date, checked as `ritsu check` checks them; the values
-//!   the call gives are what dandori's port says (`Flows::crossings`), and the answer is what
-//!   `ritsu check` says of the precondition (E201 with its example, W201, or nothing).
+//!   with an input whose range is a koyomi date — given the day of a koyomi date, or a date input
+//!   with a range of days — checked as `ritsu check` checks them; the values the call gives are what
+//!   dandori's port says (`Flows::crossings`), and the answer is what `ritsu check` says of the
+//!   precondition (E201 with its example, W201, or nothing).
 //! - X2 at a call of kaname (`ProgramVerdicts`): small modules that call a rule with a `constraint`,
 //!   under a condition that keeps a relation between the two values, with none, with the values
 //!   swapped, and with one value to both; the relations, ranges and runs are what kaname's port says
@@ -19,7 +20,8 @@
 //! - X3 (a): every date of every dates file of koyomi's examples and fixtures that passes its check
 //!   (the port answers for no other: the examples that break a claim on purpose are left out) —
 //!   the set of days koyomi's port hands over (`Dates::values`) against the set the model computes
-//!   from the same file, and `days_fit` and `days_given` over the sets against ranges around them.
+//!   from the same file, and `days_fit` and `days_given` over the sets, and over ranges of days a
+//!   `.flow` writes beside them, against ranges around them.
 //! - X3 (b): the days a rulec certificate carries for an input whose range is a koyomi date
 //!   (`range from koyomi`) against the set the model computes from the koyomi file.
 //! - X4: `amount_fits`, `amounts_given` and `amounts_hull` over every numeric output of the rules of
@@ -35,7 +37,8 @@
 //! - X5: `held_until` over a grid of the fewest and most seconds a call comes after a hold and the
 //!   seconds the hold expires after, around each edge.
 //! - X6: `input_range` over every input of every dates file, and `days_given` of the days of each
-//!   koyomi date against each date input's range.
+//!   koyomi date, and of ranges of days and of moments read as days at an offset
+//!   (`borders::moment_days`), against each date input's range.
 //!
 //! `-- --nocapture` shows a `compared cross <what>: <n> lines` line for each.
 
@@ -43,7 +46,7 @@ mod common;
 
 use koyomi::check::{Checked, DEFAULT_BUDGET, check};
 use ritsu_base::text::Lang;
-use ritsu_cross::borders::{amount_fits, amounts_given, amounts_hull, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom};
+use ritsu_cross::borders::{amount_fits, amounts_given, amounts_hull, days_fit, days_given, held_until, input_range, moment_days, refusals_met, AmountFrom, DayFrom};
 use ritsu_model::{compare, program};
 use ritsu_ports::{Amount, Answer, Books, ColumnType, Crossing, DateKind, Dates, Flows, Found, Held, Origin, OutputCall, OutputValues, Precondition, Programs, Rules, Value as Wire, Values, Verdicts};
 use ritsu_testkit::{Need, TempDir, ready};
@@ -69,6 +72,14 @@ fn run(bin: &Path, tmp: &TempDir, file: &Value, what: &str, rows: Vec<(String, S
     assert_eq!(c.differ, 0, "{}", c.report(what));
     println!("compared cross {what}: {} lines", c.lines);
     c.lines
+}
+
+/// Where the day of an example of `days_given` comes from, as `RitsuCross.daysGivenLine` writes it.
+fn given_example(&(from, day): &(DayFrom, i64)) -> Value {
+    match from {
+        DayFrom::Date(i) => json!([{ "date": i }, day]),
+        DayFrom::Range(i) => json!([{ "range": i }, day]),
+    }
 }
 
 /// An answer as `RitsuCross.answerJ` writes it.
@@ -183,7 +194,8 @@ fn example_of(note: &str) -> Value {
 }
 
 /// The kinds of place a value can come from, as `RitsuCross.Origin` reads them: the days koyomi
-/// counts for each koyomi date it can be the day of, and `other` for the rest.
+/// counts for each koyomi date it can be the day of, the ends of each range of days it can be in,
+/// and `other` for the rest.
 fn origins_json(joined: &ritsu_project::Joined, from: &[Origin]) -> Value {
     Value::Array(
         from.iter()
@@ -192,6 +204,7 @@ fn origins_json(joined: &ritsu_project::Joined, from: &[Origin]) -> Value {
                     Ok(Found::Value(set)) => json!({ "day": set.iter().collect::<Vec<_>>() }),
                     _ => json!({ "day": null }),
                 },
+                Origin::Range(lo, hi) => json!({ "range": [end(*lo), end(*hi)] }),
                 _ => json!("other"),
             })
             .collect(),
@@ -210,7 +223,7 @@ const TERMS_CAL: &str = "dates payment_terms v1\ndescription \"Closes on the 20t
 
 const DAYS_RULE: &str = "rule batch v1\ndescription \"The billing batch a payment day falls in\"\n\nenum run = spring | autumn\n\ninputs\n  pay_day : date  range from koyomi \"payment_terms.cal\" date DATE\n\noutputs\n  batch : run\n\ntable pick\npolicy unique\n| pay_day      | -> batch : run |\n| <=2026-08-31 | spring         |\n| >=2026-09-01 | autumn         |\n";
 
-const DAYS_FLOW: &str = "workflow billing v1\ndescription \"Bills an order in the batch the rule picks for a day\"\n\nuse dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\nuse rule batch from \"batch.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:batch\"\n\ninputs\n  order    : string\n  received : date\n  at_once  : bool\n\ntask bill(order: string, due: date, run: batch.run)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:bill\"\n  key\n\nflow\n  let due = terms.payment(received: received)\n  let day = due.day\n  match at_once\n    true => let day = DAY\n    false => pass\n  let pick = batch(pay_day: day)\n  bill(order: order, due: day, run: pick.batch)\n";
+const DAYS_FLOW: &str = "workflow billing v1\ndescription \"Bills an order in the batch the rule picks for a day\"\n\nuse dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\nuse rule batch from \"batch.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:batch\"\n\ninputs\n  order    : string\n  received : date\n  at_once  : bool\n  paid_on  : date  range >=2026-02-10 <=2026-02-10\n  paid_by  : date  range >=2026-02-10 <=2026-03-10\n\ntask bill(order: string, due: date, run: batch.run)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:bill\"\n  key\n\nflow\n  let due = terms.payment(received: received)\n  let day = due.day\n  match at_once\n    true => let day = DAY\n    false => pass\n  let pick = batch(pay_day: day)\n  bill(order: order, due: day, run: pick.batch)\n";
 
 /// What `ritsu check` says of the one precondition at the one call of a project: the E201 with its
 /// example, the W201, or nothing, as `RitsuCross.answerJ` writes it.
@@ -282,9 +295,10 @@ fn x2_at_the_call_is_the_models_decision() {
             rows.push((line.to_string(), said_of_call(&crossed, &format!("{op} {xr} {yr} {a} {b}"))));
         }
     }
-    // a date input over the days of a koyomi date: given those days, the days of another date,
-    // and a day that can also be the one received
-    let days_cases = [("payment", "due.day"), ("closing", "due.day"), ("payment", "received")];
+    // a date input over the days of a koyomi date: given those days, the days of another date, a
+    // day that can also be the one received, and a day that can also be one of a range of days the
+    // flow's input takes, inside the rule's days and not
+    let days_cases = [("payment", "due.day"), ("closing", "due.day"), ("payment", "received"), ("payment", "paid_on"), ("payment", "paid_by")];
     for (date, day) in days_cases {
         let dir = project(vec![
             ("payment_terms.cal", TERMS_CAL.to_string()),
@@ -495,12 +509,21 @@ fn x3a_the_days_of_every_koyomi_date_are_the_models() {
         }
         let sets_json = |fs: &[Found<ritsu_ports::DaySet>]| Value::Array(fs.iter().map(|f| match f { Found::Value(s) => json!(s.iter().collect::<Vec<_>>()), Found::Undecided(_) => Value::Null }).collect());
         let why = ritsu_base::tr!("何日かは分かりません", "nothing says what day");
+        // ranges of days the value can be in beside the dates, as a `.flow` writes them (a date's
+        // range, or a time's read as days): none, the days' own, one a day wider, open at an end,
+        // and two of which the second is past the days
+        let mut spans: Vec<Vec<(Option<i64>, Option<i64>)>> = vec![vec![]];
+        if let (Some(lo), Some(hi)) = (all.iter().min().copied(), all.iter().max().copied()) {
+            spans.extend([vec![(Some(lo), Some(hi))], vec![(Some(lo - 1), Some(hi))], vec![(None, Some(hi))], vec![(Some(lo), None)], vec![(Some(lo), Some(lo)), (Some(hi + 1), Some(hi + 2))]]);
+        }
         for pick in [sets.clone(), sets.iter().rev().cloned().collect(), sets.iter().take(1).cloned().collect(), vec![]] {
             for other in [false, true] {
-                for r in &ranges {
-                    let line = json!({"days_given": {"dates": sets_json(&pick), "other": other, "range": [r.0, r.1]}});
-                    let rust = answer(&days_given(&pick, other.then_some(&why), *r), |(i, d)| json!([i, d]));
-                    rows.push((line.to_string(), rust));
+                for span in &spans {
+                    for r in &ranges {
+                        let line = json!({"days_given": {"dates": sets_json(&pick), "ranges": span.iter().map(|x| json!([x.0, x.1])).collect::<Vec<_>>(), "other": other, "range": [r.0, r.1]}});
+                        let rust = answer(&days_given(&pick, span, other.then_some(&why), *r), given_example);
+                        rows.push((line.to_string(), rust));
+                    }
                 }
             }
         }
@@ -1067,11 +1090,17 @@ fn x6_the_day_given_to_every_koyomi_date_is_the_models() {
             let range = input_range(&facts, name);
             rows.push((line.to_string(), range.map_or("null".to_string(), |(lo, hi)| json!([lo, hi]).to_string())));
             let Some((lo, hi)) = range else { continue };
+            // the moments of the input's days, as a time's range or the period the workflow runs in
+            // can be, read as days in UTC and nine hours east; and ranges of days open at an end
+            let moments = (Some(lo * 86_400), Some((hi + 1) * 86_400 - 1));
+            let spans: Vec<Vec<(Option<i64>, Option<i64>)>> = vec![vec![], vec![moment_days(moments, 0)], vec![moment_days(moments, 540)], vec![moment_days(moments, -300)], vec![(Some(lo), None)], vec![(None, Some(hi))]];
             for pick in [&sets[..], &sets[..1], &sets[sets.len() - 1..]] {
                 for other in [false, true] {
-                    let line = json!({"days_given": {"dates": pick.iter().map(|f| match f { Found::Value(s) => json!(s.iter().collect::<Vec<_>>()), Found::Undecided(_) => Value::Null }).collect::<Vec<_>>(), "other": other, "range": [lo, hi]}});
-                    let rust = answer(&days_given(pick, other.then_some(&why), (Some(lo), Some(hi))), |(i, d)| json!([i, d]));
-                    rows.push((line.to_string(), rust));
+                    for span in &spans {
+                        let line = json!({"days_given": {"dates": pick.iter().map(|f| match f { Found::Value(s) => json!(s.iter().collect::<Vec<_>>()), Found::Undecided(_) => Value::Null }).collect::<Vec<_>>(), "ranges": span.iter().map(|x| json!([x.0, x.1])).collect::<Vec<_>>(), "other": other, "range": [lo, hi]}});
+                        let rust = answer(&days_given(pick, span, other.then_some(&why), (Some(lo), Some(hi))), given_example);
+                        rows.push((line.to_string(), rust));
+                    }
                 }
             }
         }

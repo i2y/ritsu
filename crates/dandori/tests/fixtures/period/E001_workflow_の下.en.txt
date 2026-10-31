@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/period/E001_workflow_の下.flow:3:3: only `history encrypted` and `now range` can be written under `workflow`
+     3 |   retry 3 times

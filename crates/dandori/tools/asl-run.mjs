@@ -14,7 +14,13 @@
 //
 //   node tools/asl-run.mjs <definition.asl.json> <run.json> [execution name]
 //
-// run.json: { "input": {...}, "answers": [ {"ok": value} | {"error": kind, "as": ASL error name} ] }
+// run.json: { "input": {...}, "answers": [ {"ok": value} | {"error": kind, "as": ASL error name} ],
+//             "now": the moment `now` reads, or [the moment the run starts at, the moment every later
+//                    read gets] (dandori's scenarios; render::SCENARIO_NOW when there is none) }
+//
+// `now` reads the moment a state was entered. The Pass that reads it for the check of the period at
+// the start of a workflow (dandori's asl::PERIOD_AT_START) gets the moment the run starts at, and
+// every other state the later one, as the reference interpreter reads them.
 //
 // It is a module too: `play` runs one execution and gives, besides what it prints, the Task
 // state that made each call (tools/localstack/run.mjs mocks each state's answers with it), and
@@ -23,6 +29,14 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import jsonata from "jsonata";
+
+/** The moment `now` reads in a scenario that names none (dandori's render::SCENARIO_NOW). */
+export const SCENARIO_NOW = "2026-03-31T15:30:00Z";
+/** The Pass that reads the clock for the check of the period at the start (dandori's asl::PERIOD_AT_START). */
+export const PERIOD_AT_START = "period at the start";
+
+/** A moment as Step Functions writes when a state was entered: with its milliseconds. */
+const entered = (t) => t.replace(/Z$/, ".000Z");
 
 class Stop extends Error {
   constructor(end) {
@@ -208,7 +222,7 @@ export async function play(def, run, execution = "test") {
       if (++transitions > 20000) throw new Error("more than 20000 transitions");
       const st = all[name];
       if (!st) throw new Stop({ fail: { error: "States.Runtime", cause: `no state ${name}` } });
-      const states = { input, context };
+      const states = { input, context: name === PERIOD_AT_START ? { ...context, State: { EnteredTime: entered(nows[0]) } } : context };
       let output = input;
       switch (st.Type) {
         case "Pass": {
@@ -331,8 +345,9 @@ export async function play(def, run, execution = "test") {
     }
   }
 
-  // `now` reads the moment the state was entered: the scenarios' moment here (dandori's render::SCENARIO_NOW)
-  const context = { Execution: { Name: execution }, Task: { Token: "token" }, State: { EnteredTime: "2026-03-31T15:30:00.000Z" } };
+  // `now` reads the moment the state was entered: the scenario's here (see the top)
+  const nows = Array.isArray(run.now) ? run.now : [run.now ?? SCENARIO_NOW, run.now ?? SCENARIO_NOW];
+  const context = { Execution: { Name: execution }, Task: { Token: "token" }, State: { EnteredTime: entered(nows[1]) } };
   try {
     await runStates(def.States, def.StartAt, run.input, context, true);
   } catch (e) {

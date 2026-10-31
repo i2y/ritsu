@@ -1,0 +1,9 @@
+ok settlement.rule
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+billing.flow: ok
+error[ritsu E201]: billing.flow:16:1: The call of the rule settlement can give it values that break its precondition `pay_day in koyomi "payment_terms.cal" date payment`
+    16 |   let pick = settlement(pay_day: paid)
+  = `paid` is a day of `>=2026-02-10 <=2026-03-10` and can be 2026-02-11, which is not a day of koyomi "payment_terms.cal" date payment
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. koyomi counts the days of a date over the whole range of its inputs.
+  = Give it the days of koyomi "payment_terms.cal" date payment, or correct the rule's range.
+ritsu check: 3 files (rulec 1, koyomi 1, dandori 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

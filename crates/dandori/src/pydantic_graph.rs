@@ -32,6 +32,19 @@ pub fn package(m: &Model) -> String {
     ident(&m.name)
 }
 
+/// `now` in a node: the clock of the run.
+const NOW: &str = "dd.now(deps.clock)";
+
+/// A node's lines, where it reads the clock for `now`: read once, at the start, so that one
+/// statement reads one moment, as on every other platform. A call's arguments are made again for
+/// each try, after a wait that moves the clock on, and two `now`s of a statement are two reads.
+fn one_now(body: &[String]) -> Vec<String> {
+    if !body.iter().any(|l| l.contains(NOW)) {
+        return body.to_vec();
+    }
+    std::iter::once(format!("dd_now = {NOW}")).chain(body.iter().map(|l| l.replace(NOW, "dd_now"))).collect()
+}
+
 /// The End type of the main graph: the workflow's outputs, or None.
 const OUTPUT: &str = "dict[str, Any] | None";
 
@@ -441,7 +454,8 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => if *b { "True".into() } else { "False".into() },
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "None".into(),
-            TExpr::Now => "dd.now(deps.clock)".into(),
+            TExpr::Now => NOW.into(),
+            TExpr::NowAt(site) => format!("s.{}", render::now_name(*site)),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 for (i, f) in fields.iter().enumerate() {
@@ -584,7 +598,7 @@ impl<'a> Gen<'a> {
                 out.push_str(&format!("\n\n@dataclass\nclass {}(BaseNode[State, Deps, \"{}\"]):\n    \"\"\"{}\"\"\"\n\n", n.class, n.end, n.doc));
                 out.push_str(&format!("    async def run(self, ctx: GraphRunContext[State, Deps]) -> {}:\n", ret.join(" | ")));
                 out.push_str("        s, deps = ctx.state, ctx.deps\n");
-                for l in &n.body {
+                for l in &one_now(&n.body) {
                     if l.is_empty() {
                         out.push('\n');
                     } else {
@@ -697,6 +711,33 @@ impl<'a> Gen<'a> {
                 let mut n = self.node(format!("S{site}_fail"), format!("line {line}: fail {error}"), (site, 0), cx);
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "None".into());
                 n.line(0, &format!("raise dd.Failure({}, {c})", q(error)));
+                self.push(n)
+            }
+            // the period the workflow runs in (DESIGN 20): the clock, read once and held to it
+            TK::Period { start } => {
+                let p = m.period.as_ref().expect("a check of the period is in a flow with one");
+                let now = render::now_name(site);
+                self.field(now.clone(), "str", "\"\"");
+                let holds = p.tests(|op, end| format!("s.{now}[:19] {op} {}", q(end))).join(" and ");
+                let (before, after) = p.cause_around((!*start).then_some(line));
+                let cause = format!("{} + s.{now} + {}", q(&before), q(&after));
+                let doc = if *start { format!("the period the workflow runs in, {}: a run that starts outside it calls nothing", p.text) } else { format!("line {line}: now, held to the period the workflow runs in") };
+                let mut n = self.node(format!("S{site}_period"), doc, (site, 0), cx);
+                n.line(0, &format!("s.{now} = {NOW}"));
+                n.line(0, &format!("if not ({holds}):"));
+                if *start {
+                    n.line(1, &format!("raise dd.Failure({}, {cause})", q(OUT_OF_PERIOD)));
+                } else {
+                    // outside it, the run goes on as after a task's error that no `on` takes
+                    match cx.unhandled {
+                        Unhandled::Raise => n.line(1, &format!("raise dd.TaskError({}, {cause})", q(OUT_OF_PERIOD))),
+                        _ => {
+                            n.line(1, &format!("e = dd.TaskError({}, {cause})", q(OUT_OF_PERIOD)));
+                            Gen::unhandled(&mut n, 1, cx);
+                        }
+                    }
+                }
+                n.jump(0, &next);
                 self.push(n)
             }
             // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made

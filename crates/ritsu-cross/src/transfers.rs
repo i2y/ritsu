@@ -145,7 +145,7 @@ fn amounts(project: &Project, joined: &Joined, a: &Amount) -> Amounts {
             Origin::Unknown(t) => {
                 got.other.get_or_insert(tr!("`{shown}` の範囲が分かりません（{}）", "nothing says what range `{shown}` is in ({} has no range)", crate::then_ja(&t.ja, "に範囲がありません"); t.en));
             }
-            Origin::Day { .. } | Origin::Now => {
+            Origin::Day { .. } | Origin::Now | Origin::Moment { .. } => {
                 got.other.get_or_insert(tr!("`{shown}` は数ではないところから来ることがあります", "`{shown}` can come from somewhere that is not a number"));
             }
         }

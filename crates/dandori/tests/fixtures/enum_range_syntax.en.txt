@@ -15,5 +15,5 @@ error[E003]: tests/fixtures/enum_range_syntax.flow:16:29: no value of `tiers.tie
   = the values of `tiers.tier` are, in order, basic < silver < gold < platinum
 error[E003]: tests/fixtures/enum_range_syntax.flow:17:30: the bound `basic` is not a value of `int`
     17 |   a_name      : int  range >=basic
-error[E003]: tests/fixtures/enum_range_syntax.flow:18:25: a range is for a number (`int` or a unit) or an ordered enum, and this is `string`
+error[E003]: tests/fixtures/enum_range_syntax.flow:18:25: a range is for a number (`int` or a unit), an ordered enum, a date or a time, and this is `string`
     18 |   a_text      : string  range >=basic

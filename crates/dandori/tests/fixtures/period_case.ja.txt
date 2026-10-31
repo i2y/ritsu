@@ -1,0 +1,5 @@
+警告[W101]: tests/fixtures/period_case.flow:26:1: `now` がワークフローの動く期間の外になると、案件 `p` が pending のままワークフローが失敗します。そうなるところは 2 か所です。`on failure` を足して案件を片付けてください
+    26 |   let at = now
+  そうなる例:
+      24  open_payment: p が pending で始まる
+      26  `now` が期間の外になる

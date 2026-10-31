@@ -1,0 +1,5 @@
+warning[W101]: tests/fixtures/period_case.flow:26:1: if `now` is outside the period the workflow runs in, the workflow fails with the case `p` in pending; 2 place(s) can fail like this. Add `on failure` to settle the case
+    26 |   let at = now
+  the run that gets there:
+      24  open_payment: p starts in pending
+      26  `now` is outside the period

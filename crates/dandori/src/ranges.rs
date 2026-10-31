@@ -12,6 +12,16 @@
 //! that can be a value the range of where it goes does not let in is E014, said in those values;
 //! the type always says what an enum's value can be, so there is no W104 for one.
 //!
+//! A date and a time may be held to a range too (`range >=2026-01-01 <=2027-12-31`, DESIGN 20):
+//! a date's range is its days (day numbers), a time's its seconds, and they are checked as numbers
+//! are, said in days and moments. `now` is a moment of the period the workflow runs in, when it
+//! says one (`now range`, which every statement that reads `now` is held to: `TExpr::NowAt`), and
+//! says nothing of what it is otherwise, nor in `on failure` and `on cancel`, which the period does
+//! not hold. The day of a koyomi date (`due.day`) is one of the days koyomi counts it to over the
+//! whole range of its inputs, and its time (`due.at`) that day's time at the calendar's offset: for
+//! what dandori itself holds to a range (E014), not for the values it hands ritsu at a rule's call,
+//! whose days ritsu decides itself (X2, X3 (a)).
+//!
 //! Where a value comes in (an input, the answer of a task or a rule) its range is checked when
 //! the workflow runs, by the code each platform is given; here, the ranges are taken as true.
 
@@ -96,7 +106,7 @@ fn takes(m: &Model, t: &Ty, rg: Option<Range>) -> Option<Takes> {
 }
 
 pub fn check(m: &Model) -> Vec<Diag> {
-    let vars = variables(m);
+    let vars = variables_by(m, Written::Itself, true);
     let mut out = Vec::new();
     for s in m.all_stmts() {
         let mut give = |e: &TExpr, want: Option<Takes>, en: String, ja: String| {
@@ -171,32 +181,70 @@ pub fn rule_calls(m: &Model) -> Vec<(usize, usize, Vec<(String, String, Option<R
     out
 }
 
-/// The diagnostic for giving `e` to a place whose range is `want`, if it may not fit.
+/// The diagnostic for giving `e` to a place whose range is `want`, if it may not fit. A date's and
+/// a time's ranges are said in days and moments.
 fn fit(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, want: Range, line: usize, place_en: &str, place_ja: &str) -> Option<Diag> {
-    let est = estimate(m, vars, e);
+    let est = estimate_by(m, vars, e, Written::Itself, true);
+    let ty = e.ty();
     let x = e.show();
-    let w = want.show();
+    let w = m.range_text(&ty, &want);
     if let Some(have) = est.known {
         if !have.within(&want) {
+            let h = m.range_text(&ty, &have);
             return Some(match (have.lo, have.hi) {
                 _ if matches!(e, TExpr::Int(_)) => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は{place_ja}の範囲`{w}`の外です")), format!("`{x}` is outside `{w}`, the range of {place_en}"))),
-                (Some(a), Some(b)) if a == b => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は {a} で、{place_ja}の範囲`{w}`の外です")), format!("`{x}` is {a}, outside `{w}`, the range of {place_en}"))),
-                _ => Diag::error(
-                    "E014",
-                    line,
-                    1,
-                    Text::new(spaced(format!("`{x}`は`{}`で、{place_ja}の範囲`{w}`を外れることがあります", have.show())), format!("`{x}` can be outside `{w}`, the range of {place_en}: it is `{}`", have.show())),
-                ),
+                (Some(a), Some(b)) if a == b => {
+                    let a = one_text(&ty, a);
+                    Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は {a} で、{place_ja}の範囲`{w}`の外です")), format!("`{x}` is {a}, outside `{w}`, the range of {place_en}")))
+                }
+                _ => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は`{h}`で、{place_ja}の範囲`{w}`を外れることがあります")), format!("`{x}` can be outside `{w}`, the range of {place_en}: it is `{h}`"))),
             });
         }
     }
     let Text { en: from_en, ja: from_ja } = est.unknown?;
-    Some(Diag::warning(
+    let d = Diag::warning(
         "W104",
         line,
         1,
         Text::new(spaced(format!("`{x}`の範囲が分かりません（{from_ja}に範囲がありません）。{place_ja}が受け取るのは`{w}`です")), format!("nothing says what range `{x}` is in ({from_en} has no range), and {place_en} takes `{w}`")),
-    ))
+    );
+    // `now` with no period says nothing of what it is: the period is where to say it
+    Some(if from_en == now_text(m).en {
+        d.note(match &m.period {
+            None => Text::new(
+                spaced("`now`は、ワークフローが動く期間を書かなければ、どの時刻にもなりえます。`workflow`の下に`now range >=2026-01-01 <=2027-12-31`のように期間を書くと、`now`はその中の時刻になります".into()),
+                "`now` can be any moment unless the workflow says the period it runs in: with `now range >=2026-01-01 <=2027-12-31` under `workflow`, `now` is a moment in it".to_string(),
+            ),
+            Some(_) => Text::new(
+                spaced("`on failure`と`on cancel`の中の`now`は、後始末を時計で止めないよう、動く期間で確かめません。どの時刻にもなりえます".into()),
+                "`now` in `on failure` and `on cancel` is not held to the period, so that what settles a run is not stopped by the clock: it can be any moment".to_string(),
+            ),
+        })
+    } else {
+        d
+    })
+}
+
+/// One value of a range of the type `t`, as the range is written: a number, a day or a moment.
+fn one_text(t: &Ty, n: i64) -> String {
+    let mut inner = t;
+    while let Ty::Opt(x) | Ty::List(x) = inner {
+        inner = x;
+    }
+    match inner {
+        Ty::Date => day_text(n),
+        Ty::Timestamp => moment_text(n),
+        _ => n.to_string(),
+    }
+}
+
+/// Where `now` comes from when nothing holds it to a period: a workflow that says none, or `on
+/// failure` and `on cancel`, which the period does not hold.
+fn now_text(m: &Model) -> Text {
+    match m.period {
+        None => tr!("動く期間を書いていないワークフローの `now`", "`now` in a workflow that says no period it runs in"),
+        Some(_) => tr!("`on failure` と `on cancel` の中の `now`", "`now` in `on failure` and `on cancel`"),
+    }
 }
 
 /// The diagnostic for giving `e` to a place that takes only the values `takes` of its enum (the
@@ -279,14 +327,14 @@ enum Written {
 /// What each variable can be: every value put in it, joined, until nothing more changes. An input
 /// and a task's answer of an enum can be any value its range lets in, every value of it without one.
 pub(crate) fn variables(m: &Model) -> BTreeMap<String, Est> {
-    variables_by(m, Written::Itself)
+    variables_by(m, Written::Itself, false)
 }
 
 /// What the values of an enum each variable holds can be, as the places they come from hold them
 /// (the check of a `match` reads it, `held_values`): a place's range lets in its values, a place
 /// without one every value of its enum, and so does a value written out.
 pub(crate) fn held(m: &Model) -> BTreeMap<String, Est> {
-    variables_by(m, Written::Any)
+    variables_by(m, Written::Any, false)
 }
 
 /// The values of its enum `e` can be where a `match` reads it, in the enum's order, when the places
@@ -294,13 +342,16 @@ pub(crate) fn held(m: &Model) -> BTreeMap<String, Est> {
 /// it comes in (an input, a task's answer, a field) keep it there. None when it can be any of them.
 pub(crate) fn held_values(m: &Model, held: &BTreeMap<String, Est>, e: &TExpr) -> Option<Vec<String>> {
     let en = e.ty().enum_inside()?;
-    let est = estimate_by(m, held, e, Written::Any);
+    let est = estimate_by(m, held, e, Written::Any, false);
     let order = &m.enums[en].values;
     let values: Vec<String> = order.iter().filter(|v| est.values.contains(*v)).cloned().collect();
     (values.len() < order.len()).then_some(values)
 }
 
-fn variables_by(m: &Model, w: Written) -> BTreeMap<String, Est> {
+/// `days`: the day and the time of a koyomi date are what koyomi counts them to (`koyomi_days`),
+/// for what dandori holds to a range itself; else they say nothing of what they are, as in what
+/// dandori hands ritsu, which decides them over koyomi's days itself.
+fn variables_by(m: &Model, w: Written, days: bool) -> BTreeMap<String, Est> {
     let mut vars: BTreeMap<String, Est> = BTreeMap::new();
     for (n, t) in &m.inputs {
         vars.insert(n.clone(), Est::at(m, t, m.input_ranges.get(n).copied(), tr!("入力 `{n}`", "the input `{n}`")));
@@ -322,17 +373,17 @@ fn variables_by(m: &Model, w: Written) -> BTreeMap<String, Est> {
                         None => Est::or(t.result_range, from),
                     });
                 }
-                TK::Assign { name, expr } => put(name, estimate_by(m, &vars, expr, w)),
+                TK::Assign { name, expr } => put(name, estimate_by(m, &vars, expr, w, days)),
                 TK::For { var, list, result, .. } => {
-                    put(var, estimate_by(m, &vars, list, w));
+                    put(var, estimate_by(m, &vars, list, w, days));
                     if let Some((r, y)) = result {
-                        put(r, estimate_by(m, &vars, y, w));
+                        put(r, estimate_by(m, &vars, y, w, days));
                     }
                 }
                 TK::Match { expr, arms } => {
                     for a in arms {
                         if let Some(x) = &a.some {
-                            put(x, estimate_by(m, &vars, expr, w));
+                            put(x, estimate_by(m, &vars, expr, w, days));
                         }
                     }
                 }
@@ -350,15 +401,21 @@ fn variables_by(m: &Model, w: Written) -> BTreeMap<String, Est> {
 /// What numbers `e` can be, or the numbers inside it when it is a `?` or a list; and for a value of
 /// an enum, the values it can be.
 pub(crate) fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
-    estimate_by(m, vars, e, Written::Itself)
+    estimate_by(m, vars, e, Written::Itself, false)
 }
 
-fn estimate_by(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, w: Written) -> Est {
+fn estimate_by(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, w: Written, days: bool) -> Est {
     match e {
         TExpr::Int(n) => Est::range(Range::exactly(*n)),
         TExpr::Enum(v, _) if w == Written::Itself => Est { values: BTreeSet::from([v.clone()]), ..Est::default() },
         TExpr::Enum(_, en) => Est { values: m.enums[*en].values.iter().cloned().collect(), ..Est::default() },
-        TExpr::List { items, .. } => items.iter().fold(Est::default(), |a, x| a.join(&estimate_by(m, vars, x, w))),
+        TExpr::List { items, .. } => items.iter().fold(Est::default(), |a, x| a.join(&estimate_by(m, vars, x, w, days))),
+        // the moment a check of the period read: one in the period (DESIGN 20)
+        TExpr::NowAt(_) => match &m.period {
+            Some(p) => Est::range(p.range),
+            None => Est::unknown(now_text(m)),
+        },
+        TExpr::Now => Est::unknown(now_text(m)),
         TExpr::Var { name, fields, .. } if fields.is_empty() => vars.get(name).cloned().unwrap_or_default(),
         TExpr::Var { name, fields, .. } => {
             // the last field's range, in the record it belongs to
@@ -380,6 +437,11 @@ fn estimate_by(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, w: Written) -
             }
             let (r, f) = at.expect("a field was read");
             let rd = &m.records[r];
+            if let (true, RecordOrigin::RuleOutputs(ix)) = (days, &rd.origin) {
+                if let Some(k) = koyomi_days(m, *ix, f) {
+                    return Est::range(k);
+                }
+            }
             let from = match &rd.origin {
                 RecordOrigin::RuleOutputs(ix) => tr!("規則 `{}` の出力 `{f}`", "the output `{f}` of the rule `{}`", m.rules[*ix].name),
                 RecordOrigin::Local | RecordOrigin::Proto { .. } | RecordOrigin::Hold { .. } => tr!("`{}` のフィールド `{f}`", "the field `{f}` of `{}`", rd.name),
@@ -387,6 +449,30 @@ fn estimate_by(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, w: Written) -
             Est::at(m, &ty, m.field_range(r, f), from)
         }
         _ => Est::default(),
+    }
+}
+
+/// The day of a koyomi date (`day`), or its time (`at`), over every day koyomi counts it to on the
+/// whole range of its inputs (`Dates::values`): its fewest and most days, and their times at the
+/// calendar's offset. None for a field of no date, and when koyomi does not count the days.
+fn koyomi_days(m: &Model, ix: usize, field: &str) -> Option<Range> {
+    let d = m.rules[ix].date()?;
+    let path = &m.rules[ix].info.path;
+    let days = match crate::sources::date_values(path, &d.date) {
+        Ok(ritsu_ports::Found::Value(set)) => set,
+        _ => return None,
+    };
+    let (lo, hi) = (*days.first()?, *days.last()?);
+    match field {
+        "day" => Some(Range { lo: Some(lo), hi: Some(hi) }),
+        "at" => {
+            let facts = crate::sources::dates(path).ok()?;
+            let at = facts.functions.iter().find(|f| f.name == d.date)?.at? as i64;
+            let off = d.offset.unwrap_or(0) as i64;
+            let moment = |day: i64| day * 86_400 + at * 60 - off * 60;
+            Some(Range { lo: Some(moment(lo)), hi: Some(moment(hi)) })
+        }
+        _ => None,
     }
 }
 

@@ -216,8 +216,11 @@ fn run_all<'a>(m: &'a Model, sc: &Value, view: View, hook: Option<&'a mut dyn An
     for (v, _) in &m.vars {
         r.vars.insert(v.clone(), Value::Null);
     }
-    // what `now` reads: the scenario's moment, which the runners give the platforms' clocks too
-    r.vars.insert(NOW_VAR.into(), json!(sc["now"].as_str().unwrap_or(render::SCENARIO_NOW)));
+    // what `now` reads: the scenario's moment, which the runners give the platforms' clocks too; a
+    // scenario may give the start of the run a moment of its own (`scenario_now`)
+    let (start, later) = scenario_now(sc);
+    r.vars.insert(START_VAR.into(), json!(start));
+    r.vars.insert(NOW_VAR.into(), json!(later));
     // a workflow that implements a service reads its input as protobuf reads the request: the zero
     // values its JSON leaves out are there
     let input = match &m.service {
@@ -340,6 +343,28 @@ impl<'a> Run<'a> {
                 let c = cause.as_ref().map(|c| self.value(c)).unwrap_or(Value::Null);
                 self.fail_with(error, c);
                 Ctl::Stop
+            }
+            // the period the workflow runs in (DESIGN 20): at the start, the moment the run starts at, which
+            // fails it as an input outside its range does; before a statement that reads `now`, the
+            // moment it reads, which goes to `on failure` as a task's error nothing handles does
+            TK::Period { start } => {
+                let p = self.m.period.as_ref().expect("a check of the period is in a flow with one");
+                let v = self.vars.get(if *start { START_VAR } else { NOW_VAR }).cloned().unwrap_or(Value::Null);
+                let t = v.as_str().unwrap_or_default().to_string();
+                if !*start {
+                    self.vars.insert(now_at(s.site), v);
+                }
+                if render::moment_in(&t, &p.range) {
+                    Ctl::Next
+                } else if *start {
+                    let cause = p.cause(None, &t);
+                    self.fail(OUT_OF_PERIOD, &cause);
+                    Ctl::Stop
+                } else {
+                    let cause = p.cause(Some(s.line), &t);
+                    self.visits.push(Visit::Unhandled(s.site));
+                    self.raise(Pending::Task(CallError { kind: OUT_OF_PERIOD.into(), target_name: OUT_OF_PERIOD.into(), cause }))
+                }
             }
             // a rule's precondition ritsu could not decide: the values the call will give it, as soon as they are made
             TK::Check(c) => {
@@ -744,7 +769,16 @@ impl<'a> Run<'a> {
         // a book's refusal comes back with its reason, which the code dandori writes gives as the
         // cause; on Step Functions it is the book's Lambda function that fails, as the stand-in says
         let refused = matches!(callee, Callee::Task(t) if self.m.tasks[*t].book().is_some() && self.m.tasks[*t].error(kind).is_some());
-        let cause = if refused && self.view != View::Asl { kind.to_string() } else { SCRIPTED_CAUSE.into() };
+        // on Argo, a child Workflow that fails leaves its parent nothing to read a cause from: the
+        // step that makes it has no error file (DESIGN 7)
+        let child_on_argo = self.view == View::Argo && matches!(callee, Callee::Task(t) if matches!(self.m.tasks[*t].via(Platform::Argo), Some(Via::ArgoTemplate(_))));
+        let cause = if refused && self.view != View::Asl {
+            kind.to_string()
+        } else if child_on_argo {
+            String::new()
+        } else {
+            SCRIPTED_CAUSE.into()
+        };
         CallError { kind: kind.to_string(), target_name, cause }
     }
 
@@ -806,10 +840,37 @@ pub fn matches_error(names: &[String], err: &str) -> bool {
 /// Where the run keeps what `now` reads: a name no variable can have.
 pub const NOW_VAR: &str = "(now)";
 
+/// Where the run keeps what the check of the period at `site` read (`TExpr::NowAt`).
+pub fn now_at(site: usize) -> String {
+    format!("(now@{site})")
+}
+
+/// Where the run keeps the moment it starts at: what the check of the period at the start reads.
+pub const START_VAR: &str = "(start)";
+
+/// What a scenario's `now` says: the moment the run starts at, and the moment every `now` after
+/// the start reads. A scenario writes one moment for both, or the two as a list, the start first,
+/// for a run that goes on past the end of the period it starts in (DESIGN 20).
+pub fn scenario_now(sc: &Value) -> (String, String) {
+    match &sc["now"] {
+        Value::Array(v) => {
+            let at = |i: usize| v.get(i).and_then(|x| x.as_str()).unwrap_or(render::SCENARIO_NOW).to_string();
+            let start = at(0);
+            let later = if v.len() > 1 { at(1) } else { start.clone() };
+            (start, later)
+        }
+        v => {
+            let one = v.as_str().unwrap_or(render::SCENARIO_NOW).to_string();
+            (one.clone(), one)
+        }
+    }
+}
+
 /// The value of an expression over the given variables. A field that is absent reads as null.
 pub fn value_of(vars: &BTreeMap<String, Value>, e: &TExpr) -> Value {
     match e {
         TExpr::Now => vars.get(NOW_VAR).cloned().unwrap_or_else(|| json!(render::SCENARIO_NOW)),
+        TExpr::NowAt(site) => vars.get(&now_at(*site)).cloned().unwrap_or(Value::Null),
         TExpr::Str(s) => json!(s),
         TExpr::Int(n) => json!(n),
         TExpr::Bool(b) => json!(b),

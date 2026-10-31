@@ -21,7 +21,7 @@ in each `rules/`, and the Japanese site draws the Japanese versions.
 | reserving the lines of an order side by side, packing, delivery: a workflow that implements a service of a `.proto` ([Implement a service](services.md)), the warehouse called by Connect, with the types of its answers made from its `.proto`, and the delivery a child flow, [arrange_delivery](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/fulfillment/arrange_delivery.flow), written once for every platform | [temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/fulfillment/temporal/fulfillment.flow) | [aws](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/fulfillment/aws/fulfillment.flow) | [pydantic-graph](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/fulfillment/pydantic-graph/fulfillment.flow) | [page](https://i2y.github.io/ritsu/dandori/doc/fulfillment.html) |
 | an inquiry sorted by a [decision model](jev.md) (Jev; on Temporal, a model on the company's own server of the System One API, Ollama in the example), with an agent's reading when the decision model is not sure, a rule that routes it, and an agent that drafts the reply | [temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/inquiry/temporal/inquiry.flow) | [aws](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/inquiry/aws/inquiry.flow) | [pydantic-graph](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/inquiry/pydantic-graph/inquiry.flow) | [page](https://i2y.github.io/ritsu/dandori/doc/inquiry.html) |
 | an application scored by [Jev](jev.md), and a rule that weighs how sure the score is and sends the rest to a person's approval; also [for Argo Workflows](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/argo/review.flow) | [temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.flow) | [aws](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/aws/review.flow) (Lambda durable functions) | [pydantic-graph](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/pydantic-graph/review.flow) | [page](https://i2y.github.io/ritsu/dandori/doc/review.html) |
-| an order's goods held in stock until its payment is due, then shipped once paid or put back: the stock a book of chobo's, the due date a date of koyomi's ([Dates and books](dates-and-books.md)) | [invoice](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/invoice/invoice.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/invoice.html) |
+| an order's goods held in stock until its payment is due, then shipped once paid or put back: the stock a book of chobo's, the due date a date of koyomi's, in the period the payment terms take orders in ([Dates and books](dates-and-books.md)) | [invoice](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/invoice/invoice.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/invoice.html) |
 | a payout to a seller: the bank's API pays the account by its id, and a model drafts the notice; the bank's `.proto` marks the account's number and holder secret, and the flow carries neither, so no check of [secrets](secrets.md) says anything | [payout](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/payout/payout.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/payout.html) |
 
 ## How the versions differ
@@ -59,7 +59,9 @@ Only a flow that runs as it is on every platform sits beside the versions: fulfi
 calls are HTTP ones dandori writes for each. The versions share the rules (`rules/`) and the API
 descriptions (`specs/`). Invoice has no versions: its calls are an HTTP API, a date and a book's
 operations, which dandori writes for every platform, so the one flow sits in its directory with the
-dates file, its calendar and the book (`dates/`, `calendars/`, `books/`).
+dates file, its calendar and the book (`dates/`, `calendars/`, `books/`). It says the period it runs
+in, the days its payment terms take (`now range`): a run that starts outside it fails at once, and
+one whose clock leaves it once the goods are held puts them back.
 
 ## The tests' flows
 
@@ -69,7 +71,8 @@ language: lists put into `json`, a parallel loop inside a parallel loop, agents'
 kind of type, Jev's questions of every kind and how sure its answers are, decision tasks on their
 three kinds of server with refusals, calls that time out, local
 rules, Connect's zero values, events, services implemented, whose requests come with their zero
-values left out, and dates and books (two dates of one file called as local activities, `now`, a
-transfer done at once, and a hold posted in part). They are written with
+values left out, dates and books (two dates of one file called as local activities, `now`, a
+transfer done at once, and a hold posted in part), and ranges of dates and of times, with the
+period a workflow runs in (`date_ranges`, and a child whose inputs have ranges). They are written with
 Japanese names on purpose, to see that names outside ASCII come through all five platforms as
 identifiers, keys and URL paths.

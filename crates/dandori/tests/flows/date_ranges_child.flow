@@ -1,0 +1,21 @@
+workflow date_ranges_child v1
+description "Confirms a visit on a day and in a window it holds to ranges of its own: date_ranges.flow runs it as its child, and the checker holds what that passes to them. It runs on every platform"
+
+record Confirmed
+  by : string
+
+inputs
+  id     : string
+  day    : date       range >=2026-01-01 <=2027-12-31
+  window : timestamp  range >=2026-01-01 <=2027-12-31 offset +09:00
+
+outputs
+  by : string
+
+task confirm_visit(id: string, day: date, window: timestamp) -> Confirmed
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:confirm-visit"
+  idempotent
+
+flow
+  let c = confirm_visit(id: id, day: day, window: window)
+  succeed by = c.by

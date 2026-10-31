@@ -36,7 +36,8 @@ the workflow and the states of its cases.
 - **P4. A loop says how many times it may go round,** and there is no recursion, so the length of a
   run's history has a bound.
 - **P5. What cannot be known before the run is checked where it comes in.** What the other side
-  answers is checked when it arrives, and a value that does not fit fails the run there.
+  answers is checked when it arrives, and a value that does not fit fails the run there. So is the
+  clock, in a workflow that says the period it runs in.
 - **P6. A feature whose meaning would differ between the platforms is built only where it can mean
   the same,** and refused elsewhere with E050: cleaning up after a cancellation (`on cancel`), events
   sent to a workflow by name (`event`), and a method of a service that asks a run where it is

@@ -27,6 +27,7 @@ pub mod flow;
 pub mod interp;
 pub mod lower;
 pub mod model;
+pub mod periods;
 pub mod prechecks;
 pub mod ports;
 pub mod proto;

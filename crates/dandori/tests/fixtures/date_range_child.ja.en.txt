@@ -1,0 +1,10 @@
+error[E015]: tests/fixtures/date_range_child.ja.flow:19:1: the parameter `日` is not what `来訪` takes as its input `日`: it has no range, and `>=2026-01-01 <=2026-12-31` is taken
+    19 | task 範囲なし(日: date, 時間帯: timestamp) -> 予約
+error[E015]: tests/fixtures/date_range_child.ja.flow:19:1: the parameter `時間帯` is not what `来訪` takes as its input `時間帯`: it has no range, and `>=2026-01-01 <=2026-12-31 offset +09:00` is taken
+    19 | task 範囲なし(日: date, 時間帯: timestamp) -> 予約
+error[E015]: tests/fixtures/date_range_child.ja.flow:24:1: the parameter `日` is not what `来訪` takes as its input `日`: it is `>=2026-01-01 <=2027-12-31`, and `>=2026-01-01 <=2026-12-31` is taken
+    24 | task 広い(日: date  range >=2026-01-01 <=2027-12-31, 時間帯: timestamp  range >=2026-01-01 <=2026-12-31) -> 今年
+error[E015]: tests/fixtures/date_range_child.ja.flow:24:1: the parameter `時間帯` is not what `来訪` takes as its input `時間帯`: it is `>=2026-01-01 <=2026-12-31`, and `>=2026-01-01 <=2026-12-31 offset +09:00` is taken
+    24 | task 広い(日: date  range >=2026-01-01 <=2027-12-31, 時間帯: timestamp  range >=2026-01-01 <=2026-12-31) -> 今年
+error[E015]: tests/fixtures/date_range_child.ja.flow:24:1: `来訪` answers `予約日` with what the field `予約日` of `今年` does not take: it is `>=2026-01-01 <=2027-12-31`, and `>=2026-01-01 <=2026-12-31` is taken
+    24 | task 広い(日: date  range >=2026-01-01 <=2027-12-31, 時間帯: timestamp  range >=2026-01-01 <=2026-12-31) -> 今年

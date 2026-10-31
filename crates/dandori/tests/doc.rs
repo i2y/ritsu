@@ -202,9 +202,11 @@ fn every_run_lights_up_a_way_that_holds_together() {
         for e in &edges {
             assert!(known.contains(&e.from) && known.contains(&e.to), "{file}: the edge {} goes from {} to {}, not both on the picture", e.id, e.from, e.to);
         }
+        // `pass` draws nothing, and nor does a check of the period (DESIGN 20): a run that fails at
+        // one lights the statement it is for, which did not start
         let mut pass_sites = BTreeSet::new();
         for s in m.all_stmts() {
-            if matches!(s.kind, TK::Pass) {
+            if matches!(s.kind, TK::Pass | TK::Period { .. }) {
                 pass_sites.insert(s.site);
             }
         }

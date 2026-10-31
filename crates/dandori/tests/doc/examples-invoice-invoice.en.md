@@ -2,7 +2,7 @@
 
 An order holds its goods until its payment is due, then ships them once paid, or puts them back
 
-`examples/invoice/invoice.flow`, drawn by `dandori doc`. Inputs: `order: Order`. Outputs: `outcome: Outcome`, `due: date?`.
+`examples/invoice/invoice.flow`, drawn by `dandori doc`. Inputs: `order: Order`. Outputs: `outcome: Outcome`, `due: date?`. It runs in the period `now range >=2026-01-01 <=2027-12-31`.
 
 ## flow
 
@@ -41,7 +41,7 @@ A rectangle is a task, one with a line down each side a rule or a date of a date
 
 ## on failure
 
-Runs when a call fails and nothing at the call handles the error: from the calls on lines 56, 58, 60, 63 and 67. When it runs to its end, the workflow fails with that error.
+Runs when a call fails and nothing at the call handles the error: from the calls on lines 59, 61, 63, 66 and 70. It runs too when `now` on line 61 is outside the period the workflow runs in, `>=2026-01-01 <=2027-12-31`. When it runs to its end, the workflow fails with that error.
 
 ```mermaid
 flowchart TD
@@ -66,12 +66,12 @@ flowchart TD
 
 | Line | Call | Calls | Retries | Timeout | When it fails | Case after |
 |---:|---|---|---|---|---|---|
-| 56 | `hold ← reserve(…)` | `book stock.reserve.hold`, `starts stock.reserve` | — | — | `out_of_stock` → line 57<br>`timeout`, `failure` → `on failure` | `hold`: `held` |
-| 58 | `due = terms.payment(…)` | the date `payment` of `payment_terms.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
-| 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
-| 63 | `hold ← ship(…)` | `book stock.reserve.post`, `sends post` | — | — | `expired` → line 64<br>`timeout`, `failure` → `on failure` | `hold`: `posted` |
-| 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 68<br>`already_posted`, `timeout`, `failure` → `on failure` | `hold`: `voided` |
-| 75 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 76<br>`already_posted` → line 77<br>`timeout`, `failure` → line 78 | `hold`: `voided` |
+| 59 | `hold ← reserve(…)` | `book stock.reserve.hold`, `starts stock.reserve` | — | — | `out_of_stock` → line 60<br>`timeout`, `failure` → `on failure` | `hold`: `held` |
+| 61 | `due = terms.payment(…)` | the date `payment` of `payment_terms.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
+| 63 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
+| 66 | `hold ← ship(…)` | `book stock.reserve.post`, `sends post` | — | — | `expired` → line 67<br>`timeout`, `failure` → `on failure` | `hold`: `posted` |
+| 70 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 71<br>`already_posted`, `timeout`, `failure` → `on failure` | `hold`: `voided` |
+| 78 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 79<br>`already_posted` → line 80<br>`timeout`, `failure` → line 81 | `hold`: `voided` |
 
 ## Ends
 
@@ -79,10 +79,10 @@ Every way the workflow can end, and what each case can be then, the events on th
 
 | Line | End | `hold` |
 |---:|---|---|
-| 57 | `succeed outcome = out_of_stock, due = none` | not started |
-| 64 | `succeed outcome = not_paid, due = due.day` | `expired` |
-| 65 | `succeed outcome = shipped, due = due.day` | `posted` |
-| 69 | `succeed outcome = not_paid, due = due.day` | `voided`, `expired` |
-| 78 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | handed over as it is: `held`, `posted`, `voided`, `expired` |
-| 78 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
+| 60 | `succeed outcome = out_of_stock, due = none` | not started |
+| 67 | `succeed outcome = not_paid, due = due.day` | `expired` |
+| 68 | `succeed outcome = shipped, due = due.day` | `posted` |
+| 72 | `succeed outcome = not_paid, due = due.day` | `voided`, `expired` |
+| 81 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | handed over as it is: `held`, `posted`, `voided`, `expired` |
+| 81 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
 

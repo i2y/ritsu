@@ -1,0 +1,29 @@
+workflow date_range_child v1
+description "Ranges of dates and times between a task and the .flow it runs as its child: what the task passes is in the range of the child's input, and what the child answers is in the range of the task's answer"
+
+record Booked
+  on : date  range >=2026-01-01 <=2027-12-31
+
+record Within
+  on : date  range >=2026-01-01 <=2026-12-31
+
+inputs
+  day    : date       range >=2026-01-01 <=2026-06-30
+  window : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+# passes a day and a window in the child's ranges, and reads its answer in the child's
+task held(day: date  range >=2026-01-01 <=2026-06-30, window: timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00) -> Booked
+  flow "children/visit.flow"
+
+# passes a day and a window that may be any
+task unheld(day: date, window: timestamp) -> Booked
+  flow "children/visit.flow"
+
+# passes a day past the child's range, and the same days in UTC, which end nine hours after the
+# child's; and reads the answer as if it were in this year
+task wide(day: date  range >=2026-01-01 <=2027-12-31, window: timestamp  range >=2026-01-01 <=2026-12-31) -> Within
+  flow "children/visit.flow"
+
+flow
+  let a = held(day: day, window: window)
+  pass

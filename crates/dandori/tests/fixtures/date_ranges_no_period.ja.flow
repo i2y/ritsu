@@ -1,0 +1,12 @@
+workflow 期間の無い日付の範囲 v1
+description "動く期間を書いていないワークフローの now は、どの時刻にもなりうる。時刻を範囲に収める場所に渡すと、その中に入るとは言えない"
+
+inputs
+  id : string
+
+task 知らせる(id: string, 時刻: timestamp  range >=2026-01-01 <=2027-12-31)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:remind"
+  idempotent
+
+flow
+  知らせる(id: id, 時刻: now)

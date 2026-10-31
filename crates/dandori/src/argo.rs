@@ -148,6 +148,37 @@ fn owners(m: &Model) -> BTreeMap<String, usize> {
     out
 }
 
+/// Whether a statement reads the clock for itself, in a template of its own before it: a check of
+/// the period, and a statement that reads `now`, but for a loop's yield, read as each round ends.
+fn clocks(k: &TK) -> bool {
+    match k {
+        TK::Period { .. } => true,
+        TK::For { list, .. } => list.has_now(),
+        k => k.reads_now(),
+    }
+}
+
+/// For every check of the period (`TK::Period`), how deep in `for … in parallel` it is.
+fn period_depths(m: &Model) -> BTreeMap<usize, usize> {
+    let mut out = BTreeMap::new();
+    fn go(ss: &[TStmt], depth: usize, out: &mut BTreeMap<usize, usize>) {
+        for s in ss {
+            match &s.kind {
+                TK::Period { .. } => {
+                    out.insert(s.site, depth);
+                }
+                TK::For { body, parallel: Some(_), .. } => go(body, depth + 1, out),
+                TK::For { body, .. } | TK::Repeat { body, .. } => go(body, depth, out),
+                TK::Match { arms, .. } => arms.iter().for_each(|a| go(&a.body, depth, out)),
+                TK::Call { handlers, .. } => handlers.iter().for_each(|h| go(&h.body, depth, out)),
+                _ => {}
+            }
+        }
+    }
+    go(&m.flow, 0, &mut out);
+    out
+}
+
 fn q(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
@@ -282,11 +313,16 @@ struct Gen<'a> {
     var_ix: BTreeMap<String, usize>,
     /// the templates of the tasks and rules made so far
     made: BTreeSet<String>,
+    /// while a statement that reads `now` is written: its site and depth, whose template read the
+    /// clock for it (`dd_now_<site>`)
+    clock: Option<(usize, usize)>,
+    /// how deep in `for … in parallel` each check of the period is, by its site
+    periods: BTreeMap<usize, usize>,
 }
 
 impl<'a> Gen<'a> {
     fn new(m: &'a Model) -> Gen<'a> {
-        let mut g = Gen { m, templates: Vec::new(), used: BTreeSet::new(), owner: owners(m), var_ix: BTreeMap::new(), made: BTreeSet::new() };
+        let mut g = Gen { m, templates: Vec::new(), used: BTreeSet::new(), owner: owners(m), var_ix: BTreeMap::new(), made: BTreeSet::new(), clock: None, periods: period_depths(m) };
         for (i, (v, _)) in m.vars.iter().enumerate() {
             g.var_ix.insert(v.clone(), i);
         }
@@ -409,8 +445,14 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "nil".into(),
-            // the clock, read once, as the template that computes the value is reached
-            TExpr::Now => ARGO_NOW.into(),
+            // the clock, read once for the statement by a template of its own (`Gen::block`): Argo
+            // evaluates each expression of a template that computes on its own, and reads `now()`
+            // again in each
+            TExpr::Now => match self.clock {
+                Some((site, depth)) => Gen::global_ref(&render::now_name(site), depth),
+                None => ARGO_NOW.into(),
+            },
+            TExpr::NowAt(site) => Gen::global_ref(&render::now_name(*site), self.periods.get(site).copied().unwrap_or(0)),
             TExpr::Var { name, fields, .. } => {
                 let mut s = format!("sprig.fromJson({})", self.var_raw(name));
                 for f in fields {
@@ -447,8 +489,12 @@ impl<'a> Gen<'a> {
         let m = self.m;
         match t {
             Ty::Str => format!("type({x}) == \"string\""),
-            Ty::Timestamp => format!("(type({x}) == \"string\" && {x} matches {})", q(&render::TIMESTAMP_RE.replace("\\\\", "\\"))),
-            Ty::Date => format!("(type({x}) == \"string\" && {x} matches {})", q(render::DATE_RE)),
+            Ty::Timestamp | Ty::Date => {
+                let (re, head) = if *t == Ty::Date { (render::DATE_RE.to_string(), x.to_string()) } else { (render::TIMESTAMP_RE.replace("\\\\", "\\"), format!("{x}[0:19]")) };
+                let mut parts = vec![format!("type({x}) == \"string\""), format!("{x} matches {}", q(&re))];
+                parts.extend(rg.map(|r| render::time_tests(t, &r, |op, end| format!("{head} {op} {}", q(end)))).unwrap_or_default());
+                format!("({})", parts.join(" && "))
+            }
             Ty::Int | Ty::Num(_) => {
                 let mut parts = vec![format!("type({x}) in [\"int\", \"float\"]"), format!("{x} == int({x})")];
                 parts.extend(rg.map(|r| r.tests(|op, n| format!("{x} {op} {n}"))).unwrap_or_default());
@@ -552,7 +598,19 @@ impl<'a> Gen<'a> {
         let mut steps: Vec<Value> = Vec::new();
         let mut last: Option<String> = None;
         for s in ss {
-            if let Some((t, stops)) = self.stmt(s, depth) {
+            // a statement that reads `now` reads the clock once, in a template of its own, so that
+            // it reads one moment; a check of the period holds that moment to the period
+            if clocks(&s.kind) {
+                let base = if matches!(s.kind, TK::Period { start: true }) { "dd-period-start".to_string() } else { format!("s{}-now", s.site) };
+                let t = self.compute(&base, depth, &[], vec![("now".into(), Some(Gen::global_name(&render::now_name(s.site), depth)), ARGO_NOW.into())]);
+                let when = last.as_ref().map(|l| format!("{{{{steps.{l}.outputs.parameters.go}}}}"));
+                steps.push(json!([Gen::step(&format!("s{}-now", s.site), &t, Gen::pass(depth), when)]));
+            }
+            let clocked = (clocks(&s.kind) && !matches!(s.kind, TK::Period { .. })).then_some((s.site, depth));
+            let outer = std::mem::replace(&mut self.clock, clocked);
+            let made = self.stmt(s, depth);
+            self.clock = outer;
+            if let Some((t, stops)) = made {
                 let name = format!("s{}", s.site);
                 let when = last.as_ref().map(|l| format!("{{{{steps.{l}.outputs.parameters.go}}}}"));
                 steps.push(json!([Gen::step(&name, &t, Gen::pass(depth), when)]));
@@ -607,6 +665,20 @@ impl<'a> Gen<'a> {
                 let c = cause.as_ref().map(|c| self.ex(c)).unwrap_or_else(|| "nil".into());
                 Some((self.fail_with(&format!("s{site}-fail"), depth, error, c), true))
             }
+            // the period the workflow runs in (DESIGN 20): the moment the template before read, held to
+            // it; outside it, the run fails at the start, and goes to `on failure` as a task's error
+            // does after
+            TK::Period { start } => {
+                let p = self.m.period.as_ref().expect("a check of the period is in a flow with one");
+                let t = Gen::global_ref(&render::now_name(site), depth);
+                let holds = p.tests(|op, end| format!("{t}[0:19] {op} {}", q(end))).join(" && ");
+                let (before, after) = p.cause_around((!*start).then_some(s.line));
+                let (ctl, error) = (Gen::ctl(depth), Gen::global_ref("dd_error", depth));
+                let failed = format!("toJson({{\"Error\": {}, \"Cause\": {} + {t} + {}}})", q(OUT_OF_PERIOD), q(&before), q(&after));
+                let stop = if *start { "\"fail\"" } else { "\"task\"" };
+                let outs = vec![Gen::set_ctl(depth, format!("({holds}) ? {ctl} : {stop}")), Gen::set_error(depth, format!("({holds}) ? {error} : {failed}")), Gen::go(&holds)];
+                Some((self.compute(&format!("s{site}-period"), depth, &[], outs), true))
+            }
             // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made: a
             // template that computes, which lets the flow go on when it holds and fails it when not
             TK::Check(c) => {
@@ -625,10 +697,10 @@ impl<'a> Gen<'a> {
                 Some((n, false))
             }
             TK::WaitUntil { at } => {
-                // the seconds to wait, from the clock as the statement starts; Argo would read a
-                // `now()` in the duration again each time it looks
+                // the seconds to wait, from the clock as the statement starts, read once (a `let`);
+                // Argo would read a `now()` in the duration again each time it looks
                 let secs = format!("int((date({}) - now()).Seconds())", self.ex(at));
-                let until = self.compute(&format!("s{site}-until"), depth, &[], vec![("seconds".into(), None, format!("string({secs} > 0 ? {secs} : 0)"))]);
+                let until = self.compute(&format!("s{site}-until"), depth, &[], vec![("seconds".into(), None, format!("let dd_s = {secs}; string(dd_s > 0 ? dd_s : 0)"))]);
                 let wait = self.name(&format!("s{site}-sleep"));
                 self.templates.push(json!({ "name": wait, "inputs": { "parameters": [{ "name": "seconds" }] }, "suspend": { "duration": "{{inputs.parameters.seconds}}" } }));
                 let n = self.name(&format!("s{site}-wait-until"));
@@ -746,7 +818,11 @@ impl<'a> Gen<'a> {
         if let Some(y) = yielded {
             let base = format!("dd_out_{site}");
             let out = Gen::global_ref(&base, depth);
-            let add = self.compute(&format!("s{site}-yield"), depth, &[], vec![("out".into(), Some(Gen::global_name(&base, depth)), format!("toJson(sprig.append(sprig.fromJson({out}), {}))", self.ex(y)))]);
+            // a yield reads `now` as each round ends, not with the list the loop began with
+            let outer = self.clock.take();
+            let yv = self.ex(y);
+            self.clock = outer;
+            let add = self.compute(&format!("s{site}-yield"), depth, &[], vec![("out".into(), Some(Gen::global_name(&base, depth)), format!("toJson(sprig.append(sprig.fromJson({out}), {yv}))"))]);
             steps.push(json!([Gen::step("yield", &add, Gen::pass(depth), Some("{{steps.body.outputs.parameters.go}}".into()))]));
         }
         let n = self.name(&format!("s{site}-round"));
@@ -856,7 +932,10 @@ impl<'a> Gen<'a> {
         let b = self.block(body, inner, &format!("s{site}-body"));
         let rctl = Gen::ctl(inner);
         let rerr = Gen::global_ref("dd_error", inner);
+        // a yield reads `now` as each round ends, not with the list the loop began with
+        let outer = self.clock.take();
         let y = result.map(|(_, y)| self.ex(y)).unwrap_or_else(|| "nil".into());
+        self.clock = outer;
         let end = self.compute(
             &format!("s{site}-end"),
             inner,
@@ -1029,8 +1108,9 @@ impl<'a> Gen<'a> {
             // rounded up and one at the least (DESIGN 16); Argo would read a `now()` in the duration again
             // each time it looks
             if let Some(at) = render::deadline_arg(m, callee, args) {
+                // the clock read once (a `let`), as everywhere a statement reads it
                 let secs = format!("ceil((date({}) - date({ARGO_NOW})).Seconds())", self.ex(at));
-                let until = self.compute(&format!("s{site}-until"), depth, &[], vec![("seconds".into(), None, format!("string(int({secs} > 1 ? {secs} : 1))"))]);
+                let until = self.compute(&format!("s{site}-until"), depth, &[], vec![("seconds".into(), None, format!("let dd_s = {secs}; string(int(dd_s > 1 ? dd_s : 1))"))]);
                 group.push(json!([Gen::step("until", &until, Gen::pass(depth), None)]));
                 wait_args.push(json!({ "name": "seconds", "value": "{{steps.until.outputs.parameters.seconds}}" }));
             }

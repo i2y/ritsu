@@ -1,0 +1,67 @@
+# 日付と時刻の範囲と、ワークフローが動く期間（DESIGN 20）。入力、レコードのフィールド、タスクの引数
+# と結果、出力、子の入力が、日付か時刻を範囲に収め（時刻はオフセットでも）、それぞれ入ってくるところ
+# で確かめる。ワークフローは期間の中で動く。走り始めを期間で確かめ、now を読む文もそれぞれ確かめる
+# （待ちのあとも）。now は日付のファイルの入力に渡り、その範囲は期間の日をどれも受け付ける。走り始め
+# たあとに時計が期間を出た実行は on failure に入り、on failure の now は期間で確かめない。どのプラッ
+# トフォームでも動く。
+workflow 日付の範囲 v1
+  now range >=2026-04-01 <=2026-06-30 offset +09:00
+description "来訪を範囲の日に予約し、子のワークフローで確かめ、予約の時刻まで待ってから知らせる。ワークフローは期間の中で動き、走り始めと、読む now のそれぞれを期間で確かめる"
+
+use dates 期限 from "dates/出荷の期限.cal"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:shipping-dates"
+
+record 来訪
+  id     : string
+  日     : date       range >=2026-01-01 <=2026-12-31
+  時間帯 : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+record 予約
+  日   : date       range >=2026-01-01 <=2027-12-31
+  時刻 : timestamp  range >=2026-01-01
+
+record 確認
+  担当 : string
+
+inputs
+  訪問     : 来訪
+  以降     : date       range >=2026-01-01
+  締め切り : timestamp  range <=2027-12-31
+
+outputs
+  予約日   : date       range >=2026-01-01 <=2027-12-31
+  締め日   : date
+  知らせた : timestamp  range >=2026-01-01 <=2027-12-31
+  終えた   : timestamp  range >=2026-01-01 <=2027-12-31
+
+task 予約する(id: string, 以降: date  range >=2026-01-01, 締め切り: timestamp) -> 予約
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:book"
+  idempotent
+
+# 子は、日と時間帯をそれぞれの範囲に収める。ここから渡すものは、その範囲に入っている。
+task 確かめる(id: string, 日: date  range >=2026-01-01 <=2027-12-31, 時間帯: timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00) -> 確認
+  flow "date_ranges_child.ja.flow"
+  state machine "arn:aws:states:ap-northeast-1:123456789012:stateMachine:confirm-visit"
+  durable function "arn:aws:lambda:ap-northeast-1:123456789012:function:confirm-visit:live"
+
+task 知らせる(id: string, 時刻: timestamp  range >=2026-01-01 <=2027-12-31) -> timestamp  range >=2026-01-01 <=2027-12-31
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:remind"
+  idempotent
+
+task 取り消す(id: string, 時刻: timestamp)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:release"
+  idempotent
+
+flow
+  let 予約 = 予約する(id: 訪問.id, 以降: 以降, 締め切り: 締め切り)
+  let 確認 = 確かめる(id: 訪問.id, 日: 予約.日, 時間帯: 訪問.時間帯)
+  # 期間の日は、どれも日付のファイルが受け付ける日
+  let 締め = 期限.締め日(起点: now)
+  wait until 予約.時刻
+  # 待ったあとに読む now も、また期間で確かめる
+  let 知らせ = 知らせる(id: 確認.担当, 時刻: now)
+  succeed 予約日 = 予約.日, 締め日 = 締め.day, 知らせた = 知らせ, 終えた = now
+
+on failure
+  # この now は期間で確かめない。実行の後始末は時計で止めない
+  取り消す(id: 訪問.id, 時刻: now)

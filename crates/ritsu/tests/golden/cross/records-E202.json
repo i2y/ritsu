@@ -17,7 +17,30 @@
         "line": null
       },
       "result": "failed",
-      "code": "E202"
+      "code": "E202",
+      "given": "due.day",
+      "takes": {
+        "from": "2026-03-01",
+        "to": "2027-01-31"
+      },
+      "from": [
+        {
+          "kind": "day",
+          "file": "payment_terms.cal",
+          "date": "payment",
+          "days": {
+            "from": "2026-02-10",
+            "to": "2027-01-10",
+            "count": 12
+          },
+          "why": null
+        }
+      ],
+      "example": {
+        "day": "2026-02-10",
+        "from": 0
+      },
+      "why": null
     },
     {
       "check": "rule_date_input",
@@ -49,7 +72,20 @@
         "line": null
       },
       "result": "undecided",
-      "code": "W205"
+      "code": "W205",
+      "given": "received",
+      "takes": {
+        "from": "2026-01-01",
+        "to": "2026-12-20"
+      },
+      "from": [
+        {
+          "kind": "unknown",
+          "place": "the input `received`"
+        }
+      ],
+      "example": null,
+      "why": "nothing says what day `received` is (the input `received` gives no range of days)"
     },
     {
       "check": "koyomi_date_input",

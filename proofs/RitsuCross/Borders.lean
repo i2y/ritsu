@@ -5,8 +5,13 @@
 
   - `daysFit`, `daysGiven` (X3 (a), X6): every day a value can be lies inside a range — a rule's
     date input's, or a koyomi date's input's (`inputRange`). The value can be the day of koyomi
-    dates, each of whose days koyomi counts exactly, or come from somewhere that says nothing of
-    what day it is. The example is the first day outside, of the first koyomi date that has one.
+    dates, each of whose days koyomi counts exactly; a day of a range the `.flow` writes (a date's
+    range, or a time's or the period the workflow runs in, read as days at the calendar's offset,
+    `momentDays`), any of which can come; or come from somewhere that says nothing of what day it
+    is. The example is the first day outside, of the first koyomi date that has one, else of the
+    first range (`rangeOutside`).
+  - `dayNotIn` (X2): the first day of a range of days the `.flow` writes that is not one of the days
+    a rule's input takes (`range from koyomi`), which `Relation.daysKept` decides with.
   - `amountFits`, `amountsGiven` (X4): every amount a value can be is one chobo takes, 0 to
     2⁶³ − 1: the outputs of rules (their fewest and most, as rulec counts them; where dandori
     follows a workflow's call of the rule to the transfer, over the values the flow can give the
@@ -82,27 +87,171 @@ theorem daysFit_undecided {days : Found (List Int)} {range : Range}
     simp only [daysFit] at h
     split at h <;> exact absurd h (by simp)
 
-/-- `borders::days_given` (X3 (a), X6): the days of each koyomi date the value can be the day of,
-    in order, and whether it can also come from a place that says nothing of what day it is
-    (`other`). The example is the first koyomi date with a day outside, by its place, and the day. -/
-def daysGiven (dates : List (Found (List Int))) (other : Bool) (range : Range) : Answer (Nat × Int) :=
+/-- `borders::range_outside` (X3 (a), X6): the first day the range of days `r` lets in that `range`
+    does not; none when every one of them is in `range`. A range the `.flow` writes is checked when
+    the workflow runs, and any day of it can come, so an open end lets in days without end: past an
+    open end of `r` where `range` has one is outside. The day is the low end of `r` when it is
+    outside; else, below an open low end, the last day before `range` starts that `r` lets in; else
+    the day after `range` ends. -/
+def rangeOutside (r range : Range) : Option Int :=
+  let lowIn : Bool := match r.lo, range.lo with
+    | _, none => true
+    | some a, some lo => decide (lo ≤ a)
+    | none, some _ => false
+  let highIn : Bool := match r.hi, range.hi with
+    | _, none => true
+    | some b, some hi => decide (b ≤ hi)
+    | none, some _ => false
+  if lowIn && highIn then none
+  else match r.lo with
+    | some a => if range.outside a then some a else range.hi.map (· + 1)
+    | none => match range.lo with
+      | some lo => some (match r.hi with
+        | some b => min b (lo - 1)
+        | none => lo - 1)
+      | none => range.hi.map (· + 1)
+
+/-- **When a range of days is inside**, every day it lets in lies inside `range`. -/
+theorem rangeOutside_none {r range : Range} (h : rangeOutside r range = none) :
+    ∀ d, r.mem d → range.mem d := by
+  obtain ⟨rlo, rhi⟩ := r
+  obtain ⟨lo, hi⟩ := range
+  intro d ⟨h1, h2⟩
+  simp only [Range.mem]
+  cases rlo <;> cases rhi <;> cases lo <;> cases hi <;>
+    simp only [rangeOutside, Range.outside, Option.map, Option.some.injEq, forall_eq', reduceCtorEq,
+      false_implies, implies_true, true_and, and_true] at h h1 h2 ⊢ <;>
+    (repeat' split at h) <;> (try simp_all) <;> (repeat' split at h) <;> (try simp_all) <;> omega
+
+/-- **The day a range of days gives** lies outside `range`… -/
+theorem rangeOutside_outside {r range : Range} {d : Int} (h : rangeOutside r range = some d) :
+    ¬ range.mem d := by
+  obtain ⟨rlo, rhi⟩ := r
+  obtain ⟨lo, hi⟩ := range
+  simp only [Range.mem]
+  cases rlo <;> cases rhi <;> cases lo <;> cases hi <;>
+    simp only [rangeOutside, Range.outside, Option.map, Option.some.injEq, forall_eq', reduceCtorEq,
+      false_implies, implies_true, true_and, and_true] at h ⊢ <;>
+    (repeat' split at h) <;> (try simp_all) <;> (repeat' split at h) <;> (try simp_all) <;> omega
+
+/-- …and is a day the range lets in, where it lets in any (`Range.Ok`: dandori writes no range whose
+    ends cross, E003). -/
+theorem rangeOutside_in {r range : Range} {d : Int} (ok : r.Ok) (h : rangeOutside r range = some d) :
+    r.mem d := by
+  obtain ⟨rlo, rhi⟩ := r
+  obtain ⟨lo, hi⟩ := range
+  simp only [Range.Ok, Range.mem] at ok ⊢
+  cases rlo <;> cases rhi <;> cases lo <;> cases hi <;>
+    simp only [rangeOutside, Range.outside, Option.map, Option.some.injEq, forall_eq', reduceCtorEq,
+      false_implies, implies_true, true_and, and_true] at h ok ⊢ <;>
+    (repeat' split at h) <;> (try simp_all) <;> (repeat' split at h) <;> (try simp_all) <;> omega
+
+/-- The day of the moment `t` (seconds since 1970-01-01T00:00:00Z) at a calendar's UTC offset of
+    `offset` minutes east: ⌊(t + 60·offset) / 86400⌋ (`borders::moment_days`). -/
+def momentDay (offset t : Int) : Int := (t + 60 * offset) / 86400
+
+/-- `borders::moment_days`: the days the moments of a range are at the offset — those of its ends. -/
+def momentDays (r : Range) (offset : Int) : Range := ⟨r.lo.map (momentDay offset), r.hi.map (momentDay offset)⟩
+
+/-- **Every moment of a range is, at the offset, a day of its days**: the day of a moment moves with
+    it (floor division by a positive number keeps the order). -/
+theorem momentDays_mem {r : Range} {offset t : Int} (h : r.mem t) : (momentDays r offset).mem (momentDay offset t) := by
+  obtain ⟨h1, h2⟩ := h
+  refine ⟨fun a ha => ?_, fun b hb => ?_⟩
+  · simp only [momentDays, Option.map_eq_some_iff] at ha
+    obtain ⟨a0, ha0, rfl⟩ := ha
+    exact Int.ediv_le_ediv (by decide) (by have := h1 a0 ha0; omega)
+  · simp only [momentDays, Option.map_eq_some_iff] at hb
+    obtain ⟨b0, hb0, rfl⟩ := hb
+    exact Int.ediv_le_ediv (by decide) (by have := h2 b0 hb0; omega)
+
+/-- The days of a range whose ends do not cross do not cross either. -/
+theorem momentDays_ok {r : Range} {offset : Int} (ok : r.Ok) : (momentDays r offset).Ok := by
+  intro a b ha hb
+  simp only [momentDays, Option.map_eq_some_iff] at ha hb
+  obtain ⟨a0, ha0, rfl⟩ := ha
+  obtain ⟨b0, hb0, rfl⟩ := hb
+  exact Int.ediv_le_ediv (by decide) (by have := ok a0 b0 ha0 hb0; omega)
+
+/-- Where the day of an example of `daysGiven` comes from (`borders::DayFrom`): a koyomi date, by
+    its place among the dates, or a range of days, by its place among the ranges. -/
+inductive DayFrom where
+  | date (i : Nat)
+  | range (i : Nat)
+  deriving Repr, DecidableEq, Inhabited
+
+/-- The first of the ranges of days that lets in a day `range` does not, by its place, and the day. -/
+def rangesOutside (range : Range) : List Range → Nat → Option (Nat × Int)
+  | [], _ => none
+  | r :: rs, i =>
+    match rangeOutside r range with
+    | some d => some (i, d)
+    | none => rangesOutside range rs (i + 1)
+
+theorem rangesOutside_none {range : Range} :
+    ∀ {rs : List Range} {i : Nat}, rangesOutside range rs i = none → ∀ r ∈ rs, ∀ d, r.mem d → range.mem d
+  | [], _, _, r, hr => by simp at hr
+  | r :: rs, i, h, r', hr' => by
+    simp only [rangesOutside] at h
+    split at h
+    · exact absurd h (by simp)
+    · next hn =>
+      rcases List.mem_cons.1 hr' with rfl | hm
+      · exact rangeOutside_none hn
+      · exact rangesOutside_none h r' hm
+
+theorem rangesOutside_some {range : Range} :
+    ∀ {rs : List Range} {i j : Nat} {d : Int}, rangesOutside range rs i = some (j, d) →
+      ∃ r, rs[j - i]? = some r ∧ i ≤ j ∧ rangeOutside r range = some d
+  | [], _, _, _, h => by simp [rangesOutside] at h
+  | r :: rs, i, j, d, h => by
+    simp only [rangesOutside] at h
+    split at h
+    · next d' hd =>
+      simp only [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨r, by simp, Nat.le_refl _, hd⟩
+    · obtain ⟨r', hs, hij, hr⟩ := rangesOutside_some h
+      refine ⟨r', ?_, by omega, hr⟩
+      have : j - i = (j - (i + 1)) + 1 := by omega
+      rw [this]
+      simpa using hs
+
+/-- `borders::days_given` (X3 (a), X6): whether every day a value can be lies inside `range`, by
+    where it can come from — the days of each koyomi date it can be the day of, in order; the days
+    of each range of days it can be in (a date's range the `.flow` writes; a time's, or the period
+    the workflow runs in, read as days at the calendar's offset, `momentDays`), in order; and
+    whether it can also come from a place that says nothing of what day it is (`other`). The
+    example is the first koyomi date with a day outside, by its place, and the day; else the first
+    range with one (`rangeOutside`). -/
+def daysGiven (dates : List (Found (List Int))) (ranges : List Range) (other : Bool) (range : Range) :
+    Answer (DayFrom × Int) :=
   go dates 0 other
 where
-  go : List (Found (List Int)) → Nat → Bool → Answer (Nat × Int)
-    | [], _, und => if und then .undecided else .holds
+  go : List (Found (List Int)) → Nat → Bool → Answer (DayFrom × Int)
+    | [], _, und =>
+      match rangesOutside range ranges 0 with
+      | some (i, day) => .fails (.range i, day)
+      | none => if und then .undecided else .holds
     | d :: ds, i, und =>
       match daysFit d range with
-      | .fails day => .fails (i, day)
+      | .fails day => .fails (.date i, day)
       | .undecided => go ds (i + 1) true
       | .holds => go ds (i + 1) und
 
-theorem daysGiven_go_holds {range : Range} :
+theorem daysGiven_go_holds {ranges : List Range} {range : Range} :
     ∀ {dates : List (Found (List Int))} {i : Nat} {und : Bool},
-      daysGiven.go range dates i und = .holds →
-        und = false ∧ ∀ d ∈ dates, ∃ set, d = .value set ∧ ∀ x ∈ set, range.mem x
+      daysGiven.go ranges range dates i und = .holds →
+        und = false ∧ (∀ d ∈ dates, ∃ set, d = .value set ∧ ∀ x ∈ set, range.mem x) ∧
+          ∀ r ∈ ranges, ∀ x, r.mem x → range.mem x
   | [], i, und, h => by
     simp only [daysGiven.go] at h
-    cases und <;> simp_all
+    split at h
+    · exact absurd h (by simp)
+    · next hn =>
+      cases und
+      · exact ⟨rfl, by simp, rangesOutside_none hn⟩
+      · exact absurd h (by simp)
   | d :: ds, i, und, h => by
     simp only [daysGiven.go] at h
     split at h
@@ -110,57 +259,88 @@ theorem daysGiven_go_holds {range : Range} :
     · obtain ⟨hu, _⟩ := daysGiven_go_holds h
       exact absurd hu (by simp)
     · next hd =>
-      obtain ⟨hu, hall⟩ := daysGiven_go_holds h
-      refine ⟨hu, fun x hx => ?_⟩
+      obtain ⟨hu, hall, hr⟩ := daysGiven_go_holds h
+      refine ⟨hu, fun x hx => ?_, hr⟩
       rcases List.mem_cons.1 hx with rfl | hx'
       · cases x with
         | undecided => simp [daysFit] at hd
         | value set => exact ⟨set, rfl, daysFit_holds hd⟩
       · exact hall x hx'
 
-/-- **When X3 (a) or X6 holds**, the value can only be the day of koyomi dates, and every day each
-    of them comes to lies inside the range. -/
-theorem daysGiven_holds {dates : List (Found (List Int))} {other : Bool} {range : Range}
-    (h : daysGiven dates other range = .holds) :
-    other = false ∧ ∀ d ∈ dates, ∃ set, d = .value set ∧ ∀ x ∈ set, range.mem x :=
+/-- **When X3 (a) or X6 holds**, the value can only be the day of koyomi dates or a day of the ranges,
+    and every day each of them comes to or lets in lies inside the range. -/
+theorem daysGiven_holds {dates : List (Found (List Int))} {ranges : List Range} {other : Bool} {range : Range}
+    (h : daysGiven dates ranges other range = .holds) :
+    other = false ∧ (∀ d ∈ dates, ∃ set, d = .value set ∧ ∀ x ∈ set, range.mem x) ∧
+      ∀ r ∈ ranges, ∀ x, r.mem x → range.mem x :=
   daysGiven_go_holds h
 
-theorem daysGiven_go_fails {range : Range} :
+theorem daysGiven_go_fails_date {ranges : List Range} {range : Range} :
     ∀ {dates : List (Found (List Int))} {i j : Nat} {und : Bool} {day : Int},
-      daysGiven.go range dates i und = .fails (j, day) →
+      daysGiven.go ranges range dates i und = .fails (.date j, day) →
         ∃ set, dates[j - i]? = some (.value set) ∧ i ≤ j ∧ day ∈ set ∧ ¬ range.mem day
   | [], i, j, und, day, h => by
     simp only [daysGiven.go] at h
-    cases und <;> simp_all
+    split at h
+    · simp at h
+    · cases und <;> simp at h
   | d :: ds, i, j, und, day, h => by
     simp only [daysGiven.go] at h
     split at h
     · next day' hd =>
-      simp only [Answer.fails.injEq, Prod.mk.injEq] at h
+      simp only [Answer.fails.injEq, Prod.mk.injEq, DayFrom.date.injEq] at h
       obtain ⟨rfl, rfl⟩ := h
       cases d with
       | undecided => simp [daysFit] at hd
       | value set =>
         obtain ⟨hm, hout, -⟩ := daysFit_fails hd
         exact ⟨set, by simp, Nat.le_refl _, hm, hout⟩
-    · obtain ⟨set, hs, hij, hm, hout⟩ := daysGiven_go_fails h
+    · obtain ⟨set, hs, hij, hm, hout⟩ := daysGiven_go_fails_date h
       refine ⟨set, ?_, by omega, hm, hout⟩
       have : j - i = (j - (i + 1)) + 1 := by omega
       rw [this]
       simpa using hs
-    · obtain ⟨set, hs, hij, hm, hout⟩ := daysGiven_go_fails h
+    · obtain ⟨set, hs, hij, hm, hout⟩ := daysGiven_go_fails_date h
       refine ⟨set, ?_, by omega, hm, hout⟩
       have : j - i = (j - (i + 1)) + 1 := by omega
       rw [this]
       simpa using hs
 
-/-- **When X3 (a) or X6 gives an example**, it is a day of the koyomi date it names, which the value
-    can be the day of, and the day lies outside the range. -/
-theorem daysGiven_fails {dates : List (Found (List Int))} {other : Bool} {range : Range} {j : Nat}
-    {day : Int} (h : daysGiven dates other range = .fails (j, day)) :
+theorem daysGiven_go_fails_range {ranges : List Range} {range : Range} :
+    ∀ {dates : List (Found (List Int))} {i j : Nat} {und : Bool} {day : Int},
+      daysGiven.go ranges range dates i und = .fails (.range j, day) →
+        ∃ r, ranges[j]? = some r ∧ rangeOutside r range = some day
+  | [], i, j, und, day, h => by
+    simp only [daysGiven.go] at h
+    split at h
+    · next j' day' hs =>
+      simp only [Answer.fails.injEq, Prod.mk.injEq, DayFrom.range.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨r, hr, -, hd⟩ := rangesOutside_some hs
+      exact ⟨r, by simpa using hr, hd⟩
+    · cases und <;> simp at h
+  | d :: ds, i, j, und, day, h => by
+    simp only [daysGiven.go] at h
+    split at h
+    · simp at h
+    · exact daysGiven_go_fails_range h
+    · exact daysGiven_go_fails_range h
+
+/-- **When X3 (a) or X6 gives an example from a koyomi date**, it is a day of the date it names, which
+    the value can be the day of, and the day lies outside the range. -/
+theorem daysGiven_fails_date {dates : List (Found (List Int))} {ranges : List Range} {other : Bool}
+    {range : Range} {j : Nat} {day : Int} (h : daysGiven dates ranges other range = .fails (.date j, day)) :
     ∃ set, dates[j]? = some (.value set) ∧ day ∈ set ∧ ¬ range.mem day := by
-  obtain ⟨set, hs, -, hm, hout⟩ := daysGiven_go_fails h
+  obtain ⟨set, hs, -, hm, hout⟩ := daysGiven_go_fails_date h
   exact ⟨set, by simpa using hs, hm, hout⟩
+
+/-- **When it gives an example from a range of days**, it is a day the range it names lets in, which
+    the value can be, and the day lies outside the range. -/
+theorem daysGiven_fails_range {dates : List (Found (List Int))} {ranges : List Range} {other : Bool}
+    {range : Range} {j : Nat} {day : Int} (h : daysGiven dates ranges other range = .fails (.range j, day)) :
+    ∃ r, ranges[j]? = some r ∧ (r.Ok → r.mem day) ∧ ¬ range.mem day := by
+  obtain ⟨r, hr, hd⟩ := daysGiven_go_fails_range h
+  exact ⟨r, hr, fun ok => rangeOutside_in ok hd, rangeOutside_outside hd⟩
 
 /-! ## X4: a rule's output as an amount -/
 
@@ -608,6 +788,108 @@ theorem le_foldl_max {h : Int} : ∀ {hs : List Int} {x : Int}, x ∈ h :: hs �
     · rcases List.mem_cons.1 hx' with rfl | hx''
       · exact Int.le_trans (Int.le_max_right _ _) (le_foldl_max (h := max h x) (hs := ys) List.mem_cons_self)
       · exact le_foldl_max (h := max h y) (List.mem_cons_of_mem _ hx'')
+
+/-- The integers from `lo` to `hi`, both in. -/
+def intRange (lo hi : Int) : List Int :=
+  (List.range (hi - lo + 1).toNat).map (fun n : Nat => lo + (n : Int))
+
+theorem mem_intRange {lo hi v : Int} : v ∈ intRange lo hi ↔ lo ≤ v ∧ v ≤ hi := by
+  unfold intRange
+  simp only [List.mem_map, List.mem_range]
+  constructor
+  · rintro ⟨n, hn, rfl⟩
+    omega
+  · rintro ⟨h1, h2⟩
+    exact ⟨(v - lo).toNat, by omega, by omega⟩
+
+/-! ## X2: the days of a range against a rule's days -/
+
+/-- `borders::day_not_in` (X2): the first day of the range of days `r` that is not one of `set`, the
+    days a rule's input takes (`range from koyomi`); none when every day of it is. Below an open low
+    end, the day before the earliest of `set` (the high end, when that is earlier); else the first
+    day from the low end on — up to the high end; past an open one, among as many days as `set` has
+    and one more, of which one is not in `set` (the day after the latest of `set` stands where the
+    search finds none, which it does not). -/
+def dayNotIn (set : List Int) (r : Range) : Option Int :=
+  match r.lo with
+  | none =>
+    let before := match set with
+      | [] => r.hi.getD 0
+      | f :: rest => rest.foldl min f - 1
+    some (match r.hi with
+      | some hi => if hi < before then hi else before
+      | none => before)
+  | some lo =>
+    match r.hi with
+    | some hi => (intRange lo hi).find? (fun x => !set.contains x)
+    | none => some (((intRange lo (lo + set.length)).find? (fun x => !set.contains x)).getD (set.foldl max lo + 1))
+
+/-- **When X2 keeps a range's days**, every day the range lets in is one of the rule's. -/
+theorem dayNotIn_none {set : List Int} {r : Range} (h : dayNotIn set r = none) : ∀ x, r.mem x → x ∈ set := by
+  intro x ⟨h1, h2⟩
+  unfold dayNotIn at h
+  split at h
+  · simp at h
+  · next lo hlo =>
+    split at h
+    · next hi hhi =>
+      have hx := List.find?_eq_none.1 h x (mem_intRange.2 ⟨h1 lo hlo, h2 hi hhi⟩)
+      simpa using hx
+    · simp at h
+
+/-- **The day X2 gives of a range** is one the range lets in, and not one of the rule's. -/
+theorem dayNotIn_some {set : List Int} {r : Range} {d : Int} (h : dayNotIn set r = some d) :
+    r.mem d ∧ d ∉ set := by
+  unfold dayNotIn at h
+  split at h
+  · next hlo =>
+    simp only [Option.some.injEq] at h
+    -- below the earliest day of the set, at or below the high end
+    have below : ∀ x ∈ set, d < x := by
+      intro x hx
+      cases set with
+      | nil => simp at hx
+      | cons f rest =>
+        have := foldl_min_le (l := f) (ls := rest) hx
+        simp only at h
+        split at h <;> (try split at h) <;> omega
+    refine ⟨⟨fun a ha => (by rw [hlo] at ha; cases ha), fun b hb => ?_⟩, fun hm => (by have := below d hm; omega)⟩
+    rw [hb] at h
+    simp only at h
+    split at h <;> omega
+  · next lo hlo =>
+    split at h
+    · next hi hhi =>
+      have hm := List.mem_of_find?_eq_some h
+      have hp := List.find?_some h
+      obtain ⟨h1, h2⟩ := mem_intRange.1 hm
+      refine ⟨⟨fun a ha => (by rw [hlo] at ha; cases ha; exact h1), fun b hb => (by rw [hhi] at hb; cases hb; exact h2)⟩, ?_⟩
+      intro hd
+      simp at hp
+      exact hp hd
+    · next hhi =>
+      simp only [Option.some.injEq] at h
+      cases hf : (intRange lo (lo + set.length)).find? (fun x => !set.contains x) with
+      | some e =>
+        rw [hf] at h
+        simp only [Option.getD_some] at h
+        subst h
+        have hm := List.mem_of_find?_eq_some hf
+        have hp := List.find?_some hf
+        obtain ⟨h1, _⟩ := mem_intRange.1 hm
+        refine ⟨⟨fun a ha => (by rw [hlo] at ha; cases ha; exact h1), fun b hb => (by rw [hhi] at hb; cases hb)⟩, ?_⟩
+        intro hd
+        simp at hp
+        exact hp hd
+      | none =>
+        rw [hf] at h
+        simp only [Option.getD_none] at h
+        subst h
+        have hlo' : lo ≤ set.foldl max lo := le_foldl_max (h := lo) (hs := set) List.mem_cons_self
+        refine ⟨⟨fun a ha => (by rw [hlo] at ha; cases ha; omega), fun b hb => (by rw [hhi] at hb; cases hb)⟩, ?_⟩
+        intro hd
+        have := le_foldl_max (h := lo) (hs := set) (List.mem_cons_of_mem _ hd)
+        omega
 
 theorem mapM_some_mem {β γ : Type} {f : β → Option γ} :
     ∀ {l : List β} {ys : List γ}, l.mapM f = some ys → ∀ x ∈ l, ∃ y, f x = some y ∧ y ∈ ys

@@ -1,0 +1,21 @@
+workflow 日付の範囲の子 v1
+description "来訪を、それぞれの範囲に収めた日と時間帯で確かめる。date_ranges.ja.flow がこれを子として走らせ、検査は、そこから渡すものをその範囲で確かめる。どのプラットフォームでも動く"
+
+record 確認
+  担当 : string
+
+inputs
+  id     : string
+  日     : date       range >=2026-01-01 <=2027-12-31
+  時間帯 : timestamp  range >=2026-01-01 <=2027-12-31 offset +09:00
+
+outputs
+  担当 : string
+
+task 来訪を確かめる(id: string, 日: date, 時間帯: timestamp) -> 確認
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:confirm-visit"
+  idempotent
+
+flow
+  let c = 来訪を確かめる(id: id, 日: 日, 時間帯: 時間帯)
+  succeed 担当 = c.担当

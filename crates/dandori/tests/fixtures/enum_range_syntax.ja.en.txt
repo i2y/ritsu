@@ -15,5 +15,5 @@ error[E003]: tests/fixtures/enum_range_syntax.ja.flow:16:19: no value of `送料
   = the values of `送料.段階` are, in order, 一般 < シルバー < ゴールド < プラチナ
 error[E003]: tests/fixtures/enum_range_syntax.ja.flow:17:29: the bound `一般` is not a value of `int`
     17 |   名前         : int  range >=一般
-error[E003]: tests/fixtures/enum_range_syntax.ja.flow:18:23: a range is for a number (`int` or a unit) or an ordered enum, and this is `string`
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:18:23: a range is for a number (`int` or a unit), an ordered enum, a date or a time, and this is `string`
     18 |   文字列       : string  range >=一般

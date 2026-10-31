@@ -111,11 +111,11 @@ fn a_flow_with_dates_and_books_is_told_to_run_with_ritsu_dandori() {
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
     assert_eq!(
         err,
-        format!("error[E018]: {flow}:7:11: this dandori cannot read dates files, and the flow uses the dates file `terms`\n     7 | use dates terms from \"dates/payment_terms.cal\"\n  = The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `ritsu dandori check {flow}`.\n")
+        format!("error[E018]: {flow}:10:11: this dandori cannot read dates files, and the flow uses the dates file `terms`\n    10 | use dates terms from \"dates/payment_terms.cal\"\n  = The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `ritsu dandori check {flow}`.\n")
     );
     let (code, _, ja) = binary(&["check", flow, "--lang", "ja"]);
     assert_eq!(code, 2);
-    assert!(ja.contains("エラー[E018]: examples/invoice/invoice.flow:7:11: この dandori は日付のファイルを読めません。このフローは日付のファイル `terms` を使います"), "{ja}");
+    assert!(ja.contains("エラー[E018]: examples/invoice/invoice.flow:10:11: この dandori は日付のファイルを読めません。このフローは日付のファイル `terms` を使います"), "{ja}");
     // with rulec alone, the dates file is still not read
     let (code, _, err) = with_rulec(&["check", flow]);
     assert_eq!(code, 2, "{err}");

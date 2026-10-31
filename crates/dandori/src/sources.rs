@@ -131,6 +131,12 @@ pub fn dates(path: &Path) -> Result<DateFacts, Vec<Said>> {
     current().dates().facts(path)
 }
 
+/// Every day a date of a dates file comes to over the whole range of its inputs, as koyomi counts
+/// them (the day of the date, where dandori holds it to a range: `ranges`).
+pub fn date_values(path: &Path, date: &str) -> Result<Found<DaySet>, Vec<Said>> {
+    current().dates().values(path, date)
+}
+
 /// The fewest and the most days from a dates file's date input to one of its dates, over the
 /// whole range, as koyomi counts them (ritsu's DESIGN 7.7: how long a wait until the date's time
 /// lasts, for the span of a hold, `crossings`).

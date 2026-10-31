@@ -253,8 +253,12 @@ fn ts_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize
             None => format!("Number.isInteger({x})"),
         },
         Ty::Str => format!("typeof {x} === \"string\""),
-        Ty::Timestamp => format!("(typeof {x} === \"string\" && {p}TIMESTAMP.test({x}))"),
-        Ty::Date => format!("(typeof {x} === \"string\" && {p}DATE.test({x}))"),
+        Ty::Timestamp | Ty::Date => {
+            let (re, head) = if *t == Ty::Date { ("DATE", format!("({x} as string)")) } else { ("TIMESTAMP", format!("({x} as string).slice(0, 19)")) };
+            let mut parts = vec![format!("typeof {x} === \"string\""), format!("{p}{re}.test({x})")];
+            parts.extend(rg.map(|r| render::time_tests(t, &r, |op, end| format!("{head} {op} {}", q(end)))).unwrap_or_default());
+            format!("({})", parts.join(" && "))
+        }
         Ty::Bool => format!("typeof {x} === \"boolean\""),
         Ty::Enum(e) => match m.held_values(t, rg) {
             // a place that holds the enum to a range: the values the range lets in
@@ -2508,6 +2512,7 @@ impl<'a> Gen<'a> {
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "null".into(),
             TExpr::Now => self.now.clone(),
+            TExpr::NowAt(site) => render::now_name(*site),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 let is_input = self.m.inputs.iter().any(|(i, _)| i == name);
@@ -2847,6 +2852,18 @@ impl<'a> Gen<'a> {
             self.line(d, &format!("const dd_clock_{site} = dd.stamp(await {ctx}.step({}, async () => Date.now(), {{ retryStrategy: dd.noRetry }}));", q(&format!("{} clock", s.line))));
             self.now = format!("dd_clock_{site}");
         }
+        // Temporal: a call that reads `now` reads the clock once, before it, so that a try again is
+        // given the moment its first try was: each try runs the call's arguments again, after a
+        // timer that moves the workflow's clock on
+        if self.flavor == Flavor::Temporal {
+            self.now = if matches!(s.kind, TK::Call { .. }) && s.kind.reads_now() {
+                let name = render::now_name(s.site);
+                self.line(d, &format!("const {name} = dd.now();"));
+                name
+            } else {
+                "dd.now()".into()
+            };
+        }
         self.stmt_here(s, d);
         self.now = "dd.now()".into();
     }
@@ -2898,6 +2915,22 @@ impl<'a> Gen<'a> {
             TK::Fail { error, cause, .. } => {
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "null".into());
                 self.line(d, &format!("throw dd.fail({}, {c});", q(error)));
+            }
+            // the period the workflow runs in (DESIGN 20): the clock, read once and held to it
+            TK::Period { start } => {
+                let p = m.period.as_ref().expect("a check of the period is in a flow with one");
+                let now = render::now_name(s.site);
+                let holds = p.tests(|op, end| format!("{now}.slice(0, 19) {op} {}", q(end))).join(" && ");
+                let (before, after) = p.cause_around((!*start).then_some(s.line));
+                let cause = format!("{} + {now} + {}", q(&before), q(&after));
+                self.line(d, &format!("const {now} = {};", self.now));
+                if *start {
+                    self.line(d, &format!("// the period the workflow runs in, {}: a run that starts outside it calls nothing", p.text));
+                    self.line(d, &format!("if (!({holds})) throw dd.fail({}, {cause});", q(OUT_OF_PERIOD)));
+                } else {
+                    self.line(d, &format!("// line {}: now, held to the period the workflow runs in; outside it, the run goes to on failure as a task's error does", s.line));
+                    self.line(d, &format!("if (!({holds})) throw new dd.TaskError({}, {cause});", q(OUT_OF_PERIOD)));
+                }
             }
             // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
             TK::Check(c) => {

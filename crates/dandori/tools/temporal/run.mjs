@@ -29,7 +29,13 @@
 //              "callbacks": [the proxy of each task that hands on a callback's id],
 //              "runs": [ { "id": workflow id, "input": {...},
 //                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ],
-//                          "events": { "<the index of an answer>": the event it is for } } ] }
+//                          "events": { "<the index of an answer>": the event it is for },
+//                          "now": the moment `now` reads, or [the run's start, every later read] } ] }
+//
+// `now` reads the run's moment, as in the reference: the copy of runtime.ts finds it by the
+// workflow's id, in a table of every run's (which the histories' spec.json keeps too, for a replay
+// of them), the check of the period at the start reads the moment the run starts at (its read is
+// dd.nowAtStart() in the copy of workflow.ts), and every other read the later one.
 //
 // Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the
 // id of the workflow that called it (a child workflow's id starts with its parent's). The tasks
@@ -99,8 +105,23 @@ const activitiesBy = serving ? null : JSON.parse(process.env.DANDORI_ACTIVITIES_
  */
 const TIMEOUT_SECONDS = Number(process.env.DANDORI_TEMPORAL_TIMEOUT ?? 20);
 const TIMEOUT = `${TIMEOUT_SECONDS} seconds`;
-/** The moment `now` reads in every scenario (dandori's render::SCENARIO_NOW). */
+/** The moment `now` reads in a scenario that names none (dandori's render::SCENARIO_NOW). */
 const SCENARIO_NOW = "2026-03-31T15:30:00Z";
+/** The moments each run reads `now` at, by its workflow's id: the one it starts at, and the one of every later read. */
+const NOWS = replaying ? (spec.nows ?? {}) : Object.fromEntries((spec.runs ?? []).map((r) => [r.id, Array.isArray(r.now) ? r.now : [r.now ?? SCENARIO_NOW, r.now ?? SCENARIO_NOW]]));
+
+/** The text with the clock's read for the check of the period at the start (the nearest `read` before a line that says "the run starts at ") made `by`. */
+function atStart(text, read, by) {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes('"the run starts at "')) continue;
+    let j = i;
+    while (j >= 0 && !lines[j].includes(read)) j--;
+    if (j < 0) throw new Error(`workflow.ts has no ${read} before the check of the period at the start`);
+    lines[j] = lines[j].replace(read, by);
+  }
+  return lines.join("\n");
+}
 /** How long an event is waited for here, at most: long enough for the runner to see the wait and send it. */
 const EVENT_MS = 5000;
 /** How long a stand-in that the scenario times out keeps its activity busy: until the server has timed it out. */
@@ -128,6 +149,7 @@ for (const f of fs.readdirSync(dir)) {
       .map((l) => (keep(l) ? l : l.replace(/startToCloseTimeout: "\d+ seconds"/g, `startToCloseTimeout: "${TIMEOUT}"`)))
       .join("\n");
     if (!LIMITS) text = text.replace(/workflowExecutionTimeout: "\d+ seconds"/g, `workflowExecutionTimeout: "${TIMEOUT}"`);
+    text = atStart(text, "dd.now()", "dd.nowAtStart()");
   }
   if (f === "runtime.ts") {
     if (!text.includes("return seconds * 1000;")) throw new Error("runtime.ts has no ms() to shorten");
@@ -138,8 +160,25 @@ for (const f of fs.readdirSync(dir)) {
     const eventWait = "got = await condition(() => events.has(name), ms(seconds));";
     if (!text.includes(eventWait)) throw new Error("runtime.ts has no event's wait to shorten");
     text = text.replace(eventWait, `got = await condition(() => events.has(name), Math.min(seconds * 1000, ${EVENT_MS}));`);
-    // the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
-    text = text.replace('return new Date(Date.now()).toISOString().slice(0, 19) + "Z";', `return ${JSON.stringify(SCENARIO_NOW)};`);
+    // the clock `now` reads is the run's moment, as in the reference (see the top)
+    const clock = 'return new Date(Date.now()).toISOString().slice(0, 19) + "Z";';
+    if (text.includes(clock)) {
+      text = `import { workflowInfo as ddTestInfo } from "@temporalio/workflow";\n${text.replace(clock, "return ddTestNow(false);")}`;
+      text += `
+/** The moments \`now\` reads in each run, by its workflow's id (tools/temporal/run.mjs). */
+const DD_TEST_NOWS: Record<string, [string, string]> = ${JSON.stringify(NOWS)};
+
+/** \`now\` for the check of the period at the start: the moment the run starts at. */
+export function nowAtStart(): string {
+  return ddTestNow(true);
+}
+
+function ddTestNow(start: boolean): string {
+  const n = DD_TEST_NOWS[ddTestInfo().workflowId] ?? [${JSON.stringify(SCENARIO_NOW)}, ${JSON.stringify(SCENARIO_NOW)}];
+  return start ? n[0] : n[1];
+}
+`;
+    }
   }
   fs.writeFileSync(path.join(work, f), text);
 }
@@ -605,7 +644,7 @@ try {
   if (historiesDir) {
     fs.mkdirSync(historiesDir, { recursive: true });
     for (const h of histories) fs.writeFileSync(path.join(historiesDir, h.file), historyToJSON(h.history) + "\n");
-    fs.writeFileSync(path.join(historiesDir, "spec.json"), JSON.stringify({ children: spec.children ?? [] }) + "\n");
+    fs.writeFileSync(path.join(historiesDir, "spec.json"), JSON.stringify({ children: spec.children ?? [], nows: NOWS }) + "\n");
   }
 } finally {
   await env.teardown();

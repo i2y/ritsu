@@ -4,7 +4,7 @@
 //! (`ritsu_cross::Borders`). `crates/ritsu/tests/cross.rs` reaches the same decisions from
 //! projects, where a flow calls them, and reads the records in `ritsu check --format json`.
 
-use ritsu_cross::borders::{amount_fits, amount_unshown, amounts_given, amounts_hull, amounts_unshown, day_text, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom, Unmet};
+use ritsu_cross::borders::{amount_fits, amount_unshown, amounts_given, amounts_hull, amounts_unshown, day_not_in, day_text, days_fit, days_given, held_until, input_range, moment_days, range_outside, refusals_met, AmountFrom, DayFrom, Unmet};
 use ritsu_ports::{Answer, Books, Dates, Found, Rules};
 use std::path::{Path, PathBuf};
 
@@ -31,13 +31,16 @@ fn x3a_the_days_of_a_koyomi_date_against_a_rules_range() {
     assert!(matches!(days_fit(&Found::Undecided(why.clone()), (None, None)), Answer::Undecided(_)));
     // a value that can be the day of two dates, or come from somewhere else as well
     let two = [days.clone(), k.values(&payment_terms(), "closing").unwrap()];
-    assert_eq!(days_given(&two, None, (Some(20454), Some(20828))), Answer::Holds);
-    assert!(matches!(days_given(&two, None, (Some(20494), None)), Answer::Fails((1, 20473))));
+    assert_eq!(days_given(&two, &[], None, (Some(20454), Some(20828))), Answer::Holds);
+    assert!(matches!(days_given(&two, &[], None, (Some(20494), None)), Answer::Fails((DayFrom::Date(1), 20473))));
     let input = ritsu_base::tr!("入力", "an input");
-    assert_eq!(days_given(&two, Some(&input), (Some(20454), Some(20828))), Answer::Undecided(input.clone()));
+    assert_eq!(days_given(&two, &[], Some(&input), (Some(20454), Some(20828))), Answer::Undecided(input.clone()));
     // an example wins over a place that says nothing
-    assert!(matches!(days_given(&two, Some(&input), (Some(20494), None)), Answer::Fails((1, _))));
-    assert!(matches!(days_given(&[Found::Undecided(why)], None, (None, None)), Answer::Undecided(_)));
+    assert!(matches!(days_given(&two, &[], Some(&input), (Some(20494), None)), Answer::Fails((DayFrom::Date(1), _))));
+    assert!(matches!(days_given(&[Found::Undecided(why)], &[], None, (None, None)), Answer::Undecided(_)));
+    // a range of days the `.flow` writes: the rule's open end bounds nothing on its side
+    assert_eq!(days_given(&[], &[(Some(20513), Some(20600))], None, (Some(20513), None)), Answer::Holds);
+    assert_eq!(days_given(&[], &[(Some(20500), Some(20600))], None, (Some(20513), None)), Answer::Fails((DayFrom::Range(0), 20500)));
     // the range rulec says a date input declares
     let t = ritsu_testkit::TempDir::new("x3a");
     std::fs::write(t.path().join("payment_terms.cal"), std::fs::read(payment_terms()).unwrap()).unwrap();
@@ -179,16 +182,76 @@ fn x6_a_day_given_to_a_koyomi_date() {
     assert_eq!(input_range(&facts, "nothing"), None);
     // the closing days are the 20th of each month: inside; the payment days run into 2027: outside
     let closing = k.values(&payment_terms(), "closing").unwrap();
-    assert_eq!(days_given(&[closing], None, (Some(range.0), Some(range.1))), Answer::Holds);
+    assert_eq!(days_given(&[closing.clone()], &[], None, (Some(range.0), Some(range.1))), Answer::Holds);
     let payment = k.values(&payment_terms(), "payment").unwrap();
-    match days_given(&[payment], None, (Some(range.0), Some(range.1))) {
-        Answer::Fails((0, at)) => assert_eq!(day_text(at), "2027-01-10"),
+    match days_given(&[payment.clone()], &[], None, (Some(range.0), Some(range.1))) {
+        Answer::Fails((DayFrom::Date(0), at)) => assert_eq!(day_text(at), "2027-01-10"),
         other => panic!("{other:?}"),
     }
     let now = ritsu_base::tr!("どの日にも", "any day");
-    assert!(matches!(days_given(&[], Some(&now), (Some(range.0), Some(range.1))), Answer::Undecided(_)));
+    assert!(matches!(days_given(&[], &[], Some(&now), (Some(range.0), Some(range.1))), Answer::Undecided(_)));
+    // a range of days: held when both its ends are in the input's range
+    let r = (Some(range.0), Some(range.1));
+    assert_eq!(days_given(&[], &[(Some(20454), Some(20807))], None, r), Answer::Holds);
+    // a koyomi date with a day outside is the example before a range
+    assert!(matches!(days_given(&[payment], &[(Some(20400), Some(20807))], None, r), Answer::Fails((DayFrom::Date(0), _))));
+    assert_eq!(days_given(&[closing], &[(Some(20454), Some(20807)), (Some(20400), Some(20807))], None, r), Answer::Fails((DayFrom::Range(1), 20400)));
+    // an example from a range wins over a place that says nothing
+    assert_eq!(days_given(&[], &[(Some(20454), Some(20808))], Some(&now), r), Answer::Fails((DayFrom::Range(0), 20808)));
     // the input at which a date comes to a day, for the example
     assert_eq!(k.input_for(&payment_terms(), "payment", 20828).unwrap(), Some(vec![("received".to_string(), 20778)]));
+}
+
+#[test]
+fn x6_a_range_of_days_against_an_input_range() {
+    let r = (Some(20454), Some(20807));
+    assert_eq!(range_outside((Some(20454), Some(20807)), r), None);
+    assert_eq!(range_outside((Some(20500), Some(20600)), r), None);
+    // the low end outside is the example; else the day after the input's last
+    assert_eq!(range_outside((Some(20453), Some(20600)), r), Some(20453));
+    assert_eq!(range_outside((Some(20500), Some(20808)), r), Some(20808));
+    // a range wholly after the input's: its first day
+    assert_eq!(range_outside((Some(20900), Some(20950)), r), Some(20900));
+    // an open end lets in days without end: the day before the input's first, or after its last
+    assert_eq!(range_outside((None, Some(20600)), r), Some(20453));
+    assert_eq!(range_outside((Some(20500), None), r), Some(20808));
+    assert_eq!(range_outside((None, None), r), Some(20453));
+    // below an open low end, a day the range lets in: its high end, when that is earlier
+    assert_eq!(range_outside((None, Some(20400)), r), Some(20400));
+    // a rule's open end bounds nothing on its side (X3 (a))
+    assert_eq!(range_outside((None, Some(20600)), (None, Some(20807))), None);
+    assert_eq!(range_outside((None, None), (None, None)), None);
+    assert_eq!(range_outside((None, Some(20900)), (None, Some(20807))), Some(20808));
+}
+
+#[test]
+fn x6_the_days_of_moments_at_a_calendars_offset() {
+    // 2026-01-01 to 2027-12-28 at +09:00, in UTC seconds: the same days at +09:00
+    let (lo, hi) = (1_767_193_200_i64, 1_830_005_999_i64);
+    assert_eq!(day_text(1_767_193_200_i64.div_euclid(86_400)), "2025-12-31");
+    assert_eq!(moment_days((Some(lo), Some(hi)), 540), (Some(20454), Some(21180)));
+    assert_eq!(day_text(21180), "2027-12-28");
+    // read in UTC, the first moment is on the day before
+    assert_eq!(moment_days((Some(lo), Some(hi)), 0), (Some(20453), Some(21180)));
+    // the days of UTC at +09:00: the last one runs into the next day
+    let (ulo, uhi) = (20454 * 86_400_i64, 21184 * 86_400_i64 - 1);
+    assert_eq!(day_text(21183), "2027-12-31");
+    assert_eq!(moment_days((Some(ulo), Some(uhi)), 540), (Some(20454), Some(21184)));
+    assert_eq!(moment_days((Some(ulo), Some(uhi)), 0), (Some(20454), Some(21183)));
+    // west of UTC, the first day is the day before
+    assert_eq!(moment_days((Some(ulo), None), -300), (Some(20453), None));
+}
+
+#[test]
+fn x2_a_range_of_days_against_the_days_of_a_koyomi_date() {
+    let set: std::collections::BTreeSet<i64> = [20454, 20455, 20456, 20460].into_iter().collect();
+    assert_eq!(day_not_in(&set, (Some(20454), Some(20456))), None);
+    assert_eq!(day_not_in(&set, (Some(20454), Some(20460))), Some(20457));
+    assert_eq!(day_not_in(&set, (Some(20453), Some(20456))), Some(20453));
+    // an open low end: the day before the first; an open high end: past the last
+    assert_eq!(day_not_in(&set, (None, Some(20456))), Some(20453));
+    assert_eq!(day_not_in(&set, (None, Some(20400))), Some(20400));
+    assert_eq!(day_not_in(&set, (Some(20460), None)), Some(20461));
 }
 
 #[test]

@@ -32,19 +32,6 @@ open KoyomiModel
 
 /-! ## The inputs' ranges, every combination -/
 
-/-- The integers from `lo` to `hi`, both in. -/
-def intRange (lo hi : Int) : List Int :=
-  (List.range (hi - lo + 1).toNat).map (fun n : Nat => lo + (n : Int))
-
-theorem mem_intRange {lo hi v : Int} : v ∈ intRange lo hi ↔ lo ≤ v ∧ v ≤ hi := by
-  unfold intRange
-  simp only [List.mem_map, List.mem_range]
-  constructor
-  · rintro ⟨n, hn, rfl⟩
-    omega
-  · rintro ⟨h1, h2⟩
-    exact ⟨(v - lo).toNat, by omega, by omega⟩
-
 /-- Each value inside its input's range, one value for each input. -/
 def InRanges : List KoyomiModel.Input → List Int → Prop
   | [], [] => True

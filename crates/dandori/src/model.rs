@@ -147,6 +147,22 @@ impl Range {
     }
 }
 
+/// `>=<lo> <=<hi>`, with the ends there are.
+pub fn show_ends(lo: Option<String>, hi: Option<String>) -> String {
+    lo.map(|l| format!(">={l}")).into_iter().chain(hi.map(|h| format!("<={h}"))).collect::<Vec<_>>().join(" ")
+}
+
+/// A range of moments with no `offset` to say it by: by its days in UTC when it is whole days there
+/// (`>=2026-01-01 <=2027-12-31`), else by its first and last seconds (`>=2025-12-31T15:00:00Z`).
+pub fn moments_text(rg: &Range) -> String {
+    let whole = rg.lo.is_none_or(|l| l.rem_euclid(86_400) == 0) && rg.hi.is_none_or(|h| (h + 1).rem_euclid(86_400) == 0);
+    if whole {
+        show_ends(rg.lo.map(|l| day_text(l.div_euclid(86_400))), rg.hi.map(|h| day_text(h.div_euclid(86_400))))
+    } else {
+        show_ends(rg.lo.map(moment_text), rg.hi.map(moment_text))
+    }
+}
+
 /// The values a range of an ordered enum lets in, in the enum's order, as rulec writes the range:
 /// by the values at its two ends, `>=basic <=gold`. Its values are one after another in the order,
 /// so the ends say them all.
@@ -878,6 +894,9 @@ pub enum TExpr {
     /// `now`: the moment the statement runs, as the platform's clock reads it (on Temporal, the
     /// workflow's time, which a replay reads again the same)
     Now,
+    /// `now` in a workflow with a period: the moment the check of the period at this site read and
+    /// held to the period (`TK::Period`). Never written in a `.flow`: `periods` puts it in.
+    NowAt(usize),
 }
 
 impl TExpr {
@@ -887,7 +906,7 @@ impl TExpr {
             TExpr::Str(_) | TExpr::Interp(_) => Ty::Str,
             TExpr::Int(_) => Ty::Int,
             TExpr::Bool(_) => Ty::Bool,
-            TExpr::Now => Ty::Timestamp,
+            TExpr::Now | TExpr::NowAt(_) => Ty::Timestamp,
             TExpr::Enum(_, e) => Ty::Enum(*e),
             TExpr::None(t) | TExpr::Record { ty: t, .. } | TExpr::List { ty: t, .. } => t.clone(),
         }
@@ -933,7 +952,7 @@ impl TExpr {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => v.clone(),
             TExpr::None(_) => "none".into(),
-            TExpr::Now => "now".into(),
+            TExpr::Now | TExpr::NowAt(_) => "now".into(),
             TExpr::Record { fields, .. } => format!("{{{}}}", fields.iter().map(|(f, x)| format!("{f}: {}", x.show())).collect::<Vec<_>>().join(", ")),
             TExpr::List { items, .. } => format!("[{}]", items.iter().map(|x| x.show()).collect::<Vec<_>>().join(", ")),
             TExpr::Interp(parts) => parts
@@ -970,6 +989,13 @@ pub enum TK {
     /// break it fails with `Dandori.BrokenPrecondition`. Never written in a `.flow`: `prechecks`
     /// puts it in after the check, from what `ritsu dandori` hands over.
     Check(PreCheck),
+    /// The period the workflow runs in (`now range`, DESIGN 20), held to the clock: at the start of
+    /// a run (`start`), where a run outside it fails with `Dandori.OutOfPeriod` as an input outside
+    /// its range fails, calling nothing; and before a statement that reads `now`, where the moment
+    /// read is the one the statement reads (`TExpr::NowAt` this site), and a run outside the period
+    /// goes to `on failure` as a task's error nothing handles does. Never written in a `.flow`:
+    /// `periods` puts it in after the check.
+    Period { start: bool },
 }
 
 /// A rule's precondition, checked where the code of the workflow runs (`TK::Check`).
@@ -1042,9 +1068,9 @@ impl TK {
         }
     }
 
-    /// Whether the statement itself reads `now`.
+    /// Whether the statement itself reads `now`: the clock, which a check of the period reads too.
     pub fn reads_now(&self) -> bool {
-        self.exprs().iter().any(|e| e.has_now())
+        matches!(self, TK::Period { .. }) || self.exprs().iter().any(|e| e.has_now())
     }
 }
 
@@ -1083,6 +1109,93 @@ pub fn module_key(key: &str, dir: &str) -> String {
 /// A key of [`module_key`], split back: the module's own key, and the directory of its module.
 pub fn split_key(key: &str) -> (&str, &str) {
     key.split_once(' ').unwrap_or((key, ""))
+}
+
+/// `now range >=2026-01-01 <=2027-12-31` under `workflow` (DESIGN 20): the moments a run may start
+/// at and read `now` at.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Period {
+    /// in seconds since 1970-01-01T00:00:00Z, both ends included
+    pub range: Range,
+    /// as the `.flow` writes it: `>=2026-01-01 <=2027-12-28 offset +09:00`
+    pub text: String,
+    /// the line of `now range`
+    pub line: usize,
+}
+
+impl Period {
+    /// The test the code of every platform holds a moment to: the first second of the period and
+    /// the first second after it, as the first 19 characters of a moment (`2026-01-01T00:00:00`),
+    /// which compare as text in the order of time.
+    pub fn ends(&self) -> (Option<String>, Option<String>) {
+        moment_ends(&self.range)
+    }
+
+    /// Why a run that reads `now` outside the period fails: the start of the run, or the line of
+    /// the statement that reads it, and the moment. The same on every platform.
+    pub fn cause(&self, line: Option<usize>, moment: &str) -> String {
+        let (before, after) = self.cause_around(line);
+        format!("{before}{moment}{after}")
+    }
+
+    /// The cause, before the moment and after it, for the code of a platform to put the moment in.
+    pub fn cause_around(&self, line: Option<usize>) -> (String, String) {
+        let before = match line {
+            None => "the run starts at ".to_string(),
+            Some(l) => format!("line {l}: now is "),
+        };
+        (before, format!(", outside the period the workflow runs in, {}", self.text))
+    }
+
+    /// The first 19 characters of a moment held to the period, as the code of a platform writes the
+    /// test: each end made by `test(op, end)`.
+    pub fn tests(&self, test: impl Fn(&str, &str) -> String) -> Vec<String> {
+        let (lo, next) = self.ends();
+        lo.map(|l| test(">=", &l)).into_iter().chain(next.map(|n| test("<", &n))).collect()
+    }
+}
+
+/// The error a run fails with when it reads `now` outside the period the workflow runs in.
+pub const OUT_OF_PERIOD: &str = "Dandori.OutOfPeriod";
+
+/// The day `n` days after 1970-01-01, `YYYY-MM-DD` (koyomi's, rulec's and kaname's count).
+pub fn day_text(n: i64) -> String {
+    ritsu_ports::day_text(n)
+}
+
+/// The moment `t` seconds after 1970-01-01T00:00:00Z, `YYYY-MM-DDTHH:MM:SSZ`.
+pub fn moment_text(t: i64) -> String {
+    format!("{}Z", moment_head(t))
+}
+
+/// The first 19 characters of the moment `t` seconds after 1970-01-01T00:00:00Z.
+pub fn moment_head(t: i64) -> String {
+    let (day, secs) = (t.div_euclid(86_400), t.rem_euclid(86_400));
+    format!("{}T{:02}:{:02}:{:02}", day_text(day), secs / 3600, secs / 60 % 60, secs % 60)
+}
+
+/// A time as seconds since 1970-01-01T00:00:00Z, from its first 19 characters
+/// (`YYYY-MM-DDTHH:MM:SS`): what a fraction of a second and the `Z` after them leave in its second.
+pub fn moment_of(text: &str) -> Option<i64> {
+    let day = ritsu_ports::day_of(text.get(..10)?)?;
+    if text.as_bytes().get(10) != Some(&b'T') {
+        return None;
+    }
+    let part = |a: usize, b: usize| -> Option<i64> { text.get(a..b).filter(|x| x.bytes().all(|c| c.is_ascii_digit())).and_then(|x| x.parse().ok()) };
+    Some(day * 86_400 + part(11, 13)? * 3600 + part(14, 16)? * 60 + part(17, 19)?)
+}
+
+/// A range of days as the code of every platform compares a date with it: the first day and the
+/// last, `YYYY-MM-DD`, which compare as text in the order of days.
+pub fn day_ends(r: &Range) -> (Option<String>, Option<String>) {
+    (r.lo.map(day_text), r.hi.map(day_text))
+}
+
+/// A range of moments as the code of every platform compares a time with it: its first second and
+/// the first second after it, each the first 19 characters of a moment, which the first 19 of a
+/// time are held to (`lo <= x < next`; a time may have a fraction of a second after them).
+pub fn moment_ends(r: &Range) -> (Option<String>, Option<String>) {
+    (r.lo.map(moment_head), r.hi.map(|h| moment_head(h + 1)))
 }
 
 #[derive(Clone, Debug)]
@@ -1135,6 +1248,11 @@ pub struct Model {
     /// `history encrypted`, by its line: the history of a run is encrypted with a key only those who
     /// may read its secrets hold; Temporal's code then needs a payload codec (DESIGN 1.18)
     pub history_encrypted: Option<usize>,
+    /// `now range …` under `workflow`: the period the workflow runs in (DESIGN 20)
+    pub period: Option<Period>,
+    /// how the `.flow` writes each range of times it writes with an `offset`, by the moments it is:
+    /// what a message says of a place's range (`Model::range_text`)
+    pub moment_texts: Vec<(Range, String)>,
     /// the `.flow` as dandori reached it, which a mark written in it names (`SecretMark::file`)
     pub source_reached: String,
 }
@@ -1278,11 +1396,24 @@ impl Model {
     }
 
     /// A place's range as a `.flow` writes it: `>=1 <=30`, and for an ordered enum, by the values
-    /// at its ends, `>=basic <=gold`.
+    /// at its ends, `>=basic <=gold`; for a date, by its days, `>=2026-01-01 <=2027-12-31`; for a
+    /// time, as the `.flow` writes it with its `offset`, else by its days in UTC when it is whole
+    /// days there, else by its first and last seconds in UTC.
     pub fn range_text(&self, t: &Ty, rg: &Range) -> String {
-        match t.enum_inside() {
-            Some(e) => ends_text(&self.values_in(e, Some(*rg))),
-            None => rg.show(),
+        if let Some(e) = t.enum_inside() {
+            return ends_text(&self.values_in(e, Some(*rg)));
+        }
+        let mut inner = t;
+        while let Ty::Opt(x) | Ty::List(x) = inner {
+            inner = x;
+        }
+        match inner {
+            Ty::Date => show_ends(rg.lo.map(day_text), rg.hi.map(day_text)),
+            Ty::Timestamp => match self.moment_texts.iter().find(|(r, _)| r == rg) {
+                Some((_, text)) => text.clone(),
+                None => moments_text(rg),
+            },
+            _ => rg.show(),
         }
     }
 

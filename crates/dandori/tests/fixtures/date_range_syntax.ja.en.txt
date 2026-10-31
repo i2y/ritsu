@@ -1,0 +1,20 @@
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:2:46: there is no offset `+25:00`: write it `±HH:MM`, as `+09:00`, up to 23:59
+     2 |   now range >=2026-01-01 <=2027-12-31 offset +25:00
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:8:36: there is no day `2026-02-30`
+     8 |   無い日         : date       range >=2026-02-30
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:9:25: no day is in `>=2026-12-31 <=2026-01-01`
+     9 |   入る日が無い   : date       range >=2026-12-31 <=2026-01-01
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:10:24: no day is in `>=2026-12-31 <=2026-01-01`
+    10 |   入る時刻が無い : timestamp  range >=2026-12-31 <=2026-01-01 offset -05:00
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:11:30: a bound of a range of dates or of times is a day (`>=2026-01-01`), and `1` is none
+    11 |   数             : date       range >=1 <=31
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:12:37: a bound of a range of dates or of times is a day (`>=2026-01-01`), and `今日` is none
+    12 |   名前           : timestamp  range >=今日
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:13:34: the bound `2026-01-01` is not a value of `int`
+    13 |   日付の整数     : int        range >=2026-01-01
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:14:49: `offset` is written only after a range of times and in `now range`: a date has no time of day for an offset to read
+    14 |   日付のオフセット : date     range >=2026-01-01 offset +09:00
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:15:50: there is no offset `+09:60`: write it `±HH:MM`, as `+09:00`, up to 23:59
+    15 |   遠いオフセット : timestamp  range <=2026-12-31 offset +09:60
+error[E003]: tests/fixtures/date_range_syntax.ja.flow:16:28: a range is for a number (`int` or a unit), an ordered enum, a date or a time, and this is `string`
+    16 |   文字列         : string     range >=2026-01-01

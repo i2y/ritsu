@@ -1,0 +1,6 @@
+workflow 期間のオフセット v1
+  now range >=2026-01-01 <=2026-12-31 offset 9
+description "E001：オフセットは +09:00 の形で書く"
+
+flow
+  pass

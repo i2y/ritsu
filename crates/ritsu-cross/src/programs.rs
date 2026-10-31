@@ -232,7 +232,7 @@ fn days_of(dates: &dyn Dates, g: &Given) -> (Vec<Found<DaySet>>, Option<Text>) {
 /// Whether the days a value can be all lie in `range`; what is said where one may not.
 fn days_in(dates: &dyn Dates, g: &Given, range: (Option<i64>, Option<i64>)) -> ByRanges {
     let (sets, other) = days_of(dates, g);
-    match borders::days_given(&sets, other.as_ref(), range) {
+    match borders::days_given(&sets, &[], other.as_ref(), range) {
         Answer::Holds => ByRanges::Shown,
         Answer::Fails((_, day)) => ByRanges::Open(tr!(
             "範囲の解析では、`{}` がとる日に、範囲の外の {} が入ります。関数のベクタには、範囲の外の日を渡す入力はありませんでした。",

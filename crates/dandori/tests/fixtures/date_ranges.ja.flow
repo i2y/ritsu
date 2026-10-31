@@ -1,0 +1,47 @@
+workflow 日付の範囲 v1
+  now range >=2026-04-01 <=2026-06-30 offset +09:00
+description "日付と時刻の範囲：日付か時刻を範囲に収める場所にワークフローが渡すものは、どこから来るものでも、その範囲に入らなければならない。now は、ワークフローが動く期間が言う時刻になる。ただし on failure の中では、期間は now を確かめない"
+
+use dates 期限 from "../flows/dates/出荷の期限.cal"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:shipping-dates"
+
+record 来訪
+  id     : string
+  日     : date       range >=2026-01-01 <=2026-06-30
+  時間帯 : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+inputs
+  訪問 : 来訪
+
+outputs
+  時刻 : timestamp  range >=2026-06-01
+
+task 予約する(id: string, 日: date  range >=2026-03-01) -> date
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:book"
+  idempotent
+
+task 知らせる(id: string, 時刻: timestamp  range >=2026-01-01 <=2026-06-15)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:remind"
+  idempotent
+
+task 押さえる(id: string, 日: date  range >=2026-01-01 <=2026-07-15)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold"
+  idempotent
+
+flow
+  # 来訪の日は、予約するが受け付ける最初の日より前のことがある
+  let 予約 = 予約する(id: 訪問.id, 日: 訪問.日)
+  # +09:00 の時間帯は、同じ日の UTC より 9 時間早く始まる
+  知らせる(id: 訪問.id, 時刻: 訪問.時間帯)
+  # 予約するが返す日は、範囲を言わない
+  押さえる(id: 訪問.id, 日: 予約)
+  # 期間は、知らせるが受け付ける時刻を越えて続く。koyomi が数える日も、押さえるが受け付ける日を越える
+  知らせる(id: 訪問.id, 時刻: now)
+  let 締め = 期限.締め日(起点: now)
+  押さえる(id: 訪問.id, 日: 締め.day)
+  # 収まる：来訪の日は、押さえるが受け付ける日に入る
+  押さえる(id: 訪問.id, 日: 訪問.日)
+  succeed 時刻 = now
+
+on failure
+  知らせる(id: 訪問.id, 時刻: now)

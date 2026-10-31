@@ -1015,6 +1015,25 @@ theorem exec_sound {env : Env} {ss : List Stmt} {w : World} {o : Out} (h : Exec 
       apply lift_head (by simp [Out.stops]) hr
       obtain ⟨B, hB, hab⟩ := LeO_joinO_left env _ rh.raised U hU
       exact ⟨B, hB, InvS_mono hab hi2⟩
+  | periodIn _ ih =>
+    intro f A r hc hi
+    cases f with
+    | zero => simp [chk] at hc
+    | succ f =>
+      obtain ⟨r1, hh, hr⟩ := chk_cons_eq hc
+      simp only [chkHead, Option.some.injEq] at hh
+      subst hh
+      exact go_on hr (LeO_refl _ _) hi ih
+  | periodStart => intro _ _ _ _ _; trivial
+  | periodOut =>
+    intro f A r hc hi
+    cases f with
+    | zero => simp [chk] at hc
+    | succ f =>
+      obtain ⟨r1, hh, hr⟩ := chk_cons_eq hc
+      simp only [chkHead, Option.some.injEq] at hh
+      subst hh
+      exact lift_head (by simp [Out.stops]) hr ⟨A, by simp, hi⟩
 
 theorem start_inv (env : Env) : InvS env start World.start := by
   intro i _

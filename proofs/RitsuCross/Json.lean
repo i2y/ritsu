@@ -6,11 +6,11 @@
   ```
   {"corner": {"op": "<=", "left": [lo, hi], "right": [lo, hi], "scales": [sl, sr]}}
   {"x2": {"kind": "relation", "op": "<", "left": {"shown": "x", "range": [lo, hi]}, "right": …, "scales": [sl, sr]}}
-  {"x2": {"kind": "days", "days": [d, …], "arg": {"shown": "due.day", "origins": [{"day": [d, …]}, "other", …]}}}
+  {"x2": {"kind": "days", "days": [d, …], "arg": {"shown": "due.day", "origins": [{"day": [d, …]}, {"range": [lo, hi]}, "other", …]}}}
   {"x2k": {"op": "<=", "names": ["before", "upto"], "left": arg, "right": arg, "scales": [sl, sr],
            "rels": [["before", "<=", "upto"], …], "runs": [[l, r], …]}}
   {"days_fit": {"days": [d, …], "range": [lo, hi]}}
-  {"days_given": {"dates": [[d, …], null, …], "other": false, "range": [lo, hi]}}
+  {"days_given": {"dates": [[d, …], null, …], "ranges": [[lo, hi], …], "other": false, "range": [lo, hi]}}
   {"values": k}
   {"amount_fits": {"out": {"min": n, "max": n, "values": [n, …], "examples": [[n, ex], …]}}}
   {"amounts_given": {"outputs": [out, …], "ranges": [[lo, hi], …], "other": false}}
@@ -22,7 +22,7 @@
 
   `null` stands for an open end, a range not known, a question not answered (`Found::Undecided`).
   `values` asks for the days of the date `k` of the dates file the program was started with. The
-  answers are `"holds"`, `"undecided"`, or `{"fails": …}` with the example; `values` answers
+  answers are `"holds"`, `"undecided"`, or `{"fails": …}` with the example (for `days_given`, `[{"date": i} | {"range": i}, day]`); `values` answers
   `{"days": [d, …]}` (ascending, each once, as koyomi's set) or `"undecided"`.
 -/
 import Lean.Data.Json
@@ -68,11 +68,13 @@ def readScales (j : Json) : Except String (Nat × Nat) := do
 def ints (j : Json) : Except String (List Int) := do
   (← jarr j).mapM (·.getInt?)
 
-/-- `{"day": [d, …]}`, `{"day": null}` (koyomi does not count it), or `"other"`. -/
+/-- `{"day": [d, …]}`, `{"day": null}` (koyomi does not count it), `{"range": [lo, hi]}`, or
+    `"other"`. -/
 def readOrigin (j : Json) : Except String Origin := do
   match j.getStr? with
   | .ok _ => return .other
   | .error _ =>
+    if let some r := joptField j "range" then return .range (← readRange r)
     match joptField j "day" with
     | some d => return .day (.value (← ints d))
     | none => return .day .undecided
@@ -165,8 +167,14 @@ def daysFitLine (j : Json) : Except String Json := do
 def daysGivenLine (j : Json) : Except String Json := do
   let dates ← (← jarr (← jfield j "dates")).mapM (fun d =>
     if d.isNull then pure Found.undecided else Found.value <$> ints d)
+  let ranges ← match joptField j "ranges" with
+    | some rs => (← jarr rs).mapM readRange
+    | none => pure []
   let other ← (← jfield j "other").getBool?
-  return answerJ (fun (i, d) => Json.arr #[intJ i, intJ d]) (daysGiven dates other (← readRange (← jfield j "range")))
+  let fromJ : DayFrom → Json
+    | .date i => Json.mkObj [("date", intJ i)]
+    | .range i => Json.mkObj [("range", intJ i)]
+  return answerJ (fun (f, d) => Json.arr #[fromJ f, intJ d]) (daysGiven dates ranges other (← readRange (← jfield j "range")))
 
 /-- One output of a rule, as `amount_fits` lines write it: null where rulec does not count it. -/
 def readOut (o : Json) : Except String (Found (OutputValues Json)) := do

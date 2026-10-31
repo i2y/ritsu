@@ -242,8 +242,9 @@ build for, by a plugin of protoc, cases the workflow holds itself, a rule that w
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
 HTTP and AWS endpoints from Argo, agents run against OpenAI and Anthropic themselves, and the checks
 that cross into koyomi and chobo: a hold's expiry against the waits before it is posted, and the days
-a workflow passes against a dates file's range. The
-design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles
+a workflow passes to a dates file when they come from a rule's date output or a value with no range
+(from a date or a time with a range, or from `now` in a workflow that says the period it runs in,
+they are checked against the file's range). The design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles
 are on [Design](https://i2y.github.io/ritsu/dandori/design/).
 
 ## License

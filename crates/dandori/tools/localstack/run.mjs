@@ -7,7 +7,8 @@
 //
 // spec.json: { "image": the LocalStack image,
 //              "flows": [ { "name", "definition": <the ASL as JSON>,
-//                           "runs": [ { "id", "input", "answers": [ {"ok": value} | {"error": kind, "as": ASL error name} ] } ] } ] }
+//                           "runs": [ { "id", "input", "answers": [ {"ok": value} | {"error": kind, "as": ASL error name} ],
+//                                       "now": the moment `now` reads, or [the run's start, every later read] } ] } ] }
 // results.json: { "flows": [ { "runs": [ { "steps", "end" } ], "http": the HTTP Tasks that got another resource } ] }
 //
 // The runner starts the image in Docker with Step Functions alone, and uses its mocked service
@@ -26,6 +27,10 @@
 //   the reference interpreter makes them.
 // - A Wait goes on at once (Seconds 0), and assigns a variable of its own the time it would wait
 //   for (its Seconds, or the value of its Timestamp), which the history shows.
+// - `now` reads the run's moment, not LocalStack's clock: the Pass that reads it for the check of
+//   the period at the start (dandori's asl::PERIOD_AT_START) the moment the run starts at, and every
+//   other state the later one. A flow whose runs read different moments is a state machine for
+//   each of them (named after the flow, then --2, --3 and on), each with the runs that read its own.
 // - LocalStack's mock file cannot throw an error whose name begins with States. (it takes a mocked
 //   error for the task's own, whose names may not), so a task's timeout (States.Timeout), the
 //   HTTP Task's errors (States.Http.StatusCode.<status>) and an agent's failure (below) are thrown
@@ -56,7 +61,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
-import { play, wire, wrap } from "../asl-run.mjs";
+import { PERIOD_AT_START, SCENARIO_NOW, play, wire, wrap } from "../asl-run.mjs";
 import { workDir } from "../work.mjs";
 
 const exec = promisify(execFile);
@@ -134,10 +139,19 @@ function statesOf(def) {
 /** How a definition reads `now` (dandori's render::JSONATA_NOW). */
 const NOW = '($substring($states.context.State.EnteredTime, 0, 19) & "Z")';
 
-// the definition as it runs here (the head of this file says how), and the variables of its waits
-function forLocalStack(def) {
-  // `now` reads the scenarios' moment here (dandori's render::SCENARIO_NOW), not LocalStack's clock
-  const d = JSON.parse(JSON.stringify(def).replaceAll(JSON.stringify(NOW).slice(1, -1), "\\\"2026-03-31T15:30:00Z\\\""));
+/** The moments a run reads `now` at: the one it starts at, and the one of every later read. */
+const momentsOf = (r) => (Array.isArray(r.now) ? r.now : [r.now ?? SCENARIO_NOW, r.now ?? SCENARIO_NOW]);
+
+// the text of a definition with every `now` it reads the moment t, as a JSONata string
+const nowAt = (text, t) => text.replaceAll(JSON.stringify(NOW).slice(1, -1), JSON.stringify(JSON.stringify(t)).slice(1, -1));
+
+// the definition as it runs here (the head of this file says how), with the moments a run reads
+// `now` at, and the variables of its waits
+function forLocalStack(def, [start, later]) {
+  const copy = JSON.parse(JSON.stringify(def));
+  const first = copy.States[PERIOD_AT_START];
+  if (first) copy.States[PERIOD_AT_START] = JSON.parse(nowAt(JSON.stringify(first), start));
+  const d = JSON.parse(nowAt(JSON.stringify(copy), later));
   const waits = {};
   for (const [name, st] of Object.entries(statesOf(d))) {
     if (st.Type === "Wait") {
@@ -250,15 +264,26 @@ async function main() {
   endpoint = `http://${await docker(["port", container, "4566/tcp"])}/`;
   say(`started ${spec.image} at ${endpoint}`);
 
-  // every run's calls, from playing it with ../asl-run.mjs
+  // every run's calls, from playing it with ../asl-run.mjs; a state machine for each flow and each
+  // pair of moments its runs read `now` at, with those runs (`ris`, by their places in the flow's)
   const flows = [];
-  for (const f of spec.flows) {
-    const { definition, waits } = forLocalStack(f.definition);
-    const plays = [];
-    for (const r of f.runs) plays.push((await play(f.definition, r, r.id)).calls);
-    flows.push({ name: machineName(f.name), definition, waits, plays, states: statesOf(f.definition), http: 0 });
+  for (const [fi, f] of spec.flows.entries()) {
+    const groups = new Map();
+    f.runs.forEach((r, ri) => {
+      const k = JSON.stringify(momentsOf(r));
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(ri);
+    });
+    let n = 0;
+    for (const [k, ris] of groups) {
+      const { definition, waits } = forLocalStack(f.definition, JSON.parse(k));
+      const plays = [];
+      for (const ri of ris) plays.push((await play(f.definition, f.runs[ri], f.runs[ri].id)).calls);
+      const name = machineName(f.name).slice(0, 72) + (n++ ? `--${n}` : "");
+      flows.push({ fi, ris, name, definition, waits, plays, states: statesOf(f.definition), http: 0 });
+    }
   }
-  say(`played ${spec.flows.length} flow(s) with ../asl-run.mjs`);
+  say(`played ${spec.flows.length} flow(s) with ../asl-run.mjs, in ${flows.length} state machine(s)`);
 
   for (let i = 0; ; i++) {
     const health = await fetch(`${endpoint}_localstack/health`, { signal: AbortSignal.timeout(5000) })
@@ -285,8 +310,8 @@ async function main() {
   const config = { StateMachines: {}, MockedResponses: {} };
   for (const flow of flows) {
     const cases = {};
-    flow.answers = flow.plays.map((calls, ri) => {
-      const id = spec.flows[flows.indexOf(flow)].runs[ri].id;
+    flow.answers = flow.plays.map((calls, k) => {
+      const id = spec.flows[flow.fi].runs[flow.ris[k]].id;
       const byState = {};
       for (const c of calls) (byState[c.state] ??= []).push(c);
       cases[id] = {};
@@ -305,7 +330,7 @@ async function main() {
   say(`created ${flows.length} state machine(s) and copied the mock file in`);
   fs.rmSync(work, { recursive: true, force: true });
 
-  const runs = flows.flatMap((flow, fi) => spec.flows[fi].runs.map((r, ri) => ({ flow, r, ri })));
+  const runs = flows.flatMap((flow) => flow.ris.map((ri, k) => ({ flow, r: spec.flows[flow.fi].runs[ri], ri, k })));
   await inTurns(runs, 8, async (x) => {
     x.arn = (await sfn("StartExecution", { stateMachineArn: `${x.flow.arn}#${x.r.id}`, name: x.r.id, input: JSON.stringify(x.r.input) })).executionArn;
   });
@@ -320,9 +345,9 @@ async function main() {
   }
   say("every execution ended");
 
-  const results = flows.map((flow) => ({ runs: [], http: flow.http }));
+  const results = spec.flows.map((_, fi) => ({ runs: [], http: Math.max(0, ...flows.filter((flow) => flow.fi === fi).map((flow) => flow.http)) }));
   await inTurns(runs, 8, async (x) => {
-    results[flows.indexOf(x.flow)].runs[x.ri] = trace(await histories(x.arn), x.flow, x.flow.answers[x.ri]);
+    results[x.flow.fi].runs[x.ri] = trace(await histories(x.arn), x.flow, x.flow.answers[x.k]);
   });
   fs.writeFileSync(outFile, JSON.stringify({ flows: results }, null, 2) + "\n");
 }

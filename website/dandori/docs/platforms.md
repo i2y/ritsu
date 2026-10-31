@@ -166,6 +166,29 @@ method that asks where a run is too (E050). A workflow that implements a service
 values protobuf's JSON leaves out of its input, and of a callback's answer that a method of the
 service sends, on every platform.
 
+## The clock and the period
+
+Every platform reads the clock once for a statement that reads `now`, so the statement reads one
+moment however many times it says `now`, and every try of a call that is tried again gives the
+moment of the first. A workflow that says the period it runs in (`now range …`;
+[The period a workflow runs in](dates-and-books.md#the-period-a-workflow-runs-in)) holds that moment
+to the period before the statement, and the moment a run starts at before anything else.
+
+| | how `now` is read | the check of the period | what E040 counts for it |
+|---|---|---|---|
+| Temporal | the workflow's clock, read before the call into a variable (`dd_now_<site>`) | an `if` in the workflow's code: `dd.fail` at the start, a `TaskError` before a statement (in Go, `ddFail` and `ddTaskError`) | nothing: the code makes no command |
+| Step Functions | the time the state was entered | a Pass that keeps that time in `dd_now_<site>`, and a Choice; outside, a Fail at the start, else a Pass that sets `dd_error` and goes to `on failure` | 6 events for each check |
+| Lambda durable functions | a step that reads the clock (`<line> clock`), its answer checkpointed | the same `if` as on Temporal, on the time the step read | 1 operation for each step that reads the clock: one before each statement that reads `now`, and with a period, one at the start too |
+| Argo Workflows | a template of its own before the statement (`s<site>-now`), whose output the statement reads | that template (`dd-period-start` at the start), and one that holds its time to the period (`s<site>-period`) and sets `dd_ctl` to `fail` at the start, or to `task` before a statement | 4 nodes for each template that reads the clock, and 4 for each check |
+| pydantic-graph | `Deps.clock`, read once at the start of the node | a node (`S<site>_period`): `dd.Failure` at the start, `dd.TaskError` before a statement | nothing (no limit) |
+
+Outside the period at the start, a run calls nothing, as with an input outside its range; before a
+statement, it goes to `on failure` as after a task's error nothing handles, and no `on` of a task and
+no `retry` takes it. On Argo, the expressions of a template that computes are evaluated each on its
+own, and each reads `now()` again: so a statement that reads `now` reads it from the template before
+it, and the seconds of `wait until` and of `timeout until` are worked out from one reading, in a
+`let`.
+
 ## Scenarios and the reference interpreter
 
 ```console

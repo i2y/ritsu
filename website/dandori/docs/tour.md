@@ -46,11 +46,12 @@ outputs
 - `inputs` and `outputs` are what a run starts with and ends with.
 
 The types are `int`, numbers with a unit such as `money[JPY, incl_tax]` or `temperature[℃]` (as rulec has them),
-`string`, `bool`, `timestamp`, enums, records, `list[T]`, `T?` for a value that may be absent, and
-`json` for a value passed along without being looked into. A message or an enum of a `.proto` read
+`string`, `bool`, `timestamp`, `date` (a day, as koyomi writes one; [Dates and books](dates-and-books.md)), enums, records,
+`list[T]`, `T?` for a value that may be absent, and `json` for a value passed along without being
+looked into. A message or an enum of a `.proto` read
 by `use proto` is a type too, written after the name `use` gave it (`warehouse.ReserveResponse`;
-[Types from a .proto](tasks.md#types-from-a-proto)). A number can also say what it may be, with a
-[range](#ranges). A record cannot contain itself, directly or through others (E003); what has no
+[Types from a .proto](tasks.md#types-from-a-proto)). A number, a date or a time can also say what
+it may be, with a [range](#ranges). A record cannot contain itself, directly or through others (E003); what has no
 fixed depth, a tree, is carried as `json`.
 
 ## Tasks
@@ -278,6 +279,55 @@ error[E014]: tests/fixtures/enum_ranges.flow:28:1: `campaign` can be outside `>=
 ```
 
 </div>
+
+A date or a time can have a range too, its ends written as days, as rulec and koyomi write them
+(`>=2026-01-01 <=2027-12-31`). A time's ends are days in UTC, or at the offset written after them,
+and the range holds every second of those days. It goes where a number's goes and works as a
+number's does: an input, a field or a task's answer outside its range fails the run with
+`Dandori.BadInput` or `Dandori.BadResponse`, and a value given to a place with a range must be one
+the range lets in (E014). The expressions still neither compare dates nor add to them; a date is
+held to its range only where it comes in, as a number is.
+
+A workflow can also say the period it runs in, under its first line, with `now range`
+([tests/fixtures/date_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/date_ranges.flow)):
+
+```flow
+workflow date_ranges v1
+  now range >=2026-01-01 <=2027-12-31
+…
+record Visit
+  id     : string
+  day    : date       range >=2026-01-01 <=2026-12-31
+  window : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+```
+
+- A run that starts outside the period calls nothing, and fails with `Dandori.OutOfPeriod`, as an
+  input outside its range does.
+- Each statement that reads `now` checks the clock first, and reads the moment it checked. Outside
+  the period, the run goes to `on failure`, as after a task's error nothing handles: a run that goes
+  on past the end of its period still settles what it holds.
+- `now` in `on failure` and `on cancel` is not checked, so that the clock never stops what settles
+  a run.
+
+Everywhere else, `now` is a moment of the period, and the checks count it as one: given to a
+parameter whose range ends sooner, it is E014. A time written at `+09:00` begins nine hours before
+the same days in UTC, so it can be outside a range written in UTC:
+
+<div class="dd-term" markdown>
+
+```text
+error[E014]: tests/fixtures/date_ranges.flow:35:1: `visit.window` can be outside `>=2026-01-01 <=2026-12-31`, the range of the parameter `at` of `remind`: it is `>=2026-01-01 <=2026-12-31 offset +09:00`
+    35 |   remind(id: visit.id, at: visit.window)
+warning[W104]: tests/fixtures/date_ranges.flow:37:1: nothing says what range `booked` is in (the answer of `book` has no range), and the parameter `day` of `hold` takes `>=2026-01-01 <=2027-12-31`
+    37 |   hold(id: visit.id, day: booked)
+error[E014]: tests/fixtures/date_ranges.flow:39:1: `now` can be outside `>=2026-01-01 <=2026-12-31`, the range of the parameter `at` of `remind`: it is `>=2026-01-01 <=2027-12-31`
+    39 |   remind(id: visit.id, at: now)
+```
+
+</div>
+
+`ritsu check` counts the period too: the days `now` can be, read in the calendar of a dates file, have
+to be days its date takes ([Dates and books](dates-and-books.md#the-period-a-workflow-runs-in)).
 
 ## Secrets
 

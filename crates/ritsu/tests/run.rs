@@ -441,3 +441,40 @@ fn a_timeout_until_a_time_moves_the_clock_to_it() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+/// A workflow that runs in a period (dandori's DESIGN 20), under `ritsu run`: `now` reads the
+/// scenario's moments, as `dandori run` reads them, the start's and the one every `now` after it
+/// reads. A run that starts in the period and reads `now` past its end, after a wait of three days
+/// that moves the clock past it too, fails where it reads it, and its `on failure` puts the goods
+/// back; a run that starts past the end calls nothing. The text says so in both languages.
+#[test]
+fn a_run_past_the_end_of_its_period_fails_where_it_reads_now() {
+    let t = TempDir::new("period");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("weekdays.cal", WEEKDAYS);
+    write("approval_terms.cal", APPROVAL_TERMS);
+    write("stock.book", STOCK);
+    write("approval.flow", APPROVAL);
+    let received = json!([{ "op": "do", "kind": "receive", "args": { "delivery": "D-1", "sku": "pen", "qty": 10 } }]);
+    let input = json!({ "order": "A-1", "sku": "pen", "qty": 3 });
+    write("past.json", &json!({ "execution": "past", "now": ["2027-12-30T10:00:00Z", "2028-01-02T10:00:00Z"], "input": input, "books": { "stock": received }, "answers": [] }).to_string());
+    write("after.json", &json!({ "execution": "after", "now": "2028-01-02T10:00:00Z", "input": input, "books": { "stock": received }, "answers": [] }).to_string());
+    let mut failures = Vec::new();
+    for (scenario, name) in [("past.json", "period_past"), ("after.json", "period_after")] {
+        for lang in ["en", "ja"] {
+            let (code, out, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", scenario, "--lang", lang]);
+            assert!(code == 0 && err.is_empty(), "{scenario} {lang}: {code} {err}");
+            assert!(out.contains("Dandori.OutOfPeriod"), "{scenario} {lang}: {out}");
+            golden(&format!("tests/golden/run/{name}.{lang}.txt"), &out, &mut failures);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+const WEEKDAYS: &str = "calendar weekdays v1\ndescription \"Open Monday to Friday, in UTC\"\noffset +00:00\n\nclosed weekly sat, sun\n";
+
+const APPROVAL_TERMS: &str = "dates approval_terms v1\ndescription \"An approval is due at 17:00 on the third business day after it is asked for\"\nuse calendar \"weekdays.cal\"\n\ninputs\n  asked : date  range >=2026-01-01 <=2027-12-31\n\ndate due = asked\n  + 3 business days\n  at 17:00\n";
+
+const STOCK: &str = "book stock v1\ndescription \"Stock, held for 30 days at most\"\n\nunit pcs\n\naccount shelf(sku: string) : pcs\n  at least 0 refused as out_of_stock\naccount suppliers : pcs outside\naccount customers : pcs outside\n\ntransfer receive(delivery: string, sku: string, qty: pcs)\n  key delivery, sku\n  move qty from suppliers to shelf(sku)\n\ntransfer reserve(order: string, sku: string, qty: pcs)\n  key order, sku\n  pending expires after 30 days\n  move qty from shelf(sku) to customers\n";
+
+const APPROVAL: &str = "workflow approval v1\n  now range >=2026-01-01 <=2027-12-31\ndescription \"Holds an order's goods, waits three days for the goods to be checked, and asks for an approval due on the third business day after; it runs in 2026 and 2027, the years the approval terms know\"\n\nuse dates terms from \"approval_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:approval-terms\"\nuse book stock from \"stock.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:stock\"\n\nrecord Approval\n  approver : string\n\ninputs\n  order : string\n  sku   : string\n  qty   : int  range >=1 <=100\n\noutputs\n  outcome : string\n\ntask reserve(order: string, sku: string, qty: int) -> stock.reserve\n  book stock.reserve.hold\n  starts stock.reserve\n  errors out_of_stock\n\ntask ship(order: string, sku: string) -> stock.reserve\n  book stock.reserve.post\n  sends post\n  errors expired\n\ntask put_back(order: string, sku: string) -> stock.reserve\n  book stock.reserve.void\n  sends void\n  errors expired, already_posted\n\ntask ask(order: string, by: timestamp) -> Approval\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask\"\n  callback\n  timeout until by\n\ncase goods : stock.reserve follows stock.reserve\n\nflow\n  goods <- reserve(order: order, sku: sku, qty: qty)\n    on out_of_stock => fail OutOfStock \"nothing left on the shelf\"\n  wait 3 days\n  let due = terms.due(asked: now)\n  let a = ask(order: order, by: due.at)\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => succeed outcome = \"expired\"\n      succeed outcome = \"put back\"\n  goods <- ship(order: order, sku: sku)\n    on expired => succeed outcome = \"expired\"\n  succeed outcome = \"approved by {a.approver}\"\n\non failure\n  match goods.state\n    none => pass\n    held =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n        on already_posted => pass\n        on failure => fail NotPutBack \"the goods held for the order could not be put back\" leaving goods\n";

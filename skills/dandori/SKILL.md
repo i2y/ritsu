@@ -196,7 +196,11 @@ into; an input or a field that is not there reads as null), `list[T]`, `T?` (a v
 enum of a `.proto` read by `use proto` (`warehouse.ReserveResponse`), and the file's own. A number
 can say what it may be: `nights : int  range >=1 <=30`, either end may be left out,
 and the ends are integers in the type's unit. So can a value of an enum a rule declares in order
-(`enum tier = basic < silver < gold`), by its values: `campaign : tiers.tier  range >=basic <=gold`.
+(`enum tier = basic < silver < gold`), by its values: `campaign : tiers.tier  range >=basic <=gold`,
+and so can a date or a time, by days: `day : date  range >=2026-01-01 <=2027-12-31` (a time's days
+are UTC's, or written `offset +09:00` after them). A workflow says the period it runs in under its
+first line, `now range >=2026-01-01 <=2027-12-31`: a run that starts outside it calls nothing and
+fails with `Dandori.OutOfPeriod`, and a statement that reads `now` outside it goes to `on failure`.
 A record cannot contain itself, directly or through others (E003); carry what has no fixed depth,
 a tree, as `json`.
 
@@ -324,7 +328,7 @@ pass
 Every value a `match` can meet needs an arm, and there is no default arm (E010): a value no arm
 names fails the run with `Dandori.UnexpectedValue`. The expressions are names and their fields
 (`booking.room`), literals, records (`{order_id: order.id, reservations: results}`), lists,
-`none`, `now` (the time the statement runs at, a `timestamp`), and strings with values put in
+`none`, `now` (the time the statement runs at, a `timestamp`, one moment for the statement), and strings with values put in
 (`"Order {order.id}"`); nothing compares, adds or combines
 conditions. The rounds of a parallel `for` keep their own variables; when one fails, the others
 still run to their end, and the first failure in the list's order decides. From the fulfillment

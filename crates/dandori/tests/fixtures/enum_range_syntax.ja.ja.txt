@@ -15,5 +15,5 @@
   = `送料.段階` の値は、順に 一般 < シルバー < ゴールド < プラチナ です
 エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:17:29: 範囲の端 `一般` は `int` の値ではありません
     17 |   名前         : int  range >=一般
-エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:18:23: 範囲を書けるのは、数（`int` か単位の付いた数）と、順序のある列挙だけです。これは `string` です
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:18:23: 範囲を書けるのは、数（`int` か単位の付いた数）、順序のある列挙、日付と時刻だけです。これは `string` です
     18 |   文字列       : string  range >=一般

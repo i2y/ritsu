@@ -19,6 +19,10 @@ pub enum Tok {
     /// A bound of a range with its unit, as rulec writes one: `1kg`, `1.5%`, `100万円`. The value
     /// is exact, `万` and `億` multiplied in.
     Quantity { value: ritsu_units::Rat, unit: String, raw: String },
+    /// A bound of a range that is a day, as rulec, koyomi and kaname write one: `2026-01-01`.
+    Date(String),
+    /// What follows `offset` after a range of times: `+09:00`, as written (lower reads it).
+    Offset(String),
 }
 
 #[derive(Clone, Debug)]
@@ -56,6 +60,9 @@ pub struct Program {
     /// `history encrypted` under the `workflow` line: the history of a run is encrypted with a key
     /// only those who may read its secrets hold (DESIGN 1.18)
     pub history_encrypted: Option<Span>,
+    /// `now range >=2026-01-01 <=2027-12-31` under the `workflow` line: the period the workflow runs
+    /// in, which the start of a run and every `now` it reads are held to (DESIGN 20)
+    pub now_range: Option<RangeDecl>,
     pub kind: Kind,
     pub uses: Vec<UseRule>,
     /// `use openapi|smithy|proto <name> from "<path>"`: the descriptions of the APIs the tasks call
@@ -150,12 +157,16 @@ pub struct Field {
 }
 
 /// `range >=1 <=30`, `range >=1kg`: the whole numbers a value may be, both ends included, in the
-/// unit of its type; `range >=basic <=gold`: the values of an ordered enum from one to the other.
-/// Either end can be left out.
+/// unit of its type; `range >=basic <=gold`: the values of an ordered enum from one to the other;
+/// `range >=2026-01-01 <=2027-12-31`: the days of a date, or the moments of a time from the start
+/// of one day to the end of the other, in UTC or in the `offset` written after the ends. Either end
+/// can be left out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RangeDecl {
     pub lo: Option<Bound>,
     pub hi: Option<Bound>,
+    /// `offset +09:00` after the ends, as written, and where
+    pub offset: Option<(String, Span)>,
     pub span: Span,
 }
 
@@ -170,6 +181,9 @@ pub enum Bound {
     /// A value of an ordered enum, as rulec writes a bound of one: `gold`. lower finds it in the
     /// enum's order, and refuses it for another type.
     Value { name: String, span: Span },
+    /// A day, as rulec, koyomi and kaname write a bound of a date: `2026-01-01`. lower counts it in
+    /// days since 1970-01-01, and refuses it for a type that is no date or time.
+    Date { text: String, span: Span },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -459,6 +473,12 @@ fn is_ident_continue(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
+/// Whether the characters start with a day, `2026-01-01`, that no letter or digit goes on from.
+fn is_day(c: &[char]) -> bool {
+    let digits = |r: std::ops::Range<usize>| r.into_iter().all(|k| c.get(k).is_some_and(|d| d.is_ascii_digit()));
+    digits(0..4) && c.get(4) == Some(&'-') && digits(5..7) && c.get(7) == Some(&'-') && digits(8..10) && !c.get(10).is_some_and(|d| is_ident_continue(*d))
+}
+
 fn lex(src: &str) -> Result<Vec<Line>, Diag> {
     let mut out = Vec::new();
     for (i, raw) in src.lines().enumerate() {
@@ -519,6 +539,22 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
             }
             // a bound of a range: `>=-5`, and a number glued to a unit is told apart below
             let bound = matches!(toks.last(), Some(Token { tok: Tok::Sym(">=" | "<="), .. }));
+            // a day as the bound of a range, `>=2026-01-01`, as rulec, koyomi and kaname write one
+            if bound && is_day(&chars[j..]) {
+                toks.push(Token { tok: Tok::Date(chars[j..j + 10].iter().collect()), span });
+                j += 10;
+                continue;
+            }
+            // the offset after a range of times, `offset +09:00`; lower reads it as koyomi does
+            if (c == '+' || c == '-') && matches!(toks.last(), Some(Token { tok: Tok::Ident(w), .. }) if w == "offset") {
+                let start = j;
+                j += 1;
+                while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == ':') {
+                    j += 1;
+                }
+                toks.push(Token { tok: Tok::Offset(chars[start..j].iter().collect()), span });
+                continue;
+            }
             if c.is_ascii_digit() || (c == '-' && bound && chars.get(j + 1).is_some_and(|d| d.is_ascii_digit())) {
                 let start = j;
                 j += 1;
@@ -951,13 +987,31 @@ fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
                 cur.i += 1;
                 b
             }
-            _ => Bound::Int(cur.int(tr!("整数か列挙の値", "a whole number or a value of an enum"))?.0),
+            // a day: `>=2026-01-01`
+            Some(Tok::Date(text)) => {
+                let b = Bound::Date { text: text.clone(), span: at };
+                cur.i += 1;
+                b
+            }
+            _ => Bound::Int(cur.int(tr!("整数、列挙の値か日付", "a whole number, a value of an enum or a date"))?.0),
         });
     }
     if lo.is_none() && hi.is_none() {
         return Err(err(cur.span(), tr!("範囲は `range >=<下限> <=<上限>` と書いてください。端は片方だけでもかまいません", "a range is written `range >=<low> <=<high>`, with one end or both")));
     }
-    Ok(Some(RangeDecl { lo, hi, span }))
+    // `offset +09:00`: the days of a range of times are the offset's days (lower says where it can be written)
+    let mut offset = None;
+    if cur.eat_kw("offset") {
+        let at = cur.span();
+        match cur.peek() {
+            Some(Tok::Offset(raw)) => {
+                offset = Some((raw.clone(), at));
+                cur.i += 1;
+            }
+            _ => return Err(err(at, tr!("`offset` のあとには、`+09:00` の形でオフセットを書いてください", "write the offset after `offset` as `+09:00`"))),
+        }
+    }
+    Ok(Some(RangeDecl { lo, hi, offset, span }))
 }
 
 fn expr(cur: &mut Cur) -> Result<Expr, Diag> {
@@ -1419,6 +1473,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         implements: None,
         description: None,
         history_encrypted: None,
+        now_range: None,
         kind: Kind::Standard,
         uses: vec![],
         apis: vec![],
@@ -1468,7 +1523,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 cur.expect_end()?;
                 prog.name = Some(name);
                 p.pos += 1;
-                // under it: `history encrypted` (DESIGN 1.18)
+                // under it: `history encrypted` (DESIGN 1.18) and `now range …` (DESIGN 20)
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
                         break;
@@ -1480,8 +1535,16 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                         cc.expect_kw("encrypted")?;
                         cc.expect_end()?;
                         prog.history_encrypted = Some(at);
+                    } else if cc.is_kw("now") && matches!(cc.peek_at(1), Some(Tok::Ident(w)) if w == "range") {
+                        if prog.now_range.is_some() {
+                            return Err(err(at, tr!("`now range` は一度だけ書けます", "`now range` can be written only once")));
+                        }
+                        cc.i += 1;
+                        let r = range_decl(&mut cc)?;
+                        cc.expect_end()?;
+                        prog.now_range = r;
                     } else {
-                        return Err(err(at, tr!("`workflow` の下に書けるのは `history encrypted` だけです", "only `history encrypted` can be written under `workflow`")));
+                        return Err(err(at, tr!("`workflow` の下に書けるのは `history encrypted` と `now range` だけです", "only `history encrypted` and `now range` can be written under `workflow`")));
                     }
                     p.pos += 1;
                 }

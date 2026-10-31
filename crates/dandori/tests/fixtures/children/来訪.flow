@@ -1,0 +1,17 @@
+workflow 来訪 v1
+description "日と時間帯をそれぞれ範囲に収めて受け取り、予約した日を自分の範囲に収めて返す子のワークフロー"
+
+inputs
+  日     : date       range >=2026-01-01 <=2026-12-31
+  時間帯 : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+outputs
+  予約日 : date  range >=2026-01-01 <=2027-12-31
+
+task 予約する(日: date, 時間帯: timestamp) -> date  range >=2026-01-01 <=2027-12-31
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:book"
+  idempotent
+
+flow
+  let 予約日 = 予約する(日: 日, 時間帯: 時間帯)
+  succeed 予約日 = 予約日

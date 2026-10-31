@@ -291,6 +291,10 @@ pub struct FlowResult {
     pub facts: Facts,
 }
 
+/// The place to fail that a check of the period is, among the calls that can fail (`now` is a
+/// keyword, so no task has its name).
+const PERIOD_POINT: &str = "now";
+
 pub fn analyze(m: &Model) -> FlowResult {
     let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false, seen: BTreeMap::new(), ends: BTreeMap::new(), held: crate::ranges::held(m) };
     let mut start = Abs { live: true, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), path: vec![] };
@@ -678,7 +682,17 @@ impl<'a> Flow<'a> {
                 }
             }
             // put in after this check (prechecks), so never walked here; it goes on, or fails the run
-            TK::Pass | TK::Check(_) => a,
+            TK::Pass | TK::Check(_) | TK::Period { start: true } => a,
+            // `now` outside the period the workflow runs in goes to `on failure` here, as a task's
+            // error that nothing handles does (DESIGN 20); a call after it that can fail so is
+            // already such a place
+            TK::Period { start: false } => {
+                if !self.fails_unhandled(s.site) {
+                    let fa = a.clone().step(Step::new(s.line, tr!("`now` が期間の外になる", "`now` is outside the period")).at(At::Fails(s.site)));
+                    self.failures.push((fa, s.line, PERIOD_POINT.to_string()));
+                }
+                a
+            }
             TK::Break => {
                 let a2 = a.step(Step::new(s.line, tr!("break", "break")).at(here));
                 if let Some(l) = self.loops.last_mut() {
@@ -746,6 +760,32 @@ impl<'a> Flow<'a> {
         }
     }
 
+    /// Whether the statement after the check of the period at `site` is a call that can fail with
+    /// an error nothing at it handles: the check adds no place to fail to the flow then.
+    fn fails_unhandled(&self, site: usize) -> bool {
+        fn find<'a>(ss: &'a [TStmt], site: usize) -> Option<&'a TStmt> {
+            for (i, s) in ss.iter().enumerate() {
+                if s.site == site {
+                    return ss.get(i + 1);
+                }
+                let under: Vec<&[TStmt]> = match &s.kind {
+                    TK::Call { handlers, .. } => handlers.iter().map(|h| h.body.as_slice()).collect(),
+                    TK::Match { arms, .. } => arms.iter().map(|a| a.body.as_slice()).collect(),
+                    TK::Repeat { body, .. } | TK::For { body, .. } => vec![body.as_slice()],
+                    _ => vec![],
+                };
+                if let Some(x) = under.into_iter().find_map(|b| find(b, site)) {
+                    return Some(x);
+                }
+            }
+            None
+        }
+        match find(&self.m.flow, site).map(|s| &s.kind) {
+            Some(TK::Call { handlers, .. }) => !handlers.iter().any(|h| h.errors.contains(&HErr::Failure)),
+            _ => false,
+        }
+    }
+
     fn warn_failures(&mut self, points: &[(Abs, usize, String)], settling: Settling) {
         // one warning per case: how many calls can fail with it unfinished, and the first
         for c in 0..self.m.cases.len() {
@@ -774,6 +814,10 @@ impl<'a> Flow<'a> {
                         let block = if settling == Settling::OnFailure { "on failure" } else { "on cancel" };
                         tr!("`{block}` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st_ja} のままワークフローが失敗します（そうなる呼び出しは {count} か所）", "if `{callee}` fails while `{block}` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))")
                     }
+                    Settling::No if callee == PERIOD_POINT => tr!(
+                        "`now` がワークフローの動く期間の外になると、案件 `{cn}` が {st_ja} のままワークフローが失敗します。そうなるところは {count} か所です。`on failure` を足して案件を片付けてください",
+                        "if `now` is outside the period the workflow runs in, the workflow fails with the case `{cn}` in {st}; {count} place(s) can fail like this. Add `on failure` to settle the case"
+                    ),
                     Settling::No => tr!("`{callee}` が失敗すると、案件 `{cn}` が {st_ja} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください", "if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
                 };
                 self.push(Diag::warning("W101", line, 1, message).with_path(path));

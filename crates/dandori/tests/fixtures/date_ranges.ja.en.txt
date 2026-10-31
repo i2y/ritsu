@@ -1,0 +1,15 @@
+error[E014]: tests/fixtures/date_ranges.ja.flow:33:1: `訪問.日` can be outside `>=2026-03-01`, the range of the parameter `日` of `予約する`: it is `>=2026-01-01 <=2026-06-30`
+    33 |   let 予約 = 予約する(id: 訪問.id, 日: 訪問.日)
+error[E014]: tests/fixtures/date_ranges.ja.flow:35:1: `訪問.時間帯` can be outside `>=2026-01-01 <=2026-06-15`, the range of the parameter `時刻` of `知らせる`: it is `>=2026-01-01 <=2026-12-31 offset +09:00`
+    35 |   知らせる(id: 訪問.id, 時刻: 訪問.時間帯)
+warning[W104]: tests/fixtures/date_ranges.ja.flow:37:1: nothing says what range `予約` is in (the answer of `予約する` has no range), and the parameter `日` of `押さえる` takes `>=2026-01-01 <=2026-07-15`
+    37 |   押さえる(id: 訪問.id, 日: 予約)
+error[E014]: tests/fixtures/date_ranges.ja.flow:39:1: `now` can be outside `>=2026-01-01 <=2026-06-15`, the range of the parameter `時刻` of `知らせる`: it is `>=2026-04-01 <=2026-06-30 offset +09:00`
+    39 |   知らせる(id: 訪問.id, 時刻: now)
+error[E014]: tests/fixtures/date_ranges.ja.flow:41:1: `締め.day` can be outside `>=2026-01-01 <=2026-07-15`, the range of the parameter `日` of `押さえる`: it is `>=2026-04-20 <=2026-07-20`
+    41 |   押さえる(id: 訪問.id, 日: 締め.day)
+error[E014]: tests/fixtures/date_ranges.ja.flow:44:1: `now` can be outside `>=2026-06-01`, the range of the output `時刻`: it is `>=2026-04-01 <=2026-06-30 offset +09:00`
+    44 |   succeed 時刻 = now
+warning[W104]: tests/fixtures/date_ranges.ja.flow:47:1: nothing says what range `now` is in (`now` in `on failure` and `on cancel` has no range), and the parameter `時刻` of `知らせる` takes `>=2026-01-01 <=2026-06-15`
+    47 |   知らせる(id: 訪問.id, 時刻: now)
+  = `now` in `on failure` and `on cancel` is not held to the period, so that what settles a run is not stopped by the clock: it can be any moment

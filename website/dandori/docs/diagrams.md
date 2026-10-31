@@ -18,8 +18,11 @@ such as the check of each answer and the steps of each loop.
 ## As Markdown, for a pull request
 
 The Markdown opens with the workflow's inputs and outputs, each with its type and, where one is
-written, its range: `quota: int range >=1 <=1000`, or `campaign: tiers.tier range >=basic <=gold`.
-A number's range is in whole numbers of its type's unit, as the diagnostics say it. Then it draws
+written, its range: `quota: int range >=1 <=1000`, `campaign: tiers.tier range >=basic <=gold`, or
+`day: date range >=2026-01-01 <=2026-12-31`. A number's range is in whole numbers of its type's unit,
+as the diagnostics say it. A workflow that says the period it runs in says it there too
+(`now range >=2026-01-01 <=2027-12-31`), and its `on failure` says the lines whose `now` sends a run
+there when it is outside the period. Then it draws
 the flow, and `on failure` and `on cancel`, as Mermaid flowcharts, which GitHub draws in a pull
 request, an issue or a README. Under them, a table lists every call and another
 every way the workflow can end; for a workflow that implements a service, a table of the service's
@@ -80,7 +83,9 @@ the page works without a network. The page of each example, as written for Tempo
 - **Pick a scenario.** On the left are the scenarios `dandori scenarios` writes, which together take
   every arm, every handler of an error and every way a case can move, grouped by how they end; and
   for each place of the inputs held to a range, a run whose input is just outside it there, which
-  ends at once with `Dandori.BadInput`. The way a scenario's run goes lights up, with the number of
+  ends at once with `Dandori.BadInput`; and for a workflow with a period, a run that starts outside
+  it, which ends at once with `Dandori.OutOfPeriod`, and one that reads `now` outside it later,
+  which lights up the statement that reads it and goes on to `on failure`. The way a scenario's run goes lights up, with the number of
   times it passed a step beside the step, and the pane lists what each call answered.
 - **Both.** With a step picked, the scenarios that pass it stand out, and the pane says how many of
   them do.

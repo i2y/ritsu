@@ -69,7 +69,24 @@ enum From {
     Output(usize, String),
     Now,
     Range(Range),
+    /// a time with a range, or `now` held to the period (whether it is `now`): its moments, and the
+    /// range as the `.flow` writes it
+    Moment(Range, String, bool),
     Unknown(Text),
+}
+
+/// Where a value read from a place of the type `t` with the range `rg` comes from: a time's range
+/// is moments, a date's days, and an enum's is not numbers.
+fn placed(m: &Model, t: &Ty, rg: Option<Range>, unknown: impl FnOnce() -> From) -> From {
+    let mut inner = t;
+    while let Ty::Opt(x) | Ty::List(x) = inner {
+        inner = x;
+    }
+    match rg {
+        Some(r) if *inner == Ty::Timestamp => From::Moment(r, m.range_text(t, &r), false),
+        Some(r) if t.enum_inside().is_none() => From::Range(r),
+        _ => unknown(),
+    }
 }
 
 fn add(into: &mut Vec<From>, more: Vec<From>) {
@@ -85,6 +102,11 @@ fn origins(m: &Model, vars: &BTreeMap<String, Vec<From>>, e: &TExpr) -> Vec<From
     match e {
         TExpr::Int(n) => vec![From::Range(Range::exactly(*n))],
         TExpr::Now => vec![From::Now],
+        // `now` read by a check of the period (DESIGN 20): a moment in the period
+        TExpr::NowAt(_) => match &m.period {
+            Some(p) => vec![From::Moment(p.range, p.text.clone(), true)],
+            None => vec![From::Now],
+        },
         TExpr::None(_) => vec![],
         TExpr::List { items, .. } => {
             let mut out = Vec::new();
@@ -113,11 +135,7 @@ fn origins(m: &Model, vars: &BTreeMap<String, Vec<From>>, e: &TExpr) -> Vec<From
                     RuleKind::Rule => vec![From::Output(*ix, f.clone())],
                     _ => vec![unknown()],
                 },
-                // an enum's range is not numbers
-                _ => match m.field_range(r, f).filter(|_| ty.enum_inside().is_none()) {
-                    Some(rg) => vec![From::Range(rg)],
-                    None => vec![unknown()],
-                },
+                _ => vec![placed(m, &ty, m.field_range(r, f), unknown)],
             }
         }
         other => vec![From::Unknown(tr!("`{}`", "`{}`", other.show()))],
@@ -128,11 +146,7 @@ fn origins(m: &Model, vars: &BTreeMap<String, Vec<From>>, e: &TExpr) -> Vec<From
 fn variables(m: &Model) -> BTreeMap<String, Vec<From>> {
     let mut vars: BTreeMap<String, Vec<From>> = BTreeMap::new();
     for (n, t) in &m.inputs {
-        // an enum's range is not numbers
-        let from = match m.input_ranges.get(n).filter(|_| t.enum_inside().is_none()) {
-            Some(r) => From::Range(*r),
-            None => From::Unknown(tr!("入力 `{n}`", "the input `{n}`")),
-        };
+        let from = placed(m, t, m.input_ranges.get(n).copied(), || From::Unknown(tr!("入力 `{n}`", "the input `{n}`")));
         vars.insert(n.clone(), vec![from]);
     }
     let stmts = m.all_stmts();
@@ -143,10 +157,10 @@ fn variables(m: &Model) -> BTreeMap<String, Vec<From>> {
             match &s.kind {
                 TK::Call { target: Some(Target::Let(x)), callee: Callee::Task(t), .. } => {
                     let t = &m.tasks[*t];
-                    // an enum's range is not numbers
-                    let from = match t.result_range.filter(|_| t.result.as_ref().is_none_or(|ty| ty.enum_inside().is_none())) {
-                        Some(r) => From::Range(r),
-                        None => From::Unknown(tr!("`{}` の結果", "the answer of `{}`", t.name)),
+                    let unknown = || From::Unknown(tr!("`{}` の結果", "the answer of `{}`", t.name));
+                    let from = match &t.result {
+                        Some(ty) => placed(m, ty, t.result_range, unknown),
+                        None => t.result_range.map(From::Range).unwrap_or_else(unknown),
                     };
                     put(x, vec![from]);
                 }
@@ -181,6 +195,7 @@ fn port(m: &Model, f: &From) -> Origin {
         From::Output(ix, o) => Origin::Output { rule: m.rules[*ix].info.path.clone(), output: o.clone() },
         From::Now => Origin::Now,
         From::Range(r) => Origin::Range(r.lo.map(i128::from), r.hi.map(i128::from)),
+        From::Moment(r, text, now) => Origin::Moment { lo: r.lo, hi: r.hi, text: text.clone(), now: *now },
         From::Unknown(t) => Origin::Unknown(t.clone()),
     }
 }
@@ -619,7 +634,7 @@ impl<'a> Spans<'a> {
                     };
                     if let Some((r, e)) = given {
                         let since = match e {
-                            TExpr::Now => Some(at_start),
+                            TExpr::Now | TExpr::NowAt(_) => Some(at_start),
                             TExpr::Var { name, fields, .. } if fields.is_empty() => st.nows.get(name).map(|n| n.1.clone()),
                             _ => None,
                         };
@@ -669,7 +684,7 @@ impl<'a> Spans<'a> {
                     _ => (None, None),
                 };
                 st.forget(name);
-                if matches!(expr, TExpr::Now) {
+                if matches!(expr, TExpr::Now | TExpr::NowAt(_)) {
                     st.nows.insert(name.clone(), (s.line, st.cases.clone()));
                 }
                 if let Some(a) = copied.0 {
@@ -720,7 +735,12 @@ impl<'a> Spans<'a> {
                 None
             }
             // a check of a precondition takes no time: the run goes on as it was, or fails there
-            TK::Pass | TK::Check(_) => Some(st),
+            TK::Pass | TK::Check(_) | TK::Period { start: true } => Some(st),
+            // outside the period, the run goes to `on failure` here, as after a task's error
+            TK::Period { start: false } => {
+                self.stoppable(&st);
+                Some(st)
+            }
             TK::Succeed { .. } | TK::Fail { .. } => None,
         }
     }
@@ -1376,7 +1396,12 @@ impl<'a> Answers<'a> {
                 extra.extend(locals.iter().cloned());
                 Some(self.rounds(body, &extra, st))
             }
-            TK::Pass | TK::Check(_) => Some(st),
+            TK::Pass | TK::Check(_) | TK::Period { start: true } => Some(st),
+            // outside the period, the run goes to `on failure` here, as after a task's error
+            TK::Period { start: false } => {
+                self.stoppable(&st);
+                Some(st)
+            }
             // a `fail` ends the run as it is, without `on failure` (dandori's DESIGN), and so
             // does a failed check
             TK::Break | TK::Succeed { .. } | TK::Fail { .. } => None,

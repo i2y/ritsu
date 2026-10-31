@@ -1,0 +1,29 @@
+workflow 子との日付の範囲 v1
+description "タスクと、それが子として走らせる .flow のあいだの日付と時刻の範囲：タスクが渡す値は子の入力の範囲に収まり、子が返す値はタスクの結果の範囲に収まる"
+
+record 予約
+  予約日 : date  range >=2026-01-01 <=2027-12-31
+
+record 今年
+  予約日 : date  range >=2026-01-01 <=2026-12-31
+
+inputs
+  日     : date       range >=2026-01-01 <=2026-06-30
+  時間帯 : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+# 子の範囲に入る日と時間帯を渡し、答えを子の範囲で読む
+task 収まる(日: date  range >=2026-01-01 <=2026-06-30, 時間帯: timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00) -> 予約
+  flow "children/来訪.flow"
+
+# どの日にも、どの時刻にもなりうるものを渡す
+task 範囲なし(日: date, 時間帯: timestamp) -> 予約
+  flow "children/来訪.flow"
+
+# 子の範囲を越える日と、同じ日の UTC の時間帯（子の時間帯より 9 時間遅く終わる）を渡し、答えを今年の
+# 日として読む
+task 広い(日: date  range >=2026-01-01 <=2027-12-31, 時間帯: timestamp  range >=2026-01-01 <=2026-12-31) -> 今年
+  flow "children/来訪.flow"
+
+flow
+  let a = 収まる(日: 日, 時間帯: 時間帯)
+  pass

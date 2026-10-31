@@ -188,8 +188,14 @@ fn go_check(m: &Model, n: &Names, x: &str, t: &Ty, rg: Option<Range>, depth: usi
             None => format!("ddIsInt({x})"),
         },
         Ty::Str => format!("ddIsStr({x})"),
-        Ty::Timestamp => format!("ddIsTimestamp({x})"),
-        Ty::Date => format!("ddIsDate({x})"),
+        Ty::Timestamp | Ty::Date => {
+            let (is, head) = if *t == Ty::Date { ("ddIsDate", format!("ddStr({x})")) } else { ("ddIsTimestamp", format!("ddStr({x})[:19]")) };
+            match rg {
+                // the shape first: a time is 20 characters at least, which `[:19]` takes on
+                Some(r) => format!("({is}({x}) && {})", render::time_tests(t, &r, |op, end| format!("{head} {op} {}", q(end))).join(" && ")),
+                None => format!("{is}({x})"),
+            }
+        }
         Ty::Bool => format!("ddIsBool({x})"),
         Ty::Enum(e) => match m.held_values(t, rg) {
             // a place that holds the enum to a range: the values the range lets in
@@ -3070,7 +3076,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     // the rules whose code goes with the workflow are in rules.go; the others are called at their services, from activities.go
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
     let constant = |text: &str| format!("{header}{}", text.replace("{{PKG}}", &pkg));
-    let mut g = Gen { m, names: &names, out: String::new(), loops: vec![], can: None, time: false };
+    let mut g = Gen { m, names: &names, out: String::new(), loops: vec![], can: None, time: false, now: None };
     let wf = g.workflow(&header, &pkg);
     let mut files = vec![
         (format!("{pkg}/doc.go"), doc_file(m, &nd, &pkg, &header, &called)),
@@ -3164,6 +3170,8 @@ struct Gen<'a> {
     can: Option<usize>,
     /// whether workflow.go uses the package time
     time: bool,
+    /// while a call that reads `now` is written: its site, whose variable read the clock for it
+    now: Option<usize>,
 }
 
 impl<'a> Gen<'a> {
@@ -3188,7 +3196,11 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "nil".into(),
-            TExpr::Now => "ddNow(ctx)".into(),
+            TExpr::Now => match self.now {
+                Some(site) => render::now_name(site),
+                None => "ddNow(ctx)".into(),
+            },
+            TExpr::NowAt(site) => render::now_name(*site),
             TExpr::Var { name, fields, .. } => {
                 if fields.is_empty() {
                     self.var(name)
@@ -3479,7 +3491,21 @@ impl<'a> Gen<'a> {
     }
 
     /// A statement; whether it ends the block as Go sees it.
+    /// A statement, and whether it ends the block. A call that reads `now` reads the clock once,
+    /// before it, so that a try again is given the moment its first try was: each try runs the
+    /// call's arguments again, after a timer that moves the workflow's clock on.
     fn stmt(&mut self, s: &TStmt, d: usize) -> bool {
+        let once = matches!(s.kind, TK::Call { .. }) && s.kind.reads_now();
+        if once {
+            self.line(d, &format!("{} := ddNow(ctx)", render::now_name(s.site)));
+        }
+        let outer = std::mem::replace(&mut self.now, once.then_some(s.site));
+        let ended = self.stmt_here(s, d);
+        self.now = outer;
+        ended
+    }
+
+    fn stmt_here(&mut self, s: &TStmt, d: usize) -> bool {
         match &s.kind {
             TK::Pass => false,
             TK::Break => {
@@ -3520,6 +3546,26 @@ impl<'a> Gen<'a> {
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "nil".into());
                 self.line(d, &format!("return nil, ddFail({}, {c})", q(error)));
                 true
+            }
+            // the period the workflow runs in (DESIGN 20): the clock, read once and held to it
+            TK::Period { start } => {
+                let p = self.m.period.as_ref().expect("a check of the period is in a flow with one");
+                let now = render::now_name(s.site);
+                let holds = p.tests(|op, end| format!("{now}[:19] {op} {}", q(end))).join(" && ");
+                let (before, after) = p.cause_around((!*start).then_some(s.line));
+                self.line(d, &format!("{now} := ddNow(ctx)"));
+                // as gofmt writes it: no spaces around `+` among a call's arguments, spaces in a field's value
+                if *start {
+                    self.line(d, &format!("// the period the workflow runs in, {}: a run that starts outside it calls nothing", p.text));
+                    self.line(d, &format!("if !({holds}) {{"));
+                    self.line(d + 1, &format!("return nil, ddFail({}, {}+{now}+{})", q(OUT_OF_PERIOD), q(&before), q(&after)));
+                } else {
+                    self.line(d, &format!("// line {}: now, held to the period the workflow runs in; outside it, the run goes to on failure as a task's error does", s.line));
+                    self.line(d, &format!("if !({holds}) {{"));
+                    self.line(d + 1, &format!("return nil, &ddTaskError{{Kind: {}, Message: {} + {now} + {}}}", q(OUT_OF_PERIOD), q(&before), q(&after)));
+                }
+                self.line(d, "}");
+                false
             }
             // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
             TK::Check(c) => {

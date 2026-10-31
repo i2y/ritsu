@@ -1,0 +1,15 @@
+error[E014]: tests/fixtures/date_ranges.flow:33:1: `visit.day` can be outside `>=2026-03-01`, the range of the parameter `day` of `book`: it is `>=2026-01-01 <=2026-12-31`
+    33 |   let booked = book(id: visit.id, day: visit.day)
+error[E014]: tests/fixtures/date_ranges.flow:35:1: `visit.window` can be outside `>=2026-01-01 <=2026-12-31`, the range of the parameter `at` of `remind`: it is `>=2026-01-01 <=2026-12-31 offset +09:00`
+    35 |   remind(id: visit.id, at: visit.window)
+warning[W104]: tests/fixtures/date_ranges.flow:37:1: nothing says what range `booked` is in (the answer of `book` has no range), and the parameter `day` of `hold` takes `>=2026-01-01 <=2027-12-31`
+    37 |   hold(id: visit.id, day: booked)
+error[E014]: tests/fixtures/date_ranges.flow:39:1: `now` can be outside `>=2026-01-01 <=2026-12-31`, the range of the parameter `at` of `remind`: it is `>=2026-01-01 <=2027-12-31`
+    39 |   remind(id: visit.id, at: now)
+error[E014]: tests/fixtures/date_ranges.flow:41:1: `due.day` can be outside `>=2026-01-01 <=2027-12-31`, the range of the parameter `day` of `hold`: it is `>=2026-01-05 <=2028-01-04`
+    41 |   hold(id: visit.id, day: due.day)
+error[E014]: tests/fixtures/date_ranges.flow:44:1: `now` can be outside `>=2026-06-01`, the range of the output `when`: it is `>=2026-01-01 <=2027-12-31`
+    44 |   succeed when = now
+warning[W104]: tests/fixtures/date_ranges.flow:47:1: nothing says what range `now` is in (`now` in `on failure` and `on cancel` has no range), and the parameter `at` of `remind` takes `>=2026-01-01 <=2026-12-31`
+    47 |   remind(id: visit.id, at: now)
+  = `now` in `on failure` and `on cancel` is not held to the period, so that what settles a run is not stopped by the clock: it can be any moment

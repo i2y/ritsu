@@ -80,8 +80,12 @@ pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, d
             None => format!("{p}is_int({x})"),
         },
         Ty::Str => format!("isinstance({x}, str)"),
-        Ty::Timestamp => format!("(isinstance({x}, str) and {p}TIMESTAMP.match({x}) is not None)"),
-        Ty::Date => format!("(isinstance({x}, str) and {p}DATE.match({x}) is not None)"),
+        Ty::Timestamp | Ty::Date => {
+            let (re, head) = if *t == Ty::Date { ("DATE", x.to_string()) } else { ("TIMESTAMP", format!("{x}[:19]")) };
+            let mut parts = vec![format!("isinstance({x}, str)"), format!("{p}{re}.match({x}) is not None")];
+            parts.extend(rg.map(|r| render::time_tests(t, &r, |op, end| format!("{head} {op} {}", q(end)))).unwrap_or_default());
+            format!("({})", parts.join(" and "))
+        }
         Ty::Bool => format!("isinstance({x}, bool)"),
         Ty::Enum(e) => match m.held_values(t, rg) {
             // a place that holds the enum to a range: the values the range lets in
@@ -203,7 +207,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let header = m.head("#");
     // the rules whose code goes with the workflow are in rules.py; the others are called at their services, from activities.py
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
-    let mut g = Gen { m, out: String::new(), loops: vec![], can: None };
+    let mut g = Gen { m, out: String::new(), loops: vec![], can: None, now: None };
     let wf = g.workflow(&header, !called.is_empty());
     let mut files = vec![
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow for Temporal's Python SDK. See workflow.py.\n", m.name, m.version)),
@@ -1873,6 +1877,8 @@ struct Gen<'a> {
     /// the loop at the top of the flow that the next statement is, which goes on in a new run
     /// once the history is long, by its place among such loops (the first is 1)
     can: Option<usize>,
+    /// while a call that reads `now` is written: its site, whose variable read the clock for it
+    now: Option<usize>,
 }
 
 impl<'a> Gen<'a> {
@@ -1897,7 +1903,11 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => if *b { "True".into() } else { "False".into() },
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "None".into(),
-            TExpr::Now => "dd.now()".into(),
+            TExpr::Now => match self.now {
+                Some(site) => render::now_name(site),
+                None => "dd.now()".into(),
+            },
+            TExpr::NowAt(site) => render::now_name(*site),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 for (i, f) in fields.iter().enumerate() {
@@ -2184,7 +2194,20 @@ impl<'a> Gen<'a> {
         self.line(d + 1, &format!("workflow.continue_as_new(args=[input, {{\"at\": {k}, \"round\": dd_loop_{site}, \"vars\": dd_vars(){more}}}])"));
     }
 
+    /// A statement. A call that reads `now` reads the clock once, before it, so that a try again is
+    /// given the moment its first try was: each try runs the call's arguments again, after a timer
+    /// that moves the workflow's clock on.
     fn stmt(&mut self, s: &TStmt, d: usize) {
+        let once = matches!(s.kind, TK::Call { .. }) && s.kind.reads_now();
+        if once {
+            self.line(d, &format!("{} = dd.now()", render::now_name(s.site)));
+        }
+        let outer = std::mem::replace(&mut self.now, once.then_some(s.site));
+        self.stmt_here(s, d);
+        self.now = outer;
+    }
+
+    fn stmt_here(&mut self, s: &TStmt, d: usize) {
         let m = self.m;
         match &s.kind {
             TK::Pass => {}
@@ -2214,6 +2237,24 @@ impl<'a> Gen<'a> {
             TK::Fail { error, cause, .. } => {
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "None".into());
                 self.line(d, &format!("raise dd.fail({}, {c})", q(error)));
+            }
+            // the period the workflow runs in (DESIGN 20): the clock, read once and held to it
+            TK::Period { start } => {
+                let p = m.period.as_ref().expect("a check of the period is in a flow with one");
+                let now = render::now_name(s.site);
+                let holds = p.tests(|op, end| format!("{now}[:19] {op} {}", q(end))).join(" and ");
+                let (before, after) = p.cause_around((!*start).then_some(s.line));
+                let cause = format!("{} + {now} + {}", q(&before), q(&after));
+                self.line(d, &format!("{now} = dd.now()"));
+                if *start {
+                    self.line(d, &format!("# the period the workflow runs in, {}: a run that starts outside it calls nothing", p.text));
+                    self.line(d, &format!("if not ({holds}):"));
+                    self.line(d + 1, &format!("raise dd.fail({}, {cause})", q(OUT_OF_PERIOD)));
+                } else {
+                    self.line(d, &format!("# line {}: now, held to the period the workflow runs in; outside it, the run goes to on failure as a task's error does", s.line));
+                    self.line(d, &format!("if not ({holds}):"));
+                    self.line(d + 1, &format!("raise dd.TaskError({}, {cause})", q(OUT_OF_PERIOD)));
+                }
             }
             // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
             TK::Check(c) => {

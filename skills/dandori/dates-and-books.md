@@ -12,6 +12,9 @@ The invoice example does all of it, and runs as it is on every platform
 ([examples/invoice](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/invoice/invoice.flow)):
 
 ```flow
+workflow invoice v1
+  now range >=2026-01-01 <=2027-12-31
+…
 use dates terms from "dates/payment_terms.cal"
   lambda "arn:aws:lambda:eu-west-2:123456789012:function:payment-terms"
 use book stock from "books/stock.book"
@@ -89,12 +92,53 @@ answer stay in the run's history.
 
 `date` is a type: a day, written `YYYY-MM-DD`. An input, an output, a field, a task's parameter or
 answer can be one, and a string can have one put in it (`"{order.id} ships on {ship.day}"`). It is
-checked where it comes in, like every other type, and never compared or added to: counting days is
-what a dates file is for.
+checked where it comes in, like every other type, and held there to its range when it has one
+(`range >=2026-01-01 <=2027-12-31`; [Ranges](tour.md#ranges)). An expression never compares a date
+or adds to one: counting days is what a dates file is for.
 
 `now` is the time the statement runs at, in UTC, to the second: a `timestamp`. It can go to a date,
-to a task, to `wait until`, and into a string (`"received at {now}"`). Each platform reads it so that
-a replay or a retry reads the same time again (the table below).
+to a task, to `wait until`, and into a string (`"received at {now}"`). A statement reads one moment,
+however many times it says `now`, and every try of a call that is tried again gives the moment of
+the first: each platform reads the clock once for the statement, so that a replay reads the same
+time again (the table below). In a workflow that says the period it runs in, `now` is a moment of
+the period.
+
+## The period a workflow runs in
+
+A dates file takes its inputs over a range of days: the invoice's terms take orders received from
+2026-01-01 to 2027-12-31. A workflow that gives a date `now` can say the period it runs in, under
+its first line, with the same days, as the invoice does:
+
+```flow
+workflow invoice v1
+  now range >=2026-01-01 <=2027-12-31
+…
+  let due = terms.payment(received: now)
+```
+
+A run that starts outside the period calls nothing and fails with `Dandori.OutOfPeriod`, as an input
+outside its range does. Each statement that reads `now` checks the clock first, and reads the moment
+it checked: outside the period, the run goes to `on failure`, as after a task's error nothing
+handles. The invoice holds the goods before it reads `now`, so a run whose clock has left the period
+by then puts them back. `now` in `on failure` and `on cancel` is not checked, so that the clock never
+stops what settles a run.
+
+`ritsu check` reads the days `now` can be at the offset of the dates file's calendar, and holds them
+to the days the date takes. With the period, the invoice's `now` gives `received` a day the terms
+take, and the border holds:
+
+```console
+$ ritsu check .
+…
+ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (6 warnings); borders between the languages: 8 checked, 6 undecided
+```
+
+The six warnings are W206: the hold has no `timeout`, so nothing bounds how long after it the goods
+are shipped. Without the period, `now` can be any day, and the border is a warning (W205); with a
+period that goes on past the days the file takes, it is an error (E205), as with a date or a time
+whose range does. The Japanese version's calendar is at `+09:00`, and its period is written at that
+offset (`now range >=2026-01-01 <=2027-12-28 offset +09:00`): the same period in UTC would end nine
+hours into a day its terms do not take.
 
 ## Books
 
@@ -211,7 +255,8 @@ puts another value in the variable the call was given.
 |---|---|---|---|---|---|
 | a date | a Lambda Task; dandori writes the function around the Python koyomi writes | an activity around koyomi's TypeScript, Python or Go (`local`: a local activity) | a step that invokes the same Lambda function through the `Transport` | the caller image, around koyomi's TypeScript | a function around koyomi's Python |
 | an operation of a book | the book's Lambda Task; dandori writes the function around chobo's Python client, and makes the hold from the arguments | an activity dandori writes, through the `Transport`'s `book`, on the chobo client you give it | the same, in a step | the same, in the caller image | the same, through `Deps.tasks` |
-| `now` | the time the state was entered (`$states.context.State.EnteredTime`, to the second) | the workflow's clock, which a replay reads again the same | a step that reads the clock, its answer checkpointed (one operation, counted by E040) | `now()` in the expression of the template that computes the value, evaluated once | `Deps.clock` |
+| `now` | the time the state was entered (`$states.context.State.EnteredTime`, to the second) | the workflow's clock, read once before the call, which a replay reads again the same | a step that reads the clock, its answer checkpointed (one operation, counted by E040) | a template of its own before the statement, which reads `now()` once (four nodes, counted by E040) | `Deps.clock`, read once at the start of the node |
+| the period (`now range`) | a Pass that reads the clock, and a Choice; outside, a Fail at the start, else the way to `on failure` | an `if` in the workflow's code, which throws what `on failure` catches | the same, on the clock a step reads | a template that reads the clock, and one that holds it to the period | a node that reads the clock and holds it to the period |
 
 What you put beside the generated code:
 
@@ -232,8 +277,9 @@ What you put beside the generated code:
 
 - Every platform plays every scenario against the reference interpreter, as for every other call:
   a scenario answers a date with a day (and a time), and an operation of a book with done, done
-  before, or a refusal. Each platform's clock is set to one time, so that `now` reads the same
-  everywhere.
+  before, or a refusal. Each platform's clock is set to the run's moment, so that `now` reads the
+  same everywhere. A run of a workflow with a period can say two: the moment it starts at, and the
+  one every `now` after the start reads, so that the runs that leave the period are played too.
 - The code dandori writes around koyomi's (the Lambda function, `rules.ts`, `rules.py`, `rules.go`)
   runs with the code koyomi writes, on every input of the file's range, and must answer what koyomi
   says each date comes to; one input in seven goes as a time of that day instead, read at the

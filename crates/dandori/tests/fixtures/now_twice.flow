@@ -1,0 +1,23 @@
+workflow now_twice v1
+description "One statement reads one moment, however many times it says now: the arguments of a call that is tried again, the fields of a record, a string and the outputs"
+
+record Stamp
+  at    : timestamp
+  again : timestamp
+
+inputs
+  id : string
+
+outputs
+  at    : timestamp
+  again : timestamp
+
+task note(id: string, at: timestamp, again: timestamp, said: string, stamp: Stamp)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:note"
+  idempotent
+  retry 2 times every 1 second
+
+flow
+  note(id: id, at: now, again: now, said: "from {now} to {now}", stamp: {at: now, again: now})
+  let stamp: Stamp = {at: now, again: now}
+  succeed at = now, again = stamp.again

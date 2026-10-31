@@ -1,0 +1,17 @@
+workflow visit v1
+description "A child workflow that takes a day and a window, each held to a range, and answers the day it books, held to a range of its own"
+
+inputs
+  day    : date       range >=2026-01-01 <=2026-12-31
+  window : timestamp  range >=2026-01-01 <=2026-12-31 offset +09:00
+
+outputs
+  on : date  range >=2026-01-01 <=2027-12-31
+
+task book(day: date, window: timestamp) -> date  range >=2026-01-01 <=2027-12-31
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:book"
+  idempotent
+
+flow
+  let on = book(day: day, window: window)
+  succeed on = on

@@ -1,0 +1,7 @@
+workflow period_twice v1
+  now range >=2026-01-01 <=2026-12-31
+  now range >=2027-01-01 <=2027-12-31
+description "E001: a workflow says the period it runs in once"
+
+flow
+  pass

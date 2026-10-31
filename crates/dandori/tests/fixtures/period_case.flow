@@ -1,0 +1,28 @@
+workflow period_case v1
+  now range >=2026-01-01 <=2027-12-31
+description "A statement that reads now in a workflow with a period fails the run when the clock is outside it, as a task's error nothing handles: with a case open and no on failure, the case is left where it is"
+
+use rule capture from "rules/capture.rule"
+
+record Payment
+  id     : string
+  status : capture.status
+
+task open_payment() -> Payment
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:open-payment"
+  starts capture.payment
+  key
+
+task void_payment(id: string, at: timestamp) -> Payment
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:void-payment"
+  sends void
+  key
+
+case p : Payment follows capture.payment
+
+flow
+  p <- open_payment()
+  # a place to fail of its own: the `let` cannot fail, but the check of the period before it can
+  let at = now
+  # no place of its own: the call after the check can fail as it is
+  p <- void_payment(id: p.id, at: now)

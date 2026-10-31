@@ -5,10 +5,13 @@
 //! of it. What each decides, and how, is here, so that a model can hold to it (Lean's RitsuCross).
 //!
 //! - [`days_given`] (X3 (a), X6): whether every day a value can be lies inside a range. The value
-//!   can be the day of koyomi dates, each of whose days koyomi counts exactly (`Dates::values`), or
-//!   come from somewhere that says nothing of what day it is (an input, `now`). An example is the
-//!   first day outside, of the first koyomi date that has one; with none, a place that says nothing
-//!   leaves it undecided. [`days_fit`] is the decision for one set of days.
+//!   can be the day of koyomi dates, each of whose days koyomi counts exactly (`Dates::values`), a
+//!   day of a range the `.flow` writes (a date's range, a time's or the period's read as days,
+//!   [`moment_days`]), or come from somewhere that says nothing of what day it is (an input
+//!   without a range, `now` in a workflow that says no period). An example is the first day
+//!   outside, of the first koyomi date that has one, else of the first range that has one; with
+//!   none, a place that says nothing leaves it undecided. [`days_fit`] is the decision for one set
+//!   of days, [`range_outside`] for one range.
 //! - [`amounts_given`] (X4): whether every amount a value can be is one chobo takes, 0 to 2⁶³ − 1
 //!   (an amount outside is a failure of the call, not a refusal: chobo's DESIGN 1.5). The value can
 //!   be the output of rules, whose fewest and most rulec counts (`Rules::output_values`, with an
@@ -47,20 +50,97 @@ pub fn days_fit(days: &Found<DaySet>, range: (Option<i64>, Option<i64>)) -> Answ
     }
 }
 
+/// X3 (a) and X6: a day the range of days `r` lets in that `range` does not (both ends included
+/// where given; None at an open end); None when every one of them is in `range`. A range the
+/// `.flow` writes is checked when the workflow runs, and any day of it can come, so an open end
+/// lets in days without end: past an open end of `r` where `range` has one is outside. The day is
+/// the low end of `r` when it is outside; else, below an open low end, the last day before `range`
+/// starts that `r` lets in; else the day after `range` ends (`RitsuCross.rangeOutside`).
+pub fn range_outside(r: (Option<i64>, Option<i64>), range: (Option<i64>, Option<i64>)) -> Option<i64> {
+    let outside = |d: i64| range.0.is_some_and(|lo| d < lo) || range.1.is_some_and(|hi| d > hi);
+    let low_in = match (r.0, range.0) {
+        (_, None) => true,
+        (Some(a), Some(lo)) => a >= lo,
+        (None, Some(_)) => false,
+    };
+    let high_in = match (r.1, range.1) {
+        (_, None) => true,
+        (Some(b), Some(hi)) => b <= hi,
+        (None, Some(_)) => false,
+    };
+    if low_in && high_in {
+        return None;
+    }
+    match r.0 {
+        Some(a) if outside(a) => Some(a),
+        None if range.0.is_some() => range.0.map(|lo| r.1.map_or(lo - 1, |b| b.min(lo - 1))),
+        _ => range.1.map(|hi| hi + 1),
+    }
+}
+
+/// X2: the first day of the range of days `r` (both ends included, None at an open end) that is
+/// not in `set`, the days a rule's input takes (`range from koyomi`); None when every day of it is.
+/// Below an open low end, the day before the set's first (the high end, when that is earlier);
+/// else the first day from the low end on.
+pub fn day_not_in(set: &DaySet, r: (Option<i64>, Option<i64>)) -> Option<i64> {
+    match r.0 {
+        None => {
+            let before = set.first().map_or(r.1.unwrap_or(0), |f| f - 1);
+            Some(match r.1 {
+                Some(hi) if hi < before => hi,
+                _ => before,
+            })
+        }
+        Some(lo) => {
+            let mut d = lo;
+            while set.contains(&d) {
+                d += 1;
+            }
+            match r.1 {
+                Some(hi) if d > hi => None,
+                _ => Some(d),
+            }
+        }
+    }
+}
+
+/// The days the moments of a range are (seconds since 1970-01-01T00:00:00Z, both ends included,
+/// None at an open end) at a calendar's UTC offset of `offset` minutes east: the day of the moment
+/// `t` there is ⌊(t + 60·offset) / 86400⌋, and the days of a range those of its ends.
+pub fn moment_days(r: (Option<i64>, Option<i64>), offset: i32) -> (Option<i64>, Option<i64>) {
+    let day = |t: i64| (t + 60 * i64::from(offset)).div_euclid(86_400);
+    (r.0.map(day), r.1.map(day))
+}
+
+/// Where the day of an example of [`days_given`] comes from: a koyomi date, by its place among the
+/// dates, or a range of days, by its place among the ranges.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DayFrom {
+    Date(usize),
+    Range(usize),
+}
+
 /// X3 (a) and X6: whether every day a value can be lies inside `range`, by where it can come from:
-/// the days of each koyomi date it can be the day of, in order, and the first place it can come
-/// from that says nothing of what day it is, when there is one. The example is the first koyomi
-/// date with a day outside, by its place in `dates`, and the day; with none, `other`, or a koyomi
-/// date koyomi could not count, leaves it undecided.
-pub fn days_given(dates: &[Found<DaySet>], other: Option<&Text>, range: (Option<i64>, Option<i64>)) -> Answer<(usize, i64)> {
+/// the days of each koyomi date it can be the day of, in order; the days of each range of days it
+/// can be in (a date's range the `.flow` writes, a time's or the period's read as days at the
+/// calendar's offset, [`moment_days`]), in order; and the first place it can come from that says
+/// nothing of what day it is, when there is one. The example is the first koyomi date with a day
+/// outside, by its place in `dates`, and the day; else the first range with one ([`range_outside`]);
+/// with none, `other`, or a koyomi date koyomi could not count, leaves it undecided.
+pub fn days_given(dates: &[Found<DaySet>], ranges: &[(Option<i64>, Option<i64>)], other: Option<&Text>, range: (Option<i64>, Option<i64>)) -> Answer<(DayFrom, i64)> {
     let mut undecided = other.cloned();
     for (i, d) in dates.iter().enumerate() {
         match days_fit(d, range) {
-            Answer::Fails(day) => return Answer::Fails((i, day)),
+            Answer::Fails(day) => return Answer::Fails((DayFrom::Date(i), day)),
             Answer::Undecided(why) => {
                 undecided.get_or_insert(why);
             }
             Answer::Holds => {}
+        }
+    }
+    for (i, r) in ranges.iter().enumerate() {
+        if let Some(day) = range_outside(*r, range) {
+            return Answer::Fails((DayFrom::Range(i), day));
         }
     }
     match undecided {

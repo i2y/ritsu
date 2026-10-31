@@ -1,0 +1,19 @@
+workflow 日付の範囲の書き方 v1
+  now range >=2026-01-01 <=2027-12-31 offset +25:00
+description "日付と時刻の範囲の書き間違い：端はどれも暦にある日、範囲に入る日がある、オフセットを書けるのは時刻と期間だけ、オフセットは koyomi が読めるもの"
+
+record 間違い
+  正しい         : date       range >=2026-01-01 <=2026-12-31
+  正しい時刻     : timestamp  range >=2026-01-01 offset +09:00
+  無い日         : date       range >=2026-02-30
+  入る日が無い   : date       range >=2026-12-31 <=2026-01-01
+  入る時刻が無い : timestamp  range >=2026-12-31 <=2026-01-01 offset -05:00
+  数             : date       range >=1 <=31
+  名前           : timestamp  range >=今日
+  日付の整数     : int        range >=2026-01-01
+  日付のオフセット : date     range >=2026-01-01 offset +09:00
+  遠いオフセット : timestamp  range <=2026-12-31 offset +09:60
+  文字列         : string     range >=2026-01-01
+
+flow
+  pass

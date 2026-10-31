@@ -349,6 +349,9 @@ def chkHead (env : Env) (rec : List Stmt → Abs → Option Res) (s : Stmt) (A :
   match s with
   | .pass _ | .assign .. | .wait _ => some { normal := some A, brk := .none, raised := .none }
   | .brk _ => some { normal := .none, brk := some A, raised := .none }
+  -- the period the workflow runs in: outside it, a run stops at the start before it calls anything,
+  -- and goes to `on failure` from a later check, as after a task's error nothing handles
+  | .period _ _ start _ _ _ _ => some { normal := some A, brk := .none, raised := if start then .none else some A }
   | .succeed .. => if endOk env A [] then some Res.none else .none
   | .fail _ _ _ leaving => if endOk env A leaving then some Res.none else .none
   | .matchOn _ _ e _ arms =>

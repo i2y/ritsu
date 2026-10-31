@@ -1,0 +1,8 @@
+ok batch.rule
+billing.flow: ok
+error[ritsu E202]: billing.flow:16:1: The day given to `pay_day` of the rule `batch` can be outside the range the rule declares
+    16 |   let pick = batch(pay_day: paid)
+  = `paid` is a day of `>=2026-02-01 <=2026-12-31` and can be 2026-02-01, and `pay_day` takes `>=2026-03-01 <=2027-01-31`
+  = The rule's generated code refuses a day outside its range at its door, so this call fails only when the workflow runs. dandori checks the range when the workflow runs, and any day of it can come.
+  = Widen the range of `pay_day` in the rule, or narrow the range `>=2026-02-01 <=2026-12-31` where the value comes from.
+ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

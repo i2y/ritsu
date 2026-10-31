@@ -1,0 +1,20 @@
+error[E003]: tests/fixtures/date_range_syntax.flow:2:46: there is no offset `+25:00`: write it `±HH:MM`, as `+09:00`, up to 23:59
+     2 |   now range >=2026-01-01 <=2027-12-31 offset +25:00
+error[E003]: tests/fixtures/date_range_syntax.flow:8:36: there is no day `2026-02-30`
+     8 |   no_day      : date       range >=2026-02-30
+error[E003]: tests/fixtures/date_range_syntax.flow:9:28: no day is in `>=2026-12-31 <=2026-01-01`
+     9 |   none_in     : date       range >=2026-12-31 <=2026-01-01
+error[E003]: tests/fixtures/date_range_syntax.flow:10:28: no day is in `>=2026-12-31 <=2026-01-01`
+    10 |   none_at     : timestamp  range >=2026-12-31 <=2026-01-01 offset -05:00
+error[E003]: tests/fixtures/date_range_syntax.flow:11:28: a bound of a range of dates or of times is a day (`>=2026-01-01`), and `1` is none
+    11 |   a_number    : date       range >=1 <=31
+error[E003]: tests/fixtures/date_range_syntax.flow:12:36: a bound of a range of dates or of times is a day (`>=2026-01-01`), and `today` is none
+    12 |   a_name      : timestamp  range >=today
+error[E003]: tests/fixtures/date_range_syntax.flow:13:36: the bound `2026-01-01` is not a value of `int`
+    13 |   dated_int   : int        range >=2026-01-01
+error[E003]: tests/fixtures/date_range_syntax.flow:14:54: `offset` is written only after a range of times and in `now range`: a date has no time of day for an offset to read
+    14 |   date_offset : date       range >=2026-01-01 offset +09:00
+error[E003]: tests/fixtures/date_range_syntax.flow:15:54: there is no offset `+09:60`: write it `±HH:MM`, as `+09:00`, up to 23:59
+    15 |   far_offset  : timestamp  range <=2026-12-31 offset +09:60
+error[E003]: tests/fixtures/date_range_syntax.flow:16:28: a range is for a number (`int` or a unit), an ordered enum, a date or a time, and this is `string`
+    16 |   a_text      : string     range >=2026-01-01

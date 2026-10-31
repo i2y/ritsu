@@ -22,12 +22,19 @@ same way.
 A scenario is an input and the answers the calls get, in order. The scenarios take every arm, every
 handler, every way a case can move, and lists that are empty, short, and longer than their loop
 takes. No two values in a scenario are alike, so a platform that mixes up two answers, or the rounds
-of a loop, shows it (a number with a range is picked inside it, where two may meet). The scenarios
-also give answers every platform must refuse: of the wrong shape, with a state the machine does not
-lead to, and with a number or an enum's value outside its range. Each place of the inputs held to a
-range, an input or a field of an input's record, has a run of its own whose input has that place
-alone just outside the range (past its high end, or below its low end when that is the only room),
-and every platform must end that run at once, with `Dandori.BadInput`. For a workflow that
+of a loop, shows it (a number, a date or a time with a range is picked inside it, where two may
+meet). The scenarios also give answers every platform must refuse: of the wrong shape, with a state
+the machine does not lead to, and with a number, an enum's value, a date or a time outside its
+range. Each place of the inputs held to a range, an input or a field of an input's record, has a run
+of its own whose input has that place alone just outside the range (past its high end: the next day,
+or the first second after it; below its low end when that is the only room), and every platform must
+end that run at once, with `Dandori.BadInput`. Each end of a range of dates or of times has a run too,
+with that value at the end (the first day or the last; the first second, or the last with half a
+second more), which every platform must let in: a platform that takes an end for outside, or reads a
+time's fraction of a second against the end, shows it. A workflow that says the period it runs in has
+a run that starts just outside it, which every platform must end at once, with
+`Dandori.OutOfPeriod`, and runs that start in it and read `now` outside it later, which must go to
+`on failure` where they read it. For a workflow that
 implements a service, they also give an input, and values of events and answers of callbacks that
 the service sends, with every field at its zero value left out, as protobuf's JSON writes them; a
 platform that does not fill them in reads another input, or another answer, from the reference's.
@@ -197,11 +204,14 @@ protoc.
 - A date and an operation of a book are answered from the scenario on every platform, as a rule and
   a task are: a date with a day, and a time when it says one; an operation with done, done before,
   or one of the reasons the book refuses it with. The stand-ins of the dates and of the `Transport`'s
-  `book` answer from the scenario. Every runner sets the clock of what it runs to one time
-  (`2026-03-31T15:30:00Z`), which the reference interpreter reads for `now`: in its copy of the code on
-  Temporal, durable functions and pydantic-graph, as the time a state is entered on Step Functions,
-  and in the template's `now()` on Argo. At `+09:00` that time is already the next day, so a date
-  that reads it at the wrong offset shows.
+  `book` answer from the scenario. Every runner sets the clock of what it runs to the run's time
+  (`2026-03-31T15:30:00Z`, or for a workflow with a period that does not hold it, the last day of a
+  month at 15:30:00Z nearest to it in the period), which the reference interpreter reads for `now`: in
+  its copy of the code on Temporal, durable functions and pydantic-graph, as the time a state is
+  entered on Step Functions, and in the `now()` of the templates that read the clock on Argo. At
+  `+09:00` that time is already the next day, so a date that reads it at the wrong offset shows. A run
+  that leaves the period after it starts gives two times, the start's and the one every `now` after
+  it reads, and the runners give them in that order.
 - The code between each platform and a dates file (the Lambda function, `rules.ts`, `rules.py`,
   `rules.go`) runs with the code koyomi writes, on every input of the file's range, and must answer
   what koyomi says each date comes to. One input in seven goes as a time half an hour into that day at

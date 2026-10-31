@@ -1,0 +1,10 @@
+terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+weekdays.cal: ok — calendar weekdays: no table, so the data range is 0001-01-01..9999-12-31
+reminding.flow: ok
+error[ritsu E205]: reminding.flow:16:1: The day given to `received` of the koyomi date `terms.payment` can be outside the input's range
+    16 |   let due = terms.payment(received: received)
+  = `received` is a moment of `>=2026-01-01 <=2026-12-20` (UTC), which is a day of `>=2026-01-01 <=2026-12-21` in the calendar of "terms.cal" (+09:00) and can be 2026-12-21, and "terms.cal" takes 2026-01-01 to 2026-12-20 for `received`
+  = koyomi's generated code refuses a day outside the range, so this call fails only when the workflow runs.
+  = A day from a date or a time with a range, or from `now` in a workflow that says the period it runs in, is checked over the whole range; a time and `now` are read as days at the offset of the dates file's calendar.
+  = Widen the range of `received` in "terms.cal" (and the data of its calendar), or narrow the range `>=2026-01-01 <=2026-12-20` where the value comes from.
+ritsu check: 3 files (koyomi 2, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

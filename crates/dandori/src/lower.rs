@@ -167,6 +167,8 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             input_lines: BTreeMap::new(),
             output_lines: BTreeMap::new(),
             history_encrypted: prog.history_encrypted.map(|s| s.line),
+            period: None,
+            moment_texts: vec![],
             source_reached: file.to_string_lossy().to_string(),
         },
         enum_ix: BTreeMap::new(),
@@ -195,6 +197,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.books(base);
     lw.apis(base);
     lw.local_types();
+    lw.period();
     lw.io();
     lw.tasks();
     lw.plaintexts();
@@ -227,6 +230,9 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.parallel_scopes();
     lw.m.vars = lw.var_ty.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     let ok = !crate::diag::has_errors(&lw.diags);
+    if ok {
+        crate::periods::insert(&mut lw.m);
+    }
     (if ok { Some(lw.m) } else { None }, lw.diags)
 }
 
@@ -1223,21 +1229,28 @@ impl<'a> Lowerer<'a> {
         None
     }
 
-    /// The range written after a type, which only a number or a value of an ordered enum can have
-    /// (or a `?` or a list of them).
+    /// The range written after a type, which only a number, a value of an ordered enum, a date or a
+    /// time can have (or a `?` or a list of them).
     fn range(&mut self, t: &Ty, r: Option<&RangeDecl>) -> Option<Range> {
         let r = r?;
         let mut inner = t;
         while let Ty::Opt(x) | Ty::List(x) = inner {
             inner = x;
         }
-        if let Ty::Enum(en) = inner {
-            return self.enum_range(*en, r);
-        }
-        if !matches!(inner, Ty::Int | Ty::Num(_)) {
+        if !matches!(inner, Ty::Int | Ty::Num(_) | Ty::Enum(_) | Ty::Date | Ty::Timestamp) {
             let n = self.m.ty_name(t);
-            self.push(e("E003", r.span, tr!("範囲を書けるのは、数（`int` か単位の付いた数）と、順序のある列挙だけです。これは `{n}` です", "a range is for a number (`int` or a unit) or an ordered enum, and this is `{n}`")));
+            self.push(e("E003", r.span, tr!("範囲を書けるのは、数（`int` か単位の付いた数）、順序のある列挙、日付と時刻だけです。これは `{n}` です", "a range is for a number (`int` or a unit), an ordered enum, a date or a time, and this is `{n}`")));
             return None;
+        }
+        if let (Some((_, sp)), false) = (&r.offset, matches!(inner, Ty::Timestamp)) {
+            self.push(e("E003", *sp, tr!("`offset` を書けるのは、時刻の範囲と `now range` だけです。日付は時刻を持たないので、オフセットで読み替えません", "`offset` is written only after a range of times and in `now range`: a date has no time of day for an offset to read")));
+            return None;
+        }
+        match inner {
+            Ty::Enum(en) => return self.enum_range(*en, r),
+            Ty::Date => return self.day_range(r),
+            Ty::Timestamp => return self.moment_range(r).map(|(rg, _)| rg),
+            _ => {}
         }
         let lo = match &r.lo {
             Some(b) => Some(self.bound(inner, b)?),
@@ -1280,6 +1293,7 @@ impl<'a> Lowerer<'a> {
                 },
                 syntax::Bound::Int(k) => (k.to_string(), r.span),
                 syntax::Bound::Quantity { raw, span, .. } => (raw.clone(), *span),
+                syntax::Bound::Date { text, span } => (text.clone(), *span),
             };
             self.push(e("E003", sp, tr!("範囲の端 `{word}` は `{n}` の値ではありません", "the bound `{word}` is not a value of `{n}`")).note(tr!("`{n}` の値は、順に {order} です", "the values of `{n}` are, in order, {order}")));
             None
@@ -1309,8 +1323,8 @@ impl<'a> Lowerer<'a> {
         let (value, unit, raw, sp) = match b {
             syntax::Bound::Int(n) => return Some(*n),
             syntax::Bound::Quantity { value, unit, raw, span } => (*value, unit.as_str(), raw.as_str(), *span),
-            // a value of an enum, where a number goes
-            syntax::Bound::Value { name, span } => {
+            // a value of an enum, or a day, where a number goes
+            syntax::Bound::Value { name, span } | syntax::Bound::Date { text: name, span } => {
                 let tn = self.m.ty_name(ty);
                 self.push(e("E003", *span, tr!("範囲の端 `{name}` は `{tn}` の値ではありません", "the bound `{name}` is not a value of `{tn}`")));
                 return None;
@@ -1343,6 +1357,83 @@ impl<'a> Lowerer<'a> {
                 );
                 None
             }
+        }
+    }
+
+    /// `range >=2026-01-01 <=2027-12-31` on a date: its days, counted from 1970-01-01 as koyomi,
+    /// rulec and kaname count them. E003 for an end that is no day, a day the calendar does not
+    /// have, and a range no day is in.
+    fn day_range(&mut self, r: &RangeDecl) -> Option<Range> {
+        let lo = match &r.lo {
+            Some(b) => Some(self.day(b, r.span)?),
+            None => None,
+        };
+        let hi = match &r.hi {
+            Some(b) => Some(self.day(b, r.span)?),
+            None => None,
+        };
+        let rg = Range { lo, hi };
+        if let (Some(l), Some(h)) = (lo, hi) {
+            if l > h {
+                let text = show_ends(rg.lo.map(day_text), rg.hi.map(day_text));
+                self.push(e("E003", r.span, tr!("`{text}` に入る日はありません", "no day is in `{text}`")));
+                return None;
+            }
+        }
+        Some(rg)
+    }
+
+    /// One end of a range of days or of times: the day, counted from 1970-01-01.
+    fn day(&mut self, b: &syntax::Bound, at: Span) -> Option<i64> {
+        let (word, sp) = match b {
+            syntax::Bound::Date { text, span } => match ritsu_ports::day_of(text) {
+                Some(n) => return Some(n),
+                None => {
+                    self.push(e("E003", *span, tr!("`{text}` という日はありません", "there is no day `{text}`")));
+                    return None;
+                }
+            },
+            syntax::Bound::Int(n) => (n.to_string(), at),
+            syntax::Bound::Quantity { raw, span, .. } => (raw.clone(), *span),
+            syntax::Bound::Value { name, span } => (name.clone(), *span),
+        };
+        self.push(e("E003", sp, tr!("日付と時刻の範囲の端は、日付で書いてください（`>=2026-01-01`）。`{word}` は日付ではありません", "a bound of a range of dates or of times is a day (`>=2026-01-01`), and `{word}` is none")));
+        None
+    }
+
+    /// `range >=2026-01-01 <=2027-12-31` on a time, or `now range …`: the moments from the start of
+    /// the first day to the end of the last, in UTC or in the offset written after the ends, as
+    /// seconds since 1970-01-01T00:00:00Z; and the range as the `.flow` writes it. E003 as for a
+    /// range of days, and for an offset koyomi would not read (`±HH:MM`, at most 23:59).
+    fn moment_range(&mut self, r: &RangeDecl) -> Option<(Range, String)> {
+        let days = self.day_range(r)?;
+        let offset = match &r.offset {
+            Some((raw, sp)) => match offset_minutes(raw) {
+                Some(o) => o,
+                None => {
+                    self.push(e("E003", *sp, tr!("`{raw}` というオフセットはありません。`+09:00` のように `±HH:MM` で書いてください（23:59 まで）", "there is no offset `{raw}`: write it `±HH:MM`, as `+09:00`, up to 23:59")));
+                    return None;
+                }
+            },
+            None => 0,
+        };
+        let shift = i64::from(offset) * 60;
+        let rg = Range { lo: days.lo.map(|d| d * 86_400 - shift), hi: days.hi.map(|d| (d + 1) * 86_400 - shift - 1) };
+        let mut text = show_ends(days.lo.map(day_text), days.hi.map(day_text));
+        if let Some((raw, _)) = &r.offset {
+            text = format!("{text} offset {raw}");
+            if !self.m.moment_texts.iter().any(|(x, _)| *x == rg) {
+                self.m.moment_texts.push((rg, text.clone()));
+            }
+        }
+        Some((rg, text))
+    }
+
+    /// `now range …` under `workflow`: the period the workflow runs in (DESIGN 20).
+    fn period(&mut self) {
+        let Some(r) = self.prog.now_range.clone() else { return };
+        if let Some((range, text)) = self.moment_range(&r) {
+            self.m.period = Some(Period { range, text, line: r.span.line });
         }
     }
 
@@ -3985,4 +4076,18 @@ fn has_json(m: &Model, t: &Ty, within: &mut Vec<RecordId>) -> bool {
         }
         _ => false,
     }
+}
+
+/// An offset as koyomi reads one, `±HH:MM` with HH at most 23 and MM at most 59: minutes east of
+/// UTC.
+fn offset_minutes(raw: &str) -> Option<i32> {
+    let b = raw.as_bytes();
+    if b.len() != 6 || !(b[0] == b'+' || b[0] == b'-') || b[3] != b':' || ![1, 2, 4, 5].iter().all(|&k| b[k].is_ascii_digit()) {
+        return None;
+    }
+    let (h, m): (i32, i32) = (raw[1..3].parse().ok()?, raw[4..6].parse().ok()?);
+    if h > 23 || m > 59 {
+        return None;
+    }
+    Some(if b[0] == b'-' { -(h * 60 + m) } else { h * 60 + m })
 }

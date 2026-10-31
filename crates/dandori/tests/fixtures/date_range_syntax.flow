@@ -1,0 +1,19 @@
+workflow date_range_syntax v1
+  now range >=2026-01-01 <=2027-12-31 offset +25:00
+description "Ranges of dates and times, written wrongly: each end is a day the calendar has, some day is in the range, only a time and the period take an offset, and the offset is one koyomi reads"
+
+record Mistakes
+  held        : date       range >=2026-01-01 <=2026-12-31
+  held_time   : timestamp  range >=2026-01-01 offset +09:00
+  no_day      : date       range >=2026-02-30
+  none_in     : date       range >=2026-12-31 <=2026-01-01
+  none_at     : timestamp  range >=2026-12-31 <=2026-01-01 offset -05:00
+  a_number    : date       range >=1 <=31
+  a_name      : timestamp  range >=today
+  dated_int   : int        range >=2026-01-01
+  date_offset : date       range >=2026-01-01 offset +09:00
+  far_offset  : timestamp  range <=2026-12-31 offset +09:60
+  a_text      : string     range >=2026-01-01
+
+flow
+  pass

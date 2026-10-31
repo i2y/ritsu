@@ -6,7 +6,8 @@
 #
 # runs.json: { "own": [ { "name", "method", "callback" } ], "rules": [ { "fn", "name" } ],
 #              "http": [...], "aws": [...],
-#              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
+#              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ],
+#                          "now": the moment `now` reads, or [the run's start, every later read] } ] }
 #
 # The tasks that say `lambda`, `http` or `aws` run the generated code, with a Transport that
 # writes down what it would send (../transport.py). The tasks the user writes and the rules
@@ -16,6 +17,11 @@
 #
 # The rounds of `for … in parallel` run one at a time here, so that the calls come in the
 # order the reference interpreter makes them.
+#
+# `now` reads the run's moment, as in the reference: the runs go one after another, and the copy
+# of runtime.py reads the moments of the one that is going. The check of the period at the start
+# reads the moment the run starts at (its read is dd.now_at_start() in the copy of graph.py), and
+# every other read the later one.
 #
 # With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the clock is the real one, and a
 # call that the scenario times out is held for 15 seconds, past the 10 of the generated code's
@@ -46,6 +52,41 @@ from transport import make_transport  # noqa: E402
 LIMITS = os.environ.get("DANDORI_LIMITS") == "1"
 LATE = 15.0
 HAND_ON_LATE = float(60 + 15)
+# The moment `now` reads in a scenario that names none (dandori's render::SCENARIO_NOW).
+SCENARIO_NOW = "2026-03-31T15:30:00Z"
+
+
+def moments_of(r: dict[str, Any]) -> list[str]:
+    """The moments a run reads `now` at: the one it starts at, and the one of every later read."""
+    n = r.get("now")
+    return n if isinstance(n, list) else [n or SCENARIO_NOW, n or SCENARIO_NOW]
+
+
+def at_start(text: str, read: str, by: str) -> str:
+    """The text with the clock's read for the check of the period at the start (the nearest `read` before a line that says "the run starts at ") made `by`."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if '"the run starts at "' not in line:
+            continue
+        j = i
+        while j >= 0 and read not in lines[j]:
+            j -= 1
+        assert j >= 0, f"graph.py has no {read} before the check of the period at the start"
+        lines[j] = lines[j].replace(read, by, 1)
+    return "\n".join(lines)
+
+
+# runtime.py's `now`, reading the moments of the run that is going (see the top)
+NOW_OF_RUN = f"""
+
+# The moments `now` reads in the run that is going: tools/pydantic-graph/run.py sets them.
+DD_TEST_NOW: list[str] = [{json.dumps(SCENARIO_NOW)}, {json.dumps(SCENARIO_NOW)}]
+
+
+def now_at_start(clock: Any) -> str:
+    \"\"\"`now` for the check of the period at the start: the moment the run starts at.\"\"\"
+    return DD_TEST_NOW[0]
+"""
 
 
 class SkippingClock:
@@ -164,6 +205,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
         callbacks = rt.Callbacks()
         current.clear()
         current.update({"answers": r["answers"], "next": 0, "steps": [], "callbacks": callbacks, "calls": [], "began": time.monotonic()})
+        rt.DD_TEST_NOW = moments_of(r)
         deps: dict[str, Any] = {"tasks": tasks.make_tasks(own, make_transport(spec, Run())), "clock": rt.Clock() if LIMITS else SkippingClock(), "callbacks": callbacks, "run_id": "test"}
         if spec.get("rules"):
             deps["rules"] = rules
@@ -193,12 +235,16 @@ def main() -> None:
     path = os.path.join(copy, "graph.py")
     with open(path, encoding="utf-8") as f:
         text = re.sub(r"dd\.at_a_time\(\d+\)", "dd.at_a_time(1)", f.read())
+    text = at_start(text, "dd.now(deps.clock)", "dd.now_at_start(deps.clock)")
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
-    # the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
+    # the clock `now` reads is the run's moment, as in the reference (see the top)
     path = os.path.join(copy, "runtime.py")
     with open(path, encoding="utf-8") as f:
-        text = f.read().replace('return clock.now().astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")', 'return "2026-03-31T15:30:00Z"')
+        text = f.read()
+    clock = 'return clock.now().astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")'
+    if clock in text:
+        text = text.replace(clock, "return DD_TEST_NOW[1]") + NOW_OF_RUN
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     sys.path.insert(0, work)

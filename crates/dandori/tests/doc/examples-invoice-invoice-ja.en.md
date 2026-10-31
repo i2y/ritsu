@@ -2,7 +2,7 @@
 
 注文の品を支払期日まで押さえ、支払われたら出荷し、支払われなければ戻す
 
-`examples/invoice/invoice.ja.flow`, drawn by `dandori doc`. Inputs: `受注: 注文`. Outputs: `結果: 終わり方`, `期日: date?`.
+`examples/invoice/invoice.ja.flow`, drawn by `dandori doc`. Inputs: `受注: 注文`. Outputs: `結果: 終わり方`, `期日: date?`. It runs in the period `now range >=2026-01-01 <=2027-12-28 offset +09:00`.
 
 ## flow
 
@@ -41,7 +41,7 @@ A rectangle is a task, one with a line down each side a rule or a date of a date
 
 ## on failure
 
-Runs when a call fails and nothing at the call handles the error: from the calls on lines 56, 58, 60, 63 and 67. When it runs to its end, the workflow fails with that error.
+Runs when a call fails and nothing at the call handles the error: from the calls on lines 58, 60, 62, 65 and 69. It runs too when `now` on line 60 is outside the period the workflow runs in, `>=2026-01-01 <=2027-12-28 offset +09:00`. When it runs to its end, the workflow fails with that error.
 
 ```mermaid
 flowchart TD
@@ -66,12 +66,12 @@ flowchart TD
 
 | Line | Call | Calls | Retries | Timeout | When it fails | Case after |
 |---:|---|---|---|---|---|---|
-| 56 | `押さえ ← 引き当てる(…)` | `book 在庫.引当.hold`, `starts 在庫.引当` | — | — | `在庫切れ` → line 57<br>`timeout`, `failure` → `on failure` | `押さえ`: `held` |
-| 58 | `期限 = 支払条件.支払日(…)` | the date `支払日` of `支払条件.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
-| 60 | `入金 = 支払を確かめる(…)` | `GET https://payments.example.com/orders/{注文}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
-| 63 | `押さえ ← 出荷する(…)` | `book 在庫.引当.post`, `sends post` | — | — | `expired` → line 64<br>`timeout`, `failure` → `on failure` | `押さえ`: `posted` |
-| 67 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 68<br>`already_posted`, `timeout`, `failure` → `on failure` | `押さえ`: `voided` |
-| 75 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 76<br>`already_posted` → line 77<br>`timeout`, `failure` → line 78 | `押さえ`: `voided` |
+| 58 | `押さえ ← 引き当てる(…)` | `book 在庫.引当.hold`, `starts 在庫.引当` | — | — | `在庫切れ` → line 59<br>`timeout`, `failure` → `on failure` | `押さえ`: `held` |
+| 60 | `期限 = 支払条件.支払日(…)` | the date `支払日` of `支払条件.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
+| 62 | `入金 = 支払を確かめる(…)` | `GET https://payments.example.com/orders/{注文}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
+| 65 | `押さえ ← 出荷する(…)` | `book 在庫.引当.post`, `sends post` | — | — | `expired` → line 66<br>`timeout`, `failure` → `on failure` | `押さえ`: `posted` |
+| 69 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 70<br>`already_posted`, `timeout`, `failure` → `on failure` | `押さえ`: `voided` |
+| 77 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 78<br>`already_posted` → line 79<br>`timeout`, `failure` → line 80 | `押さえ`: `voided` |
 
 ## Ends
 
@@ -79,10 +79,10 @@ Every way the workflow can end, and what each case can be then, the events on th
 
 | Line | End | `押さえ` |
 |---:|---|---|
-| 57 | `succeed 結果 = 在庫切れ, 期日 = none` | not started |
-| 64 | `succeed 結果 = 未払い, 期日 = 期限.day` | `expired` |
-| 65 | `succeed 結果 = 出荷済, 期日 = 期限.day` | `posted` |
-| 69 | `succeed 結果 = 未払い, 期日 = 期限.day` | `voided`, `expired` |
-| 78 | `fail 戻せない` "注文のために押さえた品を戻せませんでした" `leaving 押さえ` | handed over as it is: `held`, `posted`, `voided`, `expired` |
-| 78 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
+| 59 | `succeed 結果 = 在庫切れ, 期日 = none` | not started |
+| 66 | `succeed 結果 = 未払い, 期日 = 期限.day` | `expired` |
+| 67 | `succeed 結果 = 出荷済, 期日 = 期限.day` | `posted` |
+| 71 | `succeed 結果 = 未払い, 期日 = 期限.day` | `voided`, `expired` |
+| 80 | `fail 戻せない` "注文のために押さえた品を戻せませんでした" `leaving 押さえ` | handed over as it is: `held`, `posted`, `voided`, `expired` |
+| 80 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
 

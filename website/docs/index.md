@@ -160,6 +160,8 @@ them:
 - a rule's preconditions, at every call a workflow makes;
 - the days a koyomi date can come to, as the range of a rule's input (`range from koyomi`), and
   against the range the rule declares;
+- the day a workflow gives a koyomi date, against the range of its input: a day of another date,
+  a date or a time the workflow holds to a range, or `now` in the period the workflow runs in;
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
 - every value a kaname module passes to a rule, a date or a transfer, against the range that one

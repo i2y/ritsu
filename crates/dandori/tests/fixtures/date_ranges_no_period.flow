@@ -1,0 +1,12 @@
+workflow date_ranges_no_period v1
+description "now in a workflow that says no period it runs in can be any moment: given to a place that holds a time to a range, nothing says it is in it"
+
+inputs
+  id : string
+
+task remind(id: string, at: timestamp  range >=2026-01-01 <=2027-12-31)
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:remind"
+  idempotent
+
+flow
+  remind(id: id, at: now)

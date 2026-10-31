@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/period/E001_twice.flow:3:3: `now range` can be written only once
+     3 |   now range >=2027-01-01 <=2027-12-31

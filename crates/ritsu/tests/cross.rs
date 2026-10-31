@@ -456,6 +456,78 @@ fn x6_the_day_given_to_a_koyomi_date() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// X6 over the ranges a `.flow` writes (dandori's DESIGN 20): a date held to a range is given to a
+/// koyomi date with every day of the range, a time held to one and `now` in the period the workflow
+/// runs in with the days their moments are at the calendar's offset. A range inside the input's is
+/// held; one past it is E205, and so is one with an open end, past which any day can come; a period
+/// written in UTC goes a day past the input's range in a calendar nine hours east (E205), and the
+/// same period written in its offset is held; `now` with no period, and `now` in `on failure`, which
+/// the period does not hold, say nothing of what day they are (W205).
+#[test]
+fn x6_a_day_from_a_range_or_the_period() {
+    let mut failures = Vec::new();
+    let calendar = "calendar weekdays v1\ndescription \"Open Monday to Friday, in Tokyo\"\noffset +09:00\n\nclosed weekly sat, sun\n".to_string();
+    let terms = "dates terms v1\ndescription \"Closes on the 20th and pays on the 10th of the next month, or the business day before\"\nuse calendar \"weekdays.cal\"\n\ninputs\n  received : date  range >=2026-01-01 <=2026-12-20\n\ndate closing = received\n  close day 20\n\ndate payment = closing\n  day 10 of month +1\n  roll preceding\n".to_string();
+    let flow = |period: &str, input: &str, given: &str, on_failure: &str| {
+        format!(
+            "workflow reminding v1\n{period}description \"Reminds a customer of the day the payment of an order is due\"\n\nuse dates terms from \"terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:terms\"\n\ninputs\n  order    : string\n  received : {input}\n\ntask remind(order: string, on: date)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:remind\"\n  key\n\nflow\n  let due = terms.payment(received: {given})\n  remind(order: order, on: due.day)\n{on_failure}"
+        )
+    };
+    let files = |flow: String| vec![("weekdays.cal", calendar.clone()), ("terms.cal", terms.clone()), ("reminding.flow", flow)];
+    run("x6-range-held", &files(flow("", "date  range >=2026-01-01 <=2026-12-20", "received", "")), 0, (1, 0, 0), &mut failures);
+    run("x6-range-E205", &files(flow("", "date  range >=2026-01-01 <=2026-12-31", "received", "")), 1, (0, 1, 0), &mut failures);
+    run("x6-range-open-E205", &files(flow("", "date  range >=2026-01-01", "received", "")), 1, (0, 1, 0), &mut failures);
+    // a time in its offset, and one in UTC, which runs nine hours into a day past the range at the calendar's offset
+    run("x6-time-held", &files(flow("", "timestamp  range >=2026-01-01 <=2026-12-20 offset +09:00", "received", "")), 0, (1, 0, 0), &mut failures);
+    run("x6-time-E205", &files(flow("", "timestamp  range >=2026-01-01 <=2026-12-20", "received", "")), 1, (0, 1, 0), &mut failures);
+    run("x6-period-held", &files(flow("  now range >=2026-01-01 <=2026-12-20 offset +09:00\n", "date", "now", "")), 0, (1, 0, 0), &mut failures);
+    run("x6-period-E205", &files(flow("  now range >=2026-01-01 <=2026-12-20\n", "date", "now", "")), 1, (0, 1, 0), &mut failures);
+    run("x6-now-W205", &files(flow("", "date", "now", "")), 0, (0, 0, 1), &mut failures);
+    let settle = "\non failure\n  let late = terms.payment(received: now)\n  remind(order: order, on: late.day)\n";
+    run("x6-on-failure-W205", &files(flow("  now range >=2026-01-01 <=2026-12-20 offset +09:00\n", "date", "now", settle)), 0, (1, 0, 1), &mut failures);
+    // the records of the borders say where each day comes from: a date's range, a time's, the
+    // period, and `now` in `on failure`, which says nothing of what day it is
+    let all = flow("  now range >=2026-01-01 <=2026-12-20 offset +09:00\n", "date  range >=2026-01-01 <=2026-12-20\n  at       : timestamp  range >=2026-01-01 <=2026-12-20", "received", settle).replace(
+        "  remind(order: order, on: due.day)\n",
+        "  remind(order: order, on: due.day)\n  let late = terms.payment(received: at)\n  remind(order: order, on: late.day)\n  let today = terms.payment(received: now)\n  remind(order: order, on: today.day)\n",
+    );
+    let t = lay_out(&files(all), "x6-records");
+    let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    assert_eq!(code, 1, "{out}{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    records_agree("x6-records", &v);
+    let b = &v["borders"];
+    assert_eq!((b["held"].as_u64(), b["failed"].as_u64(), b["undecided"].as_u64()), (Some(2), Some(1), Some(1)), "{b}");
+    golden("records-x6.json", &(serde_json::to_string_pretty(b).unwrap() + "\n"), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// X3 (a) and X2 over a date the `.flow` holds to a range (dandori's DESIGN 20): given to a rule's
+/// date input, every day of the range is held to the range the rule declares, the rule's in-range
+/// day held and one before it E202; given to an input whose range is a koyomi date's days (`range
+/// from koyomi`), every day of the range is held to those days, a range of one payment day held and
+/// one with the days between two of them E201.
+#[test]
+fn x3a_a_date_held_to_a_range_given_to_a_rule() {
+    let mut failures = Vec::new();
+    let flow = |rule: &str, range: &str| {
+        format!(
+            "workflow billing v1\ndescription \"Bills an order in the batch the rule picks for the day it is paid on\"\n\nuse rule {rule} from \"{rule}.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:{rule}\"\n\ninputs\n  order : string\n  paid  : date  range {range}\n\ntask bill(order: string, run: {rule}.run)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:bill\"\n  key\n\nflow\n  let pick = {rule}(pay_day: paid)\n  bill(order: order, run: pick.batch)\n"
+        )
+    };
+    let batch = repro("E202").into_iter().find(|(n, _)| *n == "batch.rule").unwrap().1.to_string();
+    let rule = |range: &str| vec![("batch.rule", batch.clone()), ("billing.flow", flow("batch", range))];
+    run("x3a-range-held", &rule(">=2026-03-01 <=2026-12-31"), 0, (1, 0, 0), &mut failures);
+    run("x3a-range-E202", &rule(">=2026-02-01 <=2026-12-31"), 1, (0, 1, 0), &mut failures);
+    let days = here().join("../rulec/tests/days");
+    let cal = std::fs::read_to_string(days.join("payment_terms.cal")).unwrap();
+    let settlement = std::fs::read_to_string(days.join("settlement.rule")).unwrap();
+    let koyomi = |range: &str| vec![("payment_terms.cal", cal.clone()), ("settlement.rule", settlement.clone()), ("billing.flow", flow("settlement", range))];
+    run("x3a-range-days-held", &koyomi(">=2026-02-10 <=2026-02-10"), 0, (2, 0, 0), &mut failures);
+    run("x3a-range-days-E201", &koyomi(">=2026-02-10 <=2026-03-10"), 1, (1, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 #[test]
 fn x5_a_hold_against_its_expiry() {
     let mut failures = Vec::new();
