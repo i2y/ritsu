@@ -23,16 +23,20 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("読めない: {rel}: {e}"))
 }
 
-const BUNDLED: &[&str] =
-    &["SKILL.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "examples.md", "compatibility.md"];
+const BUNDLED: &[&str] = &[
+    "SKILL.md",
+    "more-of-the-loop.md",
+    "reference.md",
+    "formats.md",
+    "generated-code.md",
+    "backends.md",
+    "examples.md",
+    "compatibility.md",
+];
 
-/// The same assembly `skills/sync.sh` does, in one place so the two cannot disagree.
-fn built_skill_md() -> String {
-    let agents = read("AGENTS.md");
-    let cut = agents.find("\n## 7. Where to look\n").expect("AGENTS.md に 7 節が無い");
-    let body = &agents[..cut + 1];
-    let body = body
-        .replace("(docs/reference.md)", "(reference.md)")
+/// The repository's links, rewritten to the bundled copies.
+fn links(s: &str) -> String {
+    s.replace("(docs/reference.md)", "(reference.md)")
         .replace("(docs/formats.md", "(formats.md")
         .replace("(docs/generated-code.md)", "(generated-code.md)")
         .replace("(docs/backends.md)", "(backends.md)")
@@ -40,8 +44,38 @@ fn built_skill_md() -> String {
         .replace("[docs/reference.md]", "[reference.md]")
         .replace("[docs/formats.md]", "[formats.md]")
         .replace("[docs/generated-code.md]", "[generated-code.md]")
-        .replace("[docs/backends.md]", "[backends.md]");
-    format!("{}{}{}", read("skills/header.md"), body, read("skills/footer.md"))
+        .replace("[docs/backends.md]", "[backends.md]")
+}
+
+/// AGENTS.md above its own "where to look" table, in the three parts `skills/sync.sh` cuts it
+/// into: above `### In CI`; from there to the rule above `## 2. Language` (the steps of the loop
+/// for one occasion each); and the rest.
+fn parts() -> [String; 3] {
+    let agents = read("AGENTS.md");
+    let cut = agents.find("\n## 7. Where to look\n").expect("AGENTS.md に 7 節が無い");
+    let body = &agents[..cut + 1];
+    let ci = body.find("\n### In CI\n").expect("AGENTS.md に `### In CI` が無い") + 1;
+    let rule = ci + body[ci..].find("\n---\n").expect("AGENTS.md の `### In CI` のあとに `---` が無い") + 1;
+    [body[..ci].to_string(), body[ci..rule].to_string(), body[rule..].to_string()]
+}
+
+/// The same assembly `skills/sync.sh` does, in one place so the two cannot disagree.
+fn built_skill_md() -> String {
+    let [above, _, rest] = parts();
+    let body = format!("{above}{}{rest}", read("skills/more-pointer.md"));
+    let body = format!("{}\n\n", body.trim_end_matches('\n'));
+    format!("{}{}{}", read("skills/header.md"), links(&body), read("skills/footer.md"))
+}
+
+/// more-of-the-loop.md: the part SKILL.md leaves out, one heading level up.
+fn built_more_md() -> String {
+    let [_, occasions, _] = parts();
+    let body = occasions
+        .lines()
+        .map(|l| l.strip_prefix("### ").map_or_else(|| l.to_string(), |r| format!("## {r}")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("{}{}\n", read("skills/more-header.md"), links(body.trim_end_matches('\n')))
 }
 
 #[test]
@@ -50,6 +84,11 @@ fn スキルはいまの文書から組み立てたものと同じ() {
         read("../../skills/rulec/SKILL.md"),
         built_skill_md(),
         "../../skills/rulec/SKILL.md が古いか手で編集されています。`skills/sync.sh` で作り直してください"
+    );
+    assert_eq!(
+        read("../../skills/rulec/more-of-the-loop.md"),
+        built_more_md(),
+        "../../skills/rulec/more-of-the-loop.md が古いか手で編集されています。`skills/sync.sh` で作り直してください"
     );
     for (bundled, source) in [
         ("formats.md", "docs/formats.md"),

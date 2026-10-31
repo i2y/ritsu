@@ -39,6 +39,7 @@ pub const SKILLS: &[Skill] = &[
             ("examples.md", include_str!("../../../skills/rulec/examples.md")),
             ("formats.md", include_str!("../../../skills/rulec/formats.md")),
             ("generated-code.md", include_str!("../../../skills/rulec/generated-code.md")),
+            ("more-of-the-loop.md", include_str!("../../../skills/rulec/more-of-the-loop.md")),
             ("reference.md", include_str!("../../../skills/rulec/reference.md")),
         ],
     },

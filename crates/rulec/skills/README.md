@@ -24,6 +24,7 @@ To let it run rulec without a prompt each time, add this to the project's settin
 | | |
 |---|---|
 | `SKILL.md` | when the skill applies, the loop, what not to decide alone, how to turn a diagnostic into a question for a person |
+| `more-of-the-loop.md` | the steps of the loop for one occasion each: CI, `rulec verify`, `rulec diff`, `rulec doc` |
 | `reference.md` | the complete grammar |
 | `examples.md` | every rule in the corpus in full, smallest first, each with what it shows |
 | `formats.md` | every machine-readable format |
