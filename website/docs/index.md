@@ -170,6 +170,82 @@ them:
 - yuen pins each table, date, claim, task and function one by one, and sakai checks each
   reference that crosses contexts, with its line.
 
+With `--format json`, `ritsu check` says the same to a program. Each file in `files` has `check`,
+what its own language's check writes about it with `--format json`, without the path and the
+diagnostics, which ritsu gives outside it: for a kaname module, its `summary` and the `effect` of
+each function; for a book, its `report`; for a spec, its `claims`; for a date file, a gate or a
+map, `ok` and `summary`, and for the requirements of a module, the same on each of its `.req`
+files. A rule's is `null`, as rulec writes no object for a file; a flow's is `{}`, as dandori
+writes nothing more of it than its path and its diagnostics. `borders` keeps the three counts, and
+lists each border under `records`:
+
+```console
+$ ritsu check . --format json
+{
+…
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "refund_check.rule",
+      "ok": true,
+      "check": null
+    },
+    {
+      "tool": "dandori",
+      "file": "refund.flow",
+      "ok": false,
+      "check": {}
+    }
+  ],
+…
+  "borders": {
+    "held": 0,
+    "failed": 1,
+    "undecided": 0,
+    "records": [
+      {
+        "check": "precondition",
+        "about": "asked <= paid",
+        "at": {
+          "tool": "dandori",
+          "file": "refund.flow",
+          "line": 21
+        },
+        "to": {
+          "tool": "rulec",
+          "file": "refund_check.rule",
+          "line": null
+        },
+        "result": "failed",
+        "code": "E201"
+      }
+    ]
+  }
+}
+```
+
+A record says which check it is, what it is about, and its two sides: `at`, where ritsu gives the
+diagnostic, and `to`, the other side, each with its `tool`, `file` and `line`. Then come its
+`result` and the `code` of the diagnostic ritsu gave, `null` when it holds. A side's `line` is `null`
+where its language does not say one, as for the rule that declares a precondition, and `to` is
+`null` where there is no other side, as for an operation no gate guards. In a module, each side
+says its `dependency`, as a file does. There are as many records as the three counts add up to,
+in the order of this table, then by the file and the line of `at`, so the same files give the same
+JSON. A check keeps its name, and a new one is added at the end.
+
+| `check` | What it checks | Fails / undecided |
+|---|---|---|
+| `precondition` | a precondition of a rule, at a call from a workflow or a kaname module | E201 / W201 |
+| `rule_date_input` | the day a call gives a rule's date input, against the range the rule declares | E202 / W202 |
+| `range_from_koyomi` | a rule's input whose range is the days of a koyomi date (`range from koyomi`), which rulec's check holds the rule to | rulec's own |
+| `transfer_amount` | the amount a call gives a chobo transfer, against what chobo takes | E203 / W203 |
+| `transfer_refusals` | the refusals a transfer's `do` or `hold` can come to, against those the task handles | E204 / W204 |
+| `hold_expiry` | a hold's expiry, against the time to the call that settles or voids it | E206 / W206 |
+| `koyomi_date_input` | the day a call gives a koyomi date's input, against its range | E205 / W205 |
+| `secret_destination` | where a task sends a value its contract marks secret, by the map | E905 / W905 |
+| `operation_guard` | an operation a context opens, held to the action of a gate that guards it | E907 / W907 |
+| `workflow_permission` | an operation a workflow calls, against what its gate allows the workflow | E908 / W909 |
+
 ## Pages for people
 
 The same files give pages, in English or Japanese, for the people who need to understand what the

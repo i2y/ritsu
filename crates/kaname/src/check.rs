@@ -470,7 +470,7 @@ pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, String>, lang: Lang)
             } else {
                 Verdict::Passes
             };
-            Unit { label: f.to_string(), parts, verdict }
+            Unit { label: f.to_string(), parts, verdict, json: to_json(o, root, lang) }
         }
         Err(e) => {
             let msg = tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");

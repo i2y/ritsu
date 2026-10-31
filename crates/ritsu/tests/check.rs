@@ -93,6 +93,48 @@ fn holds_to_the_languages(dir: &Path, path: &str, lang: &str) -> String {
     out
 }
 
+/// Hold each file's `check` in the JSON of `ritsu check <path> --root <path>` to what its language
+/// writes of it: the object of the language's own `check --format json` (geas's `--json`) without
+/// `file`, `root` and `diagnostics` — on each `.req`, the one of yuen's requirements; on a map,
+/// sakai's object of the map — and null for a rule, a `.proto` and a context that is no map. How
+/// many files have an object.
+fn checks_hold_to_the_languages(dir: &Path, path: &str) -> usize {
+    let (code, out, err) = ritsu_in(dir, &["check", path, "--root", path, "--format", "json"]);
+    assert!(code < 2, "{out}{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}{err}"));
+    // every object the command writes, one after another
+    let written = |args: &[&str]| -> Vec<serde_json::Value> {
+        let (_, out, err) = ritsu_in(dir, args);
+        serde_json::Deserializer::from_str(&out).into_iter::<serde_json::Value>().map(|x| x.unwrap_or_else(|e| panic!("{args:?}: {e}: {out}{err}"))).collect()
+    };
+    let without = |mut o: serde_json::Value| {
+        if let Some(m) = o.as_object_mut() {
+            for k in ["file", "root", "diagnostics"] {
+                m.remove(k);
+            }
+        }
+        o
+    };
+    let mut objects = 0;
+    for f in v["files"].as_array().unwrap() {
+        let (tool, rel) = (f["tool"].as_str().unwrap(), f["file"].as_str().unwrap());
+        let shown = if path == "." { rel.to_string() } else { format!("{path}/{rel}") };
+        let want = match tool {
+            "rulec" | "proto" => serde_json::Value::Null,
+            "chobo" => without(written(&["chobo", "check", &shown, "--format", "json"])[0]["files"][0].clone()),
+            "geas" => without(written(&["geas", "check", &shown, "--json"])[0].clone()),
+            "kaname" | "sekisho" => without(written(&[tool, "check", &shown, "--format", "json", "--root", path])[0].clone()),
+            "yuen" => without(written(&["yuen", "check", path, "--root", path, "--format", "json"])[0].clone()),
+            "sakai" => written(&["sakai", "check", path, "--root", path, "--format", "json"]).into_iter().find(|m| m["file"] == rel).map_or(serde_json::Value::Null, without),
+            t => without(written(&[t, "check", &shown, "--format", "json"])[0].clone()),
+        };
+        assert_eq!(f["check"], want, "the check of {rel} ({tool}) in the JSON of ritsu check {path}");
+        assert_eq!(f.as_object().unwrap().keys().last().map(String::as_str), Some("check"), "{f}");
+        objects += usize::from(want.is_object());
+    }
+    objects
+}
+
 fn golden(path: &str, got: &str, failures: &mut Vec<String>) {
     if let Err(e) = ritsu_testkit::golden::check(&here().join(path), got) {
         failures.push(e);
@@ -176,6 +218,40 @@ fn each_file_as_its_language_says_it() {
         ritsu_testkit::tmp::copy_dir(&here().join("../geas/examples/calc"), g.path());
         let out = holds_to_the_languages(g.path(), ".", "en");
         assert!(out.contains("4 claims · 4 ok · 0 failed") && out.ends_with("(geas 1): all pass; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    }
+}
+
+/// The JSON of `ritsu check` holds, for each file, what its language's check writes of it (DESIGN
+/// 8.3): in the test project (a book, flows, date files and a map) and its copy with errors, a
+/// project of yuen's (two `.req` with one object), two of ritsu's with gates and modules of kaname
+/// (one with files that fail), sekisho's example with its dates, kaname's payout with its books,
+/// and the spec of geas's calc, whose claims run a program (Python).
+#[test]
+fn each_files_check_in_the_json_is_what_its_language_writes() {
+    assert_eq!(checks_hold_to_the_languages(&here(), SHOP), 7);
+    assert_eq!(checks_hold_to_the_languages(&here(), SHOP_EN), 7);
+    let t = TempDir::new("returned-json");
+    ritsu_testkit::tmp::copy_dir(&here().join(SHOP_EN), t.path());
+    let order = t.path().join("proto/shop/ordering/v1/order.proto");
+    let s = std::fs::read_to_string(&order).unwrap();
+    std::fs::write(&order, s.replacen("  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n", 1)).unwrap();
+    assert_eq!(checks_hold_to_the_languages(t.path(), "."), 7);
+    assert_eq!(checks_hold_to_the_languages(&here().join("../yuen"), "tests/fixtures/rulec"), 2);
+    assert_eq!(checks_hold_to_the_languages(&here(), "tests/projects/cold_chain"), 6);
+    assert_eq!(checks_hold_to_the_languages(&here(), "tests/projects/regions"), 12);
+    assert_eq!(checks_hold_to_the_languages(&here().join("../sekisho"), "examples/refunds"), 6);
+    let p = TempDir::new("payout-json");
+    ritsu_testkit::tmp::copy_dir(&here().join("../kaname/examples/payout"), p.path());
+    assert_eq!(checks_hold_to_the_languages(p.path(), "."), 4);
+    let (_, out, _) = ritsu_in(p.path(), &["check", ".", "--root", ".", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let kaname = v["files"].as_array().unwrap().iter().find(|f| f["file"] == "payout.kn").unwrap();
+    assert_eq!(kaname["check"]["summary"], "1 function, total", "{kaname}");
+    assert_eq!(kaname["check"]["functions"][0]["effect"]["fails"], serde_json::json!([]), "{kaname}");
+    if ritsu_testkit::ready(ritsu_testkit::Need::Python, || ritsu_testkit::tools::on_path("python3").is_some(), "python3 is not on the PATH; the claims of geas's calc are not run") {
+        let g = TempDir::new("calc-json");
+        ritsu_testkit::tmp::copy_dir(&here().join("../geas/examples/calc"), g.path());
+        assert_eq!(checks_hold_to_the_languages(g.path(), "."), 1);
     }
 }
 

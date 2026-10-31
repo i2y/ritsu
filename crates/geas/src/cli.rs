@@ -829,17 +829,22 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
             Ok(s) => s,
             Err(e) => {
                 let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
-                out.push(Checked { label: file.clone(), parts: vec![Part::Finding(finding(file, &d, d.shown(file, "", lang)))], verdict: Verdict::Unchecked });
+                let json = ritsu_base::json::parse(&report::failure_json(file, &[(file.clone(), d.clone())], lang)).unwrap_or(ritsu_base::json::Json::Null);
+                out.push(Checked { label: file.clone(), parts: vec![Part::Finding(finding(file, &d, d.shown(file, "", lang)))], verdict: Verdict::Unchecked, json });
                 continue;
             }
         };
         // the keys written in the spec (W901), whatever else it holds
-        let keys: Vec<Part> = diag::keys(&src).iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
+        let key_diags = diag::keys(&src);
+        let keys: Vec<Part> = key_diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
         let spec = match parse::parse(&src) {
             Ok(s) => s,
             Err(diags) => {
                 let parts = keys.into_iter().chain(diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang))))).collect();
-                out.push(Checked { label: file.clone(), parts, verdict: Verdict::Fails });
+                // the object `geas check --json` prints of a spec it could not run
+                let ds: Vec<(String, Diag)> = key_diags.iter().chain(&diags).map(|d| (file.clone(), d.clone())).collect();
+                let json = ritsu_base::json::parse(&report::failure_json(file, &ds, lang)).unwrap_or(ritsu_base::json::Json::Null);
+                out.push(Checked { label: file.clone(), parts, verdict: Verdict::Fails, json });
                 continue;
             }
         };
@@ -860,7 +865,11 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
             parts.push(Part::Finding(finding(&f, &d, d.shown(&f, "", lang))));
             verdict = Verdict::Unchecked;
         }
-        out.push(Checked { label: file.clone(), parts, verdict });
+        // the object `geas check --json` prints of the run, with the keys of the spec as its
+        // diagnostics
+        let more = format!(",\"diagnostics\":[{}]", key_diags.iter().map(|d| d.json_in(file, lang)).collect::<Vec<_>>().join(","));
+        let json = ritsu_base::json::parse(&report::claims_json_with(file, &results, lang, report::failed(&results) == 0, &more)).unwrap_or(ritsu_base::json::Json::Null);
+        out.push(Checked { label: file.clone(), parts, verdict, json });
         if proc::signalled().is_some() {
             break;
         }

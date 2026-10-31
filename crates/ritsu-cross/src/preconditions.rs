@@ -28,7 +28,7 @@
 //! A value given to both inputs of a relation (`x` to `a` and to `b`) is the same value on both
 //! sides: `<=` and `>=` hold, `<` and `>` break at any value it takes.
 
-use crate::Borders;
+use crate::{Border, Borders, Came, Check, Side};
 use ritsu_base::diag::Diag;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
@@ -289,10 +289,17 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
             for p in &facts.preconditions {
                 let pre = said(p);
                 let rule = &call.name;
-                match decide(joined.rulec.as_ref(), joined.koyomi.as_ref(), &call.rule, p, &call.args) {
-                    Answer::Holds => borders.held += 1,
+                let answer = decide(joined.rulec.as_ref(), joined.koyomi.as_ref(), &call.rule, p, &call.args);
+                let code = match &answer {
+                    Answer::Holds => None,
+                    Answer::Fails(_) => Some("E201"),
+                    Answer::Undecided(_) => Some("W201"),
+                };
+                let (at, to) = (Side::at(Tool::Dandori, &f.rel, call.line), Side::reached(project, Tool::Rulec, &call.rule, None));
+                borders.add(Border::new(Check::Precondition, pre.clone(), at, Some(to), Came::of(&answer), code));
+                match answer {
+                    Answer::Holds => {}
                     Answer::Fails(why) => {
-                        borders.failed += 1;
                         let d: Diag = Diag::at("E201", &f.shown, call.line, 1, tr!(
                             "規則 {rule} を呼ぶところで、前提 `{pre}` を破る値を渡すことがあります",
                             "The call of the rule {rule} can give it values that break its precondition `{pre}`"
@@ -322,7 +329,6 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                         out.push(Finding::of(&d, Some(f.rel.clone()), lang));
                     }
                     Answer::Undecided(why) => {
-                        borders.undecided += 1;
                         let d: Diag = Diag::at("W201", &f.shown, call.line, 1, tr!(
                             "規則 {rule} を呼ぶところで、前提 `{pre}` が保たれるかを決められません",
                             "Whether the call of the rule {rule} keeps its precondition `{pre}` cannot be decided"

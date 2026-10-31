@@ -1,9 +1,11 @@
 //! The checks across the languages, as `ritsu check` runs them on a project (DESIGN 7; PLAN E.4).
 //! Each check has a project where it holds, and variants where there is an example that it does
-//! not and where it cannot be decided; the text (English and Japanese) and the JSON's `borders`
-//! are held to golden files in `tests/golden/cross/` (`RITSU_BLESS=1` writes them). The projects
-//! are small and English: the ledger's reproductions (`ritsu_cross::codes`) are laid out from the
-//! same files.
+//! not and where it cannot be decided; the text (English and Japanese) is held to golden files in
+//! `tests/golden/cross/` (`RITSU_BLESS=1` writes them), and the JSON's `borders` to the counts, with
+//! a record of each border that agrees with them (DESIGN 8.3). The projects are small and English:
+//! the ledger's reproductions (`ritsu_cross::codes`) are laid out from the same files. One of them,
+//! E202's, whose rule, dates file, flow and module of kaname cross four languages, has the records
+//! of its borders held to a golden file too.
 //!
 //! - X1 (the unit where a value crosses, which each language holds itself; DESIGN 7.3), for the
 //!   units written with a sign (DESIGN 5.1): `cold_chain` — a rule takes the temperature of a hold
@@ -124,6 +126,42 @@ fn run(name: &str, files: &[(&str, String)], want_code: i32, borders: (u64, u64,
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     let b = &v["borders"];
     assert_eq!((b["held"].as_u64(), b["failed"].as_u64(), b["undecided"].as_u64()), (Some(borders.0), Some(borders.1), Some(borders.2)), "{name}: {b}");
+    records_agree(name, &v);
+}
+
+/// Where a check's records come in their order (`ritsu_cross::Check::ALL`).
+fn rank(check: &str) -> usize {
+    ritsu_cross::Check::ALL.iter().position(|c| c.word() == check).unwrap_or_else(|| panic!("`{check}` is no check"))
+}
+
+/// What the JSON of `ritsu check` says of each border (DESIGN 8.3): as many records as the counts
+/// say, each result as many times as its count, in the order of the checks, then of the file and
+/// the line of the place; each with its keys in their order, a code where it does not hold and none
+/// where it does, and that code among what ritsu says in the file of the place.
+fn records_agree(name: &str, v: &serde_json::Value) {
+    let b = &v["borders"];
+    let records = b["records"].as_array().unwrap_or_else(|| panic!("{name}: no records: {b}"));
+    let sum: u64 = ["held", "failed", "undecided"].iter().map(|k| b[k].as_u64().unwrap()).sum();
+    assert_eq!(records.len() as u64, sum, "{name}: {b}");
+    for k in ["held", "failed", "undecided"] {
+        assert_eq!(Some(records.iter().filter(|r| r["result"] == k).count() as u64), b[k].as_u64(), "{name}: {k}: {b}");
+    }
+    let key = |r: &serde_json::Value| (rank(r["check"].as_str().unwrap()), r["at"]["file"].as_str().map(str::to_string), r["at"]["line"].as_u64());
+    assert!(records.windows(2).all(|w| key(&w[0]) <= key(&w[1])), "{name}: the records are out of their order: {b}");
+    let diagnostics = v["diagnostics"].as_array().unwrap();
+    for r in records {
+        let keys: Vec<&str> = r.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(keys[..6], ["check", "about", "at", "to", "result", "code"], "{name}: {r}");
+        for side in [&r["at"], &r["to"]].into_iter().filter(|s| !s.is_null()) {
+            let keys: Vec<&str> = side.as_object().unwrap().keys().map(String::as_str).collect();
+            assert_eq!(keys, ["tool", "file", "line"], "{name}: {r}");
+        }
+        assert_eq!(r["code"].is_null(), r["result"] == "held", "{name}: {r}");
+        if let Some(code) = r["code"].as_str() {
+            let said = diagnostics.iter().any(|d| d["tool"] == "ritsu" && d["code"] == code && d["file"] == r["at"]["file"]);
+            assert!(said, "{name}: ritsu says no {code} in {}: {r}", r["at"]["file"]);
+        }
+    }
 }
 
 /// The project of the cold chain: a rule (its English version and its Japanese one), and a gate, a
@@ -636,5 +674,43 @@ fn kaname_calls_across_the_borders() {
         ("billing.kn", billing.to_string()),
     ];
     run("kaname-x3a-x6-E202-E205", &files, 1, (2, 2, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The borders of one project in the JSON, one record each (DESIGN 8.3): the reproduction of E202,
+/// whose dates file, rule, flow and module of kaname cross koyomi, rulec, dandori and kaname. The
+/// flow's call of the rule and the module's fail (E202), the flow's day given to the dates file is
+/// undecided (W205), and the module's holds, its range being the input's. The records agree with
+/// the counts, take in all three results and the four languages, come the same on a second run,
+/// and are held to a golden file; the module's file has kaname's own summary and the effect of its
+/// function.
+#[test]
+fn each_border_has_its_record() {
+    let l = ritsu_cross::codes::ledger();
+    let files: Vec<(&str, String)> = match &l.find("E202").expect("E202 is in the ledger").repro {
+        ritsu_base::ledger::Repro::Dir { files, .. } => files.iter().map(|(n, b)| (*n, b.to_string())).collect(),
+        other => panic!("E202 has no files: {other:?}"),
+    };
+    assert!(files.iter().any(|(n, _)| n.ends_with(".kn")), "the reproduction calls from a module of kaname");
+    let t = lay_out(&files, "records");
+    let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    assert_eq!(code, 1, "{out}{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    records_agree("E202", &v);
+    let records = v["borders"]["records"].as_array().unwrap();
+    let results: std::collections::BTreeSet<&str> = records.iter().map(|r| r["result"].as_str().unwrap()).collect();
+    assert_eq!(results.into_iter().collect::<Vec<_>>(), ["failed", "held", "undecided"]);
+    let tools: std::collections::BTreeSet<&str> = records.iter().flat_map(|r| [&r["at"], &r["to"]]).filter_map(|s| s["tool"].as_str()).collect();
+    assert_eq!(tools.into_iter().collect::<Vec<_>>(), ["dandori", "kaname", "koyomi", "rulec"]);
+    let (_, again, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    assert_eq!(out, again, "the same project, the same JSON");
+    let mut failures = Vec::new();
+    golden("records-E202.json", &(serde_json::to_string_pretty(&v["borders"]).unwrap() + "\n"), &mut failures);
+    let module = v["files"].as_array().unwrap().iter().find(|f| f["tool"] == "kaname").expect("the module is a file of the project");
+    assert_eq!(module["check"]["summary"], "1 function, fails rule", "{module}");
+    assert_eq!(module["check"]["functions"][0]["effect"], serde_json::json!({"fails": ["rule"], "diverges": false}), "{module}");
+    for k in ["file", "diagnostics"] {
+        assert!(module["check"].get(k).is_none(), "{k} is the JSON's own: {module}");
+    }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

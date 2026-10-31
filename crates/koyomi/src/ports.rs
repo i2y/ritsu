@@ -210,7 +210,8 @@ impl Engine {
                     if !tail.is_empty() {
                         parts.push(Part::Text(tail));
                     }
-                    Unit { label: f.clone(), parts, verdict: if o.has_errors() { Verdict::Fails } else { Verdict::Passes } }
+                    let json = ritsu_base::json::parse(&check::to_json(&o, lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
+                    Unit { label: f.clone(), parts, verdict: if o.has_errors() { Verdict::Fails } else { Verdict::Passes }, json }
                 }
                 Err(e) => {
                     let msg = ritsu_base::tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");

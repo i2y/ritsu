@@ -382,8 +382,8 @@ fn the_code_on_the_index_is_from_the_files_and_ritsu_check_prints_what_it_shows(
     assert!(seen >= 4, "{seen} blocks of code on the index pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     let (ran, wrong) = run_the_consoles(&pages);
-    // `ritsu check .` on the two files, on each of the two pages.
-    assert!(ran >= 2, "{ran} commands run: were the fences changed?");
+    // `ritsu check .` on the two files, as text and as JSON, on each of the two pages.
+    assert!(ran >= 4, "{ran} commands run: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     let (named, wrong) = commands_named(&pages);
     // `check` of three languages, `doc` of four and `yuen trace`, on two pages.

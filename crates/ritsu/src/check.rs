@@ -3,7 +3,9 @@
 //! what ritsu checks across the languages; then one line that sums it up. The text is what each
 //! language's `check` prints, with the tool's word in each headline (`error[rulec E032]`), since
 //! the codes of the languages overlap; the JSON is one object, each language's diagnostic in its
-//! own JSON with the tool and the file from the root put outside it.
+//! own JSON with the tool and the file from the root put outside it, each file with what its
+//! language's `check --format json` says of it in the language's own JSON, and each border between
+//! the languages with the check that held it, its two sides and what it came to.
 //!
 //! In a module (DESIGN 17.8), the tree of modules is read first: what stops the run stops it (exit
 //! 2), and its errors are said with no language's check run (exit 1). A check of the whole module
@@ -20,7 +22,7 @@ use ritsu_base::modules::Problem;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_ports::{Checked, Finding, Part, Verdict};
-use ritsu_cross::Borders;
+use ritsu_cross::{Borders, Side};
 use ritsu_project::{File, Joined, ORDER, Project};
 use std::io::Write;
 use std::path::Path;
@@ -227,7 +229,7 @@ impl Report<'_> {
         let by_tool = by_tool(&ours);
         let (ja_by, en_by) = (by_tool.join("、"), by_tool.join(", "));
         let (ja, en) = self.came_out(&ours, &|x| self.dependency(x.file.as_deref()).is_none());
-        let (checked, undecided) = (self.borders.checked(), self.borders.undecided);
+        let (checked, undecided) = (self.borders.checked(), self.borders.undecided());
         let files_en = if n == 1 { "file" } else { "files" };
         Text::new(
             format!("ritsu check: ファイル {n} 個（{ja_by}）。{ja}。言語の境目: 確かめた {checked} か所、決められない {undecided} か所"),
@@ -308,10 +310,11 @@ impl Report<'_> {
     }
 
     /// The JSON (DESIGN 8.3): the version, the root as seen from where ritsu runs, whether all is
-    /// well, every file with its language and whether it passes, every diagnostic, and what the
-    /// checks of the borders between the languages came to. When the root has a `ritsu.mod`
-    /// (DESIGN 17.21), the module at hand and its dependencies, the dependency each file and each
-    /// diagnostic is in, and the contributions that add to a rule of another module.
+    /// well, every file with its language, whether it passes and what its language's check says of
+    /// it, every diagnostic, and what the checks of the borders between the languages came to, with
+    /// each border. When the root has a `ritsu.mod` (DESIGN 17.21), the module at hand and its
+    /// dependencies, the dependency each file, each diagnostic and each side of a border is in, and
+    /// the contributions that add to a rule of another module.
     pub fn json(&self) -> Json {
         let module = self.project.tree.is_some();
         let dependency = |rel: Option<&str>| -> Option<Json> { module.then(|| Json::opt_str(rel.and_then(|r| self.project.dependency_of(r)))) };
@@ -319,6 +322,7 @@ impl Report<'_> {
             let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str(f.tool.word())), ("file".into(), Json::str(&f.rel))];
             o.extend(dependency(Some(&f.rel)).map(|d| ("dependency".to_string(), d)));
             o.push(("ok".into(), Json::Bool(self.status(f) == Status::Passes)));
+            o.push(("check".into(), self.check_of(f)));
             Json::Obj(o)
         });
         let diagnostics = self.findings().filter(|(_, f)| !self.hidden(f)).map(|(t, f)| entry_in(t, f, dependency(f.file.as_deref())));
@@ -346,11 +350,57 @@ impl Report<'_> {
             });
             o.push(("contributions".into(), Json::arr(contributions)));
         }
-        o.push((
-            "borders".into(),
-            Json::obj([("held", Json::int(self.borders.held as i128)), ("failed", Json::int(self.borders.failed as i128)), ("undecided", Json::int(self.borders.undecided as i128))]),
-        ));
+        o.push(("borders".into(), self.borders_json(&dependency)));
         Json::Obj(o)
+    }
+
+    /// What the language's `check --format json` prints of the unit the file `f` is checked in, in
+    /// the language's own JSON, without the `file`, the `root` and the `diagnostics` the JSON has
+    /// apart (DESIGN 8.3). A `.req` has the object of its module's `.req` files, which yuen checks
+    /// as one project; a map of sakai, its own; a file of contexts a map reads, null. So has a file
+    /// whose language prints no object of it: a rule (rulec prints a line for each diagnostic), a
+    /// `.proto`, a file that could not be read.
+    fn check_of(&self, f: &File) -> Json {
+        let module = |u: &Checked| ritsu_base::paths::from_root(&self.project.root, Path::new(&u.label)).and_then(|r| self.project.dependency_of(&r));
+        let unit = self.units.iter().filter(|(t, _)| *t == f.tool).map(|(_, u)| u).find(|u| match f.tool {
+            Tool::Yuen => module(u) == self.project.dependency_of(&f.rel),
+            _ => u.label == f.shown,
+        });
+        match unit.map(|u| &u.json) {
+            Some(Json::Obj(kv)) => Json::Obj(kv.iter().filter(|(k, _)| !["file", "root", "diagnostics"].contains(&k.as_str())).cloned().collect()),
+            _ => Json::Null,
+        }
+    }
+
+    /// What the checks of the borders came to (DESIGN 7.1): the counts, and each border in the
+    /// order ritsu-cross puts them in — its check, what it is about, its two sides (each with the
+    /// dependency it is in, in a module), what it came to and the code ritsu said it with, then what
+    /// the check says of it of its own.
+    fn borders_json(&self, dependency: &dyn Fn(Option<&str>) -> Option<Json>) -> Json {
+        let side = |s: &Side| {
+            let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str(s.tool.word())), ("file".into(), Json::opt_str(s.file.clone()))];
+            o.extend(dependency(s.file.as_deref()).map(|d| ("dependency".to_string(), d)));
+            o.push(("line".into(), s.line.into()));
+            Json::Obj(o)
+        };
+        let records = self.borders.records().iter().map(|b| {
+            let mut o: Vec<(String, Json)> = vec![
+                ("check".into(), Json::str(b.check.word())),
+                ("about".into(), Json::str(&b.about)),
+                ("at".into(), side(&b.at)),
+                ("to".into(), b.to.as_ref().map_or(Json::Null, side)),
+                ("result".into(), Json::str(b.came.word())),
+                ("code".into(), Json::opt_str(b.code.clone())),
+            ];
+            o.extend(b.detail.iter().cloned());
+            Json::Obj(o)
+        });
+        Json::obj([
+            ("held", Json::from(self.borders.held())),
+            ("failed", Json::from(self.borders.failed())),
+            ("undecided", Json::from(self.borders.undecided())),
+            ("records", Json::arr(records)),
+        ])
     }
 
     /// The module at hand: its name and version, from its `ritsu.mod` (null when that does not

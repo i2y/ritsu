@@ -1,7 +1,8 @@
 //! A language's own `check`, as `ritsu check` runs it on a project (DESIGN 8.3): what the command
 //! prints for each unit it checks, a diagnostic at a time, the text and the JSON, so that `ritsu
 //! check` says of every file what the language's command says, and adds only the tool's word to
-//! the headline (`error[rulec E032]`) and the tool and the file from the root to the JSON.
+//! the headline (`error[rulec E032]`) and the tool and the file from the root to the JSON (to each
+//! diagnostic, and to the object the command prints for the unit).
 //!
 //! Each language builds these with the same functions its command prints with; `ritsu check`
 //! never reads a language's text back.
@@ -19,6 +20,12 @@ pub struct Checked {
     /// What the command prints for it, in order.
     pub parts: Vec<Part>,
     pub verdict: Verdict,
+    /// Its object, as `<tool> check --format json` prints it (kaname's `functions`, koyomi's
+    /// `summary`, chobo's `report`), with its own `file` and its diagnostics; `ritsu check` writes it
+    /// under the file without the two (DESIGN 8.3). Null when the command prints no object for it:
+    /// rulec prints a line for each diagnostic and none for a file, and a unit it could not read has
+    /// none.
+    pub json: Json,
 }
 
 /// One piece of what a command prints.
@@ -61,7 +68,7 @@ pub enum Verdict {
 impl Checked {
     /// A unit the command could not check, with the line it prints for it.
     pub fn unchecked(label: &str, said: String) -> Checked {
-        Checked { label: label.to_string(), parts: vec![Part::Text(said)], verdict: Verdict::Unchecked }
+        Checked { label: label.to_string(), parts: vec![Part::Text(said)], verdict: Verdict::Unchecked, json: Json::Null }
     }
 
     /// The findings, in order.

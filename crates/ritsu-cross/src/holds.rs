@@ -19,7 +19,8 @@
 //!   When koyomi's days make the most, the notes say the day `now` falls on that makes each such
 //!   wait the longest (`HoldSpan::most_why`).
 
-use crate::{borders, named, Borders, Flow};
+use crate::{borders, named, Border, Borders, Came, Check, Flow, Side};
+use ritsu_base::naming::Tool;
 use ritsu_base::diag::Diag;
 use ritsu_base::text::Lang;
 use ritsu_base::tr;
@@ -37,10 +38,17 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
             let (least, after) = (seconds_text(span.least), seconds_text(expiry));
             let book = named(project, &span.book);
             let transfer = &span.transfer;
-            match borders::held_until(span.least, &span.most, expiry) {
-                Answer::Holds => borders.held += 1,
+            let answer = borders::held_until(span.least, &span.most, expiry);
+            let code = match &answer {
+                Answer::Holds => None,
+                Answer::Fails(_) => Some("E206"),
+                Answer::Undecided(_) => Some("W206"),
+            };
+            let (at, to) = (Side::at(Tool::Dandori, &f.file.rel, span.line), Side::reached(project, Tool::Chobo, &span.book, None));
+            borders.add(Border::new(Check::HoldExpiry, case.clone(), at, Some(to), Came::of(&answer), code));
+            match answer {
+                Answer::Holds => {}
                 Answer::Fails(_) => {
-                    borders.failed += 1;
                     let mut diag: Diag = Diag::at("E206", &f.file.shown, span.line, 1, tr!(
                         "`{task}` が案件 `{case}` の仮押さえを{verb_ja}ときには、期限が必ず切れています",
                         "The hold of the case `{case}` has always expired when `{task}` {verb_en} it"
@@ -67,7 +75,6 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                 }
                 Answer::Undecided(why) => {
-                    borders.undecided += 1;
                     let _ = why;
                     let note = match &span.most {
                         Ok(most) => {

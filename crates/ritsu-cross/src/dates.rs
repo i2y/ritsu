@@ -12,7 +12,8 @@
 //! - X6: each call of a koyomi date is a border, the day given to its date input held to the range
 //!   of that input. The date's integer inputs are dandori's own to check (its E014), as a rule's are.
 
-use crate::{borders, named, Borders, Flow};
+use crate::{borders, named, Border, Borders, Came, Check, Flow, Side};
+use ritsu_base::naming::Tool;
 use ritsu_base::diag::Diag;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
@@ -125,10 +126,17 @@ pub(crate) fn days_to_rules(project: &Project, flows: &[Flow], joined: &Joined, 
                 let d = days(project, joined, &a.shown, &a.from);
                 let sets: Vec<Found<DaySet>> = d.dates.iter().map(|x| x.days.clone()).collect();
                 let (rule, input, shown) = (&call.name, &a.input, &a.shown);
-                match borders::days_given(&sets, d.other.as_ref(), range) {
-                    Answer::Holds => borders.held += 1,
+                let answer = borders::days_given(&sets, d.other.as_ref(), range);
+                let code = match &answer {
+                    Answer::Holds => None,
+                    Answer::Fails(_) => Some("E202"),
+                    Answer::Undecided(_) => Some("W202"),
+                };
+                let (at, to) = (Side::at(Tool::Dandori, &f.file.rel, call.line), Side::reached(project, Tool::Rulec, &call.rule, None));
+                borders.add(Border::new(Check::RuleDateInput, input.clone(), at, Some(to), Came::of(&answer), code));
+                match answer {
+                    Answer::Holds => {}
                     Answer::Fails((i, day)) => {
-                        borders.failed += 1;
                         let from = day_from(joined, &d.dates[i], day);
                         let (day, range) = (day_text(day), range_text(range));
                         let x = &d.dates[i];
@@ -151,7 +159,6 @@ pub(crate) fn days_to_rules(project: &Project, flows: &[Flow], joined: &Joined, 
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                     }
                     Answer::Undecided(why) => {
-                        borders.undecided += 1;
                         let diag: Diag = Diag::at("W202", &f.file.shown, call.line, 1, tr!(
                             "規則 `{rule}` の `{input}` に渡す日が、範囲に収まるかを決められません",
                             "Whether the day given to `{input}` of the rule `{rule}` stays inside its range cannot be decided"
@@ -183,10 +190,17 @@ pub(crate) fn days_to_dates(project: &Project, flows: &[Flow], joined: &Joined, 
             let sets: Vec<Found<DaySet>> = d.dates.iter().map(|x| x.days.clone()).collect();
             let (date, input, shown, file) = (format!("{}.{}", call.name, call.date), &call.input, &call.shown, named(project, &call.file));
             let (min, max) = (day_text(lo), day_text(hi));
-            match borders::days_given(&sets, d.other.as_ref(), (Some(lo), Some(hi))) {
-                Answer::Holds => borders.held += 1,
+            let answer = borders::days_given(&sets, d.other.as_ref(), (Some(lo), Some(hi)));
+            let code = match &answer {
+                Answer::Holds => None,
+                Answer::Fails(_) => Some("E205"),
+                Answer::Undecided(_) => Some("W205"),
+            };
+            let (at, to) = (Side::at(Tool::Dandori, &f.file.rel, call.line), Side::reached(project, Tool::Koyomi, &call.file, None));
+            borders.add(Border::new(Check::KoyomiDateInput, input.clone(), at, Some(to), Came::of(&answer), code));
+            match answer {
+                Answer::Holds => {}
                 Answer::Fails((i, day)) => {
-                    borders.failed += 1;
                     let from = day_from(joined, &d.dates[i], day);
                     let day = day_text(day);
                     let diag: Diag = Diag::at("E205", &f.file.shown, call.line, 1, tr!(
@@ -207,7 +221,6 @@ pub(crate) fn days_to_dates(project: &Project, flows: &[Flow], joined: &Joined, 
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                 }
                 Answer::Undecided(why) => {
-                    borders.undecided += 1;
                     let diag: Diag = Diag::at("W205", &f.file.shown, call.line, 1, tr!(
                         "koyomi の日付 `{date}` の `{input}` に渡す日が、入力の範囲に収まるかを決められません",
                         "Whether the day given to `{input}` of the koyomi date `{date}` stays inside the input's range cannot be decided"

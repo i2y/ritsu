@@ -1671,3 +1671,9 @@ ritsu の生成物に、Rust と Wasm の出力先をそろえる。koyomi、kan
 ### 13.6 見つけて直していないもの
 
 - rulec の `.wit` は、規則の名前によっては wasm-tools が読めない形になる。rulec の `wit_name` は別名の `_` を `-` に替えるだけなので、`__` を含む名前（`a__b` は `a--b`）、`_` で終わる名前（`trailing_` は `trailing-`）、WIT の予約語の名前（`list`、`record`、`world`、`type`、`use` など。四十三語のうち、rulec の検査は 39 語を規則の名前として受け付け、その 39 の `.wit` はどれも wasm-tools が読めなかった）では、`wasm-tools component embed` が `.wit` を読めずに止まる。モジュールそのもの（`call`）は動き、component にするところだけが止まる。直すには、13.2 の 5 の作り方がそのまま使える。
+
+## 14. `ritsu check` の JSON に渡す、ファイルのオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`koyomi::ports::Engine::checked` は、診断と `ok —` の行に加えて、`koyomi check --format json` がファイルごとに書くオブジェクト（`{file, ok, summary, diagnostics}`）を `ritsu_ports::Checked::json` で渡す。作るのはコマンドと同じ `check::to_json` で、その値を書き出してから ritsu-base の JSON に読み直すので、キーの順もコマンドと同じである。ritsu は `file` と `diagnostics` を除いた `{ok, summary}` を入れる。読めないファイルは、コマンドがオブジェクトを書かないので `null` になる。koyomi のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、テストのプロジェクトの三つの日付のファイルと sekisho の例の三つの日付のファイルの `check` が、`ritsu koyomi check --format json` のオブジェクトから二つのキーを除いたものと同じであること。check の JSON の golden（`crates/ritsu/tests/golden/check/`、`golden/modules/holidays.json`）。

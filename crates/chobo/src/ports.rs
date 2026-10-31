@@ -89,7 +89,9 @@ impl Engine {
                         .collect();
                     parts.push(Part::Text(check::render_tail(f, &c, lang)));
                     let verdict = if crate::diag::has_errors(&c.diags) { Verdict::Fails } else { Verdict::Passes };
-                    Unit { label: f.clone(), parts, verdict }
+                    // the file's object of `chobo check --format json` (the one `files` holds)
+                    let json = ritsu_base::json::parse(&check::to_json(f, &src, &c, lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
+                    Unit { label: f.clone(), parts, verdict, json }
                 }
                 Err(e) => Unit::unchecked(f, format!("{e}\n")),
             })

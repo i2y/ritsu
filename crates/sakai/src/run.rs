@@ -178,7 +178,8 @@ pub fn checked(args: &[String], root: Option<&str>, suite: &Suite, lang: Lang) -
                 if !tail.is_empty() {
                     parts.push(Part::Text(tail));
                 }
-                Unit { label: paths::shown(&o.file), parts, verdict: if o.has_errors() { Verdict::Fails } else { Verdict::Passes } }
+                let json = ritsu_base::json::parse(&check::to_json(o, lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
+                Unit { label: paths::shown(&o.file), parts, verdict: if o.has_errors() { Verdict::Fails } else { Verdict::Passes }, json }
             })
             .collect())
     })();

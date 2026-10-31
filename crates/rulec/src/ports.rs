@@ -459,7 +459,9 @@ impl Engine {
                 } else {
                     Verdict::Passes
                 };
-                Checked { label: path.clone(), parts, verdict }
+                // `rulec check --format json` prints a line for each diagnostic, and no object of a
+                // file
+                Checked { label: path.clone(), parts, verdict, json: ritsu_base::json::Json::Null }
             })
             .collect()
     }

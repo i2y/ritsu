@@ -22,7 +22,7 @@
 //! kaname generates checks it when it runs. [`ProgramVerdicts`] is what kaname reads of all this
 //! (ritsu's port `Verdicts`), and [`check`] what `ritsu check` says.
 
-use crate::{borders, Borders};
+use crate::{borders, Border, Borders, Came, Check, Side};
 use ritsu_base::diag::Diag;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
@@ -41,12 +41,14 @@ use std::rc::Rc;
 /// the range has no end to hold it to (a range of dates kaname finds is a parameter's, a few years).
 const MOST_DAYS: i128 = 1_000_000;
 
-/// One decision at one place of a module: the verdict kaname reads, and the notes ritsu says it with
-/// when it does not hold.
+/// One decision at one place of a module: the verdict kaname reads, the notes ritsu says it with
+/// when it does not hold, and the file the place calls (the rule, the dates file, the book), as
+/// kaname reaches it.
 #[derive(Clone)]
 struct Decided {
     verdict: CallVerdict,
     notes: Vec<Text>,
+    to: (Tool, PathBuf),
 }
 
 /// What the checks across the borders came to at the calls of kaname's modules (ritsu's port
@@ -413,14 +415,16 @@ fn kept(relations: &[(String, String, String)], left: &str, op: &str, right: &st
     })
 }
 
-/// A decision, with the code ritsu says it with and its headline where it does not hold.
-fn decided(at: At, check: Crossing, about: String, outcome: Answer<Seen>, codes: (&str, &str), headline: Text, notes: Vec<Text>) -> Decided {
+/// A decision of a place that calls `to`, with the code ritsu says it with and its headline where it
+/// does not hold.
+#[allow(clippy::too_many_arguments)]
+fn decided(at: At, check: Crossing, about: String, outcome: Answer<Seen>, codes: (&str, &str), headline: Text, notes: Vec<Text>, to: (Tool, &Path)) -> Decided {
     let said = match &outcome {
         Answer::Holds => None,
         Answer::Fails(_) => Some((codes.0.to_string(), headline)),
         Answer::Undecided(_) => Some((codes.1.to_string(), headline)),
     };
-    Decided { verdict: CallVerdict { at, check, about, outcome, said, refusals: None }, notes }
+    Decided { verdict: CallVerdict { at, check, about, outcome, said, refusals: None }, notes, to: (to.0, to.1.to_path_buf()) }
 }
 
 /// The example of a check, as a note says it: the function's input, and what it gives the place.
@@ -482,7 +486,7 @@ fn rule_call(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, call: &Program
                 ),
             ],
         };
-        out.push(decided(call.at, Crossing::Precondition, pre, outcome, ("E201", "W201"), headline, notes));
+        out.push(decided(call.at, Crossing::Precondition, pre, outcome, ("E201", "W201"), headline, notes, (Tool::Rulec, &call.rule)));
     }
     // X3 (a): a day given to a date input with a declared range; an input whose range is a koyomi
     // date takes the date's days as a precondition, above
@@ -521,7 +525,7 @@ fn rule_call(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, call: &Program
             }
             Answer::Undecided(why) => vec![why.clone(), takes, checked_when_run(refused.clone(), "rule")],
         };
-        out.push(decided(a.at, Crossing::RuleDay, input.clone(), outcome, ("E202", "W202"), headline, notes));
+        out.push(decided(a.at, Crossing::RuleDay, input.clone(), outcome, ("E202", "W202"), headline, notes, (Tool::Rulec, &call.rule)));
     }
     out
 }
@@ -561,7 +565,7 @@ fn date_call(dates: &dyn Dates, seen: &Seeing, call: &ProgramDateCall) -> Vec<De
         }
         Answer::Undecided(why) => vec![why.clone(), takes, checked_when_run(tr!("koyomi が生成したコードが受け付けなければ", "where koyomi's generated code refuses the day"), "date")],
     };
-    vec![decided(call.day.at, Crossing::DateDay, input.clone(), outcome, ("E205", "W205"), headline, notes)]
+    vec![decided(call.day.at, Crossing::DateDay, input.clone(), outcome, ("E205", "W205"), headline, notes, (Tool::Koyomi, &call.file))]
 }
 
 /// X4 at one transfer a module builds: each amount, and the refusals of a `do` or a `hold`.
@@ -605,7 +609,7 @@ fn transfer(books: &dyn Books, seen: &Seeing, t: &ProgramTransfer) -> Vec<Decide
             }
             Answer::Undecided(why) => vec![why.clone(), takes, checked_when_run(tr!("chobo が受け取らない額なら", "for an amount chobo does not take"), "range")],
         };
-        out.push(decided(a.at, Crossing::Amount, param.clone(), outcome, ("E203", "W203"), headline, notes));
+        out.push(decided(a.at, Crossing::Amount, param.clone(), outcome, ("E203", "W203"), headline, notes, (Tool::Chobo, &t.book)));
     }
     // the refusals the amounts can meet, for the operations whose refusals turn on them
     if t.op == "do" || t.op == "hold" {
@@ -635,7 +639,7 @@ fn transfer(books: &dyn Books, seen: &Seeing, t: &ProgramTransfer) -> Vec<Decide
             ],
             _ => Vec::new(),
         };
-        let mut d = decided(t.at, Crossing::Refusals, op, outcome, ("W204", "W204"), headline, notes);
+        let mut d = decided(t.at, Crossing::Refusals, op, outcome, ("W204", "W204"), headline, notes, (Tool::Chobo, &t.book));
         d.verdict.refusals = refusals;
         out.push(d);
     }
@@ -655,11 +659,16 @@ pub(crate) fn check(project: &Project, verdicts: &ProgramVerdicts, lang: Lang, b
         let src = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(&project.root, &f.rel)).unwrap_or_default();
         for d in decided.iter() {
             let v = &d.verdict;
-            match &v.outcome {
-                Answer::Holds => borders.held += 1,
-                Answer::Fails(_) => borders.failed += 1,
-                Answer::Undecided(_) => borders.undecided += 1,
-            }
+            let check = match v.check {
+                Crossing::Precondition => Check::Precondition,
+                Crossing::RuleDay => Check::RuleDateInput,
+                Crossing::DateDay => Check::KoyomiDateInput,
+                Crossing::Amount => Check::TransferAmount,
+                Crossing::Refusals => Check::TransferRefusals,
+            };
+            let to = Side::reached(project, d.to.0, &d.to.1, None);
+            let code = v.said.as_ref().map(|(c, _)| c.as_str());
+            borders.add(Border::new(check, v.about.clone(), Side::at(Tool::Kaname, &f.rel, v.at.line), Some(to), Came::of(&v.outcome), code));
             let Some((code, headline)) = &v.said else { continue };
             // the codes of ritsu's ledger these checks say, as the diagnostics take them
             let code: &'static str = match code.as_str() {

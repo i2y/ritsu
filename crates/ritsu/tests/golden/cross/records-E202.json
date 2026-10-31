@@ -1,0 +1,71 @@
+{
+  "held": 1,
+  "failed": 2,
+  "undecided": 1,
+  "records": [
+    {
+      "check": "rule_date_input",
+      "about": "pay_day",
+      "at": {
+        "tool": "dandori",
+        "file": "billing.flow",
+        "line": 19
+      },
+      "to": {
+        "tool": "rulec",
+        "file": "batch.rule",
+        "line": null
+      },
+      "result": "failed",
+      "code": "E202"
+    },
+    {
+      "check": "rule_date_input",
+      "about": "pay_day",
+      "at": {
+        "tool": "kaname",
+        "file": "billing.kn",
+        "line": 9
+      },
+      "to": {
+        "tool": "rulec",
+        "file": "batch.rule",
+        "line": null
+      },
+      "result": "failed",
+      "code": "E202"
+    },
+    {
+      "check": "koyomi_date_input",
+      "about": "received",
+      "at": {
+        "tool": "dandori",
+        "file": "billing.flow",
+        "line": 18
+      },
+      "to": {
+        "tool": "koyomi",
+        "file": "payment_terms.cal",
+        "line": null
+      },
+      "result": "undecided",
+      "code": "W205"
+    },
+    {
+      "check": "koyomi_date_input",
+      "about": "received",
+      "at": {
+        "tool": "kaname",
+        "file": "billing.kn",
+        "line": 8
+      },
+      "to": {
+        "tool": "koyomi",
+        "file": "payment_terms.cal",
+        "line": null
+      },
+      "result": "held",
+      "code": null
+    }
+  ]
+}

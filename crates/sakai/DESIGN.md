@@ -2702,3 +2702,9 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 - **契約の形では、語が規則の出力を `means rulec "<規則>" output …` で指せない**（E408）。規則そのものは公表された言語ではないからで、語は契約のメッセージのフィールド（`means message ShippingResponse field shipping`）を指せば通る。
 - **規則を中身にした塊の形では、契約の `.proto` を `use proto` と `connect` で呼べない**（E202）。契約の `.proto` がどの塊にも並ばないからで、呼ぶ側は `use rule … connect` を使うか、公表する側が契約の形に移る。
 - **E004 と E006 は、規則が `implements` を書いているかを知らずに、契約の形を案内する**。`implements` を書いていない規則二つを一つの塊に書いても、同じ注が出る。
+
+## 27. `ritsu check` の JSON に渡す、地図のオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`sakai check` は地図ごとに、その地図と、地図が読むコンテキストを確かめる。`sakai::run::checked` は、地図ごとに、診断と `ok —` の行に加えて、`sakai check --format json` が地図ごとに書くオブジェクト（`{root, file, ok, summary, diagnostics}`）を、コマンドと同じ `check::to_json` で作り、ritsu-base の JSON に読み直して `ritsu_ports::Checked::json` で渡す。作るのは、パスをコマンドと同じに見せるあいだ（`show_from`）である。ritsu は `root`・`file`・`diagnostics` を除いた `{ok, summary}` を地図の項目に入れる。地図でないコンテキストのファイルは、いくつの地図に読まれるかが決まらない（読まれないことも、二つに読まれることもある）ので、`null` にした。sakai のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、ritsu のテストのプロジェクト（`通販` と `shop`、その変えたコピー）の地図の `check` が、`ritsu sakai check <プロジェクト> --root <プロジェクト> --format json` の地図のオブジェクトから三つのキーを除いたものと同じで、五つのコンテキストのファイルが `null` であること。check の JSON の golden（`crates/ritsu/tests/golden/check/`）。

@@ -49,31 +49,71 @@
       "tool": "rulec",
       "file": "@pricing/@tax/rules/vat_rate.rule",
       "dependency": "@pricing/@tax",
-      "ok": true
+      "ok": true,
+      "check": null
     },
     {
       "tool": "rulec",
       "file": "@pricing/rules/order_total.rule",
       "dependency": "@pricing",
-      "ok": true
+      "ok": true,
+      "check": null
     },
     {
       "tool": "rulec",
       "file": "@pricing/rules/shipping_fee.rule",
       "dependency": "@pricing",
-      "ok": true
+      "ok": true,
+      "check": null
     },
     {
       "tool": "kaname",
       "file": "checkout/basket.kn",
       "dependency": null,
-      "ok": true
+      "ok": true,
+      "check": {
+        "kaname": "0.39.0",
+        "ok": true,
+        "summary": "2 functions, total",
+        "functions": [
+          {
+            "function": "subtotal",
+            "effect": {
+              "fails": [],
+              "diverges": false
+            },
+            "written": null,
+            "places": [],
+            "calls": []
+          },
+          {
+            "function": "total",
+            "effect": {
+              "fails": [],
+              "diverges": false
+            },
+            "written": {
+              "total": true,
+              "fails": [],
+              "diverges": false
+            },
+            "places": [],
+            "calls": [
+              {
+                "line": 18,
+                "function": "subtotal"
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "tool": "dandori",
       "file": "orders/place_order.flow",
       "dependency": null,
-      "ok": true
+      "ok": true,
+      "check": {}
     }
   ],
   "diagnostics": [],
@@ -81,6 +121,7 @@
   "borders": {
     "held": 0,
     "failed": 0,
-    "undecided": 0
+    "undecided": 0,
+    "records": []
   }
 }

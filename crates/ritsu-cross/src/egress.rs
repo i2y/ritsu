@@ -21,7 +21,8 @@
 //! The context that marked a secret is the one the file of the mark belongs to; a mark the `.flow`
 //! writes (`secret`), or one in a file no context holds, is the flow's own context's.
 
-use crate::{Borders, named, then_ja};
+use crate::{Border, Borders, Came, Check, Side, named, then_ja};
+use ritsu_base::naming::Tool;
 use ritsu_base::diag::Diag;
 use ritsu_base::text::{Lang, Text, capitalize};
 use ritsu_base::tr;
@@ -80,15 +81,34 @@ pub struct Call {
 
 impl Call {
     /// What the border comes to: failed if a secret fails, else undecided if one is, else held.
-    pub fn count(&self, borders: &mut Borders) {
+    pub fn came(&self) -> Came {
         if self.secrets.iter().any(|j| j.outcome.fails()) {
-            borders.failed += 1;
+            Came::Failed
         } else if self.secrets.iter().any(|j| matches!(j.outcome, Outcome::Undecided(_))) {
-            borders.undecided += 1;
+            Came::Undecided
         } else {
-            borders.held += 1;
+            Came::Held
         }
     }
+}
+
+/// The border of a call of the flow at `flow` (from the root): from the call to the file it sends
+/// to, with the code ritsu says it with (E905 where a secret fails, W905 where one is undecided).
+fn border(flow: &str, s: &Send, to: Option<&str>, came: Came) -> Border {
+    let tool = |p: &str| ritsu_project::project::kind_of(p).unwrap_or(Tool::Openapi);
+    let to = match to {
+        Some(t) => Side::new(tool(t), Some(t.to_string()), None),
+        None => {
+            let Destination::File(p) = &s.to;
+            Side::new(tool(&p.to_string_lossy()), None, None)
+        }
+    };
+    let code = match came {
+        Came::Held => None,
+        Came::Failed => Some("E905"),
+        Came::Undecided => Some("W905"),
+    };
+    Border::new(Check::SecretDestination, s.task.clone(), Side::at(Tool::Dandori, flow, s.line), Some(to), came, code)
 }
 
 /// Whether the map relates two contexts: a relationship between them, either way, that is not
@@ -221,7 +241,7 @@ pub fn check_with(project: &Project, flows: &dyn Flows, sakai: &dyn Maps, ports:
             (Some((m, calls)), _) => {
                 let facts = m.facts.as_ref().expect("a map that answered");
                 for c in &calls {
-                    c.count(borders);
+                    borders.add(border(&f.rel, &c.send, c.to.as_deref(), c.came()));
                     for j in &c.secrets {
                         if let Some(d) = said(project, f, &src, &m.rel, facts, c, j) {
                             out.push(Finding::of(&d, Some(f.rel.clone()), lang));
@@ -231,7 +251,8 @@ pub fn check_with(project: &Project, flows: &dyn Flows, sakai: &dyn Maps, ports:
             }
             (None, Some((m, said))) => {
                 for s in sends {
-                    borders.undecided += 1;
+                    let Destination::File(dest) = &s.to;
+                    borders.add(border(&f.rel, s, from_root(dest).as_deref(), Came::Undecided));
                     for (_, secret) in &s.secrets {
                         out.push(Finding::of(&undecided(f, &src, &m.rel, s, secret, &said), Some(f.rel.clone()), lang));
                     }

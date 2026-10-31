@@ -2085,3 +2085,24 @@ Not fixed:
   wait.
 - geas's calls have no request headers yet; one added would be made again
   with the call.
+
+## 19. The object of a spec that `ritsu check` hands on (2026-10-31)
+
+Each item of `files` in `ritsu check --format json` has `check`: the object
+the file's own language writes of it as JSON (ritsu's DESIGN 8.3). For a
+spec, `geas::cli::checked` hands on, beside the lines it gave before, the
+object `geas check --json` prints of the spec (`ritsu_ports::Checked::json`),
+from the same functions: `report::claims_json_with` for a spec that runs,
+with the keys the spec holds (W901) as its `diagnostics`, as the command
+writes them; and `report::failure_json` for a spec that does not parse
+(with those keys and the parse's diagnostics) and for a file that cannot be
+read (with its E081), as the command prints it before it exits 2. ritsu
+takes out `file` and `diagnostics` and keeps the rest:
+`{"geas": 1, "ok": …, "claims": […]}`, or `{"geas": 1, "ok": false}`. The
+claims still run once, and the command line, its exit codes, its output and
+its JSON did not change.
+
+Checked: `each_files_check_in_the_json_is_what_its_language_writes` in
+ritsu's `tests/check.rs` gives the copy of `examples/calc` to `ritsu check`
+(its claims run Python), and holds the `check` of `calc.geas` to what
+`ritsu geas check calc.geas --json` prints, less those two keys.

@@ -4149,3 +4149,11 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 - kaname の Rust は変えていないので、kaname の試験と診断と生成したコードは前と同じである。
 
 **見つけて直していないもの**：無い。`let` で名前を付けた `running_totals` の答えを結ばないことは、32 章のとおりで、モデルも同じである。
+
+## 34. `ritsu check` の JSON に渡す、モジュールのオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`check::unit` は、診断と最後の行に加えて、`kaname check --format json` がファイルごとに書くオブジェクト（4.3 の `{kaname, file, ok, summary, functions, diagnostics}`）を、コマンドと同じ `to_json` で作り、`ritsu_ports::Checked::json` で渡す。ritsu は `file` と `diagnostics` を除いた `{kaname, ok, summary, functions}` を入れるので、関数ごとの `effect` を `ritsu check` の JSON から読める。読めないファイルは `null` になる。kaname のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、ritsu のテストのプロジェクト `cold_chain` と `regions`（型の確かめを通らない二つのファイルを含む）、例の `payout` の `.kn` の `check` が、`ritsu kaname check --format json` のオブジェクトから二つのキーを除いたものと同じであること（`payout.kn` は `summary` が `1 function, total` で、関数の `effect` の `fails` が空）。ritsu の `tests/cross.rs` の `each_border_has_its_record` で、日付を渡す関数の `effect` が `{"fails": ["rule"], "diverges": false}` であること。golden の `crates/ritsu/tests/golden/modules/shop.json` と `店.json`。
+
+見つけて直していないもの：`functions[].places[].check` と `kaname api` の `checks[].check` は、ritsu の DESIGN の確かめの番号（`X2`・`X3`・`X4`・`X6`）を書く（`ranges::What::across`）。ritsu の DESIGN 4.3 は、利用者に見える出力に設計の文書の番号を書かないと決めており、ritsu の境目の記録は、同じ確かめを語の名前（`precondition`・`rule_date_input`・`transfer_amount`・`koyomi_date_input`。ritsu の DESIGN 7 章）で呼ぶ。kaname の出力を変えると、`kaname check --format json` と `kaname api` を読む側が変わるので、ここでは変えていない。

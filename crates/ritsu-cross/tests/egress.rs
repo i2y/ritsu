@@ -5,7 +5,7 @@
 //! The map: Payments marks the card (`payments/v1/payment.proto`), Ordering is downstream of it,
 //! Notifications is downstream of Ordering only, and Shipping goes separate ways from Payments.
 
-use ritsu_cross::Borders;
+use ritsu_cross::Came;
 use ritsu_cross::egress::{Call, Outcome, judge, related};
 use ritsu_ports::{Destination, MapFacts, MapRelationship, Said, Secret, Send};
 use ritsu_base::text::Text;
@@ -164,10 +164,7 @@ fn each_call_is_one_border() {
             send("notifications/notify.flow", vec![("payment", card())], vec![("payment", "why")]),
         ],
     );
-    let mut b = Borders::default();
-    for c in &calls {
-        c.count(&mut b);
-    }
+    let came: Vec<Came> = calls.iter().map(|c| c.came()).collect();
     // held: the first and the disclosed; failed: the second (two secrets, one border); undecided: the third
-    assert_eq!(b, Borders { held: 2, failed: 1, undecided: 1 });
+    assert_eq!(came, [Came::Held, Came::Failed, Came::Undecided, Came::Held]);
 }

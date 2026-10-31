@@ -73,7 +73,14 @@ impl Engine {
                         } else {
                             Verdict::Passes
                         };
-                        Unit { label: f.clone(), parts, verdict }
+                        // what `dandori check --format json` prints of the file: the file, and its
+                        // diagnostics
+                        let diagnostics = parts.iter().filter_map(|p| match p {
+                            Part::Finding(x) => Some(x.json.clone()),
+                            Part::Text(_) => None,
+                        });
+                        let json = ritsu_base::json::Json::obj([("file", ritsu_base::json::Json::str(f.as_str())), ("diagnostics", ritsu_base::json::Json::arr(diagnostics))]);
+                        Unit { label: f.clone(), parts, verdict, json }
                     }
                     Err(msg) => Unit::unchecked(f, format!("{msg}\n")),
                 })

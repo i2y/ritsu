@@ -1353,3 +1353,9 @@ ritsu の言語の生成物が Rust でも書かれるようになり（kaname �
 - Rust は識別子を NFC にしてから比べる。NFC で同じになる二つの名前（ハングルの字母を並べたものと、合わせた音節）は、chobo では別の名前で、Rust のクライアントでは同じ名前になって組めない。chobo は名前を正規化しない（1.6）ので、これは確かめていない。Python の NFKC（11.3）と同じ形の穴である。
 - 名前に NFKC で変わる字（全角の英字、半角のカナ、ハングルの互換の字母、`ǅ`、合字の `ﬁ`）があると、rustc は、クライアントを入れたクレートに `uncommon_codepoints` の警告（`identifier contains a non normalized (NFKC) character`）を出す。この lint はクレートの根でしか切れないので、モジュールの頭の `#![allow]` では止められない。`#![deny(warnings)]` のクレートでは組めない。`docs/targets.md` に、クレートの根で許すよう書いた。
 - Vitess が sqlx の既定の接続（`sql_mode` に `PIPES_AS_CONCAT` を足す）を断ることは、4.5 の vtgate の振る舞いから決めたもので、Rust のクライアントで確かめてはいない。Vitess の上の Rust のクライアントは、platforms の段で `.pipes_as_concat(false)` を付けて流す。
+
+## 15. `ritsu check` の JSON に渡す、帳簿のオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`chobo::ports::Engine::checked` は、診断と要約の行と報告に加えて、`chobo check --format json` の `files` のうちその帳簿の項目（`{file, ok, diagnostics, report}`）を `ritsu_ports::Checked::json` で渡す。作るのはコマンドと同じ `check::to_json` で、その値を ritsu-base の JSON に読み直す。外側の `v` は帳簿の項目の外にあるので入らない。ritsu は `file` と `diagnostics` を除いた `{ok, report}` を入れる。`report` は帳簿の操作と境界の全部を持つので長い（ritsu のテストのプロジェクトの `inventory.book` で、詰めて書いて 6,302 字）が、削らずにそのまま入れる。読めない帳簿は `null` になる。chobo のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、テストのプロジェクトの帳簿と kaname の例 `payout` の二つの帳簿の `check` が、`ritsu chobo check --format json` の帳簿の項目から二つのキーを除いたものと同じであること。check の JSON の golden（`crates/ritsu/tests/golden/check/`）。

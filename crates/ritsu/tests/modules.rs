@@ -113,7 +113,7 @@ fn the_example_module_is_checked_with_its_dependencies() {
         for f in v["files"].as_array().unwrap() {
             let file = f["file"].as_str().unwrap();
             let keys: Vec<&str> = f.as_object().unwrap().keys().map(String::as_str).collect();
-            assert_eq!(keys, ["tool", "file", "dependency", "ok"]);
+            assert_eq!(keys, ["tool", "file", "dependency", "ok", "check"]);
             // the `require` names are the same in both: `pricing`, and `tax` in `pricing`
             let want = if file.starts_with("@pricing/@tax/") {
                 serde_json::json!("@pricing/@tax")
@@ -142,6 +142,60 @@ fn the_example_module_is_checked_with_its_dependencies() {
     assert_eq!(v["dependencies"].as_array().unwrap().len(), 2, "the dependencies of the tree are listed in a partial check too");
     assert_eq!(v["dependencies"][0]["files"], 0);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A border between the module at hand and a dependency, in the JSON (DESIGN 17.21): the flow and
+/// the module of kaname of `shop` call the order total of `pricing`, given a precondition here, and
+/// each side of a border's record says the dependency it is in, as each file and each diagnostic
+/// does: none for the flow and the module, `@pricing` for the rule.
+#[test]
+fn each_side_of_a_border_says_its_dependency() {
+    let t = example();
+    replace(&t, "pricing/rules/order_total.rule", "\noutputs\n", "\nconstraint shipping <= subtotal\n\noutputs\n");
+    let empty = TempDir::new("modules-no-store");
+    let (_, out, err) = ritsu_in(&t.path().join("shop"), empty.path(), &["check", "--format", "json"]);
+    let v = json(&out);
+    let records = v["borders"]["records"].as_array().unwrap_or_else(|| panic!("{out}{err}"));
+    let line_of = |rel: &str, call: &str| t.read(rel).lines().position(|l| l.contains(call)).map(|i| i + 1);
+    let at: Vec<serde_json::Value> = records.iter().filter(|r| r["check"] == "precondition").map(|r| r["at"].clone()).collect();
+    assert_eq!(
+        at,
+        [
+            serde_json::json!({"tool": "kaname", "file": "checkout/basket.kn", "dependency": null, "line": line_of("shop/checkout/basket.kn", "order_total(")}),
+            serde_json::json!({"tool": "dandori", "file": "orders/place_order.flow", "dependency": null, "line": line_of("shop/orders/place_order.flow", "= total(")}),
+        ],
+        "{}",
+        v["borders"]
+    );
+    for r in records.iter().filter(|r| r["check"] == "precondition") {
+        assert_eq!(r["about"], "shipping <= subtotal", "{r}");
+        assert_eq!(r["to"], serde_json::json!({"tool": "rulec", "file": "@pricing/rules/order_total.rule", "dependency": "@pricing", "line": null}), "{r}");
+    }
+}
+
+/// Each `.req` of the JSON holds what yuen says of the requirements it is checked with (DESIGN 8.3):
+/// yuen checks a module's requirements as one, and each dependency's as one. In yuen's module of
+/// tests, the `.req` of `lib` has what yuen says of `lib`'s, and each of the module's own has the
+/// same object, of the module's: its `ok` is that of all of them, where the file's own `ok` says
+/// whether that file has an error.
+#[test]
+fn each_requirements_file_holds_what_yuen_says_of_its_modules_requirements() {
+    let empty = TempDir::new("modules-check-yuen");
+    let (code, out, err) = ritsu_in(&here().join("../yuen/tests/modules/en/app"), empty.path(), &["check", "--format", "json"]);
+    assert_eq!(code, 1, "{out}{err}");
+    let v = json(&out);
+    let reqs: Vec<&serde_json::Value> = v["files"].as_array().unwrap().iter().filter(|f| f["tool"] == "yuen").collect();
+    let lib: Vec<&&serde_json::Value> = reqs.iter().filter(|f| f["dependency"] == "@lib").collect();
+    assert_eq!(lib.len(), 1, "{}", v["files"]);
+    assert_eq!((lib[0]["file"].as_str(), &lib[0]["check"]["ok"]), (Some("@lib/pricing.req"), &serde_json::json!(true)), "{}", lib[0]);
+    assert!(lib[0]["check"]["summary"].as_str().is_some_and(|s| s.starts_with("@lib: ok — ")), "{}", lib[0]);
+    let own: Vec<&&serde_json::Value> = reqs.iter().filter(|f| f["dependency"].is_null()).collect();
+    assert_eq!(own.len(), 5, "{}", v["files"]);
+    assert!(own.iter().all(|f| f["check"] == own[0]["check"]), "{}", v["files"]);
+    assert_eq!(own[0]["check"]["ok"], false, "{}", own[0]);
+    let ok: Vec<(&str, bool)> = own.iter().map(|f| (f["file"].as_str().unwrap(), f["ok"].as_bool().unwrap())).collect();
+    assert_eq!(ok[0], ("billing.req", true), "{ok:?}");
+    assert!(ok[1..].iter().all(|(_, ok)| !ok), "{ok:?}");
 }
 
 /// `ritsu run` of the example's flow (DESIGN 17.8): the flow prices an order by the rules of

@@ -23,7 +23,8 @@
 //! An amount that never comes from a rule is dandori's to hold to the task's ranges (its E014),
 //! and its refusals are the ones chobo's check finds, which dandori holds the task to (its E022).
 
-use crate::{borders, named, Borders, Flow};
+use crate::{borders, named, Border, Borders, Came, Check, Flow, Side};
+use ritsu_base::naming::Tool;
 use ritsu_base::diag::Diag;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
@@ -192,10 +193,17 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                 }
                 let outs: Vec<Found<OutputValues>> = got.outputs.iter().map(|x| x.values.clone()).collect();
                 let (param, given) = (&a.param, &a.shown);
-                match borders::amounts_given(&outs, &got.ranges, got.other.as_ref()) {
-                    Answer::Holds => borders.held += 1,
+                let answer = borders::amounts_given(&outs, &got.ranges, got.other.as_ref());
+                let code = match &answer {
+                    Answer::Holds => None,
+                    Answer::Fails(_) => Some("E203"),
+                    Answer::Undecided(_) => Some("W203"),
+                };
+                let (at, to) = (Side::at(Tool::Dandori, &f.file.rel, call.line), Side::reached(project, Tool::Chobo, &call.book, None));
+                borders.add(Border::new(Check::TransferAmount, param.clone(), at, Some(to), Came::of(&answer), code));
+                match answer {
+                    Answer::Holds => {}
                     Answer::Fails((v, at)) => {
-                        borders.failed += 1;
                         let mut held: Option<Text> = None;
                         let mut fix = tr!(
                             "規則の返す額を 0 以上にしてください（負の額は、向きの違う振替に分けてください）。",
@@ -252,7 +260,6 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                     }
                     Answer::Undecided(why) => {
-                        borders.undecided += 1;
                         let fails_then = tr!(
                             "受け取らない額なら、ワークフローを走らせたときに chobo がその呼び出しを失敗させます。",
                             "chobo fails a call with an amount it does not take when the workflow runs."
@@ -313,10 +320,17 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
             let (lo, hi) = range.unwrap_or((1, borders::MAX_AMOUNT));
             // the reasons of the book's bounds: the refusals that turn on the amounts
             let bounds: Vec<String> = joined.chobo.facts(&call.book).map(|b| b.accounts.iter().flat_map(|a| a.lower.iter().chain(a.upper.iter()).map(|x| x.refusal.clone())).collect()).unwrap_or_default();
-            match borders::refusals_met(&found, op, &call.handles, &bounds) {
-                Answer::Holds => borders.held += 1,
+            let answer = borders::refusals_met(&found, op, &call.handles, &bounds);
+            let code = match &answer {
+                Answer::Holds => None,
+                Answer::Fails(_) => Some("E204"),
+                Answer::Undecided(_) => Some("W204"),
+            };
+            let (at, to) = (Side::at(Tool::Dandori, &f.file.rel, call.line), Side::reached(project, Tool::Chobo, &call.book, None));
+            borders.add(Border::new(Check::TransferRefusals, format!("{transfer}.{op}"), at, Some(to), Came::of(&answer), code));
+            match answer {
+                Answer::Holds => {}
                 Answer::Fails(unmet) => {
-                    borders.failed += 1;
                     let reasons = listed(&unmet.unhandled);
                     let mut diag: Diag = Diag::at("E204", &f.file.shown, call.line, 1, tr!(
                         "帳簿は `{transfer}.{op}` を {reasons} で拒否することがありますが、タスク `{task}` はそれを処理していません",
@@ -340,7 +354,6 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                 }
                 Answer::Undecided(why) => {
-                    borders.undecided += 1;
                     let diag: Diag = Diag::at("W204", &f.file.shown, call.line, 1, tr!(
                         "タスク `{task}` が呼ぶ `{transfer}.{op}` を、帳簿がどの理由で拒否しうるかを決められません",
                         "Which reasons the book can refuse `{transfer}.{op}` with, as the task `{task}` calls it, cannot be decided"

@@ -1025,7 +1025,7 @@ OpenAPI と AsyncAPI の文書と、手で書いた Cedar のポリシーとス�
 
 言語をまたぐ検査は `ritsu-cross` に置き、口（3.2）だけを通す。どの検査も、結果は三つのどれかである（P5）。
 
-- **成り立つことを示した**：何も出さない（`ritsu check` の要約の数に入る）。
+- **成り立つことを示した**：何も出さない（`ritsu check` の要約の数と、JSON の境目の記録に入る。7.15）。
 - **成り立たない例がある**：エラー。その値と、そこに至るもの（フローの実行、規則の入力、koyomi の入力の日付）を添える。
 - **決められない**：警告。理由を言い、実行時に確かめる手当てがあればそれを言う。
 
@@ -1377,6 +1377,72 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 
 確かめ方：`crates/ritsu-cross/tests/gates.rs`（判定の単体テスト）、`crates/ritsu/tests/cross.rs` の `x15_the_operations_a_context_opens` と `x16_what_a_workflow_calls`（台帳の再現のプロジェクトを英語と日本語で走らせ、出力の golden（`tests/golden/cross/x15-*`、`x16-*`）と境界の数を見る。X15 は、手で書いた Cedar の組が操作を守る形も、組を地図が `owns` で指すものと、要件が指すものの二つで確かめる）、`crates/ritsu/tests/codes.rs`（再現）、`crates/ritsu/tests/sekisho.rs`（例の境界の数）。
 
+### 7.15 境目の記録と、確かめの名前（2026-10-31）
+
+**きっかけ**：`ritsu check --format json` の `borders` は、境目の検査の三つの数（`held`・`failed`・`undecided`）だけだった。数が動いても、どの境目が増えたか、減ったか、結果が変わったかを JSON から知る手段が無く、決められない境目の数を CI で見るプロジェクトは、数が変わるたびにテキストを読み直すしかなかった。
+
+**原因**：境目の検査は、境目を一つ確かめるたびに `ritsu_cross::Borders` の数を足すだけで、何を確かめたかを残していなかった（八つのファイルの 25 か所ほど）。規則の `range from koyomi`（X3 の (b)）の入力は、rulec の検査を通る規則のものを数えて、そのまま `held` に足していた。
+
+**決定**：
+
+1. **境目一つにつき記録を一つ残し、三つの数は記録から数える。** `Borders` は記録の並びだけを持ち、`held()`・`failed()`・`undecided()`・`checked()` は記録を数える。数を直に足す口は無いので、記録の数と三つの数は作りの上で合う。JSON では、三つの数のあとに `records` を置く。前からの三つのキーと値は変わらない。
+
+2. **記録の形。** キーは順に `check`・`about`・`at`・`to`・`result`・`code` で、その後ろに確かめごとのキーが続く（いまは無い）。
+   - `check`：確かめの名前（下の表）。
+   - `about`：何についての境目か。その境目の診断が名前を出すもので、前提は rulec が書くとおり（`asked <= paid`）、日付の入力と振替のパラメータは名前、拒否は `<帳簿>.<操作>`、仮押さえは案件の名前、秘密の値の送り先はタスクの名前、操作は参照（`openapi "api/orders.json" operation refundOrder`）。
+   - `at`：ritsu が診断を出す側（フローの呼び出し、kaname の関数の中の場所、コンテキストの `open host service` の行、規則の `range from koyomi` の行）。`to`：もう一方の側。もう一方が無い境目（どの action も守らない操作）は `null`。
+   - 側は `{tool, file, line}`。`file` はルートからのパスで、ルートの外なら `null`。`line` は 1 から数えた行で、言語の口が行を渡さない宣言の側（規則の前提、日付の入力、帳簿の振替）は `null`。モジュールでは `file` のすぐあとに `dependency` を置く（診断と `files` と同じ置き方。17.21）。
+   - `result`：`held`・`failed`・`undecided`。三つの数のキーと同じ語である。
+   - `code`：その境目について ritsu が出した診断のコード。`held` の記録は `null`。W907 のようにコンテキストに一つだけ出る診断は、その診断が挙げる操作のどの記録にも入るので、記録の W907 の数は診断の数と合わない。X14 は秘密の値ごとに診断を出し、記録は呼び出しごとに一つで、`code` は失敗があれば E905、無ければ W905 である。モジュールで隠す依存の警告（`--deps-warnings` なし）も、記録の `code` には入る（数にも前から入っている）。
+
+3. **確かめは語の名前で呼び、X の番号を出さない。** 4.3 は、利用者に見える出力に設計の文書の番号を書かないと決めている。JSON も利用者が見る出力であり、X4 は二つの確かめ（額と拒否）を一つの番号で呼ぶ。診断のコードで呼ぶと、`held` の境目にはコードが無く、一つの確かめにコードが二つある。
+
+   | 名前 | 7.2 | `at` | `to` | 成り立たない／決められない |
+   |---|---|---|---|---|
+   | `precondition` | X2 | 規則の呼び出し（dandori、kaname） | 規則 | E201／W201 |
+   | `rule_date_input` | X3 の (a) | 規則の呼び出し | 規則 | E202／W202 |
+   | `range_from_koyomi` | X3 の (b) | 規則の `range from koyomi` の行 | 日付のファイル | なし（rulec の検査を通る規則だけに残り、いつも `held`） |
+   | `transfer_amount` | X4 | 振替の呼び出し | 帳簿 | E203／W203 |
+   | `transfer_refusals` | X4 | 振替の呼び出し | 帳簿 | E204／W204（kaname は W204 だけ） |
+   | `hold_expiry` | X5 | 確定か取消の呼び出し | 帳簿 | E206／W206 |
+   | `koyomi_date_input` | X6 | 日付の呼び出し | 日付のファイル | E205／W205 |
+   | `secret_destination` | X14 | 送る呼び出し | 送り先のファイル | E905／W905 |
+   | `operation_guard` | X15 | コンテキストの `open host service` の行 | 守るゲートの `guards` の行。だれでも呼べる操作（`security: []`）はその文書、守るものが無ければ `null` | E907／W907 |
+   | `workflow_permission` | X16 | 操作の呼び出し | 守るゲートの `guards` の行 | E908／W909 |
+
+   決まり：名前は変えない。使い回さない。確かめを足すときは、新しい名前を表の後ろに足す（並べる順は表の順なので、前からの記録の並びは変わらない）。確かめをやめても、名前は表に残し、使い回さない。名前は英語の snake_case で、`--lang` で変わらない。kaname の呼び出しの記録の名前は、口の `Crossing` から決める（`Precondition` は `precondition`、`RuleDay` は `rule_date_input`、`Amount` は `transfer_amount`、`Refusals` は `transfer_refusals`、`DateDay` は `koyomi_date_input`）。
+
+4. **並べる順。** `check_with` の終わりで、（名前の表の順、`at` のファイル、`at` の行）で安定に並べ替える。同じものどうしは、確かめが見つけた順（プロジェクトのファイルの順、呼び出しの順、前提の順）で、これも入力が同じなら同じである。並べ替えないと、kaname の記録とフローの記録が確かめの順で混ざり、読む側が順を当てにできない。
+
+5. **確かめずに `held` にしているもの。** 規則の `range from koyomi` の入力は、rulec が自分の検査で koyomi の日の上で確かめるので、`held` の記録として残す。`at` は rulec が索引に渡す `range from koyomi` の参照の行、`to` はその日付のファイルである。同じ日付の参照が二つあれば書いた順に組にし、組にできなければ、行とファイルを `null` にする。検査を通らない規則には、前と同じく、記録も数も無い。
+
+6. **確かめごとのキー。** 記録の型（`ritsu_cross::Border`）は、`code` のあとに書くキーと値の並び（`detail`）を持つ。確かめごとのキーは、六つのキーと同じ名前を使わず、一度出した名前は変えない。
+
+**捨てたもの**：
+
+- **記録を、テキストの診断から組み立てること。** `held` の境目には診断が無く、W907 のように一つの診断が境目をいくつもまとめて言うものがある。
+- **三つの数を記録と別に足し続け、試験だけで合わせること。** 数と記録を別に持つと、片方を足し忘れたところが、試験の無い形で食い違う。
+- **確かめを X の番号か、診断のコードで呼ぶこと**（決定の 3）。
+- **記録を `files` の項目の下に置くこと。** 境目には二つのファイルがあり、どちらの下に置くかが決まらない。
+
+**変わること**：
+
+- `ritsu check --format json` の `borders` に `records` が増える。三つの数と、ほかのキーと値は変わらない。テキストは変わらない。
+- `ritsu mod report` は、中で走らせる `ritsu check` の JSON から `diagnostics` だけを読むので変わらない。`ritsu run` は check の JSON を出さない。ritsu-wasm（ブラウザで試すページと npm のパッケージ）は `ritsu::check::run` をそのまま呼ぶので、`ritsu.wasm` を作り直すと同じ JSON になる。
+- `ritsu_cross::Borders` は `Copy` でなくなり、数のフィールドを持たない。ほかのクレートは数のフィールドを読んでいなかった。
+
+**確かめたこと**：
+
+- ritsu-cross の `tests/borders.rs`（記録から数えた数と、並べる順）、`tests/egress.rs` と `tests/egress_map.rs`（X14 の結果、側、`code`。地図が答えないときは、どの記録も W905）。
+- ritsu の `tests/cross.rs`：台帳の再現を回すどの試験でも、記録の数が三つの数の和と、結果ごとの記録の数がそれぞれの数と等しいこと、記録が並べる順に並ぶこと、キーの順、`code` が `held` でない記録にだけあり、`at` と同じファイルの ritsu の診断にあること。`each_border_has_its_record` は、E202 の再現（`batch.rule`・`billing.flow`・`billing.kn`・`payment_terms.cal`。koyomi・dandori・rulec・kaname をまたぐ）で、三つの結果の記録がどれもあり、二度走らせて同じ JSON になり、記録が golden（`golden/cross/records-E202.json`）と同じであることを確かめる。
+- ritsu の `tests/modules.rs` の `each_side_of_a_border_says_its_dependency`：依存の規則に前提を足すと、モジュールのフローと kaname の呼び出しの二つの記録の `to` が `@pricing` の規則（`dependency` は `@pricing`）になり、`at` はモジュールのファイル（`dependency` は `null`）である。
+- 替える前と後の突き合わせ：0.39.0 の公式のバイナリと替えたあとのバイナリで、二つ以上の言語のファイルを持つ木の 125 のディレクトリ（geas の主張を走らせるものを除く）の `ritsu check . --root .`（英日のテキストと JSON）を比べた。テキストと終了コードは、0.39.0 のあとに入った sakai の E208 の変更が変えた二つ（sakai の `tests/contract` と、それを含む `tests`）のほかは一字も同じで、JSON は、二つの新しいキーを除くと同じだった。記録は 209 件（`held` 56、`failed` 1、`undecided` 152）で、どのディレクトリでも三つの数と合い、`code` のある記録はどれも、`at` と同じファイルの ritsu の診断にあった。
+
+**見つけて直していないもの**：
+
+- kaname の `check --format json` の `functions[].places[].check` と `kaname api` の `checks[].check` は、7.2 の番号（`X2`・`X3`・`X4`・`X6`）を書く（ritsu-ports の `Crossing::check`）。4.3 の決まりと食い違うが、kaname の出力なので変えていない（kaname の DESIGN 34 章）。
+- 規則の `check`（8.3）は `null` で、rulec が規則について言うことは JSON に無い（rulec の DESIGN §15.276）。
+
 ## 8. 一つの CLI
 
 ### 8.1 ritsu のコマンド
@@ -1460,7 +1526,7 @@ ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6):
 
 要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通りました」）で、エラーと警告の数を括弧に添える。通らないファイルがあればその数を、確かめられなかったファイルがあればその数を言い、指摘の数は、その指摘があるファイルの結果の側の括弧に添える。通るファイルの警告は、ほかのファイルが通らなくても通る側に数え（`1 fail (1 error), 5 pass (1 warning)`）、通るファイルに指摘が無ければ通る側は書かない。どのファイルのものでもない指摘は、通らない側に数える（rulec の DESIGN §15.242）。ファイルがどれも通っても、どのファイルのものでもないエラー（モジュールのルートの E307 など）があれば、`all pass` とは言わず、`1 error`（日本語は「エラー 1 件」）のように数だけを言い、検査は通らない（2026-10-28）。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、kaname、dandori、sekisho）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。E.4 で、X2（前提を呼び出しの場所で）と X3 の (b)（rulec の `range from koyomi`）が数に入り、E.5 で、`ritsu check` が dandori に日付の口と帳簿の口も渡すようになって（6.1。前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` でも E018 になっていた）、X3 の (a)、X4、X5、X6 が入った。テストのプロジェクト（`shop` と `通販`）は、フローが呼ぶ規則に前提も koyomi の範囲も無く、日付も帳簿も使わないので、どちらも 0 のままである（golden は変わらない）。2026-10-06 に、X14（16.8）も数に入った。フローが地図のコンテキストに属し、秘密の値をプロジェクトの中のファイルへ送る呼び出しごとに、境目を一つ数える（地図の無いプロジェクトでは数えない）。テストのプロジェクト四つ（`shop`、`通販`、`invoice`、`stockroom`）には秘密の値を送るフローが無いので、数は変わらない（替える前と後で確かめた）。dandori の例の `invoice` を `ritsu check` にかけると、W205 が二つ（`now` から来る日）と W206 が六つ（仮押さえを作るタスクに `timeout` が無い）出て、要約は `ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); borders between the languages: 8 checked, 8 undecided` になる。これが正しい振る舞いで、`ritsu run` の担当のテスト（`crates/ritsu/tests/dandori.rs`）の期待は、取り込むときにこの 8 件に合わせた。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
 
-JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided`）の順である。ルートに `ritsu.mod` があるときだけ、`ok` のあとに `module` と `dependencies` を、`diagnostics` のあとに `contributions` を置く（17.21）。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。境目の検査が数えたときの `borders` の三つの数は、`crates/ritsu/tests/cross.rs` がプロジェクトごとに確かめる（テキストは `tests/golden/cross/` の golden）。
+JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`、`check`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided` と、境目一つずつの記録の `records`）の順である。ルートに `ritsu.mod` があるときだけ、`ok` のあとに `module` と `dependencies` を、`diagnostics` のあとに `contributions` を置く（17.21）。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。境目の検査が数えたときの `borders` の三つの数と記録は、`crates/ritsu/tests/cross.rs` がプロジェクトごとに確かめる（テキストは `tests/golden/cross/` の golden。記録の形と順は 7.15）。
 
 ```json
 {
@@ -1471,7 +1537,8 @@ JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）�
     {
       "tool": "rulec",
       "file": "billing/rules/billing_need.rule",
-      "ok": false
+      "ok": false,
+      "check": null
     },
     …
   ],
@@ -1501,10 +1568,28 @@ JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）�
   "borders": {
     "held": 0,
     "failed": 0,
-    "undecided": 0
+    "undecided": 0,
+    "records": []
   }
 }
 ```
+
+**ファイルのまとめ（2026-10-31）**。`files` の各項目の最後の `check` は、その言語の `check --format json` がそのファイル（言語の単位）について書くオブジェクトから、`file`・`root`・`diagnostics` を除いたものである。キーの順と値は言語が書くとおりで、ritsu の側の情報（`tool`、ルートからの `file`、`dependency`）は外に置き、診断は `diagnostics` にだけ置く（診断の決まりと同じ）。各言語の口が、コマンドと同じ関数でオブジェクトを作って渡し（`ritsu_ports::Checked::json`）、三つのキーは ritsu が一か所で除く。言語ごとには次のとおりである。
+
+| 言語 | `check` |
+|---|---|
+| rulec | `null`（`rulec check --format json` は診断一つにつき一行で、ファイルのオブジェクトを書かない。rulec の DESIGN §15.276） |
+| koyomi | `{ok, summary}` |
+| chobo | `chobo check --format json` の `files` の、その帳簿の項目の `{ok, report}` |
+| geas | `{geas, ok, claims}`。走らせられない仕様と読めないファイルは `{geas, ok}`（`ok` は偽） |
+| kaname | `{kaname, ok, summary, functions}`（関数ごとの `effect` を含む） |
+| dandori | `{}`（`dandori check --format json` はファイルごとに `{file, diagnostics}` を書く） |
+| sekisho | `{ok, summary}` |
+| yuen | モジュールの要件（依存ごとにも一つ）の `{ok, summary}`。そのモジュールのどの `.req` にも同じものが入る。中の `ok` は要件の全体のもので、項目の `ok`（そのファイルにエラーがあるか）と違うことがある |
+| sakai | 地図の項目に、その地図の `{ok, summary}`。地図でないコンテキストのファイルは、いくつの地図に読まれるかが決まらないので `null` |
+| `.proto` | `null`（言語の検査が無い） |
+
+言語がオブジェクトを書かない単位（読めないファイル）は `null` である。言語がオブジェクトを書くかぎり、言語の答え（通る、通らない、確かめられない）に関わらず入れる。テキストは変えていない。`crates/ritsu/tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` が、ritsu のテストのプロジェクト（`通販`、`shop` とその変えたコピー、`cold_chain`、`regions`）、yuen の `tests/fixtures/rulec`、sekisho の例 `refunds`、kaname の例 `payout`、geas の例 `calc`（主張が Python を走らせる）で、どの項目の `check` も、その言語のコマンドが書くオブジェクトから三つのキーを除いたものと同じであることを確かめる。モジュールの `.req` は `crates/ritsu/tests/modules.rs` の `each_requirements_file_holds_what_yuen_says_of_its_modules_requirements` が確かめる。
 
 A の段階の案で `crossings` と呼んでいたものは `borders` にした。sakai の要約と api の `crossings` は、境界づけられたコンテキストの境界を越える参照のことで、別のものだからである。案の `proved` も、0.4 の決まり（肯定形で「証明」と言わない）に合わせて `held` にした。
 
@@ -4143,7 +4228,7 @@ warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` re
 
 - 外側に `"module": {"name", "version"}`（手元のモジュール。`version` は無ければ null。`ritsu.mod` が読めなければ `module` が null）と、`"dependencies": [ … ]`。置くのは `ok` のあと、`files` の前である。`diagnostics` のあとに `"contributions": [ … ]` を置く。8.3 の順は `ritsu`、`root`、`ok`、`module`、`dependencies`、`files`、`diagnostics`、`contributions`、`borders` になる。
 - `dependencies` の要素：`{"prefix": "@pricing", "name": "example.com/acme/pricing", "version": "1.1.0" | null, "source": "oci" | "git" | "path", "path": "../pricing" | null, "url": "<git の URL>" | null, "commit": "<コミット>" | null, "digest": "sha256:…" | null, "files_digest": "sha256:…" | null, "where": "store" | "vendor" | "path", "verified": ["<決まりの文>", …], "files": 3, "ok": true, "errors": 0, "warnings": 0, "claims_not_run": 0}`。正規の書き方の順に並べる。`files` はその依存のファイルのうち検査したものの数で、一部の検査では 0 のことがある。`claims_not_run` は、走らせなかった `.geas` の主張の数である（17.8）。
-- `files` と `diagnostics` の要素に `"dependency": "@pricing" | null`（手元のファイルは null）。置くのは `file` のすぐあとである。依存の依存のファイルは、正規の書き方の連なり（`"@pricing/@tax"`）を書く。全体の検査で `--deps-warnings` が無ければ、依存のファイルの警告と注は `diagnostics` に入れない（数は `dependencies` の `warnings`）。
+- `files` と `diagnostics` の要素と、`borders` の記録の二つの側（`at` と `to`。7.15）に `"dependency": "@pricing" | null`（手元のファイルは null）。置くのは `file` のすぐあとである。依存の依存のファイルは、正規の書き方の連なり（`"@pricing/@tax"`）を書く。全体の検査で `--deps-warnings` が無ければ、依存のファイルの警告と注は `diagnostics` に入れない（数は `dependencies` の `warnings`）。
 - `contributions` の要素：`{"file": "rules/spring_sale.rule", "dependency": null, "to": "@pricing/rules/order_discount.rule", "to_dependency": "@pricing"}`。モジュールの境目を越える `contribution` だけを並べる（17.8 の注と同じもの）。
 - 木が読めないとき（E301〜E306、E308）は、`files` と `dependencies` が空で、`diagnostics` に木の診断が入る。
 - ルートに `ritsu.mod` が無く、歩いてモジュールを飛ばしたときだけ、`ok` のあとに `"skipped_modules": ["tax"]`（ルートからのパス）を置く（★）。飛ばしたモジュールが無ければ置かない（M14）。

@@ -49,31 +49,71 @@
       "tool": "rulec",
       "file": "@pricing/@tax/規則/付加価値税率.rule",
       "dependency": "@pricing/@tax",
-      "ok": true
+      "ok": true,
+      "check": null
     },
     {
       "tool": "rulec",
       "file": "@pricing/規則/注文の合計.rule",
       "dependency": "@pricing",
-      "ok": true
+      "ok": true,
+      "check": null
     },
     {
       "tool": "rulec",
       "file": "@pricing/規則/送料.rule",
       "dependency": "@pricing",
-      "ok": true
+      "ok": true,
+      "check": null
     },
     {
       "tool": "kaname",
       "file": "会計/かご.kn",
       "dependency": null,
-      "ok": true
+      "ok": true,
+      "check": {
+        "kaname": "0.39.0",
+        "ok": true,
+        "summary": "2 functions, total",
+        "functions": [
+          {
+            "function": "小計",
+            "effect": {
+              "fails": [],
+              "diverges": false
+            },
+            "written": null,
+            "places": [],
+            "calls": []
+          },
+          {
+            "function": "合計",
+            "effect": {
+              "fails": [],
+              "diverges": false
+            },
+            "written": {
+              "total": true,
+              "fails": [],
+              "diverges": false
+            },
+            "places": [],
+            "calls": [
+              {
+                "line": 18,
+                "function": "小計"
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "tool": "dandori",
       "file": "注文/注文を受ける.flow",
       "dependency": null,
-      "ok": true
+      "ok": true,
+      "check": {}
     }
   ],
   "diagnostics": [],
@@ -81,6 +121,7 @@
   "borders": {
     "held": 0,
     "failed": 0,
-    "undecided": 0
+    "undecided": 0,
+    "records": []
   }
 }

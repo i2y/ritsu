@@ -1,7 +1,8 @@
 //! The decisions of X3 (a), X4, X5 and X6 (`ritsu_cross::borders`) over what the languages hand
 //! over through their ports, each to all three of its answers (held, an example, undecided), held
-//! to real answers of koyomi, chobo and rulec. `crates/ritsu/tests/cross.rs` reaches the same
-//! decisions from projects, where a flow calls them.
+//! to real answers of koyomi, chobo and rulec; and the records the checks keep of the borders
+//! (`ritsu_cross::Borders`). `crates/ritsu/tests/cross.rs` reaches the same decisions from
+//! projects, where a flow calls them, and reads the records in `ritsu check --format json`.
 
 use ritsu_cross::borders::{amount_fits, amount_unshown, amounts_given, amounts_hull, amounts_unshown, day_text, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom, Unmet};
 use ritsu_ports::{Answer, Books, Dates, Found, Rules};
@@ -209,4 +210,38 @@ fn x5_a_hold_against_its_expiry() {
         Found::Value(s) => assert_eq!((s.fewest, s.most, s.fewest_at.map(day_text), s.most_at.map(day_text)), (18, 51, Some("2026-02-20".into()), Some("2026-07-21".into()))),
         other => panic!("{other:?}"),
     }
+}
+
+/// The records of the borders: the counts are theirs, and they are put in the order of the checks,
+/// then of the file and the line of the place, the ones of one place as they were found.
+#[test]
+fn the_borders_are_counted_from_their_records_in_their_order() {
+    use ritsu_base::naming::Tool;
+    use ritsu_cross::{Border, Borders, Came, Check, Side};
+    let at = |file: &str, line: usize| Side::at(Tool::Dandori, file, line);
+    let rule = Some(Side::new(Tool::Rulec, Some("r.rule".into()), None));
+    let mut b = Borders::default();
+    b.add(Border::new(Check::KoyomiDateInput, "received", at("b.flow", 3), None, Came::Undecided, Some("W205")));
+    b.add(Border::new(Check::Precondition, "x <= y", at("b.flow", 9), rule.clone(), Came::Failed, Some("E201")));
+    b.add(Border::new(Check::Precondition, "y <= z", at("a.flow", 9), rule.clone(), Came::Held, None));
+    b.add(Border::new(Check::Precondition, "x <= z", at("a.flow", 9), rule.clone(), Came::Held, None));
+    b.add(Border::new(Check::Precondition, "x <= y", at("a.flow", 2), rule, Came::Undecided, Some("W201")));
+    assert_eq!((b.held(), b.failed(), b.undecided(), b.checked()), (2, 1, 2, 5));
+    b.sort();
+    let order: Vec<(&str, &str, usize, &str)> = b.records().iter().map(|r| (r.check.word(), r.at.file.as_deref().unwrap(), r.at.line.unwrap(), r.about.as_str())).collect();
+    assert_eq!(
+        order,
+        [
+            ("precondition", "a.flow", 2, "x <= y"),
+            ("precondition", "a.flow", 9, "y <= z"),
+            ("precondition", "a.flow", 9, "x <= z"),
+            ("precondition", "b.flow", 9, "x <= y"),
+            ("koyomi_date_input", "b.flow", 3, "received"),
+        ]
+    );
+    // the words are the order's, and each is one of a check's own
+    let words: Vec<&str> = Check::ALL.iter().map(|c| c.word()).collect();
+    assert!(Check::ALL.windows(2).all(|w| w[0] < w[1]), "{words:?}");
+    assert_eq!(words.iter().collect::<std::collections::BTreeSet<_>>().len(), Check::ALL.len());
+    assert!(words.iter().all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '_')), "{words:?}");
 }

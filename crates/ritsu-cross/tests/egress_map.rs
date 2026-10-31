@@ -7,7 +7,8 @@
 //! project in Japanese names, and a map that does not pass sakai's check (W905).
 
 use ritsu_base::text::Lang;
-use ritsu_cross::Borders;
+use ritsu_base::naming::Tool;
+use ritsu_cross::{Borders, Came, Check};
 use ritsu_ports::{Crossings, Destination, Flows, Ports, RuleCall, Rules, Said, Secret, Send};
 use ritsu_project::{Joined, Project};
 use ritsu_testkit::TempDir;
@@ -150,8 +151,15 @@ fn a_secret_goes_where_the_map_says() {
             let (text, b, codes) = run(&t, lang);
             // held: to Payments itself, under discloses, the flow's own mark to Ordering; failed:
             // to Notices, to a file the map does not cover
-            assert_eq!(b, Borders { held: 3, failed: 2, undecided: 0 }, "{tag} {l}:\n{text}");
+            assert_eq!((b.held(), b.failed(), b.undecided()), (3, 2, 0), "{tag} {l}:\n{text}");
             assert_eq!(codes, ["E905", "E905"], "{tag} {l}:\n{text}");
+            // each call a border at its line of the flow, to the file it sends to, with the code
+            // said of it
+            for r in b.records() {
+                assert_eq!((r.check, r.at.tool, r.at.file.as_deref()), (Check::SecretDestination, Tool::Dandori, Some("ordering/checkout.flow")), "{r:?}");
+                assert_eq!(r.code.as_deref(), (r.came == Came::Failed).then_some("E905"), "{r:?}");
+                assert!(r.at.line.is_some() && r.to.as_ref().is_some_and(|s| s.line.is_none()), "{r:?}");
+            }
             if let Err(e) = ritsu_testkit::golden::check(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/golden/egress/{tag}.{l}.txt")), &text) {
                 failures.push(e);
             }
@@ -164,8 +172,9 @@ fn a_secret_goes_where_the_map_says() {
 fn a_map_that_does_not_pass_leaves_it_undecided() {
     let t = project(&EN, false);
     let (text, b, codes) = run(&t, Lang::En);
-    assert_eq!(b, Borders { held: 0, failed: 0, undecided: 5 }, "{text}");
+    assert_eq!((b.held(), b.failed(), b.undecided()), (0, 0, 5), "{text}");
     assert_eq!(codes, ["W905"; 5], "{text}");
+    assert!(b.records().iter().all(|r| r.code.as_deref() == Some("W905")), "{:?}", b.records());
     if let Err(e) = ritsu_testkit::golden::check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/egress/broken.en.txt"), &text) {
         panic!("{e}");
     }

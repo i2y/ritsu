@@ -6079,6 +6079,14 @@ note: `rules/member_tier_shipping.rule` implements a contract's service (`implem
 - **別名か版の大きい数を、`implements` に移るのと同時に変えた規則。** 見るのは、いまの別名と版のパスだけなので、前のパスに残った `.proto` は挙がらない。
 - **buf が前の `.proto` から作ったスタブ。** buf の書いたファイルなので挙げない（捨てたもの）。`buf generate` はスタブを消さないので、`.proto` を消しても `python/stubs/rulec/<別名>/v<版>/` は残る。
 
+### 15.276 `ritsu check` の JSON の、規則の `check` は `null`（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`rulec check --format json` は診断一つにつき一行を書き（JSON Lines）、ファイルのオブジェクトを書かない。テキストの `ok …` の行にあたるものも JSON には無い。そこで `ports::Engine::checked` は、単位のオブジェクトに `Json::Null` を渡し（`ritsu_ports::Checked::json`）、規則の `check` は `null` になる。rulec のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、どのプロジェクトでも規則の `check` が `null` であること。check の JSON の golden（`crates/ritsu/tests/golden/check/`、`golden/modules/`）。
+
+見つけて直していないもの：規則について `check` が言うこと（`ok …` の行、警告の数）を、ほかの言語のように JSON のオブジェクトで書く形は無い。足すなら `rulec check --format json` の形を変えることになり、JSON Lines を読む側に関わるので、ここでは足していない。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

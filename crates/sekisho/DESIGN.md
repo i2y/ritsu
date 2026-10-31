@@ -2085,3 +2085,9 @@ ritsu のサイトの sekisho のページ（英日）の `gate` の塊五つず
 ### 21.7 見つけて直していないもの
 
 - 字句の定義は、検査を通るファイルを正しく読む。E001 のうち、単位の表に無い単位（`50XYZ`）、無い日付（`2026-02-30`）、大きすぎる数は、字句の定義には数に見える。単位の表と暦を持たないためである。サイトに載るゲートは検査を通るものなので、ページの色は変わらない。
+
+## 22. `ritsu check` の JSON に渡す、ゲートのオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`check::unit` は、診断と最後の行に加えて、`sekisho check --format json` がファイルごとに書くオブジェクト（`{file, ok, summary, diagnostics}`）を、コマンドと同じ `to_json` で作り、`ritsu_ports::Checked::json` で渡す。ritsu は `file` と `diagnostics` を除いた `{ok, summary}` を入れる。読めないファイルは `null` になる。sekisho のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、ritsu のテストのプロジェクト `cold_chain` と `regions`（検査を通らないゲートを含む）、例の `refunds` のゲートの `check` が、`ritsu sekisho check --format json --root <プロジェクト>` のオブジェクトから二つのキーを除いたものと同じであること。

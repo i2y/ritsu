@@ -2457,3 +2457,9 @@ dandori は、振替の額ごとに、振替に至る実行でその額になり
 - **呼び出しに渡した変数を別の変数に入れてから、その変数で分けても、狭めない。** 狭めるのは、呼び出しに渡した変数かフィールドそのものの `match` だけである。
 - **ループの中で値を入れる変数はたどらない。** ループの中の呼び出しの答えをループのあとで振替に渡すと、前と同じく規則の入力の全部で数える。
 - **dandori の検査は分岐で狭めない**（1.3、18.4）。分岐の中で規則に渡す値が、規則の入力の範囲の外になりうるかは、分岐の外の値で数える。
+
+## 19. `ritsu check` の JSON に渡す、フローのオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`dandori check --format json` は、ファイルごとに `{file, diagnostics}` を書く（`cli.rs` の `load` が、その場でこの形を組む）。`dandori::ports::Engine::checked_with` は、診断と通ったファイルの行に加えて、同じ形のオブジェクトを、渡す診断の JSON から組んで `ritsu_ports::Checked::json` で渡す。二つのキーのための関数は作らなかった。ritsu は `file` と `diagnostics` を除くので、フローの `check` は `{}` になる。読めないファイルは `null` になる。dandori のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、テストのプロジェクトの二つのフローと、ritsu のテストのプロジェクト `cold_chain` と `regions`（検査を通らないフローを含む）、sekisho の例のフローの `check` が、`ritsu dandori check --format json` のオブジェクトから二つのキーを除いたもの（`{}`）と同じであること。check の JSON の golden（`crates/ritsu/tests/golden/check/`、`golden/modules/`）。

@@ -24,7 +24,7 @@
 //! the flow never calls is W908 (it is allowed more than it needs), which is no border. The
 //! calls of operations no action of the gate guards are not the gate's to say.
 
-use crate::Borders;
+use crate::{Border, Borders, Came, Check, Side};
 use ritsu_base::diag::Diag;
 use ritsu_base::naming::{Name, Tool};
 use ritsu_base::text::{Lang, Text};
@@ -41,6 +41,17 @@ pub struct Read {
 }
 
 impl Read {
+    /// The side of a border at the gate `file` (from the root): the line of the `guards` of its
+    /// action `action` that names `operation` (a `.gate` is sekisho's; a pair of Cedar, Cedar's).
+    fn guard_side(&self, file: &str, action: &str, operation: &Name) -> Side {
+        let line = self.gates.iter().find(|(f, _)| f == file).and_then(|(_, facts)| facts.as_ref().ok()).and_then(|facts| {
+            let a = facts.actions.iter().find(|a| a.name == action)?;
+            a.guards.iter().find(|(n, _)| n == operation).map(|(_, l)| *l)
+        });
+        let tool = ritsu_project::project::kind_of(file).unwrap_or(Tool::Cedar);
+        Side::new(tool, Some(file.to_string()), line)
+    }
+
     /// The operations the actions guard, each with the file and the action that guards it.
     pub fn guarded(&self) -> BTreeMap<Name, Vec<(String, String)>> {
         let mut out: BTreeMap<Name, Vec<(String, String)>> = BTreeMap::new();
@@ -223,15 +234,21 @@ fn opened(project: &Project, read: &Read, maps: &dyn Maps, lang: Lang, borders: 
         // what a context guards, for the note of E907
         let mut not_yet: BTreeMap<String, Vec<&PublishedOperation>> = BTreeMap::new();
         for (o, came) in &judged {
+            // the other side: the `guards` that guards it, or the document that opens it to anyone
+            let (result, to, code) = match came {
+                Opened::Guarded(by) => (Came::Held, by.first().map(|(file, action)| read.guard_side(file, action, &o.operation)), None),
+                Opened::Open => (Came::Held, Some(Side::new(o.operation.tool, Some(o.operation.path.clone()), None)), None),
+                Opened::Unguarded => (Came::Failed, None, Some("E907")),
+                Opened::NotYet => (Came::Undecided, None, Some("W907")),
+            };
+            borders.add(Border::new(Check::OperationGuard, o.operation.text(), Side::at(Tool::Sakai, &o.file, o.line), to, result, code));
             match came {
-                Opened::Guarded(_) | Opened::Open => borders.held += 1,
+                Opened::Guarded(_) | Opened::Open => {}
                 Opened::Unguarded => {
-                    borders.failed += 1;
                     let others: Vec<String> = judged.iter().filter(|(x, c)| x.context == o.context && matches!(c, Opened::Guarded(_))).map(|(x, _)| x.operation.text()).collect();
                     out.push(Finding::of(&unguarded(project, o, &others, &m.rel), Some(o.file.clone()), lang));
                 }
                 Opened::NotYet => {
-                    borders.undecided += 1;
                     not_yet.entry(o.context.clone()).or_default().push(o);
                 }
             }
@@ -314,12 +331,15 @@ fn called(project: &Project, read: &Read, gates: &dyn Gates, flows: &dyn Flows, 
                 let Some(a) = guarding(&c.operation) else { continue };
                 let Ok(allowance) = gates.allowed(&project.root, file, &a.alias, &asker) else { continue };
                 let came = judge_call(c, &allowance);
-                match &came {
-                    Called::Held => borders.held += 1,
-                    Called::Never => borders.failed += 1,
-                    Called::Unhandled { .. } | Called::Undecided(_) => borders.undecided += 1,
-                }
-                if let Some(d) = call_said(project, &flow_src, file, &w.name, &w.flow, c, &a.name, &came) {
+                let result = match &came {
+                    Called::Held => Came::Held,
+                    Called::Never => Came::Failed,
+                    Called::Unhandled { .. } | Called::Undecided(_) => Came::Undecided,
+                };
+                let said = call_said(project, &flow_src, file, &w.name, &w.flow, c, &a.name, &came);
+                let at = Side::at(Tool::Dandori, &w.flow.path, c.line);
+                borders.add(Border::new(Check::WorkflowPermission, c.operation.text(), at, Some(read.guard_side(file, &a.name, &c.operation)), result, said.as_ref().map(|d| d.code)));
+                if let Some(d) = said {
                     out.push(Finding::of(&d, Some(w.flow.path.clone()), lang));
                 }
             }

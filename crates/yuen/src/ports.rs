@@ -49,7 +49,8 @@ impl Engine {
         let label = c.project.as_ref().map(|p| p.label.clone()).unwrap_or(label);
         let mut parts: Vec<Part> = c.diags.iter().map(|d| Part::Finding(Finding::of(d, (!d.rel.is_empty()).then(|| d.rel.clone()), lang))).collect();
         parts.push(Part::Text(format!("{}\n", crate::check::summary(&c, &label).get(lang).trim_end())));
-        vec![Unit { label, parts, verdict: if c.has_errors() { Verdict::Fails } else { Verdict::Passes } }]
+        let json = ritsu_base::json::parse(&crate::check::to_json(&c, &label, lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
+        vec![Unit { label, parts, verdict: if c.has_errors() { Verdict::Fails } else { Verdict::Passes }, json }]
     }
 }
 

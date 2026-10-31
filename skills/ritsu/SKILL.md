@@ -91,8 +91,25 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
 - **Exit codes**: 0 no errors (warnings possible), 1 an error in a language or across them, 2 bad
   arguments, a file that cannot be read, or one a language could not check.
 - `--format json` prints one object: `ritsu` (the version), `root`, `ok`, `files`, `diagnostics`
-  (each with `tool`, `code`, `severity`, `file`, `line`, `col`, `message`, `notes`) and `borders`
-  (`held`, `failed`, `undecided`). Read that rather than the text, if you have to parse it.
+  and `borders`. Read that rather than the text, if you have to parse it.
+  - Each of `diagnostics` is in its language's own JSON, with `tool` first and `file` from the
+    root: `code`, `severity`, `file`, `line`, `col`, `message`, `notes`, then the language's own
+    keys, and `fix` where the language gives one. rulec's has `v`, `column` and `title` in place
+    of `col` and `message`.
+  - Each of `files` has `tool`, `file`, `ok` and `check`: what the language's own `check --format
+    json` writes for that file, without the file and the diagnostics. A kaname module's has
+    `summary` and each function's `effect`; a date file's, a gate's, a map's and a module's
+    requirements' (on each `.req`) `ok` and `summary`; a book's `report`; a spec's `claims`. A
+    rule's is `null`, and a flow's `{}`.
+  - `borders` has the counts `held`, `failed` and `undecided`, and `records`, one for each border,
+    as many as the counts add up to: `check` (which check: `precondition`, `rule_date_input`,
+    `range_from_koyomi`, `transfer_amount`, `transfer_refusals`, `hold_expiry`,
+    `koyomi_date_input`, `secret_destination`, `operation_guard` or `workflow_permission`),
+    `about`, the two sides `at` (where the diagnostic is) and `to` (null when there is none), each
+    with `tool`, `file` and `line` (null where it is not known), `result` (`held`, `failed` or
+    `undecided`) and `code` (null when it holds). They come in that order of the checks, then by
+    the file and line of `at`.
+  - In a module, each file and each side also has `dependency`.
 - Paths are counted from the root: the nearest directory above the first path given that holds
   `.git` or `ritsu.mod`, or the path given. `--root <dir>` says it.
 - `--lang ja` (or `RITSU_LANG=ja`) prints the text in Japanese.

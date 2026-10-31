@@ -118,6 +118,68 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 - sakai の地図のコンテキストが公開する操作に、それを守るゲートの action があるか。ワークフローが呼ぶ操作を、ゲートがそのワークフローに許しているか
 - yuen は表、日付、主張、タスク、関数を一つずつハッシュで固定し、sakai はコンテキストをまたぐ参照を行番号つきで確かめる
 
+`--format json` を付けると、同じことをプログラムが読める形で出します。`files` の各ファイルの `check` には、そのファイルの言語の検査が `--format json` で書くものが、パスと診断を除いて入ります（パスは項目の `file` に、診断は `diagnostics` に、ritsu がまとめて書きます）。kaname のモジュールなら `summary` と関数ごとの `effect`、帳簿なら `report`、geas の仕様なら `claims`、日付のファイル、ゲート、地図なら `ok` と `summary` です。yuen の要件は、モジュールの要件の全体についての `ok` と `summary` が、そのモジュールのどの `.req` にも入ります。規則は `null` です（rulec はファイルごとのオブジェクトを書きません）。フローは、dandori がパスと診断のほかに書くものが無いので `{}` です。`borders` は、三つの数のあとに、境目を一つずつ `records` に並べます。
+
+```console
+$ ritsu check . --format json --lang ja
+{
+…
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "refund_check.rule",
+      "ok": true,
+      "check": null
+    },
+    {
+      "tool": "dandori",
+      "file": "refund.flow",
+      "ok": false,
+      "check": {}
+    }
+  ],
+…
+  "borders": {
+    "held": 0,
+    "failed": 1,
+    "undecided": 0,
+    "records": [
+      {
+        "check": "precondition",
+        "about": "asked <= paid",
+        "at": {
+          "tool": "dandori",
+          "file": "refund.flow",
+          "line": 21
+        },
+        "to": {
+          "tool": "rulec",
+          "file": "refund_check.rule",
+          "line": null
+        },
+        "result": "failed",
+        "code": "E201"
+      }
+    ]
+  }
+}
+```
+
+記録には、どの検査か、何についての境目か、二つの側が入ります。`at` は ritsu が診断を出す側、`to` はもう一方の側で、どちらも `tool`、`file`、`line` を持ちます。そのあとに結果と、ritsu が出した診断のコードが続きます。成り立つときのコードは `null` です。言語が行を言わない側（前提を宣言した規則など）は `line` が `null` で、もう一方の側が無い境目（どのゲートも守らない操作）は `to` が `null` です。モジュールでは、ファイルと同じく、どちらの側にも `dependency` が付きます。記録の数は三つの数の和と同じです。記録は下の表の順に、続いて `at` のファイルと行の順に並ぶので、同じファイルからはいつも同じ JSON が出ます。検査の名前は変えず、新しい検査は表の後ろに足します。
+
+| `check` | 確かめること | 成り立たない／決められない |
+|---|---|---|
+| `precondition` | ワークフローや kaname のモジュールが規則を呼ぶところで、規則の前提が成り立つか | E201／W201 |
+| `rule_date_input` | 規則の日付の入力に渡す日が、規則が宣言した範囲に入るか | E202／W202 |
+| `range_from_koyomi` | 範囲を koyomi の日付の日にした規則の入力（`range from koyomi`）。rulec の検査が、その日の上で規則を確かめる | rulec のコード |
+| `transfer_amount` | chobo の振替に渡す額を、chobo が受け取るか | E203／W203 |
+| `transfer_refusals` | 振替の `do` と `hold` が拒否されうる理由を、タスクが処理しているか | E204／W204 |
+| `hold_expiry` | 仮押さえの有効期限と、確定か取消の呼び出しまでの時間 | E206／W206 |
+| `koyomi_date_input` | koyomi の日付の入力に渡す日が、その入力の範囲に入るか | E205／W205 |
+| `secret_destination` | 契約が秘密と印を付けた値を、タスクが地図のどこへ送るか | E905／W905 |
+| `operation_guard` | コンテキストが公開する操作に、それを守るゲートの action があるか | E907／W907 |
+| `workflow_permission` | ワークフローが呼ぶ操作を、ゲートがそのワークフローに許しているか | E908／W909 |
+
 ## 人のためのページ
 
 コードが実現すべきものを理解し、確かめたい人（業務の担当者、経理や法務、運用する人、コードをレビューする開発者）のためのページも、同じファイルから英語か日本語で作れます。書かれたことを読み、自分の知っていることと照らし合わせられます。

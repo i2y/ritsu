@@ -5,7 +5,8 @@
 //!
 //! A check here reads the languages through the ports only (DESIGN 3.1): ritsu-project joins them
 //! and hands over the project and its index. What each check comes to is one of P5's three — shown
-//! to hold, an example where it does not, or undecided — and [`Borders`] counts them.
+//! to hold, an example where it does not, or undecided — and [`Borders`] keeps each border, with
+//! the check that held it to the other side ([`Check`]), its two sides and what it came to.
 //!
 //! The checks: the `.proto` files of a project, which no language checks on its own, read with
 //! ritsu's one reader (E101); and the borders between the languages (DESIGN 7.2), where a workflow
@@ -46,24 +47,204 @@ mod transfers;
 pub use preconditions::UndecidedCalls;
 pub use programs::ProgramVerdicts;
 
+use ritsu_base::json::Json;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::Lang;
-use ritsu_ports::{Crossings, Finding, Flows};
+use ritsu_ports::{Answer, Crossings, Finding, Flows};
 use ritsu_project::{Joined, Project};
+use std::path::Path;
 
-/// What the checks of the borders between the languages came to (DESIGN 7.1, P5): each border
-/// shown to hold, with an example where it does not, or undecided.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Which of ritsu's checks a border is (DESIGN 7.2): the word `ritsu check --format json` writes
+/// it with. A word is never changed, nor given to another check; a new check takes a new word,
+/// after the others (the records are in this order). The marks of DESIGN (X2 to X16) are no
+/// words of the output (DESIGN 4.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Check {
+    /// A rule's precondition, at a call that gives it values (X2: E201, W201).
+    Precondition,
+    /// The day given to a rule's date input, against the range the rule declares (X3 (a): E202,
+    /// W202).
+    RuleDateInput,
+    /// A rule's input whose range is a koyomi date (`range from koyomi`, X3 (b)): rulec's own
+    /// check holds it, over the days koyomi hands it.
+    RangeFromKoyomi,
+    /// The amount given to a chobo transfer (X4: E203, W203).
+    TransferAmount,
+    /// The refusals a `do` or a `hold` can meet at the amounts given, against what the call
+    /// handles (X4: E204, W204).
+    TransferRefusals,
+    /// A hold's expiry, against how long after it a call on it comes (X5: E206, W206).
+    HoldExpiry,
+    /// The day given to a koyomi date's input, against the input's range (X6: E205, W205).
+    KoyomiDateInput,
+    /// Where a call sends a secret value, against the map (X14: E905, W905).
+    SecretDestination,
+    /// An operation a context of a map opens, and the action of a gate that guards it (X15: E907,
+    /// W907).
+    OperationGuard,
+    /// A call a workflow makes of an operation a gate guards, against what the gate allows it
+    /// (X16: E908, W909).
+    WorkflowPermission,
+}
+
+impl Check {
+    /// Every check, in the order of the records.
+    pub const ALL: [Check; 10] = [
+        Check::Precondition,
+        Check::RuleDateInput,
+        Check::RangeFromKoyomi,
+        Check::TransferAmount,
+        Check::TransferRefusals,
+        Check::HoldExpiry,
+        Check::KoyomiDateInput,
+        Check::SecretDestination,
+        Check::OperationGuard,
+        Check::WorkflowPermission,
+    ];
+
+    pub fn word(self) -> &'static str {
+        match self {
+            Check::Precondition => "precondition",
+            Check::RuleDateInput => "rule_date_input",
+            Check::RangeFromKoyomi => "range_from_koyomi",
+            Check::TransferAmount => "transfer_amount",
+            Check::TransferRefusals => "transfer_refusals",
+            Check::HoldExpiry => "hold_expiry",
+            Check::KoyomiDateInput => "koyomi_date_input",
+            Check::SecretDestination => "secret_destination",
+            Check::OperationGuard => "operation_guard",
+            Check::WorkflowPermission => "workflow_permission",
+        }
+    }
+}
+
+/// What a border came to (P5): shown to hold, an example where it does not, or undecided.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Came {
+    Held,
+    Failed,
+    Undecided,
+}
+
+impl Came {
+    /// What an answer of a check comes to.
+    pub fn of<E>(a: &Answer<E>) -> Came {
+        match a {
+            Answer::Holds => Came::Held,
+            Answer::Fails(_) => Came::Failed,
+            Answer::Undecided(_) => Came::Undecided,
+        }
+    }
+
+    /// The word of the JSON, the key of its count: `held`, `failed`, `undecided`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Came::Held => "held",
+            Came::Failed => "failed",
+            Came::Undecided => "undecided",
+        }
+    }
+}
+
+/// One side of a border: the language, the file from the root (None when it is outside the root),
+/// and the line, from 1 (None when the port does not say it: the side of a declaration, such as a
+/// rule's precondition or a book's transfer).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Side {
+    pub tool: Tool,
+    pub file: Option<String>,
+    pub line: Option<usize>,
+}
+
+impl Side {
+    pub fn new(tool: Tool, file: Option<String>, line: Option<usize>) -> Side {
+        Side { tool, file, line }
+    }
+
+    /// The side of a file of the project, by its path from the root.
+    pub fn at(tool: Tool, rel: &str, line: usize) -> Side {
+        Side { tool, file: Some(rel.to_string()), line: Some(line) }
+    }
+
+    /// The side of a file a language reached at `path` (as it reached it), written from the
+    /// project's root.
+    pub fn reached(project: &Project, tool: Tool, path: &Path, line: Option<usize>) -> Side {
+        Side { tool, file: ritsu_base::paths::from_root(&project.root, path), line }
+    }
+}
+
+/// One border a check of ritsu's held a language to another (DESIGN 7.1): which check, what it is
+/// about, its place and its other side, what it came to, and the code ritsu said it with.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Border {
+    pub check: Check,
+    /// What it is about, as ritsu's diagnostic of it names it: the precondition as the rule writes
+    /// it, the input, the parameter, the operation.
+    pub about: String,
+    /// Its place: the side ritsu says its diagnostic at (the call of a flow, the place in a module
+    /// of kaname, the line of a context that opens an operation, the line of a rule's `range from
+    /// koyomi`).
+    pub at: Side,
+    /// The other side; None when there is none (an operation no action guards).
+    pub to: Option<Side>,
+    pub came: Came,
+    /// The code of the diagnostic ritsu said of it, when it said one: always None for one that
+    /// holds.
+    pub code: Option<String>,
+    /// What the check says of the border of its own, written after the rest, in this order.
+    pub detail: Vec<(String, Json)>,
+}
+
+impl Border {
+    pub fn new(check: Check, about: impl Into<String>, at: Side, to: Option<Side>, came: Came, code: Option<&str>) -> Border {
+        Border { check, about: about.into(), at, to, came, code: code.map(str::to_string), detail: Vec::new() }
+    }
+}
+
+/// What the checks of the borders between the languages came to (DESIGN 7.1, P5): each border,
+/// shown to hold, with an example where it does not, or undecided. The counts are the records',
+/// one a border.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Borders {
-    pub held: usize,
-    pub failed: usize,
-    pub undecided: usize,
+    records: Vec<Border>,
 }
 
 impl Borders {
+    pub fn add(&mut self, b: Border) {
+        self.records.push(b);
+    }
+
+    /// Each border, in the order [`Borders::sort`] puts them in once the checks are done.
+    pub fn records(&self) -> &[Border] {
+        &self.records
+    }
+
+    fn count(&self, came: Came) -> usize {
+        self.records.iter().filter(|b| b.came == came).count()
+    }
+
+    pub fn held(&self) -> usize {
+        self.count(Came::Held)
+    }
+
+    pub fn failed(&self) -> usize {
+        self.count(Came::Failed)
+    }
+
+    pub fn undecided(&self) -> usize {
+        self.count(Came::Undecided)
+    }
+
     /// Every border checked, whatever it came to.
     pub fn checked(&self) -> usize {
-        self.held + self.failed + self.undecided
+        self.records.len()
+    }
+
+    /// The order of the records: by the check ([`Check::ALL`]), then the file and the line of the
+    /// place; the borders of the same place in the order they were found, which the same project
+    /// finds in the same order.
+    pub fn sort(&mut self) {
+        self.records.sort_by(|a, b| (a.check, &a.at.file, a.at.line).cmp(&(b.check, &b.at.file, b.at.line)));
     }
 }
 
@@ -98,6 +279,7 @@ pub fn check_with(project: &Project, joined: &Joined, programs: &ProgramVerdicts
     findings.extend(secrets::keys(project, joined, lang));
     findings.extend(egress::check(project, joined, lang, &mut borders));
     findings.extend(gates::check(project, joined, lang, &mut borders));
+    borders.sort();
     Crossed { findings, borders }
 }
 
@@ -139,12 +321,28 @@ fn named(project: &Project, path: &std::path::Path) -> String {
 /// rulec's §15.174) is a border rulec checked in its own check, over the days koyomi handed it
 /// through the port; a rule that passes counts it as held. One that does not is rulec's to say
 /// (E129, E130, or the table's own errors over the days), and is not counted here.
+///
+/// The border is at the line of the rule's `range from koyomi`, and its other side is the dates
+/// file, as the rule names them to the index (rulec's references `range from koyomi`, of the same
+/// date, taken in the order written).
 fn days_held(project: &Project, joined: &Joined, borders: &mut Borders) {
     use ritsu_ports::Rules;
-    for f in project.of(ritsu_base::naming::Tool::Rulec) {
+    for f in project.of(Tool::Rulec) {
         let disk = ritsu_base::paths::on_disk(&project.root, &f.rel);
-        if let Ok(facts) = joined.rulec.facts(&disk) {
-            borders.held += facts.preconditions.iter().filter(|p| matches!(p, ritsu_ports::Precondition::Days { .. })).count();
+        let Ok(facts) = joined.rulec.facts(&disk) else { continue };
+        let mut refs: Vec<ritsu_ports::Reference> = match joined.index.references(Tool::Rulec, &project.root, &f.rel) {
+            Some(Ok(r)) => r.into_iter().filter(|r| r.how == "range from koyomi").collect(),
+            _ => Vec::new(),
+        };
+        for p in &facts.preconditions {
+            let ritsu_ports::Precondition::Days { input, date, .. } = p else { continue };
+            let found = refs.iter().position(|r| r.target.items.iter().any(|(k, v)| k == "date" && v == date)).map(|i| refs.remove(i));
+            let (line, to) = match found {
+                Some(r) => (Some(r.line), Some(r.target.path)),
+                None => (None, None),
+            };
+            let at = Side::new(Tool::Rulec, Some(f.rel.clone()), line);
+            borders.add(Border::new(Check::RangeFromKoyomi, input.clone(), at, Some(Side::new(Tool::Koyomi, to, None)), Came::Held, None));
         }
     }
 }

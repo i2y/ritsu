@@ -2130,3 +2130,9 @@ requirements touched:
 **見つけて直していないもの**：
 
 - 0.33.0 までの `source pin` が書いた読めない固定の行は、手で直すしかない（捨てたものの四つ目）。`check` の E001 は、その行の `-` や `'` を読めない字として指す。
+
+## 22. `ritsu check` の JSON に渡す、要件のオブジェクト（2026-10-31）
+
+`ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。yuen は、モジュールの `.req` を一つのプロジェクトとして確かめ、依存ごとにもう一つずつ確かめる。`yuen::ports::Engine::checked` は、そのプロジェクトごとに、診断と要約の行に加えて、`yuen check --format json` が書くオブジェクト（`{root, ok, summary, diagnostics}`）を、コマンドと同じ `check::to_json` で作り、ritsu-base の JSON に読み直して `ritsu_ports::Checked::json` で渡す。ritsu は `root` と `diagnostics` を除いた `{ok, summary}` を、そのプロジェクトのどの `.req` の項目にも入れる（同じモジュールのものか、同じ依存のものか、で組にする）。中の `ok` は要件の全体のもので、項目の `ok`（そのファイルにエラーがあるか）とは違うことがある。yuen のコマンドの出力は変えていない。
+
+確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、`tests/fixtures/rulec` の二つの `.req` の `check` が、どちらも `ritsu yuen check tests/fixtures/rulec --root tests/fixtures/rulec --format json` のオブジェクトから二つのキーを除いたものと同じであること。ritsu の `tests/modules.rs` の `each_requirements_file_holds_what_yuen_says_of_its_modules_requirements` で、`tests/modules/en/app` の `@lib/pricing.req` が `lib` の要件のオブジェクト（`ok` が真で、要約が `@lib: ok — ` で始まる）を持ち、モジュールの五つの `.req` が同じ一つのオブジェクト（`ok` が偽）を持ち、そのうち `billing.req` だけは項目の `ok` が真であること。
