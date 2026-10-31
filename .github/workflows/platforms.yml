@@ -30,6 +30,13 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # A build from nothing never reads incremental data, which only fills the cache, and the line
+  # tables alone keep a backtrace's files and lines. The keys of the caches of `target` start with
+  # cargo-v2- for these settings, so that a target built the earlier way is not restored under
+  # them (DESIGN 10.5).
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
   BUF_VERSION: "1.54.0"
   # The Jev tasks are never sent to TypeSafe from CI: every call is paid for, and how often CI
   # runs cannot be foreseen, so the key is not kept here, not even as a secret. Empty, the test
@@ -72,8 +79,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: cargo-platforms-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-platforms-${{ runner.os }}-
+          key: cargo-v2-platforms-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-v2-platforms-${{ runner.os }}-
 
       - uses: actions/setup-node@v7
         with:

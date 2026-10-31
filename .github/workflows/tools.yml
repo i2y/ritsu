@@ -33,6 +33,13 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # A build from nothing never reads incremental data, which only fills the cache, and the line
+  # tables alone keep a backtrace's files and lines. The keys of the caches of `target` start with
+  # cargo-v2- for these settings, so that a target built the earlier way is not restored under
+  # them (DESIGN 10.5).
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
   # The compiler that builds rulec's Connect stubs, pinned as rulec's ci.yml pins it: buf
   # decides how the plugins are called.
   BUF_VERSION: "1.54.0"
@@ -106,8 +113,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: cargo-tools-${{ matrix.group }}-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-tools-${{ matrix.group }}-${{ runner.os }}-
+          key: cargo-v2-tools-${{ matrix.group }}-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-v2-tools-${{ matrix.group }}-${{ runner.os }}-
 
       # --- What every group has: Node, Python, Go, Java and uv. The versions are the ones the
       # crates' own setups name (rulec's ci.yml; the go.mod files of dandori's and chobo's Go
@@ -598,8 +605,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: cargo-npm-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-npm-${{ runner.os }}-
+          key: cargo-v2-npm-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-v2-npm-${{ runner.os }}-
 
       - uses: actions/setup-node@v7
         with:
