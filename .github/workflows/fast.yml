@@ -29,6 +29,17 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # The cache below is larger than all a repository may keep and is gone by the next run, so
+      # each run builds the workspace from nothing, and on a runner of another image that ran out
+      # of the disk in the tests (DESIGN 10.5): the SDKs no step here uses are taken off first, as
+      # in platforms.yml and tools.yml.
+      - name: Room on the disk
+        run: |
+          set -eu
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - uses: actions/checkout@v7
 
       - name: Rust
