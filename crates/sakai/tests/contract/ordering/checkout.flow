@@ -1,0 +1,22 @@
+workflow checkout v1
+description "Asks pricing for the shipping and the tax of an order: the one as the rule's service, the other as the contract's"
+
+use rule shipping from "../pricing/rules/shipping.rule"
+  connect "https://pricing.example.com"
+use proto pricing from "../proto/shop/pricing/v1/pricing.proto"
+  url "https://pricing.example.com"
+
+inputs
+  subtotal : money[USD]  range >=0 <=100000
+
+outputs
+  shipping : money[USD]
+  tax      : string  # the contract's int64, which protojson writes as a string
+
+task quote_tax(amount: money[USD]) -> pricing.TaxResponse
+  connect pricing "TaxService/Quote"
+
+flow
+  let quoted = shipping(subtotal: subtotal)
+  let taxed = quote_tax(amount: subtotal)
+  succeed shipping = quoted.shipping, tax = taxed.tax

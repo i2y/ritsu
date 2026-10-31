@@ -243,12 +243,12 @@ pub fn ledger() -> Ledger {
             "E004",
             tr!("節の順序か数が違います", "A section is out of order, repeated, missing, or in the wrong kind of file"),
             tr!(
-                "節が決まった順序にないとき、一度だけの節が二度あるとき、省けない節（地図の `use context` と `covers`、コンテキストの `owns`、`upstream` の下の `through`）が無いとき、map のファイルに `owns` があるなど種類の違うファイルの節があるとき。語が定義の文と `as` のどちらか一つを持たないときにも出ます。",
-                "Sections are out of their order, a section that comes once comes twice, one that cannot be left out is missing (a map's `use context` and `covers`, a context's `owns`, the `through` under `upstream`), or a section belongs to the other kind of file (`owns` in a map); also a term with both a definition and `as`, or neither."
+                "節が決まった順序にないとき、一度だけの節が二度あるとき、省けない節（地図の `use context` と `covers`、コンテキストの `owns`、`upstream` の下の `through`）が無いとき、map のファイルに `owns` があるなど種類の違うファイルの節があるとき。語が定義の文と `as` のどちらか一つを持たないとき、一つの公表された言語に proto と rulec と Rust のクレートと OpenAPI と AsyncAPI の文書を混ぜたとき、規則やクレートを二つ書いたときにも出ます。",
+                "Sections are out of their order, a section that comes once comes twice, one that cannot be left out is missing (a map's `use context` and `covers`, a context's `owns`, the `through` under `upstream`), or a section belongs to the other kind of file (`owns` in a map); also a term with both a definition and `as`, or neither, and a published language that mixes proto, rulec, a crate and OpenAPI or AsyncAPI documents, or holds two rules or two crates."
             ),
             tr!(
-                "map のファイルは見出し、`description`、`use context`、`covers`、`except`、`proto root`、`code` の順に、context のファイルは見出し、`description`、`owner`、`also`、`owns`、`published language`、`terms`、関係の順に書いてください。",
-                "A map goes: heading, `description`, `use context`, `covers`, `except`, `proto root`, `code`. A context goes: heading, `description`, `owner`, `also`, `owns`, `published language`, `terms`, then the relationships."
+                "map のファイルは見出し、`description`、`use context`、`covers`、`except`、`proto root`、`code` の順に、context のファイルは見出し、`description`、`owner`、`also`、`owns`、`published language`、`terms`、関係の順に書いてください。規則とクレートは、一つずつ公表された言語にしてください。一つの契約のサービスを実装する規則は、契約の proto を公表された言語にしてください。",
+                "A map goes: heading, `description`, `use context`, `covers`, `except`, `proto root`, `code`. A context goes: heading, `description`, `owner`, `also`, `owns`, `published language`, `terms`, then the relationships. Each rule and each crate is a published language of its own; rules that implement services of one contract publish the contract's .proto instead."
             ),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\nowner \"甲のチーム\"\n")],
             &["E002", "E003"],
@@ -273,7 +273,10 @@ pub fn ledger() -> Ledger {
                 "コンテキストの名前や別名、一つのコンテキストの語の名前と `also`、公表された言語の package、同じ相手への同じ関係、`owns` の項、対応の左辺のどれかが二度出てくるとき。",
                 "A context's name or alias, a term's name or `also` in one context, a published package, the same relationship toward the same context, an entry of `owns`, or the left side of a mapping comes twice."
             ),
-            tr!("どちらかの名前を変えるか、二つめを消してください。", "Rename one of them, or delete the second."),
+            tr!(
+                "どちらかの名前を変えるか、二つめを消してください。一つの契約のサービスを実装する規則どうしで package がぶつかるなら、規則ごとにではなく、契約の proto を公表された言語にしてください。",
+                "Rename one of them, or delete the second. Where rules that implement services of one contract share its package, publish the contract's .proto instead of each rule."
+            ),
             &[(
                 "乙.ctx",
                 "context 甲(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
@@ -646,12 +649,15 @@ pub fn ledger() -> Ledger {
         .en(&[A_CONFORMS_EN, ("beta.ctx", "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n"), A_CALLS_B]),
         e(
             "E208",
-            tr!("ワークフローが実装するサービスが、自分の公表された言語にありません", "The service a workflow implements is not in its own published language"),
+            tr!("ワークフローか規則が実装するサービスが、自分の公表された言語にありません", "The service a workflow or a rule implements is not in its own published language"),
             tr!(
-                "ワークフローが `implements` で実装するサービスが、そのワークフローを持つコンテキストの公表された言語の `open host service` に無いとき（proto が公表された言語に無いときも）。",
-                "The service a workflow `implements` is not under `open host service` of a published language of the workflow's context (nor when the .proto is in no published language)."
+                "ワークフローか規則が `implements` で実装するサービスが、それを持つコンテキストの公表された言語の `open host service` に無いとき（proto が公表された言語に無いときも）。規則は、そのコンテキストが規則そのものを公表された言語（`rulec \"<規則>\"`）にして、その `open host service` にサービスを書いていれば通ります。",
+                "The service a workflow or a rule `implements` is not under `open host service` of a published language of its context (nor when the .proto is in no published language). A rule passes too when its context publishes the rule itself (`rulec \"<rule>\"`), with the service under that block's `open host service`."
             ),
-            tr!("自分の公表された言語に proto を並べ、`open host service` にサービスを書いてください。", "List the .proto in the context's published language, and the service under `open host service`."),
+            tr!(
+                "自分の公表された言語に proto を並べ、`open host service` にサービスを書いてください。一つの契約のサービスを二つ以上の規則が実装するときも、この形にします。",
+                "List the .proto in the context's published language, and the service under `open host service`; so too when two or more rules implement services of one contract."
+            ),
             &[
                 ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\npublished language a.v1\n  proto \"a/v1/a.proto\"\n"),
                 ("a/v1/a.proto", "syntax = \"proto3\";\npackage a.v1;\nimport \"dandori/v1/options.proto\";\nservice AService {\n  option (dandori.v1.workflow) = {name: \"w\", version: 1};\n  rpc Start(StartRequest) returns (StartResponse) {\n    option (dandori.v1.start) = {};\n  }\n}\nmessage StartRequest { string id = 1; }\nmessage StartResponse { string id = 1; }\n"),

@@ -382,7 +382,13 @@ fn holds(c: &Checked, suite: &Suite, x: &crate::owners::Artifact, lang: Lang) ->
             Some(f) => {
                 let ins = names(f.inputs.iter().map(|i| i.name.clone()).collect());
                 let outs = names(f.outputs.iter().map(|o| o.name.clone()).collect());
-                if lang == Lang::Ja { format!("入力 {ins}／出力 {outs}") } else { format!("inputs {ins}; outputs {outs}") }
+                let mut s = if lang == Lang::Ja { format!("入力 {ins}／出力 {outs}") } else { format!("inputs {ins}; outputs {outs}") };
+                // the contract's service it is served as (DESIGN 26)
+                let services: Vec<String> = c.read.refs_of(&x.path).iter().filter(|r| r.how == "implements").filter_map(|r| r.target.items.first().map(|(_, s)| s.clone())).collect();
+                if !services.is_empty() {
+                    s.push_str(&format!("{}{} {}", if lang == Lang::Ja { "／" } else { "; " }, t(lang, "実装するサービス", "implements"), names(services)));
+                }
+                s
             }
             None => String::new(),
         },
@@ -582,7 +588,7 @@ fn published(c: &Checked, p: &crate::model::Pub, lang: Lang) -> String {
             .read
             .refs
             .iter()
-            .filter(|(_, tool, refs)| *tool == Tool::Dandori && refs.iter().any(|r| r.how == "implements" && r.target.items.first().is_some_and(|(_, n)| n == s) && p.protos.iter().any(|(f, _)| *f == r.target.path)))
+            .filter(|(_, tool, refs)| matches!(tool, Tool::Dandori | Tool::Rulec) && refs.iter().any(|r| r.how == "implements" && r.target.items.first().is_some_and(|(_, n)| n == s) && p.protos.iter().any(|(f, _)| *f == r.target.path)))
             .map(|(f, _, _)| code(&rel(m, f)))
             .collect();
         let mut one = format!("{}{}", t(lang, "公開ホストサービス ", "open host service "), code(s));

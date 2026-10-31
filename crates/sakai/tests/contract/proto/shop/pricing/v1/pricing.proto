@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package shop.pricing.v1;
+
+message Fired {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+
+message ShippingRequest {
+  optional int64 subtotal = 1;
+}
+
+message ShippingResponse {
+  int64 shipping = 1;
+  repeated Fired trace = 2;
+}
+
+message TaxRequest {
+  optional int64 amount = 1;
+}
+
+message TaxResponse {
+  int64 tax = 1;
+  repeated Fired trace = 2;
+}
+
+service ShippingService {
+  rpc Quote(ShippingRequest) returns (ShippingResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+service TaxService {
+  rpc Quote(TaxRequest) returns (TaxResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}

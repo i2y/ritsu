@@ -1,0 +1,15 @@
+rule tax v1
+implements proto "../../proto/shop/pricing/v1/pricing.proto" TaxService
+description "A flat tax on an order of 100 dollars or more"
+
+inputs
+  amount : money[USD]  range >=0USD <=100000USD
+
+outputs
+  tax : money[USD]  round down(1USD)
+
+table flat
+policy unique
+| amount    | -> tax |
+| >=100USD  | 8USD   |
+| <100USD   | 0USD   |

@@ -1,0 +1,15 @@
+rule shipping v1
+implements proto "../../proto/shop/pricing/v1/pricing.proto" ShippingService
+description "Shipping: free from 50 dollars"
+
+inputs
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  shipping : money[USD]  round down(1USD)
+
+table fee
+policy unique
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| <50USD   | 5USD        |

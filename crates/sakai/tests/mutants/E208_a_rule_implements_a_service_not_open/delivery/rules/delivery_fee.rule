@@ -1,0 +1,21 @@
+# Written for this mutant: a rule that implements a service of Delivery's contract
+rule delivery_fee v1
+implements proto "../../proto/shop/delivery/v1/shipment.proto" DeliveryFeeService
+description "The fee for delivering an order, by the number of parcels in it"
+
+inputs
+  parcels : number  range >=1 <=20
+
+outputs
+  fee : money[JPY]  round up(10JPY)
+
+table fee
+policy unique
+| parcels | -> fee  |
+| <=2     | 500JPY  |
+| >2      | 1000JPY |
+
+examples
+| parcels | -> fee  |
+| 1       | 500JPY  |
+| 3       | 1000JPY |

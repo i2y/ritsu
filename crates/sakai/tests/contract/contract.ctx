@@ -1,0 +1,10 @@
+# A map of two contexts: pricing, whose two rules implement the two services of one contract, and
+# ordering, which calls them (sakai's DESIGN 26).
+map Contract(contract) v1
+description "Prices an order with two rules that implement the services of one contract, and asks for the prices from the order"
+
+use context "ctx/pricing.ctx"
+use context "ctx/ordering.ctx"
+
+covers "."
+proto root "proto"

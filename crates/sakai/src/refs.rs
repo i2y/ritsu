@@ -284,7 +284,8 @@ fn written_as(root: &std::path::Path, from: &str, to: &str) -> String {
 /// reference to a file outside the map's scope is E103.
 /// What no context owns is part of the artifact that reads it (DESIGN 1.3): a JSON Schema, a
 /// source's copy, a table of holidays, an OpenAPI or Smithy description. A workflow's `implements`
-/// is no crossing: it is held to the workflow's own published language (E208) by [`implements`].
+/// is no crossing, nor is a rule's: each is held to its own context's published language (E208) by
+/// [`implements`].
 pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -> (Vec<Crossing>, Vec<Diag>) {
     let owner = |p: &str| arts.iter().find(|a| a.path == p).and_then(|a| a.ctx());
     let is_contract = |p: &str| arts.iter().any(|a| a.path == p && a.contract.is_some());
@@ -493,35 +494,58 @@ pub fn contract_package(m: &Model, cs: &crate::contracts::Contracts, arts: &[Art
     m.contexts[c].published.iter().find(|p| !p.contracts.is_empty() && cs.published_files(&p.contracts.iter().map(|(_, f, _)| f.clone()).collect::<Vec<_>>(), &owner, c).contains(file)).map(|p| p.package.clone())
 }
 
-/// A workflow's `implements` (DESIGN 4.7): the service it implements is an open host service of a
-/// published language of its own context (E208).
+/// A workflow's `implements` and a rule's (DESIGN 4.7, 26): the service it implements is an open
+/// host service of a published language of its own context (E208), the one that lists the
+/// service's `.proto`. A rule's context may instead publish the rule itself (`rulec "<rule>"`,
+/// in the contract's package, E302), and the service is then under that block's.
 pub fn implements(m: &Model, arts: &[Artifact], read: &Read) -> Vec<Diag> {
     let mut diags = Vec::new();
     for (from, tool, refs) in &read.refs {
-        if *tool != Tool::Dandori {
-            continue;
-        }
+        let rule = match tool {
+            Tool::Dandori => false,
+            Tool::Rulec => true,
+            _ => continue,
+        };
         let Some(x) = arts.iter().find(|a| a.path == *from).and_then(|a| a.ctx()) else { continue };
         for r in refs.iter().filter(|r| r.how == "implements") {
             let svc = r.target.items.first().map(|(_, v)| v.clone()).unwrap_or_default();
+            let lists = |p: &&crate::model::Pub| p.services.iter().any(|(s, _)| *s == svc);
             let own = m.contexts[x].published.iter().find(|p| p.protos.iter().any(|(f, _)| *f == r.target.path));
-            if own.is_some_and(|p| p.services.iter().any(|(s, _)| *s == svc)) {
+            let itself = m.contexts[x].published.iter().find(|p| rule && p.rulec.as_ref().is_some_and(|(f, _)| f == from));
+            if own.as_ref().is_some_and(lists) || itself.as_ref().is_some_and(lists) {
                 continue;
             }
             let (xn, sp, t) = (m.contexts[x].name.clone(), shown(from), r.target.text());
             let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, from)).unwrap_or_default();
-            let mut d = diag::at("E208", from, r.line, 1, tr!("「{xn}」の {sp} が実装する {t} は、「{xn}」の公表された言語の公開ホストサービスではありません", "The workflow {sp} of {xn} implements {t}, which is no open host service of a published language of {xn}")).source(&src);
-            d = d.note(match own {
-                Some(p) => {
+            let msg = if rule {
+                tr!("「{xn}」の {sp} が実装する {t} は、「{xn}」の公表された言語の公開ホストサービスではありません", "The rule {sp} of {xn} implements {t}, which is no open host service of a published language of {xn}")
+            } else {
+                tr!("「{xn}」の {sp} が実装する {t} は、「{xn}」の公表された言語の公開ホストサービスではありません", "The workflow {sp} of {xn} implements {t}, which is no open host service of a published language of {xn}")
+            };
+            let mut d = diag::at("E208", from, r.line, 1, msg).source(&src);
+            d = d.note(match (own, itself) {
+                (Some(p), _) => {
                     let k = &p.package;
                     tr!("その proto は「{xn}」の公表された言語 {k} にありますが、`open host service` に {svc} がありません。", "The .proto is in {xn}'s published language {k}, and its `open host service` does not list {svc}.")
                 }
-                None => tr!("その proto は「{xn}」のどの公表された言語にも入っていません。", "The .proto is in no published language of {xn}."),
+                (None, Some(p)) => {
+                    let k = &p.package;
+                    tr!("その規則は「{xn}」の公表された言語 {k} にありますが、`open host service` に {svc} がありません。", "The rule is in {xn}'s published language {k}, and its `open host service` does not list {svc}.")
+                }
+                (None, None) if rule => tr!("その proto も規則も、「{xn}」のどの公表された言語にも入っていません。", "Neither the .proto nor the rule is in a published language of {xn}."),
+                (None, None) => tr!("その proto は「{xn}」のどの公表された言語にも入っていません。", "The .proto is in no published language of {xn}."),
             });
-            d = d.note(tr!(
-                "ワークフローが実装するサービスは、そのワークフローを持つコンテキストが公表するものです。自分の公表された言語に proto を並べ、`open host service` にサービスを書いてください。",
-                "A service a workflow implements is one the workflow's context publishes: list the .proto in its published language, and the service under `open host service`."
-            ));
+            d = d.note(if rule {
+                tr!(
+                    "規則が実装するサービスは、その規則を持つコンテキストが公表するものです。自分の公表された言語に契約の proto を並べ、`open host service` にサービスを書いてください。",
+                    "A service a rule implements is one the rule's context publishes: list the contract's .proto in its published language, and the service under `open host service`."
+                )
+            } else {
+                tr!(
+                    "ワークフローが実装するサービスは、そのワークフローを持つコンテキストが公表するものです。自分の公表された言語に proto を並べ、`open host service` にサービスを書いてください。",
+                    "A service a workflow implements is one the workflow's context publishes: list the .proto in its published language, and the service under `open host service`."
+                )
+            });
             diags.push(d.refer(Ref::line(Some(&xn), from, r.line, Text::same(format!("implements {t}"))).via("implements")));
         }
     }
@@ -564,8 +588,8 @@ fn one_sided_kernel(m: &Model, a: usize, b: usize) -> Option<usize> {
     }
 }
 
-/// The service a child workflow implements, when it does: its `.proto` and its name.
-fn child_service(read: &Read, flow: &str) -> Option<(String, String)> {
+/// The service a workflow or a rule implements, when it does: its `.proto` and its name.
+fn implemented(read: &Read, flow: &str) -> Option<(String, String)> {
     read.refs_of(flow).iter().find(|r| r.how == "implements").and_then(|r| Some((r.target.path.clone(), r.target.items.first()?.1.clone())))
 }
 
@@ -618,14 +642,21 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         let mut lands = q.clone();
         let mut child_published = false;
         if c.kind == Kind::FlowChild
-            && let Some((pf, svc)) = child_service(read, &q)
+            && let Some((pf, svc)) = implemented(read, &q)
             && m.contexts[y].published.iter().any(|pl| pl.protos.iter().any(|(f, _)| *f == pf) && pl.services.iter().any(|(s, _)| *s == svc))
         {
             lands = pf;
             child_published = true;
         }
         let pkg = match &c.kind {
-            Kind::FlowRule { connect: true, .. } => m.contexts[y].published.iter().find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q)).map(|pl| pl.package.clone()),
+            // a rule its context publishes itself, or, when the rule implements a contract's
+            // service, the published language that lists the contract (DESIGN 26)
+            Kind::FlowRule { connect: true, .. } => m.contexts[y]
+                .published
+                .iter()
+                .find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q))
+                .map(|pl| pl.package.clone())
+                .or_else(|| implemented(read, &q).and_then(|(pf, _)| published_package(m, y, &pf))),
             Kind::FlowRule { connect: false, .. } | Kind::FlowDates { .. } | Kind::RuleApply | Kind::RuleImportEnum | Kind::RuleRangeFromKoyomi | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
@@ -734,10 +765,19 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                     "規則を同梱するか Lambda で呼ぶと、規則そのもの（「{yn}」の内側）を使います。境界の向こうの規則は、「{yn}」にその規則を公表された言語（`published language rulec.…`）に入れてもらい、`use rule … connect` で、その Connect のサービスとして呼んでください。",
                     "A rule bundled, or called as a Lambda function, is the rule itself, inside {yn}; a rule across the boundary is called as its Connect service, with `use rule … connect`, once {yn} puts it in a published language (`published language rulec.…`)."
                 ),
-                Kind::FlowRule { connect: true, .. } => tr!(
-                    "{sq} は「{yn}」の公表された言語に入っていません。規則を Connect で呼ぶには、「{yn}」がその規則を公表された言語（`published language rulec.…`）に入れる必要があります。",
-                    "The rule {sq} is in no published language of {yn}; to call it by Connect, {yn} puts it in a published language (`published language rulec.…`)."
-                ),
+                Kind::FlowRule { connect: true, .. } => match implemented(read, &q) {
+                    Some((pf, svc)) => {
+                        let pf = shown(&pf);
+                        tr!(
+                            "{sq} は {pf} の {svc} を実装する規則で、その proto は「{yn}」の公表された言語に入っていません。この規則を Connect で呼ぶには、「{yn}」がその proto を公表された言語に並べ、`open host service` に {svc} を書く必要があります。",
+                            "The rule {sq} implements {svc} of {pf}, and the .proto is in no published language of {yn}; to call the rule by Connect, {yn} lists the .proto in a published language, with {svc} under `open host service`."
+                        )
+                    }
+                    None => tr!(
+                        "{sq} は「{yn}」の公表された言語に入っていません。規則を Connect で呼ぶには、「{yn}」がその規則を公表された言語（`published language rulec.…`）に入れる必要があります。",
+                        "The rule {sq} is in no published language of {yn}; to call it by Connect, {yn} puts it in a published language (`published language rulec.…`)."
+                    ),
+                },
                 Kind::FlowDates { .. } => tr!(
                     "ワークフローから生成したコードは、日付のファイルから生成したコードを、同梱して呼ぶか Lambda の関数として呼びます。使うのは日付のファイルそのもの（「{yn}」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
                     "The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside {yn}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel."

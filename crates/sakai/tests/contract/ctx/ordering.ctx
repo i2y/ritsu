@@ -1,0 +1,9 @@
+context Ordering(ordering) v1
+description "Takes orders, and asks pricing for their shipping and tax"
+owner "Ordering team"
+
+owns
+  dir "../ordering"
+
+upstream Pricing conformist
+  through shop.pricing.v1

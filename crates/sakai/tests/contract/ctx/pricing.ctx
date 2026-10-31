@@ -1,0 +1,10 @@
+context Pricing(pricing) v1
+description "Works out the shipping and the tax of an order, each with a rule that implements a service of the pricing contract"
+owner "Pricing team"
+
+owns
+  dir "../pricing", "../proto/shop/pricing"
+
+published language shop.pricing.v1
+  proto "../proto/shop/pricing/v1/pricing.proto"
+  open host service ShippingService, TaxService

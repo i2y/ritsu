@@ -236,7 +236,8 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
         }
     }
     let mut contexts: Vec<Ctx> = Vec::new();
-    let mut packages: Vec<(String, String)> = Vec::new();
+    // each published package so far: the context file, and whether its block holds a rule
+    let mut packages: Vec<(String, String, bool)> = Vec::new();
     for (f, s, c) in &files {
         let cdir = paths::parent(f);
         let mut owns = Vec::new();
@@ -252,15 +253,23 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
         }
         let mut published = Vec::new();
         for p in &c.published {
-            if let Some((_, other)) = packages.iter().find(|(k, _)| *k == p.package) {
+            if let Some((_, other, rule)) = packages.iter().find(|(k, _, _)| *k == p.package) {
                 let k = &p.package;
-                let other = paths::shown(other);
-                r.at("E006", f, s, p.package_pos, tr!("公表された言語 {k} が二度宣言されています", "The published language {k} is declared twice"))
-                    .notes
-                    .push(tr!("{other} も同じ package を公表しています。一つの package を公表できるのは、一つのコンテキストだけです。", "The context file {other} publishes the same package; a package is published by one context."));
+                let note = if other == f {
+                    tr!("このファイルの中で、同じ package を二度公表しています。一つの package は、一つの公表された言語にまとめてください。", "This file publishes the same package twice; one package is one published language.")
+                } else {
+                    let other = paths::shown(other);
+                    tr!("{other} も同じ package を公表しています。一つの package を公表できるのは、一つのコンテキストだけです。", "The context file {other} publishes the same package; a package is published by one context.")
+                };
+                let d = r.at("E006", f, s, p.package_pos, tr!("公表された言語 {k} が二度宣言されています", "The published language {k} is declared twice"));
+                d.notes.push(note);
+                // two rules in one package: rules that implement services of one contract (DESIGN 26)
+                if *rule || p.rulec.is_some() {
+                    d.notes.push(crate::parse::contract_form());
+                }
                 continue;
             }
-            packages.push((p.package.clone(), f.clone()));
+            packages.push((p.package.clone(), f.clone(), p.rulec.is_some()));
             let mut protos = Vec::new();
             for pf in &p.protos {
                 if let Some(x) = r.path(f, s, &cdir, pf, Some(false)) {

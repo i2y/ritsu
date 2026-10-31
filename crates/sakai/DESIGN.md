@@ -735,7 +735,7 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | 参照のもと | 何を読むか | 参照の先 |
 |---|---|---|
 | proto | `import` の行（行番号つき）、フィールドとメソッドの型 | 別の proto のファイルと、使っている要素 |
-| rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）、`import enum`（行と、`enums` のファイルの列挙）、`range from koyomi`（行と、日付のファイルの日付）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から。20 章 | proto のファイルと、列挙と値、メッセージ、規則、`enums` のファイル、日付のファイル |
+| rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）、`import enum`（行と、`enums` のファイルの列挙）、`range from koyomi`（行と、日付のファイルの日付）、`implements`（行と、proto のサービス。26 章）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から。20 章 | proto のファイルと、列挙と値、メッセージ、規則、`enums` のファイル、日付のファイル |
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
 | dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
@@ -748,16 +748,16 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 
 ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、dandori の `use book` と帳簿の操作のタスクの `book`（18.2）、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
 
-rulec の `implements`（規則が実装する契約のサービス。rulec の DESIGN 15.274）も、境界を越える参照に数えない。ワークフローの `implements` は、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスであることを確かめる（E208。4.7）が、規則の `implements` はまだ確かめない。
+ワークフローの `implements` と規則の `implements`（規則が実装する契約のサービス。rulec の DESIGN 15.274）は、境界を越える参照に数えない。どちらも、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスであることを確かめる（E208。4.7、26 章）。
 
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
 1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
 2. 先が、相手の公表された言語の要素で、関係がそれを許す（1.5 の表）。
 
-先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）、規則の `import enum` と `range from koyomi`（20 章）、ワークフローの `use dates`（19 章）、カレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate`（17 章）と、モジュールの `use rule`・`use dates`・`use module`（18 章）も同じである。
+先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。規則を並べた塊が無く、規則が `implements` で契約のサービスを実装していれば、その契約の proto を並べた塊のものである（26 章）。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）、規則の `import enum` と `range from koyomi`（20 章）、ワークフローの `use dates`（19 章）、カレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate`（17 章）と、モジュールの `use rule`・`use dates`・`use module`（18 章）も同じである。
 
-診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、`enums` のファイル、日付のファイル、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
+診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、`enums` のファイル、日付のファイル、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローと規則の `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7、26 章）。
 
 一つの参照に出す診断は一つで、次の順に決める。
 
@@ -810,7 +810,7 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 |---|---|---|---|
 | rulec | `Rules`（`facts`） | Connect のパス（package とサービス）、Connect の列挙（値の名前と、ワイヤでの名前と番号、取り込んだ proto のファイルと列挙の完全な名前）、入力と出力の名前 | 公表された言語の rulec の塊（E302、E301）、対応の先が規則の列挙のとき（E403、E405、E407）、`use rule … connect` が呼ぶサービス（E207）、doc の成果物の表と対応の表 |
 | rulec | `Items`（索引で） | 入力、出力、列挙と値の名前 | 語の `means` の先（E007） |
-| rulec | `References`（索引で） | `import proto`、`shape`、`apply`、`import enum`、`range from koyomi`（3.3、20 章） | 境界を越える参照 |
+| rulec | `References`（索引で） | `import proto`、`shape`、`apply`、`import enum`、`range from koyomi`（3.3、20 章）、`implements`（26 章） | 境界を越える参照、E208 |
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
 | dandori | `References`（索引で） | `use rule`、`use dates`、`use proto`、`connect`、`flow`、`implements`（4.7、19 章） | 境界を越える参照、E207〜E209 |
 | sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
@@ -865,7 +865,7 @@ proto は sakai が直接読む（P2）。読み手は自分で書いた（依�
 
 ### 4.3 rulec
 
-規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊。`implements` で契約のサービスを実装する規則では、契約の package の塊）、参照のもと（`import proto`、`shape`、`apply`、`import enum`、`range from koyomi`）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。`enums` のファイル（列挙だけを持つ `.rule`。rulec の DESIGN 15.212）は、ほかの規則の `import enum` の先としても現れる（20 章）。rulec が規則について答えるのは、規則が rulec の検査を通るときだけである。通らない規則は E105 で、その規則の参照も対応も確かめない（4.1）。
+規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊。`implements` で契約のサービスを実装する規則では、契約の proto を並べた塊か、契約の package で規則を並べた塊。26 章）、参照のもと（`import proto`、`shape`、`apply`、`import enum`、`range from koyomi`）、実装するサービス（`implements`。E208）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。`enums` のファイル（列挙だけを持つ `.rule`。rulec の DESIGN 15.212）は、ほかの規則の `import enum` の先としても現れる（20 章）。rulec が規則について答えるのは、規則が rulec の検査を通るときだけである。通らない規則は E105 で、その規則の参照も対応も確かめない（4.1）。
 
 ### 4.4 koyomi
 
@@ -887,12 +887,12 @@ dandori のワークフローは、境界を越える参照をいちばん多く
 
 | dandori が言う参照 | 先 | sakai の扱い |
 |---|---|---|
-| `use rule`（呼び方の語を添えて：`use rule`、`use rule … connect`、`use rule … lambda`、`use rule … local`） | 規則 | `connect` があれば、規則の Connect のサービスを呼ぶ参照で、先の規則が相手の公表された言語（`published language rulec.…`）に入っていること（E202）と、そのサービスが `open host service` に並ぶこと（E207）。`connect` が無ければ（同梱、Lambda、ローカル）、規則そのものを使う参照で、共有カーネルの中でなければ E202 |
+| `use rule`（呼び方の語を添えて：`use rule`、`use rule … connect`、`use rule … lambda`、`use rule … local`） | 規則 | `connect` があれば、規則の Connect のサービスを呼ぶ参照で、先の規則が相手の公表された言語（`published language rulec.…`。規則が `implements` で契約のサービスを実装していれば、契約の proto を並べた塊でもよい。26 章）に入っていること（E202）と、そのサービスが `open host service` に並ぶこと（E207）。`connect` が無ければ（同梱、Lambda、ローカル）、規則そのものを使う参照で、共有カーネルの中でなければ E202 |
 | `use dates`（呼び方の語を添えて：`use dates`、`use dates … lambda`、`use dates … local`） | 日付のファイル | 日付のファイルそのものを使う参照で、共有カーネルの中でなければ E202（関係が無ければ E201）。19 章 |
 | `use proto` | proto のファイル | proto の import と同じく、相手の公表された言語の proto であること |
 | `connect` | proto のサービスとメソッド | サービスを呼ぶ参照。サービスが相手の `open host service` に並ぶこと（E207） |
 | `flow` | 子の `.flow` | 下の決定（E209） |
-| `implements` | proto のサービス | 境界を越える参照ではない。そのワークフローを持つコンテキストの公表された言語の `open host service` に並ぶこと（E208） |
+| `implements` | proto のサービス | 境界を越える参照ではない。そのワークフローを持つコンテキストの公表された言語の `open host service` に並ぶこと（E208）。規則の `implements` も同じ（26 章） |
 | `use openapi` | OpenAPI の文書 | 文書がほかのコンテキストの成果物なら、その文書への参照として、ほかの参照と同じ決まりで確かめる（15.5）。文書が成果物でなければ、それを読むワークフローの一部（1.3） |
 | `use smithy` | 記述のファイル | 記述は、それを読むワークフローの一部（1.3）なので、参照として数えない |
 | `use book`、帳簿の操作のタスクの `book` | 帳簿、帳簿の振替 | 振替を帳簿に当てるのは、dandori が書く実装が呼ぶ帳簿のクライアントなので、参照として数えない（18.2） |
@@ -953,7 +953,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E001 | 読めない字句（知らない文字、閉じていない文字列） |
 | E002 | この位置に書けない語（役割の無い `upstream` など） |
 | E003 | ファイルが `map` か `context` の行で始まらない |
-| E004 | 節の順序や数が違う（同じ節が二度、map に `owns`、context に `covers`、省けない節が無い） |
+| E004 | 節の順序や数が違う（同じ節が二度、map に `owns`、context に `covers`、省けない節が無い、一つの公表された言語に種類を混ぜる・規則やクレートを二つ書く） |
 | E005 | 字下げが合わない（タブ、揃っていない） |
 | E006 | 同じ名前を二度宣言している（コンテキスト、別名、語、`published language` の package、同じ相手への同じ関係） |
 | E007 | 宣言されていない名前（コンテキスト、語、package、要素。指した proto にその要素が無いときも）。短い書き方の名前が二つの package に当たるときも |
@@ -982,7 +982,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E205 | 腐敗防止層の下流の公表された言語に、上流の型が出ている |
 | E206 | 別々の道の相手への参照 |
 | E207 | ワークフローが、境界の向こうの、相手の公開ホストサービスでないサービスを呼んでいる（`connect`、`use rule … connect`） |
-| E208 | ワークフローが `implements` で実装するサービスが、自分の公表された言語の公開ホストサービスでない |
+| E208 | ワークフローか規則が `implements` で実装するサービスが、自分の公表された言語の公開ホストサービスでない |
 | E209 | ワークフローが、境界の向こうのワークフローを子として走らせている（パートナーでなく、共有カーネルになく、子が相手の公開ホストサービスを実装していない） |
 | E210 | 文書が、境界の向こうの、相手の公開ホストサービスでないチャネルか HTTP の操作を使っている（15.5） |
 | E211 | `.gate` の action（か、`cedar "…"` と書いた Cedar のスキーマの `@guards`）が、ほかのコンテキストに属する契約の操作を守っている（17 章） |
@@ -2634,3 +2634,71 @@ error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService i
 **見つけて直していないもの**：
 
 - 識別子の形は、モジュールの名前にならないディレクトリの検査（E501）と同じく、Rust の `is_alphabetic` と `is_alphanumeric` で見ている。grimp が使う Python の `str.isidentifier`（Unicode の XID）とは、一部の文字で食い違う。`a·b` は Python では識別子だが、`·` は Rust では文字でも数字でもないので、そのディレクトリの `except` には式を書かず、grimp はそれを読む。
+
+## 26. 規則の `implements`（2026-10-31）
+
+規則が `implements` で実装するサービスも、その規則を持つコンテキストの公表された言語の `open host service` に無ければ E208 にする。一つの契約のサービスを二つ以上の規則が実装するときは、契約の `.proto` を公表された言語にする。
+
+**きっかけ**：rulec 0.39.0 の `implements`（rulec の DESIGN 15.274）の「見つけて直していないもの」の二つ。規則の `implements` は、ワークフローの `implements` と違って確かめていなかった（3.3）。一つの package の二つのサービスを二つの規則が実装すると、規則を公表された言語として並べられなかった。規則ごとの塊にすると同じ package が二度出て E006、一つの塊に規則を二つ書くと E004 になる。契約の `.proto` を公表された言語にすれば地図は通るが、規則とサービスを結ぶものが無く、ほかのコンテキストのワークフローが規則を `use rule … connect` で呼ぶと、0.39.0 では「The file ordering/checkout.flow of Ordering refers to pricing/rules/shipping.rule (use rule … connect), which is inside Pricing」の E202 になった。注は「The rule pricing/rules/shipping.rule is in no published language of Pricing; to call it by Connect, Pricing puts it in a published language (`published language rulec.…`).」で、規則ごとの塊へ、つまり E006 へ導いた。
+
+**原因**：
+
+- E208 を出す `refs::implements` が、dandori の参照だけを読んでいた。rulec の口 `References` は 0.39.0 から規則の `implements` を言う（`how: "implements"`、先は契約の `.proto` とサービス）が、sakai はそれを境界を越える参照からも E208 からも外していた。
+- `use rule … connect` の着地点が、規則を中身にした塊（`rulec "…"`）だけだった。契約の `.proto` を並べた塊は、規則を呼ぶ参照の着地点にならなかった。
+- E004 と E006 の注は、規則ごとに塊を分けること（package は契約のもの）だけを言い、二つの規則が一つの契約を実装するときは、E004 から E006 へ導いていた。
+
+**決定**：
+
+- E208 を規則に広げる。規則が実装するサービスは、その規則を持つコンテキストの公表された言語の `open host service` に無ければならない。ワークフローと同じ決まりで、同じコードにする。英語の文は「The rule … of … implements …」で、日本語の文はワークフローと同じ形（もとから「ワークフロー」と言っていない）。注は、契約の `.proto` を並べた塊の名前、規則を中身にした塊の名前、どちらにも無いことのどれかと、直し方を言う。
+- 一つの package に規則が二つ以上あるときの形は、契約の `.proto` を公表された言語にするもの（`proto "<契約>"` と `open host service <サービス>…`）。規則は `owns` に入っていればよく、規則とサービスは E208 が結ぶ。E004 は緩めない。
+- 規則を中身にした塊（`rulec "<規則>"`）で、`implements` を書いた規則を一つ公表する形も、公表に数える。その塊の `open host service` にサービスがあれば通り、無ければ E208 になる。0.39.0 の E302 と E004 の注がこの形を案内していて、E302 が塊の package を契約の package に、E301 が `open host service` を規則のサービスに合わせるので、確かめられることは契約の形と変わらない。
+- `use rule … connect` は、規則を中身にした塊が無く、規則が実装する契約の `.proto` を規則のコンテキストの塊が並べていれば、その塊に着く。サービスがその塊の `open host service` にあるかは E207 が確かめ、呼ぶ側の `through` もその package を見る。E202 の注は、`implements` を書いた規則には、契約の proto を公表された言語に並べることを言う。規則を契約のサービスとして公表する形なので、規則を呼ぶ参照も、その公表に着く。
+- E004（一つの塊に規則が二つ、または規則と `proto`）と E006（同じ package の塊が二つで、どちらかに規則がある）に、契約の形を案内する注を足す。この二つは地図と `.ctx` を読む段で出て、ほかの言語を読む前なので、規則が `implements` を書いているかを知らない。そこで注は「規則が一つの契約のサービスを `implements` で実装するなら」と条件を付けて言う。E004 の前の注の、E006 へ導く括弧書きは消した。E006 の注は、ぶつかる二つが同じファイルのとき、そのとおりに言う（前は、同じファイルをほかのコンテキストのファイルのように言った）。
+- `sakai doc` は、公開ホストサービスを実装しているものに規則も並べ、規則の行に実装するサービスを書く。
+
+**捨てたもの**：
+
+- **規則を中身にした塊の形を、契約の形へ移るよう言うこと**（E208 か警告にする）。0.39.0 の注のとおりに書いた地図が、確かめられることは同じなのに落ちる。
+- **一つの塊に規則を二つ書けるようにすること**（E004 を緩める）。塊が何を公表するかが、規則の数と契約の中身の二つから決まることになる。契約の形なら、契約の `.proto` が公表するものを決める。
+- **E004 と E006 で、規則のファイルを読んで `implements` を書いているかを見ること**。地図を読む段がほかの言語を読むことになる。sakai はほかの言語を口でだけ読む（4.1）。
+
+**変わること**：
+
+- `implements` を書いた規則の、実装するサービスを自分のコンテキストが公表していない地図は、E208 で落ちる。前は通っていた。規則を中身にした塊に `open host service` を書いていなかった地図も同じ（前は、呼ぶ側だけが E207 で落ちた）。
+- 契約の形で公表した規則を `use rule … connect` で呼ぶ地図は通る。前は E202 だった。
+- E004 と E006 と E202 の注。台帳の E208 の題と文と直し方、E004 の文と直し方、E006 の直し方（`sakai explain`、`docs/codes.md`、`docs/codes.ja.md`、スキルのコピー）、reference の公表された言語の段、3.3、4.1、4.3、4.7、5.2 を合わせた。README（英日）の変異の数は 184（日本語の名前のもの 90）になった。
+- `implements` を書いた規則の無い地図の出力は、規則のある E004 と E006 の注のほかは変わらない。例とテストの地図と変異にはそのどちらも無く、出力は一字も変わらなかった（下の突き合わせ）。
+
+**確かめたこと**：
+
+- 変異 `E208_a_rule_implements_a_service_not_open`（`examples/shop` の配送の `shipment.proto` に `DeliveryFeeService` を足し、それを実装する `delivery/rules/delivery_fee.rule` を置いたもの）と、日本語の版の `E208_規則が公開していないサービスを実装`（`examples/shop.ja`）。golden は英語と日本語。替える前は、どちらも `80 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)` で通った。英語の出力：
+
+```
+error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/delivery_fee.rule of Delivery implements proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService, which is no open host service of a published language of Delivery
+     3 | implements proto "../../proto/shop/delivery/v1/shipment.proto" DeliveryFeeService
+  = The .proto is in Delivery's published language shop.delivery.v1, and its `open host service` does not list DeliveryFeeService.
+  = A service a rule implements is one the rule's context publishes: list the contract's .proto in its published language, and the service under `open host service`.
+  involved:
+      Delivery  delivery/rules/delivery_fee.rule:3  implements proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService
+```
+
+日本語の出力：
+
+```
+エラー[E208]: delivery/rules/配送料.rule:3:1: 「配送」の delivery/rules/配送料.rule が実装する proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService は、「配送」の公表された言語の公開ホストサービスではありません
+     3 | implements proto "../../proto/shop/delivery/v1/shipment.proto" DeliveryFeeService
+  = その proto は「配送」の公表された言語 shop.delivery.v1 にありますが、`open host service` に DeliveryFeeService がありません。
+  = 規則が実装するサービスは、その規則を持つコンテキストが公表するものです。自分の公表された言語に契約の proto を並べ、`open host service` にサービスを書いてください。
+  関わるもの:
+      配送  delivery/rules/配送料.rule:3  implements proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService
+```
+
+- `tests/rule_implements.rs` と地図 `tests/contract`（英語）。規則とワークフローを持つので、このクレートの sakai が全部の地図を確かめる `tests/maps/` の外に置いた。価格のコンテキストの二つの規則が `shop.pricing.v1` の二つのサービスを実装し、契約の形で公表する。受注のワークフローが送料を `use rule … connect` で、税を `use proto` と `connect` で呼び、`contract.ctx: ok — 2 contexts, 1 relationship; 4 artifacts, each in one context; 3 crossings checked (dandori 3)` で通る。`open host service` から一つ外すと E208 と E207、公表された言語を消すと規則ごとに E208、契約が公表されていない規則を `use rule … connect` で呼ぶと E202 の新しい注、規則を中身にした塊で通ることと、その `open host service` を消すと E208 と E207、E004 と E006 の新しい注、文書と proto を混ぜた E004 には契約の注が出ないこと、`sakai doc` の二つの行を、英語と日本語で確かめる。
+- E006 の新しい注（規則の塊を二つ書いたもの。替えた後の出力）は、一つ目が「This file publishes the same package twice; one package is one published language.」（日本語は「このファイルの中で、同じ package を二度公表しています。一つの package は、一つの公表された言語にまとめてください。」）、二つ目が契約の形の案内「Rules that implement services of one contract with `implements` are published as the contract, not one by one: under `published language <the contract's package>`, write `proto "<contract>"`, and list the services the rules implement under `open host service`. The rules need only be in `owns`; E208 makes sure the service each rule implements is listed there.」である。替える前は、一つ目が「The context file ctx/pricing.ctx publishes the same package; a package is published by one context.」で、二つ目は無かった。一つの塊に規則を二つ書いた E004 は、前の注から括弧書きを消し、同じ二つ目の注を足した。
+- 替える前と後の突き合わせ：例（四つ）、テストの地図（`tests/maps/` の七つと、新しい `tests/contract`）、変異（184。`command` のある四つはそのコマンド）の `check` を、英語と日本語で、0.39.0 と替えた後の `ritsu sakai` で比べた。392 の出力のうち違ったのは、新しい地図と新しい変異二つの 6 だけだった。
+
+**見つけて直していないもの**：
+
+- **契約の形では、語が規則の出力を `means rulec "<規則>" output …` で指せない**（E408）。規則そのものは公表された言語ではないからで、語は契約のメッセージのフィールド（`means message ShippingResponse field shipping`）を指せば通る。
+- **規則を中身にした塊の形では、契約の `.proto` を `use proto` と `connect` で呼べない**（E202）。契約の `.proto` がどの塊にも並ばないからで、呼ぶ側は `use rule … connect` を使うか、公表する側が契約の形に移る。
+- **E004 と E006 は、規則が `implements` を書いているかを知らずに、契約の形を案内する**。`implements` を書いていない規則二つを一つの塊に書いても、同じ注が出る。

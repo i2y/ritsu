@@ -1,0 +1,6 @@
+エラー[E208]: delivery/rules/配送料.rule:3:1: 「配送」の delivery/rules/配送料.rule が実装する proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService は、「配送」の公表された言語の公開ホストサービスではありません
+     3 | implements proto "../../proto/shop/delivery/v1/shipment.proto" DeliveryFeeService
+  = その proto は「配送」の公表された言語 shop.delivery.v1 にありますが、`open host service` に DeliveryFeeService がありません。
+  = 規則が実装するサービスは、その規則を持つコンテキストが公表するものです。自分の公表された言語に契約の proto を並べ、`open host service` にサービスを書いてください。
+  関わるもの:
+      配送  delivery/rules/配送料.rule:3  implements proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService

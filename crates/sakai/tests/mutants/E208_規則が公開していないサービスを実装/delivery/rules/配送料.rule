@@ -1,0 +1,21 @@
+# この変異のために書いた：配送の契約のサービスを実装する規則
+rule 配送料(delivery_fee) v1
+implements proto "../../proto/shop/delivery/v1/shipment.proto" DeliveryFeeService
+description "注文を届ける料金。荷物の数で決まる"
+
+inputs
+  荷物の数(parcels) : number  range >=1 <=20
+
+outputs
+  料金(fee) : money[円]  round up(10円)
+
+table 料金表(fee)
+policy unique
+| 荷物の数 | -> 料金  |
+| <=2      | 500円    |
+| >2       | 1000円   |
+
+examples
+| 荷物の数 | -> 料金 |
+| 1        | 500円   |
+| 3        | 1000円  |

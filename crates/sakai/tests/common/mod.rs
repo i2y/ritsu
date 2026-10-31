@@ -139,11 +139,18 @@ pub fn mutants() -> Vec<String> {
     v
 }
 
-/// A base map of `tests/maps/` laid out in a temporary directory, with each `(file, old, new)`
-/// replacing the first `old` of the file with `new` (a file named with no `old` is written whole).
+/// A base map laid out in a temporary directory, with each `(file, old, new)` replacing the first
+/// `old` of the file with `new` (a file named with no `old` is written whole). The base is a map of
+/// `tests/maps/` by its name, or a tree of its own under `tests/` by its path (`tests/contract`,
+/// whose rules and workflow only a sakai with every language joined reads, so that the sakai of
+/// this crate, which checks every map of `tests/maps/`, does not meet it).
 pub fn variant(base: &str, edits: &[(&str, &str, &str)]) -> TempDir {
-    let dir = TempDir::new(base);
-    copy_dir(&Path::new("tests/maps").join(base), dir.path());
+    let (name, from) = match base.strip_prefix("tests/") {
+        Some(rest) => (rest, PathBuf::from(base)),
+        None => (base, Path::new("tests/maps").join(base)),
+    };
+    let dir = TempDir::new(name);
+    copy_dir(&from, dir.path());
     for (file, old, new) in edits {
         let p = dir.path().join(file);
         if old.is_empty() {

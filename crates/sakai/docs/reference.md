@@ -105,7 +105,7 @@ published language rulec.urgency.v1
 A published language is a protobuf package, written as a block `published language <package>`:
 
 - `proto "…"`: a file that declares the package and belongs to the context (else E302).
-- `rulec "…"`: a rule, whose Connect service (the one `rulec gen` writes for it) is the published language; its package is the one of the rule's Connect path (`rulec.urgency.v1`). An `enums` file is not one: no service is generated from it (E302, and E301 for each open host service under it).
+- `rulec "…"`: a rule, whose Connect service (the one `rulec gen` writes for it) is the published language; its package is the one of the rule's Connect path (`rulec.urgency.v1`, or the contract's package for a rule that implements a contract's service). An `enums` file is not one: no service is generated from it (E302, and E301 for each open host service under it).
 - `open host service <service>, …`: the services anyone may call; each must be in the block's files (else E301).
 - `generated dir "…"`: where the code generated from the package is kept; other contexts' code may import it (see [targets.md](targets.md)).
 - `crate "…"`: a Rust crate, whose name with `-` as `_` is the heading; a crate has no open host service.
@@ -116,6 +116,18 @@ A published language is a protobuf package, written as a block `published langua
 
 What a published language holds is everything its `.proto` files define (messages and their fields, enums and their values, services and their methods), or, for a rule, what rulec names of it (inputs, outputs, enums and values).
 A reference that calls a service needs the service to be an open host service; a reference that only uses types needs the published language.
+
+A workflow or a rule that implements a service (dandori's `workflow … implements`, rulec's `implements proto "<file>" <Service>`) is served as that service, and its own context publishes it: the `.proto` under `proto "…"` of one of its published languages, and the service under that block's `open host service` (else E208).
+Rules that implement the services of one contract are published as the contract, in one block, and need only be owned:
+
+```ctx
+published language shop.pricing.v1
+  proto "../proto/shop/pricing/v1/pricing.proto"
+  open host service ShippingService, TaxService
+```
+
+Such a rule is called across a boundary as its service, by `use rule … connect` as by `use proto` and `connect`.
+One rule that implements a contract's service may instead be the block itself, `rulec "…"` in the contract's package (E302) with the service under its `open host service`; two rules of one package cannot (E004 in one block, E006 in two), and the notes of both show the contract's form.
 
 ```ctx
 published language payments.v1

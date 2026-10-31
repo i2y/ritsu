@@ -634,25 +634,25 @@ impl<'a> P<'a> {
             let contract = t0.word().and_then(crate::contracts::Kind::from_word);
             if let Some(k) = contract {
                 if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() {
-                    self.mixed(cl);
+                    self.mixed(cl, false);
                 } else if let Some(ss) = self.strings(cl, 1) {
                     p.contracts.extend(ss.into_iter().map(|s| (k, s)));
                 }
             } else if t0.is("proto") {
                 if p.rulec.is_some() || p.krate.is_some() || !p.contracts.is_empty() {
-                    self.mixed(cl);
+                    self.mixed(cl, p.rulec.is_some());
                 } else if let Some(ss) = self.strings(cl, 1) {
                     p.protos.extend(ss);
                 }
             } else if t0.is("rulec") {
                 if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() || !p.contracts.is_empty() {
-                    self.mixed(cl);
+                    self.mixed(cl, !p.protos.is_empty() || p.rulec.is_some());
                 } else {
                     p.rulec = self.one_string(cl, 1);
                 }
             } else if t0.is(kw::CRATE) {
                 if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() || !p.contracts.is_empty() {
-                    self.mixed(cl);
+                    self.mixed(cl, false);
                 } else {
                     p.krate = self.one_string(cl, 1);
                 }
@@ -727,12 +727,18 @@ impl<'a> P<'a> {
         }
     }
 
-    fn mixed(&mut self, l: &Line) {
+    /// E004 for a line that mixes kinds in one published language; `rule` when a `rulec` line
+    /// meets another or a `proto` line, which rules that implement one contract's services lead to
+    /// (DESIGN 26).
+    fn mixed(&mut self, l: &Line, rule: bool) {
         self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec と Rust のクレートと、OpenAPI と AsyncAPI の文書を混ぜたり、規則やクレートを二つ書いたりはできません", "One published language cannot mix proto, rulec, a crate and OpenAPI or AsyncAPI documents, or hold two rules or two crates"));
         self.note(tr!(
-            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けてください（`implements` で契約のサービスを実装する規則では、package は契約のものです）。Rust のクレートも、クレートごとに一つの公表された言語にしてください。",
-            "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>` (the contract's package, for a rule that implements a contract's service with `implements`); a Rust crate, too, is a published language of its own."
+            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けてください。Rust のクレートも、クレートごとに一つの公表された言語にしてください。",
+            "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>`; a Rust crate, too, is a published language of its own."
         ));
+        if rule {
+            self.note(contract_form());
+        }
     }
 
     /// `A, B, C`: the names of services or packages, ASCII identifiers (or packages, `dotted`).
@@ -1203,5 +1209,14 @@ fn element_forms() -> Text {
     tr!(
         "要素は `proto \"<パス>\" message Order` のように参照の書き方で書くか、自分の公表された言語の proto の要素なら `message Order`、`enum Stock value STOCK_SHORT` のように短く書いてください。",
         "Name the element like `proto \"<path>\" message Order`, or, for an element of the context's own published language, shortly: `message Order`, `enum Stock value STOCK_SHORT`."
+    )
+}
+
+/// The note E004 and E006 give where rules meet in one published language or one package: rules
+/// that implement services of one contract are published as the contract (DESIGN 26).
+pub(crate) fn contract_form() -> Text {
+    tr!(
+        "規則が一つの契約のサービスを `implements` で実装するなら、規則ごとにではなく、契約を公表してください。`published language <契約の package>` の下に `proto \"<契約>\"` を書き、規則が実装するサービスを `open host service` に並べます。規則は `owns` に入っていれば足り、各規則が実装するサービスがそこにあることは E208 が確かめます。",
+        "Rules that implement services of one contract with `implements` are published as the contract, not one by one: under `published language <the contract's package>`, write `proto \"<contract>\"`, and list the services the rules implement under `open host service`. The rules need only be in `owns`; E208 makes sure the service each rule implements is listed there."
     )
 }

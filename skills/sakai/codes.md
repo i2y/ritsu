@@ -213,9 +213,9 @@ See also: [E004](#e004)
 
 ## E004 — A section is out of order, repeated, missing, or in the wrong kind of file
 
-**When**: Sections are out of their order, a section that comes once comes twice, one that cannot be left out is missing (a map's `use context` and `covers`, a context's `owns`, the `through` under `upstream`), or a section belongs to the other kind of file (`owns` in a map); also a term with both a definition and `as`, or neither.
+**When**: Sections are out of their order, a section that comes once comes twice, one that cannot be left out is missing (a map's `use context` and `covers`, a context's `owns`, the `through` under `upstream`), or a section belongs to the other kind of file (`owns` in a map); also a term with both a definition and `as`, or neither, and a published language that mixes proto, rulec, a crate and OpenAPI or AsyncAPI documents, or holds two rules or two crates.
 
-**Fix**: A map goes: heading, `description`, `use context`, `covers`, `except`, `proto root`, `code`. A context goes: heading, `description`, `owner`, `also`, `owns`, `published language`, `terms`, then the relationships.
+**Fix**: A map goes: heading, `description`, `use context`, `covers`, `except`, `proto root`, `code`. A context goes: heading, `description`, `owner`, `also`, `owns`, `published language`, `terms`, then the relationships. Each rule and each crate is a published language of its own; rules that implement services of one contract publish the contract's .proto instead.
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 
@@ -350,7 +350,7 @@ service BService { rpc Get(B) returns (B); }
 
 **When**: A context's name or alias, a term's name or `also` in one context, a published package, the same relationship toward the same context, an entry of `owns`, or the left side of a mapping comes twice.
 
-**Fix**: Rename one of them, or delete the second.
+**Fix**: Rename one of them, or delete the second. Where rules that implement services of one contract share its package, publish the contract's .proto instead of each rule.
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 
@@ -2262,11 +2262,11 @@ See also: [E202](#e202), [E301](#e301)
 
 <a id="e208"></a>
 
-## E208 — The service a workflow implements is not in its own published language
+## E208 — The service a workflow or a rule implements is not in its own published language
 
-**When**: The service a workflow `implements` is not under `open host service` of a published language of the workflow's context (nor when the .proto is in no published language).
+**When**: The service a workflow or a rule `implements` is not under `open host service` of a published language of its context (nor when the .proto is in no published language). A rule passes too when its context publishes the rule itself (`rulec "<rule>"`), with the service under that block's `open host service`.
 
-**Fix**: List the .proto in the context's published language, and the service under `open host service`.
+**Fix**: List the .proto in the context's published language, and the service under `open host service`; so too when two or more rules implement services of one contract.
 
 **Reproduction**: put the files below in one directory, and run `ritsu sakai check .` there.
 

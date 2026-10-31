@@ -1,0 +1,6 @@
+error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/delivery_fee.rule of Delivery implements proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService, which is no open host service of a published language of Delivery
+     3 | implements proto "../../proto/shop/delivery/v1/shipment.proto" DeliveryFeeService
+  = The .proto is in Delivery's published language shop.delivery.v1, and its `open host service` does not list DeliveryFeeService.
+  = A service a rule implements is one the rule's context publishes: list the contract's .proto in its published language, and the service under `open host service`.
+  involved:
+      Delivery  delivery/rules/delivery_fee.rule:3  implements proto "proto/shop/delivery/v1/shipment.proto" service DeliveryFeeService

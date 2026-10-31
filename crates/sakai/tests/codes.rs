@@ -138,7 +138,8 @@ fn every_japanese_mutant_has_an_english_one() {
     // context's operation (E211, DESIGN 17), the workflow that reads a dates file inside another
     // context (E202, DESIGN 19), the two rules that read an `enums` file and a dates file inside
     // another context (E202, DESIGN 20), the two mappings whose diagnostics list values with a
-    // blank, a `,` and a `、` (E402, E403, DESIGN 22), and the `enums` file listed in a rule's
-    // published language (E302, DESIGN 23)
-    assert_eq!(japanese, 89, "the Japanese mutants are all kept");
+    // blank, a `,` and a `、` (E402, E403, DESIGN 22), the `enums` file listed in a rule's
+    // published language (E302, DESIGN 23), and the rule that implements a service its context
+    // does not open (E208, DESIGN 26)
+    assert_eq!(japanese, 90, "the Japanese mutants are all kept");
 }
