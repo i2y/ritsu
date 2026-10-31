@@ -1,5 +1,6 @@
-//! The READMEs at the root, README.md and README.ja.md, show what ritsu does, and this holds them
-//! to what it does (PLAN F.3), as each language's tests/docs.rs holds its own pages:
+//! The READMEs at the root, README.md and README.ja.md, show what ritsu does, and README.zh.md
+//! introduces it in Simplified Chinese (DESIGN 10.13); this holds the three to what it does (PLAN
+//! F.3), as each language's tests/docs.rs holds its own pages:
 //!
 //! - Every `$ ritsu …` and `$ <language> …` in a `console` block is run, and prints what the page
 //!   shows under it: the lines in that order, a line `…` standing for any number of lines. It is
@@ -14,7 +15,8 @@
 //!   order, and the `text` block after it is what the host prints (`host/output.txt`, which ritsu's
 //!   tests/kaname.rs runs the hosts to print).
 //! - A command the prose names as `rulec doc` or `ritsu check` is one.
-//! - Every relative link leads to a file, and every `#anchor` to a heading of the page it is on.
+//! - Every relative link leads to a file, and every `#anchor` to a heading of the page it names
+//!   (README.zh.md links to the sections of README.md).
 //! - The table lists the languages as `ritsu` has them, the page names a link for each, the
 //!   `cargo install` lines name this repository and a package of it that has a binary, and no
 //!   page names the repository of one language by itself.
@@ -22,7 +24,7 @@
 //! - A block marked with the file it shows (`<!-- crates/ritsu/tests/projects/modules/shop/ritsu.mod -->`
 //!   above its fence) is the lines of that file, in order.
 //! - The workflow the section on modules shows is the one the guide to modules on the site shows, on
-//!   both pages, and every page installs ritsu in GitHub Actions at this version
+//!   README.md and README.ja.md, and every page installs ritsu in GitHub Actions at this version
 //!   (`uses: i2y/ritsu@v<version>`).
 //!
 //! (tests/common/mod.rs holds what tests/skill.rs shares with this file.)
@@ -37,29 +39,31 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn pages() -> Vec<Page> {
-    ["README.md", "README.ja.md"].iter().map(|n| page(n)).collect()
+    ["README.md", "README.ja.md", "README.zh.md"].iter().map(|n| page(n)).collect()
 }
 
 #[test]
 fn the_commands_on_the_pages_print_what_they_show() {
     let (ran, wrong) = run_the_consoles(&pages());
-    // `koyomi check` and `ritsu check`, on each of the two pages.
-    assert!(ran >= 4, "{ran} commands run: were the fences changed?");
+    // `koyomi check` and `ritsu check`, on README.md and README.ja.md, and `ritsu check` on
+    // README.zh.md.
+    assert!(ran >= 5, "{ran} commands run: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 #[test]
 fn the_code_on_the_pages_is_from_the_files() {
     let (seen, wrong) = code_from_files(&pages());
-    // The languages and the refund rule and flow, on two pages.
-    assert!(seen >= 2 * (CODE.len() + 2), "{seen} blocks of code on the pages: were the fences changed?");
+    // The languages and the refund rule and flow, on README.md and README.ja.md, and the rule and
+    // the flow on README.zh.md.
+    assert!(seen >= 2 * (CODE.len() + 2) + 2, "{seen} blocks of code on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 #[test]
 fn the_hosts_on_the_pages_are_kanames_and_print_what_they_show() {
     let (seen, _, wrong) = hosts_from_files(&pages());
-    // the TypeScript host of the order, on each of the two pages
+    // the TypeScript host of the order, on README.md and README.ja.md
     assert!(seen >= 2, "{seen} blocks of hosts on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
@@ -67,8 +71,8 @@ fn the_hosts_on_the_pages_are_kanames_and_print_what_they_show() {
 #[test]
 fn the_commands_the_prose_names_are_commands() {
     let (seen, wrong) = commands_named(&pages());
-    // the `check` and the `doc` of the languages, `yuen trace` and ritsu's own, on two pages
-    assert!(seen >= 2 * 8, "{seen} commands named in the prose: were they changed?");
+    // the `check` and the `doc` of the languages, `yuen trace` and ritsu's own, on three pages
+    assert!(seen >= 3 * 8, "{seen} commands named in the prose: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
@@ -89,11 +93,16 @@ fn the_links_on_the_pages_lead_somewhere() {
                 }
             } else if !root().join(file).exists() {
                 wrong.push(format!("{}:{line}: {file} is no file of the repository", p.name));
+            } else if let Some(a) = frag
+                && file.ends_with(".md")
+                && !page(file).anchors.iter().any(|h| h == a)
+            {
+                wrong.push(format!("{}:{line}: no heading of {file} is anchored `#{a}`", p.name));
             }
         }
     }
-    // A row of the table for each language, on two pages.
-    assert!(seen >= 2 * LANGUAGES.len(), "{seen} links on the pages: were they changed?");
+    // A row of the table for each language, on three pages.
+    assert!(seen >= 3 * LANGUAGES.len(), "{seen} links on the pages: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
@@ -104,7 +113,7 @@ fn the_table_and_the_links_are_the_languages_as_ritsu_has_them() {
         let names: Vec<&str> = p.text.lines().filter_map(|l| l.strip_prefix("| [")).filter_map(|l| l.split_once("](")).map(|(name, _)| name).collect();
         assert_eq!(names, LANGUAGES, "{}: the table names the languages in the order `ritsu --help` lists them", p.name);
         // The Commands section names the links, in that order, as a list.
-        let comma = if p.name.ends_with(".ja.md") { "、" } else { ", " };
+        let comma = if p.name.ends_with(".ja.md") || p.name.ends_with(".zh.md") { "、" } else { ", " };
         let listed = LANGUAGES.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(comma);
         assert!(p.text.replace('\n', " ").contains(&listed), "{}: the links are not named as {listed}", p.name);
     }
@@ -152,9 +161,10 @@ fn the_install_lines_name_this_repository_and_what_it_installs() {
             }
         }
     }
-    // ritsu, and one language alone, on each of the two pages.
+    // ritsu, and one language alone, on README.md and README.ja.md, and ritsu on README.zh.md, which
+    // sends a reader to README.md for the rest.
     installed.sort();
-    assert_eq!(installed, ["ritsu", "ritsu", "rulec", "rulec"], "the install lines of the pages");
+    assert_eq!(installed, ["ritsu", "ritsu", "ritsu", "rulec", "rulec"], "the install lines of the pages");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
@@ -180,7 +190,7 @@ fn cargo_installs_ritsu_alone_and_a_link_made_by_hand_is_a_language() {
 #[test]
 fn the_blocks_marked_with_a_file_are_that_file() {
     let (seen, wrong) = marked_files(&pages());
-    // the shop's ritsu.mod, on each of the two pages
+    // the shop's ritsu.mod, on README.md and README.ja.md
     assert!(seen >= 2, "{seen} blocks marked with a file: were the marks changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
@@ -190,13 +200,14 @@ fn workflows(p: &Page) -> Vec<Vec<String>> {
     p.blocks.iter().filter(|b| b.info == "yaml").map(|b| b.lines.clone()).collect()
 }
 
-/// The workflow that posts `ritsu mod report` on a pull request is one text, on the two READMEs and
-/// the two pages of the guide to modules; and the version of ritsu a page installs in GitHub Actions
-/// is the version of this workspace, which a release raises on every page with it.
+/// The workflow that posts `ritsu mod report` on a pull request is one text, on README.md and
+/// README.ja.md and the two pages of the guide to modules (README.zh.md shows no workflow); and the
+/// version of ritsu a page installs in GitHub Actions is the version of this workspace, which a
+/// release raises on every page with it.
 #[test]
 fn the_workflow_of_the_report_is_one_and_installs_this_version() {
     let guide = [page("website/docs/modules.md"), page("website/docs-ja/modules.md")];
-    let readmes = pages();
+    let readmes = [page("README.md"), page("README.ja.md")];
     let want = workflows(&readmes[0]);
     assert_eq!(want.len(), 1, "README.md shows one workflow");
     assert!(want[0].iter().any(|l| l.contains("ritsu mod report --base")), "the workflow runs `ritsu mod report`");
@@ -207,7 +218,7 @@ fn the_workflow_of_the_report_is_one_and_installs_this_version() {
     let mut wrong = Vec::new();
     let mut seen = 0;
     let mut site: Vec<PathBuf> = Vec::new();
-    for dir in ["website/docs", "website/docs-ja"] {
+    for dir in ["website/docs", "website/docs-ja", "website/docs-zh"] {
         let mut todo = vec![root().join(dir)];
         while let Some(d) = todo.pop() {
             for e in fs::read_dir(&d).unwrap().flatten() {
@@ -220,7 +231,7 @@ fn the_workflow_of_the_report_is_one_and_installs_this_version() {
             }
         }
     }
-    for file in [root().join("README.md"), root().join("README.ja.md")].into_iter().chain(site) {
+    for file in ["README.md", "README.ja.md", "README.zh.md"].map(|n| root().join(n)).into_iter().chain(site) {
         let text = fs::read_to_string(&file).unwrap();
         for (n, line) in text.lines().enumerate() {
             let mut rest = line;

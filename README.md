@@ -1,5 +1,7 @@
 # ritsu
 
+English | [日本語](README.ja.md) | [简体中文](README.zh.md)
+
 **Write the rules a system must follow in small languages, and check that every input gets exactly one answer and that no two rules disagree. From the checked rules, ritsu generates code, pages for people to read, and the inputs, answers and scenarios to test with.**
 
 Coding agents now write code faster, and more of it, than anyone can read line by line. That

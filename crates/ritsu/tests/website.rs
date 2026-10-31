@@ -1,4 +1,5 @@
-//! ritsu's site (website/, DESIGN 13.2): ritsu's own pages in English and Japanese, and below them
+//! ritsu's site (website/, DESIGN 13.2): ritsu's own pages in English and Japanese, its home page in
+//! Simplified Chinese (website/docs-zh, DESIGN 10.13), and below them
 //! the site of each language that website/build.sh builds, each with its own configuration in a
 //! directory of its own (website/rulec and website/dandori, the sites the two languages had in
 //! their own repositories, and website/chobo), all built into one tree, website/build, which is
@@ -13,7 +14,8 @@
 //!   Japanese one), whose own links lead to the page that explains the playground and to its files;
 //! - the English pages and the Japanese ones are the same pages, the two navs list them in the same
 //!   order (all but the page of yuen's namespace), and each home page links to every other page its
-//!   nav lists;
+//!   nav lists; the Chinese pages are the home page alone, which its nav lists, and which links to
+//!   the English home page and the Japanese one;
 //! - the pages of sekisho (website/docs/sekisho.md and website/docs-ja/sekisho.md) show sekisho's
 //!   example as the tools have it: the lines of its files, what the commands print (a `gen` into a
 //!   scratch directory), the Cedar and the code `ritsu gen` writes, the table `sekisho doc` draws
@@ -123,11 +125,11 @@ fn sites() -> Vec<String> {
 }
 
 /// ritsu's pages, each with the path of its directory in the built site (`/`, `/playground/`,
-/// `/ns/yuen/`, `/ja/`, …). A page in a directory of `docs` is published under that directory
+/// `/ns/yuen/`, `/ja/`, `/zh/`, …). A page in a directory of `docs` is published under that directory
 /// (`ns/yuen.md` at `/ns/yuen/`).
 fn pages() -> Vec<(Page, String)> {
     let mut out = Vec::new();
-    for (dir, at) in [("docs", "/"), ("docs-ja", "/ja/")] {
+    for (dir, at) in [("docs", "/"), ("docs-ja", "/ja/"), ("docs-zh", "/zh/")] {
         let mut todo = vec![PathBuf::new()];
         while let Some(under) = todo.pop() {
             for e in fs::read_dir(website().join(dir).join(&under)).unwrap().flatten() {
@@ -191,11 +193,17 @@ fn follow(base: &str, rel: &str) -> Option<String> {
 /// relative link that names no page (`rulec/`, `playground/#project=…`) from there, and writes it,
 /// in a page it publishes a directory deeper (`sekisho.md` at `/sekisho/`), with one more `../`.
 fn dir_of(name: &str) -> String {
-    let (rest, at) = name.strip_prefix("website/docs-ja/").map(|r| (r, "/ja/")).or_else(|| name.strip_prefix("website/docs/").map(|r| (r, "/"))).unwrap_or_else(|| panic!("{name} is no page of ritsu's site"));
+    let (rest, at) = name
+        .strip_prefix("website/docs-ja/")
+        .map(|r| (r, "/ja/"))
+        .or_else(|| name.strip_prefix("website/docs-zh/").map(|r| (r, "/zh/")))
+        .or_else(|| name.strip_prefix("website/docs/").map(|r| (r, "/")))
+        .unwrap_or_else(|| panic!("{name} is no page of ritsu's site"));
     rest.rsplit_once('/').map_or(at.to_string(), |(d, _)| format!("{at}{d}/"))
 }
 
-/// The Markdown a path of the built site is made from: ritsu's pages at the root and under `/ja/`,
+/// The Markdown a path of the built site is made from: ritsu's pages at the root, under `/ja/` and
+/// (the home page) under `/zh/`,
 /// a language's site under `/<language>/` and `/<language>/ja/`; and the list of modules under
 /// `/modules/list/` and `/ja/modules/list/`, which `ritsu mod site` writes from website/modules.list
 /// as build.sh builds the site (DESIGN 17.17).
@@ -211,11 +219,16 @@ fn source_of(url: &str, sites: &[String]) -> Option<PathBuf> {
         base = base.join(first);
         parts.remove(0);
     }
-    let docs = if parts.first() == Some(&"ja") {
-        parts.remove(0);
-        "docs-ja"
-    } else {
-        "docs"
+    let docs = match parts.first() {
+        Some(&"ja") => {
+            parts.remove(0);
+            "docs-ja"
+        }
+        Some(&"zh") if base == website() => {
+            parts.remove(0);
+            "docs-zh"
+        }
+        _ => "docs",
     };
     let d = base.join(docs);
     let rest = parts.join("/");
@@ -312,7 +325,7 @@ fn the_page_of_the_playground_alone_leads_to_the_one_that_explains_it() {
 
 /// The Markdown pages of ritsu's site and of the site of every language build.sh builds.
 fn every_page() -> Vec<PathBuf> {
-    let mut dirs = vec![website().join("docs"), website().join("docs-ja")];
+    let mut dirs = vec![website().join("docs"), website().join("docs-ja"), website().join("docs-zh")];
     for s in sites() {
         dirs.push(website().join(&s).join("docs"));
         dirs.push(website().join(&s).join("docs-ja"));
@@ -371,23 +384,24 @@ fn the_links_into_the_repository_name_what_is_there() {
 }
 
 fn index_pages() -> Vec<Page> {
-    vec![page("website/docs/index.md"), page("website/docs-ja/index.md")]
+    vec![page("website/docs/index.md"), page("website/docs-ja/index.md"), page("website/docs-zh/index.md")]
 }
 
 #[test]
 fn the_code_on_the_index_is_from_the_files_and_ritsu_check_prints_what_it_shows() {
     let pages = index_pages();
     let (seen, wrong) = code_from_files(&pages);
-    // The refund rule and flow, on two pages.
-    assert!(seen >= 4, "{seen} blocks of code on the index pages: were the fences changed?");
+    // The refund rule and flow, on three pages.
+    assert!(seen >= 6, "{seen} blocks of code on the index pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     let (ran, wrong) = run_the_consoles(&pages);
-    // `ritsu check .` on the two files, as text and as JSON, on each of the two pages.
-    assert!(ran >= 4, "{ran} commands run: were the fences changed?");
+    // `ritsu check .` on the two files, as text and as JSON, on the English and the Japanese pages,
+    // and as text on the Chinese one.
+    assert!(ran >= 5, "{ran} commands run: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     let (named, wrong) = commands_named(&pages);
-    // `check` of three languages, `doc` of four and `yuen trace`, on two pages.
-    assert!(named >= 2 * 8, "{named} commands named in the prose: were they changed?");
+    // `check` of three languages, `doc` of four and `yuen trace`, on three pages.
+    assert!(named >= 3 * 8, "{named} commands named in the prose: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
@@ -417,22 +431,27 @@ fn value(text: &str, key: &str) -> Option<String> {
 fn the_configurations_name_where_each_site_is_published() {
     let cargo = read(&root().join("Cargo.toml"));
     let repository = cargo.lines().find_map(|l| l.strip_prefix("repository = \"")).and_then(|l| l.strip_suffix('"')).expect("the workspace names its repository");
-    let mut configured = vec![(String::new(), website())];
-    configured.extend(sites().into_iter().map(|s| (format!("{s}/"), website().join(s))));
-    for (under, dir) in configured {
-        for (file, ja) in [("zensical.toml", false), ("zensical.ja.toml", true)] {
+    // (the configuration, the directory it is published under, its pages and where it builds them)
+    let english = ("zensical.toml", "", "docs", "build");
+    let japanese = ("zensical.ja.toml", "ja/", "docs-ja", "build/ja");
+    let chinese = ("zensical.zh.toml", "zh/", "docs-zh", "build/zh");
+    // ritsu's site has its home page in Chinese too; the site of a language is in English and Japanese.
+    let mut configured = vec![(String::new(), website(), vec![english, japanese, chinese])];
+    configured.extend(sites().into_iter().map(|s| (format!("{s}/"), website().join(s), vec![english, japanese])));
+    for (under, dir, languages) in configured {
+        let want: Vec<String> = languages.iter().map(|(_, lang, _, _)| format!("/ritsu/{under}{lang}")).collect();
+        for (file, lang, docs, built) in &languages {
             let at = dir.join(file);
             let name = at.strip_prefix(root()).unwrap().display().to_string();
             let text = read(&at);
-            let (lang, docs, built) = if ja { ("ja/", "docs-ja", "build/ja") } else { ("", "docs", "build") };
             assert_eq!(value(&text, "site_url"), Some(format!("{PUBLISHED}{under}{lang}")), "{name}: site_url");
             assert_eq!(value(&text, "repo_url").as_deref(), Some(repository), "{name}: repo_url");
             assert_eq!(value(&text, "edit_uri"), Some(format!("edit/main/website/{under}{docs}")), "{name}: edit_uri");
-            assert_eq!(value(&text, "docs_dir").as_deref(), Some(docs), "{name}: docs_dir");
-            assert_eq!(value(&text, "site_dir").as_deref(), Some(built), "{name}: site_dir");
-            // The language switch, which links absolutely.
+            assert_eq!(value(&text, "docs_dir").as_deref(), Some(*docs), "{name}: docs_dir");
+            assert_eq!(value(&text, "site_dir").as_deref(), Some(*built), "{name}: site_dir");
+            // The language switch, which links absolutely, to every language of the site.
             let switch: Vec<String> = text.lines().filter_map(|l| l.strip_prefix("link = \"")?.strip_suffix('"').map(String::from)).collect();
-            assert_eq!(switch, [format!("/ritsu/{under}"), format!("/ritsu/{under}ja/")], "{name}: the language switch");
+            assert_eq!(switch, want, "{name}: the language switch");
         }
     }
 }
@@ -810,6 +829,19 @@ fn the_two_languages_have_the_same_pages_and_the_navs_list_them() {
         for p in nav.iter().filter(|p| *p != "index.md") {
             assert!(links.contains(p), "{index} does not link to {p}, which its nav lists");
         }
+    }
+}
+
+/// The Chinese pages are ritsu's home page alone (DESIGN 10.13): its nav lists it, and it leads a
+/// reader to the English home page and the Japanese one, which have the rest.
+#[test]
+fn the_chinese_pages_are_the_home_page_alone() {
+    let zh: Vec<String> = pages_under("docs-zh").into_iter().collect();
+    assert_eq!(zh, ["index.md"], "website/docs-zh holds other pages than the home page");
+    assert_eq!(nav_targets("zensical.zh.toml"), ["index.md"], "the Chinese nav lists other pages than the home page");
+    let links: BTreeSet<String> = link_targets(&read(&website().join("docs-zh/index.md"))).into_iter().map(|(_, t)| t.split('#').next().unwrap().to_string()).collect();
+    for home in ["../", "../ja/"] {
+        assert!(links.contains(home), "website/docs-zh/index.md does not link to {home}");
     }
 }
 
@@ -1274,6 +1306,7 @@ fn build_sh_builds_the_tree_that_is_published() {
     let mut want: Vec<String> = [
         "index.html",
         "ja/index.html",
+        "zh/index.html",
         "playground/index.html",
         "playground/ritsu.wasm",
         "ja/playground/index.html",
@@ -1388,7 +1421,7 @@ fn build_sh_builds_the_tree_that_is_published() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     // the rule and the flow on each home page
-    for file in ["index.html", "ja/index.html"] {
+    for file in ["index.html", "ja/index.html", "zh/index.html"] {
         for lang in ["rule", "flow"] {
             assert!(coloured.get(&(file.to_string(), lang)).is_some_and(|n| *n >= 1), "{file}: built with no block of {lang}: were the fences changed?");
         }

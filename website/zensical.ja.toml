@@ -48,6 +48,11 @@ name = "日本語"
 link = "/ritsu/ja/"
 lang = "ja"
 
+[[project.extra.alternate]]
+name = "简体中文"
+link = "/ritsu/zh/"
+lang = "zh"
+
 [project.theme]
 variant = "modern"
 # Search, the copy button, previous / next and "edit this page" come from the theme's own

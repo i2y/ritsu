@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Build ritsu's site into build/: ritsu's own pages in both languages (build/ and build/ja), then
-# the site of each language below, in both of its languages, each built in its own directory by its
-# own build.sh and copied to build/<language> (and build/<language>/ja).
+# Build ritsu's site into build/: ritsu's own pages in both languages (build/ and build/ja) and its
+# home page in Simplified Chinese (build/zh, DESIGN 10.13), then the site of each language below, in
+# both of its languages, each built in its own directory by its own build.sh and copied to
+# build/<language> (and build/<language>/ja).
 #
 # Always the whole of it, in this order: ritsu's English build cleans build/, so a language's site
-# put there before it would be lost, and the Japanese build then writes build/ja.
+# put there before it would be lost, and the Japanese and the Chinese builds then write build/ja and
+# build/zh.
 set -eu
 cd "$(dirname "$0")"
 # The sites of the languages, each a directory here with its own zensical.toml and build.sh, built
@@ -23,6 +25,7 @@ rm -rf .cache
 lexers="$PWD/tools:$PWD/rulec/tools:$PWD/dandori/tools:$PWD/chobo/tools"
 PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build
 PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build -f zensical.ja.toml
+PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build -f zensical.zh.toml
 for site in "${sites[@]}"; do
   "$site/build.sh"
   rm -rf "build/$site"
@@ -37,7 +40,7 @@ if [ -n "$ritsu" ]; then
   "$ritsu" mod site modules.list --out build/modules/list --lang en
   "$ritsu" mod site modules.list --out build/ja/modules/list --lang ja
 fi
-echo "site: build/ (en) + build/ja (ja)"
+echo "site: build/ (en) + build/ja (ja) + build/zh (zh, the home page)"
 for site in "${sites[@]}"; do echo "  $site: build/$site (en) + build/$site/ja (ja)"; done
 if [ -n "$ritsu" ]; then
   echo "  modules: build/modules/list (en) + build/ja/modules/list (ja)"

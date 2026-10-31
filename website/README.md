@@ -1,6 +1,7 @@
 # ritsu's site
 
-ritsu's pages and the site of each language, in English and Japanese, built with
+ritsu's pages and the site of each language, in English and Japanese, with ritsu's home page in
+Simplified Chinese too, built with
 [Zensical](https://zensical.org) (the successor of Material for MkDocs; built with 0.0.67,
 unpinned) into one tree, `build/`, which is published at <https://i2y.github.io/ritsu/>.
 
@@ -10,6 +11,7 @@ unpinned) into one tree, `build/`, which is published at <https://i2y.github.io/
 website/
 ├── zensical.toml       # ritsu's English pages: docs/ -> build/
 ├── zensical.ja.toml    # ritsu's Japanese pages: docs-ja/ -> build/ja/
+├── zensical.zh.toml    # ritsu's home page in Simplified Chinese: docs-zh/ -> build/zh/
 ├── build.sh            # all of it, in the one order that works
 ├── sync.sh             # copies the playground's files into docs-ja/
 ├── serve.sh            # previews build/ under /ritsu/, with caching off
@@ -20,6 +22,7 @@ website/
 │   └── playground/     # the playground: playground.js and .css, worker.js, libraries.js, ritsu.wasm,
 │                       #   projects.json, words.json
 ├── docs-ja/            # the Japanese pages (kaname/, ns/yuen.md and play/index.html too)
+├── docs-zh/            # index.md alone: the home page in Simplified Chinese
 ├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
 │   ├── knlexer.py      # colours the ```kn blocks (see below)
@@ -58,6 +61,12 @@ writes, marked by the comment above each block.
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
 two languages say the same things but not always in the same order. A change to one goes to the
 other by hand.
+
+The Chinese site is the home page alone, an introduction rather than a translation, like the
+README.zh.md at the root (DESIGN 10.13): it says that the English pages are the ones to go by and
+that ritsu prints in English (and Japanese) only, and its links lead to the English pages. The
+language switch of ritsu's three configurations names the three languages, and each leads to its
+language's home page; the sites of the languages switch between English and Japanese.
 
 ## The colours of the code
 
@@ -147,9 +156,9 @@ a heading or a language's site that `build.sh` builds, and a link to a project o
 that names no `.md` is read, as Zensical reads it, from the directory of the page's file, and is
 written with one more `../` in a page published a directory deeper (`sekisho.md` at `/sekisho/`),
 so `docs/sekisho.md` links to `rulec/`, not `../rulec/`, which would climb out of `/ritsu/`. Every
-link into this repository names a file that is there; `docs/` and `docs-ja/` hold the same pages,
-both navs list them in the same order (all but the page of yuen's namespace), and each home page
-links to every other page of its nav; the code on the index is the lines of the files of the
+link into this repository names a file that is there; `docs/` and `docs-ja/` hold the same pages
+and `docs-zh/` the home page alone, both navs list them in the same order (all but the page of
+yuen's namespace), and each home page links to every other page of its nav; the code on the index is the lines of the files of the
 languages, and `ritsu check` prints what it shows; the pages of sekisho show its example as the
 tools have it: the lines of its files, what each command prints (a `gen` writes into a scratch
 directory in place of its `--out`), the Cedar and the code `ritsu gen` writes, the table

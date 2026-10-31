@@ -1,0 +1,102 @@
+[project]
+site_name = "ritsu"
+site_url = "https://i2y.github.io/ritsu/zh/"
+site_description = "用小型语言写下系统必须遵守的规则，并检查每个输入都恰好得到一个答案、规则之间互不矛盾。ritsu 从检查过的规则生成代码、供人阅读的页面，以及用于测试的输入、答案和场景。"
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh"
+
+# ritsu's home page in Simplified Chinese, the one page of the site in Chinese (DESIGN 10.13): the
+# other pages are in English and Japanese, and its links lead to the English ones.
+repo_url = "https://github.com/i2y/ritsu"
+repo_name = "i2y/ritsu"
+edit_uri = "edit/main/website/docs-zh"
+
+docs_dir = "docs-zh"
+site_dir = "build/zh"
+use_directory_urls = true
+
+nav = [
+  { "首页" = "index.md" },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/ritsu/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/ritsu/ja/"
+lang = "ja"
+
+[[project.extra.alternate]]
+name = "简体中文"
+link = "/ritsu/zh/"
+lang = "zh"
+
+[project.theme]
+variant = "modern"
+# Search, the copy button and "edit this page" come from the theme's own pack for Simplified
+# Chinese; without this, the chrome stays English.
+language = "zh"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer     previous / next at the foot of every page
+# navigation.top        a back-to-top button on long pages
+# content.code.copy     a copy button on every code block
+# content.tabs.link     a tab chosen on a page (TypeScript, Python, Go) is chosen in every set of tabs
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "content.code.copy",
+  "content.tabs.link",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "teal"
+toggle.icon = "lucide/moon"
+toggle.name = "切换到深色模式"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "teal"
+toggle.icon = "lucide/sun"
+toggle.name = "切换到浅色模式"
+
+# Unicode-preserving heading anchors, so that a Chinese heading gets the anchor GitHub gives it.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+# Colour the code of the languages: ```kn with tools/knlexer.py, ```gate with tools/gatelexer.py,
+# Cedar's ```cedar and ```cedarschema with tools/cedarlexer.py, and ```rule, ```flow and ```book with
+# the lexers of rulec's, dandori's and chobo's sites. Naming a module here is how it gets imported,
+# and importing it is what registers its lexers with Pygments; build.sh puts tools/ and the tools/ of
+# the three sites on PYTHONPATH.
+[project.markdown_extensions.knlexer]
+[project.markdown_extensions.gatelexer]
+[project.markdown_extensions.cedarlexer]
+[project.markdown_extensions.rulelexer]
+[project.markdown_extensions.flowlexer]
+[project.markdown_extensions.booklexer]
+
+[project.markdown_extensions.pymdownx.superfences]
+
+# Tabs, one for each language a host of kaname's examples is written in.
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true

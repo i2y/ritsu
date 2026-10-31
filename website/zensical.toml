@@ -50,6 +50,11 @@ name = "日本語"
 link = "/ritsu/ja/"
 lang = "ja"
 
+[[project.extra.alternate]]
+name = "简体中文"
+link = "/ritsu/zh/"
+lang = "zh"
+
 [project.theme]
 variant = "modern"
 icon.repo = "fontawesome/brands/github"
