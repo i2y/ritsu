@@ -244,7 +244,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: i2y/ritsu@v0.39.0
+      - uses: i2y/ritsu@v0.40.0
       - name: Report what raising the dependencies changes
         env:
           GH_TOKEN: ${{ github.token }}

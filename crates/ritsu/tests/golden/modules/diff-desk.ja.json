@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.39.0",
+  "ritsu": "0.40.0",
   "old": {
     "path": "事務-1.0.0",
     "module": "example.com/acme/desk",
@@ -41,7 +41,7 @@
       "file": "ゲート/上限.gate",
       "tool": "sekisho",
       "result": {
-        "sekisho": "0.39.0",
+        "sekisho": "0.40.0",
         "old": {
           "file": "事務-1.0.0/ゲート/上限.gate",
           "name": "上限",
@@ -209,7 +209,7 @@
       "file": "暦/事務所.cal",
       "tool": "koyomi",
       "result": {
-        "koyomi": "0.39.0",
+        "koyomi": "0.40.0",
         "kind": "calendar",
         "old": {
           "file": "事務-1.0.0/暦/事務所.cal",
@@ -276,7 +276,7 @@
       "file": "暦/支払日.cal",
       "tool": "koyomi",
       "result": {
-        "koyomi": "0.39.0",
+        "koyomi": "0.40.0",
         "kind": "dates",
         "old": {
           "file": "事務-1.0.0/暦/支払日.cal",

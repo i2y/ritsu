@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.39.0",
+  "ritsu": "0.40.0",
   "root": ".",
   "ok": true,
   "module": {
@@ -72,7 +72,7 @@
       "dependency": null,
       "ok": true,
       "check": {
-        "kaname": "0.39.0",
+        "kaname": "0.40.0",
         "ok": true,
         "summary": "2 functions, total",
         "functions": [

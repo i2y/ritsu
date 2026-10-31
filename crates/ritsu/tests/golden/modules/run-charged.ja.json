@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.39.0",
+  "ritsu": "0.40.0",
   "flow": "注文/注文を受ける.flow",
   "scenario": "注文/シナリオ/請求が通る.json",
   "target": "reference",

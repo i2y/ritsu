@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.39.0",
+  "ritsu": "0.40.0",
   "module": "example.com/acme/tax",
   "version": "1.0.0",
   "digest": "sha256:ba6f45238d9e7e65db80fcf0ec3e769e92ebf2edea05545e00b78d27c023c151",
