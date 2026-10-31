@@ -1296,6 +1296,29 @@ service StockService 6
   method Release ReleaseRequest ReleaseResponse false false 8
 service PackingService 11
   method GetPacking GetPackingRequest GetPackingResponse false false 12
+== tests/contract/proto/shop/pricing/v1/pricing.proto
+syntax proto3
+package shop.pricing.v1
+message Fired 5
+  field table 1 None Scalar("string") json=None oneof=None line=6
+  field row 2 None Scalar("int32") json=None oneof=None line=7
+  field label 3 None Scalar("string") json=None oneof=None line=8
+message ShippingRequest 11
+  field subtotal 1 Optional Scalar("int64") json=None oneof=None line=12
+message ShippingResponse 15
+  field shipping 1 None Scalar("int64") json=None oneof=None line=16
+  field trace 2 Repeated Named("Fired") json=None oneof=None line=17
+message TaxRequest 20
+  field amount 1 Optional Scalar("int64") json=None oneof=None line=21
+message TaxResponse 24
+  field tax 1 None Scalar("int64") json=None oneof=None line=25
+  field trace 2 Repeated Named("Fired") json=None oneof=None line=26
+service ShippingService 29
+  method Quote ShippingRequest ShippingResponse false false 30
+    option idempotency_level = NO_SIDE_EFFECTS
+service TaxService 35
+  method Quote TaxRequest TaxResponse false false 36
+    option idempotency_level = NO_SIDE_EFFECTS
 == tests/fixtures/proto/dandori/v1/options.proto
 syntax proto3
 package dandori.v1
@@ -1894,6 +1917,74 @@ import quotes/v1/estimate.proto 5:1 public=false weak=false
 message Record 8
   field contract_id 1 None Scalar("string") json=None oneof=None line=9
   field estimate 2 None Named("quotes.v1.Estimate") json=None oneof=None line=10
+== tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto
+syntax proto3
+package shop.delivery.v1
+import buf/validate/validate.proto 6:1 public=false weak=false
+message CreateShipmentRequest 13
+  field destination 1 None Named("Destination") json=None oneof=None line=14
+  field parcels 2 Repeated Named("Parcel") json=None oneof=None line=15
+  field declared_value_jpy 3 None Scalar("int64") json=None oneof=None line=16
+  field delivery_window 4 Optional Scalar("string") json=None oneof=None line=17
+message Destination 20
+  field region 1 None Scalar("string") json=None oneof=None line=21
+  field postcode 2 None Scalar("string") json=None oneof=None line=22
+message Parcel 25
+  field weight_g 1 None Scalar("int64") json=None oneof=None line=26
+  field handling 2 None Named("Handling") json=None oneof=None line=27
+message CreateShipmentResponse 35
+  field tracking_number 1 None Scalar("string") json=None oneof=None line=36
+message QuoteFeeRequest 46
+  field parcels 1 Optional Scalar("int64") json=None oneof=None line=47
+message QuoteFeeResponse 50
+  field fee 1 None Scalar("int64") json=None oneof=None line=51
+  field trace 2 Repeated Named("FiredRow") json=None oneof=None line=52
+message FiredRow 55
+  field table 1 None Scalar("string") json=None oneof=None line=56
+  field row 2 None Scalar("int32") json=None oneof=None line=57
+  field label 3 None Scalar("string") json=None oneof=None line=58
+enum Handling 30
+  value HANDLING_STANDARD 0 31
+  value HANDLING_FRAGILE 1 32
+service DeliveryService 8
+  method CreateShipment CreateShipmentRequest CreateShipmentResponse false false 9
+service DeliveryFeeService 40
+  method QuoteFee QuoteFeeRequest QuoteFeeResponse false false 41
+    option idempotency_level = NO_SIDE_EFFECTS
+== tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto
+syntax proto3
+package shop.delivery.v1
+import buf/validate/validate.proto 6:1 public=false weak=false
+message CreateShipmentRequest 13
+  field destination 1 None Named("Destination") json=None oneof=None line=14
+  field parcels 2 Repeated Named("Parcel") json=None oneof=None line=15
+  field declared_value_jpy 3 None Scalar("int64") json=None oneof=None line=16
+  field delivery_window 4 Optional Scalar("string") json=None oneof=None line=17
+message Destination 20
+  field region 1 None Scalar("string") json=None oneof=None line=21
+  field postcode 2 None Scalar("string") json=None oneof=None line=22
+message Parcel 25
+  field weight_g 1 None Scalar("int64") json=None oneof=None line=26
+  field handling 2 None Named("Handling") json=None oneof=None line=27
+message CreateShipmentResponse 35
+  field tracking_number 1 None Scalar("string") json=None oneof=None line=36
+message QuoteFeeRequest 46
+  field parcels 1 Optional Scalar("int64") json=None oneof=None line=47
+message QuoteFeeResponse 50
+  field fee 1 None Scalar("int64") json=None oneof=None line=51
+  field trace 2 Repeated Named("FiredRow") json=None oneof=None line=52
+message FiredRow 55
+  field table 1 None Scalar("string") json=None oneof=None line=56
+  field row 2 None Scalar("int32") json=None oneof=None line=57
+  field label 3 None Scalar("string") json=None oneof=None line=58
+enum Handling 30
+  value HANDLING_STANDARD 0 31
+  value HANDLING_FRAGILE 1 32
+service DeliveryService 8
+  method CreateShipment CreateShipmentRequest CreateShipmentResponse false false 9
+service DeliveryFeeService 40
+  method QuoteFee QuoteFeeRequest QuoteFeeResponse false false 41
+    option idempotency_level = NO_SIDE_EFFECTS
 == tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto
 syntax proto3
 package kernel
@@ -2093,6 +2184,11 @@ examples/shop/proto/warehouse/v1/stock.proto sees
   StockService.Reserve: warehouse.v1.ReserveRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (examples/shop/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/shop/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/shop/proto/warehouse/v1/stock.proto)
+tests/contract/proto/shop/pricing/v1/pricing.proto sees 
+  ShippingResponse.trace: shop.pricing.v1.Fired (tests/contract/proto/shop/pricing/v1/pricing.proto)
+  TaxResponse.trace: shop.pricing.v1.Fired (tests/contract/proto/shop/pricing/v1/pricing.proto)
+  ShippingService.Quote: shop.pricing.v1.ShippingRequest (tests/contract/proto/shop/pricing/v1/pricing.proto) -> shop.pricing.v1.ShippingResponse (tests/contract/proto/shop/pricing/v1/pricing.proto)
+  TaxService.Quote: shop.pricing.v1.TaxRequest (tests/contract/proto/shop/pricing/v1/pricing.proto) -> shop.pricing.v1.TaxResponse (tests/contract/proto/shop/pricing/v1/pricing.proto)
 tests/fixtures/proto-dandori/warehouse.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (tests/fixtures/proto-dandori/warehouse.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/fixtures/proto-dandori/warehouse.proto) -> warehouse.v1.ReserveResponse (tests/fixtures/proto-dandori/warehouse.proto)
@@ -2232,6 +2328,20 @@ tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.pr
   Record.estimate: unknown
 tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto sees 
   Record.estimate: unknown
+tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto sees 
+  CreateShipmentRequest.destination: shop.delivery.v1.Destination (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto)
+  CreateShipmentRequest.parcels: shop.delivery.v1.Parcel (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto)
+  Parcel.handling: shop.delivery.v1.Handling (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto, enum)
+  QuoteFeeResponse.trace: shop.delivery.v1.FiredRow (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto)
+  DeliveryService.CreateShipment: shop.delivery.v1.CreateShipmentRequest (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.CreateShipmentResponse (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto)
+  DeliveryFeeService.QuoteFee: shop.delivery.v1.QuoteFeeRequest (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.QuoteFeeResponse (tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto)
+tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto sees 
+  CreateShipmentRequest.destination: shop.delivery.v1.Destination (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto)
+  CreateShipmentRequest.parcels: shop.delivery.v1.Parcel (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto)
+  Parcel.handling: shop.delivery.v1.Handling (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto, enum)
+  QuoteFeeResponse.trace: shop.delivery.v1.FiredRow (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto)
+  DeliveryService.CreateShipment: shop.delivery.v1.CreateShipmentRequest (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.CreateShipmentResponse (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto)
+  DeliveryFeeService.QuoteFee: shop.delivery.v1.QuoteFeeRequest (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.QuoteFeeResponse (tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto)
 tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto sees 
 tests/mutants/E308_コピーの中身が違う/proto/contracts/kernel/units.proto sees 
 tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto sees 

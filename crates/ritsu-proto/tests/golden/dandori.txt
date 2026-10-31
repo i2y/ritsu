@@ -1187,6 +1187,29 @@ service warehouse.v1.StockService imports_options=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
+== ../sakai/tests/contract/proto/shop/pricing/v1/pricing.proto
+package shop.pricing.v1
+message shop.pricing.v1.Fired
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+message shop.pricing.v1.ShippingRequest
+  field subtotal json=subtotal ty=Scalar("int64") repeated=false presence=true rules=null
+message shop.pricing.v1.ShippingResponse
+  field shipping json=shipping ty=Scalar("int64") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.pricing.v1.Fired") repeated=true presence=false rules=null
+message shop.pricing.v1.TaxRequest
+  field amount json=amount ty=Scalar("int64") repeated=false presence=true rules=null
+message shop.pricing.v1.TaxResponse
+  field tax json=tax ty=Scalar("int64") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.pricing.v1.Fired") repeated=true presence=false rules=null
+service shop.pricing.v1.ShippingService imports_options=false
+  method Quote in=shop.pricing.v1.ShippingRequest out=shop.pricing.v1.ShippingResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+service shop.pricing.v1.TaxService imports_options=false
+  method Quote in=shop.pricing.v1.TaxRequest out=shop.pricing.v1.TaxResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+unread
 == ../sakai/tests/fixtures/proto/dandori/v1/options.proto
 package dandori.v1
 message dandori.v1.AnswerOptions
@@ -1841,6 +1864,68 @@ message audit.v1.Record
   field contract_id json=contractId ty=Scalar("string") repeated=false presence=false rules=null
   field estimate json=estimate ty=Named("quotes.v1.Estimate") repeated=false presence=true rules=null
 unread quotes/v1/estimate.proto
+== ../sakai/tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto
+package shop.delivery.v1
+message shop.delivery.v1.CreateShipmentRequest
+  field destination json=destination ty=Named("shop.delivery.v1.Destination") repeated=false presence=true rules={"required":true}
+  field parcels json=parcels ty=Named("shop.delivery.v1.Parcel") repeated=true presence=false rules={"repeated":{"min_items":1,"max_items":20}}
+  field declared_value_jpy json=declaredValueJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
+  field delivery_window json=deliveryWindow ty=Scalar("string") repeated=false presence=true rules={"string":{"in":["morning","evening"]}}
+message shop.delivery.v1.CreateShipmentResponse
+  field tracking_number json=trackingNumber ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.Destination
+  field region json=region ty=Scalar("string") repeated=false presence=false rules={"string":{"in":["honshu","hokkaido","okinawa"]}}
+  field postcode json=postcode ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.FiredRow
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.Parcel
+  field weight_g json=weightG ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":1,"lte":30000}}
+  field handling json=handling ty=Named("shop.delivery.v1.Handling") repeated=false presence=false rules=null
+message shop.delivery.v1.QuoteFeeRequest
+  field parcels json=parcels ty=Scalar("int64") repeated=false presence=true rules=null
+message shop.delivery.v1.QuoteFeeResponse
+  field fee json=fee ty=Scalar("int64") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.delivery.v1.FiredRow") repeated=true presence=false rules=null
+enum shop.delivery.v1.Handling = HANDLING_STANDARD HANDLING_FRAGILE
+service shop.delivery.v1.DeliveryService imports_options=false
+  method CreateShipment in=shop.delivery.v1.CreateShipmentRequest out=shop.delivery.v1.CreateShipmentResponse streams=false
+service shop.delivery.v1.DeliveryFeeService imports_options=false
+  method QuoteFee in=shop.delivery.v1.QuoteFeeRequest out=shop.delivery.v1.QuoteFeeResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+unread
+== ../sakai/tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto
+package shop.delivery.v1
+message shop.delivery.v1.CreateShipmentRequest
+  field destination json=destination ty=Named("shop.delivery.v1.Destination") repeated=false presence=true rules={"required":true}
+  field parcels json=parcels ty=Named("shop.delivery.v1.Parcel") repeated=true presence=false rules={"repeated":{"min_items":1,"max_items":20}}
+  field declared_value_jpy json=declaredValueJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
+  field delivery_window json=deliveryWindow ty=Scalar("string") repeated=false presence=true rules={"string":{"in":["morning","evening"]}}
+message shop.delivery.v1.CreateShipmentResponse
+  field tracking_number json=trackingNumber ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.Destination
+  field region json=region ty=Scalar("string") repeated=false presence=false rules={"string":{"in":["honshu","hokkaido","okinawa"]}}
+  field postcode json=postcode ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.FiredRow
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.Parcel
+  field weight_g json=weightG ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":1,"lte":30000}}
+  field handling json=handling ty=Named("shop.delivery.v1.Handling") repeated=false presence=false rules=null
+message shop.delivery.v1.QuoteFeeRequest
+  field parcels json=parcels ty=Scalar("int64") repeated=false presence=true rules=null
+message shop.delivery.v1.QuoteFeeResponse
+  field fee json=fee ty=Scalar("int64") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.delivery.v1.FiredRow") repeated=true presence=false rules=null
+enum shop.delivery.v1.Handling = HANDLING_STANDARD HANDLING_FRAGILE
+service shop.delivery.v1.DeliveryService imports_options=false
+  method CreateShipment in=shop.delivery.v1.CreateShipmentRequest out=shop.delivery.v1.CreateShipmentResponse streams=false
+service shop.delivery.v1.DeliveryFeeService imports_options=false
+  method QuoteFee in=shop.delivery.v1.QuoteFeeRequest out=shop.delivery.v1.QuoteFeeResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+unread
 == ../sakai/tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto
 package kernel
 message kernel.Days

@@ -715,6 +715,22 @@ message GetPackingRequest
   order_id string
 message GetPackingResponse
   status PackingStatus
+== ../sakai/tests/contract/proto/shop/pricing/v1/pricing.proto
+package Some("shop.pricing.v1") imports []
+message Fired
+  table string
+  row int32
+  label string
+message ShippingRequest
+  subtotal int64 optional
+message ShippingResponse
+  shipping int64
+  trace Fired repeated
+message TaxRequest
+  amount int64 optional
+message TaxResponse
+  tax int64
+  trace Fired repeated
 == ../sakai/tests/fixtures/proto/dandori/v1/options.proto
 package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
 message WorkflowOptions
@@ -1085,6 +1101,56 @@ package Some("audit.v1") imports ["quotes/v1/estimate.proto"]
 message Record
   contract_id string
   estimate quotes.v1.Estimate
+== ../sakai/tests/mutants/E208_a_rule_implements_a_service_not_open/proto/shop/delivery/v1/shipment.proto
+package Some("shop.delivery.v1") imports ["buf/validate/validate.proto"]
+enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
+message CreateShipmentRequest
+  destination Destination required
+  parcels Parcel repeated min_items=1 max_items=20
+  declared_value_jpy int64 gte=0 lte=1000000
+  delivery_window string optional str_in=["morning", "evening"]
+message Destination
+  region string str_in=["honshu", "hokkaido", "okinawa"]
+  postcode string
+message Parcel
+  weight_g int64 gte=1 lte=30000
+  handling Handling
+message CreateShipmentResponse
+  tracking_number string
+message QuoteFeeRequest
+  parcels int64 optional
+message QuoteFeeResponse
+  fee int64
+  trace FiredRow repeated
+message FiredRow
+  table string
+  row int32
+  label string
+== ../sakai/tests/mutants/E208_規則が公開していないサービスを実装/proto/shop/delivery/v1/shipment.proto
+package Some("shop.delivery.v1") imports ["buf/validate/validate.proto"]
+enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
+message CreateShipmentRequest
+  destination Destination required
+  parcels Parcel repeated min_items=1 max_items=20
+  declared_value_jpy int64 gte=0 lte=1000000
+  delivery_window string optional str_in=["morning", "evening"]
+message Destination
+  region string str_in=["honshu", "hokkaido", "okinawa"]
+  postcode string
+message Parcel
+  weight_g int64 gte=1 lte=30000
+  handling Handling
+message CreateShipmentResponse
+  tracking_number string
+message QuoteFeeRequest
+  parcels int64 optional
+message QuoteFeeResponse
+  fee int64
+  trace FiredRow repeated
+message FiredRow
+  table string
+  row int32
+  label string
 == ../sakai/tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto
 package Some("kernel") imports []
 message Days
