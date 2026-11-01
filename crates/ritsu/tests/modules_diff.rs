@@ -762,7 +762,7 @@ fn a_rule_that_implements_a_contract_keeps_the_contracts_numbers() {
         // the way over, from the rule's own `.proto`
         let own = rule.replace("IMPLEMENTS\n", "").replace("IMPORT\n", "");
         write("old", "1.0.0", &own, None);
-        let (code, out, err) = ritsu_in(t.path(), t.path(), &["rulec", "gen", "old/shipping.rule", "--out", "gen"]);
+        let (code, out, err) = ritsu_in(t.path(), t.path(), &["rulec", "gen", "old/shipping.rule", "--target", "proto", "--out", "gen"]);
         assert_eq!(code, 0, "{out}{err}");
         let at = "rulec/member_tier_shipping/v1/member_tier_shipping.proto";
         let generated = std::fs::read_to_string(t.path().join("gen/proto").join(at)).unwrap();

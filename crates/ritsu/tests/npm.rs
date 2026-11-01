@@ -410,8 +410,9 @@ mod npm {
                 ] {
                     reads.push(case("rulec", ".", both("rulec", args).to_vec()));
                 }
-                writes.push(case("rulec", ".", vec![en("rulec", &["gen", p, "--out", "out"])]));
-                writes.push(case("rulec", ".", vec![ja("rulec", &["gen", p, "--out", "out"])]));
+                // every target with every extra, as `rulec gen` wrote with no `--target` up to 0.40.0
+                writes.push(case("rulec", ".", vec![en("rulec", &rulec::targets::up_to_0_40(&["gen", p, "--out", "out"]))]));
+                writes.push(case("rulec", ".", vec![ja("rulec", &rulec::targets::up_to_0_40(&["gen", p, "--out", "out"]))]));
             }
             let twins = std::fs::read_to_string(root().join("crates/rulec/tests/corpus/twins.tsv")).unwrap();
             for l in twins.lines().filter(|l| !l.starts_with('#') && l.contains('\t')) {
@@ -1026,7 +1027,7 @@ for (let l = line(); l !== null; l = line()) {
             ritsu_testkit::tmp::copy_dir(&root().join(from), &w.join(into));
         }
         std::fs::create_dir_all(w.join(".git")).unwrap();
-        let made = npm(&pkg, "rulec", &["gen".into(), "corpus/parcel_rate.rule".into(), "--out".into(), "gen".into()], w, None);
+        let made = npm(&pkg, "rulec", &rulec::targets::up_to_0_40(&["gen", "corpus/parcel_rate.rule", "--out", "gen"]).iter().map(|s| s.to_string()).collect::<Vec<_>>(), w, None);
         assert_eq!(made.code, Some(0), "{made:?}");
         let curl = cannot_start("curl");
         let git = cannot_start("git");

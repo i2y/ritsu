@@ -263,10 +263,12 @@ fn with_rules<R>(f: impl FnOnce() -> R) -> R {
     dandori::sources::with_rules(rules, f)
 }
 
-/// What `rulec gen <rule> --out <out>` writes, by rulec's library.
+/// What `rulec gen <rule> --target python --target proto --extra connect --out <out>` writes, by
+/// rulec's library: the `.proto`, and the Python library with its Connect service.
 fn rulec_gen(rule: &Path, out: &Path) {
     let (mut said, mut err) = (Vec::new(), Vec::new());
-    let code = rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), false, false, &mut said, &mut err);
+    let asked = rulec::targets::Asked::new(&["python", "proto"], &["connect"]).unwrap();
+    let code = rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), &asked, false, false, &mut said, &mut err);
     assert_eq!(code, 0, "rulec gen failed: {}{}", String::from_utf8_lossy(&said), String::from_utf8_lossy(&err));
 }
 

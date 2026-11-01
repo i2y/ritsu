@@ -170,8 +170,9 @@ pub fn generate(r: &Request) -> Value {
         let joined = Joined::new();
         Some(match tool {
             Tool::Rulec => {
-                let (_, shown) = words(&["rulec", "gen", p, "--out", OUT], l);
-                rulec_lang(l, || ran(shown, |o, e| rulec::codegen::generate(&[p], OUT, false, false, o, e)))
+                // every target with every extra, as `rulec gen` wrote with no `--target` up to 0.40.0
+                let (_, shown) = words(&rulec::targets::up_to_0_40(&["rulec", "gen", p, "--out", OUT]), l);
+                rulec_lang(l, || ran(shown, |o, e| rulec::codegen::generate(&[p], OUT, &rulec::targets::Asked::up_to_0_40(), false, false, o, e)))
             }
             Tool::Koyomi => koyomi_gen(p, l),
             Tool::Chobo => chobo_build(p, l, target.as_deref().unwrap_or_default()),

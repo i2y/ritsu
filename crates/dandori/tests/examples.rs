@@ -73,10 +73,12 @@ fn with_days<R>(f: impl FnOnce() -> R) -> R {
     rulec::days::with(Some(std::sync::Arc::new(koyomi::ports::Engine)), f)
 }
 
-/// What `rulec gen <rule> --out <out>` writes, by rulec's library.
+/// What `rulec gen <rule> --target typescript --target python --target go --out <out>` writes, by
+/// rulec's library: the three libraries the code dandori writes reads.
 fn rulec_gen(rule: &Path, out: &Path) {
     let (mut said, mut err) = (Vec::new(), Vec::new());
-    let code = with_days(|| rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), false, false, &mut said, &mut err));
+    let asked = rulec::targets::Asked::new(&["typescript", "python", "go"], &[]).unwrap();
+    let code = with_days(|| rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), &asked, false, false, &mut said, &mut err));
     assert_eq!(code, 0, "rulec gen failed: {}{}", String::from_utf8_lossy(&said), String::from_utf8_lossy(&err));
 }
 
