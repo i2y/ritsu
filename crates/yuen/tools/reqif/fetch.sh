@@ -63,7 +63,10 @@ echo "$files" | while read -r want path; do
   mkdir -p "$(dirname "$file")"
   if [ ! -f "$file" ] || [ "$(sha "$file")" != "$want" ]; then
     # The W3C and the OMG serve these over https; the schemas name them by their http URLs.
-    curl -fsSL --retry 2 --max-time 60 -o "$file.tmp" "https://$path"
+    # --retry alone tries again only after a timeout and a few statuses (408, 429, 500, 502,
+    # 503, 504), not after the 525 the OMG's site has answered (Cloudflare failed its TLS
+    # handshake with the site); the SHA-256 below checks whatever came.
+    curl -fsSL --retry 2 --retry-all-errors --max-time 60 -o "$file.tmp" "https://$path"
     got=$(sha "$file.tmp")
     if [ "$got" != "$want" ]; then
       rm -f "$file.tmp"

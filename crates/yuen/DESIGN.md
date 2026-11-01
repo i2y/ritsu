@@ -1522,7 +1522,7 @@ HTML は一枚で、script も外のファイル（フォント、画像、ス�
 - xmllint（libxml 2.9.13）に OMG の `reqif.xsd` を渡して検証する。`reqif.xsd` は `driver.xsd` と W3C の `xml.xsd` を読み込み、`driver.xsd` は W3C の XHTML のスキーマを読み込むので、全部で 24 個のファイルになる。それを手元に取り、XML のカタログで URL を手元のファイルに向けて、`--nonet` で通信せずに検証できる。`LAST-CHANGE` を消した文書は落ちる。ところが、つながりの `TARGET`（`GLOBAL-REF` で、ただの文字列）を無い要件に向けた文書も、型の参照（`LOCAL-REF` で、`xsd:IDREF`）を無い識別子に向けた文書も、検証を通る。
 - Python の `reqif` 0.1.0（StrictDoc のプロジェクトの ReqIF の読み手）の `reqif validate` は、無い要件を指すつながりを「non-existing」と言って exit 1 で落とす。型の参照の宛先が無いことと、`LAST-CHANGE` の欠けは言わない。`--use-reqif-schema` を付けると、`reqif` に入っているスキーマでも検証し、`LAST-CHANGE` の欠けを言って exit 1 で落とす。
 
-だから C の段階のテストは、xmllint でスキーマを、`reqif validate` で参照とスキーマを確かめ、さらに yuen のテストが自分で、すべての `-REF` が、その名前の要素の識別子を指していること（`<SPEC-OBJECT-TYPE-REF>` なら `SPEC-OBJECT-TYPE` の識別子）を確かめる。24 個のスキーマのファイルは、OMG と W3C のもので、リポジトリには入れない。`tools/reqif/fetch.sh` が取ってきて SHA-256 を確かめ、カタログを書く。置き場所は引数で替えられ、テストは `YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd` を見る。無ければ SKIP する。
+だから C の段階のテストは、xmllint でスキーマを、`reqif validate` で参照とスキーマを確かめ、さらに yuen のテストが自分で、すべての `-REF` が、その名前の要素の識別子を指していること（`<SPEC-OBJECT-TYPE-REF>` なら `SPEC-OBJECT-TYPE` の識別子）を確かめる。24 個のスキーマのファイルは、OMG と W3C のもので、リポジトリには入れない。`tools/reqif/fetch.sh` が取ってきて SHA-256 を確かめ、カタログを書く。取るときの curl は、HTTP の誤りのどれでも二度までやり直す（OMG のサイトが 525 を返したことがある。ritsu の DESIGN 10.6）。置き場所は引数で替えられ、テストは `YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd` を見る。無ければ SKIP する。
 
 **捨てたもの**：
 
