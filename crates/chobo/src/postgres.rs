@@ -1,4 +1,4 @@
-//! `chobo build --target postgres`: one SQL file that makes a schema for the book, its tables
+//! `chobo gen --target sql`: one SQL file that makes a schema for the book, its tables
 //! and a function for each transfer kind and operation (DESIGN 4.1, PLAN 0.3 and C2).
 //!
 //! A function does one call in one transaction, in the order DESIGN 2.3 gives: a move from an

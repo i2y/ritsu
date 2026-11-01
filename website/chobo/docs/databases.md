@@ -1,24 +1,29 @@
 # Build for a database
 
-`chobo build` writes a book for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB and
-Vitess), and a client that calls it from TypeScript, Python, Go or Rust:
+`chobo gen` writes a book for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB and
+Vitess), and a client that calls it from TypeScript, Python, Go or Rust. `--target` names a language,
+as many as are wanted, and `--books` the database (`postgres` unless it is given); each language goes
+into a directory of its own under `--out`:
 
-| Target | What it writes |
-|---|---|
-| `postgres` | `<book>.sql`: a schema, its tables and constraints, and a function for each operation |
-| `postgres-typescript`, `postgres-python`, `postgres-go`, `postgres-rust` | a client that calls those functions |
-| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go`, `tigerbeetle-rust` | a client that sends TigerBeetle one chain of transfers for each operation |
-| `mysql` | `<book>.sql`: the book's three tables and their constraints, for MySQL, TiDB and Vitess |
-| `mysql-typescript`, `mysql-python`, `mysql-go`, `mysql-rust` | a client that makes each operation one transaction on those tables |
+| `--books` | `--target` | What it writes |
+|---|---|---|
+| `postgres` | `sql` | `sql/<book>.sql`: a schema, its tables and constraints, and a function for each operation |
+| | `typescript`, `python`, `go`, `rust` | a client that calls those functions |
+| `tigerbeetle` | `typescript`, `python`, `go`, `rust` | a client that sends TigerBeetle one chain of transfers for each operation |
+| `mysql` | `sql` | `sql/<book>.sql`: the book's three tables and their constraints, for MySQL, TiDB and Vitess |
+| | `typescript`, `python`, `go`, `rust` | a client that makes each operation one transaction on those tables |
 
 ```console
-$ chobo build examples/inventory/inventory.book --target postgres --out db
-$ chobo build examples/inventory/inventory.book --target postgres-typescript --out db
-$ chobo build examples/inventory/inventory.book --target tigerbeetle-go --out db
-$ chobo build examples/inventory/inventory.book --target mysql --out db
-$ chobo build examples/inventory/inventory.book --target mysql-python --out db
-$ chobo build examples/inventory/inventory.book --target tigerbeetle-rust --out db
+$ chobo gen examples/inventory/inventory.book --target sql --target typescript --out db
+$ chobo gen examples/inventory/inventory.book --target go --target rust --books tigerbeetle --out db
+$ chobo gen examples/inventory/inventory.book --target sql --target python --books mysql --out db
 ```
+
+Every target of a run is built before anything is written, so a target that cannot take the book
+(E060 to E064) stops the run and leaves nothing half written. `--check` writes nothing and exits 1
+if a file the same flags write is missing or differs, for CI. Up to 0.40.0 the command was
+`chobo build`, and its `--target` named a pair (`tigerbeetle-go`); given one, `gen` says what is
+written now (`--target go --books tigerbeetle`).
 
 Whichever the target, an operation is one write: it checks every move against the bounds and makes
 them all, or refuses and makes none, with nothing read in between that another call could change.
@@ -28,7 +33,7 @@ what they printed.
 
 ## PostgreSQL
 
-`--target postgres` writes one file of SQL, which can run any number of times: it makes what is
+`--target sql` writes one file of SQL, `sql/<book>.sql`, which can run any number of times: it makes what is
 missing and replaces the functions. A book is a schema with four tables: `accounts` (a row an
 account, with its balance and the bounds it was made with), `holds`, `keys` (every key used, what
 it was called with and what came of it) and `entries` (every change to an account, so that a
@@ -41,7 +46,7 @@ The function locks the rows of the accounts the operation moves, in the order of
 their balances, and checks the moves against them in the order the book writes them. Of
 `reserve.hold` in the inventory example:
 
-<!-- chobo build examples/inventory/inventory.book --target postgres -->
+<!-- chobo gen examples/inventory/inventory.book --target sql -->
 ```sql
   -- (3) the moves, in the order they are written, each checked against the locked rows as the
   -- moves before it left them. Nothing is written until every move has gone through.
@@ -88,7 +93,7 @@ chain of linked transfers in one request, which TigerBeetle applies whole or not
   anything when it is not there: a post sent before its hold would make the hold impossible to
   post.
 - A chain fits one request: 253 transfers on a replica started with `--development`, which is what
-  chobo is tested on, so the build stops there (E060).
+  chobo is tested on, so `gen` stops there (E060).
 
 ```console
 $ chobo run examples/refunds/refunds.book --scenario examples/refunds/refunds.more.json --show tigerbeetle
@@ -108,14 +113,14 @@ retry with other amounts of a key a bound refused, and a balance past what 64 bi
 
 ## MySQL, TiDB and Vitess
 
-`--target mysql` writes one file of SQL for MySQL 8.4 or later, TiDB 8.5 or later and Vitess, which
+`--target sql --books mysql` writes one file of SQL for MySQL 8.4 or later, TiDB 8.5 or later and Vitess, which
 can run any number of times: it makes the book's three tables, named after the book, in the database
 it runs in. There is no function to call. TiDB has no stored procedures, and a service that runs
 Vitess may allow neither stored routines nor making a database, so the client runs each operation
 as one transaction of statements chobo wrote, and fills in nothing but the values. The table of the
 accounts, in the refunds example:
 
-<!-- chobo build examples/refunds/refunds.book --target mysql -->
+<!-- chobo gen examples/refunds/refunds.book --target sql --books mysql -->
 ```sql
 -- the accounts: one row each, made the first time a call names it. An account with a bound
 -- holds its balance here, and one without holds what expire() has added up of its entries. The
@@ -172,7 +177,7 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
   counts until `expire()` lets it go: call it from a job of your own, one at a time.
 - **Keys as bytes, names in characters.** A key and a tenant are compared as the bytes of their
   IDs, whatever the collation, and the values are written in hex, whatever the `sql_mode`. A name
-  is 64 characters at most, with none beyond the Basic Multilingual Plane, so the build stops for a
+  is 64 characters at most, with none beyond the Basic Multilingual Plane, so `gen` stops for a
   book's name the tables and checks could not be named after (E062).
 - **TiDB and Vitess.** On TiDB, run the SQL with `tidb_enable_check_constraint` ON, or the tables
   keep no check; the clients keep the bounds either way. The SQL and the clients keep to what a
@@ -186,7 +191,7 @@ The clients of every database have the same names, arguments and answers, so cha
 changes how the book value is made, and nothing else. A call answers `done`, `done_before` or a
 refusal with its reason; the reasons are a type of their own, the bounds' first:
 
-<!-- chobo build examples/inventory/inventory.book --target postgres-typescript -->
+<!-- chobo gen examples/inventory/inventory.book --target typescript -->
 ```ts
 /** Why a call of inventory can be refused: the bounds' own reasons, then the ones chobo gives itself. */
 export type Reason = "out_of_stock" | "key_conflict" | "already_refused" | "same_account" | "no_such_hold" | "already_posted" | "already_voided" | "expired" | "over_hold";
@@ -197,7 +202,7 @@ export type Result = { result: "done" } | { result: "done_before" } | { result: 
 
 In Rust the reasons are an enum, and the answer is another, a refusal one of its variants:
 
-<!-- chobo build examples/inventory/inventory.book --target postgres-rust -->
+<!-- chobo gen examples/inventory/inventory.book --target rust -->
 ```rust
 /// What a call answers. A refusal is an answer, not an error: nothing has changed, and the reason
 /// says why.

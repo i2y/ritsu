@@ -1,4 +1,4 @@
-# W108 and E064: the Go and Rust clients write the transfers `ship` and `Ship` as one identifier, and `chobo build --target postgres-go` stops
+# W108 and E064: the Go and Rust clients write the transfers `ship` and `Ship` as one identifier, and `chobo gen --target go --books postgres` stops
 book shop v1
 
 unit pcs

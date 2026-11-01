@@ -544,7 +544,7 @@ for spec in json.load(open(sys.argv[1], encoding="utf-8")):
 "#;
 
 /// What the second Python probe does with each client, written beside the caller under its own
-/// name (`<book>.py`), as `chobo build` writes it: the caller's `import <book>`, and the `Book` it
+/// name (`<book>.py`), as `chobo gen` writes it: the caller's `import <book>`, and the `Book` it
 /// makes. One line of JSON a client, with what is wrong ("broken"), or null.
 const BY_NAME: &str = r#"import json, sys
 

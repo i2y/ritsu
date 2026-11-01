@@ -126,7 +126,7 @@ $ chobo run examples/refunds/refunds.ja.book --scenario examples/refunds/refunds
 
 ## データベースに送るもの
 
-`--show postgres`、`--show tigerbeetle`、`--show mysql` を付けると、結果の代わりに、`chobo build` が書くクライアントがそのシナリオで出力先に送るものを出します。PostgreSQL なら SQL とその引数を、TigerBeetle なら作る勘定、最初に流す振替、操作ごとのチェーンを、フィールドまで出します。MySQL の系統なら、操作ごとの SQL 文を、値を入れた形で出します（[データベース向けのビルド](databases.md#mysqltidbvitess)）。
+`--show postgres`、`--show tigerbeetle`、`--show mysql` を付けると、結果の代わりに、`chobo gen` が書くクライアントがそのシナリオで出力先に送るものを出します。PostgreSQL なら SQL とその引数を、TigerBeetle なら作る勘定、最初に流す振替、操作ごとのチェーンを、フィールドまで出します。MySQL の系統なら、操作ごとの SQL 文を、値を入れた形で出します（[データベース向けのビルド](databases.md#mysqltidbvitess)）。
 
 ```console
 $ chobo run examples/refunds/refunds.ja.book --scenario examples/refunds/refunds.ja.more.json --show postgres --lang ja

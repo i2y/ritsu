@@ -2,7 +2,7 @@
 # Pull chobo's reference into the site, and what the Japanese site shares with the English one.
 #
 # The four pages of crates/chobo/docs (the language, the diagnostics, the JSON chobo reads and
-# writes, and what `chobo build` writes) are written once, in chobo's crate, and tested there:
+# writes, and what `chobo gen` writes) are written once, in chobo's crate, and tested there:
 # tests/docs.rs holds their books, commands and links, docs/codes*.md to `chobo explain --all`,
 # and docs/reference.md's keywords to src/syntax.rs. Copying them in is what keeps the site from
 # becoming a second, drifting copy, so the copies are made here and not committed. A link of

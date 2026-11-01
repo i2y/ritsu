@@ -1,6 +1,6 @@
 warning[W108]: go_accounts.book:8:9: The accounts `stock` and `Stock` are one identifier in the Go client
      8 | account Stock : pcs outside
-  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Stock`: the method `Stock` of `Balances` would be declared twice, and the package does not compile.
+  = Go (`--target go --books postgres|tigerbeetle|mysql`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Stock`: the method `Stock` of `Balances` would be declared twice, and the package does not compile.
   hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 go_accounts.book: ok, 1 warning(s)
   receive.do  may be refused: key_conflict

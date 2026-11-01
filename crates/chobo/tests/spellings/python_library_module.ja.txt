@@ -1,6 +1,6 @@
 警告[W108]: python_library_module.book:1:6: 帳簿 `abc` は、Python のクライアントでそのままでは使えません
      1 | book abc v1
-  = Python（`postgres-python`、`tigerbeetle-python`、`mysql-python`）: クライアントはモジュール `abc.py` で、Python の標準ライブラリにもモジュール `abc` があります。Python は同じ名前のモジュールを一つしか読み込まず、`import abc` は先に読み込んだほうを返すので、標準ライブラリの `abc` を読み込んだあとでは、クライアントを読み込めません。先にクライアントを読み込むと、プログラムのどの `import abc` も、標準ライブラリのものの代わりにクライアントを返します。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.abc` として持つので、標準ライブラリのものとぶつかりません。
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: クライアントはモジュール `abc.py` で、Python の標準ライブラリにもモジュール `abc` があります。Python は同じ名前のモジュールを一つしか読み込まず、`import abc` は先に読み込んだほうを返すので、標準ライブラリの `abc` を読み込んだあとでは、クライアントを読み込めません。先にクライアントを読み込むと、プログラムのどの `import abc` も、標準ライブラリのものの代わりにクライアントを返します。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.abc` として持つので、標準ライブラリのものとぶつかりません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 python_library_module.book: ok、警告 1 件
   receive.do  拒否されうる理由: key_conflict

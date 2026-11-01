@@ -1,6 +1,6 @@
 warning[W108]: python_parameters.book:11:51: The parameters `class` and `class_` of the transfer `receive` are one identifier in the Python client
     11 | transfer receive(delivery: string, class: string, class_: string, sku: string, qty: pcs)
-  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client writes `_` after a keyword, and after a name its methods use themselves (`self`, `_str`, `_amt`, `_amounts`), so both are `class_`: a method of `_receiveTransfer` would have two parameters `class_`, and the module does not load (`SyntaxError`).
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client writes `_` after a keyword, and after a name its methods use themselves (`self`, `_str`, `_amt`, `_amounts`), so both are `class_`: a method of `_receiveTransfer` would have two parameters `class_`, and the module does not load (`SyntaxError`).
   hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 python_parameters.book: ok, 1 warning(s)
   receive.do  may be refused: key_conflict

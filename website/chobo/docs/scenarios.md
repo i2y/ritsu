@@ -154,7 +154,7 @@ meet by chance; the numbers in a name are written in the unit's decimal places. 
 ## What a database is sent
 
 `--show postgres`, `--show tigerbeetle` and `--show mysql` print, in place of the answers, what the
-clients `chobo build` writes send each target for the scenario: the SQL and its arguments for
+clients `chobo gen` writes send each target for the scenario: the SQL and its arguments for
 PostgreSQL; for TigerBeetle the accounts made, the opening transfers and the chain of each
 operation, field by field; and for the MySQL family the statements of each operation, with the
 values in place ([Build for a database](databases.md#mysql-tidb-and-vitess)).

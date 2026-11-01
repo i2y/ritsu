@@ -57,7 +57,7 @@ fn explain_all_as_markdown_has_every_code() {
 fn help_comes_from_the_table() {
     let (code, out, _) = run(&["--help"]);
     assert_eq!(code, 0);
-    for cmd in ["check", "run", "scenarios", "build", "doc", "api", "explain"] {
+    for cmd in ["check", "run", "scenarios", "gen", "doc", "api", "explain"] {
         assert!(out.contains(&format!("  chobo {cmd} ")), "{cmd}");
         let (code, page, _) = run(&[cmd, "--help"]);
         assert_eq!(code, 0, "{cmd}");
@@ -164,39 +164,152 @@ fn the_language_comes_from_the_flag_then_the_environment() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("may be refused"));
 }
 
+/// The flags of `gen` that write a pair of 0.40.0's (`postgres-go`): what the pair is renamed to
+/// (DESIGN 17), split into words.
+fn flags_of(pair: &str) -> Vec<&'static str> {
+    chobo::target::RENAMED.iter().find(|(old, _, _)| *old == pair).map(|(_, new, _)| new.split(' ').collect()).unwrap_or_else(|| panic!("no pair {pair}"))
+}
+
+/// Every file under `dir`, from it, in order.
+fn tree(dir: &std::path::Path) -> Vec<String> {
+    fn walk(base: &std::path::Path, d: &std::path::Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(base, &p, out);
+            } else {
+                out.push(p.strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
 #[test]
-fn build_writes_each_target() {
-    let tmp = TempDir::new("cli-build");
+fn gen_writes_each_target_in_its_directory() {
+    let tmp = TempDir::new("cli-gen");
     let book = root().join("tests/books/在庫.book");
     let b = book.to_str().unwrap();
     let wants: &[(&str, &[&str])] = &[
-        ("postgres", &["在庫.sql"]),
-        ("postgres-typescript", &["在庫.ts"]),
-        ("postgres-python", &["在庫.py"]),
-        ("postgres-go", &["book/book.go", "book/runtime.go"]),
-        ("postgres-rust", &["book.rs"]),
-        ("tigerbeetle-typescript", &["在庫.ts"]),
-        ("tigerbeetle-python", &["在庫.py"]),
-        ("tigerbeetle-go", &["book/book.go", "book/runtime.go"]),
-        ("tigerbeetle-rust", &["book.rs"]),
-        ("mysql-rust", &["book.rs"]),
+        ("postgres", &["sql/在庫.sql"]),
+        ("postgres-typescript", &["typescript/在庫.ts"]),
+        ("postgres-python", &["python/在庫.py"]),
+        ("postgres-go", &["go/book/book.go", "go/book/runtime.go"]),
+        ("postgres-rust", &["rust/book.rs"]),
+        ("tigerbeetle-typescript", &["typescript/在庫.ts"]),
+        ("tigerbeetle-python", &["python/在庫.py"]),
+        ("tigerbeetle-go", &["go/book/book.go", "go/book/runtime.go"]),
+        ("tigerbeetle-rust", &["rust/book.rs"]),
+        ("mysql-rust", &["rust/book.rs"]),
     ];
-    for (target, files) in wants {
-        let out = tmp.path().join(target);
-        let (code, _, err) = run(&["build", b, "--target", target, "--out", out.to_str().unwrap()]);
-        assert_eq!(code, 0, "{target}: {err}");
+    for (pair, files) in wants {
+        let out = tmp.path().join(pair);
+        let mut args = vec!["gen", b];
+        args.extend(flags_of(pair));
+        args.extend(["--out", out.to_str().unwrap()]);
+        args.extend(["--lang", "ja"]);
+        let (code, _, err) = run(&args);
+        assert_eq!(code, 0, "{pair}: {err}");
+        assert_eq!(tree(&out), files.iter().map(|f| f.to_string()).collect::<Vec<_>>(), "{pair}");
         for f in *files {
-            assert!(out.join(f).is_file(), "{target}: no {f}");
-            assert!(err.contains(f), "{target}: {err}");
+            assert!(err.contains(&format!("{}/{f} を書きました", out.display())), "{pair}: {err}");
         }
     }
-    assert_eq!(run(&["build", b]).0, 2);
-    assert_eq!(run(&["build", b, "--target", "sqlite"]).0, 2);
+    // several targets in one run, in the order of the languages whatever the order of the flags
+    let all = tmp.path().join("all");
+    let (code, _, err) = run(&["gen", b, "--target", "rust", "--target", "sql", "--target", "go", "--out", all.to_str().unwrap(), "--lang", "en"]);
+    assert_eq!(code, 0, "{err}");
+    let wrote: Vec<&str> = err.lines().map(|l| l.trim_start_matches("wrote ")).collect();
+    let a = all.display().to_string();
+    assert_eq!(wrote, [format!("{a}/sql/在庫.sql"), format!("{a}/go/book/book.go"), format!("{a}/go/book/runtime.go"), format!("{a}/rust/book.rs")]);
+    // --check: the same arguments find nothing; a target not written is missing; a file changed is
+    // stale; --check writes nothing
+    let (code, _, err) = run(&["gen", b, "--target", "go", "--target", "sql", "--target", "rust", "--out", all.to_str().unwrap(), "--check"]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    let (code, _, err) = run(&["gen", b, "--target", "sql", "--target", "python", "--out", all.to_str().unwrap(), "--check", "--lang", "en"]);
+    assert_eq!((code, err.as_str()), (1, format!("missing: {a}/python/在庫.py\n").as_str()));
+    std::fs::write(all.join("sql/在庫.sql"), "-- edited\n").unwrap();
+    let (code, _, err) = run(&["gen", b, "--target", "sql", "--out", all.to_str().unwrap(), "--check", "--lang", "ja"]);
+    assert_eq!((code, err.as_str()), (1, format!("生成物が古いか手で編集されています: {a}/sql/在庫.sql\n").as_str()));
+    assert_eq!(std::fs::read_to_string(all.join("sql/在庫.sql")).unwrap(), "-- edited\n");
+    assert!(!all.join("python").exists());
+    // --out is generated when it is not given
+    let here = TempDir::new("cli-gen-here");
+    let o = chobo().current_dir(here.path()).args(["gen", b, "--target", "sql"]).output().unwrap();
+    assert!(o.status.success());
+    assert!(here.path().join("generated/sql/在庫.sql").is_file());
     // a book with errors builds nothing
     let bad = root().join("tests/fixtures/境界.book");
-    let (code, _, err) = run(&["build", bad.to_str().unwrap(), "--target", "postgres", "--out", tmp.path().join("bad").to_str().unwrap()]);
+    let (code, _, err) = run(&["gen", bad.to_str().unwrap(), "--target", "sql", "--out", tmp.path().join("bad").to_str().unwrap()]);
     assert_eq!(code, 1);
     assert!(err.contains("E020") && !tmp.path().join("bad").exists());
+}
+
+/// What stops `gen` before it reads the book, with exit 2, and what it says: no `--target`, the
+/// verb and the pairs of 0.40.0 (each named with what is written now), SQL for TigerBeetle, a
+/// language twice, a language chobo does not write.
+#[test]
+fn what_stops_gen_and_what_it_says() {
+    let book = root().join("tests/books/在庫.book");
+    let b = book.to_str().unwrap();
+    let said = |args: &[&str]| {
+        let (code, out, err) = run(args);
+        assert_eq!((code, out.as_str()), (2, ""), "{args:?}: {err}");
+        err
+    };
+    assert_eq!(
+        said(&["gen", b, "--lang", "en"]),
+        "error: `chobo gen` needs one or more `--target sql|typescript|python|go|rust`; `--books postgres|tigerbeetle|mysql` says which database they are for (postgres if it is not given)\n"
+    );
+    assert_eq!(
+        said(&["gen", b, "--lang", "ja"]),
+        "エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）\n"
+    );
+    assert_eq!(said(&["build", b, "--target", "postgres", "--lang", "en"]), "`chobo build` is `chobo gen` from 0.41.0\n");
+    assert_eq!(said(&["build", b, "--lang", "ja"]), "`chobo build` は 0.41.0 から `chobo gen` です\n");
+    for (old, new, since) in chobo::target::RENAMED {
+        assert_eq!(said(&["gen", b, "--target", old, "--lang", "en"]), format!("`{old}` is `{new}` from {since}\n"));
+        assert_eq!(said(&["gen", b, "--target", "sql", "--target", old, "--lang", "ja"]), format!("`{old}` は {since} から `{new}` です\n"));
+        // what it says to write is a line gen takes
+        let words: Vec<&str> = new.split(' ').collect();
+        let pair = chobo::target::Target::parse(old).unwrap();
+        assert_eq!((words[1], words.get(3).copied().unwrap_or("postgres")), (pair.lang().key(), pair.backend().key()), "{old}");
+    }
+    assert_eq!(
+        said(&["gen", b, "--target", "go", "--target", "sql", "--books", "tigerbeetle", "--lang", "en"]),
+        "error: there is no `--target sql` for `--books tigerbeetle`: TigerBeetle takes no SQL; its clients are `--target typescript|python|go|rust`\n"
+    );
+    assert_eq!(said(&["gen", b, "--target", "go", "--target", "go", "--lang", "en"]), "`--target go` is given twice\n");
+    assert!(said(&["gen", b, "--target", "sqlite"]).contains("sqlite"));
+    assert!(said(&["gen", b, "--target", "sql", "--books", "sqlite"]).contains("sqlite"));
+    assert_eq!(said(&["gen", b, "--target", "sql", "--books", "mysql", "--books", "mysql", "--lang", "en"]), "`--books` is given twice\n");
+    // the names of --target are the languages, in their order
+    let (_, page, _) = run(&["gen", "--help", "--lang", "en"]);
+    assert!(page.starts_with("chobo gen <file.book> --target sql|typescript|python|go|rust... "), "{page}");
+    assert_eq!(chobo::target::LANGS, chobo::target::Lang::ALL.map(|l| l.key()));
+    assert_eq!(chobo::target::BOOKS, chobo::target::Backend::ALL.map(|b| b.key()));
+}
+
+/// A target that cannot take the book stops the run, and nothing is written, not even the targets
+/// that could (DESIGN 17): the E064 of the fixture's Go stops `--target sql --target go`.
+#[test]
+fn a_target_that_stops_writes_nothing_of_the_run() {
+    let tmp = TempDir::new("cli-gen-stop");
+    for (fixture, lang) in [("one_identifier", "en"), ("一つの識別子", "ja")] {
+        let book = root().join(format!("tests/fixtures/{fixture}.book"));
+        let out = tmp.path().join(fixture);
+        let o = out.to_str().unwrap();
+        let (code, _, err) = run(&["gen", book.to_str().unwrap(), "--target", "sql", "--target", "go", "--out", o, "--lang", lang]);
+        assert_eq!(code, 1, "{err}");
+        assert!(err.contains("E064") && !out.exists(), "{err}");
+        assert_eq!(err.matches("[E064]").count(), 1, "{err}");
+        let (code, _, err) = run(&["gen", book.to_str().unwrap(), "--target", "sql", "--out", o, "--lang", lang]);
+        assert_eq!(code, 0, "{err}");
+        assert!(out.join("sql").is_dir());
+    }
 }
 
 #[test]
@@ -258,7 +371,7 @@ fn doc_writes_the_pages_beside_the_examples() {
     assert!(err.contains("error[E020]"), "{err}");
 }
 
-/// What the end of `scenarios_api_and_run` and of the build test check, with the English book:
+/// What the end of `scenarios_api_and_run` and of the gen test check, with the English book:
 /// a book with errors is refused, and nothing is made from it.
 #[test]
 fn a_book_with_errors_is_refused_in_english() {
@@ -271,7 +384,7 @@ fn a_book_with_errors_is_refused_in_english() {
         assert_eq!(code, 1, "{cmd:?}");
         assert!(out.is_empty() && err.contains("E020"), "{cmd:?}");
     }
-    let (code, _, err) = run(&["build", bad, "--target", "postgres", "--out", tmp.path().join("bad").to_str().unwrap()]);
+    let (code, _, err) = run(&["gen", bad, "--target", "sql", "--out", tmp.path().join("bad").to_str().unwrap()]);
     assert_eq!(code, 1);
     assert!(err.contains("E020") && !tmp.path().join("bad").exists());
     let out = chobo().current_dir(root()).args(["doc", "tests/fixtures/bounds.book"]).output().unwrap();
@@ -372,36 +485,39 @@ fn the_language_comes_from_the_flag_then_the_environment_in_english() {
 }
 
 #[test]
-fn build_writes_each_target_in_english() {
-    let tmp = TempDir::new("cli-build-en");
+fn gen_writes_each_target_in_its_directory_in_english() {
+    let tmp = TempDir::new("cli-gen-en");
     let book = root().join("tests/books/stock_reservation.book");
     let b = book.to_str().unwrap();
     // an ASCII book's Go package and Rust module are named after it; a Japanese book's are `book`
     let wants: &[(&str, &[&str])] = &[
-        ("postgres", &["stock_reservation.sql"]),
-        ("postgres-typescript", &["stock_reservation.ts"]),
-        ("postgres-python", &["stock_reservation.py"]),
-        ("postgres-go", &["stock_reservation/book.go", "stock_reservation/runtime.go"]),
-        ("postgres-rust", &["stock_reservation.rs"]),
-        ("tigerbeetle-typescript", &["stock_reservation.ts"]),
-        ("tigerbeetle-python", &["stock_reservation.py"]),
-        ("tigerbeetle-go", &["stock_reservation/book.go", "stock_reservation/runtime.go"]),
-        ("tigerbeetle-rust", &["stock_reservation.rs"]),
-        ("mysql-rust", &["stock_reservation.rs"]),
+        ("postgres", &["sql/stock_reservation.sql"]),
+        ("postgres-typescript", &["typescript/stock_reservation.ts"]),
+        ("postgres-python", &["python/stock_reservation.py"]),
+        ("postgres-go", &["go/stock_reservation/book.go", "go/stock_reservation/runtime.go"]),
+        ("postgres-rust", &["rust/stock_reservation.rs"]),
+        ("tigerbeetle-typescript", &["typescript/stock_reservation.ts"]),
+        ("tigerbeetle-python", &["python/stock_reservation.py"]),
+        ("tigerbeetle-go", &["go/stock_reservation/book.go", "go/stock_reservation/runtime.go"]),
+        ("tigerbeetle-rust", &["rust/stock_reservation.rs"]),
+        ("mysql-rust", &["rust/stock_reservation.rs"]),
     ];
-    for (target, files) in wants {
-        let out = tmp.path().join(target);
-        let (code, _, err) = run(&["build", b, "--target", target, "--out", out.to_str().unwrap()]);
-        assert_eq!(code, 0, "{target}: {err}");
+    for (pair, files) in wants {
+        let out = tmp.path().join(pair);
+        let mut args = vec!["gen", b];
+        args.extend(flags_of(pair));
+        args.extend(["--out", out.to_str().unwrap()]);
+        let (code, _, err) = run(&args);
+        assert_eq!(code, 0, "{pair}: {err}");
+        assert_eq!(tree(&out), files.iter().map(|f| f.to_string()).collect::<Vec<_>>(), "{pair}");
         for f in *files {
-            assert!(out.join(f).is_file(), "{target}: no {f}");
-            assert!(err.contains(f), "{target}: {err}");
+            assert!(err.contains(f), "{pair}: {err}");
         }
     }
-    assert_eq!(run(&["build", b]).0, 2);
-    assert_eq!(run(&["build", b, "--target", "sqlite"]).0, 2);
+    assert_eq!(run(&["gen", b]).0, 2);
+    assert_eq!(run(&["gen", b, "--target", "sqlite"]).0, 2);
     let bad = root().join("tests/fixtures/bounds.book");
-    let (code, _, err) = run(&["build", bad.to_str().unwrap(), "--target", "postgres", "--out", tmp.path().join("bad").to_str().unwrap()]);
+    let (code, _, err) = run(&["gen", bad.to_str().unwrap(), "--target", "sql", "--out", tmp.path().join("bad").to_str().unwrap()]);
     assert_eq!(code, 1);
     assert!(err.contains("E020") && !tmp.path().join("bad").exists());
 }

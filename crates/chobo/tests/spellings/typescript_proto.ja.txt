@@ -1,6 +1,6 @@
 警告[W108]: typescript_proto.book:11:18: 振替 `receive` の引数 `__proto__` は、TypeScript のクライアントでそのままでは使えません
     11 | transfer receive(__proto__: string, sku: string, qty: pcs)
-  = TypeScript（`postgres-typescript`、`tigerbeetle-typescript`、`mysql-typescript`）: クライアントは引数を一つのオブジェクトで受け取ります。オブジェクトリテラルの `__proto__: …` はプロパティではなくオブジェクトのプロトタイプを決める書き方なので（文字列はプロトタイプにならず、捨てられます）、`book.receive.do({ __proto__: … })` の `__proto__` は書いた文字列になりません。呼び出しは止まります（`TypeError: chobo: __proto__ is a string`）。
+  = TypeScript（`--target typescript --books postgres|tigerbeetle|mysql`）: クライアントは引数を一つのオブジェクトで受け取ります。オブジェクトリテラルの `__proto__: …` はプロパティではなくオブジェクトのプロトタイプを決める書き方なので（文字列はプロトタイプにならず、捨てられます）、`book.receive.do({ __proto__: … })` の `__proto__` は書いた文字列になりません。呼び出しは止まります（`TypeError: chobo: __proto__ is a string`）。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 typescript_proto.book: ok、警告 1 件
   receive.do  拒否されうる理由: key_conflict

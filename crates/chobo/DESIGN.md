@@ -384,7 +384,7 @@ TigerBeetle はリクエストを一つずつ処理し、一つの操作は一�
 
 診断の形は dandori にそろえる。一行目にコードと場所と言うこと、次に原文の行、そのあとに、あれば `そうなる例:`（英語は `the operations that get there:`）と操作の列、最後に `ヒント:`。どの診断にも、そこに至る具体的な入力か操作の列を添える。
 
-- 帳簿の書き方の誤り（E001〜E005、E010、E011、E013、E014、E020〜E023、E030、E031、E040、E041）と、前のリビジョンとの比較（E050、E051、W107）は、原文の行が具体的な入力になる。帳簿が組み立てられないか、操作が関わらないからである。E010 は、元の勘定、先の勘定、額のそれぞれの単位を言う（帳簿の型が合わないので、参照インタプリタでは流せない）。E060 は、TigerBeetle のリクエストに入らなくなる呼び出しを一つ添え、E061 は、長すぎる名前と、それが何バイトかを言う。E062 は MySQL の系統が持てない名前を、E063 は Rust が識別子にできない字を、E064 はそのターゲットのコードで一つの識別子になる名前を言う（どれも `chobo build` が出す）。
+- 帳簿の書き方の誤り（E001〜E005、E010、E011、E013、E014、E020〜E023、E030、E031、E040、E041）と、前のリビジョンとの比較（E050、E051、W107）は、原文の行が具体的な入力になる。帳簿が組み立てられないか、操作が関わらないからである。E010 は、元の勘定、先の勘定、額のそれぞれの単位を言う（帳簿の型が合わないので、参照インタプリタでは流せない）。E060 は、TigerBeetle のリクエストに入らなくなる呼び出しを一つ添え、E061 は、長すぎる名前と、それが何バイトかを言う。E062 は MySQL の系統が持てない名前を、E063 は Rust が識別子にできない字を、E064 はそのターゲットのコードで一つの識別子になる名前を言う（どれも `chobo gen` が出す）。
 - 使われない宣言と効かない境界（W105、W106）は、原文の行と、その宣言を使う振替が無いことを言う。
 - ターゲットのコードで一つの識別子になる名前と、そのままでは使えない名前（W108）は、原文の行と、ターゲットごとの綴りと、どう壊れるかを言う（16 章）。
 - それ以外（E012、W101〜W104）は、そこに至る操作の列を添える。操作の列は、検査が参照インタプリタで実際に流して、言ったとおりの結果になることを確かめてから出す。確かめられなかったら、その診断を出さない。
@@ -415,11 +415,11 @@ TigerBeetle はリクエストを一つずつ処理し、一つの操作は一�
 | E041 | 有効期限が 1 秒より短い、2³² − 1 秒より長い、整数でない |
 | E050 | 前のリビジョンからある勘定の種類の、単位・`scale`・外の勘定かどうか・引数・境界が変わった（`--diff-base`） |
 | E051 | 前のリビジョンからある振替の種類の、引数・キー・仮押さえの終わり方・移動が変わった（`--diff-base`） |
-| E060 | 一つの操作のチェーンが、TigerBeetle の一つのリクエスト（253 件）に入らない（`chobo build` の TigerBeetle のターゲットが言う） |
-| E061 | 名前が PostgreSQL の識別子の長さ（63 バイト）を超える（`chobo build` の PostgreSQL のターゲットが言う） |
-| E062 | 名前を MySQL の系統がそのままでは持てない（帳簿の名前から作る名前が 64 字を超える、基本多言語面の外の文字。`chobo build` の MySQL の系統のターゲットが言う） |
-| E063 | 名前に Rust の識別子に使えない字がある（`chobo build` の Rust のターゲットが言う） |
-| E064 | 名前がそのターゲットのコードで一つの識別子になるか、そのターゲットが使う名前になるか、そのターゲットでそのままでは使えない（W108 が挙げるターゲットの `chobo build` が言う。16 章） |
+| E060 | 一つの操作のチェーンが、TigerBeetle の一つのリクエスト（253 件）に入らない（`chobo gen --books tigerbeetle` が言う） |
+| E061 | 名前が PostgreSQL の識別子の長さ（63 バイト）を超える（`chobo gen --books postgres` が言う） |
+| E062 | 名前を MySQL の系統がそのままでは持てない（帳簿の名前から作る名前が 64 字を超える、基本多言語面の外の文字。`chobo gen --books mysql` が言う） |
+| E063 | 名前に Rust の識別子に使えない字がある（`chobo gen --target rust` が言う） |
+| E064 | 名前がそのターゲットのコードで一つの識別子になるか、そのターゲットが使う名前になるか、そのターゲットでそのままでは使えない（W108 が挙げるターゲットを書く `chobo gen` が言う。16 章） |
 | W101 | 入れる移動はあるのに、取る移動がどこにも無い中の勘定（残高がたまる一方） |
 | W102 | いつも拒否される振替（取る元の勘定の下限が 0 以上で、その勘定へ入れる移動がどこにも無い） |
 | W103 | すぐに確定する振替が、移動の順序のせいで拒否される（下限のある勘定から前の移動が取り、後の移動が入れる。上限のある勘定へ前の移動が入れ、後の移動が取る） |
@@ -510,7 +510,7 @@ warning[W103]: 順序.book:15:3: move 1 takes from 店の売上(店) before move
 
 ### 4.1 PostgreSQL
 
-`chobo build --target postgres` は SQL のファイルを一つ書く（`<帳簿の名前>.sql`）。`CREATE … IF NOT EXISTS` と `CREATE OR REPLACE FUNCTION` で書くので、何度流してもよい。帳簿ごとにスキーマを一つ作る。
+`chobo gen --target sql` は、`--books postgres`（`--books` を書かないときもこれ）なら、SQL のファイルを一つ書く（`--out` の下の `sql/<帳簿の名前>.sql`）。`CREATE … IF NOT EXISTS` と `CREATE OR REPLACE FUNCTION` で書くので、何度流してもよい。帳簿ごとにスキーマを一つ作る。
 
 - **テーブル**：`accounts`（テナント、勘定の ID、種類、引数、単位、作ったときの下限と上限、posted、held_in、held_out。主キーはテナントと ID）、`holds`（テナント、仮押さえの ID、種類、キー、移動ごとの元と先の ID と額、状態、作った時刻、期限、確定した額）、`keys`（テナント、種類、操作、キー、中身、定義のハッシュ、結果、拒否の理由、時刻。主キーはテナント、種類、操作、キー）、`entries`（勘定ごとの変化の記録。監査と、残高を記録から計算し直す確かめのため）。仮押さえの ID は、TigerBeetle で仮押さえのチェーンの一件目になる振替の ID（4.3）である。
 - **制約**：`accounts` の行に、下限と上限の CHECK を付ける（`within_lower`：`lower_bound is null or posted − held_out ≥ least(lower_bound, 0)`、`within_upper`：`upper_bound is null or posted + held_in ≤ greatest(upper_bound, 0)`）。下限が 0 より大きい勘定は 0 から始まるので、制約は 0 までしか言わない。関数は境界そのものを確かめるので、制約は、関数を通らない書き込みを止める最後の歯止めである。
@@ -523,7 +523,7 @@ warning[W103]: 順序.book:15:3: move 1 takes from 店の売上(店) before move
 - **時刻**：期限は関数の中で一度だけ読む `clock_timestamp()` と比べる。PostgreSQL は時計で動かないので、期限の切れた仮押さえは `expire()` が戻すまで数えられたままになる。`expire()` は pg_cron か呼ぶ側の定期のジョブで呼ぶ。`expire()` は、ほかの操作や、同時に走るほかの `expire()` が持っている仮押さえを飛ばす。だから `expire()` が返っても、期限の切れた仮押さえが全部戻っているとは限らない（もう一方の `expire()` がまだコミットしていないことがある）。ジョブは一つにして、一度に一つずつ呼ぶ。
 - **ID**：勘定と仮押さえの ID は、TigerBeetle と同じ 128 ビットの値（4.3）を `uuid` 型に入れる。二つの出力先で同じ勘定は同じ ID になる。`chobo_id` は `sha256(bytea)` で 4.3 のとおりに求め、PLAN 0.3 の表の ID を全部同じに出す（`tests/postgres.rs`）。
 
-`引当.hold` の (3) と (4) は、こう書かれる（`chobo build --target postgres` の出力から）。
+`引当.hold` の (3) と (4) は、こう書かれる（`chobo gen --target sql` の出力から）。
 
 ```sql
   -- move 数 from 在庫(sku) to 客
@@ -728,21 +728,23 @@ chain: A->B 3, A->C 2                            created, created
 
 ### 4.3 クライアントと ID
 
-`chobo build --target` は、出力先ごとに一つの言語のクライアントを書く。
+`chobo gen` は、`--books` のデータベースに向けて、`--target` に挙げた言語ごとに書く。`sql` はデータベースの側の SQL で、ほかの言語はそれを呼ぶクライアントである。一つの実行に `--target` をいくつでも並べられ、言語ごとに `--out` の下の別のディレクトリに置く（17 章）。
 
-| ターゲット | 書くもの |
-|---|---|
-| `postgres` | スキーマ、テーブル、制約、関数の SQL |
-| `postgres-typescript`・`postgres-python`・`postgres-go`・`postgres-rust` | その SQL の関数を呼ぶクライアント |
-| `tigerbeetle-typescript`・`tigerbeetle-python`・`tigerbeetle-go`・`tigerbeetle-rust` | チェーンを組み立てて送るクライアント |
-| `mysql` | MySQL の系統のテーブルと制約の SQL |
-| `mysql-typescript`・`mysql-python`・`mysql-go`・`mysql-rust` | そのテーブルの上で、呼び出しを一つのトランザクションで行うクライアント（4.5） |
+| `--books` | `--target` | 書くもの |
+|---|---|---|
+| `postgres` | `sql` | スキーマ、テーブル、制約、関数の SQL |
+| `postgres` | `typescript`・`python`・`go`・`rust` | その SQL の関数を呼ぶクライアント |
+| `tigerbeetle` | `typescript`・`python`・`go`・`rust` | チェーンを組み立てて送るクライアント |
+| `mysql` | `sql` | MySQL の系統のテーブルと制約の SQL |
+| `mysql` | `typescript`・`python`・`go`・`rust` | そのテーブルの上で、呼び出しを一つのトランザクションで行うクライアント（4.5） |
+
+TigerBeetle は SQL を受け取らないので、`--books tigerbeetle` の `--target sql` は無い（exit 2）。
 
 **決定（PostgreSQL を呼ぶクライアントも出す）**：出す。理由は三つ。一つ、どの出力先のクライアントも、名前も引数も結果も同じにするので、出力先を替えても呼ぶ側のコードは変わらない。二つ、突き合わせのテスト（6 章）を、どちらの出力先でも同じクライアントを通して流せる。三つ、PostgreSQL を呼ぶ側にも誤りの起きる所がある（シリアライズの失敗のリトライ、結果の読み方）。SQL の関数は契約として残るので、ほかの言語からは関数を直接呼べる。
 
-**決定（出力先と言語ごとに一つのターゲット）**：TypeScript と Python は、使うドライバを呼ぶ側から受け取れるので、一つのクライアントに二つの出力先を入れられる。Go は import をあとに延ばせず、使わない出力先のモジュール（tigerbeetle-go は cgo を使う）も go.mod に要ることになるので、分けた。Rust も同じで、一つのクライアントに二つの出力先を入れると、使わない出力先のクレートも Cargo.toml に要る（14 章）。言語をそろえるため、どれも分ける。
+**決定（データベースと言語ごとに一つのクライアント）**：TypeScript と Python は、使うドライバを呼ぶ側から受け取れるので、一つのクライアントに二つの出力先を入れられる。Go は import をあとに延ばせず、使わない出力先のモジュール（tigerbeetle-go は cgo を使う）も go.mod に要ることになるので、分けた。Rust も同じで、一つのクライアントに二つの出力先を入れると、使わない出力先のクレートも Cargo.toml に要る（14 章）。言語をそろえるため、どれも分ける。
 
-- **ファイル**：TypeScript は `<帳簿の名前>.ts` を一つ、Python は `<帳簿の名前>.py` を一つ、Go は `<パッケージ>/book.go` と `<パッケージ>/runtime.go` を、Rust は `<モジュール>.rs` を一つ書く（14 章）。どれも、帳簿ごとに違う部分（型、呼び方、帳簿の定義の表）と、どの帳簿でも同じ部分（ID、チェーン、TigerBeetle の答えの読み方。`src/client/runtime/` のファイルを一字も変えずに入れる）でできている。TypeScript は Node が型を剥がすだけで走る書き方にし（`enum`、実行時のコードを含む `namespace`、コンストラクタの引数でのプロパティ宣言を使わない）、`tsc --strict --erasableSyntaxOnly` を通す。
+- **ファイル**：`--out` の下の言語のディレクトリ（`typescript/`、`python/`、`go/`、`rust/`）に、TypeScript は `<帳簿の名前>.ts` を一つ、Python は `<帳簿の名前>.py` を一つ、Go は `<パッケージ>/book.go` と `<パッケージ>/runtime.go` を、Rust は `<モジュール>.rs` を一つ書く（14 章）。どれも、帳簿ごとに違う部分（型、呼び方、帳簿の定義の表）と、どの帳簿でも同じ部分（ID、チェーン、TigerBeetle の答えの読み方。`src/client/runtime/` のファイルを一字も変えずに入れる）でできている。TypeScript は Node が型を剥がすだけで走る書き方にし（`enum`、実行時のコードを含む `namespace`、コンストラクタの引数でのプロパティ宣言を使わない）、`tsc --strict --erasableSyntaxOnly` を通す。
 - **形**：TypeScript では `tigerbeetle(client, { tenant })`、`postgres(db, { tenant })`、`mysql(db, { tenant, batch })` が帳簿の値を返す。
 
   ```ts
@@ -773,7 +775,7 @@ chain: A->B 3, A->C 2                            created, created
 - **ドライバ**：PostgreSQL は、呼ぶ側の接続を受け取り、SQL の関数を一つ呼ぶ。TypeScript は `query(text, values)` を持つもの（`pg` の `Client`、`Pool`、`PoolClient`）、Python は DB-API の接続（psycopg 3 か psycopg2。プレースホルダーは `%s`）、Go は `QueryRow` を持つもの（pgx の `*pgx.Conn`、`*pgxpool.Pool`、`pgx.Tx`）。クライアントはコミットもロールバックもしない。TigerBeetle は公式のクライアント（tigerbeetle-node 0.17.9、Python の tigerbeetle 0.17.9 の `ClientSync`、tigerbeetle-go v0.17.9）を受け取る。MySQL の系統は、TypeScript では mysql2 のプールか接続（`getConnection` があればプール）、Python では PyMySQL か mysqlclient の DB-API の接続（試験は PyMySQL 1.2.3 で回し、mysqlclient 2.3.0 は手で一度確かめた。4.5）、Go では database/sql の `*sql.DB`、`*sql.Conn`、`*sql.Tx` を受け取り、ドライバは go-sql-driver/mysql である（誤りの番号を読むために import する）。呼び出しは、接続がトランザクションの中にいればその一部になり、いなければ自分のトランザクションを持つ（4.5）。Go は、受け取るものをインターフェース（`Querier`、`TigerBeetleClient`）にして、テストが包めるようにした。Rust は、PostgreSQL と MySQL の系統では sqlx 0.9.0 のプールか、`tokio::sync::Mutex` に入れた接続かトランザクションを、TigerBeetle では公式のクレート（tigerbeetle 0.17.9）の `Client` を受け取り、受け取るものをトレイト（`Database`、`TigerBeetleClient`）にした（14 章）。
 - **Go のランナーのモジュール**：`tools/runner/go/go.mod` は、pgx v5.11.0 が求める golang.org/x/text v0.29.0 を、v0.42.0（と、それが求める golang.org/x/sync v0.23.0）に上げてある（2026-10-06 に v0.41.0 と v0.22.0 に、2026-10-09 に今のバージョンに。v0.42.0 は Go 1.26 を求めるので、`go` の行は 1.26.0）。v0.29.0 には、正規化が不正な UTF-8 で止まらなくなる既知の脆弱性（GO-2026-5970、v0.39.0 で直った）があり、pgx の SCRAM の認証（パスワードの正規化）から関数の単位で届く（govulncheck v1.7.0 で確かめた）。バージョンは dandori の `tools/temporal-go` と同じで、`ritsu gen` は、pgx を import する Go のパッケージの `doc.go` に、x/text を上げるよう書く（ritsu の DESIGN 3.6、9.3）。Go のモジュールは最小のバージョンを選ぶので、利用者のモジュールでも、何かが上げないかぎり v0.29.0 のままになるからである。
 - **テナント**：一つの帳簿を、いくつかの独立した残高の組として使うための名前。ID と PostgreSQL のキーに入り、MySQL の系統ではテナントの ID がどのテーブルでも最初の列になる。既定は空の文字列。テストでは、シナリオごとに別のテナントを使い、一つのデータベースで全部のシナリオを同時に流す。
-- **ritsu のパッケージの中のクライアント（2026-10-18）**：`ritsu gen` がパッケージに書くクライアント（`target::build_in` に `InPackage` を渡したもの）は、振替の操作が受け取る額のうち、お金と量の額を、パッケージの単位のモジュールの型にする（ritsu の DESIGN 9.3）。`unit USD scale 2` の帳簿の `sale` は、TypeScript では `{ order: string; shop: string; to_shop: units.USDc; fee: units.USDc }` を、Python では `to_shop: units.USDc` の引数を、Go では `To_shop units.USDc` の構造体を受け取る。Rust では `to_shop: crate::units::USDc` のフィールドを受け取り、runtime には `i64::from` で直して渡す（14 章）。規則のモジュールが返す額も同じ型なので、手で書いたコードが規則の出力を振替に渡せば、その言語の型の検査が単位を突き合わせる。型の名前は ritsu-units が単位から作る（`Unit::type_name`）。数え方の単位（`個`、`席`）の額は、これまでどおり素の整数である。Go のクライアントは、額を共通の部分（runtime）に `int64` に直して渡す（`int64(args.Fee)`）。runtime は `[]any` から額を `int64` として取り出すからで、runtime の中身は変えていない。単位のモジュールの読み込み（TypeScript の `import type * as units from "../units"`、Python の `from .. import units`、Go の `<module>/units`）は、お金か量の額を受け取る帳簿にだけ書く。`chobo build` が書くクライアントは変わらない。残高（`balance`）は、パッケージの中でも素の整数で返す（11.3）。
+- **ritsu のパッケージの中のクライアント（2026-10-18）**：`ritsu gen` がパッケージに書くクライアント（`target::build_in` に `InPackage` を渡したもの）は、振替の操作が受け取る額のうち、お金と量の額を、パッケージの単位のモジュールの型にする（ritsu の DESIGN 9.3）。`unit USD scale 2` の帳簿の `sale` は、TypeScript では `{ order: string; shop: string; to_shop: units.USDc; fee: units.USDc }` を、Python では `to_shop: units.USDc` の引数を、Go では `To_shop units.USDc` の構造体を受け取る。Rust では `to_shop: crate::units::USDc` のフィールドを受け取り、runtime には `i64::from` で直して渡す（14 章）。規則のモジュールが返す額も同じ型なので、手で書いたコードが規則の出力を振替に渡せば、その言語の型の検査が単位を突き合わせる。型の名前は ritsu-units が単位から作る（`Unit::type_name`）。数え方の単位（`個`、`席`）の額は、これまでどおり素の整数である。Go のクライアントは、額を共通の部分（runtime）に `int64` に直して渡す（`int64(args.Fee)`）。runtime は `[]any` から額を `int64` として取り出すからで、runtime の中身は変えていない。単位のモジュールの読み込み（TypeScript の `import type * as units from "../units"`、Python の `from .. import units`、Go の `<module>/units`）は、お金か量の額を受け取る帳簿にだけ書く。`chobo gen` が書くクライアントは変わらない。残高（`balance`）は、パッケージの中でも素の整数で返す（11.3）。
 
 **ID の決め方**：
 
@@ -821,7 +823,7 @@ enc(s) = s の UTF-8 のバイト長（ビッグエンディアンの 32 ビッ�
 
 ### 4.5 MySQL の系統（MySQL・TiDB・Vitess）
 
-`chobo build --target mysql` は帳簿のテーブルの SQL を一つ書き（`<帳簿の名前>.sql`）、`mysql-typescript`・`mysql-python`・`mysql-go`・`mysql-rust` は、そのテーブルの上で呼び出しを行うクライアントを書く。相手は MySQL 8.4 以降、TiDB 8.5 以降、Vitess の三つである。どれも MySQL の通信の形で話し、同じ SQL が同じ意味で通る。クライアントの名前、引数、結果は、PostgreSQL と TigerBeetle のクライアントと同じにした（4.3）。
+`chobo gen --target sql --books mysql` は帳簿のテーブルの SQL を一つ書き（`sql/<帳簿の名前>.sql`）、`--books mysql` の `--target typescript`・`python`・`go`・`rust` は、そのテーブルの上で呼び出しを行うクライアントを書く。相手は MySQL 8.4 以降、TiDB 8.5 以降、Vitess の三つである。どれも MySQL の通信の形で話し、同じ SQL が同じ意味で通る。クライアントの名前、引数、結果は、PostgreSQL と TigerBeetle のクライアントと同じにした（4.3）。
 
 **決定（データベースの中に関数を置かず、クライアントが文を送る）**：PostgreSQL では、呼び出しを関数一つにした（4.1）。MySQL の系統でそうしないのは、三つに共通する、データベースの中で走るコードが無いからである。TiDB はストアドプロシージャを持たない。Vitess を動かすサービスには、ストアドルーチンも、データベースを作ることも許さないものがある。Vitess 自身も、ストアドプロシージャを呼べるのはシャードされていないキースペースに限り、そのとき結果を返せない。MySQL のプロシージャも、autocommit のもとでは中の文が一つずつコミットされ、呼び出しが全部か無しにならない。どのみち、トランザクションはクライアントが持つことになる。
 
@@ -1102,13 +1104,13 @@ HTML は、明るい配色と暗い配色（`prefers-color-scheme`）を持つ�
 chobo check <file.book>... [--format json] [--diff-base <リビジョン>]
 chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]
 chobo scenarios <file.book> [--out <dir>]
-chobo build <file.book> --target postgres|postgres-typescript|postgres-python|postgres-go|postgres-rust|tigerbeetle-typescript|tigerbeetle-python|tigerbeetle-go|tigerbeetle-rust|mysql|mysql-typescript|mysql-python|mysql-go|mysql-rust [--out <dir>]
+chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
 chobo explain <コード> | --all [--format markdown]
 ```
 
-段階 B で `check`、`run`、`scenarios`、`api`、`explain` と `--help`、`--version` を、段階 C で `build` と `run --show` を、段階 D で `doc` を作った。`doc` は標準出力に書き、`--out <dir>` があれば、帳簿のファイル名から `<名前>.md` か `<名前>.html` を書く（`build` と違い、帳簿の名前ではなくファイル名を使う。英語の版と日本語の版が同じディレクトリにあっても、ぶつからない）。`run` の `--scenario` には、シナリオを一つ書いたファイルか、`chobo scenarios` が出す配列をそのまま渡せる。`build` は、書いたファイルのパスを一つずつ標準エラーに出す。帳簿にエラーがあるとき、出力先が帳簿を受け取れないとき（E060、E061、E062、E063）は何も書かずに exit 1 で終わる。
+段階 B で `check`、`run`、`scenarios`、`api`、`explain` と `--help`、`--version` を、段階 C で出力先を書くコマンド（いまの `gen`）と `run --show` を、段階 D で `doc` を作った。`doc` は標準出力に書き、`--out <dir>` があれば、帳簿のファイル名から `<名前>.md` か `<名前>.html` を書く（`gen` と違い、帳簿の名前ではなくファイル名を使う。英語の版と日本語の版が同じディレクトリにあっても、ぶつからない）。`run` の `--scenario` には、シナリオを一つ書いたファイルか、`chobo scenarios` が出す配列をそのまま渡せる。`gen` は、`--target` に挙げた言語を全部作ってから書き、書いたファイルのパスを一つずつ標準エラーに出す。帳簿にエラーがあるとき、挙げた出力先のどれかが帳簿を受け取れないとき（E060〜E064）は、どの出力先も書かずに exit 1 で終わる。`--check` は何も書かずに比べ、無いファイルと違うファイルを標準エラーに挙げて exit 1 で終わる（17 章）。
 
 どのコマンドにも `--lang ja` を付けられ、無ければ環境変数 `CHOBO_LANG`、次に ritsu のどの言語も読む `RITSU_LANG`、どちらも無ければ英語（rulec と同じ。システムのロケールは見ない）。exit code は、0（問題なし、警告だけ）、1（エラー）、2（使い方の誤り、内部の異常）。`--format json` の診断のキーは、`--lang` にかかわらず英語で固定する。`chobo run --show` は、参照インタプリタの結果の代わりに、操作ごとにその出力先へ送るものを出す（テナントは空の文字列）。PostgreSQL では呼ぶ SQL と引数、TigerBeetle では、確定と取消の前に読む仮押さえの ID、作る勘定、開始の振替、チェーン、MySQL の系統では、確かめる勘定と、一文ずつ送るときの文の並び（値を入れた形）である。`--format json` では、クライアントが送るものと一字ずつ比べられる形で、テキストでは TigerBeetle の勘定を帳簿の名前で書いた表で出す。
 
@@ -1133,7 +1135,7 @@ chobo は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 段階 D の最後の部分（ritsu の PLAN の D.9）で、単位を ritsu の単位の型に載せた（1.2）。お金の単位に税込か税抜を書けるようにし（`unit 円 incl_tax`）、お金でない単位に書けば E014 のエラーにする。`incl_tax` と `excl_tax` は修飾のキーワードになり、名前に使えなくなった。ritsu の口の帳簿の事実（`BookUnit`）は、単位ごとに ritsu の単位の型を持つ（名前だけの単位は `Dim::Count`）。`chobo api` は、税込か税抜を書いた単位にだけ `tax` を出し、`chobo doc` は勘定の単位を `円 incl_tax` のように書く。帳簿の中の意味と生成するコードは、区別を書いても変わらない。区別を書かない帳簿の出力は変わらない。例とテストの帳簿の全部のコマンドの出力（277 回）と、例を七つの組み合わせに生成したファイル（72 個）を、替える前と後で比べ、違ったのは、E014 を足した `--help`（三つ）と `explain --all`（四つ）と、新しいテストの帳簿（`tests/fixtures/税区分.book`）の四つだけだった。
 
-段階 E の `ritsu gen`（ritsu の DESIGN 9.3）で、クライアントと SQL の頭を、ritsu の生成器が共に使う形にそろえた（ritsu の DESIGN 9.2）。一行目は `Code generated by chobo <ritsu のバージョン>. DO NOT EDIT.`、二行目は `Source: <帳簿のファイル> (book <名前> v<版>, sha256:<16 桁>)` で、TypeScript と Go は `//`、Python は `#`、SQL は `--` のコメントにした。前は、TypeScript と Python が「Written by … from the book … Do not edit; build it again」の一文（Python はモジュールの docstring）、Go が「Code generated by … from the book … DO NOT EDIT.」、SQL が「<帳簿> v<版>: written by …」で、四つの形がばらばらだった（… は `chobo build --target <ターゲット>`）。バージョンもファイルのハッシュも書いていなかったので、生成物がどの帳簿のどの中身から作られたかを、ファイルからは確かめられなかった。帳簿のファイルは `chobo build` ではファイルの名前、`ritsu gen` ではプロジェクトのルートからのパスで書く。そのために `target::build` は、ファイルの名前（またはパス）とハッシュ（`ritsu_emit::header::Origin`）も受け取る。どの言語のクライアントを書くかを言う `--target` の値は、頭から消えた（何を呼ぶクライアントかは三行目の説明に残る）。Go の `runtime.go` は帳簿から作るものではないので、一行目だけである。
+段階 E の `ritsu gen`（ritsu の DESIGN 9.3）で、クライアントと SQL の頭を、ritsu の生成器が共に使う形にそろえた（ritsu の DESIGN 9.2）。一行目は `Code generated by chobo <ritsu のバージョン>. DO NOT EDIT.`、二行目は `Source: <帳簿のファイル> (book <名前> v<版>, sha256:<16 桁>)` で、TypeScript と Go は `//`、Python は `#`、SQL は `--` のコメントにした。前は、TypeScript と Python が「Written by … from the book … Do not edit; build it again」の一文（Python はモジュールの docstring）、Go が「Code generated by … from the book … DO NOT EDIT.」、SQL が「<帳簿> v<版>: written by …」で、四つの形がばらばらだった（… は `chobo build --target <ターゲット>`）。バージョンもファイルのハッシュも書いていなかったので、生成物がどの帳簿のどの中身から作られたかを、ファイルからは確かめられなかった。帳簿のファイルは `chobo gen` ではファイルの名前、`ritsu gen` ではプロジェクトのルートからのパスで書く。そのために `target::build` は、ファイルの名前（またはパス）とハッシュ（`ritsu_emit::header::Origin`）も受け取る。どの言語のクライアントを書くかを言う `--target` の値は、頭から消えた（何を呼ぶクライアントかは三行目の説明に残る）。Go の `runtime.go` は帳簿から作るものではないので、一行目だけである。
 
 同じとき、Python のクライアントが `mypy --strict` を通るようにした。前は、振替と残高のクラスが受け取るものの型が `Any` で、返す値が `Any` のまま返っていた（`no-any-return`）うえ、どの帳簿でも同じ部分（`src/client/runtime/*.py`）が型の引数の無い `list`・`dict`・`tuple`・`set` を書いていた。クラスが受け取るものを、そのクライアントが呼ぶもの（`_Postgres` か `_TigerBeetle`）の型にし、どの帳簿でも同じ部分に型の引数を書いた。振る舞いは変えていない。ritsu の `ritsu gen` のテストが、PostgreSQL と TigerBeetle のクライアントを `mypy --strict` にかける（tigerbeetle の型は chobo の `tools/runner` のもの）。
 
@@ -1226,7 +1228,7 @@ chobo のサイトは、ritsu のサイトの下の `website/chobo/` に置き�
 - **`.book` の色付け**：`tools/booklexer.py` が Pygments の字句解析器になり、`book` のフェンスを色付けする。`KEYWORDS` は `src/syntax.rs` と同じ語を同じ順に持つ。
 - **ブラウザで試すページ**：ritsu のブラウザで試すページに、四つの例を英語の版と日本語の版のプロジェクトとして足した（`chobo/<名前>` と `chobo/<名前>.ja`。組は `chobo`。どれも帳簿一つのプロジェクト）。サイトのナビとホームは、英語のサイトなら `chobo/refunds`、日本語のサイトなら `chobo/refunds.ja` を開く。
 
-試験は次のとおり。`tests/docs.rs` は、README と `docs/` とスキルに加えて、サイトで書いたページを両方の言語で読み（コピーするページは `docs/` として読む）、次を確かめる。診断が golden のとおりであること（言語をまたぐ検査の診断は ritsu の `tests/golden` のとおり）。`book` のフェンスの行が、例かテストの帳簿か `chobo explain` の再現の行であること（`…` で切った行は、その片を順に持つ行。切っていない行は、行の全体）。出力つきの `chobo` のコマンドが、いまその出力を出すこと。相対リンクが、Zensical の読み方（`use_directory_urls`）で行き先を持つこと（サイトのページとその見出し、サイトのファイル、ritsu やほかの言語のサイトのページ、ページの言語で並ぶブラウザで試すページのプロジェクト。例のページを開くリンクは、そのシナリオと結果とステップがあること。日本語のページの画像とスタイルシートは、`sync.sh` が英語のサイトからコピーしてコミットしないので、`docs/` のファイルとして読む）。数が実数であること。英語と日本語のサイトが同じページを持ち、二つの目次が同じページを同じ順に並べ、どちらのホームも書いたページの全部へリンクすること。サイトにしか無いものも元と突き合わせる。ほかの言語のコードはその言語のファイルの行と、シナリオの JSON は帳簿の横の JSON の行と、`ritsu run` などのテキストは golden と、`<!-- chobo build … -->` を付けた生成物の抜粋はそのビルドが書くファイルと、Mermaid の図は `chobo doc` のページと照らす。`booklexer.py` の `KEYWORDS` も確かめる。`tests/doc.rs` は、例のページが `chobo doc` のいまの出力と、ホームの図が `chobo doc` のいま描く図と、一字も違わないことを確かめる。ritsu の `tests/website.rs` は、`build.sh` が chobo のサイトを組むこと、ritsu のホームの表がサイトにリンクすること、二つのナビと二つのホームがサイトの言語のブラウザで試すページを開くことを確かめ、`tests/playground.rs` は、ブラウザで試すページが例のプロジェクトをバイナリと同じに答えることを確かめる。
+試験は次のとおり。`tests/docs.rs` は、README と `docs/` とスキルに加えて、サイトで書いたページを両方の言語で読み（コピーするページは `docs/` として読む）、次を確かめる。診断が golden のとおりであること（言語をまたぐ検査の診断は ritsu の `tests/golden` のとおり）。`book` のフェンスの行が、例かテストの帳簿か `chobo explain` の再現の行であること（`…` で切った行は、その片を順に持つ行。切っていない行は、行の全体）。出力つきの `chobo` のコマンドが、いまその出力を出すこと。相対リンクが、Zensical の読み方（`use_directory_urls`）で行き先を持つこと（サイトのページとその見出し、サイトのファイル、ritsu やほかの言語のサイトのページ、ページの言語で並ぶブラウザで試すページのプロジェクト。例のページを開くリンクは、そのシナリオと結果とステップがあること。日本語のページの画像とスタイルシートは、`sync.sh` が英語のサイトからコピーしてコミットしないので、`docs/` のファイルとして読む）。数が実数であること。英語と日本語のサイトが同じページを持ち、二つの目次が同じページを同じ順に並べ、どちらのホームも書いたページの全部へリンクすること。サイトにしか無いものも元と突き合わせる。ほかの言語のコードはその言語のファイルの行と、シナリオの JSON は帳簿の横の JSON の行と、`ritsu run` などのテキストは golden と、`<!-- chobo gen … -->` を付けた生成物の抜粋はその実行が書くファイルと、Mermaid の図は `chobo doc` のページと照らす。`booklexer.py` の `KEYWORDS` も確かめる。`tests/doc.rs` は、例のページが `chobo doc` のいまの出力と、ホームの図が `chobo doc` のいま描く図と、一字も違わないことを確かめる。ritsu の `tests/website.rs` は、`build.sh` が chobo のサイトを組むこと、ritsu のホームの表がサイトにリンクすること、二つのナビと二つのホームがサイトの言語のブラウザで試すページを開くことを確かめ、`tests/playground.rs` は、ブラウザで試すページが例のプロジェクトをバイナリと同じに答えることを確かめる。
 
 ## 13. 温度の単位の名前（2026-10-21）
 
@@ -1453,3 +1455,60 @@ PascalCase は、`_` で区切った語の頭を大文字にして `_` を除い
 
 - Python のクライアントのモジュールの名前が、クライアントが読み込む外のパッケージの名前と同じとき（帳簿 `tigerbeetle` の `tigerbeetle-python`）は、W108 にしていない。クライアントの中の `import tigerbeetle as tb` が自分自身を読み、`partially initialized module 'tigerbeetle' … has no attribute 'CreateTransferStatus'` で読み込めない（確かめた）。PostgreSQL と MySQL の系統の Python のクライアントは、標準ライブラリのほかを読み込まない。
 - 14.6 の、ほかの言語の識別子にならない字（`²`）と、NFKC と NFC で同じになる名前は、そのままである。
+
+## 17. `build` を `gen` にし、出力先を言語に、帳簿のデータベースを `--books` に分ける（2026-11-01）
+
+### 17.1 きっかけ
+
+0.40.0 の `chobo build` は、`--target` に、帳簿のデータベースと言語をつないだ 14 の名前（`postgres`、`postgres-go`、`tigerbeetle-go`、`mysql-rust` など）の一つを取った。一度の実行で書けるのは一つで、`--out`（既定 `.`）に平らに書き、書いたものがいまも同じかを確かめる `--check` が無かった。ほかの生成のコマンド（rulec、koyomi、sekisho、`ritsu gen`）は、動詞が `gen` で、出力先を言語の名前で言い、`ritsu gen` は帳簿のデータベースを `--books` で言う（ritsu の DESIGN 9.6）。
+
+### 17.2 原因
+
+出力先を足すたびに、組の名前を足してきた（4.3 の PostgreSQL のクライアント、4.5 の MySQL の系統、14 章の Rust）。組の名前は、データベースと言語の二つを一つの語に入れるので、言語を二つ書くには、データベースも二度書くことになる。
+
+### 17.3 決定
+
+1. **動詞は `gen`。** `chobo build` は知らないコマンドとして exit 2 で止まり、新しい名前を言う（`` `chobo build` is `chobo gen` from 0.41.0``、`` `chobo build` は 0.41.0 から `chobo gen` です``）。`ritsu chobo build` も同じ文で止まる。動く別名にはしない。書くのはソースと SQL で、バイナリを作るコマンド（`cargo build`、`go build`）とは違う。ritsu の生成のコマンドは、どれも `gen` にした。
+2. **`--target sql|typescript|python|go|rust` を何度でも書き、`--books postgres|tigerbeetle|mysql` を一度書く。** `--books` の既定は `postgres` で、`ritsu gen` の `--books` と同じ名前、同じ既定である。書く順はフラグの順ではなく言語の表の順（`sql`、`typescript`、`python`、`go`、`rust`。`target::LANGS`）で、`wrote` の行もその順に並ぶ。同じ `--target` を二度書けば exit 2。TigerBeetle は SQL を受け取らないので、`--books tigerbeetle` の `--target sql` は exit 2 で、クライアントの書き方を言う。`--target` が無ければ、何も書かずに exit 2 で止まり、二つのフラグを言う。0.40.0 も `--target` が要ったので、koyomi や rulec と違い、0.40.0 と同じものを書くコマンドは示さない。
+
+   ```text
+   error: `chobo gen` needs one or more `--target sql|typescript|python|go|rust`; `--books postgres|tigerbeetle|mysql` says which database they are for (postgres if it is not given)
+   ```
+
+   ```text
+   エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）
+   ```
+
+3. **0.40.0 の組の名前を `--target` に渡せば、それに当たるフラグを言って exit 2 で止まる**（`` `tigerbeetle-go` is `--target go --books tigerbeetle` from 0.41.0``、`` `postgres` は 0.41.0 から `--target sql` です``）。表は `target::RENAMED` の 14 行で、引数を読むところ（ritsu-base の `Flag::renamed`）が言う。
+4. **言語ごとに `<out>/<言語>/` に書き、`--out` の既定は `generated`。** `generated/sql/inventory.sql`、`generated/go/inventory/book.go`、`generated/rust/inventory.rs` のように置く。言語を一つだけ書くときも同じにする。言語を足しても、ほかの言語のファイルが動かないためである。`<言語>/` の下は、0.40.0 が `--out` に書いたものと同じ形である。
+5. **一つの実行の出力先は、全部を作ってから書く。** どれかが帳簿を受け取れなければ（E060〜E064）、どの出力先も書かずに exit 1 で終わる（`ritsu gen` と同じく、途中まで書いた出力先を残さない）。止めた診断は一度ずつ言う。E061 と E062 は、そのデータベースの SQL とクライアントのどれもが同じ名前について言うので、一つになる。
+6. **`--check` を足す。** 書かずに、同じフラグで書くはずのファイルとディスクのものを比べ、無いか違うファイルがあれば exit 1 で終わる。文は `ritsu gen` と同じ言い方（`missing: <path>` と `generated file is stale or hand-edited: <path>`、「ありません: <パス>」と「生成物が古いか手で編集されています: <パス>」）で、`wrote` の行と同じく標準エラーに出す。指定しなかった言語のディレクトリは見ない。
+7. **出力先は `gen` のフラグで言う。** W108 の注は「Go（`--target go --books postgres|tigerbeetle|mysql`）」、E064 の見出しは「`--target go --books postgres` のコードで同じ識別子になります」、`explain` の「どのコマンドで出るか」は `chobo gen <file.book> --target go --books postgres`、生成したコードのコメントは `chobo gen --target sql`（PostgreSQL）と `chobo gen --target sql --books mysql`（MySQL の系統）と言う。`Target` と 14 の組の名前は、ライブラリの中に残す。ブラウザで試すページが 14 の組を並べ、診断の台帳の再現が使う `tests/fixtures/*.target` も組の名前で書くからである。`name()` は人が読む文には使わない。
+8. **付属物は無い。** 書くものはどれも、データベースか呼ぶ側のコードが読む本体である。
+
+### 17.4 捨てたもの
+
+- **組の名前のまま、`--target` を何度でも書けるようにすること。** 14 の名前を覚えることが残り、言語を二つ書くとデータベースを二度書くことになる。ほかの生成のコマンドともそろわない。
+- **`--books` を何度でも書くこと。** 一つの実行で二つのデータベースのクライアントを書くと、置き方に `<books>/` の段が要る。二つのデータベースを使うときは、`--out` を分けて二度走らせる。
+- **`--books` を必須にすること。** `ritsu gen` と同じく、既定を `postgres` にした。
+- **`build` を `gen` の別名として残すこと。** 古い名前で通る実行が残ると、文書と出力の両方に二つの名前が要る。
+
+### 17.5 変わること
+
+- コマンドの形と置き方。前は通っていた実行が落ちるのは、`chobo build`（exit 2）、組の名前の `--target`（exit 2）、`--out` に平らに書いていたこと（`<言語>/` が一段増える）の三つである（ritsu の DESIGN 9.6）。0.40.0 が `--out` に平らに書いたファイルは、`gen` が消さないので残る。
+- 生成したコードのコメントと、W108・E064・`explain` の文が言う出力先（決定の 7）。MySQL の系統の SQL のコメントは、クライアントを `mysql-typescript`、`mysql-python`、`mysql-go` と並べ、14 章で足した Rust を挙げていなかった。言語を並べず、「`--books mysql` のクライアント」と書く。
+- `target.rs` に、言語と帳簿のデータベースの表（`LANGS`、`BOOKS`、`Lang::key`・`parse`、`Backend::key`・`parse`）、二つから組を作る `Target::of`、組を書くフラグを言う `Target::flags`、組の名前の表 `RENAMED` を足した。
+- 文書：`docs/reference.md`、`docs/targets.md`、`docs/formats.md`、`docs/codes.md`（英日）、README（英日）、スキル（`skills/chobo/`）、サイトのページ（英日。`databases`、`install`、`checks`、`agents`、`scenarios`、`together`、ホーム）。`tests/docs.rs` は `<!-- chobo gen <引数> -->` の注を走らせ、続くブロックがその実行の書くファイルにあることを確かめる。ブラウザで試すページ（ritsu-wasm）は、選んだ組を `chobo gen <帳簿> --target <言語> --books <db> --out generated` と見せ、`generated/<言語>/` に書く。
+
+### 17.6 確かめたこと
+
+- 木の 176 冊の帳簿（`git ls-files '*.book'` の全部）の 14 の組を、英語と日本語（`--lang ja`）で、`build --target <組>` と、替えた後の `gen` に `RENAMED` のフラグを渡したもので比べた（4,928 回）。比べたのは、終了コード、標準出力、標準エラー、書いたファイルの全部と、書けたときに続けて走らせた `gen --check` の三つである。同じディレクトリで順に走らせ、替えた後のパスからは `<言語>/` の段だけを外して読んだ。どのバイナリも版が 0.40.0 なので、頭の行は読み替えていない。
+  - 替える前の版（16 章までを入れたもの）との比べ：1,996 回が一字も違わない。1,980 回は、生成したコードのコメントの、コマンドを言う行だけが違う（PostgreSQL のクライアントと、MySQL の系統の SQL とクライアント）。552 回は、W108 と E064 の文が出力先を組の名前でなくフラグで言うことだけが違い、400 回はその二つだけが違う。ほかの違いは無い。終了コードは (0, 0) が 3,744 回、(1, 1) が 1,184 回で、書けた 3,744 回の `--check` は、どれも `gen` と同じ警告を出して 0 で終わった。替えた後が書いたファイルは合わせて 4,548。
+  - 0.40.0 の公式のバイナリとは、上の違いのほかに、16 章による違いがある。16 章の材料の 34 冊（`tests/spellings/` の 32 冊と、`tests/fixtures/` の 2 冊）の 952 回で W108 が増え、そのうち 294 回は E064 で止まって何も書かずに 1 で終わる（0.40.0 は書いていた）。`own_expire.book` と `自分のexpire.book` の TigerBeetle のクライアント（4 言語の英日で 16 回）は、0.40.0 が振替 `expire` を `expire_2` に付け替えていたところを、`expire` のまま書く。
+- 一つの帳簿のデータベースの言語を全部、一度の実行で書いた（176 冊、三つのデータベース、英日で 1,056 回。`--target` は言語の表と逆の順に書いた）。単独の実行がどれも書ける 672 回は、単独の実行が書くファイルを `<言語>/` の下に集めたものと一字も違わず、警告は一度だけで、`wrote` の行は言語の順だった。どれかが止まる 384 回は、どれも何も書かずに 1 で終わり、単独の実行が止まった診断を一度ずつ言った。
+- 止まる文（英日）：`--target` が無いとき、`--books tigerbeetle` の `--target sql`、`build`、14 の組の名前。
+- `tests/cli.rs`：言語ごとのディレクトリ、フラグと違う順の `--target`、`--check` の三つの終わり方（0、無いファイル、違うファイル）、既定の `generated`、止まる文の全部（英日）、組の名前の 14 行、同じ `--target` を二度、`--books` を二度、知らないデータベース、`LANGS` と `BOOKS` が `Lang::ALL` と `Backend::ALL` の名前と同じこと、二つの言語の一方が E064 で止まるときに何も書かず E064 を一度だけ言うこと。
+
+### 17.7 見つけて直していないもの
+
+- 0.40.0 が `--out` に平らに書いたファイル（`--out db` の `db/inventory.sql`）は、`gen` が消さず、`--check` も見ない。rulec と koyomi は頼まれなくなった付属物の残りを挙げるが（ritsu の DESIGN 9.6）、出力先のディレクトリの中だけを見るので、chobo の前の置き方の残りは挙げない。

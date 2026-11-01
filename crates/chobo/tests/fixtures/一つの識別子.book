@@ -1,4 +1,4 @@
-# W108 と E064: Go のクライアントは振替 `出荷` と `X出荷` を一つの識別子で書くので、`chobo build --target postgres-go` は止まります
+# W108 と E064: Go のクライアントは振替 `出荷` と `X出荷` を一つの識別子で書くので、`chobo gen --target go --books postgres` は止まります
 book 店 v1
 
 unit 個

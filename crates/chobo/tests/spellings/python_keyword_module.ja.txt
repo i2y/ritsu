@@ -1,6 +1,6 @@
 警告[W108]: python_keyword_module.book:1:6: 帳簿 `return` は、Python のクライアントでそのままでは使えません
      1 | book return v1
-  = Python（`postgres-python`、`tigerbeetle-python`、`mysql-python`）: クライアントはモジュール `return.py` で、`return` は Python が予約している語なので、`import return` は Python の文になりません（`SyntaxError`）。`ritsu gen` のパッケージにも、この名前のモジュールは置けません。
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: クライアントはモジュール `return.py` で、`return` は Python が予約している語なので、`import return` は Python の文になりません（`SyntaxError`）。`ritsu gen` のパッケージにも、この名前のモジュールは置けません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 python_keyword_module.book: ok、警告 1 件
   receive.do  拒否されうる理由: key_conflict

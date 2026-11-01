@@ -54,7 +54,7 @@ flow
 
 dandori reads the book through ritsu's port of books, as it reads a rule through the port of rules:
 `ritsu dandori` and `ritsu check` hand it what chobo knows of the book, and the code dandori writes
-calls the client `chobo build` writes, on every platform it builds for. dandori's
+calls the client `chobo gen` writes, on every platform it builds for. dandori's
 [Dates and books](../dandori/dates-and-books/) says how.
 
 ## A rule and the book, without a workflow

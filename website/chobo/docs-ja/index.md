@@ -133,12 +133,9 @@ examples/refunds/refunds.ja.book (more: 30000 円の売上に 20000 円の返金
 <div markdown>
 
 ```console
-$ chobo build examples/refunds/refunds.ja.book --target postgres --out db
-$ chobo build examples/refunds/refunds.ja.book --target postgres-typescript --out db
-$ chobo build examples/refunds/refunds.ja.book --target tigerbeetle-python --out db
-$ chobo build examples/refunds/refunds.ja.book --target mysql --out db
-$ chobo build examples/refunds/refunds.ja.book --target mysql-go --out db
-$ chobo build examples/refunds/refunds.ja.book --target postgres-rust --out db
+$ chobo gen examples/refunds/refunds.ja.book --target sql --target typescript --target rust --out db
+$ chobo gen examples/refunds/refunds.ja.book --target python --books tigerbeetle --out db
+$ chobo gen examples/refunds/refunds.ja.book --target sql --target go --books mysql --out db
 ```
 
 </div>

@@ -1,4 +1,4 @@
-//! `chobo build --target mysql`: the tables of a book on MySQL, TiDB and Vitess, and the SQL the
+//! `chobo gen --target sql --books mysql`: the tables of a book on MySQL, TiDB and Vitess, and the SQL the
 //! clients of the MySQL family send (DESIGN 4.5).
 //!
 //! The three share no code a database runs for the caller (a hosted Vitess takes no stored routine,
@@ -183,8 +183,8 @@ pub fn build(book: &Book, origin: &crate::target::Origin) -> Result<String, Vec<
     o.push_str(&format!(
         "-- The tables of the book {} v{} on MySQL 8.4 or later, TiDB 8.5 or later, and Vitess.\n\
          -- It can run any number of times: it makes what is missing. Nothing here runs a call: the\n\
-         -- clients of `chobo build --target mysql-typescript`, `mysql-python` and `mysql-go` do, each\n\
-         -- call one transaction, its accounts locked in the order of their IDs.\n\
+         -- clients of `chobo gen --books mysql` do, each call one transaction, its accounts locked in\n\
+         -- the order of their IDs.\n\
          -- On TiDB, run it with tidb_enable_check_constraint ON: made without it, a table keeps no check.\n\n",
         book.name, book.version
     ));

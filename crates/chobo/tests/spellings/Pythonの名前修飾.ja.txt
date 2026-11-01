@@ -1,6 +1,6 @@
 警告[W108]: Pythonの名前修飾.book:19:10: 振替 `_棚卸し調整` は、Python のクライアントでそのままでは使えません
     19 | transfer _棚卸し調整(棚卸し: string, 品番: string, 数: 個)
-  = Python（`postgres-python`、`tigerbeetle-python`、`mysql-python`）: クライアントは振替をクラス `__棚卸し調整Transfer` にします。Python はクラスの中で、`__` で始まり `__` で終わらない名前を書き換える（名前修飾）ので、`Book` の中で書いた `__棚卸し調整Transfer` は `_Book__棚卸し調整Transfer` になります。`Book` を作れず、どの呼び出しも止まります（`NameError`）。
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: クライアントは振替をクラス `__棚卸し調整Transfer` にします。Python はクラスの中で、`__` で始まり `__` で終わらない名前を書き換える（名前修飾）ので、`Book` の中で書いた `__棚卸し調整Transfer` は `_Book__棚卸し調整Transfer` になります。`Book` を作れず、どの呼び出しも止まります（`NameError`）。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 Pythonの名前修飾.book: ok、警告 1 件
   入荷.do         拒否されうる理由: key_conflict

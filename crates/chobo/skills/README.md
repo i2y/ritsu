@@ -23,7 +23,7 @@ chobo without a prompt each time, add this to the project's settings:
 | `SKILL.md` | when the skill applies, the loop, the language on one page, turning a condition into a bound, what to ask a person, from a diagnostic to a fix, the targets |
 | `reference.md` | the whole language |
 | `formats.md` | the JSON chobo reads and writes |
-| `targets.md` | what `chobo build` writes, and how to call it |
+| `targets.md` | what `chobo gen` writes, and how to call it |
 | `codes.md` | every diagnostic code |
 
 ## Rebuilding it

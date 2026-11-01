@@ -23,7 +23,8 @@ fn render(path: &std::path::Path, lang: Lang) -> String {
         }
     }
     let file = path.file_name().unwrap().to_string_lossy().to_string();
-    // a fixture with a `.target` beside it: what `chobo build --target <it>` prints
+    // a fixture with a `.target` beside it (a pair, `postgres-go`): what `chobo gen` with its flags
+    // (`--target go --books postgres`) prints
     if let Ok(t) = std::fs::read_to_string(path.with_file_name(format!("{}.target", stem(path)))) {
         let target = chobo::target::Target::parse(t.trim()).unwrap_or_else(|| panic!("{}: no target {t}", path.display()));
         let book = c.book.as_ref().unwrap_or_else(|| panic!("{}: the book does not load", path.display()));

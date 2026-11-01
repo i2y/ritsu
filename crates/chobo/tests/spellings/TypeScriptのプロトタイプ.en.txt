@@ -1,6 +1,6 @@
 warning[W108]: TypeScriptのプロトタイプ.book:11:13: The parameter `__proto__` of the transfer `入荷` cannot be used as it is in the TypeScript client
     11 | transfer 入荷(__proto__: string, 品番: string, 数: 個)
-  = TypeScript (`postgres-typescript`, `tigerbeetle-typescript`, `mysql-typescript`): the client takes the arguments as one object, and `__proto__: …` in an object literal sets the object's prototype, not a property (a string is no prototype, and is dropped): the `__proto__` of `book.入荷.do({ __proto__: … })` is never the string written, and the call stops (`TypeError: chobo: __proto__ is a string`).
+  = TypeScript (`--target typescript --books postgres|tigerbeetle|mysql`): the client takes the arguments as one object, and `__proto__: …` in an object literal sets the object's prototype, not a property (a string is no prototype, and is dropped): the `__proto__` of `book.入荷.do({ __proto__: … })` is never the string written, and the call stops (`TypeError: chobo: __proto__ is a string`).
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 TypeScriptのプロトタイプ.book: ok, 1 warning(s)
   入荷.do  may be refused: key_conflict

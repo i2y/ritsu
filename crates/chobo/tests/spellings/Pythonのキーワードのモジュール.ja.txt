@@ -1,6 +1,6 @@
 警告[W108]: Pythonのキーワードのモジュール.book:1:6: 帳簿 `import` は、Python のクライアントでそのままでは使えません
      1 | book import v1
-  = Python（`postgres-python`、`tigerbeetle-python`、`mysql-python`）: クライアントはモジュール `import.py` で、`import` は Python が予約している語なので、`import import` は Python の文になりません（`SyntaxError`）。`ritsu gen` のパッケージにも、この名前のモジュールは置けません。
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: クライアントはモジュール `import.py` で、`import` は Python が予約している語なので、`import import` は Python の文になりません（`SyntaxError`）。`ritsu gen` のパッケージにも、この名前のモジュールは置けません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 Pythonのキーワードのモジュール.book: ok、警告 1 件
   入荷.do  拒否されうる理由: key_conflict

@@ -1,9 +1,9 @@
 warning[W108]: 自分の残高.book:11:10: The transfer `balance` is a name the TypeScript, Python, Go and Rust clients use themselves
     11 | transfer balance(調整: string, 会員: string, 額: 円)
-  = TypeScript (`postgres-typescript`, `tigerbeetle-typescript`, `mysql-typescript`): the client writes the transfer `balance` as the member `balance` of `Book`, and `Book` has `balance`, which reads the balances: `Book` would have two members of that name, and the module does not type-check.
-  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client writes the transfer `balance` as the attribute `balance` of `Book`, and `Book` has `balance`, which reads the balances: the attribute is set to the transfer first and then to what reads the balances, so no call reaches the transfer.
-  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes the transfer `balance` as the field `Balance` of `Book`, and `Book` has `Balance`, which reads the balances: it would be declared twice, and the package does not compile.
-  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the transfer `balance` as the method `balance` of `Book`, and `Book` has `balance`, which reads the balances: it would be declared twice, and the module does not compile.
+  = TypeScript (`--target typescript --books postgres|tigerbeetle|mysql`): the client writes the transfer `balance` as the member `balance` of `Book`, and `Book` has `balance`, which reads the balances: `Book` would have two members of that name, and the module does not type-check.
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client writes the transfer `balance` as the attribute `balance` of `Book`, and `Book` has `balance`, which reads the balances: the attribute is set to the transfer first and then to what reads the balances, so no call reaches the transfer.
+  = Go (`--target go --books postgres|tigerbeetle|mysql`): the client writes the transfer `balance` as the field `Balance` of `Book`, and `Book` has `Balance`, which reads the balances: it would be declared twice, and the package does not compile.
+  = Rust (`--target rust --books postgres|tigerbeetle|mysql`): the client writes the transfer `balance` as the method `balance` of `Book`, and `Book` has `balance`, which reads the balances: it would be declared twice, and the module does not compile.
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 自分の残高.book: ok, 1 warning(s)
   balance.do  may be refused: key_conflict

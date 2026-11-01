@@ -2,7 +2,7 @@
 
 chobo is made to be written by an AI coding agent and read by a person. What the agent hands back
 is a book, which the people who keep the accounts can read and check, and not the code around a
-database that keeps a balance within its bounds: that code is what `chobo build` writes. Two things
+database that keeps a balance within its bounds: that code is what `chobo gen` writes. Two things
 stay with people: the numbers and the names of the business (the bounds, the reasons a refusal
 gives, what makes a call once only, how long a hold lasts), and the code around the book (where the
 amounts come from, who posts and voids a hold, the connection to the database).

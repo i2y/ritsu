@@ -101,16 +101,18 @@ unit 円 incl_tax
 ## 出力先
 
 ```console
-$ chobo build examples/refunds/refunds.ja.book --target postgres --out db
+$ chobo gen examples/refunds/refunds.ja.book --target sql --target typescript --out db
 ```
 
-| ターゲット | `build` が書くもの |
-|---|---|
-| `postgres` | スキーマ、テーブルと制約、操作ごとの関数（SQL） |
-| `postgres-typescript`、`postgres-python`、`postgres-go`、`postgres-rust` | その関数を呼ぶクライアント |
-| `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go`、`tigerbeetle-rust` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
-| `mysql` | MySQL、TiDB、Vitess 向けの、帳簿のテーブルと制約（SQL） |
-| `mysql-typescript`、`mysql-python`、`mysql-go`、`mysql-rust` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
+`--target` で言語を（いくつでも）、`--books` でクライアントが呼ぶデータベースを指定します（無ければ `postgres`）。言語ごとに `<out>/<言語>/` に書き（`--out` が無ければ `generated`）、`--check` は何も書かずに、同じフラグで書くものがディスクのものと違えば 1 で終わります。
+
+| `--books` | `--target` | `gen` が書くもの |
+|---|---|---|
+| `postgres` | `sql` | スキーマ、テーブルと制約、操作ごとの関数（SQL） |
+| | `typescript`、`python`、`go`、`rust` | その関数を呼ぶクライアント |
+| `tigerbeetle` | `typescript`、`python`、`go`、`rust` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
+| `mysql` | `sql` | MySQL、TiDB、Vitess 向けの、帳簿のテーブルと制約（SQL） |
+| | `typescript`、`python`、`go`、`rust` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
 
 どの出力先のクライアントも、名前も引数も結果も同じです。拒否されたことは例外ではなく、`{ result: "refused", reason: "返金超過" }` という結果で返ります。同じ呼び出しの二度目は `done_before` を返すので、リトライで二重に動くことはありません。PostgreSQL では、関数が呼ぶ側のトランザクションの中で動くので、注文の行と在庫の仮押さえを一緒にコミットできます。TigerBeetle は利用者のコードを中で動かせないので、クライアントがチェーンを組み立てます。下限 0 は勘定のフラグで守り、ほかの境界は、chobo が同じチェーンに足す振替で守ります。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、その読み取りで、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、呼び出しもそのトランザクションに入ります。Rust のクライアントは非同期で、sqlx と TigerBeetle のクレートを通して呼び、拒否は `Outcome::Refused(Reason::返金超過)` で返ります。出力先ごとに何を書き、四つの言語からどう呼ぶかは [docs/targets.md](docs/targets.md)（英語）にあります。
 
@@ -144,7 +146,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked chobo
 chobo check <file.book>... [--format json] [--diff-base <rev>]
 chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]
 chobo scenarios <file.book> [--out <dir>]
-chobo build <file.book> --target <target> [--out <dir>]
+chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
 chobo explain <code> | --all [--format markdown]

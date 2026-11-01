@@ -548,11 +548,25 @@ fn lang_name(l: Lang) -> &'static str {
     }
 }
 
-/// `Go（\`postgres-go\`、\`tigerbeetle-go\`、\`mysql-go\`）: ` / `Go (\`postgres-go\`, …): `.
+/// `Go（\`--target go --books postgres|tigerbeetle|mysql\`）: `: the targets a note is of, by the flags
+/// of `gen` that write them (DESIGN 17). They are the languages of the note on its databases, so
+/// one `--target` and one `--books`, each with its values, say them all.
 fn prefix(lang: Lang, targets: &[Target]) -> Text {
-    let ts: Vec<String> = targets.iter().map(|t| format!("`{}`", t.name())).collect();
     let l = lang_name(lang);
-    Text::new(format!("{l}（{}）: ", ts.join("、")), format!("{l} ({}): ", ts.join(", ")))
+    Text::new(format!("{l}（{}）: ", flags_of(targets, "、")), format!("{l} ({}): ", flags_of(targets, ", ")))
+}
+
+/// `` `--target go --books postgres|mysql` ``: the targets as `gen`'s flags, the values of each in
+/// their order; the targets one by one, after `sep`, if they are not every language given on every
+/// database.
+fn flags_of(targets: &[Target], sep: &str) -> String {
+    let langs: Vec<&str> = crate::target::Lang::ALL.into_iter().filter(|l| targets.iter().any(|t| t.lang() == *l)).map(|l| l.key()).collect();
+    let books: Vec<&str> = Backend::ALL.into_iter().filter(|b| targets.iter().any(|t| t.backend() == *b)).map(|b| b.key()).collect();
+    if langs.len() * books.len() == targets.len() {
+        format!("`--target {} --books {}`", langs.join("|"), books.join("|"))
+    } else {
+        targets.iter().map(|t| format!("`{}`", t.flags())).collect::<Vec<_>>().join(sep)
+    }
 }
 
 /// What one language says of a hit: how the client spells it, where it is, and how it breaks.
@@ -751,7 +765,7 @@ fn typescript_proto(b: &Book) -> Vec<Found> {
     out
 }
 
-/// Python: the book's name, which `chobo build` writes the client as the module of (`<name>.py`),
+/// Python: the book's name, which `chobo gen` writes the client as the module of (`<name>.py`),
 /// when it is a word Python keeps (`import class` is no Python) or the name of a module of Python's
 /// standard library, as `sys.stdlib_module_names` lists it (Python keeps one module of a name). A
 /// package of ritsu's holds the module as `<package>.books.<name>`, where the standard library's
@@ -991,7 +1005,7 @@ pub fn check_target(b: &Book, target: Target, in_package: bool) -> Vec<Diag> {
             if said.is_empty() {
                 return None;
             }
-            let t = target.name();
+            let t = target.flags();
             let place = tr!("`{t}` のコード", "the code of `{t}`");
             let (line, col) = f.subject.at().place(b);
             let mut d = diag::error("E064", line, col, headline(b, f, &place, false));

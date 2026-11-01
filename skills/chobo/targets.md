@@ -1,4 +1,4 @@
-# What `chobo build` writes
+# What `chobo gen` writes
 
 A book becomes code for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB and
 Vitess), and a client that calls it from TypeScript, Python, Go or Rust. Every target answers every
@@ -6,22 +6,35 @@ scenario as the reference interpreter does: the tests run each scenario of the e
 test books through every client, on PostgreSQL, TigerBeetle, MySQL, TiDB and Vitess, and compare
 what each client sent with `chobo run --show`.
 
-| Target | What it writes |
-|---|---|
-| `postgres` | `<book>.sql`: a schema, its tables and constraints, and a function for each operation |
-| `postgres-typescript` | `<book>.ts`: a client that calls those functions through `pg` |
-| `postgres-python` | `<book>.py`: the same, through a DB-API connection (psycopg 3 or psycopg2) |
-| `postgres-go` | `<package>/book.go` and `runtime.go`: the same, through pgx |
-| `postgres-rust` | `<module>.rs`: the same, an async client through sqlx |
-| `tigerbeetle-typescript` | `<book>.ts`: a client that sends TigerBeetle one chain of transfers for each operation, through `tigerbeetle-node` |
-| `tigerbeetle-python` | `<book>.py`: the same, through `tigerbeetle` (`ClientSync`) |
-| `tigerbeetle-go` | `<package>/book.go` and `runtime.go`: the same, through `tigerbeetle-go` |
-| `tigerbeetle-rust` | `<module>.rs`: the same, an async client through the `tigerbeetle` crate |
-| `mysql` | `<book>.sql`: the book's three tables and their constraints, for MySQL, TiDB and Vitess |
-| `mysql-typescript` | `<book>.ts`: a client that makes each operation one transaction on those tables, through `mysql2` |
-| `mysql-python` | `<book>.py`: the same, through a DB-API connection (PyMySQL or mysqlclient) |
-| `mysql-go` | `<package>/book.go` and `runtime.go`: the same, through database/sql and go-sql-driver/mysql |
-| `mysql-rust` | `<module>.rs`: the same, an async client through sqlx |
+`chobo gen <book> --target <language>` writes each language given, as many as are given, for the
+database `--books` names: `postgres` (unless it is given), `tigerbeetle` or `mysql`, the MySQL
+family. `--target sql` is the SQL of PostgreSQL or of the MySQL family; TigerBeetle takes no SQL, so
+`--target sql --books tigerbeetle` stops with exit 2, as no `--target` does. Each language goes
+into a directory of its own, `<out>/<language>/`, and `--out` is `generated` unless it is given.
+Every target given is built before anything is written: one that cannot take the book (E060 to
+E064) stops the run with exit 1, and nothing is written. `--check` writes nothing: it compares the
+files the same flags write with the ones on disk, says on standard error each one that is missing
+or differs, and exits 1 if there is one. Up to 0.40.0 the command was `chobo build`, its
+`--target` named a pair of a database and a language (`postgres`, `tigerbeetle-go`, …), once, and
+it wrote into `--out` itself (`.` unless it was given). Given one of those pairs, `gen` stops and
+says what is written now: `tigerbeetle-go` is `--target go --books tigerbeetle`.
+
+| `--books` | `--target` | What it writes |
+|---|---|---|
+| `postgres` | `sql` | `sql/<book>.sql`: a schema, its tables and constraints, and a function for each operation |
+| | `typescript` | `typescript/<book>.ts`: a client that calls those functions through `pg` |
+| | `python` | `python/<book>.py`: the same, through a DB-API connection (psycopg 3 or psycopg2) |
+| | `go` | `go/<package>/book.go` and `runtime.go`: the same, through pgx |
+| | `rust` | `rust/<module>.rs`: the same, an async client through sqlx |
+| `tigerbeetle` | `typescript` | `typescript/<book>.ts`: a client that sends TigerBeetle one chain of transfers for each operation, through `tigerbeetle-node` |
+| | `python` | `python/<book>.py`: the same, through `tigerbeetle` (`ClientSync`) |
+| | `go` | `go/<package>/book.go` and `runtime.go`: the same, through `tigerbeetle-go` |
+| | `rust` | `rust/<module>.rs`: the same, an async client through the `tigerbeetle` crate |
+| `mysql` | `sql` | `sql/<book>.sql`: the book's three tables and their constraints, for MySQL, TiDB and Vitess |
+| | `typescript` | `typescript/<book>.ts`: a client that makes each operation one transaction on those tables, through `mysql2` |
+| | `python` | `python/<book>.py`: the same, through a DB-API connection (PyMySQL or mysqlclient) |
+| | `go` | `go/<package>/book.go` and `runtime.go`: the same, through database/sql and go-sql-driver/mysql |
+| | `rust` | `rust/<module>.rs`: the same, an async client through sqlx |
 
 The clients of every target have the same names, arguments and answers, so changing the database
 changes how the book value is made, and nothing else. `chobo api` lists the names each target
@@ -34,15 +47,15 @@ package's type of its unit, the one the package's rules take and return: the `sa
 `USD scale 2` takes `to_shop: units.USDc` in TypeScript and Python and `To_shop units.USDc` in Go,
 so code written by hand that gives the book what a rule returns is held to the book's unit by the
 type checker. An amount of a count (`pcs`, `seats`) stays a plain integer, as it does everywhere
-`chobo build` writes it, and so does a balance.
+`chobo gen` writes it, and so does a balance.
 
 ## PostgreSQL
 
 ```console
-$ chobo build examples/inventory/inventory.book --target postgres --out db
+$ chobo gen examples/inventory/inventory.book --target sql --out db
 ```
 
-writes `db/inventory.sql`, which can run any number of times: it makes what is missing and
+writes `db/sql/inventory.sql`, which can run any number of times: it makes what is missing and
 replaces the functions. A book is a schema (`"inventory"`) with four tables: `accounts` (a row an
 account, with its balance and the bounds it was made with), `holds`, `keys` (every key used, what
 it was called with, and what came of it) and `entries` (every change to an account, so that a
@@ -109,7 +122,7 @@ select * from inventory.balance_stock('', 'A-1');
   bound changed without a new account kind, which `chobo check --diff-base` refuses) stops every
   call that names it with the error `CB001`.
 - **Names.** A schema, a function or a parameter has to fit PostgreSQL's 63 bytes (21 characters
-  of Japanese), or the build stops (E061): PostgreSQL would cut the name short without a word.
+  of Japanese), or `gen` stops (E061): PostgreSQL would cut the name short without a word.
 
 ## TigerBeetle
 
@@ -135,9 +148,8 @@ chain of linked transfers in one request, which TigerBeetle applies whole or not
   hold, linked to a transfer from an account to itself. Why the void would have been refused
   says whether the hold is held, posted, voided or expired, and nothing is written.
 - **Size.** A chain has to fit one request: 253 transfers on a replica started with
-  `--development`, which is what chobo is tested on, and 8189 on one started without it. The
-  build stops at 253 (E060), so that a book that builds also runs on the replica it can be tried
-  on. Past it, split the transfer into kinds with fewer moves.
+  `--development`, which is what chobo is tested on, and 8189 on one started without it. `gen`
+  stops at 253 (E060), so that a book it writes also runs on the replica it can be tried on. Past it, split the transfer into kinds with fewer moves.
 
 Two answers differ from the reference interpreter, and the tests do not reach either:
 
@@ -153,10 +165,10 @@ Two answers differ from the reference interpreter, and the tests do not reach ei
 ## MySQL, TiDB and Vitess
 
 ```console
-$ chobo build examples/refunds/refunds.book --target mysql --out db
+$ chobo gen examples/refunds/refunds.book --target sql --books mysql --out db
 ```
 
-writes `db/refunds.sql`, which can run any number of times: it makes what is missing. MySQL 8.4 or
+writes `db/sql/refunds.sql`, which can run any number of times: it makes what is missing. MySQL 8.4 or
 later, TiDB 8.5 or later and Vitess all speak MySQL's protocol and read this SQL alike. It holds no
 function: TiDB has no stored procedures, and a service that runs Vitess may allow neither stored
 routines nor making a database. So the client sends the statements of each call itself, in one
@@ -244,7 +256,7 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
   the error `CB001`.
 - **Names.** A name in MySQL is 64 characters at most, and holds no character beyond the Basic
   Multilingual Plane (𠮷 and the like), which MySQL writes as `?` with only a warning. The tables
-  and the checks are named after the book, so the build stops (E062) for a book's name of more
+  and the checks are named after the book, so `gen` stops (E062) for a book's name of more
   than 51 characters (`_within_lower` follows it), or with such a character in it. A character of
   Japanese counts as one, so a name can be longer than on PostgreSQL.
 - **TiDB.** Run the SQL with `tidb_enable_check_constraint` ON, a global variable that is OFF by
@@ -270,8 +282,8 @@ keyword arguments; in Go, `Postgres(q, tenant)`, `TigerBeetle(c, tenant)` and
 TypeScript, an `int` in Python and an `int64` in Go. A refusal comes back as an answer; a failure
 (no connection, a wrong argument) as an exception, or an `error` in Go.
 
-TypeScript, on a TigerBeetle replica (`chobo build examples/inventory/inventory.book --target
-tigerbeetle-typescript`):
+TypeScript, on a TigerBeetle replica (`chobo gen examples/inventory/inventory.book --target
+typescript --books tigerbeetle`):
 
 ```ts
 import { createClient } from "tigerbeetle-node";
@@ -298,7 +310,7 @@ posted
 ```
 
 The post of 1 of the 2 held lets the other one go back on the shelf. The same calls on MySQL
-(`--target mysql-typescript`, beside the tables of `--target mysql` in a database `shop`) answer
+(`--target typescript --books mysql`, beside the tables of `--target sql --books mysql` in a database `shop`) answer
 the same; only the book value is made otherwise, here from a pool of mysql2 that allows more than
 one statement a request, so that the calls go in batches:
 
@@ -329,7 +341,7 @@ posted
 ```
 
 No hold was past its expiry, so `expire()` let none go. Python, on PostgreSQL
-(`--target postgres-python`):
+(`--target python`):
 
 ```python
 import psycopg
@@ -356,7 +368,7 @@ voided
 Balance(posted=3, held_in=0, held_out=0)
 ```
 
-Python, on TiDB (`--target mysql-python`), in the caller's transaction: a connection of PyMySQL
+Python, on TiDB (`--target python --books mysql`), in the caller's transaction: a connection of PyMySQL
 has autocommit off unless it is asked for, so each call is part of the transaction the caller
 commits or rolls back, and the hold rolled back is not there to read.
 
@@ -387,7 +399,7 @@ Balance(posted=3, held_in=0, held_out=2)
 ```
 
 The key of the hold rolled back was never used, so the same hold goes through after it. Go, on
-PostgreSQL (`--target postgres-go`), with a pgx pool:
+PostgreSQL (`--target go`), with a pgx pool:
 
 ```go
 	b := inventory.Postgres(pool, "shop-3")
@@ -418,7 +430,7 @@ keyword of Rust's). An argument is a struct of the transfer's parameters, the st
 `Result<Outcome, Error>`: `Outcome::Done`, `Outcome::DoneBefore`, or `Outcome::Refused(Reason)`,
 where `Reason` is an enum of the book's reasons and chobo's own (`Reason::OutOfStock`,
 `Reason::KeyConflict`, …; `as_str()` gives the name as the book writes it), and `Error` is a
-failure, no answer. Rust on PostgreSQL (`--target postgres-rust`), with a pool of sqlx, and in a
+failure, no answer. Rust on PostgreSQL (`--target rust`), with a pool of sqlx, and in a
 transaction of the caller's:
 
 ```rust
@@ -464,7 +476,7 @@ None
 A book value takes the pool itself, or one connection or transaction of sqlx's behind a
 `tokio::sync::Mutex`, through which its calls go one at a time: what a call is given is a trait of
 the client's (`Database`), which these implement, and which a type of yours can implement too, to
-count or log what is sent. On TigerBeetle (`--target tigerbeetle-rust`), the book value takes the
+count or log what is sent. On TigerBeetle (`--target rust --books tigerbeetle`), the book value takes the
 crate's `Client`, a reference to it, or an `Arc` of it:
 
 ```rust
@@ -487,7 +499,7 @@ Some(Voided)
 Balance { posted: 3, held_in: 0, held_out: 0 }
 ```
 
-On the MySQL family (`--target mysql-rust`), the book value takes sqlx's `MySqlPool`, each call a
+On the MySQL family (`--target rust --books mysql`), the book value takes sqlx's `MySqlPool`, each call a
 transaction of its own on a connection of the pool, or a connection behind a `tokio::sync::Mutex`:
 a call on a `Transaction` of sqlx's is part of it, and the caller commits it; on a connection in no
 transaction of sqlx's, a call is a transaction of its own there. sqlx does not say whether the
@@ -507,7 +519,7 @@ name is written as the book writes it, and none is changed to make room for anot
 names are one identifier in a client, a transfer kind is called `balance` (or `expire`, on
 PostgreSQL and the MySQL family), or a client cannot take a name as it is (a parameter `__proto__`
 in TypeScript, a book named like a keyword of Python or a module of its standard library),
-`chobo check` warns about it (W108) and the build of the targets it names stops (E064). A Rust
+`chobo check` warns about it (W108) and `chobo gen` of the targets it names stops (E064). A Rust
 client is one module: it holds what every book shares beside the book's own part, as the
 TypeScript and Python files do, and its head says the crates it needs, at the versions its tests
 run. The module is the book's name in lower case when that is an ASCII identifier, else the file's
@@ -520,20 +532,20 @@ in (`#![allow(uncommon_codepoints)]`), not in the module.
 
 ## The clients' own needs
 
-| Target | What the client is given |
+| `--books`, `--target` | What the client is given |
 |---|---|
-| `postgres-typescript` | something with `query(text, values)`: a `pg` `Client`, `Pool` or `PoolClient` |
-| `postgres-python` | a DB-API connection of psycopg 3 or psycopg2 |
-| `postgres-go` | something with `QueryRow`: pgx's `*pgx.Conn`, `*pgxpool.Pool` or `pgx.Tx` |
-| `tigerbeetle-typescript` | a client of `tigerbeetle-node` 0.17.9 |
-| `tigerbeetle-python` | a `ClientSync` of `tigerbeetle` 0.17.9 |
-| `tigerbeetle-go` | a client of `github.com/tigerbeetle/tigerbeetle-go` v0.17.9, which uses cgo |
-| `mysql-typescript` | a pool or a connection of `mysql2`'s promise API (`mysql2/promise`); for `batch`, one made with `multipleStatements` |
-| `mysql-python` | a DB-API connection of PyMySQL or mysqlclient; for `batch`, one made with `CLIENT.MULTI_STATEMENTS` |
-| `mysql-go` | database/sql's `*sql.DB`, `*sql.Conn` or `*sql.Tx` through `github.com/go-sql-driver/mysql`, which the client imports to read the error numbers; for `batch`, `multiStatements=true` in the DSN |
-| `postgres-rust` | sqlx's `PgPool`, or a `tokio::sync::Mutex` of a `&mut PgConnection`, a `Transaction` or a `PoolConnection` of sqlx's; in the crate's Cargo.toml, `sqlx` 0.9.0 with `runtime-tokio` and `postgres`, and `tokio` with `sync` and `time` |
-| `tigerbeetle-rust` | the `Client` of the `tigerbeetle` crate 0.17.9, a reference to one, or an `Arc` of one; in Cargo.toml, `tigerbeetle = "=0.17.9"` |
-| `mysql-rust` | sqlx's `MySqlPool`, or a `tokio::sync::Mutex` of a `&mut MySqlConnection`, a `Transaction` or a `PoolConnection`; in Cargo.toml, `sqlx` 0.9.0 with `runtime-tokio` and `mysql`, and `tokio` with `sync` and `time` |
+| `postgres`, `typescript` | something with `query(text, values)`: a `pg` `Client`, `Pool` or `PoolClient` |
+| `postgres`, `python` | a DB-API connection of psycopg 3 or psycopg2 |
+| `postgres`, `go` | something with `QueryRow`: pgx's `*pgx.Conn`, `*pgxpool.Pool` or `pgx.Tx` |
+| `tigerbeetle`, `typescript` | a client of `tigerbeetle-node` 0.17.9 |
+| `tigerbeetle`, `python` | a `ClientSync` of `tigerbeetle` 0.17.9 |
+| `tigerbeetle`, `go` | a client of `github.com/tigerbeetle/tigerbeetle-go` v0.17.9, which uses cgo |
+| `mysql`, `typescript` | a pool or a connection of `mysql2`'s promise API (`mysql2/promise`); for `batch`, one made with `multipleStatements` |
+| `mysql`, `python` | a DB-API connection of PyMySQL or mysqlclient; for `batch`, one made with `CLIENT.MULTI_STATEMENTS` |
+| `mysql`, `go` | database/sql's `*sql.DB`, `*sql.Conn` or `*sql.Tx` through `github.com/go-sql-driver/mysql`, which the client imports to read the error numbers; for `batch`, `multiStatements=true` in the DSN |
+| `postgres`, `rust` | sqlx's `PgPool`, or a `tokio::sync::Mutex` of a `&mut PgConnection`, a `Transaction` or a `PoolConnection` of sqlx's; in the crate's Cargo.toml, `sqlx` 0.9.0 with `runtime-tokio` and `postgres`, and `tokio` with `sync` and `time` |
+| `tigerbeetle`, `rust` | the `Client` of the `tigerbeetle` crate 0.17.9, a reference to one, or an `Arc` of one; in Cargo.toml, `tigerbeetle = "=0.17.9"` |
+| `mysql`, `rust` | sqlx's `MySqlPool`, or a `tokio::sync::Mutex` of a `&mut MySqlConnection`, a `Transaction` or a `PoolConnection`; in Cargo.toml, `sqlx` 0.9.0 with `runtime-tokio` and `mysql`, and `tokio` with `sync` and `time` |
 
 The TypeScript clients use only types that can be stripped as they are, so Node.js runs them as
 written, and `tsc --strict` compiles them. The Rust clients build on the 2021 and the 2024

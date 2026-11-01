@@ -160,11 +160,11 @@ warning[W104]: hold_order.book:14:3: in a hold, what move 1 puts into held(order
 | W108 | two names one target's code spells as one identifier, a name a target's client uses itself, or a name it cannot take as it is: the targets, and how each one's code would break |
 | W901 | a key written in the file, in a string or a comment: the diagnostic gives its kind, its prefix and its length, never the key |
 
-Five errors belong to a target, and `chobo build` gives them: a chain of transfers too long for
+Five errors belong to a target, and `chobo gen` gives them: a chain of transfers too long for
 one TigerBeetle request (E060, at 253); a name longer than PostgreSQL's 63 bytes (E061), which
 PostgreSQL would cut short without a word; a book's name the MySQL family's tables and checks
 cannot be named after (E062), longer than 51 characters or with a character beyond the Basic
-Multilingual Plane, which MySQL would write as `?` with only a warning; and, for the Rust targets,
+Multilingual Plane, which MySQL would write as `?` with only a warning; and, for `--target rust`,
 a name with a character no Rust identifier holds where the name has it (E063), such as a digit that
 is not decimal, which the Rust client would write as it is, as a field of a struct; and two names
 that are one identifier in the target's code, a name its client uses itself, or one its client
@@ -178,13 +178,13 @@ error[E063]: identifiers.book:11:46: The parameter's name `area_m²` has ² (U+0
 A book is held only to the limits of the target it is built for. E064 is in the names as they are
 written, so `chobo check` warns about it first (W108), naming the targets, each with how its code
 would break. No name is changed to make room for another: in every language a call is written with
-the book's names, and the build of a target the warning names stops:
+the book's names, and `chobo gen` of a target the warning names stops:
 
 ```text
 warning[W108]: one_identifier.book:19:10: The transfers `ship` and `Ship` are one identifier in the Go and Rust clients
     19 | transfer Ship(order: string, sku: string, qty: pcs)
-  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Ship`: the types `ShipArgs` and `ShipCalls`, and the field `Ship` of `Book`, would be declared twice, and the package does not compile.
-  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `Ship`: the types `ShipArgs` and `ShipCalls` would be declared twice, and the module does not compile.
+  = Go (`--target go --books postgres|tigerbeetle|mysql`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Ship`: the types `ShipArgs` and `ShipCalls`, and the field `Ship` of `Book`, would be declared twice, and the package does not compile.
+  = Rust (`--target rust --books postgres|tigerbeetle|mysql`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `Ship`: the types `ShipArgs` and `ShipCalls` would be declared twice, and the module does not compile.
   hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 ```
 

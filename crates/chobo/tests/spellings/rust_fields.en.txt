@@ -1,6 +1,6 @@
 warning[W108]: rust_fields.book:11:51: The parameters `crate` and `crate_` of the transfer `receive` are one identifier in the Rust client
     11 | transfer receive(delivery: string, crate: string, crate_: string, sku: string, qty: pcs)
-  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes `_` after a keyword a raw identifier cannot be (`self`, `Self`, `super`, `crate`) and after `_`, so both are `crate_`: the field `crate_` of `ReceiveArgs` would be declared twice, and the module does not compile.
+  = Rust (`--target rust --books postgres|tigerbeetle|mysql`): the client writes `_` after a keyword a raw identifier cannot be (`self`, `Self`, `super`, `crate`) and after `_`, so both are `crate_`: the field `crate_` of `ReceiveArgs` would be declared twice, and the module does not compile.
   hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 rust_fields.book: ok, 1 warning(s)
   receive.do  may be refused: key_conflict

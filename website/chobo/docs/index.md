@@ -155,12 +155,9 @@ tests see that it does. [Run scenarios](scenarios.md)
 <div markdown>
 
 ```console
-$ chobo build examples/refunds/refunds.book --target postgres --out db
-$ chobo build examples/refunds/refunds.book --target postgres-typescript --out db
-$ chobo build examples/refunds/refunds.book --target tigerbeetle-python --out db
-$ chobo build examples/refunds/refunds.book --target mysql --out db
-$ chobo build examples/refunds/refunds.book --target mysql-go --out db
-$ chobo build examples/refunds/refunds.book --target postgres-rust --out db
+$ chobo gen examples/refunds/refunds.book --target sql --target typescript --target rust --out db
+$ chobo gen examples/refunds/refunds.book --target python --books tigerbeetle --out db
+$ chobo gen examples/refunds/refunds.book --target sql --target go --books mysql --out db
 ```
 
 </div>

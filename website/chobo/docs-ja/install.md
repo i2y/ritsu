@@ -34,7 +34,7 @@ chobo が外から取ってくる依存は serde_json だけです。
 $ chobo check examples/inventory/inventory.ja.book --lang ja
 examples/inventory/inventory.ja.book: ok
 …
-$ chobo build examples/inventory/inventory.ja.book --target postgres --out db
+$ chobo gen examples/inventory/inventory.ja.book --target sql --out db
 ```
 
 `--lang ja`（または環境変数 `CHOBO_LANG=ja`、`RITSU_LANG=ja`）を付けると、メッセージが日本語になります。JSON のキーは英語のままです。
@@ -53,23 +53,23 @@ Claude Code なら、プラグイン `ritsu` に十のスキルが入ってい�
 
 ## 生成したコードを動かすのに要るもの
 
-ビルドが書くコードは、それを使うプログラムが、データベースのクライアントを渡して呼びます。
+`chobo gen` が書くコードは、それを使うプログラムが、データベースのクライアントを渡して呼びます。
 
-| ターゲット | 動かすのに要るもの |
+| `--books`、`--target` | 動かすのに要るもの |
 |---|---|
-| `postgres` | PostgreSQL。SQL がスキーマとテーブルと操作ごとの関数を作る。何度流してもよい |
-| `postgres-typescript` | `pg` の `Client`、`Pool`、`PoolClient` のどれか |
-| `postgres-python` | psycopg 3 か psycopg2 の DB-API の接続 |
-| `postgres-go` | pgx の `*pgx.Conn`、`*pgxpool.Pool`、`pgx.Tx` のどれか |
-| `postgres-rust` | sqlx の `PgPool`、または `tokio::sync::Mutex` に入れた sqlx の接続かトランザクション。クレートは sqlx 0.9.0 と tokio で、モジュールの頭に書いてある |
-| `tigerbeetle-typescript` | `tigerbeetle-node` 0.17.9 のクライアント |
-| `tigerbeetle-python` | `tigerbeetle` 0.17.9 の `ClientSync` |
-| `tigerbeetle-go` | `tigerbeetle-go` v0.17.9 のクライアント（cgo を使う） |
-| `tigerbeetle-rust` | クレート `tigerbeetle` 0.17.9 の `Client` |
-| `mysql` | MySQL 8.4 以降、TiDB 8.5 以降、Vitess のどれか。SQL が、流したデータベースに帳簿の三つのテーブルを作る。何度流してもよい。TiDB では `tidb_enable_check_constraint` を ON にして流す |
-| `mysql-typescript` | `mysql2`（`mysql2/promise`）のプールか接続 |
-| `mysql-python` | PyMySQL か mysqlclient の DB-API の接続 |
-| `mysql-go` | database/sql の `*sql.DB`、`*sql.Conn`、`*sql.Tx` のどれか（ドライバは `go-sql-driver/mysql`） |
-| `mysql-rust` | sqlx の `MySqlPool`、または `tokio::sync::Mutex` に入れた sqlx の接続かトランザクション。クレートは sqlx 0.9.0 と tokio |
+| `postgres`、`sql` | PostgreSQL。SQL がスキーマとテーブルと操作ごとの関数を作る。何度流してもよい |
+| `postgres`、`typescript` | `pg` の `Client`、`Pool`、`PoolClient` のどれか |
+| `postgres`、`python` | psycopg 3 か psycopg2 の DB-API の接続 |
+| `postgres`、`go` | pgx の `*pgx.Conn`、`*pgxpool.Pool`、`pgx.Tx` のどれか |
+| `postgres`、`rust` | sqlx の `PgPool`、または `tokio::sync::Mutex` に入れた sqlx の接続かトランザクション。クレートは sqlx 0.9.0 と tokio で、モジュールの頭に書いてある |
+| `tigerbeetle`、`typescript` | `tigerbeetle-node` 0.17.9 のクライアント |
+| `tigerbeetle`、`python` | `tigerbeetle` 0.17.9 の `ClientSync` |
+| `tigerbeetle`、`go` | `tigerbeetle-go` v0.17.9 のクライアント（cgo を使う） |
+| `tigerbeetle`、`rust` | クレート `tigerbeetle` 0.17.9 の `Client` |
+| `mysql`、`sql` | MySQL 8.4 以降、TiDB 8.5 以降、Vitess のどれか。SQL が、流したデータベースに帳簿の三つのテーブルを作る。何度流してもよい。TiDB では `tidb_enable_check_constraint` を ON にして流す |
+| `mysql`、`typescript` | `mysql2`（`mysql2/promise`）のプールか接続 |
+| `mysql`、`python` | PyMySQL か mysqlclient の DB-API の接続 |
+| `mysql`、`go` | database/sql の `*sql.DB`、`*sql.Conn`、`*sql.Tx` のどれか（ドライバは `go-sql-driver/mysql`） |
+| `mysql`、`rust` | sqlx の `MySqlPool`、または `tokio::sync::Mutex` に入れた sqlx の接続かトランザクション。クレートは sqlx 0.9.0 と tokio |
 
 テストは、PostgreSQL 18.0、TigerBeetle 0.17.9、MySQL 8.4.11、TiDB 8.5.8、Vitess 24.0.5 の上でクライアントを動かしています。ドライバのバージョンは[出力先](targets.md#the-clients-own-needs)（英語）にあります。ターゲットごとに何を書くかは[データベース向けのビルド](databases.md)に、三つの言語からの呼び方は[出力先](targets.md)（英語）にあります。

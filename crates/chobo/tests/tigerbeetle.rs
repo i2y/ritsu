@@ -123,7 +123,7 @@ fn what_only_tigerbeetle_has() {
     }
     // E060 needs no replica
     let out_dir = TempDir::new("e060");
-    let out = chobo().args(["build", root().join("tests/fixtures/リクエスト.book").to_str().unwrap(), "--target", "tigerbeetle-typescript", "--out", out_dir.path().to_str().unwrap()]).output().unwrap();
+    let out = chobo().args(["gen", root().join("tests/fixtures/リクエスト.book").to_str().unwrap(), "--target", "typescript", "--books", "tigerbeetle", "--out", out_dir.path().to_str().unwrap()]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.code() == Some(1) && err.contains("error[E060]"), "{err}");
     assert_eq!(std::fs::read_dir(out_dir.path()).unwrap().count(), 0, "nothing is written");
@@ -177,7 +177,7 @@ fn an_operation_too_big_for_one_request_in_english() {
         return;
     }
     let out_dir = TempDir::new("e060-en");
-    let out = chobo().args(["build", root().join("tests/fixtures/requests.book").to_str().unwrap(), "--target", "tigerbeetle-typescript", "--out", out_dir.path().to_str().unwrap()]).output().unwrap();
+    let out = chobo().args(["gen", root().join("tests/fixtures/requests.book").to_str().unwrap(), "--target", "typescript", "--books", "tigerbeetle", "--out", out_dir.path().to_str().unwrap()]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.code() == Some(1) && err.contains("error[E060]"), "{err}");
     assert_eq!(std::fs::read_dir(out_dir.path()).unwrap().count(), 0, "nothing is written");

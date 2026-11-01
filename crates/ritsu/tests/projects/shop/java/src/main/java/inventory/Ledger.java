@@ -1,4 +1,4 @@
-// A stand-in for what `chobo build` writes from inventory/inventory.book: the ledger of stock.
+// A stand-in for what `chobo gen` writes from inventory/inventory.book: the ledger of stock.
 package inventory;
 
 public final class Ledger {

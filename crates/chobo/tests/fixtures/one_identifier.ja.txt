@@ -1,10 +1,10 @@
 警告[W108]: one_identifier.book:19:10: 振替 `ship` と `Ship` は、Go・Rust のクライアントで同じ識別子になります
     19 | transfer Ship(order: string, sku: string, qty: pcs)
-  = Go（`postgres-go`、`tigerbeetle-go`、`mysql-go`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Ship` です。型 `ShipArgs`・`ShipCalls` と、`Book` のフィールド `Ship` を二度宣言することになり、コンパイルできません。
-  = Rust（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）: クライアントは、型の名前と列挙の値を PascalCase で書く（`_` で区切った語の頭を大文字にして、`_` を除く）ので、どちらも `Ship` です。型 `ShipArgs`・`ShipCalls` を二度宣言することになり、コンパイルできません。
+  = Go（`--target go --books postgres|tigerbeetle|mysql`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Ship` です。型 `ShipArgs`・`ShipCalls` と、`Book` のフィールド `Ship` を二度宣言することになり、コンパイルできません。
+  = Rust（`--target rust --books postgres|tigerbeetle|mysql`）: クライアントは、型の名前と列挙の値を PascalCase で書く（`_` で区切った語の頭を大文字にして、`_` を除く）ので、どちらも `Ship` です。型 `ShipArgs`・`ShipCalls` を二度宣言することになり、コンパイルできません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
-エラー[E064]: one_identifier.book:19:10: 振替 `ship` と `Ship` は、`postgres-go` のコードで同じ識別子になります
+エラー[E064]: one_identifier.book:19:10: 振替 `ship` と `Ship` は、`--target go --books postgres` のコードで同じ識別子になります
     19 | transfer Ship(order: string, sku: string, qty: pcs)
-  = Go（`postgres-go`、`tigerbeetle-go`、`mysql-go`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Ship` です。型 `ShipArgs`・`ShipCalls` と、`Book` のフィールド `Ship` を二度宣言することになり、コンパイルできません。
+  = Go（`--target go --books postgres|tigerbeetle|mysql`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Ship` です。型 `ShipArgs`・`ShipCalls` と、`Book` のフィールド `Ship` を二度宣言することになり、コンパイルできません。
   ヒント: どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 one_identifier.book: エラー 1 件、警告 1 件

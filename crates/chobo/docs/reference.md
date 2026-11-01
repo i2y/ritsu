@@ -3,7 +3,7 @@
 A book (`.book`) holds three things: the units things are counted in, the accounts they are kept
 in with the bounds each account keeps, and the kinds of transfer that move them from account to
 account. This page is the whole language. [formats.md](formats.md) has the JSON chobo reads and
-writes, [targets.md](targets.md) what `chobo build` writes for PostgreSQL, TigerBeetle and the
+writes, [targets.md](targets.md) what `chobo gen` writes for PostgreSQL, TigerBeetle and the
 MySQL family, and [codes.md](codes.md) every diagnostic.
 
 ## A book
@@ -274,7 +274,7 @@ name (`<name>.py`). Where that makes two names one identifier, or a name one the
 as it is (a name Python mangles, such as `__note`; a parameter `__proto__`, which an object literal
 in TypeScript takes as the prototype; a book named like a keyword of Python or a module of its
 standard library), `chobo check` warns about it and names the targets, with how each one's code
-would break (W108), and the build of those targets stops (E064). For a target you do not build,
+would break (W108), and `chobo gen` of those targets stops (E064). For a target you do not build,
 leave it as it is.
 
 ## Diagnostics

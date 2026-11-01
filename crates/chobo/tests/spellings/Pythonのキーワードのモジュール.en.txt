@@ -1,6 +1,6 @@
 warning[W108]: Pythonのキーワードのモジュール.book:1:6: The book `import` cannot be used as it is in the Python client
      1 | book import v1
-  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client is the module `import.py`, and `import` is a word Python keeps, so `import import` is no Python (`SyntaxError`); a package of `ritsu gen` cannot hold a module of that name either.
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client is the module `import.py`, and `import` is a word Python keeps, so `import import` is no Python (`SyntaxError`); a package of `ritsu gen` cannot hold a module of that name either.
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 Pythonのキーワードのモジュール.book: ok, 1 warning(s)
   入荷.do  may be refused: key_conflict

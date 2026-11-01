@@ -1,6 +1,6 @@
 warning[W108]: Rustの理由.book:9:3: The reasons `残高不足` and `残高_不足` are one identifier in the Rust client
      9 |   at least 0 refused as 残高_不足
-  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `残高不足`: the variant `残高不足` of `Reason` would be declared twice, and the module does not compile.
+  = Rust (`--target rust --books postgres|tigerbeetle|mysql`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `残高不足`: the variant `残高不足` of `Reason` would be declared twice, and the module does not compile.
   hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 Rustの理由.book: ok, 1 warning(s)
   入金.do        may be refused: key_conflict

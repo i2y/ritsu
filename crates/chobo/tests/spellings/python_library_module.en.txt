@@ -1,6 +1,6 @@
 warning[W108]: python_library_module.book:1:6: The book `abc` cannot be used as it is in the Python client
      1 | book abc v1
-  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client is the module `abc.py`, and Python's standard library has a module `abc` too. Python keeps one module per name, and `import abc` gives the one imported first: once the standard library's `abc` is imported, the client cannot be imported; imported before it, the client is what every `import abc` in the program gets in place of the standard library's. A package of `ritsu gen` holds the module as `<package>.books.abc`, which does not meet the standard library's.
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client is the module `abc.py`, and Python's standard library has a module `abc` too. Python keeps one module per name, and `import abc` gives the one imported first: once the standard library's `abc` is imported, the client cannot be imported; imported before it, the client is what every `import abc` in the program gets in place of the standard library's. A package of `ritsu gen` holds the module as `<package>.books.abc`, which does not meet the standard library's.
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 python_library_module.book: ok, 1 warning(s)
   receive.do  may be refused: key_conflict

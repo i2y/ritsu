@@ -1,6 +1,6 @@
 警告[W108]: go_accounts.book:8:9: 勘定 `stock` と `Stock` は、Go のクライアントで同じ識別子になります
      8 | account Stock : pcs outside
-  = Go（`postgres-go`、`tigerbeetle-go`、`mysql-go`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Stock` です。`Balances` のメソッド `Stock` を二度宣言することになり、コンパイルできません。
+  = Go（`--target go --books postgres|tigerbeetle|mysql`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Stock` です。`Balances` のメソッド `Stock` を二度宣言することになり、コンパイルできません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 go_accounts.book: ok、警告 1 件
   receive.do  拒否されうる理由: key_conflict

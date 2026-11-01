@@ -495,10 +495,13 @@ mod npm {
                 for args in [&["check", p][..], &["check", p, "--format", "json"], &["doc", p], &["doc", p, "--format", "html"], &["api", p], &["scenarios", p]] {
                     reads.push(case("chobo", ".", both("chobo", args).to_vec()));
                 }
-                for t in ["postgres", "postgres-typescript", "postgres-python", "postgres-go", "postgres-rust", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "tigerbeetle-rust", "mysql", "mysql-typescript", "mysql-python", "mysql-go", "mysql-rust"] {
-                    writes.push(case("chobo", ".", vec![en("chobo", &["build", p, "--target", t, "--out", "db"])]));
+                // each language for each database, one a run, then several in one run
+                for (books, langs) in [("postgres", &["sql", "typescript", "python", "go", "rust"][..]), ("tigerbeetle", &["typescript", "python", "go", "rust"]), ("mysql", &["sql", "typescript", "python", "go", "rust"])] {
+                    for t in langs {
+                        writes.push(case("chobo", ".", vec![en("chobo", &["gen", p, "--target", t, "--books", books, "--out", "db"])]));
+                    }
                 }
-                writes.push(case("chobo", ".", vec![ja("chobo", &["build", p, "--target", "postgres-typescript", "--out", "db"])]));
+                writes.push(case("chobo", ".", vec![ja("chobo", &["gen", p, "--target", "sql", "--target", "typescript", "--out", "db"])]));
                 writes.push(Case { of: "chobo", at: ".".into(), steps: vec![en("chobo", &["scenarios", p, "--out", "sc"])], scenarios: Some(("chobo", p.to_string(), "sc".into())) });
             }
             for (book, sc) in [("examples/refunds/refunds.book", "examples/refunds/refunds.more.json"), ("examples/refunds/refunds.ja.book", "examples/refunds/refunds.ja.more.json")] {

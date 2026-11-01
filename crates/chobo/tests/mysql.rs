@@ -785,7 +785,7 @@ fn what_only_the_mysql_family_has_in_japanese() {
 fn a_name_mysql_cannot_hold() {
     for (fixture, says) in [("tests/fixtures/mysql_name_length.book", "is 69 characters long"), ("tests/fixtures/名前の文字.book", "U+20BB7")] {
         let work = TempDir::new("e062");
-        let out = chobo().args(["build", root().join(fixture).to_str().unwrap(), "--target", "mysql", "--out", work.path().to_str().unwrap()]).output().unwrap();
+        let out = chobo().args(["gen", root().join(fixture).to_str().unwrap(), "--target", "sql", "--books", "mysql", "--out", work.path().to_str().unwrap()]).output().unwrap();
         let err = String::from_utf8_lossy(&out.stderr);
         assert_eq!(out.status.code(), Some(1), "{fixture}: {err}");
         assert!(err.contains("error[E062]") && err.contains(says), "{fixture}: {err}");

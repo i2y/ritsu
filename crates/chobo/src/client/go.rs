@@ -301,7 +301,7 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin, in_pkg: Option<&InPack
     let mut o = header(
         book,
         origin,
-        &format!("on PostgreSQL, through the SQL functions of `chobo build --target postgres` (schema {}) and pgx v5.", postgres::ident(&book.name)),
+        &format!("on PostgreSQL, through the SQL functions of `chobo gen --target sql` (schema {}) and pgx v5.", postgres::ident(&book.name)),
         &pkg,
         in_pkg,
     );
@@ -491,7 +491,7 @@ pub fn mysql(book: &Book, stem: &str, origin: &Origin, in_pkg: Option<&InPackage
     let mut o = header(
         book,
         origin,
-        &format!("on MySQL, TiDB or Vitess, through the tables of `chobo build --target mysql` ({}),\n// database/sql and go-sql-driver/mysql.", tables.join(", ")),
+        &format!("on MySQL, TiDB or Vitess, through the tables of `chobo gen --target sql --books mysql` ({}),\n// database/sql and go-sql-driver/mysql.", tables.join(", ")),
         &pkg,
         in_pkg,
     );

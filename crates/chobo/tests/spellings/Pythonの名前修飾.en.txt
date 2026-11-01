@@ -1,6 +1,6 @@
 warning[W108]: Pythonの名前修飾.book:19:10: The transfer `_棚卸し調整` cannot be used as it is in the Python client
     19 | transfer _棚卸し調整(棚卸し: string, 品番: string, 数: 個)
-  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client writes the transfer as the class `__棚卸し調整Transfer`, and Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): `__棚卸し調整Transfer` written in `Book` is `_Book__棚卸し調整Transfer`, so `Book` cannot be made, and no call goes through (`NameError`).
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client writes the transfer as the class `__棚卸し調整Transfer`, and Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): `__棚卸し調整Transfer` written in `Book` is `_Book__棚卸し調整Transfer`, so `Book` cannot be made, and no call goes through (`NameError`).
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 Pythonの名前修飾.book: ok, 1 warning(s)
   入荷.do         may be refused: key_conflict

@@ -231,7 +231,7 @@ pub fn postgres(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String
     let (head, tail) = split(PG_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str(&format!(
-        "// It calls the SQL functions of `chobo build --target postgres` (schema {}) through a connection such as pg's.\n\n",
+        "// It calls the SQL functions of `chobo gen --target sql` (schema {}) through a connection such as pg's.\n\n",
         postgres::ident(&book.name)
     ));
     o.push_str(head);
@@ -379,7 +379,7 @@ pub fn mysql(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(MY_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str(&format!(
-        "// It runs the calls on the tables of `chobo build --target mysql` ({}) through mysql2: MySQL, TiDB or Vitess.\n\n",
+        "// It runs the calls on the tables of `chobo gen --target sql --books mysql` ({}) through mysql2: MySQL, TiDB or Vitess.\n\n",
         my::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect::<Vec<_>>().join(", ")
     ));
     o.push_str(head);

@@ -72,8 +72,8 @@ nothing but the repository) reads every page written here, in both languages, an
 - a ```` ```flow ````, ```` ```gate ````, ```` ```req ```` (or any other language's) block is the
   lines, in order, of one file of that language in the workspace; a ```` ```json ```` block of a
   scenario beside a book; a ```` ```text ```` block is in a golden file of chobo's or ritsu's; a
-  block under `<!-- chobo build <book> --target <target> -->` is in a file that build writes; and a
-  ```` ```mermaid ```` block is word for word on a page `chobo doc` wrote.
+  block under `<!-- chobo gen <book> --target <language> --books <database> -->` is in a file that
+  run writes; and a ```` ```mermaid ```` block is word for word on a page `chobo doc` wrote.
 - every relative link leads where Zensical leads it (`use_directory_urls`): to a page of the site
   and a heading of it, to a file of the site (a page of an example, with the scenario, step and
   outcome a link opens), to a page of ritsu's site or of another language's, or to the playground

@@ -1,4 +1,7 @@
-//! `chobo build --target …`: the fourteen targets (DESIGN 4.3, 4.5, 14) and the files each one writes.
+//! `chobo gen --target <language> --books <database>`: the fourteen pairs of a language and the
+//! database of the books (DESIGN 4.3, 4.5, 14, 17), and the files each one writes. A pair is what a
+//! check and a build are of; the command line names its two halves, `--target` the language (any
+//! number of them) and `--books` the database (one).
 
 use crate::client;
 use crate::diag::Diag;
@@ -41,6 +44,68 @@ pub enum Lang {
     Rust,
 }
 
+/// The values of `--target`: the languages, in the order `gen` writes them, whatever the order of
+/// the flags (DESIGN 17).
+pub const LANGS: [&str; 5] = ["sql", "typescript", "python", "go", "rust"];
+
+/// The values of `--books`: the databases, `postgres` when it is not given (as `ritsu gen`'s).
+pub const BOOKS: [&str; 3] = ["postgres", "tigerbeetle", "mysql"];
+
+/// The pairs `--target` took up to 0.40.0, each with the flags that say it now (DESIGN 17): given
+/// one, `gen` stops and says what to write. `postgres` and `mysql` were the SQL.
+pub const RENAMED: [(&str, &str, &str); 14] = [
+    ("postgres", "--target sql", "0.41.0"),
+    ("postgres-typescript", "--target typescript --books postgres", "0.41.0"),
+    ("postgres-python", "--target python --books postgres", "0.41.0"),
+    ("postgres-go", "--target go --books postgres", "0.41.0"),
+    ("postgres-rust", "--target rust --books postgres", "0.41.0"),
+    ("tigerbeetle-typescript", "--target typescript --books tigerbeetle", "0.41.0"),
+    ("tigerbeetle-python", "--target python --books tigerbeetle", "0.41.0"),
+    ("tigerbeetle-go", "--target go --books tigerbeetle", "0.41.0"),
+    ("tigerbeetle-rust", "--target rust --books tigerbeetle", "0.41.0"),
+    ("mysql", "--target sql --books mysql", "0.41.0"),
+    ("mysql-typescript", "--target typescript --books mysql", "0.41.0"),
+    ("mysql-python", "--target python --books mysql", "0.41.0"),
+    ("mysql-go", "--target go --books mysql", "0.41.0"),
+    ("mysql-rust", "--target rust --books mysql", "0.41.0"),
+];
+
+impl Lang {
+    pub const ALL: [Lang; 5] = [Lang::Sql, Lang::TypeScript, Lang::Python, Lang::Go, Lang::Rust];
+
+    /// Its value of `--target`, which is also the directory under `--out` its files go in.
+    pub fn key(self) -> &'static str {
+        match self {
+            Lang::Sql => "sql",
+            Lang::TypeScript => "typescript",
+            Lang::Python => "python",
+            Lang::Go => "go",
+            Lang::Rust => "rust",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Lang> {
+        Lang::ALL.into_iter().find(|l| l.key() == s)
+    }
+}
+
+impl Backend {
+    pub const ALL: [Backend; 3] = [Backend::Postgres, Backend::TigerBeetle, Backend::MySql];
+
+    /// Its value of `--books`.
+    pub fn key(self) -> &'static str {
+        match self {
+            Backend::Postgres => "postgres",
+            Backend::TigerBeetle => "tigerbeetle",
+            Backend::MySql => "mysql",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Backend> {
+        Backend::ALL.into_iter().find(|b| b.key() == s)
+    }
+}
+
 impl Target {
     pub const ALL: [Target; 14] = [
         Target::Postgres,
@@ -59,6 +124,8 @@ impl Target {
         Target::MySqlRust,
     ];
 
+    /// The pair's name: the playground's list of the fourteen, and the tests' names of them. What
+    /// a person reads names the pair by its flags ([`Target::flags`]).
     pub fn name(self) -> &'static str {
         match self {
             Target::Postgres => "postgres",
@@ -80,6 +147,16 @@ impl Target {
 
     pub fn parse(s: &str) -> Option<Target> {
         Target::ALL.into_iter().find(|t| t.name() == s)
+    }
+
+    /// The pair of a language and a database: none for SQL on TigerBeetle, which takes no SQL.
+    pub fn of(lang: Lang, books: Backend) -> Option<Target> {
+        Target::ALL.into_iter().find(|t| t.lang() == lang && t.backend() == books)
+    }
+
+    /// The flags of `gen` that write it: `--target go --books postgres`.
+    pub fn flags(self) -> String {
+        format!("--target {} --books {}", self.lang().key(), self.backend().key())
     }
 
     pub fn backend(self) -> Backend {
@@ -129,7 +206,8 @@ pub fn check_in(book: &Book, target: Target, in_package: bool) -> Vec<Diag> {
     d
 }
 
-/// The files a target writes, by their path under `--out`, or the diagnostics that stop it.
+/// The files a target writes, by their path under its directory (`<out>/<language>/`), or the
+/// diagnostics that stop it.
 /// `stem` is the book's file name without `.book` (the Go package falls back on it); `origin` is
 /// the `.book` as the head of each file names it (ritsu's DESIGN 9.2).
 pub fn build(book: &Book, stem: &str, target: Target, origin: &Origin) -> Result<Vec<(String, String)>, Vec<Diag>> {

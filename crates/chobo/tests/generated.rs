@@ -1,4 +1,4 @@
-//! The code `chobo build` writes, as each language's own tools read it (PLAN C8): the TypeScript
+//! The code `chobo gen` writes, as each language's own tools read it (PLAN C8): the TypeScript
 //! clients pass `tsc --strict` with only erasable syntax (Node runs them by stripping the
 //! types), the Python ones compile, the Go ones are as gofmt writes them and pass go vet, and the
 //! Rust ones build on the 2024 and the 2021 editions with no warning, clippy's among them.

@@ -1,9 +1,9 @@
 warning[W108]: 自分のexpire.book:15:10: The transfer `expire` is a name the TypeScript, Python, Go and Rust clients use themselves
     15 | transfer expire(通知: string, 会員: string, 額: ポイント)
-  = TypeScript (`postgres-typescript`, `mysql-typescript`): the client writes the transfer `expire` as the member `expire` of `Book`, and `Book` has the method `expire`, which gives back the holds past their expiry: `Book` would have two members of that name, and the module does not type-check.
-  = Python (`postgres-python`, `mysql-python`): the client writes the transfer `expire` as the attribute `expire` of `Book`, and `Book` has the method `expire`, which gives back the holds past their expiry: the transfer's attribute hides the method, and a call of `expire()` stops (`TypeError`).
-  = Go (`postgres-go`, `mysql-go`): the client writes the transfer `expire` as the field `Expire` of `Book`, and `Book` has the method `Expire`, which gives back the holds past their expiry: Go takes no field and method of one name in one type, so the package does not compile.
-  = Rust (`postgres-rust`, `mysql-rust`): the client writes the transfer `expire` as the method `expire` of `Book`, and `Book` has the method `expire`, which gives back the holds past their expiry: it would be declared twice, and the module does not compile.
+  = TypeScript (`--target typescript --books postgres|mysql`): the client writes the transfer `expire` as the member `expire` of `Book`, and `Book` has the method `expire`, which gives back the holds past their expiry: `Book` would have two members of that name, and the module does not type-check.
+  = Python (`--target python --books postgres|mysql`): the client writes the transfer `expire` as the attribute `expire` of `Book`, and `Book` has the method `expire`, which gives back the holds past their expiry: the transfer's attribute hides the method, and a call of `expire()` stops (`TypeError`).
+  = Go (`--target go --books postgres|mysql`): the client writes the transfer `expire` as the field `Expire` of `Book`, and `Book` has the method `Expire`, which gives back the holds past their expiry: Go takes no field and method of one name in one type, so the package does not compile.
+  = Rust (`--target rust --books postgres|mysql`): the client writes the transfer `expire` as the method `expire` of `Book`, and `Book` has the method `expire`, which gives back the holds past their expiry: it would be declared twice, and the module does not compile.
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 自分のexpire.book: ok, 1 warning(s)
   付与.do    may be refused: key_conflict

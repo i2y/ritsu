@@ -13,7 +13,7 @@ use ritsu_base::cli::{Cmd, Flag, Misuse, Reading, Table, flag, help_flag, lang_f
 use ritsu_base::text::Lang;
 use crate::render;
 use crate::scenario;
-use crate::target::Target;
+use crate::target::{BOOKS, Backend, LANGS, Lang as Language, RENAMED, Target};
 use ritsu_base::tr;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -103,24 +103,58 @@ fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
-            name: "build",
-            usage: Some("chobo build <file.book> --target <target> [--out <dir>]"),
+            name: "gen",
+            usage: Some("chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]"),
             args: "",
             purpose: tr!(
-                "帳簿を、PostgreSQL のスキーマと関数の SQL、MySQL の系統のテーブルの SQL、TypeScript・Python・Go・Rust のクライアント（PostgreSQL、TigerBeetle、MySQL の系統を呼ぶもの）にする",
-                "build the book into PostgreSQL's schema and functions or the MySQL family's tables, as SQL, or into a client in TypeScript, Python, Go or Rust that calls PostgreSQL, TigerBeetle or the MySQL family"
+                "帳簿を、指定した言語のコードにする。SQL は PostgreSQL のスキーマと関数か MySQL の系統のテーブル、TypeScript・Python・Go・Rust は `--books` のデータベース（PostgreSQL、TigerBeetle、MySQL の系統）を呼ぶクライアント",
+                "build the book into the code of each language given: SQL is PostgreSQL's schema and functions or the MySQL family's tables, and TypeScript, Python, Go and Rust are clients that call the database of `--books` (PostgreSQL, TigerBeetle or the MySQL family)"
             ),
             params: vec![book(false)],
             flags: vec![
-                flag("--target", Some("<target>"), tr!("書くもの。postgres と mysql は SQL、ほかはクライアント", "what to write: postgres and mysql are SQL, the others are clients")).choices(&TARGETS),
-                flag("--out", Some("<dir>"), tr!("書く先のディレクトリ", "the directory to write into")).default("."),
+                flag("--target", Some("sql|typescript|python|go|rust"), tr!("書く言語。<out>/<言語>/ に書く", "a language to write, into <out>/<language>/"))
+                    .choices(&LANGS)
+                    .once_each()
+                    .renamed(&RENAMED),
+                flag(
+                    "--books",
+                    Some("postgres|tigerbeetle|mysql"),
+                    tr!("帳簿を持つデータベース。SQL はその方言で書き、クライアントはそれを呼ぶ（mysql は MySQL・TiDB・Vitess）", "the database that keeps the books: the SQL is in its dialect, and the clients call it (mysql is MySQL, TiDB or Vitess)"),
+                )
+                .choices(&BOOKS)
+                .default("postgres"),
+                flag("--out", Some("<dir>"), tr!("書く先のディレクトリ", "the directory to write into")).default("generated"),
+                flag(
+                    "--check",
+                    None,
+                    tr!(
+                        "書かずに、同じ --target と --books で書くはずのファイルを、ディスクのものと比べる。無いか違えば 1（CI 用）",
+                        "write nothing; exit 1 if a file the same --target and --books write is missing or differs from the one on disk (for CI)"
+                    ),
+                ),
             ],
             exits: vec![
-                (0, tr!("書いた", "written")),
-                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061、E062、E063、E064）", "the book has errors, or the target cannot take it (E060, E061, E062, E063, E064)")),
-                (2, usage_exit.clone()),
+                (0, tr!("書いた、または --check で全部が同じ", "written, or under --check all the same")),
+                (
+                    1,
+                    tr!(
+                        "帳簿にエラーがある、指定した出力先のどれかが帳簿を受け取れない（E060、E061、E062、E063、E064。何も書かない）、または --check で無いか違うファイルがある",
+                        "the book has errors, a target given cannot take it (E060, E061, E062, E063, E064; nothing is written), or under --check a file is missing or differs"
+                    ),
+                ),
+                (
+                    2,
+                    tr!(
+                        "使い方の誤り（`--target` が無い、`--target sql` と `--books tigerbeetle`、0.40.0 までの組の名前、も含む）、読めないファイル",
+                        "a mistake in how the command is called (no `--target`, `--target sql` with `--books tigerbeetle`, or a pair as 0.40.0 named it, among them), or a file that cannot be read"
+                    ),
+                ),
             ],
-            examples: vec!["chobo build inventory.book --target postgres --out db/", "chobo build inventory.book --target tigerbeetle-go --out internal/"],
+            examples: vec![
+                "chobo gen inventory.book --target sql",
+                "chobo gen inventory.book --target go --books tigerbeetle --out internal/",
+                "chobo gen inventory.book --target sql --target typescript --check",
+            ],
             codes: vec!["E060", "E061", "E062", "E063", "E064"],
         },
         Cmd {
@@ -191,24 +225,6 @@ fn table() -> Table {
     }
 }
 
-/// The values of `--target`: crate::target::Target's names, in its order.
-const TARGETS: [&str; 14] = [
-    "postgres",
-    "postgres-typescript",
-    "postgres-python",
-    "postgres-go",
-    "postgres-rust",
-    "tigerbeetle-typescript",
-    "tigerbeetle-python",
-    "tigerbeetle-go",
-    "tigerbeetle-rust",
-    "mysql",
-    "mysql-typescript",
-    "mysql-python",
-    "mysql-go",
-    "mysql-rust",
-];
-
 fn top_help(lang: Lang) -> String {
     let mut o = String::new();
     let t = table();
@@ -249,6 +265,9 @@ fn cmd_help(c: &Cmd, lang: Lang) -> String {
         if let Some(d) = &f.default {
             h.push_str(&tr!("（既定: {d}）", " (default: {d})").get(lang).to_string());
         }
+        if f.repeats {
+            h.push_str(tr!("（何度でも書ける）", " (may be given more than once)").get(lang));
+        }
         o.push_str(&format!("  {:24} {}\n", f.spelled(), h));
     }
     o.push_str(tr!("\n終了コード:\n", "\nExit codes:\n").get(lang));
@@ -269,7 +288,15 @@ struct Args {
     cmd: String,
     positional: Vec<String>,
     flags: BTreeMap<String, Option<String>>,
+    /// Every value of each flag, in the order given: `--target` may be given more than once.
+    all: Vec<(String, String)>,
     lang: Lang,
+}
+
+impl Args {
+    fn all(&self, flag: &str) -> Vec<&str> {
+        self.all.iter().filter(|(k, _)| k == flag).map(|(_, v)| v.as_str()).collect()
+    }
 }
 
 /// What a parse ends in: the arguments, or something to print and the exit code.
@@ -292,6 +319,10 @@ fn parse(argv: Vec<String>) -> Parsed {
     }
     let t = table();
     let Some(c) = t.command(&cmd) else {
+        // the verb up to 0.40.0 is not read as the new one (ritsu's DESIGN 9.6)
+        if cmd == "build" {
+            return Parsed::Print(format!("{}\n", ritsu_base::cli::renamed("chobo build", "chobo gen", "0.41.0").get(lang)), 2, true);
+        }
         let msg = tr!("知らないコマンド `{cmd}` です\n\n", "unknown command `{cmd}`\n\n").get(lang).to_string();
         return Parsed::Print(msg + &top_help(lang), 2, true);
     };
@@ -305,7 +336,8 @@ fn parse(argv: Vec<String>) -> Parsed {
     if until < rest.len() {
         return Parsed::Print(cmd_help(c, lang), 0, false);
     }
-    let mut a = Args { cmd: cmd.clone(), positional: got.pos.clone(), flags: BTreeMap::new(), lang };
+    let all = got.got.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+    let mut a = Args { cmd: cmd.clone(), positional: got.pos.clone(), flags: BTreeMap::new(), all, lang };
     for (k, v) in &got.got {
         let takes = c.flags.iter().chain(t.globals.iter()).find(|f| f.name == *k).is_some_and(|f| f.value.is_some());
         a.flags.insert(k.to_string(), takes.then(|| v.clone()));
@@ -357,7 +389,7 @@ pub fn run(argv: Vec<String>) -> ExitCode {
         "check" => cmd_check(&a),
         "run" => cmd_run(&a),
         "scenarios" => cmd_scenarios(&a),
-        "build" => cmd_build(&a),
+        "gen" => cmd_gen(&a),
         "doc" => cmd_doc(&a),
         "api" => cmd_api(&a),
         "explain" => cmd_explain(&a),
@@ -570,13 +602,38 @@ fn cmd_scenarios(a: &Args) -> u8 {
     0
 }
 
-fn cmd_build(a: &Args) -> u8 {
+/// `chobo gen` (DESIGN 17): the languages given, each for the database of `--books`, into
+/// `<out>/<language>/`. Every target is built before anything is written: one that cannot take
+/// the book stops the run, and nothing is written.
+fn cmd_gen(a: &Args) -> u8 {
     let Some(path) = one_book(a) else { return usage(a) };
-    let Some(Some(t)) = a.flags.get("--target") else {
-        eprintln!("{}", tr!("`--target <target>` が要ります", "`--target <target>` is required").get(a.lang));
+    let head = if a.lang == Lang::Ja { "エラー" } else { "error" };
+    let given = a.all("--target");
+    if given.is_empty() {
+        let msg = tr!(
+            "`chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）",
+            "`chobo gen` needs one or more `--target sql|typescript|python|go|rust`; `--books postgres|tigerbeetle|mysql` says which database they are for (postgres if it is not given)"
+        );
+        eprintln!("{head}: {}", msg.get(a.lang));
         return 2;
-    };
-    let target = Target::parse(t).expect("the choices of --target are the targets");
+    }
+    let books = Backend::parse(a.flags.get("--books").cloned().flatten().as_deref().unwrap_or("postgres")).expect("the choices of --books are the databases");
+    // in the order of the languages, not of the flags
+    let langs: Vec<Language> = Language::ALL.into_iter().filter(|l| given.contains(&l.key())).collect();
+    let mut targets = Vec::new();
+    for l in langs {
+        match Target::of(l, books) {
+            Some(t) => targets.push(t),
+            None => {
+                let msg = tr!(
+                    "`--books tigerbeetle` には `--target sql` がありません。TigerBeetle は SQL を受け取りません。クライアントは `--target typescript|python|go|rust` で書きます",
+                    "there is no `--target sql` for `--books tigerbeetle`: TigerBeetle takes no SQL; its clients are `--target typescript|python|go|rust`"
+                );
+                eprintln!("{head}: {}", msg.get(a.lang));
+                return 2;
+            }
+        }
+    }
     let (src, book, c) = match load(&path, a.lang) {
         Ok(x) => x,
         Err(c) => return c,
@@ -584,23 +641,54 @@ fn cmd_build(a: &Args) -> u8 {
     let stem = path.file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
     let file = path.display().to_string();
     let origin = crate::target::Origin::named(&file, src.as_bytes());
-    let files = match crate::target::build(&book, &stem, target, &origin) {
-        Ok(f) => f,
-        Err(diags) => {
-            for d in &diags {
-                eprint!("{}", d.shown(&file, &src, a.lang));
+    let out = PathBuf::from(a.flags.get("--out").cloned().flatten().unwrap_or_else(|| "generated".into()));
+    let mut planned: Vec<(PathBuf, String)> = Vec::new();
+    // what stops the targets, each once: E060, E061 and E062 are of the database, which every
+    // language given is built for
+    let mut stops: Vec<crate::diag::Diag> = Vec::new();
+    for t in &targets {
+        match crate::target::build(&book, &stem, *t, &origin) {
+            Ok(files) => planned.extend(files.into_iter().map(|(rel, text)| (out.join(t.lang().key()).join(rel), text))),
+            Err(diags) => {
+                for d in diags {
+                    let same = |s: &crate::diag::Diag| (s.code, s.line, s.col, &s.message.en, &s.notes.iter().map(|n| &n.en).collect::<Vec<_>>()) == (d.code, d.line, d.col, &d.message.en, &d.notes.iter().map(|n| &n.en).collect::<Vec<_>>());
+                    if !stops.iter().any(same) {
+                        stops.push(d);
+                    }
+                }
             }
-            // the summary counts the warnings `load` printed above as well
-            let mut all = c.diags.clone();
-            all.extend(diags);
-            eprintln!("{}", diag::summary(&file, &all, a.lang));
-            return 1;
         }
-    };
-    let out = PathBuf::from(a.flags.get("--out").cloned().flatten().unwrap_or_else(|| ".".into()));
-    for (rel, text) in &files {
-        let p = out.join(rel);
-        if let Err(e) = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(&p, text)) {
+    }
+    if !stops.is_empty() {
+        for d in &stops {
+            eprint!("{}", d.shown(&file, &src, a.lang));
+        }
+        // the summary counts the warnings `load` printed above as well
+        let mut all = c.diags.clone();
+        all.extend(stops);
+        eprintln!("{}", diag::summary(&file, &all, a.lang));
+        return 1;
+    }
+    if a.flags.contains_key("--check") {
+        let mut differs = false;
+        for (p, text) in &planned {
+            let shown = p.display();
+            match std::fs::read(p) {
+                Ok(on_disk) if on_disk == text.as_bytes() => {}
+                Ok(_) => {
+                    eprintln!("{}", tr!("生成物が古いか手で編集されています: {shown}", "generated file is stale or hand-edited: {shown}").get(a.lang));
+                    differs = true;
+                }
+                Err(_) => {
+                    eprintln!("{}", tr!("ありません: {shown}", "missing: {shown}").get(a.lang));
+                    differs = true;
+                }
+            }
+        }
+        return u8::from(differs);
+    }
+    for (p, text) in &planned {
+        if let Err(e) = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(p, text)) {
             eprintln!("{}: {e}", p.display());
             return 2;
         }

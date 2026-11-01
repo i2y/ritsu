@@ -312,7 +312,7 @@ $ chobo api examples/refunds/refunds.book
 ## What a client sends
 
 `chobo run --show postgres`, `--show tigerbeetle` or `--show mysql` prints, for each operation of
-a scenario, what the clients `chobo build` writes send that target: the SQL and its arguments for
+a scenario, what the clients `chobo gen` writes send that target: the SQL and its arguments for
 PostgreSQL; for TigerBeetle, the hold read before a post or a void, the accounts made, the opening
 transfers, and the chain, field by field; for the MySQL family, the accounts a book value makes
 sure of and the statements, with the values in place. The tests hold the clients of all four

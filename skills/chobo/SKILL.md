@@ -61,8 +61,11 @@ data (§6).
    whoever keeps the accounts: the bounds, a chart of the moves, what each operation can be refused with, the
    life of a hold, and every scenario with the balances after each step. `--format html` writes
    one page whose scenarios can be stepped through; `--lang ja` writes it in Japanese.
-7. **Build it:** `ritsu chobo build <file.book> --target <target> --out <dir>` (§7). A build stops when
-   a target cannot take the book (E060, E061, E062, E063, E064).
+7. **Build it:** `ritsu chobo gen <file.book> --target <language> --books <database> --out <dir>` (§7):
+   `--target` once for each language wanted, `--books` the database (`postgres` if it is not given);
+   each language goes into `<dir>/<language>/`. `gen` stops, and writes nothing, when a target cannot
+   take the book (E060, E061, E062, E063, E064). The same line with `--check` in CI writes nothing
+   and exits 1 if a file is missing or differs.
 8. **Call it:** a refusal is an answer, not an exception: handle each reason the check listed. A
    retry with the same arguments is safe; the key makes it `done_before`. On PostgreSQL and the
    MySQL family, call `expire()` from a job, one at a time.
@@ -188,8 +191,8 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | E060 | one operation's chain is too long for one TigerBeetle request | split the transfer into kinds with fewer moves |
 | E061 | a name past PostgreSQL's 63 bytes | a shorter name |
 | E062 | a name MySQL cannot hold: a book's name past 51 characters, or with a character beyond the Basic Multilingual Plane (𠮷 and the like) | a shorter name, without such a character |
-| E063 | with a Rust target, a name with a character no Rust identifier holds where the name has it (`²`, `½`, `①`, `Ⓐ`, a combining mark first) | the name without it (`area_m²` as `area_m2`) |
-| E064 | with a target W108 names, the build of that target | rename one of the names W108 gives |
+| E063 | with `--target rust`, a name with a character no Rust identifier holds where the name has it (`²`, `½`, `①`, `Ⓐ`, a combining mark first) | the name without it (`area_m²` as `area_m2`) |
+| E064 | with a target W108 names, `gen` of that target | rename one of the names W108 gives |
 | W101 | an account that only ever fills | a transfer that takes from it, or `outside` |
 | W102 | a transfer always refused: nothing fills what it takes from | a transfer that fills it |
 | W103 | a transfer refused because of the order of its moves | the move that puts in first (the one that takes out first, for an upper bound) |
@@ -217,14 +220,18 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 
 ## 7. Targets
 
-| Target | What `build` writes | What to know |
+`gen`'s `--target` is the language (`sql`, `typescript`, `python`, `go`, `rust`) and `--books` the
+database (`postgres`, `tigerbeetle`, `mysql`); TigerBeetle has no `sql`. Up to 0.40.0 the command was
+`build`, and its `--target` named the pair (`tigerbeetle-go` is `--target go --books tigerbeetle`).
+
+| `--books`, `--target` | What `gen` writes | What to know |
 |---|---|---|
-| `postgres` | a schema, tables, constraints and a function for each operation, in SQL | runs any number of times; a function runs in the caller's transaction; call `expire()` from a job |
-| `postgres-typescript`, `postgres-python`, `postgres-go` | a client of those functions | pass it a `pg` client or pool, a DB-API connection, or a pgx conn or pool; it neither commits nor rolls back |
-| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go` | a client that sends one chain of transfers for each operation | pass it the official client 0.17.9; a chain fits 253 transfers (E060) |
-| `mysql` | the book's three tables and their checks, for MySQL, TiDB and Vitess, in SQL | runs any number of times, in the caller's database; on TiDB, run it with `tidb_enable_check_constraint` ON |
-| `mysql-typescript`, `mysql-python`, `mysql-go` | a client that makes each operation one transaction on those tables | pass it a pool or a connection of mysql2, PyMySQL or mysqlclient, or database/sql with go-sql-driver/mysql: a call is part of the transaction its connection is in, else a transaction of its own (on mysqlclient, a transaction of yours is one with autocommit off); call `expire()` from a job; `batch` sends a call's statements in fewer requests |
-| `postgres-rust`, `tigerbeetle-rust`, `mysql-rust` | an async client, one module of Rust | pass it sqlx's pool, a connection or a transaction of sqlx's in a `tokio::sync::Mutex`, or a `Client` of the crate `tigerbeetle` 0.17.9; add to Cargo.toml the lines its head names; on the MySQL family, a call on a `Transaction` of sqlx's is part of it, and on Vitess connect with `.pipes_as_concat(false)` |
+| `postgres`, `sql` | a schema, tables, constraints and a function for each operation, in SQL | runs any number of times; a function runs in the caller's transaction; call `expire()` from a job |
+| `postgres`, `typescript` `python` `go` | a client of those functions | pass it a `pg` client or pool, a DB-API connection, or a pgx conn or pool; it neither commits nor rolls back |
+| `tigerbeetle`, `typescript` `python` `go` | a client that sends one chain of transfers for each operation | pass it the official client 0.17.9; a chain fits 253 transfers (E060) |
+| `mysql`, `sql` | the book's three tables and their checks, for MySQL, TiDB and Vitess, in SQL | runs any number of times, in the caller's database; on TiDB, run it with `tidb_enable_check_constraint` ON |
+| `mysql`, `typescript` `python` `go` | a client that makes each operation one transaction on those tables | pass it a pool or a connection of mysql2, PyMySQL or mysqlclient, or database/sql with go-sql-driver/mysql: a call is part of the transaction its connection is in, else a transaction of its own (on mysqlclient, a transaction of yours is one with autocommit off); call `expire()` from a job; `batch` sends a call's statements in fewer requests |
+| any, `rust` | an async client, one module of Rust | pass it sqlx's pool, a connection or a transaction of sqlx's in a `tokio::sync::Mutex`, or a `Client` of the crate `tigerbeetle` 0.17.9; add to Cargo.toml the lines its head names; on the MySQL family, a call on a `Transaction` of sqlx's is part of it, and on Vitess connect with `.pipes_as_concat(false)` |
 
 The clients of every database have the same names, arguments and answers. A name of the book
 that is Japanese is exported in Go with an `X` in front, and a name that is a keyword of Rust is
@@ -238,7 +245,7 @@ interpreter.
 |---|---|
 | [reference.md](reference.md) | the whole language: units, accounts and bounds, transfers, operations, keys, holds, versions |
 | [formats.md](formats.md) | the JSON of scenarios, results, `check --format json`, `api` and `run --show` |
-| [targets.md](targets.md) | what `ritsu chobo build` writes for PostgreSQL, TigerBeetle and the MySQL family, and how to call it |
+| [targets.md](targets.md) | what `ritsu chobo gen` writes for PostgreSQL, TigerBeetle and the MySQL family, and how to call it |
 | [codes.md](codes.md) | every diagnostic code, as `ritsu chobo explain --all` prints it |
 
 They are copies of the pages under `crates/chobo/docs/` in <https://github.com/i2y/ritsu>, where

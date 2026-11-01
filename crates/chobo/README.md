@@ -135,16 +135,21 @@ nothing else, never the same as each other, and `kg` is the kilogram the rules k
 ## Targets
 
 ```console
-$ chobo build examples/refunds/refunds.book --target postgres --out db
+$ chobo gen examples/refunds/refunds.book --target sql --target typescript --out db
 ```
 
-| Target | What `build` writes |
-|---|---|
-| `postgres` | a schema, its tables and constraints, and a function for each operation, in SQL |
-| `postgres-typescript`, `postgres-python`, `postgres-go`, `postgres-rust` | a client that calls those functions |
-| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go`, `tigerbeetle-rust` | a client that sends TigerBeetle one chain of transfers for each operation |
-| `mysql` | the tables and constraints of the book for MySQL, TiDB and Vitess, in SQL |
-| `mysql-typescript`, `mysql-python`, `mysql-go`, `mysql-rust` | a client that makes each operation one transaction on those tables |
+`--target` names a language, as many as are wanted, and `--books` the database the clients call
+(`postgres` unless it is given). Each language goes into `<out>/<language>/` (`generated` unless
+`--out` is given), and `--check` writes nothing and exits 1 if what the same flags write is not
+what is on disk.
+
+| `--books` | `--target` | What `gen` writes |
+|---|---|---|
+| `postgres` | `sql` | a schema, its tables and constraints, and a function for each operation, in SQL |
+| | `typescript`, `python`, `go`, `rust` | a client that calls those functions |
+| `tigerbeetle` | `typescript`, `python`, `go`, `rust` | a client that sends TigerBeetle one chain of transfers for each operation |
+| `mysql` | `sql` | the tables and constraints of the book for MySQL, TiDB and Vitess, in SQL |
+| | `typescript`, `python`, `go`, `rust` | a client that makes each operation one transaction on those tables |
 
 The clients of every target have the same names, arguments and answers. A refusal is an answer,
 `{ result: "refused", reason: "refund_exceeds_sale" }`, not an exception; the same call again
@@ -204,7 +209,7 @@ chobo's one dependency is serde_json.
 chobo check <file.book>... [--format json] [--diff-base <rev>]
 chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]
 chobo scenarios <file.book> [--out <dir>]
-chobo build <file.book> --target <target> [--out <dir>]
+chobo gen <file.book> --target sql|typescript|python|go|rust... [--books postgres|tigerbeetle|mysql] [--out <dir>] [--check]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
 chobo explain <code> | --all [--format markdown]

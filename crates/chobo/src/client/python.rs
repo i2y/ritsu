@@ -209,7 +209,7 @@ pub fn postgres(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String
     let mut o = header(
         book,
         origin,
-        &format!("It calls the SQL functions of `chobo build --target postgres` (schema {}) through a DB-API connection.", postgres::ident(&book.name)),
+        &format!("It calls the SQL functions of `chobo gen --target sql` (schema {}) through a DB-API connection.", postgres::ident(&book.name)),
     );
     o.push_str(head.trim_end());
     o.push('\n');
@@ -369,7 +369,7 @@ pub fn mysql(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let mut o = header(
         book,
         origin,
-        &format!("It runs the calls on the tables of `chobo build --target mysql` ({}) through a DB-API connection: MySQL, TiDB or Vitess.", tables.join(", ")),
+        &format!("It runs the calls on the tables of `chobo gen --target sql --books mysql` ({}) through a DB-API connection: MySQL, TiDB or Vitess.", tables.join(", ")),
     );
     o.push_str(head.trim_end());
     o.push('\n');

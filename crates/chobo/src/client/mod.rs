@@ -1,5 +1,5 @@
 //! The clients chobo writes (DESIGN 4.3, 4.5, 14): for each of TypeScript, Python, Go and Rust,
-//! one that calls the SQL functions of `chobo build --target postgres`, one that sends TigerBeetle
+//! one that calls the SQL functions of `chobo gen --target sql`, one that sends TigerBeetle
 //! the chains of PLAN 0.3, and one that makes the calls on the tables of the MySQL family. The
 //! three of a language have the same names, arguments and results, so that a caller moves from
 //! one database to another without changing its code.

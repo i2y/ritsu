@@ -1,6 +1,6 @@
 警告[W108]: postgresql_functions.book:11:10: 勘定 `order_hold` と振替 `balance_order` は、PostgreSQL の SQL で同じ関数になります
     11 | transfer balance_order(order: string)
-  = PostgreSQL（`postgres`、`postgres-typescript`、`postgres-python`、`postgres-go`、`postgres-rust`）: SQL は、振替の操作を `<振替>_<操作>`、勘定の残高を `balance_<勘定>` という関数にするので、勘定 `order_hold` の残高の関数と振替 `balance_order` の `hold` の関数は、どちらも `balance_order_hold` です。PostgreSQL は同じ名前の関数を引数の型で分けますが、この二つは引数の型も同じなので、SQL のファイルを読み込めません（二つ目で `cannot change return type of existing function`）。
+  = PostgreSQL（`--target sql|typescript|python|go|rust --books postgres`）: SQL は、振替の操作を `<振替>_<操作>`、勘定の残高を `balance_<勘定>` という関数にするので、勘定 `order_hold` の残高の関数と振替 `balance_order` の `hold` の関数は、どちらも `balance_order_hold` です。PostgreSQL は同じ名前の関数を引数の型で分けますが、この二つは引数の型も同じなので、SQL のファイルを読み込めません（二つ目で `cannot change return type of existing function`）。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 postgresql_functions.book: ok、警告 1 件
   balance_order.hold  拒否されうる理由: なし

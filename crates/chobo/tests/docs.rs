@@ -12,7 +12,7 @@
 //!
 //! What only the site shows is held to the files too: the code of the other languages is the lines
 //! of one of their files, the JSON is the lines of a scenario beside a book, the text of a run or a
-//! check is in a golden file, the code a page says `chobo build` writes is what it writes, and a
+//! check is in a golden file, the code a page says `chobo gen` writes is what it writes, and a
 //! Mermaid chart is word for word on a page `chobo doc` wrote. The English site and the Japanese one
 //! have the same pages, which their navs list in the same order. The site's pages of the examples and
 //! its charts are held to `chobo doc` by tests/doc.rs.
@@ -723,9 +723,9 @@ fn the_text_on_the_site_is_in_a_golden_file() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// The code a page of the site says `chobo build` writes, under `<!-- chobo build <book> --target
-/// <target> -->` on the line before its fence, is what that build writes: the runs of its lines
-/// between the lines that are only `…`, each whole, in one of the files it writes.
+/// The code a page of the site says `chobo gen` writes, under `<!-- chobo gen <book> --target
+/// <language> --books <database> -->` on the line before its fence, is what that run writes: the
+/// runs of its lines between the lines that are only `…`, each whole, in one of the files it writes.
 #[test]
 fn the_code_chobo_builds_on_the_site_is_what_it_writes() {
     let work = TempDir::new("docs-builds");
@@ -738,7 +738,7 @@ fn the_code_chobo_builds_on_the_site_is_what_it_writes() {
         for line in text.lines() {
             if let Some((args, mut lines)) = block.take() {
                 if line.trim_start().starts_with("```") {
-                    // the build the comment names, into a directory of its own
+                    // the run the comment names, into a directory of its own
                     let out = work.path().join(format!("build-{seen}"));
                     let mut a = args.clone();
                     a.extend(["--out".to_string(), out.display().to_string()]);
@@ -764,8 +764,8 @@ fn the_code_chobo_builds_on_the_site_is_what_it_writes() {
                 }
                 continue;
             }
-            if let Some(cmd) = line.trim().strip_prefix("<!-- chobo build ").and_then(|r| r.strip_suffix("-->")) {
-                let mut args = vec!["build".to_string()];
+            if let Some(cmd) = line.trim().strip_prefix("<!-- chobo gen ").and_then(|r| r.strip_suffix("-->")) {
+                let mut args = vec!["gen".to_string()];
                 args.extend(words(cmd.trim()));
                 said = Some(args);
             } else if !line.trim().is_empty() {

@@ -1,29 +1,28 @@
 # データベース向けのビルド
 
-`chobo build` は、帳簿を PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けに書き、それを TypeScript、Python、Go、Rust から呼ぶクライアントを書きます。
+`chobo gen` は、帳簿を PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けに書き、それを TypeScript、Python、Go、Rust から呼ぶクライアントを書きます。`--target` で言語を（いくつでも）、`--books` でデータベースを指定し（無ければ `postgres`）、言語ごとに `--out` の下の別のディレクトリに書きます。
 
-| ターゲット | 書くもの |
-|---|---|
-| `postgres` | `<帳簿>.sql`。スキーマ、テーブルと制約、操作ごとの関数 |
-| `postgres-typescript`、`postgres-python`、`postgres-go`、`postgres-rust` | その関数を呼ぶクライアント |
-| `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go`、`tigerbeetle-rust` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
-| `mysql` | `<帳簿>.sql`。MySQL、TiDB、Vitess 向けの、帳簿の三つのテーブルと制約 |
-| `mysql-typescript`、`mysql-python`、`mysql-go`、`mysql-rust` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
+| `--books` | `--target` | 書くもの |
+|---|---|---|
+| `postgres` | `sql` | `sql/<帳簿>.sql`。スキーマ、テーブルと制約、操作ごとの関数 |
+| | `typescript`、`python`、`go`、`rust` | その関数を呼ぶクライアント |
+| `tigerbeetle` | `typescript`、`python`、`go`、`rust` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
+| `mysql` | `sql` | `sql/<帳簿>.sql`。MySQL、TiDB、Vitess 向けの、帳簿の三つのテーブルと制約 |
+| | `typescript`、`python`、`go`、`rust` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
 
 ```console
-$ chobo build examples/inventory/inventory.ja.book --target postgres --out db
-$ chobo build examples/inventory/inventory.ja.book --target postgres-typescript --out db
-$ chobo build examples/inventory/inventory.ja.book --target tigerbeetle-go --out db
-$ chobo build examples/inventory/inventory.ja.book --target mysql --out db
-$ chobo build examples/inventory/inventory.ja.book --target mysql-python --out db
-$ chobo build examples/inventory/inventory.ja.book --target tigerbeetle-rust --out db
+$ chobo gen examples/inventory/inventory.ja.book --target sql --target typescript --out db
+$ chobo gen examples/inventory/inventory.ja.book --target go --target rust --books tigerbeetle --out db
+$ chobo gen examples/inventory/inventory.ja.book --target sql --target python --books mysql --out db
 ```
+
+一つの実行の出力先は、書く前に全部を作るので、帳簿を受け取れない出力先が一つでもあれば（E060〜E064）、実行は止まり、途中まで書いたものは残りません。`--check` は何も書かず、同じフラグで書くはずのファイルが無いか違えば 1 で終わります（CI 用）。0.40.0 までのコマンドは `chobo build` で、`--target` には組の名前（`tigerbeetle-go`）を書きました。組の名前を渡すと、`gen` はいまの書き方（`--target go --books tigerbeetle`）を言って止まります。
 
 どの出力先でも、一つの操作は一度の書き込みです。全部の移動を境界で確かめて全部を書くか、拒否して何も書かないかのどちらかです。確かめてから書くまでのあいだに、ほかの呼び出しが変えうるものは読みません。これができるのは、境界が一つの勘定の条件で、移動が書き換える勘定しか見ないからです。出力先ごとのくわしいことは、四つの言語から呼んだ例とその出力と一緒に、[出力先](targets.md)（英語）にあります。
 
 ## PostgreSQL
 
-`--target postgres` は SQL のファイルを一つ書きます。何度流してもよく、無いものを作り、関数は置き換えます。帳簿はスキーマ一つになり、テーブルは四つです。
+`--target sql` は SQL のファイルを一つ（`sql/<帳簿>.sql`）書きます。何度流してもよく、無いものを作り、関数は置き換えます。帳簿はスキーマ一つになり、テーブルは四つです。
 
 - `accounts`：勘定ごとに一行。残高と、勘定を作ったときの境界を持ちます。
 - `holds`：仮押さえ。
@@ -34,7 +33,7 @@ $ chobo build examples/inventory/inventory.ja.book --target tigerbeetle-rust --o
 
 関数は、操作が動かす勘定の行を ID の順にロックし、残高を読み、帳簿に書いた順に移動を確かめます。在庫の引当の例の `引当.hold` では、次のとおりです。
 
-<!-- chobo build examples/inventory/inventory.ja.book --target postgres -->
+<!-- chobo gen examples/inventory/inventory.ja.book --target sql -->
 ```sql
   -- (3) the moves, in the order they are written, each checked against the locked rows as the
   -- moves before it left them. Nothing is written until every move has gone through.
@@ -63,7 +62,7 @@ TigerBeetle は利用者のコードを中で動かさないので、仕事は�
 - 帳簿の勘定は、どれも TigerBeetle の勘定になります。残高は貸方から借方を引いたもので、移動は勘定から勘定への振替です。単位は ledger になります。
 - 下限 0 は、勘定のフラグ `debits_must_not_exceed_credits` で守ります。それ以外の境界は、chobo がチェーンに足す勘定と振替で守ります。0 より上の下限は、その量の仮押さえを移動のすぐあとに作って取り消すことで守り、0 より下の下限と上限は、境界までの余地を表す勘定を同じチェーンの中で動かすことで守ります。一つの移動は、多くても六つの振替になります。
 - 確定と取消の前に、クライアントは仮押さえを読みます。無ければ何も送らずに `no_such_hold` を返します。仮押さえより先に確定が届くと、その仮押さえはもう確定できなくなるからです。
-- チェーンは、一つのリクエストに入らなければなりません。chobo のテストで使う、`--development` で立てたレプリカでは 253 件までなので、ビルドはそこで止まります（E060）。
+- チェーンは、一つのリクエストに入らなければなりません。chobo のテストで使う、`--development` で立てたレプリカでは 253 件までなので、`gen` はそこで止まります（E060）。
 
 ```console
 $ chobo run examples/refunds/refunds.ja.book --scenario examples/refunds/refunds.ja.more.json --show tigerbeetle --lang ja
@@ -81,9 +80,9 @@ examples/refunds/refunds.ja.book (more: 30000 円の売上に 20000 円の返金
 
 ## MySQL、TiDB、Vitess
 
-`--target mysql` は、MySQL 8.4 以降、TiDB 8.5 以降、Vitess 向けの SQL のファイルを一つ書きます。何度流してもかまいません。流したデータベースの中に、帳簿の名前を頭に付けたテーブルを三つ作ります。呼ぶための関数はありません。TiDB にはストアドプロシージャが無く、Vitess を動かすサービスには、ストアドルーチンもデータベースを作ることも許さないものがあるからです。そのため、操作ごとに、chobo が書いた SQL 文をクライアントが一つのトランザクションの中で送ります。クライアントがするのは、値を入れることと、前の文の結果から次の文を選ぶことだけです。返金の例の日本語の版では、勘定のテーブルは次のとおりです。
+`--target sql --books mysql` は、MySQL 8.4 以降、TiDB 8.5 以降、Vitess 向けの SQL のファイルを一つ書きます。何度流してもかまいません。流したデータベースの中に、帳簿の名前を頭に付けたテーブルを三つ作ります。呼ぶための関数はありません。TiDB にはストアドプロシージャが無く、Vitess を動かすサービスには、ストアドルーチンもデータベースを作ることも許さないものがあるからです。そのため、操作ごとに、chobo が書いた SQL 文をクライアントが一つのトランザクションの中で送ります。クライアントがするのは、値を入れることと、前の文の結果から次の文を選ぶことだけです。返金の例の日本語の版では、勘定のテーブルは次のとおりです。
 
-<!-- chobo build examples/refunds/refunds.ja.book --target mysql -->
+<!-- chobo gen examples/refunds/refunds.ja.book --target sql --books mysql -->
 ```sql
 create table if not exists `返金_accounts` (
 …
@@ -116,14 +115,14 @@ examples/refunds/refunds.ja.book (more: 30000 円の売上に 20000 円の返金
 - **ロックをかけて読むのは一度だけです。** 次に、境界のある勘定の行を ID の順にロックして読みます。どの移動が最初に境界を破るかは、その読み取りの結果に出ます（`case` の部分）。書き込みまでに、ほかには何も読みません。境界の無い勘定（ここでは `返金済み`）はロックしません。そこへ入る分は記録として残し、`expire()` が勘定の行に足し込むので、別の注文の返金が互いを待つことはありません。
 - **呼ぶ側のトランザクションにも入れます。** 呼び出しは、渡した接続がトランザクションの中にいればその一部になるので、注文の行と在庫の仮押さえを一緒にコミットできます。プールか、トランザクションの中にいない接続なら、呼び出しごとに自分のトランザクションを持ち、デッドロック、ロックの待ちのタイムアウト、TiDB の書き込みの衝突のあとは、同じ引数で呼び直します。mysql2 の接続には、呼び出しの前に `set @chobo = 0` を送って、トランザクションの中にいるかを聞きます。PyMySQL の接続は、サーバーの状態を手元に持っているので、聞かずに分かります。mysqlclient の接続では、autocommit を切ったものだけが呼ぶ側のトランザクションになります。一つの接続は、一度に一つの呼び出しにだけ使ってください。同時に呼ぶなら、プールを渡します。`batch` を付けると、続けて送る SQL 文を一つのリクエストにまとめ、境界を確かめる呼び出しがロックを持つあいだの往復は一回になります。
 - **期限切れ。** PostgreSQL と同じく、期限を過ぎた仮押さえはすぐに `expired` を返しますが、押さえていた量は、`expire()` が戻すまで数えられたままです。自前のジョブから、同時に二つ以上走らないようにして呼んでください。
-- **キーの比べ方と名前の長さ。** キーとテナントは、照合順序にかかわらず、ID のバイト列として比べます。値は 16 進で書くので、`sql_mode` にもよりません。MySQL の名前は 64 字までで、基本多言語面の外の文字（𠮷 など）を持てません。テーブルと制約の名前にできない帳簿の名前なら、ビルドはエラーで止まります（E062）。日本語の字も一字を一字と数えるので、PostgreSQL より長い名前を付けられます。
+- **キーの比べ方と名前の長さ。** キーとテナントは、照合順序にかかわらず、ID のバイト列として比べます。値は 16 進で書くので、`sql_mode` にもよりません。MySQL の名前は 64 字までで、基本多言語面の外の文字（𠮷 など）を持てません。テーブルと制約の名前にできない帳簿の名前なら、`gen` はエラーで止まります（E062）。日本語の字も一字を一字と数えるので、PostgreSQL より長い名前を付けられます。
 - **TiDB と Vitess。** TiDB では、`tidb_enable_check_constraint` を ON にしてから SQL を流してください。OFF のまま作ったテーブルには制約が付きません（境界はクライアントが守ります）。SQL とクライアントは、Vitess を動かすサービスが許す範囲で書いてあります。シャードを分けたキースペースでは、三つのテーブルを `tenant` で分けてください。テナントの行も、どの呼び出しも、一つのシャードに収まります。呼び出しと一緒にコミットする自分の行も、同じシャードに置く必要があります。テストは Vitess 24.0.5 の試験用のサーバー（vttestserver）で、シャード一つと二つの両方で流しています。
 
 ## クライアント
 
 どのデータベースのクライアントも、名前も引数も結果も同じです。データベースを替えても、変わるのは帳簿の値の作り方だけです。呼び出しは `done`、`done_before`、理由つきの拒否のどれかを返します。理由は専用の型で、境界の理由が先に並びます。
 
-<!-- chobo build examples/inventory/inventory.ja.book --target postgres-typescript -->
+<!-- chobo gen examples/inventory/inventory.ja.book --target typescript -->
 ```ts
 /** Why a call of 在庫の引当 can be refused: the bounds' own reasons, then the ones chobo gives itself. */
 export type Reason = "在庫切れ" | "key_conflict" | "already_refused" | "same_account" | "no_such_hold" | "already_posted" | "already_voided" | "expired" | "over_hold";
@@ -134,7 +133,7 @@ export type Result = { result: "done" } | { result: "done_before" } | { result: 
 
 Rust では理由が列挙になり、帳簿の名前はそのまま値や構造体のフィールドの名前になります。
 
-<!-- chobo build examples/inventory/inventory.ja.book --target postgres-rust -->
+<!-- chobo gen examples/inventory/inventory.ja.book --target rust -->
 ```rust
 /// Why a call of 在庫の引当 can be refused: the bounds' own reasons, then the ones chobo gives itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

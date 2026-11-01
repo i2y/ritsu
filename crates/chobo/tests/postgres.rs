@@ -465,7 +465,7 @@ fn cases_of(names: &[&str]) -> Vec<Case> {
 
 fn too_long() {
     let work = TempDir::new("e061");
-    let out = chobo().args(["build", root().join("tests/fixtures/名前の長さ.book").to_str().unwrap(), "--target", "postgres", "--out", work.path().to_str().unwrap()]).output().unwrap();
+    let out = chobo().args(["gen", root().join("tests/fixtures/名前の長さ.book").to_str().unwrap(), "--target", "sql", "--out", work.path().to_str().unwrap()]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{err}");
     assert!(err.contains("error[E061]"), "{err}");
@@ -510,7 +510,7 @@ fn a_name_too_long_for_postgres_in_english() {
         return;
     }
     let work = TempDir::new("e061-en");
-    let out = chobo().args(["build", root().join("tests/fixtures/name_length.book").to_str().unwrap(), "--target", "postgres", "--out", work.path().to_str().unwrap()]).output().unwrap();
+    let out = chobo().args(["gen", root().join("tests/fixtures/name_length.book").to_str().unwrap(), "--target", "sql", "--out", work.path().to_str().unwrap()]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{err}");
     assert!(err.contains("error[E061]") && err.contains("is 67 bytes long"), "{err}");

@@ -1,6 +1,6 @@
 警告[W108]: Rustの自分の理由.book:8:3: 拒否の理由 `keyConflict` は、Rust のクライアントが自分で使う名前と同じになります
      8 |   at most 100 refused as keyConflict
-  = Rust（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）: クライアントは、拒否の理由 `keyConflict` を 列挙 `Reason` の値 `KeyConflict` にしますが、`Reason` には、chobo が自分で返す理由 `key_conflict` の値 `KeyConflict` があります。二度宣言することになり、コンパイルできません。
+  = Rust（`--target rust --books postgres|tigerbeetle|mysql`）: クライアントは、拒否の理由 `keyConflict` を 列挙 `Reason` の値 `KeyConflict` にしますが、`Reason` には、chobo が自分で返す理由 `key_conflict` の値 `KeyConflict` があります。二度宣言することになり、コンパイルできません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 Rustの自分の理由.book: ok、警告 1 件
   入荷.do  拒否されうる理由: keyConflict（在庫(品番) at most 100）、key_conflict、already_refused

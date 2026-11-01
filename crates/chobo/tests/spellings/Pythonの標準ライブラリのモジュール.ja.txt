@@ -1,6 +1,6 @@
 警告[W108]: Pythonの標準ライブラリのモジュール.book:1:6: 帳簿 `site` は、Python のクライアントでそのままでは使えません
      1 | book site v1
-  = Python（`postgres-python`、`tigerbeetle-python`、`mysql-python`）: クライアントはモジュール `site.py` で、Python の標準ライブラリにもモジュール `site` があります。Python は同じ名前のモジュールを一つしか読み込まず、`import site` は先に読み込んだほうを返すので、標準ライブラリの `site` を読み込んだあとでは、クライアントを読み込めません。先にクライアントを読み込むと、プログラムのどの `import site` も、標準ライブラリのものの代わりにクライアントを返します。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.site` として持つので、標準ライブラリのものとぶつかりません。
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: クライアントはモジュール `site.py` で、Python の標準ライブラリにもモジュール `site` があります。Python は同じ名前のモジュールを一つしか読み込まず、`import site` は先に読み込んだほうを返すので、標準ライブラリの `site` を読み込んだあとでは、クライアントを読み込めません。先にクライアントを読み込むと、プログラムのどの `import site` も、標準ライブラリのものの代わりにクライアントを返します。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.site` として持つので、標準ライブラリのものとぶつかりません。
   ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
 Pythonの標準ライブラリのモジュール.book: ok、警告 1 件
   入荷.do  拒否されうる理由: key_conflict

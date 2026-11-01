@@ -15,7 +15,8 @@ pub struct Entry {
     pub example: &'static str,
     /// for the codes of `--diff-base`: the book at the revision it is compared with
     pub before: Option<&'static str>,
-    /// for the codes of `chobo build`: the target whose build gives it
+    /// for the codes of `chobo gen`: the target whose build gives it, by its name (`postgres-go`);
+    /// shown as the flags that write it (`--target go --books postgres`, DESIGN 17)
     pub target: Option<&'static str>,
     pub related: &'static [&'static str],
 }
@@ -720,8 +721,8 @@ pub fn ledger() -> Vec<Entry> {
                 "E060",
                 tr!("一つの操作が TigerBeetle の一つのリクエストに入りません", "An operation that does not fit one TigerBeetle request"),
                 tr!(
-                    "`chobo build` の TigerBeetle のターゲットで、ある振替の一つの操作が送るチェーンが 253 件の振替を超えるときに出ます。チェーンは一つのリクエストで送らないと全部か無しになりませんが、`--development` で立てたレプリカは一つのリクエストに 253 件までしか受け取りません（そうでないレプリカは 8189 件まで）。境界のある勘定のあいだの移動は、一つで最大 6 件の振替になります。",
-                    "With a TigerBeetle target of `chobo build`: one operation of a transfer kind sends a chain of more than 253 transfers. The chain has to go in one request to go through whole or not at all, and a replica started with `--development` takes at most 253 in one (8189 without it). A move between bounded accounts takes up to 6 transfers."
+                    "`chobo gen` で TigerBeetle のクライアント（`--books tigerbeetle`）を書くときに、ある振替の一つの操作が送るチェーンが 253 件の振替を超えるときに出ます。チェーンは一つのリクエストで送らないと全部か無しになりませんが、`--development` で立てたレプリカは一つのリクエストに 253 件までしか受け取りません（そうでないレプリカは 8189 件まで）。境界のある勘定のあいだの移動は、一つで最大 6 件の振替になります。",
+                    "With `--books tigerbeetle`, the TigerBeetle clients of `chobo gen`: one operation of a transfer kind sends a chain of more than 253 transfers. The chain has to go in one request to go through whole or not at all, and a replica started with `--development` takes at most 253 in one (8189 without it). A move between bounded accounts takes up to 6 transfers."
                 ),
                 tr!(
                     "振替の種類を、移動の少ないいくつかの種類に分けてください。分けた振替はそれぞれが一度の書き込みになるので、全部か無しにしたい移動は同じ種類に残してください。",
@@ -737,8 +738,8 @@ pub fn ledger() -> Vec<Entry> {
                 "E061",
                 tr!("名前が PostgreSQL の識別子に収まりません", "A name too long for PostgreSQL"),
                 tr!(
-                    "`chobo build` の PostgreSQL のターゲットで、スキーマ（帳簿の名前）、関数（`<振替>_<操作>`、`balance_<勘定>`）、関数の引数（`p_<引数>`）の名前が 63 バイトを超えるときに出ます。PostgreSQL はそれより長い名前を黙って切り詰めるので、二つの関数が同じ名前になりえます。日本語は一字 3 バイトです。",
-                    "With a PostgreSQL target of `chobo build`: the name of the schema (the book's), of a function (`<transfer>_<operation>`, `balance_<account>`) or of a function's parameter (`p_<parameter>`) is longer than 63 bytes. PostgreSQL cuts a longer name short without a word, so two functions could end up with one name. A Japanese character is 3 bytes."
+                    "`chobo gen` で PostgreSQL のもの（`--books postgres` の SQL とクライアント）を書くときに、スキーマ（帳簿の名前）、関数（`<振替>_<操作>`、`balance_<勘定>`）、関数の引数（`p_<引数>`）の名前が 63 バイトを超えるときに出ます。PostgreSQL はそれより長い名前を黙って切り詰めるので、二つの関数が同じ名前になりえます。日本語は一字 3 バイトです。",
+                    "With `--books postgres`, PostgreSQL's SQL and clients from `chobo gen`: the name of the schema (the book's), of a function (`<transfer>_<operation>`, `balance_<account>`) or of a function's parameter (`p_<parameter>`) is longer than 63 bytes. PostgreSQL cuts a longer name short without a word, so two functions could end up with one name. A Japanese character is 3 bytes."
                 ),
                 tr!("名前を短くしてください。ASCII なら 63 字、日本語なら 21 字までです（関数の名前では、後ろに付く `_hold` などの分を引いた字数です）。", "Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …)."),
                 X_E061,
@@ -751,8 +752,8 @@ pub fn ledger() -> Vec<Entry> {
                 "E062",
                 tr!("名前を MySQL がそのままでは持てません", "A name MySQL cannot hold as written"),
                 tr!(
-                    "`chobo build` の MySQL の系統のターゲットで、帳簿の名前から作るテーブル（`<帳簿>_accounts` など）と制約（`<帳簿>_within_lower` など）の名前が 64 字を超えるとき、または帳簿の名前に基本多言語面の外の文字（𠮷 など）があるときに出ます。MySQL はそういう文字を、警告だけで `?` に書き換えるので、二つの名前が同じになりえます。TiDB と Vitess も同じ決まりです。",
-                    "With a target of the MySQL family of `chobo build`: a name made from the book's, of a table (`<book>_accounts`, …) or of a check (`<book>_within_lower`, …), is longer than 64 characters, or the book's name has a character beyond the Basic Multilingual Plane (𠮷 and the like). MySQL writes such a character as `?` with only a warning, so two names could become one. TiDB and Vitess keep the same rules."
+                    "`chobo gen` で MySQL の系統のもの（`--books mysql` の SQL とクライアント）を書くときに、帳簿の名前から作るテーブル（`<帳簿>_accounts` など）と制約（`<帳簿>_within_lower` など）の名前が 64 字を超えるとき、または帳簿の名前に基本多言語面の外の文字（𠮷 など）があるときに出ます。MySQL はそういう文字を、警告だけで `?` に書き換えるので、二つの名前が同じになりえます。TiDB と Vitess も同じ決まりです。",
+                    "With `--books mysql`, the MySQL family's SQL and clients from `chobo gen`: a name made from the book's, of a table (`<book>_accounts`, …) or of a check (`<book>_within_lower`, …), is longer than 64 characters, or the book's name has a character beyond the Basic Multilingual Plane (𠮷 and the like). MySQL writes such a character as `?` with only a warning, so two names could become one. TiDB and Vitess keep the same rules."
                 ),
                 tr!(
                     "帳簿の名前を 51 字までにし（後ろに `_within_lower` が付きます）、基本多言語面の外の文字を外してください。",
@@ -768,8 +769,8 @@ pub fn ledger() -> Vec<Entry> {
                 "E063",
                 tr!("名前を Rust が識別子にできません", "A name Rust takes as no identifier"),
                 tr!(
-                    "`chobo build` の Rust のターゲット（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）で、振替、勘定、引数の名前か拒否の理由に、Rust の識別子には使えない字があるときに出ます。Rust のクライアントは、これらの名前をそのまま、メソッド、構造体のフィールド、型、列挙の値の名前にします。chobo の名前には Unicode の文字と数字を使えますが、Rust の識別子は XID_Start の字で始まり、XID_Continue の字が続くもの（Unicode 17.0。rustc 1.94〜1.97 が読む版）なので、十進でない数字（`²`、`½`、`①` など）も丸で囲んだ文字（`Ⓐ`）も使えず、結合文字などは先頭に置けません。",
-                    "With a Rust target of `chobo build` (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the name of a transfer, an account or a parameter, or a reason, has a character no Rust identifier holds where the name has it. The Rust client writes those names as they are, as methods, fields of structs, and names of types and of an enum's variants. A name of chobo may hold any letter and digit of Unicode; a Rust identifier begins with a character of XID_Start and goes on with those of XID_Continue (Unicode 17.0, which rustc 1.94 to 1.97 read), so it holds no digit that is not decimal (`²`, `½`, `①`, …) and no circled letter (`Ⓐ`), and begins with no combining mark."
+                    "`chobo gen` で Rust のクライアント（`--target rust`。どの `--books` でも）を書くときに、振替、勘定、引数の名前か拒否の理由に、Rust の識別子には使えない字があるときに出ます。Rust のクライアントは、これらの名前をそのまま、メソッド、構造体のフィールド、型、列挙の値の名前にします。chobo の名前には Unicode の文字と数字を使えますが、Rust の識別子は XID_Start の字で始まり、XID_Continue の字が続くもの（Unicode 17.0。rustc 1.94〜1.97 が読む版）なので、十進でない数字（`²`、`½`、`①` など）も丸で囲んだ文字（`Ⓐ`）も使えず、結合文字などは先頭に置けません。",
+                    "With `--target rust`, the Rust client of `chobo gen` on any `--books`: the name of a transfer, an account or a parameter, or a reason, has a character no Rust identifier holds where the name has it. The Rust client writes those names as they are, as methods, fields of structs, and names of types and of an enum's variants. A name of chobo may hold any letter and digit of Unicode; a Rust identifier begins with a character of XID_Start and goes on with those of XID_Continue (Unicode 17.0, which rustc 1.94 to 1.97 read), so it holds no digit that is not decimal (`²`, `½`, `①`, …) and no circled letter (`Ⓐ`), and begins with no combining mark."
                 ),
                 tr!(
                     "名前からその字を外すか、ほかの字に替えてください（たとえば `area_m²` は `area_m2` に）。同じ名前はどの言語のクライアントにも出るので、替えると、どの言語の呼び出しも新しい名前で書くことになります。",
@@ -785,8 +786,8 @@ pub fn ledger() -> Vec<Entry> {
                 "E064",
                 tr!("名前がこのターゲットのコードで同じ識別子になります", "Names that are one identifier in the code of the target"),
                 tr!(
-                    "`chobo build` のターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前と同じになるとき、または名前をそのままでは使えないときに出ます。`check` が W108 で知らせることのうち、このターゲットを壊すものです。そのまま書くと、コードをコンパイルできないか読み込めないか、呼び出しがほかの振替や勘定に届くので、このターゲットは何も書きません。",
-                    "With a target of `chobo build`: in its client or its SQL, two names are one identifier, a name is one the client uses itself, or a name cannot be used as it is. It is what `check` warns of with W108 that breaks this target: written as it is, the code would not compile or load, or a call would reach another transfer or account, so the target writes nothing."
+                    "`chobo gen` の出力先のクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前と同じになるとき、または名前をそのままでは使えないときに出ます。`check` が W108 で知らせることのうち、このターゲットを壊すものです。そのまま書くと、コードをコンパイルできないか読み込めないか、呼び出しがほかの振替や勘定に届くので、このターゲットは何も書きません。",
+                    "With a target of `chobo gen`: in its client or its SQL, two names are one identifier, a name is one the client uses itself, or a name cannot be used as it is. It is what `check` warns of with W108 that breaks this target: written as it is, the code would not compile or load, or a call would reach another transfer or account, so the target writes nothing."
                 ),
                 tr!(
                     "注が挙げる名前のどれかを変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください（W107）。",
@@ -892,8 +893,8 @@ pub fn ledger() -> Vec<Entry> {
             "W108",
             tr!("ターゲットのコードで同じ識別子になる名前", "Names that are one identifier in a target's code"),
             tr!(
-                "どれかのターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前（`balance`、`expire` など）と同じになるとき、または名前をそのままでは使えないときに出ます。クライアントは、振替、勘定、引数の名前と拒否の理由を、言語ごとの綴りで識別子にします。Go は名前の頭の一字を大文字にし（大文字の無い字で始まる名前には、頭に `X` を付けます）、Rust は型の名前と列挙の値を PascalCase で書き、フィールドとメソッドでは、生の識別子にできないキーワードの後ろに `_` を付けます。Python はキーワードの後ろに `_` を付け、クラスの中では `__` で始まる名前を書き換えます。Python のクライアントは帳簿の名前のモジュール（`<名前>.py`）なので、名前が Python の予約している語（`return`）なら `import` で読み込めず、標準ライブラリのモジュールの名前（`abc`）なら、標準ライブラリのものとぶつかります。TypeScript は名前をそのまま書き、引数を一つのオブジェクトで受け取ります。オブジェクトリテラルの `__proto__` はプロパティではなくプロトタイプになるので、`__proto__` という名前の引数は渡せません。PostgreSQL の SQL では、関数の名前が `<振替>_<操作>` と `balance_<勘定>` になります。どれも、壊れるのは言語のクライアントか PostgreSQL のターゲットの一部で、名前を書くほかのターゲットは組めるので、警告です。壊れるターゲットの `chobo build` は E064 で止まります。chobo は名前を書き換えません。どの言語の呼び出しも、帳簿の名前で書きます。",
-                "In the client or the SQL of some target, two names are one identifier, a name is one the client uses itself (`balance`, `expire`, …), or a name cannot be used as it is. A client writes the names of transfers, accounts and parameters, and the reasons, as identifiers in its language's spelling: Go writes a name with its first letter in upper case (with an `X` before one whose first letter has none); Rust writes the names of types and variants in PascalCase, and a field or a method with `_` after a keyword a raw identifier cannot be; Python writes `_` after a keyword, and changes a name that begins with `__` inside a class, and the Python client is the module of the book's name (`<name>.py`), which no `import` reaches when the name is a word Python keeps (`return`), and which meets the standard library's when a module of it has the name (`abc`); TypeScript writes a name as it is, and takes the arguments as one object, where an object literal's `__proto__` sets the prototype, not a property, so no parameter named `__proto__` can be given. In the SQL of PostgreSQL, a function is named `<transfer>_<operation>` or `balance_<account>`. Each case breaks some of the targets, a language's clients or PostgreSQL's, and the other targets that write the names build, so it is a warning, and `chobo build` of a target it breaks stops with E064. chobo renames nothing: a call is written with the book's names in every language."
+                "どれかのターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前（`balance`、`expire` など）と同じになるとき、または名前をそのままでは使えないときに出ます。クライアントは、振替、勘定、引数の名前と拒否の理由を、言語ごとの綴りで識別子にします。Go は名前の頭の一字を大文字にし（大文字の無い字で始まる名前には、頭に `X` を付けます）、Rust は型の名前と列挙の値を PascalCase で書き、フィールドとメソッドでは、生の識別子にできないキーワードの後ろに `_` を付けます。Python はキーワードの後ろに `_` を付け、クラスの中では `__` で始まる名前を書き換えます。Python のクライアントは帳簿の名前のモジュール（`<名前>.py`）なので、名前が Python の予約している語（`return`）なら `import` で読み込めず、標準ライブラリのモジュールの名前（`abc`）なら、標準ライブラリのものとぶつかります。TypeScript は名前をそのまま書き、引数を一つのオブジェクトで受け取ります。オブジェクトリテラルの `__proto__` はプロパティではなくプロトタイプになるので、`__proto__` という名前の引数は渡せません。PostgreSQL の SQL では、関数の名前が `<振替>_<操作>` と `balance_<勘定>` になります。どれも、壊れるのは言語のクライアントか PostgreSQL のターゲットの一部で、名前を書くほかのターゲットは組めるので、警告です。壊れるターゲットを書く `chobo gen` は E064 で止まります。chobo は名前を書き換えません。どの言語の呼び出しも、帳簿の名前で書きます。",
+                "In the client or the SQL of some target, two names are one identifier, a name is one the client uses itself (`balance`, `expire`, …), or a name cannot be used as it is. A client writes the names of transfers, accounts and parameters, and the reasons, as identifiers in its language's spelling: Go writes a name with its first letter in upper case (with an `X` before one whose first letter has none); Rust writes the names of types and variants in PascalCase, and a field or a method with `_` after a keyword a raw identifier cannot be; Python writes `_` after a keyword, and changes a name that begins with `__` inside a class, and the Python client is the module of the book's name (`<name>.py`), which no `import` reaches when the name is a word Python keeps (`return`), and which meets the standard library's when a module of it has the name (`abc`); TypeScript writes a name as it is, and takes the arguments as one object, where an object literal's `__proto__` sets the prototype, not a property, so no parameter named `__proto__` can be given. In the SQL of PostgreSQL, a function is named `<transfer>_<operation>` or `balance_<account>`. Each case breaks some of the targets, a language's clients or PostgreSQL's, and the other targets that write the names build, so it is a warning, and `chobo gen` of a target it breaks stops with E064. chobo renames nothing: a call is written with the book's names in every language."
             ),
             tr!(
                 "使わないターゲットなら、このままで構いません。使うなら、注が挙げる名前のどれかを変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください（W107）。",
@@ -942,7 +943,8 @@ pub fn render_text(e: &Entry, lang: Lang) -> String {
     o.push_str(tr!("\n直し方\n", "\nFix\n").get(lang));
     o.push_str(&indent(e.fix.get(lang)));
     if let Some(t) = e.target {
-        o.push_str(&format!("{}  chobo build <file.book> --target {t}\n", tr!("\nどのコマンドで出るか\n", "\nThe command that shows it\n").get(lang)));
+        let flags = crate::target::Target::parse(t).expect("a code's target is a target").flags();
+        o.push_str(&format!("{}  chobo gen <file.book> {flags}\n", tr!("\nどのコマンドで出るか\n", "\nThe command that shows it\n").get(lang)));
     }
     if let Some(b) = e.before {
         o.push_str(tr!("\n比べるリビジョンの帳簿\n", "\nThe book at the revision compared with\n").get(lang));
@@ -965,7 +967,8 @@ pub fn render_markdown(e: &Entry, lang: Lang) -> String {
     o.push_str(&format!("{} {}\n\n", tr!("**いつ出るか。**", "**When.**").get(lang), e.when.get(lang)));
     o.push_str(&format!("{} {}\n\n", tr!("**直し方。**", "**Fix.**").get(lang), e.fix.get(lang)));
     if let Some(t) = e.target {
-        o.push_str(&format!("{} `chobo build <file.book> --target {t}`\n\n", tr!("**どのコマンドで出るか**:", "**The command that shows it**:").get(lang)));
+        let flags = crate::target::Target::parse(t).expect("a code's target is a target").flags();
+        o.push_str(&format!("{} `chobo gen <file.book> {flags}`\n\n", tr!("**どのコマンドで出るか**:", "**The command that shows it**:").get(lang)));
     }
     if let Some(b) = e.before {
         o.push_str(tr!("**比べるリビジョンの帳簿**:\n\n", "**The book at the revision compared with**:\n\n").get(lang));

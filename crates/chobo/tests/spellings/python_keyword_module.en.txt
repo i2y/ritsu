@@ -1,6 +1,6 @@
 warning[W108]: python_keyword_module.book:1:6: The book `return` cannot be used as it is in the Python client
      1 | book return v1
-  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client is the module `return.py`, and `return` is a word Python keeps, so `import return` is no Python (`SyntaxError`); a package of `ritsu gen` cannot hold a module of that name either.
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client is the module `return.py`, and `return` is a word Python keeps, so `import return` is no Python (`SyntaxError`); a package of `ritsu gen` cannot hold a module of that name either.
   hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
 python_keyword_module.book: ok, 1 warning(s)
   receive.do  may be refused: key_conflict

@@ -8,7 +8,7 @@
 //! - [`check`]: `ritsu check .` — every file by its language's own check, the languages joined once,
 //!   then what ritsu checks across them. It is ritsu's own `check` (`ritsu::check::run`), so a check
 //!   ritsu gains later is in the page with nothing changed here.
-//! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo build`, `dandori build`,
+//! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo gen`, `dandori build`,
 //!   `sakai export cml`, `yuen export`, `sekisho gen --target cedar` (the last three given the
 //!   project's root, as `ritsu check` gives it them). geas and `.proto` files generate nothing.
 //! - [`doc`]: one file's page for the people who read it, as HTML and as Markdown: `rulec doc`,
@@ -425,16 +425,20 @@ fn chobo_load(path: &str, l: Lang, r: &mut Ran) -> Option<(String, chobo::model:
     Some((src, book, c))
 }
 
-/// `chobo build <path> --target <target> --out generated` (chobo's `run::cmd_build`).
+/// `chobo gen <path> --target <language> --books <database> --out generated` for the pair the page
+/// picked (`postgres-go`; chobo's `run::cmd_gen` with one target), written under `generated/<language>/`.
 fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
     use chobo::diag::Show;
-    let (_, shown) = words(&["chobo", "build", path, "--target", target, "--out", OUT], l);
-    let mut r = Ran { command: shown, ..Ran::default() };
     let Some(t) = chobo::target::Target::parse(target) else {
-        r.err = format!("there is no target `{target}`\n");
-        r.code = 2;
-        return r;
+        let (_, shown) = words(&["chobo", "gen", path, "--target", target, "--out", OUT], l);
+        return Ran { command: shown, code: 2, err: format!("there is no target `{target}`\n"), ..Ran::default() };
     };
+    let flags = t.flags();
+    let mut w = vec!["chobo", "gen", path];
+    w.extend(flags.split(' '));
+    w.extend(["--out", OUT]);
+    let (_, shown) = words(&w, l);
+    let mut r = Ran { command: shown, ..Ran::default() };
     let Some((src, book, _)) = chobo_load(path, l, &mut r) else { return r };
     let stem = Path::new(path).file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
     let origin = chobo::target::Origin::named(path, src.as_bytes());
@@ -450,7 +454,7 @@ fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
         }
     };
     for (rel, text) in &files {
-        let p = Path::new(OUT).join(rel);
+        let p = Path::new(OUT).join(t.lang().key()).join(rel);
         if let Err(e) = p.parent().map(fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| fs::write(&p, text)) {
             r.err.push_str(&format!("{}: {e}\n", p.display()));
             r.code = 2;

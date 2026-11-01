@@ -508,11 +508,11 @@ Related codes: [E050](#e050), [W107](#w107)
 
 `error` — **An operation that does not fit one TigerBeetle request**
 
-**When.** With a TigerBeetle target of `chobo build`: one operation of a transfer kind sends a chain of more than 253 transfers. The chain has to go in one request to go through whole or not at all, and a replica started with `--development` takes at most 253 in one (8189 without it). A move between bounded accounts takes up to 6 transfers.
+**When.** With `--books tigerbeetle`, the TigerBeetle clients of `chobo gen`: one operation of a transfer kind sends a chain of more than 253 transfers. The chain has to go in one request to go through whole or not at all, and a replica started with `--development` takes at most 253 in one (8189 without it). A move between bounded accounts takes up to 6 transfers.
 
 **Fix.** Split the transfer kind into kinds with fewer moves. Each kind is a write of its own, so keep together the moves that have to go through all or none.
 
-**The command that shows it**: `chobo build <file.book> --target tigerbeetle-typescript`
+**The command that shows it**: `chobo gen <file.book> --target typescript --books tigerbeetle`
 
 **Smallest reproduction**:
 
@@ -585,11 +585,11 @@ Related codes: [E061](#e061), [E062](#e062), [E063](#e063)
 
 `error` — **A name too long for PostgreSQL**
 
-**When.** With a PostgreSQL target of `chobo build`: the name of the schema (the book's), of a function (`<transfer>_<operation>`, `balance_<account>`) or of a function's parameter (`p_<parameter>`) is longer than 63 bytes. PostgreSQL cuts a longer name short without a word, so two functions could end up with one name. A Japanese character is 3 bytes.
+**When.** With `--books postgres`, PostgreSQL's SQL and clients from `chobo gen`: the name of the schema (the book's), of a function (`<transfer>_<operation>`, `balance_<account>`) or of a function's parameter (`p_<parameter>`) is longer than 63 bytes. PostgreSQL cuts a longer name short without a word, so two functions could end up with one name. A Japanese character is 3 bytes.
 
 **Fix.** Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …).
 
-**The command that shows it**: `chobo build <file.book> --target postgres`
+**The command that shows it**: `chobo gen <file.book> --target sql --books postgres`
 
 **Smallest reproduction**:
 
@@ -614,11 +614,11 @@ Related codes: [E060](#e060), [E062](#e062), [E063](#e063), [E064](#e064)
 
 `error` — **A name MySQL cannot hold as written**
 
-**When.** With a target of the MySQL family of `chobo build`: a name made from the book's, of a table (`<book>_accounts`, …) or of a check (`<book>_within_lower`, …), is longer than 64 characters, or the book's name has a character beyond the Basic Multilingual Plane (𠮷 and the like). MySQL writes such a character as `?` with only a warning, so two names could become one. TiDB and Vitess keep the same rules.
+**When.** With `--books mysql`, the MySQL family's SQL and clients from `chobo gen`: a name made from the book's, of a table (`<book>_accounts`, …) or of a check (`<book>_within_lower`, …), is longer than 64 characters, or the book's name has a character beyond the Basic Multilingual Plane (𠮷 and the like). MySQL writes such a character as `?` with only a warning, so two names could become one. TiDB and Vitess keep the same rules.
 
 **Fix.** Make the book's name at most 51 characters (`_within_lower` follows it), and take out any character beyond the Basic Multilingual Plane.
 
-**The command that shows it**: `chobo build <file.book> --target mysql`
+**The command that shows it**: `chobo gen <file.book> --target sql --books mysql`
 
 **Smallest reproduction**:
 
@@ -643,11 +643,11 @@ Related codes: [E060](#e060), [E061](#e061), [E063](#e063)
 
 `error` — **A name Rust takes as no identifier**
 
-**When.** With a Rust target of `chobo build` (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the name of a transfer, an account or a parameter, or a reason, has a character no Rust identifier holds where the name has it. The Rust client writes those names as they are, as methods, fields of structs, and names of types and of an enum's variants. A name of chobo may hold any letter and digit of Unicode; a Rust identifier begins with a character of XID_Start and goes on with those of XID_Continue (Unicode 17.0, which rustc 1.94 to 1.97 read), so it holds no digit that is not decimal (`²`, `½`, `①`, …) and no circled letter (`Ⓐ`), and begins with no combining mark.
+**When.** With `--target rust`, the Rust client of `chobo gen` on any `--books`: the name of a transfer, an account or a parameter, or a reason, has a character no Rust identifier holds where the name has it. The Rust client writes those names as they are, as methods, fields of structs, and names of types and of an enum's variants. A name of chobo may hold any letter and digit of Unicode; a Rust identifier begins with a character of XID_Start and goes on with those of XID_Continue (Unicode 17.0, which rustc 1.94 to 1.97 read), so it holds no digit that is not decimal (`²`, `½`, `①`, …) and no circled letter (`Ⓐ`), and begins with no combining mark.
 
 **Fix.** Take the character out of the name, or write another in its place (`area_m²` as `area_m2`, for one). The same name is in the clients of every language, so a call in any of them is then written with the new name.
 
-**The command that shows it**: `chobo build <file.book> --target postgres-rust`
+**The command that shows it**: `chobo gen <file.book> --target rust --books postgres`
 
 **Smallest reproduction**:
 
@@ -669,11 +669,11 @@ Related codes: [E061](#e061), [E062](#e062), [E064](#e064)
 
 `error` — **Names that are one identifier in the code of the target**
 
-**When.** With a target of `chobo build`: in its client or its SQL, two names are one identifier, a name is one the client uses itself, or a name cannot be used as it is. It is what `check` warns of with W108 that breaks this target: written as it is, the code would not compile or load, or a call would reach another transfer or account, so the target writes nothing.
+**When.** With a target of `chobo gen`: in its client or its SQL, two names are one identifier, a name is one the client uses itself, or a name cannot be used as it is. It is what `check` warns of with W108 that breaks this target: written as it is, the code would not compile or load, or a call would reach another transfer or account, so the target writes nothing.
 
 **Fix.** Rename one of the names the notes give. If the book is in use, check the renamed book against the revision in use with `chobo check --diff-base` (W107).
 
-**The command that shows it**: `chobo build <file.book> --target postgres-go`
+**The command that shows it**: `chobo gen <file.book> --target go --books postgres`
 
 **Smallest reproduction**:
 
@@ -894,7 +894,7 @@ Related codes: [E050](#e050), [E051](#e051)
 
 `warning` — **Names that are one identifier in a target's code**
 
-**When.** In the client or the SQL of some target, two names are one identifier, a name is one the client uses itself (`balance`, `expire`, …), or a name cannot be used as it is. A client writes the names of transfers, accounts and parameters, and the reasons, as identifiers in its language's spelling: Go writes a name with its first letter in upper case (with an `X` before one whose first letter has none); Rust writes the names of types and variants in PascalCase, and a field or a method with `_` after a keyword a raw identifier cannot be; Python writes `_` after a keyword, and changes a name that begins with `__` inside a class, and the Python client is the module of the book's name (`<name>.py`), which no `import` reaches when the name is a word Python keeps (`return`), and which meets the standard library's when a module of it has the name (`abc`); TypeScript writes a name as it is, and takes the arguments as one object, where an object literal's `__proto__` sets the prototype, not a property, so no parameter named `__proto__` can be given. In the SQL of PostgreSQL, a function is named `<transfer>_<operation>` or `balance_<account>`. Each case breaks some of the targets, a language's clients or PostgreSQL's, and the other targets that write the names build, so it is a warning, and `chobo build` of a target it breaks stops with E064. chobo renames nothing: a call is written with the book's names in every language.
+**When.** In the client or the SQL of some target, two names are one identifier, a name is one the client uses itself (`balance`, `expire`, …), or a name cannot be used as it is. A client writes the names of transfers, accounts and parameters, and the reasons, as identifiers in its language's spelling: Go writes a name with its first letter in upper case (with an `X` before one whose first letter has none); Rust writes the names of types and variants in PascalCase, and a field or a method with `_` after a keyword a raw identifier cannot be; Python writes `_` after a keyword, and changes a name that begins with `__` inside a class, and the Python client is the module of the book's name (`<name>.py`), which no `import` reaches when the name is a word Python keeps (`return`), and which meets the standard library's when a module of it has the name (`abc`); TypeScript writes a name as it is, and takes the arguments as one object, where an object literal's `__proto__` sets the prototype, not a property, so no parameter named `__proto__` can be given. In the SQL of PostgreSQL, a function is named `<transfer>_<operation>` or `balance_<account>`. Each case breaks some of the targets, a language's clients or PostgreSQL's, and the other targets that write the names build, so it is a warning, and `chobo gen` of a target it breaks stops with E064. chobo renames nothing: a call is written with the book's names in every language.
 
 **Fix.** For a target you do not build, leave it as it is. For one you do, rename one of the names the notes give. If the book is in use, check the renamed book against the revision in use with `chobo check --diff-base` (W107).
 
