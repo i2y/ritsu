@@ -24,7 +24,7 @@ fn have(cmd: &str) -> bool {
 fn generate(tag: &str, rule: &str) -> (TempDir, PathBuf) {
     let t = TempDir::new(&format!("sql-{tag}"));
     let dir = t.path().to_path_buf();
-    let (c, _, e) = run(&["gen", rule, "--out", dir.to_str().unwrap()]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", dir.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     (t, dir)
 }
@@ -242,7 +242,7 @@ fn 同じデータベースで走る関数は互いにもデータベースの�
     let src = std::fs::read_to_string(root().join("tests/corpus/期間区分.rule")).unwrap();
     std::fs::write(&rule, src.replacen("(period) v1", "(period_side_by_side) v1", 1)).unwrap();
     let dir = t.path().join("out");
-    let (c, _, e) = run(&["gen", rule.to_str().unwrap(), "--out", dir.to_str().unwrap()]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", rule.to_str().unwrap(), "--out", dir.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     let psql = |sql: &str| Command::new("psql").args(["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", sql]).output().unwrap();
     let theirs = psql("CREATE OR REPLACE FUNCTION period_side_by_side(n integer) RETURNS text LANGUAGE sql AS $$ SELECT 'theirs' $$;");

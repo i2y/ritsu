@@ -35,7 +35,7 @@ fn toolchain() -> bool {
 fn generate(tag: &str) -> (TempDir, PathBuf) {
     let t = TempDir::new(&format!("wasm-target-{tag}"));
     let dir = t.path().to_path_buf();
-    let (c, out, e) = run(&["gen", "tests/corpus/送料.rule", "--out", dir.to_str().unwrap()]);
+    let (c, out, e) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/送料.rule", "--out", dir.to_str().unwrap()]));
     assert_eq!(c, 0, "{out}{e}");
     (t, dir)
 }

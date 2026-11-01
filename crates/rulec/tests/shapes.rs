@@ -54,7 +54,7 @@ fn generate(tag: &str, rule: &str) -> (TempDir, PathBuf) {
     let dir = t.path().to_path_buf();
     let src = dir.join("r.rule");
     std::fs::write(&src, rule).unwrap();
-    let (c, out) = run(&["gen", &src.to_string_lossy(), "--out", &dir.to_string_lossy()]);
+    let (c, out) = run(&rulec::targets::up_to_0_40(&["gen", &src.to_string_lossy(), "--out", &dir.to_string_lossy()]));
     assert_eq!(c, 0, "{tag}: 生成できない:\n{out}");
     (t, dir)
 }

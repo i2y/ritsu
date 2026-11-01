@@ -32,7 +32,7 @@ fn generated(tag: &str) -> (TempDir, PathBuf) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", "tests/corpus/注文の送料.rule", "--out", &dir.to_string_lossy()])
+        .args(["gen", "tests/corpus/注文の送料.rule", "--out", &dir.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
@@ -217,7 +217,7 @@ fn 射影の無い規則には何も出ない() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", "tests/corpus/送料.rule", "--out", &dir.to_string_lossy()])
+        .args(["gen", "tests/corpus/送料.rule", "--out", &dir.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success());
@@ -263,7 +263,7 @@ fn 日付の射影は五つの言語で同じ日を指す() {
     std::fs::write(dir.join("d.rule"), rule).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
-        .args(["gen", &dir.join("d.rule").to_string_lossy(), "--out", &dir.to_string_lossy()])
+        .args(["gen", &dir.join("d.rule").to_string_lossy(), "--out", &dir.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
@@ -395,7 +395,7 @@ fn 省略できる入力は無いフィールドを_none_として読む() {
     let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
     let o = rulec(&["check", "r.rule"]);
     assert!(o.status.success(), "省略できる入力に `required` を求めてはいけない:\n{}", String::from_utf8_lossy(&o.stdout));
-    let o = rulec(&["gen", "r.rule", "--out", "gen"]);
+    let o = rulec(&rulec::targets::up_to_0_40(&["gen", "r.rule", "--out", "gen"]));
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
     let g = dir.join("gen");
     let cases = [("{}", "0"), ("{\"coupon\":{}}", "0"), ("{\"coupon\":{\"kind\":null}}", "0"), ("{\"coupon\":{\"kind\":\"fixed\"}}", "200")];
@@ -440,7 +440,7 @@ fn built(tag: &str, rule: &str, contract: (&str, &str)) -> (TempDir, PathBuf) {
     let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
     let o = rulec(&["check", "r.rule", "--format", "json"]);
     assert!(o.status.success(), "契約と規則はそろっているはず:\n{}", String::from_utf8_lossy(&o.stdout));
-    let o = rulec(&["gen", "r.rule", "--out", "gen"]);
+    let o = rulec(&rulec::targets::up_to_0_40(&["gen", "r.rule", "--out", "gen"]));
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
     (tmp, dir)
 }
@@ -622,7 +622,7 @@ fn コーパスのprotoの規則は要求をそのまま読む() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", "tests/corpus/出荷の送料.rule", "--out", &dir.join("gen").to_string_lossy()])
+        .args(["gen", "tests/corpus/出荷の送料.rule", "--out", &dir.join("gen").to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
@@ -682,7 +682,7 @@ fn 合計と最大と並びは五つの言語で同じ答えを出す() {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
             .env("RULEC_LANG", "ja")
             .current_dir(root())
-            .args(["gen", rule, "--out", &dir.join("gen").to_string_lossy()])
+            .args(["gen", rule, "--out", &dir.join("gen").to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
             .output()
             .expect("rulec を起動できない");
         assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stdout));
@@ -848,7 +848,7 @@ fn 射影の関数の無い生成先を名前で言う() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
         .current_dir(root())
-        .args(["gen", "tests/corpus/order_shipping_fee.rule", "--out", &tmp.path().to_string_lossy()])
+        .args(["gen", "tests/corpus/order_shipping_fee.rule", "--out", &tmp.path().to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success());
@@ -872,7 +872,7 @@ fn 射影の関数の無い生成先を名前で言う() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
         .current_dir(root())
-        .args(["gen", "tests/corpus/member_shipping_fee.rule", "--out", &tmp.path().to_string_lossy()])
+        .args(["gen", "tests/corpus/member_shipping_fee.rule", "--out", &tmp.path().to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(!String::from_utf8_lossy(&o.stdout).contains("caller's object"));
@@ -924,7 +924,7 @@ fn five_say(made: &Path, alias: &str, case: &str) -> Vec<(&'static str, String)>
 /// The rule at `rule`, generated in English or Japanese into `gen` under `dir`.
 fn generated_in(lang: &str, dir: &Path, rule: &str) -> PathBuf {
     let made = dir.join("gen");
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(root()).args(["gen", rule, "--out", &made.to_string_lossy()]).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(root()).args(["gen", rule, "--out", &made.to_string_lossy()]).args(rulec::targets::UP_TO_0_40).output().expect("rulec を起動できない");
     assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stdout));
     made
 }
@@ -1071,7 +1071,7 @@ fn 列挙を読む関数はほかの名前とぶつからない() {
     let o = rulec(&["check", "r.rule"]);
     let said = String::from_utf8_lossy(&o.stdout);
     assert!(o.status.success() && !said.contains("warning"), "規則は警告なしに通るはず:\n{said}");
-    let o = rulec(&["gen", "r.rule", "--out", "gen"]);
+    let o = rulec(&rulec::targets::up_to_0_40(&["gen", "r.rule", "--out", "gen"]));
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
     let py = std::fs::read_to_string(dir.join("gen/python/seq_reader.py")).unwrap();
     for want in [
@@ -1127,7 +1127,7 @@ fn ほかのファイルの列挙もその型の関数で読む() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
         .current_dir(dir)
-        .args(["gen", "item_fee.rule", "shared/catalog.rule", "--out", "gen"])
+        .args(["gen", "item_fee.rule", "shared/catalog.rule", "--out", "gen"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));

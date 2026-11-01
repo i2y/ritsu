@@ -58,7 +58,7 @@ fn gen_dir(tag: &str, rule: &str) -> (TempDir, PathBuf) {
     let t = TempDir::new(&format!("formats-{tag}"));
     let dir = t.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, _) = run(&["gen", rule, "--out", &out]);
+    let (c, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out]));
     assert_eq!(c, 0);
     (t, dir)
 }
@@ -114,7 +114,7 @@ fn genは古い生成物と欠けた生成物を分ける() {
     let rule = "tests/corpus/送料.rule";
 
     // Nothing generated yet: everything is missing, nothing is stale.
-    let (c, out) = run(&["gen", rule, "--out", &out_dir, "--check", "--format", "json"]);
+    let (c, out) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out_dir, "--check", "--format", "json"]));
     assert_eq!(c, 1);
     let j = obj(&out);
     keys(&j, &["written", "stale", "missing", "left"], "gen");
@@ -127,13 +127,13 @@ fn genは古い生成物と欠けた生成物を分ける() {
     assert!(arr(&j, "missing") > 0 && arr(&j, "stale") == 0 && arr(&j, "written") == 0 && arr(&j, "left") == 0, "{out}");
 
     // Generate, then edit one by hand: that one is stale, nothing is missing.
-    let (c, out) = run(&["gen", rule, "--out", &out_dir, "--format", "json"]);
+    let (c, out) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out_dir, "--format", "json"]));
     assert_eq!(c, 0);
     assert!(arr(&obj(&out), "written") > 0);
     let py = dir.join("python").join("shipping_fee.py");
     let before = std::fs::read_to_string(&py).unwrap();
     std::fs::write(&py, format!("{before} ")).unwrap();
-    let (c, out) = run(&["gen", rule, "--out", &out_dir, "--check", "--format", "json"]);
+    let (c, out) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out_dir, "--check", "--format", "json"]));
     assert_eq!(c, 1);
     let j = obj(&out);
     assert_eq!(arr(&j, "stale"), 1, "{out}");
@@ -301,7 +301,7 @@ fn adapter_dir() -> Option<(TempDir, PathBuf)> {
     let t = TempDir::new("formats-vf");
     let dir = t.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out]);
+    let (c, _) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out]));
     assert_eq!(c, 0);
     let src = std::fs::read_to_string(root().join("tests/verify.rs")).unwrap();
     let body = src.split("const ADAPTER: &str = r#\"").nth(1).unwrap().split("\"#;").next().unwrap();
@@ -330,7 +330,7 @@ fn 鍵は言語で変わらない() {
     let mut cases: Vec<Vec<&str>> = vec![
         vec!["check", "tests/mutants/m_e101.rule", "--format", "json"],
         vec!["fmt", "--check", "tests/mutants/m_e102.rule", "--format", "json"],
-        vec!["gen", "tests/corpus/送料.rule", "--out", &d, "--check", "--format", "json"],
+        rulec::targets::up_to_0_40(&["gen", "tests/corpus/送料.rule", "--out", &d, "--check", "--format", "json"]),
         vec!["coverage", "tests/corpus/送料.rule", "--format", "json"],
         vec!["explain", "--all", "--format", "json"],
     ];

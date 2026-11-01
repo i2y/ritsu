@@ -226,7 +226,7 @@ fn 上限を超えた並びはエラーになる() {
     let (_tmp, d) = dir("cap");
     let p = write(&d, "r.rule", &RULE.replace("<=100", "<=2"));
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     let py = std::fs::read_to_string(out.join("python/supplier_match.py")).unwrap();
     assert!(py.contains("if _len(candidates) > 2:"), "上限の検査が生成されていない:\n{py}");
@@ -254,7 +254,7 @@ fn 生成された数え上げは参照評価器と一致する() {
     let (_tmp, d) = dir("agree");
     let p = write(&d, "r.rule", &format!("{RULE}{EXAMPLES}"));
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
 
     let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
@@ -277,7 +277,7 @@ fn sqlには生成しない() {
     let (_tmp, d) = dir("sql");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     assert!(!out.join("sql").exists(), "SQL を書いてしまった");
     assert!(said.contains("SQL"), "生成しなかったことを言っていない:\n{said}");

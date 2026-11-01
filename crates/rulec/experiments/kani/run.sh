@@ -1,12 +1,12 @@
 #!/bin/sh
 # Every rule in the corpus, through the model checker: generate, then read the proof
-# harnesses `gen` writes beside the Rust. Needs `kani` on the PATH (§15.95).
+# harnesses `gen --extra proof` writes beside the Rust. Needs `kani` on the PATH (§15.95).
 #
 #   $ cargo build --release
 #   $ sh experiments/kani/run.sh > experiments/kani/report.txt
 set -eu
 out=$(mktemp -d)
-./target/release/rulec gen tests/corpus/ --out "$out" > /dev/null
+./target/release/rulec gen tests/corpus/ --target rust --extra proof --out "$out" > /dev/null
 echo "rulec $(./target/release/rulec --version | awk '{print $2}'), $(kani --version | tr '\n' ' ')"
 echo
 cd "$out/rust"

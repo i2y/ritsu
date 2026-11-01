@@ -91,6 +91,8 @@ pub mod runtest;
 /// headers.
 pub use ritsu_base::sha256;
 pub mod sources;
+/// What `rulec gen` writes: the targets it is given, and the extras beside them (§15.277).
+pub mod targets;
 pub mod types;
 pub mod vfs;
 pub mod vdiff;

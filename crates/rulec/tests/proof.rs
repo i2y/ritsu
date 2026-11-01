@@ -56,7 +56,7 @@ fn rows(json: &str) -> Vec<rulec::json::Json> {
 #[test]
 fn 証明のハーネスは生成され_apiの名前と一致する() {
     let (_tmp, out) = dir("gen");
-    let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
+    let (c, said) = run(&rulec::targets::up_to_0_40(&["gen", RULE, "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{said}");
     let f = out.join("rust").join("coupon_stack_proof.rs");
     let body = std::fs::read_to_string(&f).expect("証明のファイルが無い");
@@ -88,7 +88,7 @@ fn 証明のファイルは普通のビルドでは空である() {
         return;
     }
     let (_tmp, out) = dir("rustc");
-    let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
+    let (c, said) = run(&rulec::targets::up_to_0_40(&["gen", RULE, "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{said}");
     let o = Command::new("rustc")
         .current_dir(out.join("rust"))
@@ -107,7 +107,7 @@ fn フラグが無ければ証明は走らない() {
         return;
     }
     let (_tmp, out) = dir("noflag");
-    let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
+    let (c, said) = run(&rulec::targets::up_to_0_40(&["gen", RULE, "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{said}");
     let (_, said) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
     assert!(
@@ -124,7 +124,7 @@ fn フラグを付ければ証明が走る() {
         return;
     }
     let (_tmp, out) = dir("flag");
-    let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
+    let (c, said) = run(&rulec::targets::up_to_0_40(&["gen", RULE, "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{said}");
     let (code, said) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--proofs", "--format", "json"]);
     assert_eq!(code, 0, "{said}");

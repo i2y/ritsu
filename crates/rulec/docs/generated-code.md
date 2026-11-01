@@ -1,7 +1,7 @@
 # The generated code
 
 `rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm — a module in each,
-a package in Go's case, and one query plus one function in SQL's. NumPy is the twelfth and the odd one out: it is
+a package in Go's case, and one query plus one function in SQL's — each where it is given as a `--target`. NumPy is the twelfth and the odd one out: it is
 not generated code at all but the rule as data, read by one fixed evaluator (see below). There is no runtime to install and nothing to
 configure: a function takes the declared inputs and returns the declared outputs, and the
 query takes a relation of them. This file says what shape that code has, what it guarantees,
@@ -18,6 +18,73 @@ brands, units and ranges, the outputs with their rounding and the range written 
 by their tables, the enum members under the spelling each language gives them, and the errors the
 code can raise. The shape is defined in [formats.md](formats.md), and a test holds every name in
 it to the file the generator wrote.
+
+---
+
+## What `gen` writes
+
+`gen` writes the targets it is given and nothing else (§15.277). Each `--target` gets its
+library — the module other code reads, and what it needs to build — and an extra beside it is
+written only when `--extra` asks for it. Neither the order of the flags nor the version of rulec
+changes which files a command line writes. For `member_shipping_fee.rule`:
+
+| `--target` | the library |
+|---|---|
+| `python` | `python/member_shipping_fee.py` |
+| `numpy` | `numpy/member_shipping_fee.json`, and `numpy/rulec_np.py`, the evaluator that reads it |
+| `typescript` | `typescript/member_shipping_fee.ts` |
+| `javascript` | `javascript/member_shipping_fee.mjs` |
+| `rust` | `rust/member_shipping_fee.rs` |
+| `ruby` | `ruby/member_shipping_fee.rb`, and its signature `ruby/sig/member_shipping_fee.rbs` |
+| `php` | `php/member_shipping_fee.php` |
+| `go` | `go/membershippingfee/member_shipping_fee.go`, and the package's `go.mod` |
+| `swift` | `swift/member_shipping_fee.swift` |
+| `java` | `java/MemberShippingFee.java` |
+| `sql` | `sql/member_shipping_fee.sql`, the query, and `sql/member_shipping_fee_function.sql`, the function |
+| `wasm` | `wasm/member_shipping_fee.rs`, the crate root `wasm/member_shipping_fee_wasm.rs`, and the world `wasm/member_shipping_fee.wit` |
+| `proto` | `proto/rulec/member_shipping_fee/v4/member_shipping_fee.proto`, and `proto/buf.yaml` (with `proto/buf.lock` where a contract it copies is pinned in a module) |
+
+A rule that reads its enums from an `enums` file gets that file's module beside it, with the
+library of each target.
+
+| `--extra` | beside | what it writes |
+|---|---|---|
+| `runner` | every language | the runner `rulec test` puts the vectors through, `<alias>_runner.<ext>` (`MemberShippingFeeRunner.java`; under `go/`, a module of its own, `membershippingfeerunner/`; under `sql/`, one for the query and one for the function) |
+| `vectors` | the run | `vectors/<alias>.jsonl`, `.expected.jsonl` and `.refused.jsonl`, and the cases of a rule's prerequisites and of its chances where it has them ([formats.md](formats.md)) |
+| `mcp` | `python`, `typescript`, `javascript` | the rule as an MCP server, `<alias>_mcp.<ext>`, and the page it serves, `<alias>_page.html` ([below](#the-rule-as-an-mcp-tool)) |
+| `connect` | `python` and `proto`, both given | the Connect service `python/<alias>_service.py`, and `proto/buf.gen.yaml`, which builds its stubs; with `--extra runner` too, its runner `python/<alias>_connect_runner.py` ([below](#the-rule-as-a-connect-service)) |
+| `round-test` | every language | the unit tests of the rounding helpers, `_round_test.<ext>` (`round_test.go` in the package, `_RoundTest.java`, and under `wasm/` the pair `_round.rs` and `_round_test.mjs`) |
+| `proof` | `rust` | the proof harnesses, `rust/<alias>_proof.rs` ([below](#the-proofs)) |
+
+The library reads no extra, and every extra reads the library beside it. `rulec test` needs
+`--extra runner --extra vectors`; the line CI runs names the same flags as the line that wrote
+the files:
+
+```console
+$ rulec gen rules/member_shipping_fee.rule --target python --target typescript --extra runner --extra vectors --out generated
+generated: generated/python/member_shipping_fee.py
+generated: generated/python/member_shipping_fee_runner.py
+generated: generated/typescript/member_shipping_fee.ts
+generated: generated/typescript/member_shipping_fee_runner.ts
+generated: generated/vectors/member_shipping_fee.jsonl
+generated: generated/vectors/member_shipping_fee.expected.jsonl
+generated: generated/vectors/member_shipping_fee.refused.jsonl
+```
+
+Up to 0.40.0, `gen` with no `--target` wrote every target with every extra: 60 files for this
+rule, where the libraries are 20. It now writes nothing and stops at 2, and names the command
+that writes those 60:
+
+```console
+$ rulec gen rules/member_shipping_fee.rule --out generated
+error: `rulec gen` writes only the targets it is given: give one or more `--target python|numpy|typescript|javascript|rust|ruby|php|go|swift|java|sql|wasm|proto`, and `--extra runner|mcp|connect|round-test|proof|vectors` for what to write beside them
+note: up to 0.40.0, `rulec gen` with no `--target` wrote every target with every extra; this writes the same files:
+  rulec gen rules/member_shipping_fee.rule --out generated --target python --target numpy --target typescript --target javascript --target rust --target ruby --target php --target go --target swift --target java --target sql --target wasm --target proto --extra runner --extra mcp --extra connect --extra round-test --extra proof --extra vectors
+```
+
+A file of an extra a run no longer asks for is not deleted: `gen` names it as generated no more,
+with one note on the `--extra` that writes it, and leaves it for you
+([formats.md](formats.md#gen)).
 
 ---
 
@@ -240,11 +307,12 @@ about one), and `Display` puts them together — nothing is formatted on the ref
 which is what lets a model checker walk it (below).
 
 It compiles with `rustc` alone — `rustc --edition 2021 -O single_coupon_runner.rs` builds both
-the rule and its runner through a `#[path] mod`, with no project file and nothing to fetch.
+the rule and its runner (`--extra runner`) through a `#[path] mod`, with no project file and
+nothing to fetch.
 
 #### The proofs
 
-Beside the module, `single_coupon_proof.rs` holds proof harnesses for the [Kani Rust
+Beside the module, `single_coupon_proof.rs` (`--extra proof`) holds proof harnesses for the [Kani Rust
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
@@ -640,8 +708,8 @@ wasm/
 ├── member_shipping_fee.rs           the same module rust/ gets
 ├── member_shipping_fee_wasm.rs      the crate root: that module behind the canonical ABI
 ├── member_shipping_fee.wit          the world, for the component model
-├── member_shipping_fee_runner.mjs   the Node runner `rulec test` drives
-└── _round.rs, _round_test.mjs
+├── member_shipping_fee_runner.mjs   the Node runner `rulec test` drives (--extra runner)
+└── _round.rs, _round_test.mjs       the tests of the rounding helpers (--extra round-test)
 ```
 
 One file to build, with `rustc` alone — `rulec api` prints this line under `wasm.build`:
@@ -1048,10 +1116,10 @@ machine's state is; the functions keep nothing.
 | NumPy | `rule.requires("<name>", value)` and `rule.available("<name>", value, held)` over the plan's `prerequisites`, for a block a rule holds; an `enums` file, like this one, has no plan |
 | SQL, Wasm | none: one entry, and no room for a second function. `rulec gen` says so as it writes them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared there |
 
-`rulec gen` writes `vectors/<alias>.prereq.tsv` and `.prereq.expected` beside the vectors: one
-line per case — a block, a value and what is held — and what the two functions answer for it,
-from the reference evaluator. An `enums` file with a block gets them too, with a runner of its own
-beside its module in each language. `rulec test` asks every runner with `--prerequisites` and
+`rulec gen --extra vectors` writes `vectors/<alias>.prereq.tsv` and `.prereq.expected` beside the
+vectors: one line per case — a block, a value and what is held — and what the two functions answer
+for it, from the reference evaluator. An `enums` file with a block gets them too, and with
+`--extra runner` a runner of its own beside its module in each language. `rulec test` asks every runner with `--prerequisites` and
 compares the answers byte for byte (docs/formats.md), and so does the corpus's agreement suite
 (`tests/threeway.rs`) for the rules with a block.
 
@@ -1176,8 +1244,8 @@ One call costs as many runs of the rule as there are points of the random inputs
 says how many (`chances.runs`); past a million, `rulec check` says so (W131). A pick by weight
 counted from its weights runs the walk once and the rule once per element.
 
-`rulec gen` writes `vectors/<alias>.chances.jsonl` and `.chances.expected` beside the vectors: the
-inputs of a call, one line per combination of the inputs that are not random the vectors meet, and
+`rulec gen --extra vectors` writes `vectors/<alias>.chances.jsonl` and `.chances.expected` beside the
+vectors: the inputs of a call, one line per combination of the inputs that are not random the vectors meet, and
 what the reference evaluator counted for it (docs/formats.md). Every runner answers `--chances`:
 for each line it calls the function and prints `{"total":N}`, then a line per answer, its count, a
 tab and its outputs as the record writes them; `rulec test` holds that to the second file.
@@ -1319,8 +1387,8 @@ the five, and under `without` the seven that have none, each with its reason.
 ## A rule merged with contributions
 
 What `rulec gen` writes for a rule given with contributions to it (`rulec gen order_discount.rule
-contrib/order_discount/`, reference.md §6.7) is one function, under the rule's name, in every
-language: the rule with the contributions merged into it. Its parameters are the rule's inputs, then
+contrib/order_discount/ --target python`, reference.md §6.7) is one function, under the rule's name,
+in each language asked for: the rule with the contributions merged into it. Its parameters are the rule's inputs, then
 the inputs each contribution adds, in the order they were merged. A contribution's tables, clauses
 and definitions are inside it, as an `apply`'s are, their names prefixed with the contribution's —
 `regional_campaign:campaign_parts` in the trace and on the page, `regional_campaign_campaign_off`
@@ -1661,9 +1729,9 @@ element both rows matched.
 
 ## The rule as an MCP tool
 
-Beside the module, `gen` writes the rule as one MCP server: `<alias>_mcp.py` next to the
-Python module, `<alias>_mcp.mjs` next to the JavaScript one, and the same server with its
-types on in the `typescript` directory. It is for the agent that **calls** the rule, where
+Beside the module, `gen --extra mcp` writes the rule as one MCP server: `<alias>_mcp.py` next
+to the Python module, `<alias>_mcp.mjs` next to the JavaScript one, and the same server with its
+types on in the `typescript` directory, for each of the three given as a `--target`. It is for the agent that **calls** the rule, where
 `rulec mcp` is for the agent that writes one. Registered as a stdio server, the rule is one
 tool named after its alias:
 
@@ -1716,9 +1784,9 @@ read as 1.83%). The module's two error classes are what reach the caller, under 
 ### The answer, with the table beside it
 
 A host that renders **MCP Apps** ([SEP-1865](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/))
-gets more than the record. Beside the server, `gen` writes `<alias>_page.html` — the page
-`rulec doc --format html` renders, byte for byte — and the server offers it as the tool's
-view:
+gets more than the record. Beside the server, the same `--extra mcp` writes `<alias>_page.html`
+— the page `rulec doc --format html` renders, byte for byte, which the server reads as it runs —
+and the server offers it as the tool's view:
 
 ```json
 {"uri":"ui://member_shipping_fee/table","name":"member_shipping_fee","mimeType":"text/html;profile=mcp-app"}
@@ -1755,8 +1823,9 @@ answer that changed with the carrying would be a disagreement. Nothing beyond `p
 ## The rule as a Connect service
 
 The MCP tool above is for an agent. This is the other caller — a service that another team's
-code calls over a wire it already speaks — and `gen` writes it as
-[Connect](https://connectrpc.com/):
+code calls over a wire it already speaks — and `gen --target python --target proto --extra
+connect` writes it as [Connect](https://connectrpc.com/), the first two files with
+`--target proto` alone and the last with `--extra runner` too:
 
 ```
 generated/proto/rulec/member_shipping_fee/v4/member_shipping_fee.proto   the whole of the contract
@@ -1969,8 +2038,8 @@ message, is read from the module protobuf-py writes for that file, under the cla
 
 ## The Rust runner as a WASI module
 
-Apart from the `wasm/` target above, the Rust runner itself compiles unchanged for
-`wasm32-wasip1`: it reads stdin and writes stdout through the standard library, which is what
+Apart from the `wasm/` target above, the Rust runner itself (`--target rust --extra runner`)
+compiles unchanged for `wasm32-wasip1`: it reads stdin and writes stdout through the standard library, which is what
 a WASI command does — the shape a host that speaks through stdio gives a rule, such as Fastly
 Compute, Spin, or an ordinary batch step in a sandbox. When `wasmtime` is on the PATH and that
 target's standard library is installed (`rustup target add wasm32-wasip1`), `rulec test` runs
@@ -2012,21 +2081,25 @@ platform takes and where its input ends and the rule's begins.
 
 ## Keeping it in step with the rule
 
-The generated files are committed to git and CI re-derives them:
+The generated files are committed to git and CI re-derives them, with the `--target` and
+`--extra` that wrote them:
 
 ```console
-$ rulec gen rules/ --out generated/ --check
+$ rulec gen rules/ --target python --target typescript --out generated/ --check
 ```
 
-`gen --check` writes nothing and exits 1 if any file differs from a fresh generation or is
-missing, so a rule edited without regenerating, or a generated file edited by hand, both stop
-the build. **Never edit generated code by hand**: the header says `DO NOT EDIT`, and the next
+`gen --check` writes nothing and exits 1 if any file those flags write differs from a fresh
+generation or is missing, so a rule edited without regenerating, or a generated file edited by
+hand, both stop the build. **Never edit generated code by hand**: the header says `DO NOT EDIT`, and the next
 `gen` overwrites it. Anything the generated code lacks belongs either in the `.rule` or on the
 calling side.
 
 `rulec test generated/` goes one step further and actually runs every generated language over the
 generated vectors, comparing them with the reference evaluator by canonical JSON, byte for
-byte. That is the only step that needs a `python3` and a `go` toolchain.
+byte: the runners and the vectors are `--extra runner --extra vectors`, which a run for CI can
+write to a directory of its own rather than beside the committed code. A language generated
+without its runner is skipped, and `--require-all` fails on it. That is the only step that
+needs the toolchains, a `python3` and a `go` for those two languages.
 
 ## Where the values come from
 

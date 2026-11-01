@@ -332,6 +332,7 @@ fn runs_alike(runs: &[Run], what: &str) {
     args.extend(runs.iter().map(|r| r.file.as_str()));
     let o = out.to_string_lossy().into_owned();
     args.extend(["--out", o.as_str()]);
+    args.extend(rulec::targets::UP_TO_0_40);
     let (code, said, e) = rulec(&dir, &tmp, &args);
     assert_eq!(code, 0, "{what}: {said}{e}");
     let (_, said, e) = rulec(&dir, &tmp, &["test", o.as_str(), "--format", "json"]);

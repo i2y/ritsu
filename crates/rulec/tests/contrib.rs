@@ -226,7 +226,7 @@ fn the_header_the_api_and_the_page_say_what_was_merged() {
     assert!(!alone.contains("\"contributions\""), "{alone}");
     let t = TempDir::new("contrib-gen");
     let out = t.path().join("gen");
-    let (c, _, e) = run_in(&d, &["gen", "order_discount.rule", "contrib/order_discount/regional_campaign.rule", "--out", out.to_str().unwrap()]);
+    let (c, _, e) = run_in(&d, &rulec::targets::up_to_0_40(&["gen", "order_discount.rule", "contrib/order_discount/regional_campaign.rule", "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     let py = std::fs::read_to_string(out.join("python/order_discount.py")).unwrap();
     assert!(py.lines().any(|l| l.starts_with("# Contributions: regional_campaign = contrib/order_discount/regional_campaign.rule (signature:")), "{}", &py[..400.min(py.len())]);
@@ -317,7 +317,7 @@ fn the_merged_rules_run_alike_in_every_language() {
     let out = t.path().join("gen");
     let (c, _, e) = run_in(
         &d,
-        &[
+        &rulec::targets::up_to_0_40(&[
             "gen",
             "order_discount.rule",
             "contrib/order_discount/regional_campaign.rule",
@@ -327,7 +327,7 @@ fn the_merged_rules_run_alike_in_every_language() {
             "contrib/product_line/garden_price.rule",
             "--out",
             out.to_str().unwrap(),
-        ],
+        ]),
     );
     assert_eq!(c, 0, "{e}");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["test", out.to_str().unwrap()]).output().expect("cannot start rulec test");
@@ -486,7 +486,7 @@ fn a_rules_claims_of_chances_hold_whatever_is_added() {
     let (c, out, _) = run_in(d, &["check", "lottery.rule", "swap.rule"]);
     assert_eq!(c, 0, "{out}");
     let out_dir = d.join("gen");
-    let (c, _, e) = run_in(d, &["gen", "lottery.rule", "swap.rule", "--out", out_dir.to_str().unwrap()]);
+    let (c, _, e) = run_in(d, &rulec::targets::up_to_0_40(&["gen", "lottery.rule", "swap.rule", "--out", out_dir.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     let py = std::fs::read_to_string(out_dir.join("python/prize_lottery.py")).unwrap();
     assert!(py.contains("def prize_lottery_chances(campaign: bool, holiday: bool) -> Chances:"), "the counts take the added input");
@@ -661,7 +661,7 @@ fn a_contribution_to_an_applied_rule_is_named_by_the_rule_that_applies_it() {
     let (c, out, e) = run_in(d, &["check", "rules", "mods"]);
     assert_eq!(c, 0, "{out}{e}");
     assert!(out.contains("ok rules/pick.rule (2 contributions: mods/m/elig.rule, mods/m/content.rule)\n"), "{out}");
-    let (c, out, e) = run_in(d, &["gen", "rules", "mods", "--out", "gen"]);
+    let (c, out, e) = run_in(d, &rulec::targets::up_to_0_40(&["gen", "rules", "mods", "--out", "gen"]));
     assert_eq!(c, 0, "{out}{e}");
     let line = "Contributions: elig:m_elig = ../mods/m/elig.rule (signature:";
     for (file, comment) in [("gen/python/pick.py", "#"), ("gen/typescript/pick.ts", "//"), ("gen/go/pick/pick.go", "//"), ("gen/java/Pick.java", "//")] {

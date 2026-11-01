@@ -113,7 +113,7 @@ fn 生成物は制約を破る入力を受け付けない() {
     let (_tmp, d) = dir("guard");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, o, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, o, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{o}{e}");
 
     // Every language writes the door; Python is the one run here.
@@ -225,7 +225,7 @@ fn 刻みの違う率どうしの制約を門が正しく比べる() {
     let (_tmp, d) = dir("steps");
     let p = write(&d, "r.rule", STEPS);
     let out = d.join("out");
-    let (code, o, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, o, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{o}{e}");
     // 50% in 1% steps is 50; 10% in 0.1% steps is 100. 50% ≤ 10% is false, so the door has to
     // refuse it — and 5% against 20% (5 and 200) has to pass.

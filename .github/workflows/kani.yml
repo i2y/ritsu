@@ -103,7 +103,7 @@ jobs:
         run: |
           set -eu -o pipefail
           out=$(mktemp -d)
-          target/debug/rulec gen crates/rulec/tests/corpus/ --out "$out" > /dev/null
+          target/debug/rulec gen crates/rulec/tests/corpus/ --target rust --extra proof --out "$out" > /dev/null
           bad=0
           rules=0
           harnesses=0

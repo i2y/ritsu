@@ -193,7 +193,7 @@ fn the_generated_code_refuses_another_day() {
     let path = days_dir().join("settlement.rule");
     let t = ritsu_testkit::TempDir::new("days-gen");
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = rulec::days::with(Some(koyomi()), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), false, false, &mut out, &mut err));
+    let code = rulec::days::with(Some(koyomi()), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), &rulec::targets::Asked::up_to_0_40(), false, false, &mut out, &mut err));
     assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
     let dir = t.path().join("python");
     assert!(dir.join("settlement.py").exists(), "{}", String::from_utf8_lossy(&out));
@@ -239,7 +239,7 @@ fn the_generated_code_answers_in_every_language_here() {
     let path = days_dir().join("settlement.rule");
     let t = ritsu_testkit::TempDir::new("days-all");
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = rulec::days::with(Some(koyomi()), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), false, false, &mut out, &mut err));
+    let code = rulec::days::with(Some(koyomi()), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), &rulec::targets::Asked::up_to_0_40(), false, false, &mut out, &mut err));
     assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
     let run = rulec::runtest::run(t.path()).expect("rulec test runs");
     print!("{}", rulec::runtest::render(&run));

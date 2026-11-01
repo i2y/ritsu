@@ -10,14 +10,17 @@ rather than in SKILL.md, which is read whole whenever the skill is used.
 - uses: i2y/ritsu@v0.38.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
-- run: rulec gen rules/ --out generated/ --check
+- run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
 - run: rulec coverage rules/
 - run: rulec test generated/ --require-all
 ```
 
 `--diff-base` reports only findings that are new since that revision, so pre-existing
 warnings do not drown the ones this change introduced. `gen --check` fails when the generated
-code is stale — that is the gate that keeps the committed output honest.
+code is stale — that is the gate that keeps the committed output honest. It compares what the
+same `--target` and `--extra` write, so the line names the ones the files were written with:
+`python` stands for the languages your code reads, and `--extra runner --extra vectors` for what
+`rulec test` puts through them.
 
 ## If there is a legacy implementation: `rulec verify`
 

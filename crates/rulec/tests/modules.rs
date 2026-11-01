@@ -159,7 +159,7 @@ fn a_contract_of_the_module_imports_its_dependencys_contract() {
                 .current_dir(t.path().join(app))
                 .env_remove("RULEC_LANG")
                 .env_remove("RITSU_LANG")
-                .args(["gen", rule, "--out", out.to_str().unwrap(), "--lang", lang])
+                .args(["gen", rule, "--out", out.to_str().unwrap(), "--lang", lang]).args(rulec::targets::UP_TO_0_40)
                 .output()
                 .expect("cannot start rulec");
             (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
@@ -198,6 +198,7 @@ fn gen_in(t: &TempDir, rules: &[&str], lang: &str, out: &str) -> (i32, String, S
     let mut args = vec!["gen"];
     args.extend_from_slice(rules);
     args.extend(["--out", out.to_str().unwrap(), "--lang", lang]);
+    args.extend(rulec::targets::UP_TO_0_40);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(t.path().join("app")).env_remove("RULEC_LANG").env_remove("RITSU_LANG").args(&args).output().expect("cannot start rulec");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }

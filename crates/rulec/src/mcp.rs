@@ -179,7 +179,13 @@ fn tools_list(cmds: &[Cmd]) -> String {
                 if f.value.is_none() {
                     o.push_str("\"type\":\"boolean\"");
                 } else if f.repeat {
-                    o.push_str("\"type\":\"array\",\"items\":{\"type\":\"string\"}");
+                    // Each value is held to the flag's closed set, as on the command line; a flag the
+                    // command needs is a list of at least one (`gen --target`, §15.277).
+                    let one = if f.choices.is_empty() { String::new() } else { format!(",\"enum\":{}", json::strs(f.choices)) };
+                    o.push_str(&format!("\"type\":\"array\",\"items\":{{\"type\":\"string\"{one}}}"));
+                    if f.required {
+                        o.push_str(",\"minItems\":1");
+                    }
                 } else {
                     o.push_str("\"type\":\"string\"");
                     if !f.choices.is_empty() {
@@ -192,6 +198,9 @@ fn tools_list(cmds: &[Cmd]) -> String {
                 }
                 o.push_str(&format!(",\"description\":{}", json_str(&help)));
                 props.push(format!("{}:{{{o}}}", json_str(&prop_name(f.name))));
+                if f.required {
+                    required.push(prop_name(f.name));
+                }
             }
             let mut desc = c.purpose.clone();
             desc.push_str(&tr!("。exit code: ", ". Exit codes: "));

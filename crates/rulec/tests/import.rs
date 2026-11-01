@@ -385,6 +385,7 @@ fn the_code_generated_from_every_draft_answers_alike_in_every_language() {
         let mut args: Vec<&str> = vec!["gen"];
         args.extend(files.iter().map(String::as_str));
         args.extend(["--out", "out"]);
+        args.extend(rulec::targets::UP_TO_0_40);
         let (c, said, e) = rulec_in(dir, &tmp, &args);
         assert_eq!(c, 0, "gen: {said}{e}");
         let (_, said, e) = rulec_in(dir, &tmp, &["test", "out", "--format", "json"]);

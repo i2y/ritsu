@@ -15514,7 +15514,10 @@ fn dependencies_hold(files: &[&str], read: &[RuleRead]) -> Option<String> {
     None
 }
 
-pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> u8 {
+/// `rulec gen` (§15.277): the library of each target `asked` gives and the extras it asks for,
+/// written under `out_dir`, or under `--check` held to what is there; the exit code.
+pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, check_only: bool, json: bool, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> u8 {
+    use crate::targets::{PROTO, Part};
     // In a module of ritsu's, every rule is read first, and what a dependency's file stops is made
     // sure of before anything is written (ritsu's DESIGN 17.6); the loop below takes each rule as it
     // was read. Outside every module, each rule is read where the loop comes to it, as before (M14).
@@ -15525,13 +15528,19 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
     let mut early: Vec<Option<RuleRead>> = Vec::new();
     if in_a_module {
         let read: Vec<RuleRead> = files.iter().map(|p| read_rule(p)).collect();
-        if let Some(stop) = dependencies_hold(files, &read) {
+        // What it makes sure of is the module of the `.proto` files, which `--target proto` writes.
+        if asked.target(PROTO)
+            && let Some(stop) = dependencies_hold(files, &read)
+        {
             let _ = writeln!(err, "{stop}");
             return 2;
         }
         early = read.into_iter().map(Some).collect();
     }
     let mut st = Emitted::default();
+    // The files of the extras this run is not asked for, of the targets it is given, each with its
+    // part: one found where it would be written is named as left there (§15.277).
+    let mut unasked: Vec<(String, Part)> = Vec::new();
     // The contracts copied into the module so far, the rule each came with and the file it was
     // copied from: two rules may import the same one, but not two different files under one path.
     let mut contracts: std::collections::BTreeMap<String, (String, String, std::path::PathBuf)> = std::collections::BTreeMap::new();
@@ -15593,18 +15602,22 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         // (§15.212).
         if f.kind == FileKind::Enums {
             let g = crate::codegen::Gen::new(&f, &c, &src, path);
-            let Some(mut targets) = put_modules(path, g.enums_module_files(), err) else { return 1 };
+            let Some(mut targets) = put_modules(path, asked.split(g.enums_module_files(), Part::Library).0, err) else { return 1 };
             // Its `prerequisites` blocks are functions of its modules (§15.222): a runner beside
             // each, and what they have to answer.
             if let Some((input, expected)) = g.prereq_input() {
                 let alias = pub_name(&f.name);
-                for (rel, body) in g.enums_runner_files() {
+                let (runners, not) = asked.split(g.enums_runner_files(), Part::Runner);
+                for (rel, body) in runners {
                     targets.push((format!("{out_dir}/{rel}"), body));
                 }
-                targets.push((format!("{out_dir}/vectors/{alias}.prereq.tsv"), input));
-                targets.push((format!("{out_dir}/vectors/{alias}.prereq.expected"), expected));
+                unasked.extend(not.into_iter().map(|rel| (format!("{out_dir}/{rel}"), Part::Runner)));
+                if asked.extra("vectors") {
+                    targets.push((format!("{out_dir}/vectors/{alias}.prereq.tsv"), input));
+                    targets.push((format!("{out_dir}/vectors/{alias}.prereq.expected"), expected));
+                }
                 if !json {
-                    for b in crate::backend::ALL.iter().filter(|b| !b.prereqs || b.id == "numpy") {
+                    for b in crate::backend::ALL.iter().filter(|b| asked.target(b.id) && (!b.prereqs || b.id == "numpy")) {
                         let _ = writeln!(out, "{}", if b.prereqs { prereq_not_here(b.name) } else { prereq_skipped(b.name) });
                     }
                 }
@@ -15627,24 +15640,16 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
             }
         };
         for (from, files) in owners {
-            let Some(targets) = put_modules(&from, files, err) else { return 1 };
+            let Some(targets) = put_modules(&from, asked.split(files, Part::Library).0, err) else { return 1 };
             if let Some(code) = emit(targets, check_only, json, &mut st, out, err) {
                 return code;
             }
         }
-        // Also emit the vectors and the expected values. Of the three uses in §9.3, the
-        // cross-language agreement test and the golden files run on these.
-        let suite = crate::vectors::suite(&f, &c);
-        let vs = &suite.vectors;
-        let vec_body: String =
-            vs.iter().map(|v| crate::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
-        let exp_body: String =
-            vs.iter().map(|v| crate::vectors::expected_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
         // Every backend says which files it writes (src/backend.rs). The list used to be
         // here, spelled out per language, which is one of the seven places a new target had
         // to be added by hand.
         let mut targets: Vec<(String, String)> = Vec::new();
-        for b in crate::backend::ALL {
+        for b in crate::backend::ALL.iter().filter(|b| asked.target(b.id)) {
             // A walk is written only by the backends that can write one (§15.56). A file that
             // cannot run is worse than a missing one, so the rest are named and skipped.
             if !f.elements.is_empty() && !b.folds {
@@ -15696,131 +15701,150 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
             if !b.chances && f.has_random() && !json {
                 let _ = writeln!(out, "{}", chances_skipped(b.name, b.id, &alias));
             }
-            for (rel, body) in (b.files)(&g, &alias, &pkg) {
-                targets.push((format!("{out_dir}/{rel}"), body));
-            }
-        }
-        // The wire of the rule as a service (§15.112). It is one file for every language,
-        // not one per backend, so it is pushed here rather than from the registry: the
-        // `.proto` is the contract, and a contract does not come in twelve copies. A rule that
-        // implements a contract's service has none of its own: the contract is the `.proto`,
-        // copied below (§15.274).
-        if f.implements.is_none() {
-            let (p, body) = (format!("{out_dir}/proto/{}", g.proto_path()), g.proto());
-            if let Some((_, _, disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
-                let _ = writeln!(err, "{}", contract_over_own(&g.proto_path(), disk, path));
-                return if ritsu_base::modules::under_dependency(disk) { 2 } else { 1 };
-            }
-            own_protos.insert(p.clone(), (body.clone(), path.to_string()));
-            targets.push((p, body));
-        } else {
-            before_contract.push((format!("{out_dir}/proto/{}", g.proto_path()), path.to_string()));
-        }
-        // The contracts that `.proto` imports an enum from, so that the module builds as it
-        // stands (§15.160): each the file `check` held the rule to, copied byte for byte to
-        // the path the import names, and the contract the rule implements. What they import
-        // from the BSR goes into the module's `buf.yaml` and `buf.lock`, written once below.
-        let found = g.proto_contracts();
-        if let Some((rel, a, b)) = &found.clash {
-            let _ = writeln!(err, "{}", contracts_clash(rel, a, b));
-            return 2;
-        }
-        if let Some((file, a, b)) = &found.two_names {
-            let _ = writeln!(err, "{}", contracts_two_names(file, a, b));
-            return 2;
-        }
-        if let Err(e) = module_deps.merge(found.deps) {
-            let _ = writeln!(err, "error: {e}");
-            return 1;
-        }
-        for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
-            let p = format!("{out_dir}/proto/{rel}");
-            // a contract that would be copied over a rule's own `.proto`, or under it
-            if let Some((_, rule)) = own_protos.get(&p).filter(|(prev, _)| *prev != body) {
-                let _ = writeln!(err, "{}", contract_over_own(&rel, &disk, rule));
-                return if ritsu_base::modules::under_dependency(&disk) { 2 } else { 1 };
-            }
-            if let Some((_, from, prev_disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
-                // in a module of ritsu's, with a dependency's file among the two, the run stops as
-                // it does for one rule's (ritsu's DESIGN 17.6)
-                if ritsu_base::modules::under_dependency(prev_disk) || ritsu_base::modules::under_dependency(&disk) {
-                    let _ = writeln!(err, "{}", contracts_clash(&rel, prev_disk, &disk));
-                    return 2;
+            // Its library, and the extras asked for (§15.277).
+            for (rel, body, part) in (b.files)(&g, &alias, &pkg) {
+                if asked.wants(b.id, part) {
+                    targets.push((format!("{out_dir}/{rel}"), body));
+                } else {
+                    unasked.push((format!("{out_dir}/{rel}"), part));
                 }
-                let _ = writeln!(err,
-                    "{}",
-                    tr!(
-                        "error: `{from}` と `{path}` が、違う内容の契約を同じ `proto/{rel}` として取り込んでいます",
-                        "error: `{from}` and `{path}` import two different contracts as the same `proto/{rel}`"
-                    )
-                );
+            }
+        }
+        // The target `proto` (§15.277): the rule's `.proto`, or the contracts it implements and
+        // imports from, as the module of buf they land in.
+        if asked.target(PROTO) {
+            // The wire of the rule as a service (§15.112). It is one file for every language,
+            // not one per backend, so it is pushed here rather than from the registry: the
+            // `.proto` is the contract, and a contract does not come in twelve copies. A rule that
+            // implements a contract's service has none of its own: the contract is the `.proto`,
+            // copied below (§15.274).
+            if f.implements.is_none() {
+                let (p, body) = (format!("{out_dir}/proto/{}", g.proto_path()), g.proto());
+                if let Some((_, _, disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
+                    let _ = writeln!(err, "{}", contract_over_own(&g.proto_path(), disk, path));
+                    return if ritsu_base::modules::under_dependency(disk) { 2 } else { 1 };
+                }
+                own_protos.insert(p.clone(), (body.clone(), path.to_string()));
+                targets.push((p, body));
+            } else {
+                before_contract.push((format!("{out_dir}/proto/{}", g.proto_path()), path.to_string()));
+            }
+            // The contracts that `.proto` imports an enum from, so that the module builds as it
+            // stands (§15.160): each the file `check` held the rule to, copied byte for byte to
+            // the path the import names, and the contract the rule implements. What they import
+            // from the BSR goes into the module's `buf.yaml` and `buf.lock`, written once below.
+            let found = g.proto_contracts();
+            if let Some((rel, a, b)) = &found.clash {
+                let _ = writeln!(err, "{}", contracts_clash(rel, a, b));
+                return 2;
+            }
+            if let Some((file, a, b)) = &found.two_names {
+                let _ = writeln!(err, "{}", contracts_two_names(file, a, b));
+                return 2;
+            }
+            if let Err(e) = module_deps.merge(found.deps) {
+                let _ = writeln!(err, "error: {e}");
                 return 1;
             }
-            // one file of a dependency's that another rule copied under another name
-            if ritsu_base::modules::under_dependency(&disk) {
-                let key = connect::same_file_key(&disk);
-                match dependency_files.get(&key) {
-                    Some(prev) if *prev != rel => {
-                        let mut names = [prev.clone(), rel.clone()];
-                        names.sort();
-                        let _ = writeln!(err, "{}", contracts_two_names(&disk, &names[0], &names[1]));
+            for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
+                let p = format!("{out_dir}/proto/{rel}");
+                // a contract that would be copied over a rule's own `.proto`, or under it
+                if let Some((_, rule)) = own_protos.get(&p).filter(|(prev, _)| *prev != body) {
+                    let _ = writeln!(err, "{}", contract_over_own(&rel, &disk, rule));
+                    return if ritsu_base::modules::under_dependency(&disk) { 2 } else { 1 };
+                }
+                if let Some((_, from, prev_disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
+                    // in a module of ritsu's, with a dependency's file among the two, the run stops as
+                    // it does for one rule's (ritsu's DESIGN 17.6)
+                    if ritsu_base::modules::under_dependency(prev_disk) || ritsu_base::modules::under_dependency(&disk) {
+                        let _ = writeln!(err, "{}", contracts_clash(&rel, prev_disk, &disk));
                         return 2;
                     }
-                    Some(_) => {}
-                    None => {
-                        dependency_files.insert(key, rel.clone());
+                    let _ = writeln!(err,
+                        "{}",
+                        tr!(
+                            "error: `{from}` と `{path}` が、違う内容の契約を同じ `proto/{rel}` として取り込んでいます",
+                            "error: `{from}` and `{path}` import two different contracts as the same `proto/{rel}`"
+                        )
+                    );
+                    return 1;
+                }
+                // one file of a dependency's that another rule copied under another name
+                if ritsu_base::modules::under_dependency(&disk) {
+                    let key = connect::same_file_key(&disk);
+                    match dependency_files.get(&key) {
+                        Some(prev) if *prev != rel => {
+                            let mut names = [prev.clone(), rel.clone()];
+                            names.sort();
+                            let _ = writeln!(err, "{}", contracts_two_names(&disk, &names[0], &names[1]));
+                            return 2;
+                        }
+                        Some(_) => {}
+                        None => {
+                            dependency_files.insert(key, rel.clone());
+                        }
                     }
                 }
+                contracts.insert(p.clone(), (body.clone(), path.to_string(), disk));
+                targets.push((p, body));
             }
-            contracts.insert(p.clone(), (body.clone(), path.to_string(), disk));
-            targets.push((p, body));
         }
-        targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
-        targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
-        // The modules of the `enums` files the rule reads, for a language that builds them
-        // together with it (§15.212): `rulec test` reads this beside the vectors.
-        let owners: Vec<String> = g.foreign_enums().into_iter().map(|(m, _)| m).collect();
-        if !owners.is_empty() {
-            targets.push((format!("{out_dir}/vectors/{alias}.owners.json"), crate::json::strs(&owners) + "\n"));
-        }
-        // The display names every language has to give back, value by value (§15.211).
-        if let Some((input, expected)) = g.labels_input() {
-            targets.push((format!("{out_dir}/vectors/{alias}.labels.tsv"), input));
-            targets.push((format!("{out_dir}/vectors/{alias}.labels.expected"), expected));
-        }
-        // What the functions of each `prerequisites` block have to answer (§15.222).
-        if let Some((input, expected)) = g.prereq_input() {
-            targets.push((format!("{out_dir}/vectors/{alias}.prereq.tsv"), input));
-            targets.push((format!("{out_dir}/vectors/{alias}.prereq.expected"), expected));
-        }
-        // What the function that counts the answers has to give, line by line (§15.225).
-        if let Some((input, expected)) = crate::chances::vector_files(&f, &c, vs) {
-            targets.push((format!("{out_dir}/vectors/{alias}.chances.jsonl"), input));
-            targets.push((format!("{out_dir}/vectors/{alias}.chances.expected"), expected));
-        }
-        // The cases the reference evaluator refuses: the walks it has no answer for, and an
-        // input for every reason the door has (§15.204). They have no expected record —
-        // refusing is the expectation — so they get a file of their own, and `rulec test` holds
-        // every generated language to refusing each of them with the reference's sentence
-        // (§15.56).
-        let refused: Vec<String> = suite
-            .refused
-            .iter()
-            .map(|v| crate::vectors::refused_json(&f, &c, v))
-            .chain(crate::vectors::door_cases(&f, &c, &suite.vectors))
-            .collect();
-        if !refused.is_empty() {
-            targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), refused.join("\n") + "\n"));
-        }
-        // The sequences of calls a machine is played through (§15.148): each runner passes
-        // the state its own language answered to the next call, and prints its constants
-        // first, so the traces hold the hand-over and `INITIAL` / the final states as well.
-        if let Some(t) = crate::vectors::machine_traces(&f, &c) {
-            targets.push((format!("{out_dir}/vectors/{alias}.traces.jsonl"), crate::vectors::traces_json(&f, &c, &t)));
-            targets.push((
-                format!("{out_dir}/vectors/{alias}.traces.expected.jsonl"),
-                crate::vectors::traces_expected_json(&f, &c, &t),
-            ));
+        // Also emit the vectors and the expected values, for `--extra vectors` (§15.277). Of the
+        // three uses in §9.3, the cross-language agreement test and the golden files run on these.
+        if asked.extra("vectors") {
+            let suite = crate::vectors::suite(&f, &c);
+            let vs = &suite.vectors;
+            let vec_body: String =
+                vs.iter().map(|v| crate::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
+            let exp_body: String =
+                vs.iter().map(|v| crate::vectors::expected_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
+            targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
+            targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
+            // The modules of the `enums` files the rule reads, for a language that builds them
+            // together with it (§15.212): `rulec test` reads this beside the vectors.
+            let owners: Vec<String> = g.foreign_enums().into_iter().map(|(m, _)| m).collect();
+            if !owners.is_empty() {
+                targets.push((format!("{out_dir}/vectors/{alias}.owners.json"), crate::json::strs(&owners) + "\n"));
+            }
+            // The display names every language has to give back, value by value (§15.211).
+            if let Some((input, expected)) = g.labels_input() {
+                targets.push((format!("{out_dir}/vectors/{alias}.labels.tsv"), input));
+                targets.push((format!("{out_dir}/vectors/{alias}.labels.expected"), expected));
+            }
+            // What the functions of each `prerequisites` block have to answer (§15.222).
+            if let Some((input, expected)) = g.prereq_input() {
+                targets.push((format!("{out_dir}/vectors/{alias}.prereq.tsv"), input));
+                targets.push((format!("{out_dir}/vectors/{alias}.prereq.expected"), expected));
+            }
+            // What the function that counts the answers has to give, line by line (§15.225).
+            if let Some((input, expected)) = crate::chances::vector_files(&f, &c, vs) {
+                targets.push((format!("{out_dir}/vectors/{alias}.chances.jsonl"), input));
+                targets.push((format!("{out_dir}/vectors/{alias}.chances.expected"), expected));
+            }
+            // The cases the reference evaluator refuses: the walks it has no answer for, and an
+            // input for every reason the door has (§15.204). They have no expected record —
+            // refusing is the expectation — so they get a file of their own, and `rulec test` holds
+            // every generated language to refusing each of them with the reference's sentence
+            // (§15.56).
+            let refused: Vec<String> = suite
+                .refused
+                .iter()
+                .map(|v| crate::vectors::refused_json(&f, &c, v))
+                .chain(crate::vectors::door_cases(&f, &c, &suite.vectors))
+                .collect();
+            if !refused.is_empty() {
+                targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), refused.join("\n") + "\n"));
+            }
+            // The sequences of calls a machine is played through (§15.148): each runner passes
+            // the state its own language answered to the next call, and prints its constants
+            // first, so the traces hold the hand-over and `INITIAL` / the final states as well.
+            if let Some(t) = crate::vectors::machine_traces(&f, &c) {
+                targets.push((format!("{out_dir}/vectors/{alias}.traces.jsonl"), crate::vectors::traces_json(&f, &c, &t)));
+                targets.push((
+                    format!("{out_dir}/vectors/{alias}.traces.expected.jsonl"),
+                    crate::vectors::traces_expected_json(&f, &c, &t),
+                ));
+            }
         }
         if let Some(code) = emit(targets, check_only, json, &mut st, out, err) {
             return code;
@@ -15834,12 +15858,20 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
     for n in &module_deps.notes {
         let _ = writeln!(err, "{}", tr!("注意: {n}", "warning: {n}"));
     }
-    let mut module = vec![
-        (format!("{out_dir}/proto/buf.yaml"), crate::codegen::buf_yaml(&module_deps)),
-        (format!("{out_dir}/proto/buf.gen.yaml"), crate::codegen::buf_gen_yaml()),
-    ];
-    if let Some(lock) = crate::codegen::buf_lock(&module_deps) {
-        module.push((format!("{out_dir}/proto/buf.lock"), lock));
+    // It is the target `proto`'s; `buf.gen.yaml`, which builds the stubs of the Python service and
+    // nothing else, is the Connect service's (§15.277).
+    let mut module = Vec::new();
+    if asked.target(PROTO) {
+        module.push((format!("{out_dir}/proto/buf.yaml"), crate::codegen::buf_yaml(&module_deps)));
+        let stubs = format!("{out_dir}/proto/buf.gen.yaml");
+        if asked.wants(PROTO, Part::Connect) {
+            module.push((stubs, crate::codegen::buf_gen_yaml()));
+        } else {
+            unasked.push((stubs, Part::Connect));
+        }
+        if let Some(lock) = crate::codegen::buf_lock(&module_deps) {
+            module.push((format!("{out_dir}/proto/buf.lock"), lock));
+        }
     }
     if let Some(code) = emit(module, check_only, json, &mut st, out, err) {
         return code;
@@ -15857,6 +15889,23 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         if !json {
             let _ = writeln!(out, "{}", left_behind(p, rule));
         }
+    }
+    // The files of the extras this run is not asked for, found where it would have written them:
+    // an earlier run asked for them, or was 0.40.0's, which wrote every one (§15.277). They are said
+    // as that `.proto` is, the extras that write them named once, and the exit code stays what it is.
+    let mut extras_left: Vec<&'static str> = Vec::new();
+    for (p, part) in &unasked {
+        if st.planned.contains(p) || st.left.contains(p) || !extra_by_rulec(p) {
+            continue;
+        }
+        st.left.push(p.clone());
+        extras_left.extend(asked.not_asked(*part));
+        if !json {
+            let _ = writeln!(out, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}"));
+        }
+    }
+    if !json && !extras_left.is_empty() {
+        let _ = writeln!(out, "{}", crate::targets::left_note(&extras_left));
     }
     if json {
         let _ = writeln!(out,
@@ -15877,6 +15926,17 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
 fn generated_by_rulec(p: &str) -> bool {
     let Ok(text) = ritsu_base::fs::read_to_string(p) else { return false };
     text.lines().next().and_then(|l| l.strip_prefix("// ")).is_some_and(|l| l.starts_with("Code generated by rulec ") && l.ends_with("DO NOT EDIT."))
+}
+
+/// Whether the file at `p` is a file of an extra rulec wrote (§15.277): a line of it is rulec's
+/// head, of whichever version, in the comment of the file's language. It is the first line of most;
+/// PHP's comes after `<?php`, and the page carries it in its script. The `.proto` of §15.275 is
+/// held to its first line, as [`generated_by_rulec`] reads it.
+fn extra_by_rulec(p: &str) -> bool {
+    let Ok(text) = ritsu_base::fs::read_to_string(p) else { return false };
+    text.lines().any(|l| {
+        ["// ", "# ", "-- "].iter().filter_map(|c| l.trim().strip_prefix(c)).any(|l| l.starts_with("Code generated by rulec ") && l.ends_with("DO NOT EDIT."))
+    })
 }
 
 /// What `gen` says of the `.proto` it wrote for a rule before the rule implemented a contract's

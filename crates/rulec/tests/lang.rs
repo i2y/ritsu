@@ -136,7 +136,7 @@ fn generated_code_prose_follows_the_switch() {
     let tmp = TempDir::new("lang");
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, _, e) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--lang", "en"], &[]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--lang", "en"]), &[]);
     assert_eq!(c, 0, "{e}");
     let py = std::fs::read_to_string(dir.join("python").join("yupack_fee.py")).unwrap();
     // Comments quote cells (Japanese by design); the docstring and the runtime
@@ -146,9 +146,9 @@ fn generated_code_prose_follows_the_switch() {
     // The same rule generated in Japanese differs only in prose, and each
     // language is deterministic: `gen --check` must pass in the language it was
     // generated with.
-    let (c, o, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check", "--lang", "en"], &[]);
+    let (c, o, _) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check", "--lang", "en"]), &[]);
     assert_eq!(c, 0, "{o}");
-    let (c, _, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check", "--lang", "ja"], &[]);
+    let (c, _, _) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check", "--lang", "ja"]), &[]);
     assert_eq!(c, 1, "a Japanese --check against English output must report a difference");
 }
 

@@ -117,7 +117,7 @@ fn said_everywhere(dir: &Path, file: &str, output: &str, (lo, hi): (i128, i128))
     // SQL files, and the rule the pages' script reads
     let generated = dir.join("generated");
     let _ = std::fs::remove_dir_all(&generated);
-    let (code, _) = rulec(dir, &["gen", file, "--out", "generated"]);
+    let (code, _) = rulec(dir, &rulec::targets::up_to_0_40(&["gen", file, "--out", "generated"]));
     assert_eq!(code, 0, "{at}: gen");
     let mut files: Vec<PathBuf> = Vec::new();
     let mut todo = vec![generated];

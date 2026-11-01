@@ -158,7 +158,7 @@ fn 生成コードの型と値の名前は凍結した表のとおり() {
         let src = rule(&im, |_, d| im.value(d).to_string());
         let p = write(t.path(), &format!("pick{k}.rule"), &src.replace("rule pick v1", &format!("rule pick{k} v1")));
         let out = t.path().join(format!("out{k}"));
-        let (c, o) = rulec("en", &["gen", &p, "--out", out.to_str().unwrap()]);
+        let (c, o) = rulec("en", &rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
         assert_eq!(c, 0, "{o}");
         let ty = im.ns.generated;
         let read = |rel: &str| std::fs::read_to_string(out.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"));
@@ -272,7 +272,7 @@ fn 都道府県はどちらの名前で取り込んでも同じ区分で綴り�
     // The same generated type and members; the wire value is each import's spelling.
     let out = t.path().join("out");
     for (p, w) in [(&a, "TOKYO = \"東京都\""), (&b, "TOKYO = \"Tokyo\"")] {
-        let (c, o) = rulec("en", &["gen", p, "--out", out.to_str().unwrap()]);
+        let (c, o) = rulec("en", &rulec::targets::up_to_0_40(&["gen", p, "--out", out.to_str().unwrap()]));
         assert_eq!(c, 0, "{o}");
         let py = std::fs::read_to_string(out.join("python/pick.py")).unwrap();
         assert!(py.contains("class Prefecture(enum.Enum):") && py.contains(w), "{py}");

@@ -197,7 +197,7 @@ fn 出力が状態だけの機械も生成したコードで回る() {
     let (c, out) = rulec(&["check", &rule]);
     assert_eq!(c, 0, "{out}");
     let out_dir = d.join("gen").to_string_lossy().into_owned();
-    let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
+    let (c, out) = rulec(&rulec::targets::up_to_0_40(&["gen", &rule, "--out", &out_dir]));
     assert_eq!(c, 0, "{out}");
     assert!(d.join("gen/vectors/traffic_light.traces.jsonl").exists(), "手順のベクタが出ていない");
     if need(Need::Python) {
@@ -645,7 +645,7 @@ fn heldのある機械も生成したコードで回る() {
     let (_tmp, d) = scratch("review-gen");
     let rule = write(&d, "review.rule", REVIEW);
     let out_dir = d.join("gen").to_string_lossy().into_owned();
-    let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
+    let (c, out) = rulec(&rulec::targets::up_to_0_40(&["gen", &rule, "--out", &out_dir]));
     assert_eq!(c, 0, "{out}");
     let (c, out) = rulec_tmp(&tmpdir_in(Path::new(&out_dir)), &["test", &out_dir, "--format", "json"]);
     assert_eq!(c, 0, "生成したコードが食い違う:\n{out}");
@@ -957,7 +957,7 @@ machine account over step
 ",
     );
     let out_dir = d.join("gen").to_string_lossy().into_owned();
-    let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
+    let (c, out) = rulec(&rulec::targets::up_to_0_40(&["gen", &rule, "--out", &out_dir]));
     assert_eq!(c, 0, "{out}");
     let traces = std::fs::read_to_string(d.join("gen/vectors/account.traces.jsonl")).unwrap();
     assert!(traces.lines().next().unwrap().contains(r#""more":[{"in":"balance","out":"next_balance"}"#), "{traces}");
@@ -1145,7 +1145,7 @@ fn enumsのファイルから状態を読む機械も全部のrunnerで走る() 
          machine barrier over step\n  carry   state -> next_state\n  initial down\n",
     );
     let out_dir = d.join("gen").to_string_lossy().into_owned();
-    let (c, out) = rulec(&["gen", &door, &lamp, &gate, "--out", &out_dir]);
+    let (c, out) = rulec(&rulec::targets::up_to_0_40(&["gen", &door, &lamp, &gate, "--out", &out_dir]));
     assert_eq!(c, 0, "{out}");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")

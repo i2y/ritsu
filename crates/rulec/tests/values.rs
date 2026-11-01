@@ -226,7 +226,7 @@ fn 出力のセルの語は列の型で読む() {
     let p = t.path().join("treasure.rule");
     std::fs::write(&p, VALUE_LIKE_A_NAME[0]).unwrap();
     let out = t.path().join("out");
-    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).args(["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]).output().unwrap();
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).args(["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40).output().unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let py = std::fs::read_to_string(out.join("python/treasure.py")).unwrap();
     assert!(py.contains("result_kind = Outcome.GOLD"), "{py}");

@@ -55,7 +55,7 @@ fn generated(dir: &Path) -> Vec<(String, String)> {
 fn an_address_with_line_breaks_stays_in_the_head() {
     let t = TempDir::new("heads-breaks");
     rule_citing(t.path(), &format!("https://example.com/rates\u{2028}{MARK} after a line separator\r{MARK} after a CR\u{85}{MARK} after a NEL"));
-    rulec(t.path(), &["gen", "postage.rule", "--out", "gen"]);
+    rulec(t.path(), &rulec::targets::up_to_0_40(&["gen", "postage.rule", "--out", "gen"]));
     let mut heads = 0;
     for (path, text) in generated(&t.path().join("gen")) {
         for line in text.split('\n').filter(|l| l.contains(MARK)) {
@@ -76,7 +76,7 @@ fn an_address_with_line_breaks_stays_in_the_head() {
 fn an_address_does_not_end_the_script_of_the_page() {
     let t = TempDir::new("heads-script");
     rule_citing(t.path(), "https://example.com/rates?</script><img src=x onerror=alert(1)><!--");
-    rulec(t.path(), &["gen", "postage.rule", "--out", "gen"]);
+    rulec(t.path(), &rulec::targets::up_to_0_40(&["gen", "postage.rule", "--out", "gen"]));
     let pages: Vec<(String, String)> = generated(&t.path().join("gen")).into_iter().filter(|(p, _)| p.ends_with("_page.html")).collect();
     assert!(!pages.is_empty(), "rulec gen writes a page");
     for (path, page) in pages {
@@ -111,7 +111,7 @@ fn a_cited_address_does_not_break_the_java_head() {
     std::fs::write(t.path().join(&name), src).unwrap();
     rulec(t.path(), &["source", "pin", &name]);
     rulec(t.path(), &["check", &name]);
-    rulec(t.path(), &["gen", &name, "--out", "gen"]);
+    rulec(t.path(), &rulec::targets::up_to_0_40(&["gen", &name, "--out", "gen"]));
 
     // the generated Java: the head names the file and the URL, and no line after the head is code
     // the head's text leaked into — every line that carries the mark is a comment.
@@ -162,7 +162,7 @@ fn rule_strings_stay_what_they_are_in_the_java() {
     );
     std::fs::write(t.path().join("label.rule"), src).unwrap();
     rulec(t.path(), &["check", "label.rule"]);
-    rulec(t.path(), &["gen", "label.rule", "--out", "gen"]);
+    rulec(t.path(), &rulec::targets::up_to_0_40(&["gen", "label.rule", "--out", "gen"]));
     let dir = t.path().join("gen/java");
     let java = std::fs::read_to_string(dir.join("Label.java")).unwrap();
     // every `\u` in the file is preceded by an odd number of `\`, so javac reads no escape

@@ -80,6 +80,9 @@ pub struct Run {
     pub skipped: Vec<String>,
     /// How many of the languages were skipped, for the summary's scope.
     pub missing_langs: usize,
+    /// How many languages `gen` wrote anything for under the directory: the scope the skipped are
+    /// counted in (§15.277).
+    pub langs: usize,
     /// What a target does not have by design, said and counted but not a skip: the functions of
     /// a `prerequisites` block in a target with one entry (§15.222). `--require-all` is about the
     /// toolchains, so these leave it passing.
@@ -177,8 +180,8 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     let vdir = dir.join("vectors");
     let rd = std::fs::read_dir(&vdir).map_err(|_| {
         tr!(
-            "`{}` にベクタがありません。先に `rulec gen --out {}` を実行してください",
-            "no vectors in `{}`; run `rulec gen --out {}` first",
+            "`{}` にベクタがありません。先に `rulec gen <file.rule>... --target <出力先> --extra runner --extra vectors --out {}` を実行してください",
+            "no vectors in `{}`; run `rulec gen <file.rule>... --target <target> --extra runner --extra vectors --out {}` first",
             vdir.display(),
             dir.display()
         )
@@ -215,11 +218,23 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         return Err(crate::i18n::text(&ritsu_base::wasi::cannot_start_programs()));
     }
 
+    // The languages `gen` wrote anything for (§15.277): one it was not asked for is no language
+    // this run skipped, and needs no toolchain.
+    let generated: Vec<&crate::backend::Backend> = crate::backend::ALL.iter().filter(|b| dir.join(b.id).is_dir()).collect();
+    if generated.is_empty() {
+        return Err(tr!(
+            "`{}` には、どの言語の生成物もありません。先に `rulec gen <file.rule>... --target <出力先> --extra runner --extra vectors --out {}` を実行してください",
+            "no language's code is in `{}`; run `rulec gen <file.rule>... --target <target> --extra runner --extra vectors --out {}` first",
+            dir.display(),
+            dir.display()
+        ));
+    }
     // Which toolchains are here. The set of backends lives in src/backend.rs, so a new
     // language is a row there rather than five more blocks in this file.
-    let mut out = Run { results: Vec::new(), skipped: Vec::new(), missing_langs: 0, without: Vec::new() };
-    let present: Vec<&crate::backend::Backend> = crate::backend::ALL
+    let mut out = Run { results: Vec::new(), skipped: Vec::new(), missing_langs: 0, langs: generated.len(), without: Vec::new() };
+    let present: Vec<&crate::backend::Backend> = generated
         .iter()
+        .copied()
         .filter(|b| {
             if !have(b.tool) {
                 out.skipped.push(tr!(
@@ -242,16 +257,20 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         return Err(tr!(
             "ツールチェーンが一つも無いので、生成したコードを走らせられません（{}）",
             "none of the toolchains is available, so the generated code cannot be run ({})",
-            crate::backend::ALL.iter().map(|b| b.tool).collect::<Vec<_>>().join(", ")
+            generated.iter().map(|b| b.tool).collect::<Vec<_>>().join(", ")
         ));
     }
+    // A pass is run where its files were generated (§15.277), and its tools are looked for only
+    // then: an extra `gen` was not asked for needs nothing here. The rules, not the `enums` files.
+    let rules: Vec<&String> = aliases.iter().filter(|a| !prereq_only.contains(a)).collect();
+    let somewhere = |plan: &dyn Fn(&str, &str) -> crate::backend::Plan| rules.iter().any(|a| on_disk(dir, &plan(a, &a.replace('_', ""))));
     // The Rust runner once more as a WASI module under wasmtime (§15.63): the shape a host
     // that speaks through stdin and stdout gives a rule — Fastly Compute, Spin, a batch step.
     // Not Shopify Functions: those export a named function and read the input through the
     // platform's own host calls (§15.73). It needs wasmtime on the PATH and the
     // wasm32-wasip1 standard library in the toolchain; without either the pass is skipped and
     // said so, like a missing language, but not counted as one.
-    let wasi_host = if present.iter().any(|b| b.wasi.is_some()) {
+    let wasi_host = if present.iter().any(|b| b.wasi.is_some_and(|w| somewhere(&|a, p| w(a, p)))) {
         if !have("wasmtime") {
             out.skipped.push(tr!("wasmtime が無いので WASI 側を飛ばしました", "wasmtime not found; skipped the WASI side"));
             false
@@ -273,7 +292,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     // milliseconds — 7s to 33s on two rules, +155s on the corpus — which is why it is asked
     // for rather than assumed. Without kani on the PATH the pass is skipped
     // and said so, like a missing toolchain, but not counted as a missing language.
-    let proof_host = if proofs && present.iter().any(|b| b.proof.is_some()) {
+    let proof_host = if proofs && present.iter().any(|b| b.proof.is_some_and(|f| somewhere(&|a, _| f(a)))) {
         if !have("kani") {
             out.skipped.push(tr!("kani が無いので証明を飛ばしました", "kani not found; skipped the proofs"));
             false
@@ -288,7 +307,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     // query's own runner cannot stand in for, and it needs a PostgreSQL to run on — `psql`
     // on the PATH and a server it can reach. Without one the pass is skipped and said so,
     // like a missing toolchain, but not counted as a missing language: SQL itself ran.
-    let pg_host = if present.iter().any(|b| b.pg.is_some()) {
+    let pg_host = if present.iter().any(|b| b.pg.is_some_and(|f| somewhere(&|a, _| f(a)))) {
         if !have("psql") {
             out.skipped.push(tr!(
                 "psql が無いので PostgreSQL 側を飛ばしました",
@@ -312,7 +331,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     // writes the stubs, and the runtime the generated service imports — so without them the
     // pass is skipped and said so, like a missing toolchain, but not counted as a missing
     // language: Python itself ran.
-    let connect_host = if present.iter().any(|b| b.connect.is_some()) {
+    let connect_host = if present.iter().any(|b| b.connect.is_some()) && rules.iter().any(|a| connect_runner_of(dir, a)) {
         match crate::backend::connect_ready() {
             Ok(()) => true,
             Err(why) => {
@@ -338,6 +357,11 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     // whole-second mtime, so a same-length edit within a second of the last run would
     // otherwise execute the old module and report a stale result as ok.
     let _ = std::fs::remove_dir_all(dir.join("python").join("__pycache__"));
+
+    // The languages a rule's library was generated in without its runner, and the passes whose
+    // files were not generated (§15.277): said once each, after the runs.
+    let mut no_runner: Vec<(&'static str, String)> = Vec::new();
+    let mut absent: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
 
     // One plan is one command, with an optional build that has to succeed first.
     // Ok is the command's stdout; Err is anything that stopped it from producing one.
@@ -409,10 +433,15 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         if prereq_only.contains(alias) {
             let pkg = alias.replace('_', "");
             for b in present.iter().filter(|b| b.prereqs) {
-                if !wrote(dir, b.id, &crate::backend::stem(b, alias)) || !dir.join(&(b.run)(alias, &pkg).cwd).is_dir() {
+                if !wrote(dir, b.id, &crate::backend::stem(b, alias)) {
                     continue;
                 }
-                let diff = prereqs(&runner_plan(b, dir, alias, &pkg), true);
+                let plan = runner_plan(b, dir, alias, &pkg);
+                if !on_disk(dir, &plan) {
+                    no_runner.push((b.name, alias.clone()));
+                    continue;
+                }
+                let diff = prereqs(&plan, true);
                 out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "prerequisites", vectors: prereq_count, refused: 0, calls: 0, diff });
             }
             continue;
@@ -510,76 +539,93 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                 diff
             };
             let plan = runner_plan(b, dir, alias, &pkg);
-            let diff = held(&plan);
-            let built = diff.as_ref().is_none_or(|d| d.ran());
-            out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), calls, diff });
-            if b.labels && labels_want.is_some() && built {
-                let diff = labelled(&plan);
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "labels", vectors: label_count, refused: 0, calls: 0, diff });
-            }
-            if b.prereqs && prereq_want.is_some() && built {
-                let diff = prereqs(&plan, false);
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "prerequisites", vectors: prereq_count, refused: 0, calls: 0, diff });
-            }
-            if b.chances && chances_want.is_some() && built {
-                let diff = chanced(&plan);
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "chances", vectors: chances_count, refused: 0, calls: 0, diff });
-            }
-            // The same runner as a WASI module, held to the same records (§15.63).
-            if let (Some(w), true) = (b.wasi, wasi_host) {
-                let diff = held(&w(alias, &pkg));
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasi", vectors: n, refused: refused.len(), calls, diff });
-            }
-            // The same rule as a function on a real PostgreSQL, held to the same records
-            // (§15.80). What it proves that the query's runner cannot: the signature, the
-            // declared return types, and that an input outside the declaration raises
-            // instead of coming back with a number beside a column nobody read.
-            if let (Some(f), true) = (b.pg, pg_host) {
-                let diff = held(&f(alias));
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), calls, diff });
-                // The display names, from the functions the PostgreSQL file declares (§15.211).
-                if labels_want.is_some() {
-                    let diff = labelled(&f(alias));
-                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function-labels", vectors: label_count, refused: 0, calls: 0, diff });
+            // The library without its runner (§15.277): nothing puts the vectors through it, and the
+            // passes that are the runner again (WASI, the database's function) have nothing either.
+            let runs = on_disk(dir, &plan);
+            if !runs {
+                no_runner.push((b.name, alias.clone()));
+            } else {
+                let diff = held(&plan);
+                let built = diff.as_ref().is_none_or(|d| d.ran());
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), calls, diff });
+                if b.labels && labels_want.is_some() && built {
+                    let diff = labelled(&plan);
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "labels", vectors: label_count, refused: 0, calls: 0, diff });
+                }
+                if b.prereqs && prereq_want.is_some() && built {
+                    let diff = prereqs(&plan, false);
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "prerequisites", vectors: prereq_count, refused: 0, calls: 0, diff });
+                }
+                if b.chances && chances_want.is_some() && built {
+                    let diff = chanced(&plan);
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "chances", vectors: chances_count, refused: 0, calls: 0, diff });
+                }
+                // The same runner as a WASI module, held to the same records (§15.63).
+                if let (Some(w), true) = (b.wasi, wasi_host) {
+                    let diff = held(&w(alias, &pkg));
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasi", vectors: n, refused: refused.len(), calls, diff });
+                }
+                // The same rule as a function on a real PostgreSQL, held to the same records
+                // (§15.80). What it proves that the query's runner cannot: the signature, the
+                // declared return types, and that an input outside the declaration raises
+                // instead of coming back with a number beside a column nobody read.
+                if let (Some(f), true) = (b.pg, pg_host) {
+                    let diff = held(&f(alias));
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), calls, diff });
+                    // The display names, from the functions the PostgreSQL file declares (§15.211).
+                    if labels_want.is_some() {
+                        let diff = labelled(&f(alias));
+                        out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function-labels", vectors: label_count, refused: 0, calls: 0, diff });
+                    }
                 }
             }
             // The proofs of the same rule (§15.95): what every input in the declared domain
             // does, rather than what the vectors do.
-            if let (Some(f), true) = (b.proof, proof_host) {
+            if let Some(f) = b.proof {
                 let plan = f(alias);
-                let (h, diff) = via_proof(&dir.join(&plan.cwd), &plan);
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "proof", vectors: h, refused: 0, calls: 0, diff });
+                if !on_disk(dir, &plan) {
+                    if proofs {
+                        absent.insert("proof");
+                    }
+                } else if proof_host {
+                    let (h, diff) = via_proof(&dir.join(&plan.cwd), &plan);
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "proof", vectors: h, refused: 0, calls: 0, diff });
+                }
             }
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
             if let Some(mcp) = b.mcp {
-                for (via, http) in [("mcp", false), ("mcp-http", true)] {
-                    let cwd = dir.join(&mcp(alias).cwd);
-                    let traces = traces_want.as_ref().and_then(|_| std::fs::read_to_string(&traces_path).ok());
-                    let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, &refused, http, traces.as_deref()) {
-                        Err(f) => Some(f),
-                        Ok((got, got_traces)) => {
-                            if got != want {
-                                Some(first_diff(&got, &want))
-                            } else {
-                                // The records of the calls, without the constants' line.
-                                let tw: String = traces_want
-                                    .as_deref()
-                                    .map(|t| t.lines().skip(1).map(|l| format!("{l}\n")).collect())
-                                    .unwrap_or_default();
-                                (got_traces != tw).then(|| first_diff(&got_traces, &tw))
+                if !on_disk(dir, &mcp(alias)) {
+                    absent.insert("mcp");
+                } else {
+                    for (via, http) in [("mcp", false), ("mcp-http", true)] {
+                        let cwd = dir.join(&mcp(alias).cwd);
+                        let traces = traces_want.as_ref().and_then(|_| std::fs::read_to_string(&traces_path).ok());
+                        let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, &refused, http, traces.as_deref()) {
+                            Err(f) => Some(f),
+                            Ok((got, got_traces)) => {
+                                if got != want {
+                                    Some(first_diff(&got, &want))
+                                } else {
+                                    // The records of the calls, without the constants' line.
+                                    let tw: String = traces_want
+                                        .as_deref()
+                                        .map(|t| t.lines().skip(1).map(|l| format!("{l}\n")).collect())
+                                        .unwrap_or_default();
+                                    (got_traces != tw).then(|| first_diff(&got_traces, &tw))
+                                }
                             }
-                        }
-                    };
-                    out.results.push(Outcome {
-                        rule: alias.clone(),
-                        lang: b.name,
-                        via,
-                        vectors: n,
-                        refused: refused.len(),
-                        calls,
-                        diff,
-                    });
+                        };
+                        out.results.push(Outcome {
+                            rule: alias.clone(),
+                            lang: b.name,
+                            via,
+                            vectors: n,
+                            refused: refused.len(),
+                            calls,
+                            diff,
+                        });
+                    }
                 }
             }
             // The same vectors once more, through the generated Connect service: the stubs
@@ -588,6 +634,9 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             // socket. Four times — the ASGI application and the WSGI one, each by POST and
             // by GET — because both are generated and the method declares itself free of
             // side effects (§15.112).
+            if b.connect.is_some() && !connect_runner_of(dir, alias) {
+                absent.insert("connect");
+            }
             if let (Some(f), true) = (b.connect, connect_host) {
                 if connect_runner_of(dir, alias) {
                     for (via, flags) in [
@@ -620,18 +669,80 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
 
     // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one. An
     // `enums` file emits none (§15.222): with nothing but its functions there, there are none to run.
-    let Some(first) = aliases.iter().find(|a| !prereq_only.contains(a)) else { return Ok(out) };
-    let pkg0 = first.replace('_', "");
-    for b in &present {
-        // Same reason as above: a backend nothing was written for has no helpers either.
-        if !dir.join(b.id).exists() {
-            continue;
+    if let Some(first) = aliases.iter().find(|a| !prereq_only.contains(a)) {
+        let pkg0 = first.replace('_', "");
+        for b in &present {
+            // Same reason as above: a backend nothing was written for has no helpers either, and one
+            // written without its round test (§15.277) has none to run.
+            if !dir.join(b.id).exists() {
+                continue;
+            }
+            let plan = (b.round)(&pkg0);
+            if !on_disk(dir, &plan) {
+                absent.insert("round-test");
+                continue;
+            }
+            let diff = exec(&plan, None).err();
+            out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, refused: 0, calls: 0, diff });
         }
-        let diff = exec(&(b.round)(&pkg0), None).err();
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, refused: 0, calls: 0, diff });
+    }
+
+    // A language whose library is here without its runner was not run, which narrows what the run
+    // proved as a missing toolchain does: `--require-all` does not pass it (§15.277).
+    for b in &present {
+        let without: Vec<&str> = no_runner.iter().filter(|(n, _)| *n == b.name).map(|(_, a)| a.as_str()).collect();
+        if !without.is_empty() {
+            out.skipped.push(tr!(
+                "{} はランナーなしで生成されているので、ベクタを走らせていません（{}。ランナーは `rulec gen --extra runner` が書きます）",
+                "{} was generated without its runner, so no vector was run through it ({}; `rulec gen --extra runner` writes it)",
+                b.name,
+                without.join(", ")
+            ));
+            out.missing_langs += 1;
+        }
+    }
+    // An extra `gen` was not asked for is not run, and is no failure: said once.
+    for (pass, said) in [
+        ("mcp", tr!("MCP: サーバーが生成されていないので、走らせていません（`rulec gen --extra mcp` が書きます）", "MCP: the servers were not generated, so none was run (`rulec gen --extra mcp` writes them)")),
+        ("connect", tr!(
+            "Connect: サービスとそのランナーが生成されていないので、走らせていません（`rulec gen --target python --target proto --extra connect --extra runner` が書きます）",
+            "Connect: the service and its runner were not generated, so it was not run (`rulec gen --target python --target proto --extra connect --extra runner` writes them)"
+        )),
+        ("round-test", tr!(
+            "丸めの試験が生成されていないので、丸めヘルパを走らせていません（`rulec gen --extra round-test` が書きます）",
+            "the round tests were not generated, so the rounding helpers were not run (`rulec gen --extra round-test` writes them)"
+        )),
+        ("proof", tr!(
+            "証明のハーネスが生成されていないので、証明を走らせていません（`rulec gen --target rust --extra proof` が書きます）",
+            "the proof harnesses were not generated, so no proof was run (`rulec gen --target rust --extra proof` writes them)"
+        )),
+    ] {
+        if absent.contains(pass) {
+            out.without.push(said);
+        }
     }
 
     Ok(out)
+}
+
+/// Whether what a plan runs was generated under `dir` (§15.277): its directory, and every source
+/// file it names, the files a build compiles among them. Go names a directory rather than a file:
+/// `go run .` there needs a Go file, and `go test` a test.
+fn on_disk(dir: &Path, plan: &crate::backend::Plan) -> bool {
+    let cwd = dir.join(&plan.cwd);
+    if !cwd.is_dir() {
+        return false;
+    }
+    if plan.cmd == "go" {
+        let test = plan.args.first().is_some_and(|a| a == "test");
+        let Ok(rd) = std::fs::read_dir(&cwd) else { return false };
+        return rd.flatten().any(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            if test { n.ends_with("_test.go") } else { n.ends_with(".go") }
+        });
+    }
+    let source = |a: &&String| matches!(Path::new(a.as_str()).extension().and_then(|e| e.to_str()), Some("py" | "ts" | "mjs" | "rs" | "rb" | "php" | "swift" | "java"));
+    plan.args.iter().chain(plan.build.iter().flat_map(|(_, a)| a.iter())).filter(source).all(|a| cwd.join(a).is_file())
 }
 
 /// Drive the generated MCP server as a client would: `initialize`, `tools/list`, then one
@@ -1123,7 +1234,7 @@ pub fn render(r: &Run) -> String {
             "（{} 言語中 {} 言語を飛ばしました）",
             " ({} of {} languages skipped)",
             r.missing_langs,
-            crate::backend::ALL.len()
+            r.langs
         )
     };
     if bad == 0 {

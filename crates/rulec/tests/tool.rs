@@ -25,7 +25,7 @@ fn generate(tag: &str) -> (TempDir, PathBuf) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", RULE, "--out", dir.to_str().unwrap()])
+        .args(["gen", RULE, "--out", dir.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));

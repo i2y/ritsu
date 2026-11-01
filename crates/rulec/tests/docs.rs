@@ -165,7 +165,7 @@ fn to_json(j: &rulec::json::Json) -> String {
 fn w114の防壁の抜粋は実物と一致する() {
     let tmp = TempDir::new("docs-w114");
     let dir = tmp.path().to_path_buf();
-    let (code, out) = run(&["gen", "tests/pages/half_bound.rule", "--out", dir.to_str().unwrap(), "--lang", "en"]);
+    let (code, out) = run(&rulec::targets::up_to_0_40(&["gen", "tests/pages/half_bound.rule", "--out", dir.to_str().unwrap(), "--lang", "en"]));
     assert_eq!(code, 0, "{out}");
     let py = std::fs::read_to_string(dir.join("python/half_bound.py")).expect("python/half_bound.py が出ていない");
     let lines: Vec<&str> = py.lines().collect();
@@ -186,7 +186,7 @@ fn agentsとreadmeのciが同じ行を言う() {
     for line in [
         "rulec fmt --check rules/",
         "rulec check rules/ --diff-base origin/main",
-        "rulec gen rules/ --out generated/ --check",
+        "rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check",
         "rulec coverage rules/",
         "rulec test generated/ --require-all",
     ] {
@@ -252,7 +252,7 @@ fn 文書が並べる対象言語はレジストリと同じ() {
 fn genが書く言語のディレクトリはレジストリと同じ() {
     let tmp = TempDir::new("docs-langs");
     let dir = tmp.path().to_path_buf();
-    let (code, out) = run(&["gen", "tests/corpus/ec261.rule", "--out", dir.to_str().unwrap()]);
+    let (code, out) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/ec261.rule", "--out", dir.to_str().unwrap()]));
     assert_eq!(code, 0, "{out}");
     let mut got: Vec<String> = std::fs::read_dir(&dir)
         .expect("出力が無い")

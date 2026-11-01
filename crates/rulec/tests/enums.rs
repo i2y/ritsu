@@ -81,7 +81,7 @@ fn an_app_passes_one_value_of_a_shared_enum_to_two_rules() {
         let tmp = TempDir::new("enums-app");
         let out = tmp.path().to_string_lossy().into_owned();
         // The file of enums is not given: `gen` writes its module because the rules read it.
-        let (c, _, e) = run(&["gen", shipping, returns, "--out", &out]);
+        let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", shipping, returns, "--out", &out]));
         assert_eq!(c, 0, "{e}");
         let py = tmp.path().join("python");
         let module = std::fs::read_to_string(py.join(format!("{ship_mod}.py"))).unwrap();
@@ -123,7 +123,7 @@ fn an_app_passes_one_value_of_a_shared_enum_to_two_rules() {
 fn gen_writes_the_module_of_an_enums_file_beside_the_rule() {
     let tmp = TempDir::new("enums-gen");
     let out = tmp.path().to_string_lossy().into_owned();
-    let (c, _, e) = run(&["gen", "tests/corpus/catalog_shipping.rule", "--out", &out]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/catalog_shipping.rule", "--out", &out]));
     assert_eq!(c, 0, "{e}");
     for f in [
         "python/catalog.py",
@@ -286,6 +286,7 @@ fn every_language_answers_the_display_names_and_the_keyword_names() {
     let mut args: Vec<String> = vec!["gen".into(), d.join("fare.rule").to_string_lossy().into_owned()];
     args.extend(plans.iter().map(|p| p.to_string_lossy().into_owned()));
     args.extend(["--out".into(), generated.to_string_lossy().into_owned()]);
+    args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
     let (c, _, e) = run_in(d, &args.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(c, 0, "{e}");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
@@ -366,7 +367,7 @@ fn a_rule_named_like_the_enum_it_reads_compiles_in_go() {
     std::fs::write(d.join("size.rule"), rule).unwrap();
     let (c, out, e) = run_in(d, &["check", "size.rule"]);
     assert_eq!((c, out.as_str()), (0, "ok size.rule\n"), "{e}");
-    let (c, out, e) = run_in(d, &["gen", "size.rule", "--out", "gen"]);
+    let (c, out, e) = run_in(d, &rulec::targets::up_to_0_40(&["gen", "size.rule", "--out", "gen"]));
     assert_eq!(c, 0, "{out}{e}");
     let go = std::fs::read_to_string(d.join("gen/go/size/size.go")).unwrap();
     assert!(!go.contains("type Size = sizes.Size"), "{go}");

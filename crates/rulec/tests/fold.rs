@@ -195,7 +195,7 @@ fn 十言語に生成し_SQLだけは生成しない() {
     let (_tmp, d) = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     // Every backend that says it can write a walk, taken from the registry rather than
     // listed again here: the count in this test's name is the one `folds` decides.
@@ -221,7 +221,7 @@ fn 一覧は並びをフィールドとして載せる() {
     let (_tmp, d) = dir("api");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     let (code, said, e) = run(&["api", &p]);
     assert_eq!(code, 0, "{e}");
@@ -329,7 +329,7 @@ fn ページの試用欄は並びを編集して走る() {
     // With the examples, so the panel's example button has a sequence to rebuild.
     let p = write(&d, "r.rule", &format!("{RULE}{EXAMPLES}"));
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
 
     // The page's own module script, with the stub in front of it and the driver behind.
@@ -443,7 +443,7 @@ fn 受け付けない入力は生成コードでもエラーになる() {
     let (_tmp, d) = dir("refused");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
 
     let body = std::fs::read_to_string(out.join("vectors/freight.refused.jsonl")).expect("受け付けない入力の一覧が無い");
@@ -527,7 +527,7 @@ fn 途中で落ちたrulec_testは立てたプロセスを残さない() {
     let (_tmp, d) = dir("left");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     // Only the Python side: its MCP server is what this is about, and `rulec test` runs what
     // it finds.
@@ -572,7 +572,7 @@ fn 生成されたたどり方は参照評価器と一致する() {
     let (_tmp, d) = dir("agree");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
 
     let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
@@ -709,7 +709,7 @@ fn 歩きの段の順に生成される() {
     ] {
         let (rel, _) = stage_source(stem);
         let out = d.join(stem);
-        let (code, said, e) = run(&["gen", &rel, "--out", out.to_str().unwrap()]);
+        let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &rel, "--out", out.to_str().unwrap()]));
         assert_eq!(code, 0, "{said}{e}");
         let py = std::fs::read_to_string(out.join(format!("python/{stem}.py"))).unwrap();
         let at = |what: &str| py.find(what).unwrap_or_else(|| panic!("{stem}: no `{what}` in\n{py}"));
@@ -730,7 +730,7 @@ fn 歩きの段の生成コードは参照評価器と一致する() {
         for stem in [en, ja] {
             let (rel, _) = stage_source(stem);
             let out = d.join(stem);
-            let (code, said, e) = run(&["gen", &rel, "--out", out.to_str().unwrap()]);
+            let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &rel, "--out", out.to_str().unwrap()]));
             assert_eq!(code, 0, "{stem}: {said}{e}");
             let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
             let j = rulec::json::parse(said.lines().next().expect("結果が無い")).unwrap();

@@ -863,13 +863,13 @@ implements proto "../api/shop/v1/member_shipping.proto" MemberShippingService
 ```
 
 A rule without this line is served as a Connect service of its own
-([generated-code.md](generated-code.md#the-rule-as-a-connect-service)): `gen` writes its `.proto`
-and numbers the fields in the order the rule declares the values, the inputs from 1 with the
-sequences after them and the outputs from 1. An input added in the middle moves every number
-after it, and protobuf's binary form carries the number rather than the name, so a caller built
-from the earlier `.proto` sends its values to the wrong fields (`ritsu mod diff` says so as E310).
-With the line, the names and the numbers are a contract's to keep: the `.proto` it names declares
-the service, and the rule is served as that service.
+([generated-code.md](generated-code.md#the-rule-as-a-connect-service)): `gen --target proto` writes
+its `.proto` and numbers the fields in the order the rule declares the values, the inputs from 1
+with the sequences after them and the outputs from 1. An input added in the middle moves every
+number after it, and protobuf's binary form carries the number rather than the name, so a caller
+built from the earlier `.proto` sends its values to the wrong fields (`ritsu mod diff` says so as
+E310). With the line, the names and the numbers are a contract's to keep: the `.proto` it names
+declares the service, and the rule is served as that service.
 
 The path is followed from the directory of the `.rule`, and the service is named by its name or
 by its name with the file's package (`shop.v1.MemberShippingService`). A rule has one such line
@@ -985,9 +985,9 @@ numbers: `rulec api` gives `member` 2, `campaign` 9, `subtotal` 5 and `express` 
 cannot be read and a service it does not have are E013. A rule that does not pass its type checks
 is held to the contract once it does.
 
-`gen` writes no `.proto` of the rule's own. It copies the contract, byte for byte and with the
-files it imports, to the path its package gives it (`proto/shop/v1/member_shipping.proto`), and
-the service answers at the contract's path, `/shop.v1.MemberShippingService/Quote`. `rulec api`
+`gen --target proto` writes no `.proto` of the rule's own. It copies the contract, byte for byte and
+with the files it imports, to the path its package gives it (`proto/shop/v1/member_shipping.proto`),
+and the service answers at the contract's path, `/shop.v1.MemberShippingService/Quote`. `rulec api`
 says the contract's names and numbers and names the file under `connect.contract`
 ([formats.md](formats.md)); the page `rulec doc` renders says the inputs and outputs are the
 service's.

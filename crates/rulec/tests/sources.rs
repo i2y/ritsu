@@ -228,7 +228,7 @@ fn 生成物のヘッダは出典を挙げる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let tmp = TempDir::new("cites");
     let d = tmp.path().to_path_buf();
-    let (c, out) = rulec(&root(), &["gen", RULE, "--out", &d.to_string_lossy(), "--lang", "en"]);
+    let (c, out) = rulec(&root(), &rulec::targets::up_to_0_40(&["gen", RULE, "--out", &d.to_string_lossy(), "--lang", "en"]));
     assert_eq!(c, 0, "{out}");
     let py = std::fs::read_to_string(d.join("python/stamp_duty_split.py")).unwrap();
     assert!(py.contains("# Cites: 法 = law 342AC0000000023 asof 2026-04-01 (別表第一 sha256:0ba69792e960021e)\n"), "{py}");
@@ -272,7 +272,7 @@ fn ファイルの出典はurlを持ち_それが下流まで届く() {
 
     // The header and the inventory carry it.
     let g = d.join("gen");
-    let (c, out) = rulec(&d, &["gen", "a.rule", "--out", &g.to_string_lossy(), "--lang", "en"]);
+    let (c, out) = rulec(&d, &rulec::targets::up_to_0_40(&["gen", "a.rule", "--out", &g.to_string_lossy(), "--lang", "en"]));
     assert_eq!(c, 0, "{out}");
     let py = std::fs::read_to_string(g.join("python/t.py")).unwrap();
     assert!(py.contains(&format!("# Cites: 郵便 = file 料金表.txt url {url} sha256:")), "{py}");

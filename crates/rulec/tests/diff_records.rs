@@ -157,7 +157,7 @@ fn allowance(a: &Allowance) -> TempDir {
         let (c, out, e) = rulec(d, a.lang, &["check", &format!("{dir}/{}", a.callee), &format!("{dir}/{}", a.rule)]);
         assert_eq!(c, 0, "{dir}: 検査を通らない: {out}{e}");
     }
-    let (c, out, e) = rulec(d, a.lang, &["gen", &format!("old/{}", a.rule), "--out", "gen"]);
+    let (c, out, e) = rulec(d, a.lang, &rulec::targets::up_to_0_40(&["gen", &format!("old/{}", a.rule), "--out", "gen"]));
     assert_eq!(c, 0, "{out}{e}");
     std::fs::copy(d.join("gen/vectors").join(a.expected), d.join("records.jsonl")).unwrap();
     let first = std::fs::read_to_string(d.join("records.jsonl")).unwrap().lines().next().unwrap().to_string();

@@ -96,7 +96,7 @@ fn generate(c: &Case) -> (TempDir, PathBuf) {
     let t = TempDir::new(&format!("error-value-{}", c.lang));
     let out = t.path().join("out");
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
-    cmd.env("RULEC_LANG", c.lang).current_dir(root()).arg("gen").args(c.rules).arg("--out").arg(&out);
+    cmd.env("RULEC_LANG", c.lang).current_dir(root()).arg("gen").args(c.rules).arg("--out").arg(&out).args(rulec::targets::UP_TO_0_40);
     let o = cmd.output().expect("cannot start rulec");
     assert!(o.status.success(), "{}: {}{}", c.lang, String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     (t, out)

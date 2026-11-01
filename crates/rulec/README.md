@@ -80,7 +80,7 @@ error[E101]: Completeness gap: some input matches no row
  The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
 
-Once the rule passes, out of `rulec gen`, in Python:
+Once the rule passes, out of `rulec gen --target python`:
 
 ```python
 def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
@@ -230,7 +230,7 @@ download and the check ([In CI](#in-ci)).
 ```console
 $ rulec check rules/*.rule                         # --format json, --terse, --diff-base HEAD
 $ rulec fmt --check rules/*.rule                   # the gofmt convention
-$ rulec gen rules/*.rule --out generated [--check]
+$ rulec gen rules/*.rule --target python           # into generated/; more --target, --extra runner, --check
 $ rulec vectors | coverage | test                  # the test cases, their coverage, the run
 $ rulec adapter | schema | verify                  # against a legacy implementation
 $ rulec fixtures lint | replay | diff              # against past records
@@ -258,10 +258,14 @@ once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
 - uses: i2y/ritsu@v0.38.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
-- run: rulec gen rules/ --out generated/ --check
+- run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
 - run: rulec coverage rules/
 - run: rulec test generated/ --require-all   # the only step that needs the toolchains
 ```
+
+`--target` names the languages your code reads, once each (`--target python --target
+typescript`), and `--extra runner --extra vectors` the runners and the vectors `rulec test` puts
+through them; `gen --check` compares what those same flags write.
 
 Those logs are read by machines and developers, so they stay in the default English. What goes
 to a person — `rulec diff` on a pull request, `rulec doc` for the people who read it — is built
@@ -283,7 +287,7 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              59 modules, and 12 more under codegen/
+src/              60 modules, and 12 more under codegen/
 tests/corpus/     143 rules, and the copies of the documents they cite
 tests/mutants/    220 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 98 in Japanese, 87 in English

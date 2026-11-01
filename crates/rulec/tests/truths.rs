@@ -71,6 +71,7 @@ fn generated_into(t: &TempDir, which: &[&str]) -> PathBuf {
     let mut args: Vec<String> = vec!["gen".into()];
     args.extend(which.iter().map(|s| format!("tests/truths/{s}.rule")));
     args.extend(["--out".into(), out.to_string_lossy().into_owned()]);
+    args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let (code, said, e) = rulec(&root(), &tmp, &refs);
     assert_eq!(code, 0, "{said}{e}");

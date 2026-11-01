@@ -187,7 +187,7 @@ fn the_reference_answers_what_a_value_needs_and_whether_it_can_be_taken() {
 fn gen_and_api_say_where_the_functions_are() {
     let t = TempDir::new("prereq-gen");
     let out = t.path().join("gen");
-    let (c, said, e) = run(&["gen", COURSES, "--out", out.to_str().unwrap()]);
+    let (c, said, e) = run(&rulec::targets::up_to_0_40(&["gen", COURSES, "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     for name in ["SQL", "Wasm"] {
         assert!(said.contains(&format!("{name}: the functions of `prerequisites` are not generated for this target: it has one entry, and no room for a second function")), "{said}");
@@ -255,7 +255,7 @@ fn every_language_answers_a_block_in_an_enums_file_and_over_an_enum_read_from_on
     assert_eq!(c, 0, "{out}");
     let generated = d.join("gen");
     let certs = root().join("tests/corpus/shared/certifications.rule");
-    let (c, _, e) = run_in(d, &["gen", "tech_tree.rule", certs.to_str().unwrap(), "--out", generated.to_str().unwrap()]);
+    let (c, _, e) = run_in(d, &rulec::targets::up_to_0_40(&["gen", "tech_tree.rule", certs.to_str().unwrap(), "--out", generated.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     for f in ["python/certifications_runner.py", "go/certificationsrunner/main.go", "java/CertificationsRunner.java", "vectors/certifications.prereq.tsv"] {
         assert!(generated.join(f).exists(), "no {f}");

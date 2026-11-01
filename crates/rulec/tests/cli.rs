@@ -240,15 +240,15 @@ fn gen_check_は生成物のずれを見つける() {
     let rule = "tests/corpus/送料.rule";
 
     // No generated files at all. This is the case of forgetting to put them into CI.
-    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    let (c, o, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out, "--check"]));
     assert_eq!(c, 1, "生成物が無ければ 1: {o}");
     assert!(o.contains("生成物が古いか手で編集されています"), "{o}");
     assert!(!dir.exists(), "--check が書き込んでいる");
 
     // Checked right after generating, it is silently 0.
-    let (c, _, _) = run(&["gen", rule, "--out", &out]);
+    let (c, _, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out]));
     assert_eq!(c, 0);
-    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    let (c, o, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out, "--check"]));
     assert_eq!(c, 0, "生成直後は 0: {o}");
     assert_eq!(o.trim(), "", "一致していれば何も言わない: {o}");
 
@@ -256,7 +256,7 @@ fn gen_check_は生成物のずれを見つける() {
     let py = dir.join("python").join("shipping_fee.py");
     let before = std::fs::read_to_string(&py).unwrap();
     std::fs::write(&py, format!("{before} ")).unwrap();
-    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    let (c, o, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out, "--check"]));
     assert_eq!(c, 1, "手で編集したら 1: {o}");
     assert!(o.contains("shipping_fee.py"), "どのファイルかを言う: {o}");
     assert_eq!(o.lines().count(), 1, "ずれた一件だけ言う: {o}");
@@ -264,15 +264,15 @@ fn gen_check_は生成物のずれを見つける() {
 
     // Delete one. A missing file counts as a mismatch too.
     std::fs::remove_file(dir.join("go").join("shippingfee").join("shipping_fee.go")).unwrap();
-    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    let (c, o, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out, "--check"]));
     assert_eq!(c, 1);
     assert_eq!(o.lines().count(), 2, "編集一件と欠落一件: {o}");
     assert!(o.contains("shipping_fee.go"), "{o}");
 
     // Regenerating restores it.
-    let (c, _, _) = run(&["gen", rule, "--out", &out]);
+    let (c, _, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out]));
     assert_eq!(c, 0);
-    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    let (c, o, _) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out, "--check"]));
     assert_eq!(c, 0, "{o}");
 }
 
@@ -307,7 +307,7 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     let tmp = TempDir::new("dir");
     let dir = tmp.path().to_path_buf();
     let d = dir.to_string_lossy().to_string();
-    let (c, _, _) = run(&["gen", "tests/corpus/期間区分.rule", "--out", &d]);
+    let (c, _, _) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/期間区分.rule", "--out", &d]));
     assert_eq!(c, 0);
     let (c, r, _) = run_tmp(&tmpdir_in(&dir), &["test", &d]);
     assert_eq!(c, 0, "test がディレクトリを展開してしまった:\n{r}");
@@ -590,9 +590,12 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
 
     // What the proofs are about waits for them.
     for cmd in ["check", "gen", "doc", "certificate", "api", "vectors", "coverage"] {
+        // `gen` with no `--target` stops at its arguments, before the rule is read (§15.277).
+        let targets: &[&str] = if cmd == "gen" { rulec::targets::UP_TO_0_40 } else { &[] };
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
             .env("RULEC_LANG", "ja")
             .args([cmd, f])
+            .args(targets)
             .output()
             .expect("rulec を起動できない");
         assert_eq!(

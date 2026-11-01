@@ -37,7 +37,7 @@ import sys
 
 # The palettes, the fonts, the text metrics and the two shapes are shared
 # with make_overview.py, so that the two pictures cannot drift apart.
-from diagram import DARK, LIGHT, FONT, fit, esc, text, card, sheet, arrow, marker
+from diagram import DARK, LIGHT, FONT, fit, esc, text, card, sheet, arrow, marker, every_language
 
 
 # --- words ------------------------------------------------------------------
@@ -202,12 +202,11 @@ def verify(rulec):
     here = pathlib.Path(__file__).resolve().parent
     rule = here / "overview.rule"
     with tempfile.TemporaryDirectory() as tmp:
-        r = subprocess.run([rulec, "gen", str(rule), "--out", tmp], capture_output=True, text=True)
+        r = subprocess.run([rulec, "gen", str(rule), "--out", tmp, *every_language()],
+                           capture_output=True, text=True)
         if r.returncode:
             raise SystemExit(r.stdout + r.stderr)
-        # `gen` also writes the unit vectors, which are not a language.
-        # Neither the vectors nor the `.proto` of the rule as a service is a language.
-        wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors", "proto"}
+        wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()}
     want = {d for _, d in LANGS}
     if wrote != want:
         raise SystemExit(f"rulec gen writes {sorted(wrote)}, the diagram is drawn for {sorted(want)}")

@@ -95,7 +95,7 @@ fn 期待値のファイルはそのまま記録として通る() {
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     for (rule, alias) in [(RULE, "yupack_fee"), ("tests/corpus/期間区分.rule", "period"), ("tests/corpus/会員特典.rule", "member_perk")] {
-        let (c, _, e) = rulec(&["gen", rule, "--out", &out]);
+        let (c, _, e) = rulec(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out]));
         assert_eq!(c, 0, "{e}");
         let exp = dir.join("vectors").join(format!("{alias}.expected.jsonl"));
         let exp = exp.to_str().unwrap();
@@ -139,7 +139,7 @@ fn 記録の行が規則の行と違えば行の移動として出る() {
     let tmp = TempDir::new("m3-moved");
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, _, e) = rulec(&["gen", RULE, "--out", &out]);
+    let (c, _, e) = rulec(&rulec::targets::up_to_0_40(&["gen", RULE, "--out", &out]));
     assert_eq!(c, 0, "{e}");
     let exp = std::fs::read_to_string(dir.join("vectors").join("yupack_fee.expected.jsonl")).unwrap();
     // The first three records claim size row 7 (the last row, which none of the boundary
@@ -463,7 +463,7 @@ fn rulec_testが生成物を走らせる() {
     let tmp = TempDir::new("m3-test");
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, _, e) = rulec(&["gen", RULE, "--out", &out]);
+    let (c, _, e) = rulec(&rulec::targets::up_to_0_40(&["gen", RULE, "--out", &out]));
     assert_eq!(c, 0, "{e}");
 
     let (c, r, _) = rulec_tmp(&tmpdir_in(&dir), &["test", &out]);

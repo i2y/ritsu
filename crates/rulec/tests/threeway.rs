@@ -234,6 +234,7 @@ fn 評価器と生成コードが全言語で一致する() {
     args.extend(files.iter().copied());
     args.push("--out");
     args.push(&out);
+    args.extend(rulec::targets::UP_TO_0_40);
     rulec(&args);
 
     // Which languages can run here. The set is src/backend.rs; this file used to name
@@ -412,6 +413,7 @@ fn 生成物は決定的である() {
         args.extend(files.iter().copied());
         args.push("--out");
         args.push(&out);
+        args.extend(rulec::targets::UP_TO_0_40);
         rulec(&args);
         let mut v: Vec<(String, String)> = Vec::new();
         collect(&dir, &dir, &mut v);
@@ -449,6 +451,7 @@ fn 生成物は両言語の整形器に素で通る() {
     args.extend(files.iter().copied());
     args.push("--out");
     args.push(&out);
+    args.extend(rulec::targets::UP_TO_0_40);
     rulec(&args);
 
     let go_dir = dir.join("go");
@@ -541,7 +544,7 @@ fn 丸めヘルパは両言語で参照実装と一致する() {
     let tmp = TempDir::new("round");
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    rulec(&["gen", CORPUS[0].0, "--out", &out]);
+    rulec(&rulec::targets::up_to_0_40(&["gen", CORPUS[0].0, "--out", &out]));
 
     if have("python3") {
         let o = Command::new("python3")
@@ -598,6 +601,7 @@ fn 生成pythonはmypy_strictを通る() {
     args.extend(CORPUS.iter().map(|(f, _)| (*f).to_string()));
     args.push("--out".into());
     args.push(dir.to_string_lossy().into_owned());
+    args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
     rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
     // Every generated Python but the two that speak Connect. Those import `connectrpc` and
@@ -805,6 +809,7 @@ fn 生成pythonのモジュールの直下には決まった種類の文だけ�
         let mut made = vec!["gen"];
         made.extend(&files);
         made.extend(["--out", out.as_str()]);
+        made.extend(rulec::targets::UP_TO_0_40);
         rulec(&made);
         let mut api = vec!["api"];
         api.extend(&files);
@@ -853,6 +858,7 @@ fn 生成typescriptはtsc_strictを通る() {
     args.extend(CORPUS.iter().map(|(f, _)| (*f).to_string()));
     args.push("--out".into());
     args.push(dir.to_string_lossy().into_owned());
+    args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
     rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
     let ts = dir.join("typescript");
     // node reads the runner's `import … from "./x.ts"` inside a package of ES modules
@@ -902,6 +908,7 @@ fn 生成rubyは自分のrbsでsteepを通る() {
     args.extend(CORPUS.iter().map(|(f, _)| (*f).to_string()));
     args.push("--out".into());
     args.push(dir.to_string_lossy().into_owned());
+    args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
     rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
     let rb = dir.join("ruby");
@@ -932,7 +939,7 @@ fn rbsは誤った呼び出しを拒む() {
     }
     let dir = root().join("target").join("steep-bite");
     let _ = std::fs::remove_dir_all(&dir);
-    rulec(&["gen", "tests/corpus/クーポン一枚.rule", "--out", dir.to_str().unwrap()]);
+    rulec(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/クーポン一枚.rule", "--out", dir.to_str().unwrap()]));
     let rb = dir.join("ruby");
     std::fs::write(
         rb.join("caller.rb"),
@@ -973,7 +980,7 @@ fn 数の集合は全言語で集合として読まれる() {
     let p = dir.join("pieces.rule");
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let out = dir.join("gen");
-    rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
+    rulec(&rulec::targets::up_to_0_40(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]));
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
     let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
     assert!(o.status.success(), "{said}");
@@ -998,7 +1005,7 @@ fn 率の出力は全言語で宣言した刻みで返る() {
         let p = dir.join(name);
         std::fs::write(&p, src).unwrap();
         let out = dir.join(format!("gen-{name}"));
-        rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
+        rulec(&rulec::targets::up_to_0_40(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]));
         let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
         let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
         assert!(o.status.success(), "{name}: {said}");

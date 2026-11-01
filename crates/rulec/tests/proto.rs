@@ -254,7 +254,7 @@ fn 入れ子の列挙はメッセージの名前で引く() {
     .unwrap();
     let rule = d.join("fee.rule").to_string_lossy().into_owned();
     let out = d.join("out").to_string_lossy().into_owned();
-    let (code, said) = run(&["gen", &rule, "--out", &out]);
+    let (code, said) = run(&rulec::targets::up_to_0_40(&["gen", &rule, "--out", &out]));
     assert_eq!(code, 0, "{said}");
     let body = std::fs::read_to_string(d.join("out/proto/rulec/fee/v1/fee.proto")).unwrap();
     assert!(body.contains("  optional shop.v1.Member.Tier member = 1;\n"), "{body}");
@@ -285,7 +285,7 @@ fn 契約のファイルの名前の記号はstubの名前で下線になる() {
     .unwrap();
     let rule = d.join("fee.rule").to_string_lossy().into_owned();
     let out = d.join("out").to_string_lossy().into_owned();
-    let (code, said) = run(&["gen", &rule, "--out", &out]);
+    let (code, said) = run(&rulec::targets::up_to_0_40(&["gen", &rule, "--out", &out]));
     assert_eq!(code, 0, "{said}");
     assert!(d.join("out/proto/shop/v1/member-tier.proto").exists(), "the contract keeps its name");
     let svc = std::fs::read_to_string(d.join("out/python/fee_service.py")).unwrap();

@@ -160,7 +160,7 @@ fn nothing_is_written_from_a_rule_that_writes_a_name_twice() {
                 assert_eq!(code, 1, "rulec {cmd} {file} answered:\n{out}");
             }
             let out = t.path().join(format!("gen-{stem}"));
-            let (code, said, _) = rulec(&dir, &tmp, &["gen", &file, "--out", &out.to_string_lossy()]);
+            let (code, said, _) = rulec(&dir, &tmp, &rulec::targets::up_to_0_40(&["gen", &file, "--out", &out.to_string_lossy()]));
             assert_eq!(code, 1, "rulec gen {file}:\n{said}");
             assert!(!out.exists() || std::fs::read_dir(&out).unwrap().next().is_none(), "rulec gen {file} wrote something");
         }
@@ -194,6 +194,7 @@ fn names_that_meet_where_nothing_reads_them_two_ways_pass_and_run_alike() {
         let mut args: Vec<String> = vec!["gen".into()];
         args.extend(PASS.iter().map(|(en, j)| format!("{}.rule", if ja { j } else { en })));
         args.extend(["--out".into(), out.to_string_lossy().into_owned()]);
+        args.extend(rulec::targets::UP_TO_0_40.iter().map(|s| s.to_string()));
         let (code, said, e) = rulec(&dir, &tmp, &args.iter().map(String::as_str).collect::<Vec<_>>());
         assert_eq!(code, 0, "{said}{e}");
         let (_, said, e) = rulec(&dir, &tmp, &["test", &out.to_string_lossy(), "--format", "json"]);

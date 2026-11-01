@@ -350,6 +350,7 @@ fn runs_alike(cwd: &Path, rels: &[String], what: &str) -> Vec<String> {
     let mut args: Vec<&str> = vec!["gen"];
     args.extend(rels.iter().map(String::as_str));
     args.extend(["--out", out.to_str().unwrap()]);
+    args.extend(rulec::targets::UP_TO_0_40);
     let (code, said, e) = rulec(cwd, &tmp, &args);
     assert_eq!(code, 0, "{what}: {said}{e}");
     let (_, said, e) = rulec(cwd, &tmp, &["test", out.to_str().unwrap(), "--format", "json"]);

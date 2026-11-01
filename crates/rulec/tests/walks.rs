@@ -288,7 +288,7 @@ fn 一つの歩きの二つの畳み込みと数え上げは全言語で一致�
     let (_tmp, d) = dir("mixed");
     let p = write(&d, "mixed.rule", MIXED);
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
     let j = rulec::json::parse(said.lines().next().expect("no result")).unwrap();
@@ -501,7 +501,7 @@ fn 二つの並びのページは並びごとに編集して走る() {
     }
     let (_tmp, d) = dir("page");
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", "tests/corpus/order_settlement.rule", "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/order_settlement.rule", "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     let html = std::fs::read_to_string(out.join("javascript/order_settlement_page.html")).unwrap();
     let head = html.find("<script type=\"module\">").unwrap() + "<script type=\"module\">".len();
@@ -522,7 +522,7 @@ fn 二つの並びのページは並びごとに編集して走る() {
     assert_eq!((ex.get("lines").and_then(|x| x.as_int()), ex.get("pays").and_then(|x| x.as_int())), (Some(3), Some(0)), "{said}");
     assert!(ex.get("result").and_then(|x| x.as_str()).unwrap().contains("balance = 228USD"), "{said}");
     // one sequence: the page keeps the script that knows one list
-    let (_, _, _) = run(&["gen", "tests/corpus/cart_shipping_fee.rule", "--out", out.to_str().unwrap()]);
+    let (_, _, _) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/cart_shipping_fee.rule", "--out", out.to_str().unwrap()]));
     let one = std::fs::read_to_string(out.join("javascript/cart_shipping_fee_page.html")).unwrap();
     assert!(one.contains("if (RULE.elements) {") && !one.contains("const lists = "), "the page of one sequence changed its script");
 }
@@ -583,7 +583,7 @@ fn 版の比べは集計も比べ_切り分けられない歩きはそう言う(
 fn sqlとnumpyは二つの並びの規則も生成しない() {
     let (_tmp, d) = dir("sql");
     let out = d.join("out");
-    let (code, said, e) = run(&["gen", "tests/corpus/rate_adjustment.rule", "--out", out.to_str().unwrap()]);
+    let (code, said, e) = run(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/rate_adjustment.rule", "--out", out.to_str().unwrap()]));
     assert_eq!(code, 0, "{said}{e}");
     assert!(!out.join("sql").exists() || std::fs::read_dir(out.join("sql")).unwrap().next().is_none(), "SQL was written for a walk");
     assert!(!out.join("numpy").exists() || std::fs::read_dir(out.join("numpy")).unwrap().next().is_none(), "NumPy was written for a walk");

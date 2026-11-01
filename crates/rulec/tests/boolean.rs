@@ -99,7 +99,7 @@ const NOT_ONE: [&str; 5] = [r#""false""#, r#""true""#, "1", "0", "[]"];
 fn generate(c: &Case) -> (TempDir, PathBuf) {
     let t = TempDir::new("boolean");
     let out = t.path().join("out");
-    let (code, said, e) = rulec(c.lang, None, &["gen", c.rule, "--out", &out.to_string_lossy()]);
+    let (code, said, e) = rulec(c.lang, None, &rulec::targets::up_to_0_40(&["gen", c.rule, "--out", &out.to_string_lossy()]));
     assert_eq!(code, 0, "{}: {said}{e}", c.rule);
     (t, out)
 }

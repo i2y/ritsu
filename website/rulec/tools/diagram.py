@@ -176,3 +176,21 @@ def marker(kind, c):
     return (f'<marker id="head-{kind}" viewBox="0 0 10 10" refX="9" refY="5" '
             f'markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" '
             f'orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="{c[kind]}"/></marker>')
+
+
+# --- what the tool says -----------------------------------------------------
+#
+# Both pictures name the languages rulec generates, and --verify holds that list
+# to the tool. `rulec gen` writes only the targets it is given (rulec's DESIGN
+# §15.277), so the languages are written down here: the targets of `gen` but
+# `proto` (the rule's `.proto`, not a language), in the order of rulec's
+# registry. rulec's tests/website.rs holds this list to the registry, so a
+# language added to rulec and not here fails a test there.
+
+LANGUAGES = ["python", "numpy", "typescript", "javascript", "rust", "ruby", "php", "go",
+             "swift", "java", "sql", "wasm"]
+
+
+def every_language():
+    """The arguments that make `rulec gen` write a rule in every language it has."""
+    return [a for t in LANGUAGES for a in ("--target", t)]

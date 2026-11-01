@@ -97,7 +97,7 @@ const CASES: [Case; 4] = [
 fn generate(c: &Case) -> (TempDir, PathBuf) {
     let t = TempDir::new("door");
     let out = t.path().join("out");
-    let (code, said, e) = rulec(c.lang, None, &["gen", c.rule, "--out", &out.to_string_lossy()]);
+    let (code, said, e) = rulec(c.lang, None, &rulec::targets::up_to_0_40(&["gen", c.rule, "--out", &out.to_string_lossy()]));
     assert_eq!(code, 0, "{}: {said}{e}", c.rule);
     (t, out)
 }
@@ -288,7 +288,7 @@ fn every_language_refuses_a_day_koyomi_does_not_come_to() {
     let t = TempDir::new("door-days");
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let port: rulec::days::Port = Arc::new(koyomi::ports::Engine);
-    let code = rulec::days::with(Some(port), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), false, false, &mut out, &mut err));
+    let code = rulec::days::with(Some(port), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), &rulec::targets::Asked::up_to_0_40(), false, false, &mut out, &mut err));
     assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
     if numpy_here() {
         let got = try_numpy(t.path(), "settlement.json", r#"[{"pay_day":["2026-02-10","2026-02-16"]},{"pay_day":["2026-02-10"]}]"#);

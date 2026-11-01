@@ -79,8 +79,8 @@ canonical unit** — no decimals anywhere. Two consequences bite generators:
   infinity: `-4.8 EUR` rounds down to `-4 EUR`. [generated-code.md](generated-code.md) has the
   five modes.
 
-**There is a second spelling of the same wire.** `rulec gen` also writes the rule's contract
-as a `.proto` — the request, the answer with the rows that decided it, and one method
+**There is a second spelling of the same wire.** `rulec gen --target proto` writes the rule's
+contract as a `.proto` — the request, the answer with the rows that decided it, and one method
 (generated-code.md, [the rule as a Connect service](generated-code.md#the-rule-as-a-connect-service)).
 A target whose language has a protobuf plugin can take that file and let the plugin write the
 messages: the names, the types and the enum values are then the same on both sides by
@@ -185,7 +185,8 @@ No mismatches.
 Almost none of those 94 cases is hand-written. rulec builds them from the rule's own
 boundaries — both sides of every comparison, one case per row, and the pairs where one row
 shadows another — and adds the rule's own `examples`, which are the six a person did write.
-It is the same suite `rulec gen` writes next to the generated code and `rulec coverage` audits.
+It is the same suite `rulec gen --extra vectors` writes next to the generated code and `rulec
+coverage` audits.
 You can also take it directly with `rulec vectors`.
 
 Exit code 0 is agreement, 1 is mismatches, 2 is a bad argument or an adapter that would not
@@ -287,11 +288,13 @@ The pieces, in the order they are usually written:
    stdout. This is what lets the target join the agreement test.
 4. `round_tests_<lang>()` — the five rounding modes against the reference values.
 5. An arm in `Gen::cell()`, and an entry in `Gen::api()`.
-6. **A row in `src/backend.rs`**: the id, the name, the toolchain, the files it writes, how
+6. **A row in `src/backend.rs`**: the id, the name, the toolchain, the files it writes, each
+   with the part it is — the library, or the extra it is written for (`targets::Part`) — how
    to run them, and — where the files are not named after the rule's alias, as Java's are
-   not — what it does name them. Nothing else has to be told about the language — `rulec gen` writes it,
-   `rulec test` runs it, the agreement test compares it, and the test that holds the
-   documents to the registry starts requiring the prose to name it.
+   not — what it does name them. Nothing else has to be told about the language — the id is
+   one more name `rulec gen --target` takes, `rulec test` runs it, the agreement test compares
+   it, and the test that holds the documents to the registry starts requiring the prose to name
+   it. No command line that worked before writes anything more (§15.277).
 
 Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
 Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint` and `tsc --strict` is
@@ -350,8 +353,8 @@ Two shapes of Wasm come out of `rulec gen`, and a platform takes one or the othe
 in the canonical ABI, with a `.wit` that makes a component of it — for a host that calls
 into it: a script host, an Extism plugin, a component runtime
 ([generated-code.md](generated-code.md#wasm)). The other shape is a WASI command that reads
-one JSON document on stdin and writes one on stdout; that is what the Rust runner is, and it
-compiles for `wasm32-wasip1` unchanged
+one JSON document on stdin and writes one on stdout; that is what the Rust runner
+(`--target rust --extra runner`) is, and it compiles for `wasm32-wasip1` unchanged
 ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)).
 
 A Shopify Function is on the first side, through a door of the platform's own. It is built

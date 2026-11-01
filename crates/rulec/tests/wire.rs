@@ -128,7 +128,7 @@ fn 入口のガードは刻みの個数で比べる() {
     let tmp = TempDir::new("wire-gen");
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, msg) = run(&["gen", COUPON, "--out", &out]);
+    let (c, msg) = run(&rulec::targets::up_to_0_40(&["gen", COUPON, "--out", &out]));
     assert_eq!(c, 0, "{msg}");
     let py = std::fs::read_to_string(dir.join("python").join("coupon_step.py")).expect("Python が無い");
     let go =
@@ -221,7 +221,7 @@ fn 小数は正確な有理数として読まれる() {
     let tmp = TempDir::new("wire-exact-gen");
     let dir = tmp.path().to_path_buf();
     let o = dir.to_string_lossy().to_string();
-    let (c, msg) = run(&["gen", &p, "--out", &o]);
+    let (c, msg) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", &o]));
     assert_eq!(c, 0, "{msg}");
     let py = std::fs::read_to_string(dir.join("python").join("fine_rate.py")).unwrap();
     assert!(py.contains("rate <= 36"), "3.6% が 36 刻みになっていない:\n{py}");
@@ -280,7 +280,7 @@ fn 単位のない数が書けて割り算が単位を消す() {
     let tmp = TempDir::new("wire-count-gen");
     let dir = tmp.path().to_path_buf();
     let o = dir.to_string_lossy().to_string();
-    let (c, msg) = run(&["gen", &p, "--out", &o]);
+    let (c, msg) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", &o]));
     assert_eq!(c, 0, "{msg}");
     let py = std::fs::read_to_string(dir.join("python").join("pts_only.py")).unwrap();
     // A number is a plain int on both sides: branding it would shadow the language's own
@@ -348,7 +348,7 @@ fn defineの中の率のリテラルは名前と同じ尺度で保管される()
     let tmp = TempDir::new("wire-ratedef-gen");
     let dir = tmp.path().to_path_buf();
     let o = dir.to_string_lossy().to_string();
-    let (c, msg) = run(&["gen", &p, "--out", &o]);
+    let (c, msg) = run(&rulec::targets::up_to_0_40(&["gen", &p, "--out", &o]));
     assert_eq!(c, 0, "{msg}");
     let py = std::fs::read_to_string(dir.join("python").join("rate_def.py")).unwrap();
     // 36/1000, not the reduced 9/250 — because 1000 is what every later read assumes.

@@ -268,7 +268,7 @@ fn every_language_agrees_and_refuses_a_value_outside_the_range() {
     for (stem, lang, alias) in [(PASSING[0], "en", "parcel_cover"), (PASSING[1], "ja", "parcel_cover_ja")] {
         let t = TempDir::new("optional");
         let out = t.path().join("out");
-        let (code, said, e) = rulec(lang, None, &["gen", &format!("tests/optional/{stem}.rule"), "--out", &out.to_string_lossy()]);
+        let (code, said, e) = rulec(lang, None, &rulec::targets::up_to_0_40(&["gen", &format!("tests/optional/{stem}.rule"), "--out", &out.to_string_lossy()]));
         assert_eq!(code, 0, "{stem}: {said}{e}");
         let wrong = outside(stem);
         std::fs::write(out.join("vectors").join(format!("{alias}.refused.jsonl")), wrong.join("\n") + "\n").unwrap();
@@ -301,7 +301,7 @@ fn every_language_agrees_and_refuses_a_value_outside_the_range() {
     )
     .unwrap();
     let out = t.path().join("out");
-    let (code, said, e) = rulec("en", None, &["gen", &rule.to_string_lossy(), "--out", &out.to_string_lossy()]);
+    let (code, said, e) = rulec("en", None, &rulec::targets::up_to_0_40(&["gen", &rule.to_string_lossy(), "--out", &out.to_string_lossy()]));
     assert_eq!(code, 0, "{said}{e}");
     let wrong = ["{\"in\":{\"weight\":30001,\"share\":null}}", "{\"in\":{\"weight\":null,\"share\":101}}", "{\"in\":{\"weight\":-1,\"share\":50}}"];
     std::fs::write(out.join("vectors/light_parcel.refused.jsonl"), wrong.join("\n") + "\n").unwrap();
@@ -332,7 +332,7 @@ fn every_language_agrees_and_refuses_a_value_outside_the_range() {
     )
     .unwrap();
     let out = t.path().join("walk");
-    let (code, said, e) = rulec("en", None, &["gen", &rule.to_string_lossy(), "--out", &out.to_string_lossy()]);
+    let (code, said, e) = rulec("en", None, &rulec::targets::up_to_0_40(&["gen", &rule.to_string_lossy(), "--out", &out.to_string_lossy()]));
     assert_eq!(code, 0, "{said}{e}");
     let wrong = ["{\"in\":{\"auto_ok\":true,\"candidates\":[{\"score\":101}]}}", "{\"in\":{\"auto_ok\":false,\"candidates\":[{\"score\":null},{\"score\":-1}]}}"];
     std::fs::write(out.join("vectors/match_count.refused.jsonl"), wrong.join("\n") + "\n").unwrap();
@@ -373,7 +373,7 @@ fn every_language_says_the_same_sentence_for_a_value_outside_the_range() {
     ] {
         let t = TempDir::new("optional");
         let out = t.path().join("out");
-        let (code, printed, e) = rulec(lang, None, &["gen", &format!("tests/optional/{stem}.rule"), "--out", &out.to_string_lossy()]);
+        let (code, printed, e) = rulec(lang, None, &rulec::targets::up_to_0_40(&["gen", &format!("tests/optional/{stem}.rule"), "--out", &out.to_string_lossy()]));
         assert_eq!(code, 0, "{stem}: {printed}{e}");
         let wrong = out.join("vectors").join(".outside.jsonl");
         std::fs::write(&wrong, format!("{}\n", outside(stem)[0])).unwrap();
@@ -649,7 +649,7 @@ fn every_language_answers_none_as_the_reference_evaluator_does() {
         for (stem, lang) in [(en, "en"), (ja, "ja")] {
             let t = TempDir::new("optional");
             let out = t.path().join("out");
-            let (code, said, e) = rulec(lang, None, &["gen", &format!("tests/optional/{stem}.rule"), "--out", &out.to_string_lossy()]);
+            let (code, said, e) = rulec(lang, None, &rulec::targets::up_to_0_40(&["gen", &format!("tests/optional/{stem}.rule"), "--out", &out.to_string_lossy()]));
             assert_eq!(code, 0, "{stem}: {said}{e}");
             let (alias, names) = optional_outputs(stem);
             let vectors = std::fs::read_to_string(out.join("vectors").join(format!("{alias}.jsonl"))).unwrap();
@@ -696,6 +696,7 @@ fn the_generated_types_of_an_optional_output_check() {
     args.extend(rules.iter().map(String::as_str));
     let dir = out.to_string_lossy().into_owned();
     args.extend(["--out", dir.as_str()]);
+    args.extend(rulec::targets::UP_TO_0_40);
     let (code, said, e) = rulec("en", None, &args);
     assert_eq!(code, 0, "{said}{e}");
     let aliases: Vec<String> = ANSWERING.iter().map(|(en, _)| optional_outputs(en).0).collect();

@@ -323,6 +323,7 @@ fn runs_alike(runs: &[Run], what: &str) {
     args.extend(runs.iter().map(|r| r.file.as_str()));
     let o = out.to_string_lossy().into_owned();
     args.extend(["--out", o.as_str()]);
+    args.extend(rulec::targets::UP_TO_0_40);
     let (code, said, e) = rulec(&dir, &tmp, &args);
     assert_eq!(code, 0, "{what}: {said}{e}");
     let (_, said, e) = rulec(&dir, &tmp, &["test", o.as_str(), "--format", "json"]);
@@ -445,7 +446,7 @@ fn mypy_refuses_what_only_a_type_checker_reads_and_takes_it_with_an_alias() {
                 let t = TempDir::new("own-names-mypy");
                 let tmp = tmpdir_in(t.path());
                 std::fs::write(t.path().join(format!("{stem}.rule")), text).unwrap();
-                let (code, said, e) = rulec(t.path(), &tmp, &["gen", &format!("{stem}.rule"), "--out", "out"]);
+                let (code, said, e) = rulec(t.path(), &tmp, &rulec::targets::up_to_0_40(&["gen", &format!("{stem}.rule"), "--out", "out"]));
                 assert_eq!(code, 0, "{rel}: {said}{e}");
                 let py = t.path().join("out/python");
                 let module: Vec<String> = std::fs::read_dir(&py)

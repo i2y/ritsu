@@ -261,7 +261,7 @@ fn the_points_are_counted_for_w131_and_e108() {
 #[test]
 fn a_pick_by_weight_refuses_a_draw_past_the_weights() {
     let t = TempDir::new("chances-refused");
-    let (c, _, e) = run(&["gen", ROUTING, "--out", t.path().to_str().unwrap()]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", ROUTING, "--out", t.path().to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     let refused = std::fs::read_to_string(t.path().join("vectors/case_routing.refused.jsonl")).unwrap();
     assert!(
@@ -287,7 +287,7 @@ fn a_pick_by_weight_refuses_a_draw_past_the_weights() {
 fn gen_and_api_say_where_the_functions_are() {
     let t = TempDir::new("chances-gen");
     let out = t.path().join("gen");
-    let (c, said, e) = run(&["gen", LOTTERY, "--out", out.to_str().unwrap()]);
+    let (c, said, e) = run(&rulec::targets::up_to_0_40(&["gen", LOTTERY, "--out", out.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     // One line for each target, as for the other functions a target has no room for.
     assert!(
@@ -343,7 +343,7 @@ fn the_functions_count_the_chances_the_reference_counts() {
     }
     let t = TempDir::new("chances-langs");
     let generated = t.path().join("gen");
-    let (c, _, e) = run(&["gen", ROUTING, BOX, "--out", generated.to_str().unwrap()]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", ROUTING, BOX, "--out", generated.to_str().unwrap()]));
     assert_eq!(c, 0, "{e}");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")

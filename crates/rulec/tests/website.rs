@@ -807,6 +807,23 @@ fn サイトが並べる対象言語はレジストリと同じ() {
     }
 }
 
+/// The languages the front page's two diagrams are drawn for, written down in
+/// `tools/diagram.py`. Their `--verify` asks `gen` for those targets and holds the pictures to
+/// what it writes, so a language left out of the list would be left out of the pictures with
+/// nothing to say so. The list is held here to the targets of `gen` but `proto`, the rule's
+/// `.proto` (§15.277), in their order.
+#[test]
+fn 図の道具が並べる言語はgenの出力先と同じ() {
+    let src = read("website/rulec/tools/diagram.py");
+    let at = src.find("\nLANGUAGES = [").expect("diagram.py に LANGUAGES の並びが無い");
+    let list = &src[at..];
+    let list = &list[..list.find(']').expect("diagram.py の LANGUAGES の並びが閉じていない")];
+    let got: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+    let want: Vec<&str> =
+        rulec::targets::target_names().iter().copied().filter(|t| *t != rulec::targets::PROTO).collect();
+    assert_eq!(got, want, "website/rulec/tools/diagram.py の LANGUAGES を、gen の出力先から proto を除いた並びにしてください");
+}
+
 /// The numbers about Kani on the pages, held to the harnesses `gen` actually writes and to
 /// the run recorded in `experiments/kani/report.txt`.
 ///
@@ -823,7 +840,7 @@ fn kaniの件数はページと記録と実物で揃っている() {
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", "tests/corpus/", "--out", &out.to_string_lossy()])
+        .args(["gen", "tests/corpus/", "--out", &out.to_string_lossy()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "gen が失敗した");

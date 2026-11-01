@@ -1250,7 +1250,7 @@ mod tests {
                 if !b.folds && !f.elements.is_empty() {
                     continue;
                 }
-                let text: String = (b.files)(&g, &alias, &pkg).into_iter().map(|(_, body)| body).collect::<Vec<_>>().join("\n");
+                let text: String = (b.files)(&g, &alias, &pkg).into_iter().map(|(_, body, _)| body).collect::<Vec<_>>().join("\n");
                 let mut listed: Vec<Own> = reads(t, &f, &has);
                 listed.extend(tops(t, &has));
                 for o in listed.iter().filter(|o| o.what != What::Builtin) {

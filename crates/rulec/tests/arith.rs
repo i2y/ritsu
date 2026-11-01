@@ -369,7 +369,7 @@ fn the_vectors_keep_to_a_sum_and_the_refused_ones_break_it() {
     let tmp = TempDir::new("arith-quota");
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, said) = rulec(&["gen", "tests/corpus/quota_request.rule", "--out", &out]);
+    let (c, said) = rulec(&rulec::targets::up_to_0_40(&["gen", "tests/corpus/quota_request.rule", "--out", &out]));
     assert_eq!(c, 0, "{said}");
     let read = |name: &str| -> Vec<rulec::json::Json> {
         std::fs::read_to_string(dir.join("vectors").join(name))

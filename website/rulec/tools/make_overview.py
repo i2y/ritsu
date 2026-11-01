@@ -46,7 +46,7 @@ import pathlib
 import sys
 
 from diagram import (DARK, LIGHT, FONT, PAD, LINE_W, width, fit, esc, text, card,
-                     sheet_frame, sheet_title, arrow, marker)
+                     sheet_frame, sheet_title, arrow, marker, every_language)
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -403,16 +403,14 @@ def verify(rulec):
             def run(*args):
                 return subprocess.run([rulec, *args, "--lang", lang],
                                       capture_output=True, text=True)
-            r = run("gen", str(rule), "--out", tmp)
+            r = run("gen", str(rule), "--out", tmp, *every_language())
             if r.returncode:
                 raise SystemExit(r.stdout + r.stderr)
             written = (pathlib.Path(tmp) / "python" / "fee.py").read_text(encoding="utf-8")
             for line in t["code"][1]:
                 if line.strip() != "..." and line not in written.splitlines():
                     raise SystemExit(f"{name}: rulec gen does not write {line!r}")
-            # `gen` also writes the vectors and the `.proto` of the rule as a service, and
-            # neither of those is a language.
-            wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors", "proto"}
+            wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()}
             if wrote != {d for _, d in LANGS}:
                 raise SystemExit(f"rulec gen writes {sorted(wrote)}, the diagram is drawn "
                                  f"for {sorted(d for _, d in LANGS)}")

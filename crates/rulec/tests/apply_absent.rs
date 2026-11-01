@@ -182,7 +182,7 @@ fn every_language_reads_the_absent_value_as_with_says() {
         let out = t.path().join("out");
         let tmp = t.path().join("tmp");
         std::fs::create_dir_all(&tmp).unwrap();
-        let (code, said, e) = rulec(&tmp, &["gen", &format!("tests/apply_absent/{stem}.rule"), "--out", &out.to_string_lossy()]);
+        let (code, said, e) = rulec(&tmp, &rulec::targets::up_to_0_40(&["gen", &format!("tests/apply_absent/{stem}.rule"), "--out", &out.to_string_lossy()]));
         assert_eq!(code, 0, "{stem}: {said}{e}");
         let vectors = std::fs::read_to_string(out.join("vectors").join(format!("{alias}.jsonl"))).unwrap();
         assert!(vectors.contains(&format!("\"{member}\":null")), "{stem}: no vector asks for the member's tier absent:\n{vectors}");

@@ -530,7 +530,7 @@ fn the_generated_code_agrees_with_the_vectors() {
     for s in STAYS.iter().chain(BOOKINGS.iter()) {
         let tmp = TempDir::new("date-constraint-gen");
         let out = tmp.path().join("out");
-        let (code, said, e) = rulec(&["gen", s.path, "--out", &out.to_string_lossy()]);
+        let (code, said, e) = rulec(&rulec::targets::up_to_0_40(&["gen", s.path, "--out", &out.to_string_lossy()]));
         assert_eq!(code, 0, "{}: {said}{e}", s.path);
         let (_, said, e) = rulec_in(Some(&tmpdir_in(&out)), &["test", &out.to_string_lossy(), "--format", "json"]);
         let j = json(said.lines().next().unwrap_or_else(|| panic!("{}: no result\n{e}", s.path)));

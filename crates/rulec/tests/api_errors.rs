@@ -123,7 +123,7 @@ fn every_entry_names_its_errors_and_what_they_carry() {
     for (lang, rule) in RULES {
         let t = TempDir::new(&format!("api-errors-{lang}"));
         let out = t.path().to_path_buf();
-        let (c, _, e) = rulec(lang, &["gen", rule, "--out", &out.to_string_lossy()]);
+        let (c, _, e) = rulec(lang, &rulec::targets::up_to_0_40(&["gen", rule, "--out", &out.to_string_lossy()]));
         assert_eq!(c, 0, "{rule}: {e}");
         let (c, api, e) = rulec(lang, &["api", rule]);
         assert_eq!(c, 0, "{rule}: {e}");
@@ -161,7 +161,7 @@ fn python_and_numpy_errors_carry_the_fields_the_inventory_lists() {
     for (lang, rule) in RULES {
         let t = TempDir::new(&format!("api-errors-py-{lang}"));
         let out = t.path().to_path_buf();
-        let (c, _, e) = rulec(lang, &["gen", rule, "--out", &out.to_string_lossy()]);
+        let (c, _, e) = rulec(lang, &rulec::targets::up_to_0_40(&["gen", rule, "--out", &out.to_string_lossy()]));
         assert_eq!(c, 0, "{rule}: {e}");
         let (_, api, _) = rulec(lang, &["api", rule]);
         let j = rulec::json::parse(api.trim()).unwrap();
@@ -242,7 +242,7 @@ fn a_go_caller_built_from_the_inventory_reads_each_error() {
     for (lang, rule) in RULES {
         let t = TempDir::new(&format!("api-errors-go-{lang}"));
         let out = t.path().to_path_buf();
-        let (c, _, e) = rulec(lang, &["gen", rule, "--out", &out.to_string_lossy()]);
+        let (c, _, e) = rulec(lang, &rulec::targets::up_to_0_40(&["gen", rule, "--out", &out.to_string_lossy()]));
         assert_eq!(c, 0, "{rule}: {e}");
         let (_, api, _) = rulec(lang, &["api", rule]);
         let j = rulec::json::parse(api.trim()).unwrap();
@@ -338,7 +338,7 @@ fn the_wasm_entry_says_what_its_module_answers() {
         }
         let t = TempDir::new(&format!("api-wasm-{lang}"));
         let out = t.path().to_path_buf();
-        let (c, _, e) = rulec(lang, &["gen", rule, "--out", &out.to_string_lossy()]);
+        let (c, _, e) = rulec(lang, &rulec::targets::up_to_0_40(&["gen", rule, "--out", &out.to_string_lossy()]));
         assert_eq!(c, 0, "{rule}: {e}");
         // Built the way the entry says.
         let line = s(w, "build");

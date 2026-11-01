@@ -29,10 +29,13 @@ struct Flag {
     repeat: bool,
     /// Everything after this flag belongs to it verbatim (`--adapter`).
     rest: bool,
+    /// The command does nothing without it (`gen --target`, §15.277). The command says so itself,
+    /// with what to write; the table says it for the usage line and for MCP's schema.
+    required: bool,
 }
 
 fn flag(name: &'static str, value: Option<&'static str>, help: String) -> Flag {
-    Flag { name, value, choices: &[], default: None, help, repeat: false, rest: false }
+    Flag { name, value, choices: &[], default: None, help, repeat: false, rest: false, required: false }
 }
 
 impl Flag {
@@ -52,12 +55,21 @@ impl Flag {
         self.rest = true;
         self
     }
-    /// `--out <dir>` — the flag as it appears in a usage line.
+    fn required(mut self) -> Flag {
+        self.required = true;
+        self
+    }
+    /// `--out <dir>` — the flag with its value, as an error names it.
     fn spelled(&self) -> String {
         match self.value {
             Some(v) => format!("{} {v}", self.name),
             None => self.name.to_string(),
         }
+    }
+    /// `--target <target>...` — the flag as a usage line and the list of flags show it: one that
+    /// may be given more than once says so, as ritsu's other commands do.
+    fn shown(&self) -> String {
+        if self.repeat { format!("{}...", self.spelled()) } else { self.spelled() }
     }
 }
 
@@ -201,27 +213,49 @@ fn commands() -> Vec<Cmd> {
             name: "gen",
             args: "<file.rule>...",
             purpose: tr!(
-                "{} と単体ベクタを生成する。検査を通らない規則からは生成しない",
-                "generate {}, and the unit vectors; nothing is generated from a rule that does not pass check",
+                "指定した出力先（{}、.proto）のライブラリと、頼んだ付属物を生成する。検査を通らない規則からは生成しない",
+                "generate the library of each target given ({}, or the .proto), and the extras asked for; nothing is generated from a rule that does not pass check",
                 crate::backend::names()
             ),
             params: vec![rule_files()],
             flags: vec![
+                flag(
+                    "--target",
+                    Some(if crate::i18n::ja() { "<出力先>" } else { "<target>" }),
+                    tr!(
+                        "書く出力先（何度でも書ける）: {}。出力先ごとに、ほかのコードが読むライブラリだけを書く。proto は規則の .proto と buf のモジュール",
+                        "a target to write (may be given more than once): {}. Each gets its library, the module other code reads; proto is the rule's .proto and its buf module",
+                        crate::targets::target_names().join(", ")
+                    ),
+                )
+                .choices(crate::targets::target_names())
+                .repeat()
+                .required(),
+                flag(
+                    "--extra",
+                    Some(if crate::i18n::ja() { "<付属物>" } else { "<extra>" }),
+                    tr!(
+                        "出力先の横に書く付属物（何度でも書ける）: runner（rulec test が走らせるランナー）、mcp（MCP のサーバーと、それが出す確かめのページ）、connect（Connect のサービス。--target python と --target proto が要る）、round-test（丸めの試験）、proof（証明のハーネス。rust）、vectors（ベクタと期待値）",
+                        "an extra to write beside the targets (may be given more than once): runner (what `rulec test` runs), mcp (the MCP server, and the page it serves), connect (the Connect service; needs --target python and --target proto), round-test (the unit tests of the rounding helpers), proof (the proof harnesses; rust), vectors (the vectors and their expected values)"
+                    ),
+                )
+                .choices(crate::targets::EXTRAS)
+                .repeat(),
                 out_flag(&tr!("生成物", "generated files")).default("generated"),
-                flag("--check", None, tr!("書き換えず、生成物が古ければ 1 で落ちる（CI 用）", "write nothing and exit 1 if a generated file is stale (for CI)")),
+                flag("--check", None, tr!("書き換えず、同じ --target と --extra で書くはずのファイルが古いか無ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a file the same --target and --extra write is stale or missing (for CI)")),
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
                 (0, tr!("生成した、または --check が一致を確かめた", "generated, or --check found everything up to date")),
                 (1, tr!("--check でずれがある、または規則が検査を通らない", "--check found a difference, or the rule does not pass check")),
                 (2, tr!(
-                    "引数の誤り、書けないファイル、ritsu のモジュールの中で、生成するモジュールの一つのパスに入る中身の違う二つの契約か、二つの名前で import される依存の契約",
-                    "bad arguments, a file that cannot be written, or in a module of ritsu's, two different contracts for one path of the module generated, or a contract of a dependency imported by two names"
+                    "引数の誤り（`--target` が無い、出力先の持たない付属物を頼んだ、も含む）、書けないファイル、ritsu のモジュールの中で、生成するモジュールの一つのパスに入る中身の違う二つの契約か、二つの名前で import される依存の契約",
+                    "bad arguments (no `--target`, or an extra none of the targets has, among them), a file that cannot be written, or in a module of ritsu's, two different contracts for one path of the module generated, or a contract of a dependency imported by two names"
                 )),
             ],
             examples: vec![
-                "rulec gen rules/ --out generated/".into(),
-                "rulec gen rules/ --out generated/ --check".into(),
+                "rulec gen rules/ --target python --target typescript --out generated/".into(),
+                "rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check".into(),
             ],
             codes: every_code(),
         },
@@ -683,7 +717,7 @@ fn commands() -> Vec<Cmd> {
 fn usage_line(c: &Cmd) -> String {
     let mut o = format!("rulec {} {}", c.name, c.args).trim_end().to_string();
     for f in &c.flags {
-        o.push_str(&format!(" [{}]", f.spelled()));
+        o.push_str(&if f.required { format!(" {}", f.shown()) } else { format!(" [{}]", f.shown()) });
     }
     o
 }
@@ -704,9 +738,9 @@ fn help_cmd(c: &Cmd) -> String {
 
     o.push_str(&tr!("\nフラグ:\n", "\nFlags:\n"));
     let flags: Vec<&Flag> = c.flags.iter().chain(GLOBALS.get_or_init(global_flags)).collect();
-    let w = flags.iter().map(|f| crate::diag::width(&f.spelled())).max().unwrap_or(0);
+    let w = flags.iter().map(|f| crate::diag::width(&f.shown())).max().unwrap_or(0);
     for f in &flags {
-        let s = f.spelled();
+        let s = f.shown();
         let pad = " ".repeat(w - crate::diag::width(&s));
         let d = match &f.default {
             Some(d) => tr!(" (既定 {d})", " (default {d})"),
@@ -779,6 +813,9 @@ struct Args {
     /// Everything after a `rest` flag (`--adapter`), verbatim.
     rest: Vec<String>,
     pos: Vec<String>,
+    /// The words after the program's name as they were typed, `--lang` among them: what a command
+    /// shows when it says which command line to run instead (`gen`, §15.277).
+    typed: Vec<String>,
 }
 
 impl Args {
@@ -798,7 +835,7 @@ impl Args {
 fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
     let globals = GLOBALS.get_or_init(global_flags);
     let find = |name: &str| c.flags.iter().chain(globals.iter()).find(|f| f.name == name);
-    let mut out = Args { got: Vec::new(), rest: Vec::new(), pos: Vec::new() };
+    let mut out = Args { got: Vec::new(), rest: Vec::new(), pos: Vec::new(), typed: Vec::new() };
     let mut i = 0;
     while i < argv.len() {
         let a = &argv[i];
@@ -1017,6 +1054,7 @@ fn need_args(c: &Cmd) -> ExitCode {
 /// output and standard error: the exit code. The binary of this crate and `ritsu rulec` (ritsu's
 /// DESIGN 8.2) run it, so the two are the same command.
 pub fn run(mut args: Vec<String>) -> ExitCode {
+    let typed = args.clone();
     // `--lang ja|en` (or `--lang=en`) decides the output language before anything
     // is printed; `RULEC_LANG`, then `RITSU_LANG`, is the fallback, English the default (i18n.rs).
     if let Some(i) = args.iter().position(|a| a == "--lang") {
@@ -1073,10 +1111,11 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
             "unknown command `{n}`; `rulec --help` lists them"
         ));
     };
-    let a = match parse(cmd, &args[1..]) {
+    let mut a = match parse(cmd, &args[1..]) {
         Ok(a) => a,
         Err(e) => return refuse(e),
     };
+    a.typed = typed;
     if a.has("--help") {
         print!("{}", help_cmd(cmd));
         return ExitCode::from(0);
@@ -1300,8 +1339,18 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
             }
         }
         "gen" => {
+            // It writes only what it is given (§15.277): with no target, nothing, and the command
+            // line that writes what 0.40.0 wrote.
+            let targets = a.all("--target");
+            if targets.is_empty() {
+                return refuse(crate::targets::no_target(&a.typed));
+            }
+            let asked = match crate::targets::Asked::new(&targets, &a.all("--extra")) {
+                Ok(x) => x,
+                Err(e) => return refuse(e),
+            };
             let files: Vec<&str> = files.iter().map(|f| f.as_str()).collect();
-            ExitCode::from(crate::codegen::generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check"), json, &mut std::io::stdout(), &mut std::io::stderr()))
+            ExitCode::from(crate::codegen::generate(&files, a.get("--out").unwrap_or("generated"), &asked, a.has("--check"), json, &mut std::io::stdout(), &mut std::io::stderr()))
         }
         _ => unreachable!("the table and the dispatch are the same list"),
     }

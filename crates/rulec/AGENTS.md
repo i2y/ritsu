@@ -238,34 +238,39 @@ the reference evaluator and every generated language share — which happened on
 rounding for multiple outputs missing in all of them. Take the cases from the source: a
 published tariff's own worked examples are ideal.
 
-**They ride in the vector suite.** `gen` writes each out as a case of its own, so `rulec test`
-runs them through every generated language and `rulec coverage` counts what they reach. A row
-goes in only when it names every input.
+**They ride in the vector suite.** `gen --extra vectors` writes each out as a case of its own, so
+`rulec test` runs them through every generated language and `rulec coverage` counts what they
+reach. A row goes in only when it names every input.
 
-### `rulec gen <file> --out generated/ --format json`
+### `rulec gen <file> --target <target>... --out generated/ --format json`
 
-Writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, NumPy, and the
-vectors. It refuses to generate from a rule that does not pass check. `rulec api <file>` tells you
-how to call the result — signatures, parameters with units and ranges, enum member spellings,
-errors — so you never have to read the generated code to integrate it
-([docs/generated-code.md](docs/generated-code.md) carries a heading for each). Beside each
-function is a twin with `_traced` on its name that also returns the rows that matched, one per
-table in order — the row numbers `rulec doc` prints, and what an answer to "why this amount"
-needs; `rulec test` holds those rows to the reference evaluator as well as the values. A third,
-`_record`, turns one call into one line of the fixtures format, so what `replay` and `diff` need
-comes out of the generated code itself. A fourth file beside the module, `<alias>_mcp.py`, serves
-the rule as one MCP tool for an agent that will *call* it: the arguments are the wire form, the
-answer is the record line, and `--record <file.jsonl>` keeps every call. It speaks stdio, and with
-`--http <port>` MCP's Streamable HTTP — put TLS and authentication in front of that one; where the
-host renders MCP Apps it also offers the page for people (`<alias>_page.html`) as the tool's view.
-`proto/` and `<alias>_service.py` are the same rule as a Connect service, for the caller that is
-another team's code. The `wasm/` directory holds the rule as one module for any host, behind
-`call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a component
-of it. The `sql/` directory holds two doors on one query: `<alias>.sql` over a relation of inputs,
-and `<alias>_function.sql`, the same query as a PostgreSQL function asked one case at a time — an
-RPC endpoint the moment it sits in a schema PostgREST or Supabase exposes.
+Writes the library of each target it is given and nothing else: Python, TypeScript, JavaScript,
+Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm or NumPy (`--target python --target typescript`), or
+the rule's `.proto` (`--target proto`). What sits beside a library is an extra, written only when
+`--extra` asks for it: `runner` and `vectors`, which `rulec test` needs, `mcp`, `connect`,
+`round-test` and `proof`. With no `--target` it writes nothing and stops at 2, naming the command
+that writes what 0.40.0 wrote with none — every target with every extra. It refuses to generate
+from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
+signatures, parameters with units and ranges, enum member spellings, errors — so you never have to
+read the generated code to integrate it ([docs/generated-code.md](docs/generated-code.md) carries a
+heading for each). Beside each function is a twin with `_traced` on its name that also returns the
+rows that matched, one per table in order — the row numbers `rulec doc` prints, and what an answer
+to "why this amount" needs; `rulec test` holds those rows to the reference evaluator as well as the
+values. A third, `_record`, turns one call into one line of the fixtures format, so what `replay`
+and `diff` need comes out of the generated code itself. With `--extra mcp`, a file beside the
+module, `<alias>_mcp.py`, serves the rule as one MCP tool for an agent that will *call* it: the
+arguments are the wire form, the answer is the record line, and `--record <file.jsonl>` keeps every
+call. It speaks stdio, and with `--http <port>` MCP's Streamable HTTP — put TLS and authentication
+in front of that one; where the host renders MCP Apps it also offers the page for people
+(`<alias>_page.html`) as the tool's view. `proto/` (`--target proto`) and `<alias>_service.py`
+(`--extra connect`, beside `--target python`) are the same rule as a Connect service, for the
+caller that is another team's code. The `wasm/` directory holds the rule as one module for any
+host, behind `call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a
+component of it. The `sql/` directory holds two doors on one query: `<alias>.sql` over a relation
+of inputs, and `<alias>_function.sql`, the same query as a PostgreSQL function asked one case at a
+time — an RPC endpoint the moment it sits in a schema PostgREST or Supabase exposes.
 
-Beside the Rust module, `<alias>_proof.rs` holds proof harnesses for the
+Beside the Rust module, with `--extra proof`, `<alias>_proof.rs` holds proof harnesses for the
 [Kani](https://model-checking.github.io/kani/) model checker, behind `#[cfg(kani)]` so `rustc`
 never reads them: over **every** input in the declared domain rather than over the vectors, no
 table falls through, no contradiction guard fires, nothing overflows an `i64`, and each `unique`
@@ -288,10 +293,13 @@ no dependencies; `proofs/` proves in Lean 4 that those checks imply the claims a
 
 ### `rulec test generated/ --format json`
 
-Runs every generated language over the vectors and compares them with the reference
-evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
+Runs every language generated there over the vectors and compares them with the reference
+evaluator, byte for byte, through the runners — `gen --extra runner --extra vectors` writes both,
+and a language generated without its runner is skipped. The MCP servers, the Connect service,
+the round tests and the proofs run where they were generated, and a note names each that was
+not. This is the only step that reaches outside: it wants `python3`,
 `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK, plus the `wasm32-unknown-unknown` target for the
-Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a PostgreSQL for the function beside the query, and, under `--proofs`, `kani` for the proof harnesses `gen` writes beside the `rustc` module (that pass is not vectors: it holds the generated code over **every** input in the declared domain, and costs seconds per rule where the vectors cost milliseconds, which is why it is asked for), and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
+Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a PostgreSQL for the function beside the query, and, under `--proofs`, `kani` for the proof harnesses `gen --extra proof` writes beside the `rustc` module (that pass is not vectors: it holds the generated code over **every** input in the declared domain, and costs seconds per rule where the vectors cost milliseconds, which is why it is asked for), and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 
@@ -302,14 +310,17 @@ to mean the agreement held across all of them.
 - uses: i2y/ritsu@v0.38.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
-- run: rulec gen rules/ --out generated/ --check
+- run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
 - run: rulec coverage rules/
 - run: rulec test generated/ --require-all
 ```
 
 `--diff-base` reports only findings that are new since that revision, so pre-existing
 warnings do not drown the ones this change introduced. `gen --check` fails when the generated
-code is stale — that is the gate that keeps the committed output honest.
+code is stale — that is the gate that keeps the committed output honest. It compares what the
+same `--target` and `--extra` write, so the line names the ones the files were written with:
+`python` stands for the languages your code reads, and `--extra runner --extra vectors` for what
+`rulec test` puts through them.
 
 ### If there is a legacy implementation: `rulec verify`
 

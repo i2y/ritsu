@@ -26,6 +26,7 @@ fn generate(tag: &str, rules: &[&str]) -> (TempDir, PathBuf) {
     let mut args: Vec<&str> = vec!["gen"];
     args.extend_from_slice(rules);
     args.extend_from_slice(&["--out", dir.to_str().unwrap()]);
+    args.extend_from_slice(rulec::targets::UP_TO_0_40);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
@@ -137,7 +138,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
-        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()])
+        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -416,7 +417,7 @@ fn 承認者のページは走らせた場所によらない() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(&dir)
-        .args(["gen", rule, "--out", "out"])
+        .args(["gen", rule, "--out", "out"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -562,7 +563,7 @@ fn 名前は_buf_と同じに切る() {
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
-        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()])
+        .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -606,7 +607,7 @@ fn 同じパスに違う契約はコピーしない() {
     let b = d.join("b/b.rule");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
-        .args(["gen", a.to_str().unwrap(), b.to_str().unwrap(), "--out", d.join("out").to_str().unwrap()])
+        .args(["gen", a.to_str().unwrap(), b.to_str().unwrap(), "--out", d.join("out").to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     let err = String::from_utf8_lossy(&o.stderr).into_owned();
@@ -661,7 +662,7 @@ fn 生成したまま立ち_名前の誤りと省いた入力を受け付けな�
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
-        .args(["gen", d.join("delivery.rule").to_str().unwrap(), "--out", out.to_str().unwrap()])
+        .args(["gen", d.join("delivery.rule").to_str().unwrap(), "--out", out.to_str().unwrap()]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
@@ -807,6 +808,7 @@ fn gen_in(d: &std::path::Path, rules: &[&str]) -> (i32, String) {
         .arg("gen")
         .args(rules)
         .args(["--out", "out"])
+        .args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stderr).into_owned())
@@ -963,7 +965,7 @@ fn 契約を実装した規則は契約の番号で話す() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
         .current_dir(&d)
-        .args(["gen", rules[0], rules[1], "--out", "out"])
+        .args(["gen", rules[0], rules[1], "--out", "out"]).args(rulec::targets::UP_TO_0_40)
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));

@@ -102,6 +102,7 @@ fn generate(lang: &str, rules: &[&str]) -> (TempDir, PathBuf) {
         .current_dir(root())
         .arg("gen")
         .args(rules)
+        .args(rulec::targets::UP_TO_0_40)
         .arg("--out")
         .arg(&out)
         .output()

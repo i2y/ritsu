@@ -64,7 +64,7 @@ fn setup(tag: &str, rule: &str) -> (TempDir, PathBuf, rulec::json::Json) {
     let tmp = TempDir::new(&format!("api-{tag}"));
     let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
-    let (c, _, e) = run(&["gen", rule, "--out", &out]);
+    let (c, _, e) = run(&rulec::targets::up_to_0_40(&["gen", rule, "--out", &out]));
     assert_eq!(c, 0, "{e}");
     (tmp, dir, api(rule))
 }

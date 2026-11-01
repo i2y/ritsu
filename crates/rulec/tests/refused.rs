@@ -93,6 +93,7 @@ fn generate(rules: &[&str], lang: &str) -> (TempDir, PathBuf) {
     args.extend(rules.iter().copied());
     let o = out.to_string_lossy().into_owned();
     args.extend(["--out", o.as_str()]);
+    args.extend(rulec::targets::UP_TO_0_40);
     let (code, said, e) = rulec(lang, None, &args);
     assert_eq!(code, 0, "{said}{e}");
     (t, out)
@@ -195,7 +196,7 @@ fn a_day_koyomi_does_not_come_to_is_written_and_refused() {
     let t = TempDir::new("refused-days");
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let port: rulec::days::Port = Arc::new(koyomi::ports::Engine);
-    let code = rulec::days::with(Some(port), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), false, false, &mut out, &mut err));
+    let code = rulec::days::with(Some(port), || rulec::codegen::generate(&[path.to_str().unwrap()], t.path().to_str().unwrap(), &rulec::targets::Asked::up_to_0_40(), false, false, &mut out, &mut err));
     assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
     let got = refused(t.path());
     let errors: Vec<&str> = got["settlement"].iter().map(|(_, e)| e.as_str()).collect();

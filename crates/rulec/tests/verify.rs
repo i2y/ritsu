@@ -111,7 +111,7 @@ fn setup_for(tag: &str, rule: &str, adapter: &str) -> Option<(TempDir, PathBuf)>
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", rule, "--out", &out])
+        .args(["gen", rule, "--out", &out]).args(rulec::targets::UP_TO_0_40)
         .output()
         .unwrap();
     assert!(o.status.success());
