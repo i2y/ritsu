@@ -549,7 +549,7 @@ impl Door<'_, '_> {
             ritsu_base::json::quote(&id.transfer),
             ritsu_base::json::quote(&id.op)
         );
-        let mut out = format!("let mut args: ::std::vec::Vec<::std::string::String> = ::std::vec::Vec::new();\n");
+        let mut out = String::from("let mut args: ::std::vec::Vec<::std::string::String> = ::std::vec::Vec::new();\n");
         for (i, optional) in super::books::op_params(&book, &id.transfer, &id.op) {
             let p = &tr.params[i];
             let key = ritsu_emit::lit::rust(&format!("{}:", ritsu_base::json::quote(&p.name)));

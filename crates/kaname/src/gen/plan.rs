@@ -993,10 +993,7 @@ impl<'a> Gen<'a> {
         match t {
             Ty::Transfer(_) | Ty::Fn(..) => false,
             Ty::Record(RecId::Element(..)) => false,
-            Ty::Record(RecId::Outputs(f)) => match self.p.rules.get(f) {
-                Some(facts) if facts.outputs.len() == 1 => true,
-                _ => false,
-            },
+            Ty::Record(RecId::Outputs(f)) => matches!(self.p.rules.get(f), Some(facts) if facts.outputs.len() == 1),
             Ty::Opt(x) | Ty::List(x) | Ty::Set(x) => self.orderable_in(x, seen),
             Ty::Dict(a, b) | Ty::Result(a, b) => self.orderable_in(a, seen) && self.orderable_in(b, seen),
             Ty::Record(RecId::Running(a, b) | RecId::Entry(a, b)) => self.orderable_in(a, seen) && self.orderable_in(b, seen),
@@ -6193,7 +6190,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             ) => self.walk(e, name, xs[0], xs[1]),
             ("filter", 2) if matches!(self.ty(xs[0]).present(), Ty::Dict(..)) => self.dict_filter(e, xs[0], xs[1]),
             ("filter", 2) => self.walk(e, "filter", xs[0], xs[1]),
-            ("to_dict", 3) => self.to_dict(e, xs[0], xs[1], xs[2]),
+            ("to_dict", 3) => self.list_to_dict(e, xs[0], xs[1], xs[2]),
             ("map_values", 2) => self.map_values(e, xs[0], xs[1]),
             ("merge_with", 3) => self.merge_with(e, xs[0], xs[1], xs[2]),
             _ => {
@@ -6530,7 +6527,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let node = self.each(xs, lam, vec![], |s, v| {
                     let v = s.adapt(v, &kt, lam);
                     let v = s.spill(v);
-                    let x = s.lookup(&el).map(|x| x).unwrap_or(Val::new(s.g.null(), Ty::Error));
+                    let x = s.lookup(&el).unwrap_or(Val::new(s.g.null(), Ty::Error));
                     if s.t() == Target::Rust {
                         // the greatest (least) key so far, none or below (above) this one
                         let o = if max { Op::Gt } else { Op::Lt };
@@ -6711,7 +6708,7 @@ impl<'g, 'a> Fx<'g, 'a> {
 
     /// `xs.to_dict(x => key, x => value)`: for each element its key, then its value, each as it
     /// travels; the later of two elements of one key wins (DESIGN 24.6).
-    fn to_dict(&mut self, e: &Expr, list: &Expr, kf: &Expr, vf: &Expr) -> Val {
+    fn list_to_dict(&mut self, e: &Expr, list: &Expr, kf: &Expr, vf: &Expr) -> Val {
         let ty = self.ty(e);
         let g = self.g;
         let t = self.t();
@@ -6835,7 +6832,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let keys = self.sorted_keys(&d.ex, &kt);
         let raw = self.value_of(&d.ex, &Ex::atom(k.clone()), &vt);
         let (v, mut body) = self.apart(|s| {
-            let v = s.from_raw(raw, &vt, &vt);
+            let v = s.val_of_raw(raw, &vt, &vt);
             s.spill(v)
         });
         let (u, more) = self.apply(lam, vec![v]);
@@ -6911,8 +6908,8 @@ impl<'g, 'a> Fx<'g, 'a> {
         let ka = Ex::atom(k.clone());
         let (va, vb_) = (self.value_of(&a.ex, &ka, &vt), self.value_of(&b.ex, &ka, &vt));
         let (args, mut both) = self.apart(|s| {
-            let p = s.from_raw(va.clone(), &vt, &vt);
-            let q = s.from_raw(vb_.clone(), &vt, &vt);
+            let p = s.val_of_raw(va.clone(), &vt, &vt);
+            let q = s.val_of_raw(vb_.clone(), &vt, &vt);
             vec![p, q]
         });
         let (r, more) = self.apply(lam, args);
@@ -6947,7 +6944,7 @@ impl<'g, 'a> Fx<'g, 'a> {
 
     /// A value as it travels that a call answers (`kaname.Get(…)`), as it is worked on: made a name of
     /// the type it travels as first, where it is no name.
-    fn from_raw(&mut self, raw: Ex, slot: &Ty, ty: &Ty) -> Val {
+    fn val_of_raw(&mut self, raw: Ex, slot: &Ty, ty: &Ty) -> Val {
         let b = self.g.boundary(slot);
         let raw = self.spill_as(raw, &b);
         self.from_boundary(raw, slot, ty)
@@ -7096,7 +7093,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Ty::Opt(_) => (*vt).clone(),
                             v => Ty::Opt(Box::new(v.clone())),
                         };
-                        self.from_raw(raw, &slot, &me)
+                        self.val_of_raw(raw, &slot, &me)
                     }
                     "has" if t == Target::Rust => {
                         let kx = sought(self, &kt);
@@ -7118,7 +7115,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Ty::Opt(_) => (*vt).clone(),
                             v => Ty::Opt(Box::new(v.clone())),
                         };
-                        self.from_raw(raw, &slot, &me)
+                        self.val_of_raw(raw, &slot, &me)
                     }
                     "has" => {
                         let kx = key(self);
@@ -7148,7 +7145,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     }
                     "keys" => {
                         let raw = self.sorted_keys(if t == Target::Rust { &lent0 } else { &d }, &kt);
-                        self.from_raw(raw, &Ty::List(kt.clone()), &me)
+                        self.val_of_raw(raw, &Ty::List(kt.clone()), &me)
                     }
                     "values" => {
                         let raw = match t {
@@ -7157,7 +7154,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::Go => g.kcall("ValuesOf", vec![d, g.order_fn(&kt, false)]),
                             Target::Rust => g.kcall("ValuesOf", vec![lent0]),
                         };
-                        self.from_raw(raw, &Ty::List(vt.clone()), &me)
+                        self.val_of_raw(raw, &Ty::List(vt.clone()), &me)
                     }
                     "entries" => {
                         let ex = match t {
@@ -7242,7 +7239,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     }
                     "to_list" => {
                         let raw = self.sorted_keys(if t == Target::Rust { &lent0 } else { &s0 }, &et);
-                        self.from_raw(raw, &Ty::List(et.clone()), &me)
+                        self.val_of_raw(raw, &Ty::List(et.clone()), &me)
                     }
                     _ => Val::new(self.size_of(&s0), me),
                 }
