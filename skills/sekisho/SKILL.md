@@ -44,8 +44,9 @@ and show the page to the people who decide who may do what. Three things stay wi
 3. Run the check and fix what it says, one diagnostic at a time, from the top; `ritsu sekisho
    explain <code>` says how. Then `ritsu check` on the project, which adds the checks across the
    languages (X15, X16).
-4. Generate the Cedar and the code that asks it, into the service's package (`ritsu gen`, or
-   `ritsu sekisho gen --target …`), and have CI run `gen --check`.
+4. Generate the Cedar and the code that asks it, into the service's package (`ritsu gen --target
+   cedar --target <language>…`, or `ritsu sekisho gen --target …`), and have CI run the same `gen`
+   with `--check`.
 5. Write the page with `ritsu sekisho doc`, and show it to the people who decide.
 6. When the gate changes, or a rule or a date it reads does, `ritsu sekisho diff <old> <new>` says
    which combinations gained or lost a permission, and which are decided by other policies, with an

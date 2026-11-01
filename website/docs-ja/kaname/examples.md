@@ -6,11 +6,11 @@ kaname の例の初めの四つは、ほかの言語を読みません。どれ�
 
 ## ホストが呼ぶパッケージ
 
-例のディレクトリで `ritsu gen` を走らせると、TypeScript、Python、Go のパッケージができます。
+例のディレクトリで、三つの言語を `--target` で指定して `ritsu gen` を走らせると、TypeScript、Python、Go のパッケージができます。
 
 ```console
 $ cd crates/kaname/examples/order_flow
-$ ritsu gen --root . --out gen --module example.com/order_flow --lang ja
+$ ritsu gen --root . --out gen --module example.com/order_flow --target typescript --target python --target go --lang ja
 生成しました: gen/typescript/glue/kaname.ts
 生成しました: gen/typescript/glue/order_flow_ja.ts
 生成しました: gen/typescript/glue/order_flow.ts

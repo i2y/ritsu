@@ -9,11 +9,11 @@ through `go vet`.
 
 ## The package a host calls
 
-In the directory of an example, `ritsu gen` writes a package for each of TypeScript, Python and Go:
+In the directory of an example, `ritsu gen` writes a package for each language `--target` names:
 
 ```console
 $ cd crates/kaname/examples/order_flow
-$ ritsu gen --root . --out gen --module example.com/order_flow
+$ ritsu gen --root . --out gen --module example.com/order_flow --target typescript --target python --target go
 generated: gen/typescript/glue/kaname.ts
 generated: gen/typescript/glue/order_flow_ja.ts
 generated: gen/typescript/glue/order_flow.ts

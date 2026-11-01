@@ -27,11 +27,13 @@ source "https://github.com/acme/pricing"
 library typescript "@acme/pricing"
 library python "acme-pricing"
 library go "example.com/acme/pricing-go"
+target typescript python go
 
 require tax path "../tax"
 ```
 
 - `library typescript|python|go "<名前>"` は、その言語のレジストリでのパッケージの名前です。npm のパッケージの名前、Python のディストリビューションの名前、Go のモジュールのパスを書きます。Python では、ディストリビューション `acme-pricing` を `acme_pricing` として import します。名前を小文字にし、`-`・`_`・`.` の連なりを一つの `_` にした名前です。版 2 からは、Go の決まりに従って Go のモジュールのパスの最後に `/v2` が付き、ritsu はそれを import するコードもそのパスで書きます。
+- `target typescript python go` は、`--target` が無いときに `ritsu gen` が書く言語です。`--target` を付ければ、フラグの言語を書きます。ライブラリとして書く言語には、どれもその言語の `library` の行が要ります。
 - `version` は、どの言語のライブラリの版にもなります。`--library` には `version` の行が要ります。Python の版（PEP 440）にできるプレリリースは、`alpha`、`beta`、`rc` に番号を付けたものだけです。`1.0.0-rc.1` は `1.0.0rc1` になります。`1.0.0-dev.1` なら、ritsu は止まります。
 - `description` と `license` は、package.json と pyproject.toml に入ります。`source` は package.json の `repository` に入り、npm の provenance がこれを確かめます（[npm に公開する](#npm-に公開する)）。`source` は pyproject.toml の `[project.urls]` の `Repository` にも入ります。`source` はパッケージと一緒に公開されるので、ユーザー、パスワード、クエリを持つ URL は E302 になります。
 
@@ -47,7 +49,7 @@ $ ritsu gen --library --out ../out/pricing --lang ja
 生成しました: ../out/pricing/go/go.mod
 ```
 
-`ritsu gen --library` は、`library` の行のある言語ごとに、`--out` の下の `typescript/`、`python/`、`go/` にライブラリを書きます。`--target typescript|python|go` を付ければ、その一つだけを書きます。ライブラリはモジュール全体（`exclude` の行が外すものを除く）なので、`--library` にはパスを渡せず、`--name` と `--module` も付けられません。ライブラリの名前は `library` の行から取ります。`--check` は、`--library` を付けないときと同じく、いまあるものとの違いを言います。
+`ritsu gen --library` は、`target` の行の言語ごとに、`--out` の下の `typescript/`、`python/`、`go/` にライブラリを書きます。`--target typescript|python|go` を付ければ、その言語を書きます。ライブラリはモジュール全体（`exclude` の行が外すものを除く）なので、`--library` にはパスを渡せず、`--name` と `--module` も付けられません。ライブラリの名前は `library` の行から取ります。`--check` は、`--library` を付けないときと同じく、いまあるものとの違いを言います。
 
 ## 依存は依存のライブラリから読む
 

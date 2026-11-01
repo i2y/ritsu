@@ -665,7 +665,7 @@ ritsu とその言語は、AI エージェントに使ってもらうための�
 ```
 ritsu check <ディレクトリ>        各言語の検査と、言語をまたぐ検査
 ritsu run <フロー> …              規則を評価し、日付を計算し、帳簿を動かしながらワークフローを走らせる
-ritsu gen <ディレクトリ> --out …  プロジェクト全体を、TypeScript、Python、Go のどれか一つのパッケージに
+ritsu gen --target …              プロジェクト全体を、指定した言語（TypeScript、Python、Go）ごとのパッケージに
 ritsu gen --check …               パッケージが今の状態に合っているか。--format json ならファイルごとに
 ritsu gen --library …             モジュールを、npm、PyPI、Go のライブラリにする
 ritsu mod <コマンド> …            モジュールのコマンド（add、lock、fetch、push、diff、report など）

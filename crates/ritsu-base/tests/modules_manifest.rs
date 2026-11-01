@@ -11,7 +11,7 @@ const PRICING: &str = r#"# The prices of the Acme shop, shared by its services.
 module example.com/acme/pricing
 version 1.1.0
 description "Shipping fees and order totals of the Acme shop"
-ritsu >=0.37.0
+ritsu >=0.41.0
 license "MIT OR Apache-2.0"
 source "https://example.com/acme/pricing"
 
@@ -25,6 +25,7 @@ exclude "tests"
 library typescript "@acme/pricing"
 library python "acme-pricing"
 library go "example.com/acme/pricing-go"
+target typescript python go
 "#;
 
 fn v(s: &str) -> Version {
@@ -57,7 +58,7 @@ fn the_example_reads_every_statement() {
     assert_eq!((m.module.line, m.module.col), (2, 8));
     assert_eq!(m.version.as_ref().map(|x| x.value.clone()), Some(v("1.1.0")));
     assert_eq!(m.description.as_ref().map(|x| x.value.as_str()), Some("Shipping fees and order totals of the Acme shop"));
-    assert_eq!(m.ritsu.as_ref().map(|x| x.value.clone()), Some(v("0.37.0")));
+    assert_eq!(m.ritsu.as_ref().map(|x| x.value.clone()), Some(v("0.41.0")));
     assert_eq!(m.license.as_ref().map(|x| x.value.as_str()), Some("MIT OR Apache-2.0"));
     assert_eq!(m.source.as_ref().map(|x| x.value.as_str()), Some("https://example.com/acme/pricing"));
     assert_eq!(m.requires.len(), 1);
@@ -69,7 +70,8 @@ fn the_example_reads_every_statement() {
     assert_eq!(m.signatures[0].text(), r#"signature "example.com/acme/" key "keys/acme.pub""#);
     let libs: Vec<(Target, &str)> = m.libraries.iter().map(|l| (l.target, l.name.as_str())).collect();
     assert_eq!(libs, [(Target::Typescript, "@acme/pricing"), (Target::Python, "acme-pricing"), (Target::Go, "example.com/acme/pricing-go")]);
-    assert_eq!(m.targets, None);
+    let t = m.targets.as_ref().unwrap();
+    assert_eq!((t.value.as_slice(), t.line, t.col), (["typescript", "python", "go"].map(String::from).as_slice(), 19, 8));
 }
 
 /// The `target` line (DESIGN 17.3): one name or more, each a word of `TARGET_WORDS` once, in the

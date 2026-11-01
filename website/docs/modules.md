@@ -43,6 +43,7 @@ A line of `ritsu.mod` is one statement, and `#` starts a note that runs to the e
 | `exclude "<path>"` | A file or a directory that `ritsu mod push` leaves out. `ritsu mod init` writes `exclude "generated"`, where `ritsu gen` writes. |
 | `signature "<name>" …` | The signature the modules of that name must have ([Signatures](#signatures)). |
 | `library typescript\|python\|go "<name>"` | The name of the module's library in that language ([Libraries](#libraries)). |
+| `target typescript\|python\|go\|cedar …` | What `ritsu gen` writes when it is given no `--target`, a library as well ([Libraries](#libraries)). Only `ritsu gen` reads it. A ritsu older than 0.41.0 cannot read it, so a module with it asks for `ritsu >=0.41.0`. |
 
 The name of a dependency is the word after `require`: lower-case letters, digits and `_`, starting
 with a letter. The module's files name a file of the dependency by that name, with `@`, and the

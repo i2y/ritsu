@@ -1042,7 +1042,7 @@ E.4 と E.5 で、言語の境目の検査のコードを載せた（E2xx がエ
 | コード | いつ出るか |
 |---|---|
 | E201 | ワークフローが規則を呼ぶところで、dandori が知っている値の範囲と出どころの中に、規則の前提（入力どうしの関係か、`range from koyomi` の日の集合）を破る値がある（X2） |
-| W201 | 規則を呼ぶところで、前提が保たれるかを決められない（範囲の無い出どころ、並びの合計や長さ、`range from koyomi` の日の前提に、koyomi の日付の日と範囲を書いた日付のほかからも来る値。X2）。決められない前提は、`ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめ、破る実行を `Dandori.BrokenPrecondition` で失敗させる（dandori の DESIGN 1.17） |
+| W201 | 規則を呼ぶところで、前提が保たれるかを決められない（範囲の無い出どころ、並びの合計や長さ、`range from koyomi` の日の前提に、koyomi の日付の日と範囲を書いた日付のほかからも来る値。X2）。決められない前提は、`ritsu dandori gen` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめ、破る実行を `Dandori.BrokenPrecondition` で失敗させる（dandori の DESIGN 1.17） |
 | E202 | ワークフローが koyomi の日付の日か、範囲を書いた日付を規則の日付の入力に渡すとき、koyomi が数えたその日付の日か、その範囲の日のどれかが、規則の宣言した入力の範囲の外にある（X3 の (a)）。注に、外れる日と、koyomi がその日を返す入力か、その範囲を書く |
 | W202 | 規則の日付の入力に渡す値が、koyomi の日付の日と範囲を書いた日付のほかに、何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`）からも来うる。または koyomi がその日付の日を数えない（X3 の (a)） |
 | E203 | 規則の数の出力を振替の額に渡すとき、振替に至る実行で呼び出しが規則に渡しうる値の中に、出力が負か 2⁶³ − 1 を超える額になる規則のベクタの入力がある（X4。chobo は 0 から 2⁶³ − 1 までを受け取る）。注に、その入力と額を書き、フローが呼び出しに渡す値を狭めていれば、その値も書く。例の入力が、呼び出しから振替までほかの値を入れない列挙か真偽の変数なら、直し方に、振替の前にそれを `match` で分けることを足す |
@@ -1107,7 +1107,7 @@ kaname の呼び出しの判定は、`ritsu-cross` の `src/programs.rs`（`Prog
 
 dandori が規則に渡す値、規則から受け取る値、chobo の振替に渡す額、koyomi の関数に渡す日付と受け取る日付や時刻の単位を、単位の型（5 章）で比べる。同じ単位の別の綴り（`JPY` と `円`）は同じ、同じ次元の違う単位（`kg` と `g`）と、税込と税抜は違う。いまは dandori が自分の文字列の比べ（E003）でしていることを、単位の型の上でする。D の段階では dandori の E003 のまま出し、E の段階で、chobo と koyomi の境目も加えて ritsu の台帳のコードに移すかを決める。
 
-**E で決めたこと**：X1 は言語の検査のまま残し、ritsu の台帳には移さない（★）。境目の単位が合わなければ、生成するコードの型が決まらないので、生成する言語が自分の検査で止めなければならない（`dandori build` は `ritsu check` を通らない）。言語の外にもう一度置けば、同じことを二度言うか、何も言わないかのどちらかになる。境目ごとの持ち主は次のとおり。規則の呼び出しと受け取りは dandori の E003（D で単位の型にした）。koyomi の日付と規則の入力のあいだ（rulec の `range from koyomi`）は rulec の E065（日付でない入力には書けない）。koyomi の日付と chobo の振替を dandori から呼ぶところは、E.5 で dandori が自分の検査（E003 と同じ形）で確かめる（口の `BookFacts::unit` が、帳簿の単位を ritsu の単位の型で渡す）。kaname のモジュールが規則・日付・振替に渡す値と受け取る値は、kaname が自分の型の検査（E102。単位と税区分を含む）で確かめる（2026-10-18。kaname の DESIGN 0.2 の P7）。
+**E で決めたこと**：X1 は言語の検査のまま残し、ritsu の台帳には移さない（★）。境目の単位が合わなければ、生成するコードの型が決まらないので、生成する言語が自分の検査で止めなければならない（`dandori gen` は `ritsu check` を通らない）。言語の外にもう一度置けば、同じことを二度言うか、何も言わないかのどちらかになる。境目ごとの持ち主は次のとおり。規則の呼び出しと受け取りは dandori の E003（D で単位の型にした）。koyomi の日付と規則の入力のあいだ（rulec の `range from koyomi`）は rulec の E065（日付でない入力には書けない）。koyomi の日付と chobo の振替を dandori から呼ぶところは、E.5 で dandori が自分の検査（E003 と同じ形）で確かめる（口の `BookFacts::unit` が、帳簿の単位を ritsu の単位の型で渡す）。kaname のモジュールが規則・日付・振替に渡す値と受け取る値は、kaname が自分の型の検査（E102。単位と税区分を含む）で確かめる（2026-10-18。kaname の DESIGN 0.2 の P7）。
 
 ### 7.4 規則の前提を、呼び出しの場所で（X2）
 
@@ -1134,7 +1134,7 @@ ritsu では、呼び出しの場所で次のように確かめる。
 2. 並びの合計と長さの上限は、決められない（dandori は並びを歩く規則を呼ばず（E005）、並びの長さを知らない）。
 3. 日付の入力の範囲が koyomi の日付の日の集合（`Days`。rulec の `range from koyomi`）のとき（E.5 で決められるようにした。E.4 ではいつも決められないとしていた）、渡す値がどこから来うるか（`CallArg` の `from`）で決める。来うるところがどれも koyomi の日付の日か、`.flow` が範囲を書いた日付（`Origin::Range`。2026-10-31）なら、それぞれの日付について koyomi が数えた日（`Dates::values`）と、それぞれの範囲のどの日もが、規則の集合の日でなければならない。そうでない日があれば、来うるところの順で最初のその日を例にして E201（範囲なら、範囲が入れる日のうち集合に無い最初の日。下の端が開いていれば、集合の最初の日の前の日か、範囲の上の端。`borders::day_not_in`）。何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`、時刻）からも来うるとき、koyomi が数えないとき、値の来るところが無いときは決められない（W201）。規則と同じ日付の日を渡すなら、集合が同じなので、必ず成り立つ（7.5 の (b) の終わりの段落）。E201 の注の二つ目と三つ目は、日の前提では「koyomi は、入力の範囲のすべてで日付の日を数えています」と「koyomi "<ファイル>" date <日付> の日を渡すか、規則の範囲を直してください」にした。
 
-例は、dandori の範囲が値ごとに独立に取れるとしたときの角である。dandori の E014（「範囲を外れることがある」）と同じ読み方で、二つの値が同じ出どころから来て連動している場合（同じ値そのものは上の 1 で扱う）には、実際には起きない角を例にすることがある。決められないときの警告（W201）は、`ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに前提を確かめることを言う（下の「E.5 で作った形」）。
+例は、dandori の範囲が値ごとに独立に取れるとしたときの角である。dandori の E014（「範囲を外れることがある」）と同じ読み方で、二つの値が同じ出どころから来て連動している場合（同じ値そのものは上の 1 で扱う）には、実際には起きない角を例にすることがある。決められないときの警告（W201）は、`ritsu dandori gen` が書くワークフローのコードが、走らせたときに、値ができたところですぐに前提を確かめることを言う（下の「E.5 で作った形」）。
 
 再現は英語の小さなプロジェクト（`refund_check.rule` と `refund.flow`。返金の額は払った額を超えない、という前提）で、`crates/ritsu/tests/cross.rs` が、範囲で前提を保つもの（成り立つ）、超えうるもの（E201、例は asked = 10000, paid = 0）、範囲の無いタスクの結果を渡すもの（W201）、ほかの規則の `result` の答えを渡すもの（E201、例は asked = 9000, paid = 0。範囲を書かない出力にも、rulec は `result` のとる範囲を規則の事実で渡す。rulec の §15.271）、同じ値を両方に渡すもの（成り立つ）を、英語と日本語のテキストと JSON の `borders` で確かめる。
 
@@ -1166,12 +1166,12 @@ $ ritsu check preconditions.flow rules/refund_check.rule rules/settlement.rule d
 warning[ritsu W201]: preconditions.flow:41:1: Whether the call of the rule check keeps its precondition `asked <= paid` cannot be decided
     41 |   let decision = check(paid: paid, asked: asked)
   = nothing says what range `asked` is in (the answer of `ask_amount` has no range)
-  = The workflow's code that `ritsu dandori build` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
+  = The workflow's code that `ritsu dandori gen` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
 …
 ritsu check: 4 files (rulec 2, koyomi 1, dandori 1): all pass (7 warnings); borders between the languages: 5 checked, 4 undecided
 ```
 
-（dandori のディレクトリの `tests/flows` で走らせたもの。取り込んだあとの木で走らせても、同じ出力だった。46 行目の `range from koyomi` の前提は、渡す値がタスクの結果（`pick_day`。何日かを言わない）から来るので、決められない。）`ritsu dandori build preconditions.flow --target temporal` が書く `workflow.ts` の一部：
+（dandori のディレクトリの `tests/flows` で走らせたもの。取り込んだあとの木で走らせても、同じ出力だった。46 行目の `range from koyomi` の前提は、渡す値がタスクの結果（`pick_day`。何日かを言わない）から来るので、決められない。）`ritsu dandori gen preconditions.flow --target temporal-typescript` が書く `workflow.ts` の一部：
 
 ```ts
     // line 41: the precondition asked <= paid of the rule check, which ritsu could not decide
@@ -1457,8 +1457,8 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 ```
 ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--lang ja|en]
 ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <target>] [--format json]
-ritsu gen [<パス>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
-ritsu gen --library [--embed <名前>]... [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
+ritsu gen [<パス>...] [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
+ritsu gen --library [--embed <名前>]... [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
 ritsu mod <コマンド> <引数>...  モジュールの依存、送り出し、版のあいだの差、報告、一覧のサイト（17.19）
 ritsu skills list | ritsu skills install [<name>...] [--dir <dir> | --user] [--force]
@@ -1469,6 +1469,7 @@ ritsu --help | --version
 - `ritsu check` は、パスを渡さなければ今いるディレクトリを読む。各言語の `check` を全部のファイルに走らせ、言語をまたぐ検査をし、最後に一行の要約（言語ごとのファイルの数、確かめた境目の数、決められなかった数）を出す。
 - `--budget <n>` は、空間を歩く検査の上限で、rulec の検査（区画とステートマシン）が一つの規則で訪れるノード数と、sekisho が一つの action で歩く組み合わせの数に、同じ数を渡す（`ritsu_project::Joined::with_budget`）。既定は言語ごとの既定（rulec は 50,000,000、sekisho は 100,000,000）のまま。koyomi の検査も予算（E305）を持つが、koyomi の口が予算を持たないので、いまは渡さない。
 - `--deps-warnings` は、モジュールの全体を検査するとき、依存のファイルの警告も一つずつ出す。無ければ、依存ごとの数だけを出す（17.8）。
+- `ritsu gen` は、`--target`（何度でも書ける）か、無ければ `ritsu.mod` の `target` の行（17.3）が挙げる出力先だけを書く。どちらも無ければ、何も書かずに exit 2 で止まり、0.40.0 と同じファイルを書くコマンドを示す（9.3、9.6）。
 - `ritsu mod …` は、モジュールのコマンドで、`ritsu <言語>` と同じく自分のコマンドの表を持つ（17.19）。通信するのはこのコマンドだけである（17.1 の M4）。
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
 - `ritsu skills` は、バイナリが持つ十の Agent Skills（ritsu のものと、九つの言語のもの）を一覧し、エージェントが読む場所に書く（13.2）。
@@ -1485,7 +1486,7 @@ ritsu --help | --version
 - 言語のコマンドは、どれもライブラリの関数になった。rulec、koyomi、chobo、geas は、E.2 で `src/main.rs` の中身を `rulec::cli::run`、`koyomi::run::run`、`chobo::run::run`、`geas::cli::run` に移した（振る舞いは変えていない。各言語の DESIGN.md）。これで `ritsu <言語>` は七つの全部にある（8.2）。
 - **寄与**（rulec の DESIGN §15.231、2026-10-14）。`ritsu check` と `ritsu gen` は、プロジェクトの rulec のファイルを、寄与を合わせる組として rulec に渡す（`rulec::ports::Engine::set_project`）。寄与が届く規則は、規則だけと、プロジェクトの寄与を合わせた規則の両方で検査され、`ok` の行が合わせた寄与を言う。プロジェクトの rulec のファイルを一度に `rulec check` に渡したときと、同じことを言う（前のファイルで言ったことは繰り返さず、エラーが全部上で言われたファイルには「its errors are said above」の一行）。フローは、寄与を合わせた規則で検査する。`ritsu gen` は、寄与のファイルにモジュールを作らず、各規則のモジュールを、それに届く寄与を合わせた関数にする。
 
-**E の二つ目の部分で作った形**。`ritsu run` を作った（7.9）。★`--target` は、8.1 の A の段階の形には無かったもので、`dandori run` と同じ八つ（`reference`、`asl`、`temporal`、`temporal-python`、`temporal-go`、`durable`、`argo`、`pydantic-graph`。既定は `reference`）から、トレースの呼び出しをどのプラットフォームの形で出すかを選ぶ。一つの生成パッケージ（9.3）と突き合わせるときは Temporal の見え方を使う。フローの診断は、`dandori run` と同じくテキストなら標準エラーに出し、`--format json` なら JSON の `diagnostics` に入れる。`ritsu gen` は E.7 で作った（9.3）。
+**E の二つ目の部分で作った形**。`ritsu run` を作った（7.9）。★`--target` は、8.1 の A の段階の形には無かったもので、`dandori run` と同じ八つ（`reference`、`asl`、`temporal-typescript`、`temporal-python`、`temporal-go`、`durable`、`argo`、`pydantic-graph`。既定は `reference`）から、トレースの呼び出しをどのプラットフォームの形で出すかを選ぶ。一つの生成パッケージ（9.3）と突き合わせるときは Temporal の見え方を使う。フローの診断は、`dandori run` と同じくテキストなら標準エラーに出し、`--format json` なら JSON の `diagnostics` に入れる。`ritsu gen` は E.7 で作った（9.3）。
 
 `ritsu dandori` は、rulec の規則の口に加えて、koyomi の日付の口、chobo の帳簿の口、ritsu-cross の `Undecided`（7.4）を渡す（`dandori::cli::run_with_undecided`）。これで、日付と帳簿を使うフローも `ritsu dandori` で走る（前は E018 で、`ritsu dandori` で走らせるよう言っていた）。`ritsu run` の担当が同じ行に置いた `run_with_ports` は、取り込むときにこの形にまとめた。リリースのリンクの名前（`dandori` という名前の `ritsu`）も同じ関数を通るので、同じくつながる。
 
@@ -1650,9 +1651,9 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 
 - `ritsu_check`：`ritsu check .`。`ritsu` のクレートのライブラリの `ritsu::check::run`（バイナリと同じ関数）を呼ぶので、言語をまたぐ検査が増えても、ページは何も直さずに出す。答えは標準出力・標準エラー・終了コードと、`--format json` の JSON（ページはこれで、ファイルのタブの印、エディターの波線、問題の一覧を作る）。
 - `ritsu_gen`：開いているファイルの言語の生成。rulec は `gen`、koyomi は `gen`、chobo は `build --target`、dandori は `build --target`、sakai は `export cml`、yuen は `export reqif|prov`、sekisho は `gen --target cedar`（yuen と sakai と sekisho には `--root .`）。生成したファイルは `generated/` に書いた順に返す（`Memory::written`）。geas と `.proto` は生成しない。sekisho の TypeScript・Python・Go は、パッケージの `rules/` と `dates/` を読むコードなので、ゲート一つの生成としては出さない。
-- koyomi の `gen` は、`koyomi gen` と同じく全部の出力先を書くので、Wasm の出力先を足した 2026-10-24 から `wasm/` の四つのファイルも返す（koyomi の DESIGN 13）。`ritsu.wasm` はそのとき作り直した。
+- koyomi の `gen` は、`--target` を付けない 0.40.0 の `koyomi gen` と同じく、全部の出力先をランナーつきで書く（`koyomi::cli::up_to_0_40` の引数。koyomi の DESIGN 16 章）ので、Wasm の出力先を足した 2026-10-24 から `wasm/` の四つのファイルも返す（koyomi の DESIGN 13）。`ritsu.wasm` はそのとき作り直した。
 - `ritsu_doc`：rulec・koyomi・chobo・dandori・sekisho の `doc` の HTML と Markdown。
-- 書き出し先を引数に取るコマンド（ritsu の check、rulec の gen、dandori、yuen、sakai、sekisho）はそのまま呼ぶ。標準出力に直接書くコマンド（rulec の doc、koyomi の gen と doc、chobo の build と doc）は、コマンドが呼ぶ関数を同じ順に呼び、同じ文を返す。四つの言語のコマンドを書き出し先を引数に取る形に直すことは捨て、テストがページの答えを全部 `ritsu` のバイナリの出力と突き合わせる。
+- 書き出し先を引数に取るコマンド（ritsu の check、rulec の gen、dandori、yuen、sakai、sekisho）はそのまま呼ぶ。標準出力に直接書くコマンド（rulec の doc、koyomi の gen と doc、chobo の gen と doc）は、コマンドが呼ぶ関数を同じ順に呼び、同じ文を返す。四つの言語のコマンドを書き出し先を引数に取る形に直すことは捨て、テストがページの答えを全部 `ritsu` のバイナリの出力と突き合わせる。
 - dandori は、`ritsu dandori` の本体（`ritsu` のライブラリの `languages::dandori`）で走らせる。フローの規則、日付のファイル、帳簿の口と、X2 で決められない前提（7.4）を同じプロセスの中で渡すので、日付と帳簿を使うフロー（請求の例）も、バイナリと同じに答える。バイナリ（`src/main.rs`）とページは同じ関数を呼ぶ。
 - rulec の E129（koyomi をつないでいない rulec で `range from koyomi` を確かめた）の注と台帳は、koyomi が無いところとして rulec のクレートのバイナリだけを挙げる。このページは koyomi をつなぐ（rulec の §15.185）。
 
@@ -1806,7 +1807,7 @@ WASI で組んだ `realpath` は、パスを含むいちばん深い preopen か
 
 **モジュール**（17.22）。通信か子プロセスが要る `ritsu mod` のコマンドは、ネイティブのバイナリを使うよう言って exit 2 で止まり、モジュールも置き場も変えない。置き場と同梱のコピーを読むコマンドは、ネイティブと同じに答える。置き場の場所は、ローダーが渡す `RITSU_WASI_PLATFORM` と呼び出し元の環境から、ネイティブと同じに決まる（17.15）。`dirs` で開くディレクトリを絞るときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーを置く。
 
-**確かめ方。** `crates/ritsu/tests/npm.rs`（tools の段）。組んだ .tgz（`RITSU_NPM`、無ければ `<target>/npm/i2y-ritsu-<版>.tgz`）を開いて使い、node かそれが無ければ SKIP。`the_package_answers_as_the_binary_does` が、ネイティブの `ritsu`（`CARGO_BIN_EXE_ritsu` と、それを指す言語の名前のリンク）とパッケージの bin（`node bin/<名前>.js`）を、同じコピーのディレクトリで走らせ、標準出力・標準エラー・終了コード・書いたファイルを一字も違わず比べる。範囲は、九つの言語の例（rulec はコーパス 87 本）、`crates/ritsu/tests/projects` の四つ、ブラウザで試すページの英日の通販、sekisho と kaname の例で、そこで人が走らせるコマンド（`ritsu check` と `--format json`、`ritsu gen` の三つのターゲットと `--check` と `--format json`、`ritsu run`、全部のコードの `explain`、各言語の `check`・`doc`（Markdown と HTML）・`api`・`export`・`trace`・`affected`（標準入力から読む形も）・`vectors`・`diff`・`scenarios`・`build`・`gen`・`review`、`ritsu skills list` と `install --dir`）を、英語と `--lang ja` で走らせる。読むだけのコマンドは一つのコピーを共有し、終わったらコピーが変わっていないことを確かめ、書くコマンドは両方の側にコピーを一つずつ作って、書いたファイルを比べる。12,110 通りが一字も違わなかった（chobo 701、dandori 2,819、geas 98、kaname 271、koyomi 402、ritsu 2,083、rulec 4,805、sakai 237、sekisho 223、yuen 471。この機械で、dirs の突き合わせと並べて 460 秒。2026-10-24）。ほかに、`what_needs_another_program_says_so`（上の表）、`the_package_holds_what_it_should`（`npm pack --dry-run --json` のファイルの一覧と、リポジトリのファイルとの一致、`.wasm` に手元のパスが無いこと）、`the_manifest_is_the_workspaces`（fast。`package.json` の版、ライセンス、bin、engines、`scripts` も依存も無いこと）、`the_pages_on_node_show_what_the_package_prints`（パッケージの README とサイトの英日のページの `console` と `js` の塊を、`<!-- run in <dir> -->` の印のディレクトリのコピーでパッケージを使って走らせ、ページの出力と照らし合わせる）、`the_javascript_tests_pass`（`node --test packaging/npm/test/*.test.js`。API と bin の振る舞い 20 件と、ネットワークを切った入れ方）。CI は tools.yml の `npm` のジョブで、Node 22・24・26 の Linux と Node 24 の macOS で、Node ごとに二つのジョブに分けて回す（`RITSU_NPM_PART`。10.5）。
+**確かめ方。** `crates/ritsu/tests/npm.rs`（tools の段）。組んだ .tgz（`RITSU_NPM`、無ければ `<target>/npm/i2y-ritsu-<版>.tgz`）を開いて使い、node かそれが無ければ SKIP。`the_package_answers_as_the_binary_does` が、ネイティブの `ritsu`（`CARGO_BIN_EXE_ritsu` と、それを指す言語の名前のリンク）とパッケージの bin（`node bin/<名前>.js`）を、同じコピーのディレクトリで走らせ、標準出力・標準エラー・終了コード・書いたファイルを一字も違わず比べる。範囲は、九つの言語の例（rulec はコーパス 87 本）、`crates/ritsu/tests/projects` の四つ、ブラウザで試すページの英日の通販、sekisho と kaname の例で、そこで人が走らせるコマンド（`ritsu check` と `--format json`、`ritsu gen` の三つのターゲットと `--check` と `--format json`、`ritsu run`、全部のコードの `explain`、各言語の `check`・`doc`（Markdown と HTML）・`api`・`export`・`trace`・`affected`（標準入力から読む形も）・`vectors`・`diff`・`scenarios`・`gen`・`review`、`ritsu skills list` と `install --dir`）を、英語と `--lang ja` で走らせる。読むだけのコマンドは一つのコピーを共有し、終わったらコピーが変わっていないことを確かめ、書くコマンドは両方の側にコピーを一つずつ作って、書いたファイルを比べる。12,110 通りが一字も違わなかった（chobo 701、dandori 2,819、geas 98、kaname 271、koyomi 402、ritsu 2,083、rulec 4,805、sakai 237、sekisho 223、yuen 471。この機械で、dirs の突き合わせと並べて 460 秒。2026-10-24）。ほかに、`what_needs_another_program_says_so`（上の表）、`the_package_holds_what_it_should`（`npm pack --dry-run --json` のファイルの一覧と、リポジトリのファイルとの一致、`.wasm` に手元のパスが無いこと）、`the_manifest_is_the_workspaces`（fast。`package.json` の版、ライセンス、bin、engines、`scripts` も依存も無いこと）、`the_pages_on_node_show_what_the_package_prints`（パッケージの README とサイトの英日のページの `console` と `js` の塊を、`<!-- run in <dir> -->` の印のディレクトリのコピーでパッケージを使って走らせ、ページの出力と照らし合わせる）、`the_javascript_tests_pass`（`node --test packaging/npm/test/*.test.js`。API と bin の振る舞い 20 件と、ネットワークを切った入れ方）。CI は tools.yml の `npm` のジョブで、Node 22・24・26 の Linux と Node 24 の macOS で、Node ごとに二つのジョブに分けて回す（`RITSU_NPM_PART`。10.5）。
 
 **捨てたもの。**
 
@@ -1816,7 +1817,7 @@ WASI で組んだ `realpath` は、パスを含むいちばん深い preopen か
 - wasm-opt：上の表。
 - npm のレジストリに出すこと：レジストリのアカウントが要るので、リリースの .tgz を `npm install <URL>` で入れる形にした。
 
-パッケージの `chobo build` は、2026-10-24 から Rust の三つの出力先（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）も書く。ブラウザで試すページ（8.7）も同じで、`ritsu.wasm` はそのとき作り直した。
+パッケージの chobo の生成は、2026-10-24 から Rust も書く（いまの `chobo gen --target rust`。帳簿のデータベースは `--books` の三つで、そのときの出力先の名前は `postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）。ブラウザで試すページ（8.7）も同じで、`ritsu.wasm` はそのとき作り直した。
 
 ## 9. 生成
 
@@ -1878,18 +1879,18 @@ generated/typescript/          generated/python/              generated/go/
   units.ts                       <name>/units.py                units/units.go
 ```
 
-ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6）。
+ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、`--target cedar`（か `target` の行の `cedar`）のとき、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6、9.6）。
 
-`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
+`ritsu gen [<path>...] [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。書くのは `--target`（何度でも書ける）の出力先で、無ければ `ritsu.mod` の `target` の行（17.3）の出力先である。どちらも無ければ、何も書かずに exit 2 で止まる（9.6）。書く順は、フラグの順に依らず、TypeScript、Python、Go、Cedar である。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
 
 `glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「Functional Core（kaname のモジュール）」（英語では the functional cores (kaname's modules)）を言う。kaname は規則と日付と帳簿をつなぐコードに限らない汎用の言語なので、そう呼ぶ。置き場の名前は `glue/` のままである。ホストのコードはこのパスでモジュールを読むので、名前を変えるとホストのビルドが壊れる。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
 
-- ワークフローは、規則と期日と帳簿を、同じパッケージの `rules/`・`dates/`・`books/` から読む。import はパッケージのモジュールを指し、帳簿のトランスポートが受け取るクライアントは、パッケージの `books/` のクライアントの型である（TypeScript の `Books`、Python の `TypedDict` の `Books`、Go の `Books` と `Map()`）。渡すクライアントが帳簿と違えば、その言語の型の検査が言う。dandori のモデルに `package`（`InPackage`）があるときだけ、Temporal の三つの SDK のビルドが読み込む先を替える。`package` が無い `dandori build` の生成物は前と同じである（dandori の DESIGN 4.2）。
+- ワークフローは、規則と期日と帳簿を、同じパッケージの `rules/`・`dates/`・`books/` から読む。import はパッケージのモジュールを指し、帳簿のトランスポートが受け取るクライアントは、パッケージの `books/` のクライアントの型である（TypeScript の `Books`、Python の `TypedDict` の `Books`、Go の `Books` と `Map()`）。渡すクライアントが帳簿と違えば、その言語の型の検査が言う。dandori のモデルに `package`（`InPackage`）があるときだけ、Temporal の三つの SDK のビルドが読み込む先を替える。`package` が無い `dandori gen` の生成物は前と同じである（dandori の DESIGN 4.2）。
 - **単位の型（2026-10-18）。** パッケージの中では、お金と量の額は、パッケージの単位のモジュール（TypeScript の `units.ts`、Python の `<name>/units.py`、Go の `<module>/units`）が宣言する、単位ごとに一つの型である。規則のモジュールは、その単位のブランド（rulec の §8.2）を自分では宣言せず、単位のモジュールから同じ名前で読んで公開する（rulec の §15.248）。帳簿のクライアントは、振替の操作が受け取る額をその型にする（chobo の DESIGN 4.3）。そのため、ワークフローを通さずに手で書いたコードが、規則の出力を帳簿の振替に渡しても、その言語の型の検査が単位を突き合わせる。7 章の検査は、ワークフローが規則と帳簿を呼ぶ場所しか見られない。手で書いたコードの中の境目は ritsu には見えないので、そこはパッケージの型で、その言語の型の検査に任せる。テストのプロジェクト `crates/ritsu/tests/projects/marketplace` がその形で、規則がセントで出す手数料と店の取り分を、`service/` の決済のコード（三つの言語）が帳簿の `sale.do` に渡す。規則をドル（`money[USD]`）で数えるように変えると、tsc、mypy、go vet のどれもが、決済のコードのそこで止める。
   - 型の名前は、表がその単位を最初に書く綴りから作る（`ritsu_units::Unit::first_spelling` と `type_name`）。`円` は `Yen`、`USD scale 2` の帳簿の額は `money[USDc]` で `USDc` である。同じ単位をパッケージのファイルが別の綴りで書いていれば（`JPY`、`mL`）、その綴りの名前を、最初の綴りの型の別名として単位のモジュールに置く。規則のモジュールと帳簿のクライアントは、自分の書いた綴りの名前で型を呼び、どちらも同じ型になる。規則のあいだでも同じで、`円` で書いた規則が返す値段を、`JPY` で書いた規則に渡せる。前は、規則のモジュールごとにブランドを宣言していたので、三つの言語とも、それを違う型として止めた。
   - 率は単位のモジュールに入れず、規則のモジュールが自分で宣言する。率の整数が数える刻みは、規則ごとの入力の宣言にある（5.2）ので、名前が同じ `Rate` でも、二つの規則の率が同じ値を表すとは限らない。単位の無い数（`number`）と、chobo の数え方の単位（`個`、`席`）は、これまでどおり素の整数である。
   - Go の帳簿のクライアントは、額を共通の部分（runtime）に `int64` に直して渡す。runtime は `[]any` から額を `int64` として取り出すからである。生成するワークフローのコードは変わらない。トランスポートは帳簿の操作を、TypeScript では型の無い値として、Go ではリフレクションで、Python ではキーワード引数で呼ぶからである。
-  - 単独のコマンドの出力は変えない。`rulec gen` の規則のモジュールはブランドを自分で宣言し、`chobo build` のクライアントは額を素の整数で受け取る。リポジトリの 546 本の規則の `rulec gen` と、95 の帳簿の 11 の出力先の `chobo build` が、変える前と一字も同じであることを確かめた。ブラウザで試すページは単独の生成器を使うので、`ritsu.wasm` も変わらない。
+  - 単独のコマンドの出力は変えない。`rulec gen` の規則のモジュールはブランドを自分で宣言し、`chobo gen` のクライアントは額を素の整数で受け取る。リポジトリの 546 本の規則の `rulec gen` と、95 の帳簿の 11 の出力先の `chobo build` が、変える前と一字も同じであることを確かめた。ブラウザで試すページは単独の生成器を使うので、`ritsu.wasm` も変わらない。
   - 残高（`balance`）は、まだ素の整数で返す（15 章）。
 - 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。`.gate` があれば、TypeScript は `@cedar-policy/cedar-wasm` 4.13.0（`--authorizer avp` なら `@aws-sdk/client-verifiedpermissions` 3.1146.0）、Python は `cedarpy==4.12.1`（avp なら `boto3==1.43.103`）、Go の `doc.go` は `github.com/cedar-policy/cedar-go v1.8.0`（avp なら `github.com/aws/aws-sdk-go-v2 v1.47.1` と `github.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1`）。PostgreSQL と MySQL の系統の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx と go-sql-driver/mysql だけは import するので、`doc.go` に書く）。バージョンは、ここで生成物を確かめているもの（dandori、chobo、sekisho のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。`doc.go` の package の名前は、`--module` の最後の部分（`gocheck/generated` なら `generated`）である。最後の部分が Go の予約語なら、パッケージの名前（`--name`）にし、それも予約語なら、数字で始まる部分と同じく前に `p` を付ける。`<out>/go` をそのままモジュールに置くと import のパスは `…/go` で終わり、前はそれを `package go` と書いて、Go のコンパイラが通さなかった（2026-10-18）。
 - **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール）と、生成したコードがコメントに書くバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go`、chobo の `tools/runner` と `tools/runner/go`、sekisho の `tools/runner-ts`・`tools/runner-py`・`tools/runner-go` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の三つの置き場所で、sekisho の例のパッケージを二つの authorizer で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
@@ -1909,8 +1910,8 @@ generated/typescript/          generated/python/              generated/go/
 - ★パッケージの名前（`--name`、既定は `generated`）は、npm のパッケージの名前、Python のパッケージのディレクトリ、Go の import のパスの既定になる。ディレクトリの名前から決めると、CI で別の名前のディレクトリに取り出したときに `--check` が古いと言うからである。
 - 何も書かずにエラーで止まるもの：検査を通らないファイル（その言語の診断を `ritsu check` と同じ形で出し、exit 1）、パッケージの同じファイルを書く二つのファイル（同じ別名の二つの規則、日本語の名前の二つのフローの Go の `workflow`。どちらの名前を替えるかは書いた人が決めることなので、exit 2）、インデックスのファイルや Go のディレクトリが import できない名前（Python と Go が予約している語。exit 2）、プロジェクトに無いファイルを読むワークフロー（exit 1）。
 - ★生成物のコメントは `--lang` の言語で書く（`rulec gen` と同じ）。`--check` は同じ言語で走らせる（違えば古いと言う）。
-- `--check` は書かずに、無いファイル、古いか手で直したファイル、前の `gen` が書いて今は書かないファイル（頭が ritsu の生成器のもの）を挙げて 1 で終わる。書くときは、前に書いて今は書かないファイルを消す（rulec の `gen --check` と同じ考え）。頭は、最初の 3 行のコメントで見る。注を書けない package.json は、アプリの形なら 4 行目の `description` の値の終わり（`… Code generated by ritsu <版>. DO NOT EDIT.`）で、ライブラリの形なら `"//"` キー（17.16）で見る。どれも、頭のコメントと同じく ritsu の生成器の名前のものだけを数え、人が置いた package.json や、ほかの生成器が書いた package.json は数えない。
-- **`--format json`（2026-10-10）。** 行の代わりに一つの JSON を出す。最初の三つのキーは `ritsu check --format json`（8.3）と同じで、`ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート。プロジェクトを読む前に止まったときは null）、`ok`（終了コードが 0 か）。続いて `check`（`--check` か）、`out`（`--out`）、`targets`（頼んだ言語）、`files`（パッケージのファイルごとに、`target`（`typescript`・`python`・`go`、ゲートの Cedar なら `cedar`）、`path`（テキストが出すとおりのパス）、`from`（もとのプロジェクトのファイル。パッケージそのものの部分と、もう生成しないファイルは null）、`state`）、`diagnostics`、`error` の順である。`state` は、書いたときは `written`・`same`・`removed`、`--check` のときは `same`・`missing`・`stale`・`left`（`left` と `removed` は、ritsu の生成器の頭（`Code generated by … DO NOT EDIT.`）を持つファイルだけで、人が置いたファイルは数えない。前からの `--check` と同じ）。テキストは変わったものだけを並べるが、JSON は同じだったファイルも並べ、パッケージの全部のファイルを言う。何も生成しなかったとき（引数の誤り、検査を通らないファイル、同じファイルを書く二つのファイル、予約語のモジュールの名前、生成器が止めたもの）は、`files` が空で、`error` に終了コードと文（`--lang` の言語。テキストの `error: ` の頭は付けない）が入り、`diagnostics` に止めた診断が `ritsu check --format json` と同じ形（`tool` と、ルートからの `file`）で入る。`--authorizer avp` の W401 も `diagnostics` に入る。JSON のときは標準エラーに何も書かない。引数の誤りも JSON で答えるため、`--format json` は引数を読む前に見る（`ritsu check --format json` の引数の誤りは、いままでどおり標準エラーのテキストである）。終了コードはテキストと同じ。確かめ方は `tests/npm.rs` の突き合わせ（stockroom、invoice、通販、ページの通販で、書いたとき・`--check`・手で変えたあと・`--authorizer avp`）と、ページの例（`tests/npm.rs` の `the_pages_on_node_show_what_the_package_prints`）。
+- `--check` は書かずに、無いファイル、古いか手で直したファイル、前の `gen` が書いて今は書かないファイル（頭が ritsu の生成器のもの）を挙げて 1 で終わる。書くときは、前に書いて今は書かないファイルを消す（rulec の `gen --check` と同じ考え）。ただし、頼まなかった出力先の `cedar/` に前の実行が書いたファイルは、書くときも `--check` でも挙げるだけで、消さず、終了コードも変えない（9.6）。頭は、最初の 3 行のコメントで見る。注を書けない package.json は、アプリの形なら 4 行目の `description` の値の終わり（`… Code generated by ritsu <版>. DO NOT EDIT.`）で、ライブラリの形なら `"//"` キー（17.16）で見る。どれも、頭のコメントと同じく ritsu の生成器の名前のものだけを数え、人が置いた package.json や、ほかの生成器が書いた package.json は数えない。
+- **`--format json`（2026-10-10）。** 行の代わりに一つの JSON を出す。最初の三つのキーは `ritsu check --format json`（8.3）と同じで、`ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート。プロジェクトを読む前に止まったときは null）、`ok`（終了コードが 0 か）。続いて `check`（`--check` か）、`out`（`--out`）、`targets`（書く出力先。`--target` か `target` の行のもので、書く順）、`files`（パッケージのファイルごとに、`target`（`typescript`・`python`・`go`、ゲートの Cedar なら `cedar`）、`path`（テキストが出すとおりのパス）、`from`（もとのプロジェクトのファイル。パッケージそのものの部分と、もう生成しないファイルは null）、`state`）、`diagnostics`、`error` の順である。`state` は、書いたときは `written`・`same`・`removed`、`--check` のときは `same`・`missing`・`stale`・`left`、どちらでも、頼まなかった出力先の `cedar/` のファイルは `left` である（`left` と `removed` は、ritsu の生成器の頭（`Code generated by … DO NOT EDIT.`）を持つファイルだけで、人が置いたファイルは数えない。前からの `--check` と同じ）。テキストは変わったものだけを並べるが、JSON は同じだったファイルも並べ、パッケージの全部のファイルを言う。何も生成しなかったとき（引数の誤り、検査を通らないファイル、同じファイルを書く二つのファイル、予約語のモジュールの名前、生成器が止めたもの）は、`files` が空で、`error` に終了コードと文（`--lang` の言語。テキストの `error: ` の頭は付けない）が入り、出力先が無くて止まったときは `instead` に 0.40.0 と同じファイルを書くコマンドの語の配列も入り（9.6。17.21）、`diagnostics` に止めた診断が `ritsu check --format json` と同じ形（`tool` と、ルートからの `file`）で入る。`--authorizer avp` の W401 も `diagnostics` に入る。JSON のときは標準エラーに何も書かない。引数の誤りも JSON で答えるため、`--format json` は引数を読む前に見る（`ritsu check --format json` の引数の誤りは、いままでどおり標準エラーのテキストである）。終了コードはテキストと同じ。確かめ方は `tests/npm.rs` の突き合わせ（stockroom、invoice、通販、ページの通販で、書いたとき・`--check`・手で変えたあと・`--authorizer avp`）と、ページの例（`tests/npm.rs` の `the_pages_on_node_show_what_the_package_prints`）。
 - パッケージの Python が `mypy --strict` を通るように、dandori の Temporal の Python（と同じ部品を使う pydantic-graph と Step Functions の Lambda の Python）と、chobo の Python のクライアントの型の書き方を直した（★単独の出力も変わった。振る舞いは変えていない。dandori の DESIGN 0.3、chobo の DESIGN 8.1）。
 
 確かめ方：`crates/ritsu/tests/gen.rs`。テストのプロジェクト `crates/ritsu/tests/projects/stockroom`（英語。rulec の規則 `delivery`、koyomi の日付のファイルとカレンダー、chobo の帳簿、三つを使う dandori のフロー）のパッケージが、帳簿の三つの出力先（PostgreSQL、TigerBeetle、MySQL の系統）で、`tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ること（通販は TypeScript だけ。dandori の Python の残りは dandori の DESIGN 7 章）。フローの import がパッケージのモジュールを指し、規則と日付のアクティビティを走らせるとパッケージのモジュールを通って答えること（Python と Go）。`--check` が、無いもの・古いもの・残ったものを言うこと。`--out` を一つ深くした前の実行が残したアプリの形のパッケージを、`--check` が package.json も含めて「もう生成しない」と言い、次の gen が消し、人の package.json と、ほかの生成器の頭を `description` に持つ package.json は残すこと（`gen_reads_the_apps_package_json_as_ritsus`）。`--module` の最後の部分が `go` のパッケージを `…/go` に置くと、根が `package generated`（`--name go` なら `package pgo`）で、`go vet` と gofmt を通ること（`a_package_whose_directory_is_named_go_vets`）。テストのプロジェクト `crates/ritsu/tests/projects/marketplace`（英語。セントで売上を分ける rulec の規則 `sale_split`、chobo の例の帳簿 `marketplace`、手で書いた決済のコード `service/checkout.{ts,py,go}`）で、単位のモジュールが `USDc` を宣言し、規則のモジュールがそれを読み、帳簿のクライアントの額がその型であること。決済のコードが、帳簿の三つの出力先のパッケージの上で `tsc --strict`、`mypy --strict`、`go vet` と gofmt を通り、規則をドルで数える版では三つとも決済のコードで止まること（`the_checkout_hands_the_book_the_rules_amounts_in_their_units_type`）。決済のコードを走らせると、テストが立てた PostgreSQL に三つの言語で売上を記帳し、Go では TigerBeetle と MySQL にも記帳すること（`the_checkout_records_the_sale`。手数料 149 セントと店の 850 セント、同じ注文の二度目は `done_before`）。`円` で書いた規則の値段を `JPY` で書いた規則に渡すコードが、三つの言語の型の検査を通って走ること（`a_unit_is_one_type_across_the_rules_however_they_spell_it`）。sekisho の例をプロジェクトにしたパッケージで、三つの言語のファイルの形、インデックス、依存が正しく、型の検査（`tsc --strict` と cedar-wasm の型、`mypy --strict` と cedarpy、sekisho の Go のランナーの `go.mod` で作ったモジュールの `go vet` と gofmt）と `--check` を通り、`--authorizer avp` なら avp の依存を書くこと（`the_gates_of_a_project_go_into_the_package`）。テストのプロジェクト `crates/ritsu/tests/projects/settlement`（kaname の例の `payout` と `late_payment` の英語の版と、それが読む規則、日付のファイル、帳簿）のパッケージが、パッケージの形の golden（`golden/gen/settlement.txt`）と三つの型の検査を通ること（`the_modules_of_kaname_go_into_the_package`）、`.kn` を変えると `--check` がそのモジュールの三つの言語のファイルだけを言うこと（`gen_check_says_a_module_of_kaname_is_stale`）、`glue/` の生成物が、三つの言語とも、ベクタと宣言の外の入力で参照インタプリタと同じ答えを返すこと（`the_code_of_the_modules_answers_as_the_reference_does`。kaname の DESIGN 10.7、16.4）。どのファイルの頭も 9.2 の形で、元のファイルとそのハッシュを書くこと（パッケージの形の golden `crates/ritsu/tests/golden/gen/stockroom.txt`。バージョンは `<version>` に置き換えてある）。中身ごとの突き合わせは、いままでどおり各言語のテスト（rulec の 12 言語のベクタ、koyomi の五つの出力先、chobo の PostgreSQL と TigerBeetle の七つの組み合わせと MySQL・TiDB・Vitess の組み合わせ、dandori のプラットフォーム）がする。sekisho のテストは、三つの言語の生成したコードに、検査を通る 35 の `.gate` の生の値 27,579 件を cedar-wasm、cedarpy、cedar-go で答えさせ、参照の評価と比べる（sekisho の DESIGN 6.3）。
@@ -1931,6 +1932,43 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 - rulec と dandori の表は `copies` にコピーした。標準の表と同じところはそれを指し、違うところ（rulec は `Self` を持たず、Go の `complex64` と `complex128` を持たない。dandori は生成物が使う名前を足す）は、それぞれの表に持つ。C.11 で、二つは自分の表をやめて `copies` を読むようにした。rulec は出力先ごとの定数（`copies::rulec::PYTHON` など）と、`backend.rs` の並びの `BACKENDS` を、dandori は Python・Go・TypeScript の表を読む。中身はコピーしたときのままで、生成物も診断も変わらない。標準の表にそろえるかは、一つの生成パッケージ（9.3）を作る E で決める。表の違いが、dandori の生成物が rulec の生成物の名前を参照するところで食い違いを起こすかを C.11 で調べた結果は、PLAN の 7.5 にある。
   E の段階（`ritsu gen`）で、表は一つにしないと決めた。一つのパッケージの中で、ある言語の名前をほかの言語が参照するところは三つあり、どれも表の違いで食い違わない。dandori は rulec の名前（関数、列挙のクラス、単位の型、Go のパッケージ）と chobo の名前（振替のメンバーと引数）を、それぞれの口から、その言語が自分の表で決めたとおりに受け取って書く。koyomi の名前は dandori が ritsu-emit の同じ決め方（`go_package`、`pascal`、`<別名>_at`）で求めるが、koyomi は表に当たる別名を、名前を替えて避けずに E009 でエラーにするので、決め方だけで同じ名前になる。表が違っても、名前を作り直すところが無いので、食い違いは起きない。新しく名前を使うのは、パッケージのインデックスのファイル（`index.ts`、`__init__.py`）と Go のディレクトリ（パッケージ）で、それは言語が作ったモジュールの名前をそのまま使う。rulec は、出力先が予約している語の別名を警告（W121）で通すので、`ritsu gen` は、インデックスのファイルと Go のディレクトリが import するモジュールの名前を標準の表（Python 3.14.6 の `keyword.kwlist`、Go 1.25 のキーワード）で確かめ、当たれば何も書かずにエラーで止まる（`crates/ritsu/tests/gen.rs`）。TypeScript の `export * as <名前>` は予約語も名前に取れるので確かめない。
 - 名前（`ident`）、リテラル（`lit`）、生成物の頭の一行とコメント（`header`）は、koyomi と chobo の形である。9.2 の頭（`Code generated by <名前> <ritsu のバージョン>.` と元のファイルとハッシュ）にそろえるのは、生成物が変わるので E の段階（9.3、9.4）にする。E.7 でそろえた（9.2。`header` に `VERSION`、`generated(tool)`、`Source`、`Origin`、`file_name` を置き、rulec・koyomi・chobo・dandori がそれで書く）。
+
+### 9.6 出力先と付属物（2026-11-01）
+
+コードを書くコマンド（`rulec gen`、`koyomi gen`、`chobo gen`、`dandori gen`、`sekisho gen`、`sakai gen`、`ritsu gen`）は、一つの決まりで出力先と付属物を選ぶ。動詞はどれも `gen` である。
+
+- **出力先は `--target <名前>` で、何度でも書ける。** 書くのは指定したものだけである。名前は言語の名前でそろえる（`typescript`、`python`、`go`、`rust`、`sql`、`wasm`、rulec だけの `numpy`・`javascript`・`ruby`・`php`・`swift`・`java`、rulec の `proto`、sekisho と `ritsu gen` の `cedar`）。dandori は基盤の名前（`asl`、`temporal-typescript`、`temporal-python`、`temporal-go`、`durable`、`argo`、`pydantic-graph`）、sakai はツールの名前（`import-linter`、`dependency-cruiser`、`archunit`、`go-arch-lint`）で、chobo の帳簿のデータベースは `--books` で選ぶ。書く順は、フラグの順ではなく、コマンドごとの並びの順である（`ritsu gen` は TypeScript、Python、Go、Cedar）。知らない名前と、同じ名前を二度書くのは exit 2。
+- **`--target` が無ければ、何も書かずに exit 2 で止まる。** 書く組がバイナリの版で決まると、出力先が増えるたびに、使う人の `--check` が「無い」と言うからである。止まる文は使える名前を言い、0.40.0 で `--target` を省けた三つ（`rulec gen`、`koyomi gen`、`ritsu gen`）は、0.40.0 の既定と同じファイルを書くコマンド（その人の引数のあとに `--target` と `--extra` を足したもの）も示す。その引数は 0.40.0 で固定し（`UP_TO_0_40`）、あとから足す出力先は入れない。`ritsu gen` は、`ritsu.mod` の `target` の行（17.3）があれば、それを読む。
+- **出力先ごとに、ほかのコードが読む本体（ライブラリ）だけを書く。** ランナー、MCP のサーバーと確かめのページ、Connect のサービス、丸めの試験、証明のハーネス、ベクタは付属物で、`--extra <名前>`（何度でも書ける）で頼んだときだけ書く。付属物があるのは rulec（`runner`、`mcp`、`connect`、`round-test`、`proof`、`vectors`）と koyomi（`runner`）だけで、ほかのコマンドが書くものは全部が本体である。ライブラリは付属物を読まない。
+- **置き方は `<out>/<出力先>/`、`--out` の既定は `generated`。** 出力先が一つでも同じで、出力先を足しても、ほかのファイルは動かない。0.40.0 で `--out` の直下に書いていた chobo と dandori は、この段が増えた。sakai の設定だけは、ツールが探すところに置く（`--out` を付ければ、そこに全部を置く）。
+- **`--check` は、どのコマンドも、その実行が書くはずのファイルだけを比べる。** 無いか違えば 1。頼まなかった出力先と付属物のファイルは比べない。chobo と dandori には、ここで `--check` を足した。
+- **chobo・dandori・sakai・koyomi の一つの実行は、途中まで書いて止まらない。** 全部の出力先を作ってから書くので、指定した出力先の一つでも受け取れなければ（chobo の E060〜E064、dandori のプラットフォームが受け取れないフロー、sakai の E501、koyomi の E016）、何も書かずに 1 で終わる。`ritsu gen` は、名前のぶつかりと予約語を、どの出力先を書くより前に確かめる（17.8 の `modules_hold`）。ほかの理由で止まれば、それまでに書いた出力先は残る（M14）。
+- **前に書いたが頼まれなくなったファイルは、消さずに挙げる。** rulec と koyomi の付属物、`ritsu gen` の `cedar/` で、終了コードは変えない。挙げるのは、頭のコメントで ritsu の生成器のものと分かるファイルである（9.3 の `--check` と同じ見分け方。Cedar の二つの JSON は頭を持たないので挙げない）。
+- **0.40.0 までの名前は、新しい名前を添えて止まる。** `chobo build`・`dandori build`・`sakai build` は知らないコマンドとして、dandori の `temporal`（`ritsu run --target` も）と chobo の組の名前（`postgres-go` など）は知らない名前として exit 2 で止まり、文に 0.41.0 からの名前を添える（`` `chobo build` is `chobo gen` from 0.41.0 ``、`` `postgres-go` is `--target go --books postgres` from 0.41.0 ``）。別名は作らない。
+
+`--target` も `target` の行も無い `ritsu gen`（sekisho の例 `crates/sekisho/examples/refunds` で走らせたもの。exit 2）：
+
+```
+$ ritsu gen
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|cedar`, or make it a module (`ritsu mod init`) and write them on the `target` line of its ritsu.mod (`target typescript python go`)
+note: up to 0.40.0, `ritsu gen` with no `--target` wrote the packages of TypeScript, Python and Go, and the gates' Cedar; this writes the same files:
+  ritsu gen --target typescript --target python --target go --target cedar
+```
+
+`--format json` では、同じ文が `error` の `message` に入り、示したコマンドの語が `instead` に入る（17.21）。
+
+**確かめたこと。** 0.40.0 の公式のバイナリの既定と、`UP_TO_0_40` の引数（chobo と dandori は名前を書き換えた引数）で、木の全部の材料を比べた。数は各言語の章にある（rulec §15.277 の 994 本、koyomi 16 章の 347 本、chobo 17 章の 176 冊、dandori 21 章の 281 本、sakai 28 章の 218 の地図）。違いは次のものだけである。
+
+- chobo と dandori の `<出力先>/` の段。
+- 生成物のコメントのうち、コマンドを言う行。dandori では、そのコードをハッシュする Temporal のワーカーのビルドの ID も変わる。
+- sakai の設定の頭の二行と、E502 の注が言うコマンド。
+- chobo の W108・E064 の文が、出力先を組の名前でなくフラグで言うこと（chobo 17 章）。
+- `ritsu run --format json` の `target` が、渡した名前を言うこと（dandori 21 章）。
+- 名前のぶつかりの koyomi 15 章（E016）と chobo 16 章（W108・E064 と、名前を付け替えないこと）によるもの。
+
+`ritsu gen` は、木の 138 のプロジェクトのルート（`ritsu.mod` のあるディレクトリ、ritsu のテストのプロジェクト、ブラウザで試すページの通販、各言語の例）で、0.40.0 の既定と止まる文が示すコマンドを英日で比べた（書く、`--check`、`--format json`。帳簿のあるルートは `--books` の三つで、ゲートのあるルートは `--authorizer avp` でも）。終了コードと標準出力と標準エラーはどれも一字も違わず、違うのは、帳簿のクライアントと MySQL の系統の SQL のコメントのうちコマンドを言う行（`chobo build --target postgres` が `chobo gen --target sql` に、など）と、JSON の `targets` が `cedar` も言うことだけである。
+
+コマンドごとの名前と付属物の表、止まる文、`ritsu.mod` の行の決まりは、各言語の DESIGN（rulec §15.277、koyomi 16 章、chobo 17 章、dandori 21 章、sekisho 23 章、sakai 28 章）と 17.3・17.16 にある。
 
 ## 10. テストの組み立て
 
@@ -2639,7 +2677,7 @@ ritsu check: ファイル 1 個（proto 1）。どれも検査を通りました
 
 - OpenAPI と AsyncAPI の文書：Server Object に `x-ritsu-plaintext: "<理由>"` と書く。どちらの仕様も Server Object に `x-` で始まる拡張を書けるので、ほかのツールはこれを読み飛ばす。意図が、文書と一緒に動く。空の文字列や文字列でない値は意図として読まず、W902 の注で理由を書くよう求める。
 
-**Step Functions の E050 との関係。** Step Functions の HTTP Task は HTTPS の送り先しか呼べないので、dandori は `http://` の送り先を、`dandori build --target asl` で E050 にしている（dandori の DESIGN 1.7）。W902 はどのプラットフォームにも出す `check` の警告で、E050 はそのまま残る。`plaintext` を書いても、Step Functions には出せない。
+**Step Functions の E050 との関係。** Step Functions の HTTP Task は HTTPS の送り先しか呼べないので、dandori は `http://` の送り先を、`dandori gen --target asl` で E050 にしている（dandori の DESIGN 1.7）。W902 はどのプラットフォームにも出す `check` の警告で、E050 はそのまま残る。`plaintext` を書いても、Step Functions には出せない。
 
 **診断の文。** dandori（材料 `tests/fixtures/security/W902_agent_url.flow`）：
 
@@ -2849,7 +2887,7 @@ warning[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: the secret 
 
 **捨てたもの**：
 
-- **`dandori build` でプラットフォームごとに出すこと（E040 と同じ置き場所）。** `ritsu check` に出なくなる。履歴に残ることは五つのうち四つのプラットフォームで同じなので、`check` に置いた。pydantic-graph だけに出すフローでも W904 は出る（文は、四つのプラットフォームが残すと言う）。
+- **`dandori gen` でプラットフォームごとに出すこと（E040 と同じ置き場所）。** `ritsu check` に出なくなる。履歴に残ることは五つのうち四つのプラットフォームで同じなので、`check` に置いた。pydantic-graph だけに出すフローでも W904 は出る（文は、四つのプラットフォームが残すと言う）。
 - **Temporal だけの宣言にすること（`payload codec`）。** Step Functions と Lambda durable functions も、カスタマー管理の鍵で同じことができる（読むのに `kms:Decrypt` が要る）。宣言は「鍵を持つ人だけが読める」という事実にし、手段はプラットフォームごとにした。
 - **`history encrypted` のとき、Step Functions と durable functions でも E050 にすること。** できるプラットフォームで締め出すことになる（P6 は、できないプラットフォームでだけ E050 にする）。
 
@@ -3208,7 +3246,7 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
 ファイル     = { 行 } ;
 行           = [ 文 ] [ 注 ] 改行 ;
 文           = モジュール | 版 | 説明 | 求める版 | ライセンス | ソース
-             | 依存 | 除く | 署名 | ライブラリ ;
+             | 依存 | 除く | 署名 | ライブラリ | 出力先 ;
 モジュール   = "module" モジュールの名前 ;
 版           = "version" 版の字 ;
 説明         = "description" 文字列 ;
@@ -3225,9 +3263,11 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
              | "by" 文字列 "issuer" 文字列             (* 鍵の無い署名：署名者と発行者 *)
              | "by" "matching" 文字列 "issuer" 文字列 ; (* 署名者を正規表現で *)
 ライブラリ   = "library" ( "typescript" | "python" | "go" ) 文字列 ;
+出力先       = "target" 出力先の名前 { 出力先の名前 } ; (* `ritsu gen` が書くもの。9.6 *)
+出力先の名前 = "typescript" | "python" | "go" | "cedar" ;
 ```
 
-**並びと回数**。注と空行のほかで最初の文は `module` でなければならない。`module`、`version`、`description`、`ritsu`、`license`、`source` は一度まで、`library` は出力先ごとに一度まで、`require` は名前ごとに一度まで書ける。`exclude` と `signature` は何度でも書け、同じ頭の部分に二つの `signature` を書けば、二つとも確かめる。知らない語で始まる行は E301 で、使える語を並べる。
+**並びと回数**。注と空行のほかで最初の文は `module` でなければならない。`module`、`version`、`description`、`ritsu`、`license`、`source`、`target` は一度まで、`library` は出力先ごとに一度まで、`require` は名前ごとに一度まで、`target` の行の名前はそれぞれ一度まで書ける。`exclude` と `signature` は何度でも書け、同じ頭の部分に二つの `signature` を書けば、二つとも確かめる。知らない語で始まる行は E301 で、使える語を並べる。
 
 **モジュールの名前**は二つの形のどちらかである。
 
@@ -3247,15 +3287,16 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
 - `exclude` は、送り出すファイルからそのファイルかディレクトリを外す（17.12）。手元の `ritsu check` が歩くファイルは変えない。`ritsu mod init` は `exclude "generated"` を書く（`ritsu gen` の既定の出力先）。
 - `signature` の頭の部分は、モジュールの名前そのものか、`/` で終わる頭の部分（`"example.com/acme/"`）である。`key` のパスはモジュールのルートからで、モジュールの中になければならない。`tlog off` は、透明性ログに載せていない署名を受け付ける（17.14）。
 - `library` の文字列は出力先の名前の決まりに従う。`typescript` は npm のパッケージの名前（`@scope/name` か `name`）、`python` はディストリビューションの名前、`go` はモジュールのパス（版 2 からの `/vN` は付けない。17.16 で ritsu が付ける）。
+- `target` は、`--target` を付けない `ritsu gen` が書く出力先である（2026-11-01。9.6）。読むのは `ritsu gen`（`--library` も。17.16）だけで、言語のコマンド（`rulec gen` など）は読まない。読むのは手元のモジュールの行だけで、依存の `ritsu.mod` の行は読まない。`--target` を一つでも付ければ、行の代わりにフラグの出力先を書く。書く順は、行の順に依らず 9.6 の順である。知らない名前と、一つの行に同じ名前を二度書くのは E301。`ritsu mod init` はこの行を書かない。0.40.0 はこの行を知らない語として E301 にするので、書くなら `ritsu >=0.41.0` も書く（0.40.0 は、`ritsu >=` の行を先に読み、新しい ritsu が要ると言って exit 2 で止まる）。
 
-例（全部の語を使う形。英語の例のプロジェクトの `pricing`（17.26）に、レジストリの依存、署名、除くもの、ライブラリの行を足したもので、`crates/ritsu-base/tests/modules_manifest.rs` がこれを読む）：
+例（全部の語を使う形。英語の例のプロジェクトの `pricing`（17.26）に、レジストリの依存、署名、除くもの、ライブラリと出力先の行を足したもので、`crates/ritsu-base/tests/modules_manifest.rs` がこれを読む）：
 
 ```
 # The prices of the Acme shop, shared by its services.
 module example.com/acme/pricing
 version 1.1.0
 description "Shipping fees and order totals of the Acme shop"
-ritsu >=0.37.0
+ritsu >=0.41.0
 license "MIT OR Apache-2.0"
 source "https://example.com/acme/pricing"
 
@@ -3269,6 +3310,7 @@ exclude "tests"
 library typescript "@acme/pricing"
 library python "acme-pricing"
 library go "example.com/acme/pricing-go"
+target typescript python go
 ```
 
 **書き換え方**。`ritsu.mod` を書き換えるのは `ritsu mod init`、`add`、`get`、`remove` だけで、どれも行の単位で書き換える。
@@ -3570,7 +3612,7 @@ chobo はほかのファイルを指さないので替えるところが無い�
 - **読み込むパス**。ほかの部分を読み込むコードを書く生成器（rulec の規則、koyomi、chobo のクライアント、dandori のワークフロー、sekisho のリクエストのコード、kaname の glue）は、自分の部分の置き場所と、読み込むファイルごとの置き場所を `package.rs` から受け取り（`ritsu_emit::package::Place`）、読み込むパスをそこから作る。`rules/<別名>` を自分では組み立てない。
 - **走らせるときに一つでなければならない名前**。二つのモジュールのファイルが、Temporal のワークフローの型（名前と版から作る `place_order_v1` など）か、Cedar の名前（名前空間の中の型と操作）を同じに作れば、二つのファイルを挙げて止まる（exit 2）。走っているときは名前で見分けるので、一つのパッケージに二つは置けない。黙って名前を変えると、走っているときの名前が変わる。一つのモジュールの中のことは、言語が見る。一つのゲートが `use gate` で一緒に読むファイルは、モジュールが違っても一つの名前空間で（sekisho が E210 と E211 で確かめる）、ぶつかりにしない。
 - **Python が予約している語**。依存の名前は Python のパッケージの名前になる。`lambda` のような Python が予約している語の依存があれば、Python のパッケージを作るなら止まる（exit 2）。`--target typescript` と `--target go` では作る。
-- **書く前に確かめる止まり方**。上の二つの名前のぶつかりと Python が予約している語は、どのターゲットを書くより前に確かめる（`package.rs` の `modules_hold`）。`--target` を指定しない `ritsu gen` が、TypeScript を書いたあとで Python のところで止まり、途中まで書いたパッケージを残さないためである。どれもモジュールの木から来る止まり方で、マニフェストの無い木では起きない。ほかの理由の止まり方は、そのターゲットを作るところで止まり、それまでに書いたターゲットは残る（M14）。
+- **書く前に確かめる止まり方**。上の二つの名前のぶつかりと Python が予約している語は、どのターゲットを書くより前に確かめる（`package.rs` の `modules_hold`）。出力先を二つ以上指定した `ritsu gen` が、TypeScript を書いたあとで Python のところで止まり、途中まで書いたパッケージを残さないためである。どれもモジュールの木から来る止まり方で、マニフェストの無い木では起きない。ほかの理由の止まり方は、そのターゲットを作るところで止まり、それまでに書いたターゲットは残る（M14）。
 - **頭の行**。依存の部分の頭の `Source:` には、正規の書き方と、モジュールの名前と版を書く。規則の頭の `Applies:` の行は、依存の規則が自分のルートから書いた形（`@tax/…`）のままにする（★）。規則のファイルに書いてあるとおりで、依存が自分で生成しても同じ行になる。
 
   ```
@@ -3994,12 +4036,12 @@ require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
 
 ### 17.16 ライブラリの gen
 
-`ritsu gen --library [--embed <名前>]… [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]`。付けなければ、アプリの形（9.3）のまま一字も変えない（M14）。言語ごとのパッケージを、そのレジストリ（npm、PyPI、Go のモジュール）が受け取るライブラリの形で書く。コードは `crates/ritsu/src/package/library.rs`。
+`ritsu gen --library [--embed <名前>]… [--target typescript|python|go|cedar]… [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]`。付けなければ、アプリの形（9.3）のまま一字も変えない（M14）。言語ごとのパッケージを、そのレジストリ（npm、PyPI、Go のモジュール）が受け取るライブラリの形で書く。コードは `crates/ritsu/src/package/library.rs`。
 
 **引数**
 
 - モジュール全体（`exclude` の行が外すものを除く）を、出力先ごとに一つのライブラリにする。パスを渡すと exit 2。`--name` と `--module` も exit 2 で、名前は `library` の行から取る。`--embed` は `--library` と一緒にだけ使える（exit 2）。`ritsu.mod` の無いディレクトリでは exit 2。
-- `--target` が無ければ、`library` の行のある出力先だけを作る。行が一つも無いか、`--target` で頼んだ出力先に行が無ければ exit 2。
+- 書く出力先は、アプリの形と同じく `--target` か `target` の行のもの（9.6、17.3）で、`library` の行はパッケージの名前を与えるだけである（2026-11-01）。どちらも無ければ、何も書かずに exit 2 で止まり、0.40.0 と同じファイルを書くコマンド（`library` の行の言語ごとの `--target`）を示す。行が一つも無ければ、0.40.0 も止まったので、コマンドは示さない。書く言語に `library` の行が無ければ exit 2。`cedar` はライブラリにならず（Cedar はゲートのファイルの形のまま `cedar/` に書く）、`library` の行は要らない。
 - 名前は `library` の行、版は `version` の行で、版が無ければ exit 2。
 
 **どの部分をどのライブラリが持つか**
@@ -4221,6 +4263,7 @@ modules/holidays/
 - `rulec diff` は 17.9.1 の書き方を受け取る（フラグは変えない）。
 - `ritsu check --deps-warnings`（17.8）。
 - `ritsu gen --library`、`--embed <名前>`（くり返せる）（17.16）。`--library` はパス、`--name`、`--module` と一緒に使えず、`--embed` は `--library` と一緒にだけ使える（どれも exit 2）。
+- `ritsu gen --target <出力先>`（くり返せる）と、それが無いときに読む `ritsu.mod` の `target` の行（2026-11-01。9.6、17.3）。`--library` も同じ決まりで出力先を選ぶ（17.16）。
 
 ### 17.20 診断
 
@@ -4228,7 +4271,7 @@ ritsu の台帳（4.3、ritsu-cross の `codes.rs`）には、モジュールの
 
 | コード | いつ |
 |---|---|
-| E301 | `ritsu.mod` を読めない（知らない語、値の無い語、文字列のエスケープ、一度だけの語が二度、`module` が無いか最初でない、全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` の知らない出力先） |
+| E301 | `ritsu.mod` を読めない（知らない語、値の無い語、文字列のエスケープ、一度だけの語が二度、`module` が無いか最初でない、全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` と `target` の知らない出力先、`target` の行に二度書いた出力先） |
 | E302 | `ritsu.mod` の値の形が違う（モジュールの名前、版の字、依存の名前、絶対パスの `path`、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、同じ依存の名前が二度、空の `license`、https でない `source` とユーザー・パスワードかクエリを持つ `source`、`exclude` と鍵のファイルのパス、`require … git` の URL（受け付けない形、資格情報かクエリを持ちうるもの、大文字のある名前になるもの）と `dir`）。`require … path` の指す先に `ritsu.mod` が無いのも、値が指すものの誤りとしてここに入れる |
 | E303 | レジストリか git の依存があるのに `ritsu.lock` が無いか、読めない |
 | E304 | `ritsu.lock` が `ritsu.mod` に合わない（lock に無いモジュール、求める最小の版より低い版、取り先の種類やパスや git の URL の違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無い、パスで読むモジュールに `oci` か `git` の行） |
@@ -4271,6 +4314,8 @@ warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` re
 - `contributions` の要素：`{"file": "rules/spring_sale.rule", "dependency": null, "to": "@pricing/rules/order_discount.rule", "to_dependency": "@pricing"}`。モジュールの境目を越える `contribution` だけを並べる（17.8 の注と同じもの）。
 - 木が読めないとき（E301〜E306、E308）は、`files` と `dependencies` が空で、`diagnostics` に木の診断が入る。
 - ルートに `ritsu.mod` が無く、歩いてモジュールを飛ばしたときだけ、`ok` のあとに `"skipped_modules": ["tax"]`（ルートからのパス）を置く（★）。飛ばしたモジュールが無ければ置かない（M14）。
+
+**`ritsu gen --format json`**（9.3）。モジュールで足すキーは無い。`targets` は、`--target` が無ければ `target` の行の出力先である（書く順）。`--target` も `target` の行も無くて止まったとき（2026-11-01。9.6）は、`error` の `message` のあとに `"instead": ["ritsu", "gen", …, "--target", "typescript", …]`（0.40.0 と同じファイルを書くコマンドの語。テキストの最後の行が示すコマンドである）を置く。`--library` で `library` の行が一つも無ければ、0.40.0 も止まったので `instead` を置かない。ほかの理由で止まったときも置かない。
 
 **`ritsu mod list --format json`**：`{"ritsu", "root", "module": {"name", "version"}, "lock": {"lock": 1, "ritsu": "<版>"} | null, "modules": [{"name", "version", "source", "path", "url", "commit", "digest", "files_digest", "prefix", "required_by": [{"module", "name", "version"}], "present": true | false, "where", "verified": […]}], "diagnostics": [ … ]}`。`where` は `"store" | "vendor" | "path"` で、取り出していなければ null である。`diagnostics` は木の診断（lock が合わないときの E304 など）で、要素は `ritsu check --format json` の `diagnostics` と同じ形である（★。17.19 の exit 1 の理由を、JSON でも読めるようにする）。
 

@@ -830,7 +830,7 @@ There are four ways to install them:
 ```
 ritsu check <dir>         every language's check, then the checks across them
 ritsu run <flow> …        a workflow run with its rules evaluated, dates computed, books moved
-ritsu gen <dir> --out …   one package of TypeScript, Python or Go for the whole project
+ritsu gen --target …      one package of the whole project per language: TypeScript, Python, Go
 ritsu gen --check …       whether the packages are current; with --format json, file by file
 ritsu gen --library …     a module as libraries for npm, PyPI and Go
 ritsu mod <command> …     modules: add, lock, fetch, push, diff, report and the rest

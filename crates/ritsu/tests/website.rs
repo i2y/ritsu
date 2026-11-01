@@ -882,7 +882,7 @@ const GENERATED: [&str; 5] = ["cedar", "cedarschema", "typescript", "python", "g
 /// Every file `ritsu gen` writes for sekisho's example into `out` (`--lang ja` for the Japanese
 /// pages), with its lines.
 fn written_for_the_example(links: &Path, out: &Path, ja: bool) -> Vec<(String, Vec<String>)> {
-    let cmd = format!("ritsu gen --out {}{}", out.display(), if ja { " --lang ja" } else { "" });
+    let cmd = format!("ritsu gen --target typescript --target python --target go --target cedar --out {}{}", out.display(), if ja { " --lang ja" } else { "" });
     let said = sh(links, &root().join(SEKISHO_EXAMPLE), &cmd);
     assert!(out.join("cedar").is_dir(), "`{cmd}` wrote no Cedar:\n{said}");
     let mut files = Vec::new();

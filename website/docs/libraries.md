@@ -38,6 +38,7 @@ source "https://github.com/acme/pricing"
 library typescript "@acme/pricing"
 library python "acme-pricing"
 library go "example.com/acme/pricing-go"
+target typescript python go
 
 require tax path "../tax"
 ```
@@ -47,6 +48,9 @@ require tax path "../tax"
   distribution `acme-pricing` as `acme_pricing`: the name in lower case, each run of `-`, `_` and
   `.` made one `_`. From version 2, the path of the Go module ends in `/v2`, as Go requires, and
   the code that imports it says so.
+- `target typescript python go` names the languages `ritsu gen` writes when it is given no
+  `--target`; with `--target`, the flags name them instead. Each language written as a library
+  needs its `library` line.
 - `version` is the version of every library, and `--library` needs it. Python's versions (PEP 440)
   take a pre-release only as `alpha`, `beta` or `rc` with a number: `1.0.0-rc.1` is `1.0.0rc1`,
   and `1.0.0-dev.1` stops the run.
@@ -67,8 +71,8 @@ generated: ../out/pricing/python/pyproject.toml
 generated: ../out/pricing/go/go.mod
 ```
 
-`ritsu gen --library` writes a library for each language the module has a `library` line for,
-in `typescript/`, `python/` and `go/` under `--out`; `--target typescript|python|go` writes one.
+`ritsu gen --library` writes a library for each language of the `target` line, in `typescript/`,
+`python/` and `go/` under `--out`; `--target typescript|python|go` writes the languages it names.
 A library is the whole module, all but what its `exclude` lines leave out, so `--library` takes
 no paths, and no `--name` or `--module`: the `library` lines name the libraries. `--check` says
 what differs from what is there, as it does without `--library`.

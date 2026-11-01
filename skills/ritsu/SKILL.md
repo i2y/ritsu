@@ -59,7 +59,7 @@ and bounds are, which warnings to leave, and what a fix would change in the mean
 5. **Check again**, until it ends `all pass`. A warning does not fail the check; it says what could
    not be decided, and why.
 6. **Then run and generate**: `ritsu run` plays a workflow with its rules, dates and books worked
-   out (§4); `ritsu gen [<path>...]` writes one package for the whole project (§4); the pages
+   out (§4); `ritsu gen [<path>...] --target <target>...` writes one package of the whole project for each language given (§4); the pages
    for people that the languages write (`rulec doc`, `dandori doc`, `koyomi doc`, `chobo doc`,
    `yuen doc`, `sakai doc`, `sekisho doc`, `kaname doc`, each run as `ritsu <language> doc`) are for whoever has to understand
    what the code is to carry out and check it against what they know.
@@ -126,7 +126,7 @@ comes with an example that breaks it; a warning says what could not be decided.
 |---|---|---|
 | E101 | a `.proto` of the project does not read as proto3 | correct it where it points; a file `buf build` builds, ritsu reads |
 | E201 | a workflow's call of a rule, or a kaname module's, can give it values that break one of its preconditions (a `constraint`), or a koyomi date's days, or the days of a date held to a range, one of the rule's | branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or of a task's result); if the precondition is what is wrong, correct the rule's `constraint` |
-| W201 | whether a call keeps a precondition cannot be decided: a value comes from a place with no range, or the precondition bounds a total or a length | give the place a range; where none can be given, leave it: the workflow `ritsu dandori build` writes checks it when it runs, and fails a run that breaks it with `Dandori.BrokenPrecondition` |
+| W201 | whether a call keeps a precondition cannot be decided: a value comes from a place with no range, or the precondition bounds a total or a length | give the place a range; where none can be given, leave it: the workflow `ritsu dandori gen` writes checks it when it runs, and fails a run that breaks it with `Dandori.BrokenPrecondition` |
 | E202 | the days a koyomi date comes to, or a day of the range of a date (`range >=2026-01-01 <=2026-12-31`), fall outside the range of the rule input they are given to | widen the input's range, or make it `range from koyomi`, so that koyomi's days are the range; for a date held to a range, narrowing that range does it too |
 | W202 | whether those days stay inside the range cannot be decided: the value can also come from an input or a task's answer with no range, or `now` | give the input days of koyomi dates, or of dates held to a range, only; or narrow the inputs of its file |
 | E203 | a rule's output a workflow gives a chobo transfer as its amount, or an amount a kaname module gives one, comes to an amount below 0 or above 2⁶³ − 1 at an input from the vectors (chobo takes 0 to 2⁶³ − 1); in a workflow, among what the call can give the rule on the runs that reach the transfer | make the amounts 0 or more (a negative one, a refund say, is a transfer the other way); a workflow can instead branch with `match` before the transfer on the enum or bool the call was given, and give the transfer the output only in the arms of the values that do not come to such an amount; in kaname, narrow the amount with an `if` before the transfer |
@@ -214,11 +214,14 @@ answers those calls itself, written before, stops `ritsu run` at the first of th
 cancelled), 1 the flow has errors or the run could not go on (the scenario ran out of answers, say),
 2 bad arguments or a scenario that cannot be run.
 
-**`ritsu gen [<path>...] [--target <language>] [--out <dir>]`** writes one package for each of
-TypeScript, Python and Go (`<out>/<language>/`, `generated` by default): the rules, the dates, the
+**`ritsu gen [<path>...] --target <target>... [--out <dir>]`** writes one package for each language
+given, of TypeScript, Python and Go (`<out>/<language>/`, `generated` by default), in that order
+whatever the order of the flags; with no `--target`, the `target` line of the module's `ritsu.mod`
+(`target typescript python go`) names them, and with neither, nothing is written and the exit is
+2. A package holds the rules, the dates, the
 clients of the books, the workflows, the code that asks the gates and the functional cores
 (kaname's modules, under `glue/`) of the project, where a workflow and a module read their rules, dates and books,
-and a gate's code its rules and dates, from the package itself; the gates' Cedar goes once into `<out>/cedar/`. An amount of money or of a quantity is of
+and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`. An amount of money or of a quantity is of
 the package's one type of its unit, declared in `units` and taken and returned in it by the rules
 and the clients of the books alike, so code written by hand that gives a book what a rule returns,
 with no workflow between them, is held to the book's unit by the type checker of the language
@@ -229,8 +232,9 @@ of lines, every file of the packages with what became of it (`written`, `same` o
 of the files that stopped it; `--books postgres|tigerbeetle|mysql` says what the clients of the
 books call (`mysql` is MySQL, TiDB or Vitess); `--authorizer cedar|avp` says whether a gate's code
 asks the language's own Cedar in the process or Amazon Verified Permissions; `--name` and
-`--module` name the package. Each language's own `gen` or `build` still writes that language's code alone (`rulec
-gen`, `koyomi gen`, `chobo build`, `dandori build`, `sekisho gen`).
+`--module` name the package. Each language's own `gen` still writes that language's code alone (`rulec
+gen`, `koyomi gen`, `chobo gen`, `dandori gen`, `sekisho gen`, each with its own `--target`), and
+none of them reads the `target` line.
 
 ## 5. Which skill to read
 

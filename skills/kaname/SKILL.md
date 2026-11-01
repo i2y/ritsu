@@ -55,8 +55,9 @@ its code with `ritsu gen`. Three things stay with people:
 3. Run the check and fix what it says, one diagnostic at a time, from the top; `ritsu kaname explain
    <code>` says how. Then `ritsu check` on the project, which adds ritsu's checks across the
    languages (X2, X3, X4, X6) and hands kaname their verdicts.
-4. Generate the code into the host's package (`ritsu gen`), call it from the host, and have CI run
-   `ritsu gen --check`.
+4. Generate the code into the host's package (`ritsu gen --target <language>`, once for each
+   language, or the `target` line of ritsu.mod), call it from the host, and have CI run the same
+   `ritsu gen` with `--check`.
 5. Write the page with `ritsu kaname doc`, and show it to the people who approve the decisions.
 
 ```console

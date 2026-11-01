@@ -33,6 +33,7 @@ require tax path "../税"
 | `exclude "<パス>"` | `ritsu mod push` が送らないファイルかディレクトリ。`ritsu mod init` は、`ritsu gen` の出力先の `exclude "generated"` を書きます。 |
 | `signature "<名前>" …` | その名前のモジュールに求める署名（[署名](#署名)）。 |
 | `library typescript\|python\|go "<名前>"` | その言語でのモジュールのライブラリの名前（[ライブラリ](#ライブラリ)）。 |
+| `target typescript\|python\|go\|cedar …` | `--target` を付けない `ritsu gen` が書く出力先。ライブラリも同じです（[ライブラリ](#ライブラリ)）。読むのは `ritsu gen` だけです。0.41.0 より前の ritsu は読めないので、この行を書くモジュールは `ritsu >=0.41.0` も書きます。 |
 
 依存の名前は `require` の次の語で、英小文字、数字、`_` で書き、英字で始めます。モジュールのファイルは、依存のファイルを、`@` とこの名前に、依存のルートからのパスを続けて指します。`pricing` の `注文の合計.rule` は、`tax` の税率を準用します。
 
