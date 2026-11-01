@@ -2,21 +2,21 @@
 
 `koyomi gen` turns a file that passes `koyomi check` into code in five languages, TypeScript,
 Python, Go, Rust and SQL for PostgreSQL, and into a Wasm module that any host calls with one JSON
-object. Each language gets one file, or one Go package, and a runner beside it; the Wasm module is
-the Rust one behind a door of one function. There is nothing else to install: the file holds the
+object: the targets `--target` names. Each gets one file, or one Go package, and with `--extra
+runner` a runner beside it; the Wasm module is the Rust one behind a door of one function. There is nothing else to install: the file holds the
 small functions it calls and the calendar's table of holidays, and it uses no date library of its
 language, because those disagree about months (the one-month-after of 2023-01-31 is 2023-02-28 in
 most and 2023-03-03 in Go). Every function computes on day numbers, days since 1970-01-01, with the
 same steps as koyomi's reference interpreter, and the tests hold every target to it on every input
 of the range (the end of this page).
 
-The examples on this page are what `koyomi gen examples/payment_20th_close_next_10th.cal`
-writes: closing on the 20th and paying on the 10th of the next month, on Tokyo's business days,
-whose offset gives the payment a time too.
+The examples on this page are what `koyomi gen examples/payment_20th_close_next_10th.cal` writes
+given every target and `--extra runner`: closing on the 20th and paying on the 10th of the next
+month, on Tokyo's business days, whose offset gives the payment a time too.
 
 ## What it writes
 
-| Target | The code | The runner | A date is |
+| Target | The code | The runner (`--extra runner`) | A date is |
 |---|---|---|---|
 | TypeScript | `typescript/<alias>.ts` | `typescript/<alias>_runner.ts` | a `"YYYY-MM-DD"` string |
 | Python | `python/<alias>.py` | `python/<alias>_runner.py` | a `datetime.date` |
@@ -37,15 +37,22 @@ alias a name that target cannot take; rustc warns of an alias with two `_` in a 
 which then stands in for the generated module, or the generated module for it. `koyomi check`
 warns about each and names the targets (W001). Written as it is, the code of those targets would
 not build (for Rust and Wasm, with `-D warnings`), would answer for one date with another, or
-could not be imported, so `gen` writes nothing when it is to write one of them (E016);
-`--target` writes one of the others.
+could not be imported, so `gen` writes nothing when it is to write one of them (E016); a
+`--target` that names only the others writes them.
 
-`--out <dir>` says where (`generated` unless given), `--target` picks one target, and `--lang ja`
+`--target` says what to write, given once for each target (`--target typescript --target go`); the
+targets are written in the order of the table above, whatever the order of the flags. With no
+`--target`, `gen` writes nothing and exits 2, and prints the command that writes what 0.40.0 wrote
+with none: every target, each with its runner. `--extra runner` writes the runner of each target
+given beside its code. A runner koyomi wrote where the run would write it, which the run does not
+ask for (one 0.40.0 wrote, say), is named as generated no more and still there, and kept; the exit
+code stays what it is. The Go runner is a test file of the package, so `go test` builds it with the
+package as long as it is there. `--out <dir>` says where (`generated` unless given), and `--lang ja`
 writes the comments and the error messages in Japanese. A file that does not pass check writes
 nothing and makes the run exit 1, while the files that pass are still written; a W001 that names a
 target to write (E016) and two files with one alias stop the run before anything is written.
-`koyomi gen --check` writes nothing and exits 1 when a file on disk is not what gen would write,
-for CI.
+`koyomi gen --check` writes nothing and exits 1 when a file the same `--target` and `--extra` write
+is not on disk as gen would write it, for CI.
 
 ## The head
 
@@ -276,7 +283,7 @@ wasm/
 ├── payment_20th_close_next_10th_wasm.rs      the crate root: the module behind the canonical ABI
 ├── payment_20th_close_next_10th.rs           the module rust/ gets, byte for byte
 ├── payment_20th_close_next_10th.wit          the world, for the component model
-└── payment_20th_close_next_10th_runner.mjs   the runner Node runs
+└── payment_20th_close_next_10th_runner.mjs   the runner Node runs (--extra runner)
 ```
 
 One file to build, with `rustc` alone; `koyomi api` prints this line under `wasm.build`, to run in
@@ -372,8 +379,8 @@ of WIT (`result` gives `%result`), so every alias koyomi takes makes a world tha
 
 ## The runners
 
-A runner reads the lines of `koyomi vectors` on its standard input and writes, for each, what the
-functions give: the dates and the times, separated by spaces, in the order `out` has them, or
+`--extra runner` writes a runner beside the code of each target. A runner reads the lines of
+`koyomi vectors` on its standard input and writes, for each, what the functions give: the dates and the times, separated by spaces, in the order `out` has them, or
 `error <kind>`. It is how the tests hold the code to the reference interpreter, and how the code
 can be held to it again after it is copied somewhere else:
 

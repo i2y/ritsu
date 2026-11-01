@@ -21,6 +21,12 @@ fn err(o: &Output) -> String {
     String::from_utf8_lossy(&o.stderr).to_string()
 }
 
+/// `koyomi` on `args` with the flags that write every target and its runner, as `gen` wrote up to
+/// 0.40.0 with no `--target`.
+fn koyomi_every(args: &[&str]) -> Output {
+    koyomi(&koyomi::cli::up_to_0_40(args))
+}
+
 #[test]
 fn no_arguments_and_help() {
     let o = koyomi(&[]);
@@ -76,10 +82,15 @@ fn what_is_refused_with_exit_2() {
         vec!["check", f, "--lang", "fr"],
         vec!["explain", "--all=yes"],
         vec!["gen"],
+        vec!["gen", f],
+        vec!["gen", f, "--extra", "runner"],
         vec!["gen", f, "--target", "java"],
-        vec!["gen", f, "--out"],
-        vec!["gen", f, "--check=yes"],
-        vec!["gen", "examples/none.cal"],
+        vec!["gen", f, "--target", "go", "--target", "go"],
+        vec!["gen", f, "--target", "go", "--extra", "mcp"],
+        vec!["gen", f, "--target", "go", "--extra", "runner", "--extra", "runner"],
+        vec!["gen", f, "--target", "go", "--out"],
+        vec!["gen", f, "--target", "go", "--check=yes"],
+        vec!["gen", "examples/none.cal", "--target", "go"],
         vec!["vectors"],
         vec!["vectors", f, "--format", "json"],
         vec!["source", "fetch"],
@@ -222,7 +233,7 @@ fn gen_writes_and_checks() {
     let out_dir = t.path().to_string_lossy().to_string();
     let good = ["examples/payment_20th_close_next_10th.ja.cal", "examples/calendars/東京の営業日.cal"];
     // A file that fails check is refused with its diagnostics; the others are written.
-    let o = koyomi(&["gen", good[0], "examples/eom_close_two_months_later.ja.cal", good[1], "--out", &out_dir]);
+    let o = koyomi_every(&["gen", good[0], "examples/eom_close_two_months_later.ja.cal", good[1], "--out", &out_dir]);
     assert_eq!(code(&o), 1, "{}{}", out(&o), err(&o));
     assert!(out(&o).contains("error[E301]"), "{}", out(&o));
     assert!(err(&o).contains("`examples/eom_close_two_months_later.ja.cal` does not pass check, so nothing is generated from it"), "{}", err(&o));
@@ -270,37 +281,175 @@ fn gen_writes_and_checks() {
         }
     }
     // Generated again: nothing changes, nothing is said.
-    let o = koyomi(&["gen", good[0], good[1], "--out", &out_dir]);
+    let o = koyomi_every(&["gen", good[0], good[1], "--out", &out_dir]);
     assert_eq!(code(&o), 0);
     assert_eq!(out(&o), "");
     // --check: the same files pass; an edited file or a missing one is 1, and nothing is written.
-    assert_eq!(code(&koyomi(&["gen", good[0], good[1], "--out", &out_dir, "--check"])), 0);
+    assert_eq!(code(&koyomi_every(&["gen", good[0], good[1], "--out", &out_dir, "--check"])), 0);
     let edited = t.path().join("python/payment_terms.py");
     let before = std::fs::read_to_string(&edited).unwrap();
     std::fs::write(&edited, before.replace("roll preceding", "roll following")).unwrap();
     std::fs::remove_file(t.path().join("sql/tokyo.sql")).unwrap();
-    let o = koyomi(&["gen", good[0], good[1], "--out", &out_dir, "--check"]);
+    let o = koyomi_every(&["gen", good[0], good[1], "--out", &out_dir, "--check"]);
     assert_eq!(code(&o), 1);
     assert!(out(&o).contains(&format!("differs from what gen writes: {}", edited.display())), "{}", out(&o));
     assert!(out(&o).contains("missing: "), "{}", out(&o));
     assert_ne!(std::fs::read_to_string(&edited).unwrap(), before, "--check writes nothing");
-    let o = koyomi(&["gen", good[0], good[1], "--out", &out_dir, "--check", "--lang", "ja"]);
+    let o = koyomi_every(&["gen", good[0], good[1], "--out", &out_dir, "--check", "--lang", "ja"]);
     assert!(out(&o).contains("生成し直すと変わります: "), "{}", out(&o));
-    // One target only, and the comments in Japanese.
+    // --check holds the files of the targets given and no other: the edited Python is not one of Go's.
+    assert_eq!(code(&koyomi(&["gen", good[0], good[1], "--out", &out_dir, "--check", "--target", "go", "--extra", "runner"])), 0);
+    // One target only, its module alone, and the comments in Japanese.
     let t3 = TempDir::new("gen-py");
     let o = koyomi(&["gen", "examples/net30.cal", "--target", "python", "--lang", "ja", "--out", &t3.path().to_string_lossy()]);
     assert_eq!(code(&o), 0, "{}", err(&o));
     let names: Vec<String> = tree(t3.path()).into_iter().map(|(p, _)| p).collect();
-    assert_eq!(names, ["python/net30.py", "python/net30_runner.py"]);
+    assert_eq!(names, ["python/net30.py"]);
     let py = std::fs::read_to_string(t3.path().join("python/net30.py")).unwrap();
     assert!(py.contains("# もと: net30.cal（dates net30 v1、sha256:"), "{py}");
     assert!(py.contains("受け取る範囲は invoice_date 2026-01-01〜2028-11-29 で、"), "{py}");
-    // The Wasm target alone: the crate root, the module rust/ gets, the world and the runner.
-    let t4 = TempDir::new("gen-wasm");
-    let o = koyomi(&["gen", "examples/net30.cal", "--target", "wasm", "--out", &t4.path().to_string_lossy()]);
+    // The runner beside it, when it is asked for.
+    let o = koyomi(&["gen", "examples/net30.cal", "--target", "python", "--extra", "runner", "--lang", "ja", "--out", &t3.path().to_string_lossy()]);
     assert_eq!(code(&o), 0, "{}", err(&o));
-    let names: Vec<String> = tree(t4.path()).into_iter().map(|(p, _)| p).collect();
-    assert_eq!(names, ["wasm/net30.rs", "wasm/net30.wit", "wasm/net30_runner.mjs", "wasm/net30_wasm.rs"]);
+    let names: Vec<String> = tree(t3.path()).into_iter().map(|(p, _)| p).collect();
+    assert_eq!(names, ["python/net30.py", "python/net30_runner.py"]);
+    // The Wasm target alone: the crate root, the module rust/ gets and the world; the runner with it.
+    for (extra, want) in [(None, vec!["wasm/net30.rs", "wasm/net30.wit", "wasm/net30_wasm.rs"]), (Some("runner"), vec!["wasm/net30.rs", "wasm/net30.wit", "wasm/net30_runner.mjs", "wasm/net30_wasm.rs"])] {
+        let t4 = TempDir::new("gen-wasm");
+        let dir = t4.path().to_string_lossy().to_string();
+        let mut args = vec!["gen", "examples/net30.cal", "--target", "wasm", "--out", &dir];
+        if let Some(e) = extra {
+            args.extend(["--extra", e]);
+        }
+        let o = koyomi(&args);
+        assert_eq!(code(&o), 0, "{}", err(&o));
+        let names: Vec<String> = tree(t4.path()).into_iter().map(|(p, _)| p).collect();
+        assert_eq!(names, want, "--extra {extra:?}");
+    }
+}
+
+/// `--target` given more than once writes those targets, in the order every list of them is in
+/// (typescript, python, go, rust, sql, wasm), whatever the order of the flags; the two give what
+/// each gives alone.
+#[test]
+fn gen_writes_the_targets_given_in_their_order() {
+    let t = TempDir::new("gen-two");
+    let dir = t.path().to_string_lossy().to_string();
+    let o = koyomi(&["gen", "examples/net30.cal", "--target", "go", "--target", "python", "--out", &dir]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    assert_eq!(out(&o), format!("generated: {dir}/python/net30.py\ngenerated: {dir}/go/net30/net30.go\n"));
+    let mut each = Vec::new();
+    for target in ["python", "go"] {
+        let one = TempDir::new("gen-one");
+        assert_eq!(code(&koyomi(&["gen", "examples/net30.cal", "--target", target, "--out", &one.path().to_string_lossy()])), 0);
+        each.extend(tree(one.path()));
+    }
+    each.sort();
+    let mut both = tree(t.path());
+    both.sort();
+    assert_eq!(both, each);
+}
+
+/// The names `gen --target` takes are the targets, in their order, and what 0.40.0 wrote with no
+/// `--target` is every one of them with its runner.
+#[test]
+fn the_target_names_are_the_targets() {
+    let keys: Vec<&str> = koyomi::naming::TARGETS.iter().map(|t| t.key()).collect();
+    assert_eq!(koyomi::cli::TARGET_NAMES, keys.as_slice());
+    let mut want: Vec<&str> = keys.iter().flat_map(|k| ["--target", *k]).collect();
+    want.extend(["--extra", "runner"]);
+    assert_eq!(koyomi::cli::UP_TO_0_40, want.as_slice());
+}
+
+/// With no `--target`, `gen` writes nothing and exits 2, saying the names it takes and the command
+/// that writes what 0.40.0 wrote: the words given (a path a shell would take apart in quotes, an
+/// `--extra` left out, as the line has it), every target, and `--extra runner`. That command writes
+/// those files.
+#[test]
+fn gen_given_no_target_says_what_writes_what_0_40_0_wrote() {
+    let t = TempDir::new("gen-none");
+    let dir = t.path().join("out dir").to_string_lossy().to_string();
+    let every = "--target typescript --target python --target go --target rust --target sql --target wasm --extra runner";
+    for (lang, said) in [
+        (
+            "en",
+            format!(
+                "error: `koyomi gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|sql|wasm`, and `--extra runner` for the runners\nnote: up to 0.40.0, `koyomi gen` with no `--target` wrote every target with its runner; this writes the same files:\n  koyomi gen examples/net30.cal --out '{dir}' --lang en {every}\n"
+            ),
+        ),
+        (
+            "ja",
+            format!(
+                "エラー: `koyomi gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|sql|wasm` を一つ以上付けてください。ランナーは `--extra runner` で指定します\n注記: 0.40.0 までの `koyomi gen` は、`--target` が無ければ、六つの出力先をランナーつきで書きました。同じファイルを書くのは次のコマンドです\n  koyomi gen examples/net30.cal --out '{dir}' --lang ja {every}\n"
+            ),
+        ),
+    ] {
+        for extra in [false, true] {
+            let mut args = vec!["gen", "examples/net30.cal", "--out", &dir, "--lang", lang];
+            if extra {
+                args.extend(["--extra", "runner"]);
+            }
+            let o = koyomi(&args);
+            assert_eq!((code(&o), out(&o), err(&o)), (2, String::new(), said.clone()), "{lang} {args:?}");
+            assert!(!t.path().join("out dir").exists(), "{lang}: nothing is written");
+        }
+    }
+    let o = koyomi_every(&["gen", "examples/net30.cal", "--out", &dir]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    let mut c = koyomi::check::check("examples/net30.cal").unwrap();
+    let u = koyomi::codegen::unit_of(&c.checked.take().unwrap(), ritsu_base::text::Lang::En);
+    let mut want: Vec<(String, Vec<u8>)> = koyomi::naming::TARGETS.iter().flat_map(|t| koyomi::codegen::files(&u, *t)).map(|(p, b)| (p, b.into_bytes())).collect();
+    want.sort();
+    let mut written = tree(&t.path().join("out dir"));
+    written.sort();
+    assert_eq!(written, want);
+}
+
+/// Over what every target and its runner wrote, a run that asks for Python and Go without the
+/// runners writes nothing, and names the runners of Python and Go that koyomi wrote, a line each and
+/// one note; it deletes none, and `--check` stays 0. A file of someone else's where a runner would be,
+/// and the runners of the targets not given, are not named.
+#[test]
+fn runners_not_asked_for_are_named_and_kept() {
+    for (lang, line, note) in [
+        (
+            "en",
+            "generated no more, and still there: ",
+            "note: `--extra runner` writes these files, and this run does not ask for it; gen deletes nothing in the output directory, so they can be deleted if they are not wanted",
+        ),
+        (
+            "ja",
+            "もう生成しないファイルが残っています: ",
+            "注記: これらは `--extra runner` が書くファイルで、この実行は頼んでいません。gen は出力先のファイルを消さないので、要らなければ消してかまいません",
+        ),
+    ] {
+        let t = TempDir::new("gen-left");
+        let dir = t.path().to_string_lossy().to_string();
+        let o = koyomi_every(&["gen", "examples/net30.cal", "examples/calendars/england_and_wales.cal", "--out", &dir, "--lang", lang]);
+        assert_eq!(code(&o), 0, "{}", err(&o));
+        // a file of the reader's own where the Python runner of England and Wales would be
+        std::fs::write(t.path().join("python/england_and_wales_runner.py"), "print('mine')\n").unwrap();
+        let before = tree(t.path());
+        let mut args = vec!["gen", "examples/net30.cal", "examples/calendars/england_and_wales.cal", "--out", &dir, "--lang", lang, "--target", "go", "--target", "python"];
+        let left = ["python/net30_runner.py", "go/net30/net30_runner_test.go", "go/englandandwales/englandandwales_runner_test.go"];
+        let mut want: Vec<String> = left.iter().map(|p| format!("{line}{dir}/{p}")).collect();
+        want.push(note.to_string());
+        let o = koyomi(&args);
+        assert_eq!(code(&o), 0, "{lang}: {}{}", out(&o), err(&o));
+        assert_eq!(out(&o).lines().collect::<Vec<_>>(), want, "{lang}");
+        assert_eq!(err(&o), "", "{lang}");
+        assert_eq!(tree(t.path()), before, "{lang}: a file changed or went");
+        args.push("--check");
+        let o = koyomi(&args);
+        assert_eq!(code(&o), 0, "{lang}: --check counts what is left: {}{}", out(&o), err(&o));
+        assert_eq!(out(&o).lines().collect::<Vec<_>>(), want, "{lang}: --check");
+        // asked for, the runners are written, and nothing is left
+        args.pop();
+        args.extend(["--extra", "runner"]);
+        let o = koyomi(&args);
+        assert_eq!(code(&o), 0, "{lang}: {}", err(&o));
+        assert_eq!(out(&o), format!("{}{dir}/python/england_and_wales_runner.py\n", if lang == "ja" { "生成しました: " } else { "generated: " }), "{lang}");
+    }
 }
 
 #[test]
@@ -311,7 +460,7 @@ fn gen_refuses_two_files_with_one_alias() {
     let body = "dates 同じ(same) v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-12-31\n\ndate later = d\n  + 1 day\n";
     std::fs::write(&a, body).unwrap();
     std::fs::write(&b, body).unwrap();
-    let o = koyomi(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
+    let o = koyomi_every(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
     assert_eq!(code(&o), 2, "{}{}", out(&o), err(&o));
     assert!(err(&o).contains("both write typescript/same.ts"), "{}", err(&o));
     assert!(!t.path().join("out").exists(), "nothing is written");
@@ -328,12 +477,12 @@ fn gen_refuses_two_files_whose_wasm_files_meet() {
     let body = |alias: &str| format!("dates {alias} v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-12-31\n\ndate later = d\n  + 1 day\n");
     std::fs::write(&a, body("same")).unwrap();
     std::fs::write(&b, body("same_wasm")).unwrap();
-    let o = koyomi(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
+    let o = koyomi_every(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
     assert_eq!(code(&o), 2, "{}{}", out(&o), err(&o));
     assert!(err(&o).contains("both write wasm/same_wasm.rs"), "{}", err(&o));
     assert!(!t.path().join("out").exists(), "nothing is written");
     // Each by itself is written whole.
-    let o = koyomi(&["gen", &b.to_string_lossy(), "--target", "wasm", "--out", &t.path().join("b").to_string_lossy()]);
+    let o = koyomi(&["gen", &b.to_string_lossy(), "--target", "wasm", "--extra", "runner", "--out", &t.path().join("b").to_string_lossy()]);
     assert_eq!(code(&o), 0, "{}{}", out(&o), err(&o));
 }
 
@@ -436,7 +585,7 @@ fn gen_writes_and_checks_in_english() {
     let t = TempDir::new("gen-en");
     let out_dir = t.path().to_string_lossy().to_string();
     let good = ["examples/payment_20th_close_next_10th.cal", "examples/calendars/england_and_wales.cal"];
-    let o = koyomi(&["gen", good[0], "examples/eom_close_two_months_later.cal", good[1], "--out", &out_dir]);
+    let o = koyomi_every(&["gen", good[0], "examples/eom_close_two_months_later.cal", good[1], "--out", &out_dir]);
     assert_eq!(code(&o), 1, "{}{}", out(&o), err(&o));
     assert!(out(&o).contains("error[E301]"), "{}", out(&o));
     assert!(err(&o).contains("`examples/eom_close_two_months_later.cal` does not pass check, so nothing is generated from it"), "{}", err(&o));
@@ -481,12 +630,12 @@ fn gen_writes_and_checks_in_english() {
             assert_eq!(std::fs::read_to_string(t.path().join(&rel)).unwrap(), body, "{rel}");
         }
     }
-    assert_eq!(code(&koyomi(&["gen", good[0], good[1], "--out", &out_dir, "--check"])), 0);
+    assert_eq!(code(&koyomi_every(&["gen", good[0], good[1], "--out", &out_dir, "--check"])), 0);
     let edited = t.path().join("python/payment_20th_close_next_10th.py");
     let before = std::fs::read_to_string(&edited).unwrap();
     std::fs::write(&edited, before.replace("roll preceding", "roll following")).unwrap();
     std::fs::remove_file(t.path().join("sql/england_and_wales.sql")).unwrap();
-    let o = koyomi(&["gen", good[0], good[1], "--out", &out_dir, "--check"]);
+    let o = koyomi_every(&["gen", good[0], good[1], "--out", &out_dir, "--check"]);
     assert_eq!(code(&o), 1);
     assert!(out(&o).contains(&format!("differs from what gen writes: {}", edited.display())), "{}", out(&o));
     assert!(out(&o).contains("missing: "), "{}", out(&o));
@@ -500,7 +649,7 @@ fn gen_refuses_two_files_with_one_alias_in_english() {
     let body = "dates same v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-12-31\n\ndate later = d\n  + 1 day\n";
     std::fs::write(&a, body).unwrap();
     std::fs::write(&b, body).unwrap();
-    let o = koyomi(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
+    let o = koyomi_every(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
     assert_eq!(code(&o), 2, "{}{}", out(&o), err(&o));
     assert!(err(&o).contains("both write typescript/same.ts"), "{}", err(&o));
     assert!(!t.path().join("out").exists(), "nothing is written");

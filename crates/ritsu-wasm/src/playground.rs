@@ -325,12 +325,13 @@ fn head(l: Lang) -> &'static str {
     if l == Lang::Ja { "エラー" } else { "error" }
 }
 
-/// `koyomi gen <path> --out generated` (koyomi's `run::gen_cmd`, one file, every target).
+/// `koyomi gen <path> --out generated` with every target and its runner, as 0.40.0 wrote with no
+/// `--target` (koyomi's `run::gen_cmd`, one file).
 fn koyomi_gen(path: &str, l: Lang) -> Ran {
     use koyomi::calendar::Loader;
     use koyomi::check::{self, Options};
     use koyomi::naming::TARGETS;
-    let (_, shown) = words(&["koyomi", "gen", path, "--out", OUT], l);
+    let (_, shown) = words(&koyomi::cli::up_to_0_40(&["koyomi", "gen", path, "--out", OUT]), l);
     let mut r = Ran { command: shown, ..Ran::default() };
     let refuse = |mut r: Ran, t: Text| {
         r.err.push_str(&format!("{}: {}\n", head(l), t.get(l)));

@@ -529,27 +529,44 @@ pub fn calendar_unit(c: &Calendar, lang: Lang, shown: Option<&str>, module: Opti
     }
 }
 
-/// The files a target writes for a unit, as paths under the output directory and contents: the
-/// file `api` names first. Wasm writes its crate root, the Rust module it holds, the `.wit` and
-/// the runner (DESIGN 13).
-pub fn files(u: &Unit, t: Target) -> Vec<(String, String)> {
-    let (module, runner) = match t {
-        Target::TypeScript => (typescript::module(u), typescript::runner(u)),
-        Target::Python => (python::module(u), python::runner(u)),
-        Target::Go => (go::module(u), go::runner(u)),
-        Target::Rust => (rust::module(u), rust::runner(u)),
-        Target::Sql => (sql::module(u), sql::runner(u)),
+/// The module a target writes for a unit, the code other code reads, as paths under the output
+/// directory and contents: the file `api` names first. Wasm's is its crate root, the Rust module it
+/// holds and the `.wit` (DESIGN 13). It reads nothing of the runner's (DESIGN 16).
+pub fn library(u: &Unit, t: Target) -> Vec<(String, String)> {
+    let module = match t {
+        Target::TypeScript => typescript::module(u),
+        Target::Python => python::module(u),
+        Target::Go => go::module(u),
+        Target::Rust => rust::module(u),
+        Target::Sql => sql::module(u),
         Target::Wasm => {
             let a = &u.alias;
-            return vec![
-                (t.file(a), wasm::root(u)),
-                (format!("wasm/{a}.rs"), wasm::module(u)),
-                (format!("wasm/{a}.wit"), wasm::wit(u)),
-                (runner_file(t, a), wasm::runner(u)),
-            ];
+            return vec![(t.file(a), wasm::root(u)), (format!("wasm/{a}.rs"), wasm::module(u)), (format!("wasm/{a}.wit"), wasm::wit(u))];
         }
     };
-    vec![(t.file(&u.alias), module), (runner_file(t, &u.alias), runner)]
+    vec![(t.file(&u.alias), module)]
+}
+
+/// The runner of a target for a unit, which `gen --extra runner` writes beside the module (DESIGN
+/// 16): what reads the vectors and writes what the module answers, a line each.
+pub fn runner(u: &Unit, t: Target) -> (String, String) {
+    let body = match t {
+        Target::TypeScript => typescript::runner(u),
+        Target::Python => python::runner(u),
+        Target::Go => go::runner(u),
+        Target::Rust => rust::runner(u),
+        Target::Sql => sql::runner(u),
+        Target::Wasm => wasm::runner(u),
+    };
+    (runner_file(t, &u.alias), body)
+}
+
+/// Every file of a target for a unit, the module ([`library`]) and then its runner ([`runner`]): what
+/// `gen --target <t> --extra runner` writes, and what 0.40.0's `gen` wrote for every target.
+pub fn files(u: &Unit, t: Target) -> Vec<(String, String)> {
+    let mut v = library(u, t);
+    v.push(runner(u, t));
+    v
 }
 
 /// What stops target `t` of a checked file (E016, DESIGN 15): each W001 that names `t`; for the code
@@ -558,14 +575,15 @@ pub fn check(o: &crate::check::Outcome, t: Target, in_package: bool) -> Vec<crat
     crate::spellings::stops(&o.spelled, t, in_package)
 }
 
-/// The files of target `t` for a checked file, as `koyomi gen` writes them ([`files`]), or what stops
-/// it ([`check`]). `u` is the unit of the outcome's file.
-pub fn build(o: &crate::check::Outcome, u: &Unit, t: Target) -> Result<Vec<(String, String)>, Vec<crate::diag::Diag>> {
+/// The files of target `t` for a checked file, as `koyomi gen` writes them: the module, and its runner
+/// when `with_runner` ([`library`], [`files`]); or what stops it ([`check`]). `u` is the unit of the
+/// outcome's file.
+pub fn build(o: &crate::check::Outcome, u: &Unit, t: Target, with_runner: bool) -> Result<Vec<(String, String)>, Vec<crate::diag::Diag>> {
     let d = check(o, t, false);
     if !d.is_empty() {
         return Err(d);
     }
-    Ok(files(u, t))
+    Ok(if with_runner { files(u, t) } else { library(u, t) })
 }
 
 /// [`build`], for the module alone, as a package of ritsu's holds it (ritsu's DESIGN 9.3): the file

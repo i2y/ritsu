@@ -59,9 +59,11 @@ have to read koyomi's source.
    for people, for those who read the terms: every operation in words beside its line, the claims and their
    least room, the edge cases, the months with the holidays named and the failing input days
    marked. A file whose claims fail still gets its page; the failing days are the point of it.
-7. **Generate the code:** `ritsu koyomi gen <file.cal> --out generated` writes TypeScript, Python, Go,
-   Rust, SQL and Wasm, each with a runner, and `--target` picks one; a target a W001 names stops it with
-   nothing written (E016). `ritsu koyomi gen --check` in CI says when the code is stale.
+7. **Generate the code:** `ritsu koyomi gen <file.cal> --target typescript --out generated` writes the
+   TypeScript; give `--target` once for each language used (`typescript`, `python`, `go`, `rust`, `sql`,
+   `wasm`), and `--extra runner` for the runners. With no `--target` it writes nothing (exit 2). A
+   target a W001 names stops it with nothing written (E016). `ritsu koyomi gen` with the same
+   `--target` and `--check` in CI says when the code is stale.
    `ritsu koyomi api <file.cal>` gives the functions, their inputs and ranges, and the signatures in each
    language, without reading the code. [generated-code.md](generated-code.md) says how to call it.
 8. **In a project with rules or workflows**, `ritsu check` checks the `.cal` files with the rest,
@@ -185,8 +187,8 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 | E001 to E006 | words, lines, the order of sections, indentation, dates that do not exist | what the message says |
 | E007 to E014 | names twice or undeclared, aliases, types, the one date input, ranges, dates that start from each other | what the message says |
 | E015 | a `use calendar` that cannot be used | the path is from the `.cal`'s directory |
-| E016 | `gen` is to write a target a W001 names, and writes nothing | another alias for the one the note names; for a target you do not use, pick the one you use with `--target` |
-| W001 | two aliases one target spells as one identifier (Go's PascalCase, PostgreSQL's 63 bytes), an alias that is a name the Go code declares, a file's alias whose Go package is a keyword or `main`, an alias with two `_` in a row, which rustc warns of (`non_snake_case`) in the Rust and Wasm code, or a file's alias that is a module of Python's standard library | leave it for a target you do not generate, and pick the one you do with `gen --target`; for one you do, another alias for the one the note names |
+| E016 | `gen` is to write a target a W001 names, and writes nothing | another alias for the one the note names; for a target you do not use, name the ones you use with `--target` |
+| W001 | two aliases one target spells as one identifier (Go's PascalCase, PostgreSQL's 63 bytes), an alias that is a name the Go code declares, a file's alias whose Go package is a keyword or `main`, an alias with two `_` in a row, which rustc warns of (`non_snake_case`) in the Rust and Wasm code, or a file's alias that is a module of Python's standard library | leave it for a target you do not generate, and name the ones you do with `gen --target`; for one you do, another alias for the one the note names |
 | E101 to E106 | a table's copy missing, unpinned, changed, unreadable, or outside its `covers` | `ritsu koyomi source fetch`, read what changed, `ritsu koyomi source pin` |
 | E107 | a time zone's name as the offset | write `+09:00`; for a zone with daylight saving time, give dates only |
 | E108 to E111 | no business day; an operation needs a calendar; `at` needs an offset; a citation | what the message says |
@@ -234,9 +236,9 @@ kind: `range` (an input outside its range), `data` (a day the calendar does not 
 `date`. The Wasm module exports one function, `call`: in goes a JSON object of the inputs by name
 (or `{"date": …}` for the calendar), out comes the line `ritsu koyomi vectors` writes for it, or
 `{"refused":"<kind>","error":"…"}`, the kind being one of the four or `input`; `ritsu koyomi api`
-gives its build line and its exports under `wasm`. The runner beside each file reads
-`ritsu koyomi vectors` and prints what the functions give, so the code can be held to the reference
-interpreter wherever it is copied.
+gives its build line and its exports under `wasm`. The runner `--extra runner` writes beside each
+file reads `ritsu koyomi vectors` and prints what the functions give, so the code can be held to the
+reference interpreter wherever it is copied.
 
 ## 7. The files bundled with this skill
 

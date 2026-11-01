@@ -474,8 +474,8 @@ mod npm {
                 for args in [&["check", p][..], &["check", p, "--format", "json"], &["vectors", p], &["doc", p], &["doc", p, "--format", "html"], &["api", p]] {
                     reads.push(case("koyomi", ".", both("koyomi", args).to_vec()));
                 }
-                writes.push(case("koyomi", ".", vec![en("koyomi", &["gen", p, "--out", "generated"])]));
-                writes.push(case("koyomi", ".", vec![ja("koyomi", &["gen", p, "--out", "generated"])]));
+                writes.push(case("koyomi", ".", vec![en("koyomi", &koyomi::cli::up_to_0_40(&["gen", p, "--out", "generated"]))]));
+                writes.push(case("koyomi", ".", vec![ja("koyomi", &koyomi::cli::up_to_0_40(&["gen", p, "--out", "generated"]))]));
                 writes.push(case("koyomi", ".", vec![en("koyomi", &["source", "pin", p])]));
             }
             reads.push(case("koyomi", ".", both("koyomi", &["eval", "examples/net30.cal", "invoice_date=2026-03-04"]).to_vec()));

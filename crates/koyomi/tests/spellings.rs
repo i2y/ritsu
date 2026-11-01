@@ -90,7 +90,7 @@ fn the_targets_w001_names_stop_and_the_others_build() {
         let u = codegen::unit_of(o.checked.as_ref().unwrap(), Lang::En);
         let named = targets_of(path);
         for t in TARGETS {
-            match codegen::build(&o, &u, t) {
+            match codegen::build(&o, &u, t, false) {
                 Err(ds) if named.contains(&t) => {
                     let [e] = ds.as_slice() else {
                         failures.push(format!("{path} {}: {} diagnostics, not E016 once", t.key(), ds.len()));
@@ -101,7 +101,7 @@ fn the_targets_w001_names_stop_and_the_others_build() {
                         failures.push(format!("{path} {}: E016 says otherwise than W001:\n{}{}", t.key(), e.render(Lang::En), w.render(Lang::En)));
                     }
                     let last = &e.notes[e.notes.len() - 1];
-                    if !last.en.ends_with(". For a target you do not use, pick the one you use with `--target`.") || !last.ja.ends_with("。使わない出力先なら、`--target` で使う出力先を挙げてください。") {
+                    if !last.en.ends_with(". For a target you do not use, name the ones you use with `--target`.") || !last.ja.ends_with("。使わない出力先なら、`--target` で使う出力先を挙げてください。") {
                         failures.push(format!("{path} {}: the last note of E016 is {last:?}", t.key()));
                     }
                 }
@@ -115,7 +115,7 @@ fn the_targets_w001_names_stop_and_the_others_build() {
             }
         }
         // The aliases are in the code as they are written: every target but Go has each.
-        let ts = codegen::build(&o, &u, Target::TypeScript).unwrap();
+        let ts = codegen::build(&o, &u, Target::TypeScript, false).unwrap();
         for d in &u.dates {
             if !ts.iter().any(|(_, body)| body.contains(&format!("export function {}(", d.alias))) {
                 failures.push(format!("{path}: {} is not in the TypeScript", d.alias));
@@ -132,10 +132,10 @@ fn the_targets_w001_names_stop_and_the_others_build() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// `koyomi gen` writes no file when a target it is to write stops (E016): it prints each E016 once
-/// (one finding names Rust and Wasm alike), says on the standard error which targets stop, and
-/// exits 1, and `--check` stops the same way. With `--target` naming another target, it writes
-/// that one.
+/// `koyomi gen` writes no file when a target it is to write stops (E016): given every target, it prints
+/// each E016 once (one finding names Rust and Wasm alike), says on the standard error which targets
+/// stop, and exits 1, and `--check` stops the same way. With `--target` naming another target, it
+/// writes that one.
 #[test]
 fn gen_writes_nothing_when_a_target_it_writes_stops() {
     let out = ritsu_testkit::TempDir::new("spellings-gen");
@@ -143,7 +143,7 @@ fn gen_writes_nothing_when_a_target_it_writes_stops() {
     for (path, _) in common::SPELLING_FILES {
         let named = targets_of(path);
         for check in [false, true] {
-            let mut args = vec!["gen", path, "--out", dir];
+            let mut args = koyomi::cli::up_to_0_40(&["gen", path, "--out", dir]);
             if check {
                 args.push("--check");
             }
@@ -165,15 +165,15 @@ fn gen_writes_nothing_when_a_target_it_writes_stops() {
         assert!(std::fs::read_dir(dir).unwrap().next().is_none(), "{path} --target {}: gen wrote a file", named[0].key());
     }
     // Japanese
-    let o = koyomi(&["gen", "tests/spellings/Rustの関数.cal", "--out", dir, "--lang", "ja"]);
+    let o = koyomi(&koyomi::cli::up_to_0_40(&["gen", "tests/spellings/Rustの関数.cal", "--out", dir, "--lang", "ja"]));
     assert_eq!(o.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&o.stdout).starts_with("エラー[E016]: tests/spellings/Rustの関数.cal:"));
     assert_eq!(String::from_utf8_lossy(&o.stderr), "エラー: `tests/spellings/Rustの関数.cal` からは `rust`、`wasm` のコードを生成できないので、何も生成しません\n");
     // A file that stops a target stops the run, the files beside it included.
-    let o = koyomi(&["gen", "tests/spellings/renamed/go_functions.cal", "tests/spellings/go_functions.cal", "--out", dir]);
+    let o = koyomi(&koyomi::cli::up_to_0_40(&["gen", "tests/spellings/renamed/go_functions.cal", "tests/spellings/go_functions.cal", "--out", dir]));
     assert_eq!(o.status.code(), Some(1));
     assert!(std::fs::read_dir(dir).unwrap().next().is_none(), "gen wrote the renamed file");
-    let o = koyomi(&["gen", "tests/spellings/renamed/go_functions.cal", "--out", dir]);
+    let o = koyomi(&koyomi::cli::up_to_0_40(&["gen", "tests/spellings/renamed/go_functions.cal", "--out", dir]));
     assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
 }
 

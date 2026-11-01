@@ -7,12 +7,14 @@ use koyomi::check::{check, render};
 use ritsu_base::text::Lang;
 
 /// What `koyomi gen` prints of a mutant of E016 (DESIGN 15): the run is to write every target into
-/// a directory, and writes nothing there.
+/// a directory (with the runners, as 0.40.0 wrote with no `--target`), and writes nothing there.
 fn gen_says(path: &str, lang: Lang) -> String {
     let out = ritsu_testkit::TempDir::new("mutant-gen");
     let tag = if lang == Lang::Ja { "ja" } else { "en" };
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_koyomi"))
-        .args(["gen", path, "--lang", tag, "--out"])
+        .args(["gen", path, "--lang", tag])
+        .args(koyomi::cli::UP_TO_0_40)
+        .arg("--out")
         .arg(out.path())
         .env_remove("KOYOMI_LANG")
         .env_remove("RITSU_LANG")

@@ -239,7 +239,7 @@ pub fn ledger() -> Ledger {
             ),
             tr!(
                 "注が挙げる別名を変えてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
-                "Change the alias the notes give; for a target you do not use, pick the one you use with `--target`."
+                "Change the alias the notes give; for a target you do not use, name the ones you use with `--target`."
             ),
             Repro::Dir { files: vec![("t.cal", W001_JA)], command: vec!["gen", "t.cal", "--target", "go"] },
             &["W001", "E009"],
@@ -254,7 +254,7 @@ pub fn ledger() -> Ledger {
             ),
             tr!(
                 "使わない出力先なら、このままで構いません。`gen` には、`--target` で使う出力先を挙げてください。使うなら、注が挙げる別名を変えてください。二つの別名が一つになるときは、どちらか一つを変えれば足ります（`遅れた支払日(late_payment)` のように）。パッケージとモジュールの名前のときは、ファイルの別名を変えてください。",
-                "For a target you do not generate, leave it, and pick the one you generate with `gen --target`. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module."
+                "For a target you do not generate, leave it, and name the ones you generate with `gen --target`. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module."
             ),
             W001_JA,
             &["E007", "E009", "E016"],

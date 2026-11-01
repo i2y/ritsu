@@ -75,7 +75,7 @@ $ koyomi check examples/eom_close_two_months_later.ja.cal --lang ja
 
 例の条件「受領から60日以内」は、例のために文字どおりに書いたもので、何かの法令の読み方を示すものではありません。
 
-検査を通ったファイルは、`koyomi gen` でコードになります。TypeScript では次のようになります（`--lang ja` を付けたので、コメントは日本語です）。
+検査を通ったファイルは、`koyomi gen` で、`--target` で指定した言語のコードになります。`--target typescript` では次のようになります（`--lang ja` を付けたので、コメントは日本語です）。
 
 ```ts
 /**
@@ -154,7 +154,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked koyomi
 ```console
 $ koyomi check examples/                         # 下の .cal を全部。--format json、--budget <n>
 $ koyomi eval examples/net30.cal invoice_date=2026-03-04   # 一つの入力の計算を一段ずつ
-$ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql|wasm、--check
+$ koyomi gen examples/net30.cal --target typescript --out generated   # --target typescript|python|go|rust|sql|wasm を一つ以上、--extra runner、--check
 $ koyomi vectors examples/net30.cal              # すべての入力の結果を JSON Lines で
 $ koyomi doc examples/net30.cal --format html    # 人が読むページ
 $ koyomi api examples/net30.cal                  # 生成したコードの呼び方を JSON で

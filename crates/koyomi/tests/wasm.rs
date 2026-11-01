@@ -132,7 +132,7 @@ fn host(dir: &Path) -> PathBuf {
 fn gen_writes_the_crate_root_the_module_the_world_and_the_runner() {
     let t = TempDir::new("wasm-gen");
     let out = t.path().to_string_lossy().to_string();
-    let (c, o, e) = koyomi(&["gen", "examples/payment_20th_close_next_10th.cal", "--out", &out]);
+    let (c, o, e) = koyomi(&["gen", "examples/payment_20th_close_next_10th.cal", "--target", "rust", "--target", "wasm", "--extra", "runner", "--out", &out]);
     assert_eq!(c, 0, "{o}{e}");
     let a = "payment_20th_close_next_10th";
     for f in [format!("{a}_wasm.rs"), format!("{a}.rs"), format!("{a}.wit"), format!("{a}_runner.mjs")] {

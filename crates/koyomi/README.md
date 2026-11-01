@@ -71,7 +71,8 @@ error[E301]: examples/close_eom_pay_two_months_on.cal:16:3: The claim within_60_
 The claims of these examples are their own, written as they read; none of them says how a law is
 to be read.
 
-Once a file passes, `koyomi gen` writes it out, here in TypeScript:
+Once a file passes, `koyomi gen` writes it out in each language `--target` names, here TypeScript
+(`--target typescript`):
 
 ```ts
 /**
@@ -175,7 +176,7 @@ koyomi's one dependency is serde_json. `koyomi source fetch` and `koyomi source 
 ```console
 $ koyomi check examples/                         # every .cal under it; --format json, --budget <n>
 $ koyomi eval examples/net30.cal invoice_date=2026-03-04   # one input, step by step
-$ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql|wasm, --check
+$ koyomi gen examples/net30.cal --target typescript --out generated   # one or more --target typescript|python|go|rust|sql|wasm, --extra runner, --check
 $ koyomi vectors examples/net30.cal              # the result for every input, as JSON Lines
 $ koyomi doc examples/net30.cal --format html    # the page for people
 $ koyomi api examples/net30.cal                  # how to call the generated code, as JSON

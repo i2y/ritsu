@@ -1280,7 +1280,7 @@ fn a_dates_file_whose_names_break_the_target_stops_the_package() {
     let (code, stdout, err) = generate(&project, &out, &["--target", "go"]);
     assert_eq!((code, stdout.as_str()), (1, ""));
     assert!(err.starts_with("error[E016]: terms.cal:10:6: `net_30` (line 7) and `net30` are one identifier in the code generated for Go\n"), "{err}");
-    assert!(err.ends_with(". For a target you do not use, pick the one you use with `--target`.\n"), "{err}");
+    assert!(err.ends_with(". For a target you do not use, name the ones you use with `--target`.\n"), "{err}");
     assert!(!out.exists(), "nothing is written");
     let (code, stdout, err) = generate(&project, &out, &["--target", "go", "--format", "json"]);
     assert_eq!((code, err.as_str()), (1, ""));

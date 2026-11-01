@@ -1,9 +1,8 @@
 //! The commands and their flags, in one table (DESIGN 5, rulec's §12.1). `--help` is drawn
 //! from it and the command line is read against it, so a flag cannot be documented and
 //! ignored, or taken and left undocumented. An unknown flag, a value outside a closed set, a
-//! flag without its value and a flag given twice all stop the run with exit 2: an agent that
-//! is told nothing believes the flag worked. The table is koyomi's; how it is drawn and read is
-//! ritsu-base's ([`ritsu_base::cli`]).
+//! flag without its value and a flag given twice (`gen`'s `--target` may be, each target once) all
+//! stop the run with exit 2: an agent that is told nothing believes the flag worked. The table is koyomi's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
 use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
 
@@ -11,6 +10,25 @@ pub use ritsu_base::cli::Args;
 
 pub fn global_flags() -> Vec<Flag> {
     vec![lang_flag("KOYOMI_LANG"), help_flag()]
+}
+
+/// The names `gen --target` takes, in the order the targets are written ([`crate::naming::TARGETS`]).
+pub const TARGET_NAMES: &[&str] = &["typescript", "python", "go", "rust", "sql", "wasm"];
+
+/// The extras `gen --extra` takes: the runner of each target given (DESIGN 16). There is one, so the
+/// flag is given once.
+pub const EXTRAS: &[&str] = &["runner"];
+
+/// The flags that make `gen` write what it wrote up to 0.40.0 with no `--target`: every target, each
+/// with its runner. Fixed at 0.40.0, so that what it writes stays what 0.40.0 wrote: a target added
+/// later is not in it (ritsu's DESIGN 9.6).
+pub const UP_TO_0_40: &[&str] =
+    &["--target", "typescript", "--target", "python", "--target", "go", "--target", "rust", "--target", "sql", "--target", "wasm", "--extra", "runner"];
+
+/// `args` with [`UP_TO_0_40`] after them: the command line of a caller that reads every target and
+/// its runner, as 0.40.0 wrote them.
+pub fn up_to_0_40<'a>(args: &[&'a str]) -> Vec<&'a str> {
+    args.iter().copied().chain(UP_TO_0_40.iter().copied()).collect()
 }
 
 fn every_code() -> Vec<&'static str> {
@@ -120,15 +138,39 @@ pub fn commands() -> Vec<Cmd> {
             name: "gen",
             args: "<file.cal>...",
             purpose: tr!(
-                "TypeScript・Python・Go・Rust・SQL・Wasm のコードとランナーを生成する。検査を通らないファイルからは生成しない",
-                "generate TypeScript, Python, Go, Rust, SQL and Wasm, each with a runner; nothing is generated from a file that does not pass check"
+                "指定した出力先（TypeScript・Python・Go・Rust・SQL・Wasm）のコードと、頼んだランナーを生成する。検査を通らないファイルからは生成しない",
+                "generate the code of each target given (TypeScript, Python, Go, Rust, SQL, Wasm), and the runners if asked; nothing is generated from a file that does not pass check"
             ),
             params: vec![("<file.cal>...", tr!(".cal のファイル。ディレクトリなら下の .cal を全部（パスの順）", ".cal files; a directory stands for every .cal under it, in path order"))],
             flags: vec![
-                flag("--target", Some("typescript|python|go|rust|sql|wasm"), tr!("この出力先だけを生成する。無ければ全部", "generate this target only; every target without it"))
-                    .choices(&["typescript", "python", "go", "rust", "sql", "wasm"]),
+                flag(
+                    "--target",
+                    Some("typescript|python|go|rust|sql|wasm"),
+                    tr!(
+                        "書く出力先。出力先ごとに、ほかのコードが読むモジュールだけを書く",
+                        "a target to write; each gets its module, the code other code reads"
+                    ),
+                )
+                .choices(TARGET_NAMES)
+                .once_each(),
+                flag(
+                    "--extra",
+                    Some("runner"),
+                    tr!(
+                        "出力先の横に書く付属物。runner は、ベクタを読んで答えを一行ずつ書くランナー（出力先ごとに一つ）",
+                        "an extra to write beside the targets: runner, what reads vectors and writes the answers a line each (one for each target)"
+                    ),
+                )
+                .choices(EXTRAS),
                 flag("--out", Some("<dir>"), tr!("生成物を書くディレクトリ", "the directory the generated files go to")).default("generated"),
-                flag("--check", None, tr!("書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）", "write nothing; exit 1 if a file on disk differs from what gen would write (for CI)")),
+                flag(
+                    "--check",
+                    None,
+                    tr!(
+                        "書き出さずに、同じ --target と --extra で書くはずのファイルが、ディスクのものと一字一句同じかを見る。違うか無ければ 1（CI 用）",
+                        "write nothing; exit 1 if a file the same --target and --extra write differs from the one on disk, or is missing (for CI)"
+                    ),
+                ),
             ],
             exits: vec![
                 (0, tr!("生成した、または --check で全部が同じだった", "generated, or --check found every file the same")),
@@ -136,13 +178,13 @@ pub fn commands() -> Vec<Cmd> {
                     "検査を通らないファイルがある、書く出力先を W001 が挙げる（E016。どのファイルも書かない）、または --check で違う・無いファイルがある",
                     "a file does not pass check, a W001 names a target to write (E016: no file is written), or --check found a file that differs or is missing"
                 )),
-                (2, tr!("引数の誤り、読めないファイル、書けないファイル", "bad arguments, or a file that cannot be read or written")),
+                (2, tr!("引数の誤り（`--target` が無い、も含む）、読めないファイル、書けないファイル", "bad arguments (no `--target`, among them), or a file that cannot be read or written")),
             ],
             examples: vec![
-                "koyomi gen examples/close_20th_pay_10th.cal --out generated",
-                "koyomi gen examples/net30.cal --target python --lang ja",
-                "koyomi gen examples/net30.cal --target wasm",
-                "koyomi gen examples/net30.cal --check",
+                "koyomi gen examples/close_20th_pay_10th.cal --target typescript --out generated",
+                "koyomi gen examples/net30.cal --target python --target go --lang ja",
+                "koyomi gen examples/net30.cal --target wasm --extra runner",
+                "koyomi gen examples/net30.cal --target python --check",
             ],
             codes: vec![],
         },

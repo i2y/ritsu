@@ -93,12 +93,13 @@ fn rulec_vectors(rule: &Path) -> String {
     })
 }
 
-/// What `koyomi gen <file.cal> --target <target> --out <out>` writes, by koyomi's library.
+/// What `koyomi gen <file.cal> --target <target> --out <out>` writes (the module, which the glue
+/// reads, without the runner), by koyomi's library.
 fn koyomi_gen(cal: &Path, out: &Path, target: koyomi::naming::Target) {
     let checked = koyomi::check::check_file(cal.to_str().unwrap(), &koyomi::check::Options::default(), &mut koyomi::calendar::Loader::default()).unwrap();
     let c = checked.checked.as_ref().unwrap_or_else(|| panic!("{} does not pass koyomi's check", cal.display()));
     let unit = koyomi::codegen::unit_of(c, dandori::diag::Lang::En);
-    for (name, text) in koyomi::codegen::files(&unit, target) {
+    for (name, text) in koyomi::codegen::library(&unit, target) {
         let p = out.join(name);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(&p, text).unwrap();

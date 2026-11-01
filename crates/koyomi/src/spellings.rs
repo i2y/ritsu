@@ -68,7 +68,7 @@ fn leave_or(rename: &Text) -> Text {
 /// E016: the findings that break target `t`, which `gen` does not write (DESIGN 15); of them, the
 /// ones that break a package of ritsu's as well, when `in_package`. Each is its warning made an
 /// error, at the same place, with the same headline and reasons, and in place of the last note,
-/// what to do: `rename`, or `--target` with the target used.
+/// what to do: `rename`, or `--target` with the targets used.
 pub fn stops(found: &[Found], t: Target, in_package: bool) -> Vec<Diag> {
     found
         .iter()
@@ -80,7 +80,7 @@ pub fn stops(found: &[Found], t: Target, in_package: bool) -> Vec<Diag> {
             d.notes.pop();
             d.note(tr!(
                 "{}。使わない出力先なら、`--target` で使う出力先を挙げてください。",
-                "{}. For a target you do not use, pick the one you use with `--target`.",
+                "{}. For a target you do not use, name the ones you use with `--target`.",
                 f.rename.ja;
                 capitalize(&f.rename.en)
             ))

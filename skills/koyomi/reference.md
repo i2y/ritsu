@@ -107,7 +107,7 @@ aliases that share their first 63 bytes are one function, or one parameter, in P
 so that whichever of the two is imported first is what every `import abc` gives. `check` warns
 about each (W001) and names the targets, and the file passes. `gen` writes nothing when it is to
 write a target the warning names (E016), and no name is changed: give the name the note points to
-another alias, or, for a target you do not use, generate the one you use with `--target`.
+another alias, or, for a target you do not use, generate only the ones you use with `--target`.
 
 ### Keywords
 
@@ -382,7 +382,7 @@ Usage:
   koyomi check <file.cal>...                   compute on every input of the range, and hold the claims and the examples to it
   koyomi eval <file.cal> <name>=<value>...     compute every date on one input and show each step; for a calendar, whether a day is open or closed
   koyomi diff <old> <new>                      compare the answers of two versions: a calendar on every day both know, a dates file on every input both take
-  koyomi gen <file.cal>...                     generate TypeScript, Python, Go, Rust, SQL and Wasm, each with a runner; nothing is generated from a file that does not pass check
+  koyomi gen <file.cal>...                     generate the code of each target given (TypeScript, Python, Go, Rust, SQL, Wasm), and the runners if asked; nothing is generated from a file that does not pass check
   koyomi vectors <file.cal>                    print the reference interpreter's result for every input of the range as JSON Lines, with the inputs just outside it
   koyomi doc <file.cal>                        print the page for people (accounting, legal, whoever keeps the calendar, the developers reviewing the code): Markdown, or one HTML file
   koyomi api <file.cal>                        print the functions, their inputs, the calendar, the data range and the sources' digests as JSON, for other tools
@@ -399,7 +399,7 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 | `koyomi check <file.cal>...` | `--format json`, `--budget <n>`; a directory stands for every `.cal` under it |
 | `koyomi eval <file.cal> <name>=<value>...` | `--format json`; a name or its alias; for a calendar, one date (`koyomi eval examples/calendars/england_and_wales.cal 2026-04-03`) |
 | `koyomi diff <old> <new>` | `--format markdown\|json`, `--budget <n>`; two calendars or two dates files, each a path, `<path>@<git revision>`, `@<name>/<path>` or `@<name>@<version>/<path>` |
-| `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm` (every target without it), `--out <dir>` (`generated`), `--check`; a target a W001 names stops the run (E016) |
+| `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm`, once or more (without it, exit 2 and the command that writes what 0.40.0 wrote), `--extra runner`, `--out <dir>` (`generated`), `--check`; a target a W001 names stops the run (E016) |
 | `koyomi vectors <file.cal>` | |
 | `koyomi doc <file.cal>` | `--format markdown\|html`, `--months <YYYY-MM>..<YYYY-MM>` |
 | `koyomi api <file.cal>` | |
@@ -408,10 +408,11 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 
 Every command takes `--lang ja|en`, else the `KOYOMI_LANG` environment variable, else `RITSU_LANG`
 (the variable every language of ritsu reads), else English; the system's locale is never read. An unknown flag, a value outside a flag's set, a flag without its
-value and a flag given twice are refused with exit code 2, never ignored.
+value and a flag given twice (for `gen --target`, which may be given more than once, a target given
+twice) are refused with exit code 2, never ignored.
 
 **Exit codes.** 0 when there is no error (warnings may be), 1 when there is one, 2 for bad
-arguments, a file that cannot be read, or a bug in koyomi. `doc` prints a page, and exits 0, for a
+arguments (`gen` with no `--target` among them), a file that cannot be read, or a bug in koyomi. `doc` prints a page, and exits 0, for a
 file whose claims or examples fail; any other error leaves it without a page, with exit 1.
 `source outdated` exits 1 when a source has moved on. `diff` exits 1 when the inputs or the answers
 of the two versions differ, and 2 when they cannot be compared.
@@ -502,7 +503,8 @@ not know), `reject` (a missing day under `else reject`) and `date` (outside 0001
 
 The Wasm entry has the shape of rulec's: `build` (the line that builds the module, run in the
 directory of `file`), `wit`, `package` and `world` (as the `.wit` writes them), `call`,
-`call_signature`, `post_return`, `realloc` and `memory` (the exports a host needs), `runner`, and
+`call_signature`, `post_return`, `realloc` and `memory` (the exports a host needs), `runner` (the
+file `gen --extra runner` writes), and
 `component` (the two lines that make a component of the module and the `.wit`); with `file`,
 `module` (the `.wasm` a host instantiates) and `date_type`. In the place of the signatures,
 `functions` gives each date the key of `out` it comes under (`key`, and `at_key` for its time) with
