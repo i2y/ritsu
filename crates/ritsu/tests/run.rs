@@ -98,7 +98,7 @@ fn the_replay_is_the_run_dandori_makes() {
     let t = TempDir::new("replay");
     for v in &VERSIONS {
         for s in SCENARIOS {
-            for target in ["reference", "temporal"] {
+            for target in ["reference", "temporal-typescript"] {
                 let ran = run_json(v, s, target);
                 let replay = t.path().join(format!("{s}{}.{target}.json", v.suffix));
                 std::fs::write(&replay, ran["replay"].to_string()).unwrap();
@@ -125,7 +125,7 @@ fn each_language_answers_as_its_own_command_does() {
     let (mut rules, mut dates, mut books) = (0, 0, 0);
     for v in &VERSIONS {
         for s in SCENARIOS {
-            let ran = run_json(v, s, "temporal");
+            let ran = run_json(v, s, "temporal-typescript");
             let events = ran["events"].as_array().unwrap();
             let by = |who: &str| events.iter().filter(|e| e["by"] == who).collect::<Vec<_>>();
             // rulec: each call a record of what came in and what came out

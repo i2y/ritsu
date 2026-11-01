@@ -1256,7 +1256,7 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     docker.push_str(&m.head("#"));
     docker.push_str("# The image that runs the tasks dandori writes and the rules. Build it here, after\n");
     if !called.is_empty() {
-        docker.push_str("# `rulec gen <rule> --out rulec` for every rule the workflow calls, ");
+        docker.push_str("# `rulec gen <rule> --target typescript --out rulec` for every rule the workflow calls, ");
     } else {
         docker.push_str("# ");
     }
@@ -1330,10 +1330,10 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
         rules_ts.push_str("// The modules these imports read are the package's own, which `ritsu gen` writes beside the flows.\n");
     } else {
         if called.iter().any(|r| m.rules[*r].is_rule()) {
-            rules_ts.push_str("// `rulec gen <rule> --out rulec` writes the modules these imports read.\n");
+            rules_ts.push_str("// `rulec gen <rule> --target typescript --out rulec` writes the modules these imports read.\n");
         }
         if dates {
-            rules_ts.push_str("// `koyomi gen <file.cal> --out koyomi` writes the modules of the dates.\n");
+            rules_ts.push_str("// `koyomi gen <file.cal> --target typescript --out koyomi` writes the modules of the dates.\n");
         }
     }
     rules_ts.push('\n');

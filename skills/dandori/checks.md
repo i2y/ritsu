@@ -78,13 +78,13 @@ period. [Ranges](tour.md#ranges)
 one input stays at or below another (`constraint asked <= paid`), or that a day is one of the days a
 koyomi date comes to (`range from koyomi`). `ritsu check` holds each such precondition to the values
 the call can give (ritsu's E201, with an example that breaks it), and says when nothing decides it
-(W201). What it cannot decide, the code that `ritsu dandori build` writes checks when the workflow
+(W201). What it cannot decide, the code that `ritsu dandori gen` writes checks when the workflow
 runs, as soon as the values are made: right after the task whose answer they are, or later, where
 the run can no longer go another way before the call. A run whose values break it fails there with
 `Dandori.BrokenPrecondition`, on every platform.
 
 **The period a workflow runs in.** The period is checked when the workflow runs, as a precondition
-is, by the code that `build` writes: a run that starts outside it calls nothing and fails with
+is, by the code that `gen` writes: a run that starts outside it calls nothing and fails with
 `Dandori.OutOfPeriod`, and a statement that reads `now` checks the clock before it, going to
 `on failure` when it is outside, as after a task's error nothing handles. The checker counts that
 check as a place a run can fail from, as it counts a call that can fail: a workflow with no
@@ -111,7 +111,7 @@ in the `.flow`) is kept in the history of a run as an input, an output, an answe
 (E906). A key written in the `.flow` (W901) and a call over plain HTTP to another machine (W902) are
 warnings, unless the line or the URL says why. [Secrets](secrets.md)
 
-**The platform.** `dandori build` also checks what only the platform decides: a run whose history
+**The platform.** `dandori gen` also checks what only the platform decides: a run whose history
 could outgrow the platform's limit (E040), and what the platform needs or cannot do (E050).
 
 ## The size of a run

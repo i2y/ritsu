@@ -1,14 +1,14 @@
 # プラットフォーム別のビルド
 
 ```console
-$ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|durable|argo|pydantic-graph [--out <dir>]
+$ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph... [--out <dir>] [--check]
 ```
 
-ビルドは、一つのプラットフォーム向けのコードを書き出します。そのプラットフォームにできないこと（E050）と、一回の実行がプラットフォームの上限を超えうるワークフロー（E040）はエラーにします。dandori の主なプラットフォームは Temporal です。
+`gen` は、`--target`（何度でも書けます）で指定したプラットフォームごとに、`<out>/<target>/`（既定は `generated/`）へコードを書き出します。プラットフォームにできないこと（E050）と、一回の実行がプラットフォームの上限を超えうるワークフロー（E040）はエラーにし、一つでもエラーになれば何も書きません。`--check` を付けると何も書かず、無いファイルか、書くはずのものと違うファイルがあれば 1 で終わります。dandori の主なプラットフォームは Temporal です。
 
 ## Temporal（TypeScript）
 
-`--target temporal` は、次のファイルを書き出します。
+`--target temporal-typescript` は、次のファイルを書き出します。
 
 - `workflow.ts`：ワークフロー
 - `types.ts`：型
@@ -130,7 +130,7 @@ Lambda durable functions、Argo Workflows、pydantic-graph も、`event` のタ�
 
 ```console
 $ dandori scenarios <file.flow> [--out <dir>]
-$ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
+$ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 ```
 
 `scenarios` は、入力と、各呼び出しが受け取る結果を並べたシナリオを書き出します。全部を合わせると、すべての分岐と、エラーを処理するすべての箇所を通り、案件の状態の変わり方もすべて試します。リストには、空のもの、短いもの、ループの上限より長いものを入れます。`run` は、シナリオを一つ参照インタプリタで動かし、呼び出しをターゲットが出す形で出力します。ビルドしたコードをこれとどう突き合わせているかは、[どうやって確かめているか](assurance.md)を見てください。

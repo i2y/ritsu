@@ -124,13 +124,13 @@ settled nor released. Each diagnostic comes with the run that gets there.
 <div markdown>
 
 ```text
-dandori build hotel.flow --target temporal
-dandori build hotel.flow --target temporal-python
-dandori build hotel.flow --target temporal-go
-dandori build hotel.flow --target asl
-dandori build hotel.flow --target durable
-dandori build hotel.flow --target argo
-dandori build hotel.flow --target pydantic-graph
+dandori gen hotel.flow --target temporal-typescript
+dandori gen hotel.flow --target temporal-python
+dandori gen hotel.flow --target temporal-go
+dandori gen hotel.flow --target asl
+dandori gen hotel.flow --target durable
+dandori gen hotel.flow --target argo
+dandori gen hotel.flow --target pydantic-graph
 ```
 
 </div>
@@ -141,7 +141,8 @@ dandori build hotel.flow --target pydantic-graph
 Temporal is the main platform: dandori writes the workflow, the activities that make its HTTP, AWS
 and agent calls, the worker and the client, in TypeScript, Python or Go. The same `.flow` also builds
 for AWS Step Functions, Lambda durable functions, Argo Workflows and pydantic-graph, and the code
-dandori writes sends the same requests on each. A build refuses what its platform cannot do.
+dandori writes sends the same requests on each. `gen` takes `--target` more than once, writes each
+platform into a directory of its own, and refuses what a platform cannot do.
 [Build for a platform](platforms.md)
 
 </div>

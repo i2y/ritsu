@@ -76,7 +76,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let view = match target.as_str() {
         "reference" | "asl" => View::Asl,
         // the three SDKs put the same names on the wire
-        "temporal" | "temporal-python" | "temporal-go" => View::Temporal,
+        "temporal-typescript" | "temporal-python" | "temporal-go" => View::Temporal,
         "durable" => View::Durable,
         "argo" => View::Argo,
         _ => View::Graph,

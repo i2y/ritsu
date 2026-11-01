@@ -1,4 +1,4 @@
-build --target asl:
+gen --target asl:
 エラー[E050]: tests/fixtures/security/W902_このマシン.flow:4:1: `知らせる` には `connection "<EventBridge の接続の ARN>"` が要ります
      4 | task 知らせる(本文: string)
 エラー[E050]: tests/fixtures/security/W902_このマシン.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`知らせる` の送信先は `http://localhost:8080/v1/messages` です

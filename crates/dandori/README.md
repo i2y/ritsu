@@ -28,7 +28,7 @@ readable here, in [website/dandori/docs](../../website/dandori/docs) and
 [website/dandori/docs-ja](../../website/dandori/docs-ja).
 
 **Try it in the browser: [i2y.github.io/ritsu/playground](https://i2y.github.io/ritsu/playground/#flow=tests/fixtures/hotel_naive.flow)**.
-ritsu, with dandori in it, compiled to wasm32 and run in the page: the checker, the builds and
+ritsu, with dandori in it, compiled to wasm32 and run in the page: the checker, `dandori gen` and
 `dandori doc` on every example or on a flow you edit, with the rules, dates files and books each
 reads, which you can edit too; nothing is sent anywhere.
 
@@ -107,8 +107,8 @@ $ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 its dates files and books (`use dates`, `use book`) read by koyomi and chobo, in the same process.
 `rulec gen` writes the code of each rule, and a Connect service for it that a workflow can call
 instead; the package `rulec` in place of `ritsu` installs rulec alone, and the package `dandori`
-installs the `dandori` command alone: it checks and builds a workflow that uses no rules, dates
-files or books as `ritsu dandori` does, and tells you to run one that uses them with
+installs the `dandori` command alone: it checks a workflow that uses no rules, dates files or books,
+and writes its code, as `ritsu dandori` does, and tells you to run one that uses them with
 `ritsu dandori`. dandori's one outside dependency is serde_json. A workflow without rules has no
 cases, since a case follows a rule's state machine, and its branches can only match what its tasks
 answer.
@@ -124,9 +124,9 @@ project's `.claude/skills/`; [skills/README.md](skills/README.md) says more.
 
 ```
 dandori check <file.flow>...
-dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|durable|argo|pydantic-graph [--out <dir>]
+dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph... [--out <dir>] [--check]
 dandori scenarios <file.flow> [--out <dir>]
-dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
+dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
 dandori explain <CODE> | --all [--format markdown|json]
 dandori <command> --help
@@ -134,21 +134,24 @@ dandori --version
 ```
 
 For a workflow that uses rules, dates files or books, run each as `ritsu dandori <command>`; then
-`build`, `run`, `scenarios` and `doc` also check, when the workflow runs, a rule's precondition that
+`gen`, `run`, `scenarios` and `doc` also check, when the workflow runs, a rule's precondition that
 `ritsu check` cannot decide where the flow calls the rule (its W201): as soon as the values are
 made, a run whose values break it fails with `Dandori.BrokenPrecondition`. `dandori <command> --help`
 prints what one command takes, and what its exit codes mean; `dandori explain E014` says when a
 diagnostic comes, how to fix it, and the smallest `.flow` that gets it. `--lang ja`
-prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build` refuses what its platform cannot do (E050),
-and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
+prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `gen` writes the code of
+each platform its `--target` names (one or more) into `<out>/<target>/` (`generated/` by default), and
+writes nothing when one of them cannot take the workflow: what its platform cannot do (E050), or a
+run that can outgrow the platform (E040). `gen --check` writes nothing, and exits 1 when a file the
+same `--target` write is missing or differs. `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
 call and every way the workflow can end, or one HTML page on which each scenario lights up the way
 its run goes ([the hotel booking, drawn](https://i2y.github.io/ritsu/dandori/doc/hotel.html)). The rules
 it calls come with it, each as the page for people that `rulec doc` renders.
 
-| Target | What `build` writes |
+| Target | What `gen` writes |
 |---|---|
-| `temporal` | the workflow, its activities, a worker and a client, in TypeScript |
+| `temporal-typescript` | the workflow, its activities, a worker and a client, in TypeScript |
 | `temporal-python` | the same in Python, named alike, so a worker in one language can serve another |
 | `temporal-go` | the same in Go, as one package, named alike too |
 | `asl` | the state machine, in ASL with JSONata, and a Lambda handler for every rule and date it calls by Lambda and every book it runs operations on |

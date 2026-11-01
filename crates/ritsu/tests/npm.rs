@@ -392,7 +392,7 @@ mod npm {
                         vec![
                             en("ritsu", &["run", flow, "--scenario", &f]),
                             en("ritsu", &["run", flow, "--scenario", &f, "--format", "json"]),
-                            en("ritsu", &["run", flow, "--scenario", &f, "--target", "temporal"]),
+                            en("ritsu", &["run", flow, "--scenario", &f, "--target", "temporal-typescript"]),
                         ],
                     ));
                 }
@@ -451,9 +451,9 @@ mod npm {
                 for args in [&["check", p][..], &["check", p, "--format", "json"], &["doc", p], &["doc", p, "--format", "html"], &["scenarios", p]] {
                     reads.push(case("dandori", ".", both("dandori", args).to_vec()));
                 }
-                for t in ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"] {
-                    writes.push(case("dandori", ".", vec![en("dandori", &["build", p, "--target", t, "--out", "out"])]));
-                    writes.push(case("dandori", ".", vec![ja("dandori", &["build", p, "--target", t, "--out", "out"])]));
+                for t in ["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"] {
+                    writes.push(case("dandori", ".", vec![en("dandori", &["gen", p, "--target", t, "--out", "out"])]));
+                    writes.push(case("dandori", ".", vec![ja("dandori", &["gen", p, "--target", t, "--out", "out"])]));
                 }
                 writes.push(Case { of: "dandori", at: ".".into(), steps: vec![en("dandori", &["scenarios", p, "--out", "sc"])], scenarios: Some(("dandori", p.to_string(), "sc".into())) });
                 writes.push(Case { of: "ritsu", at: ".".into(), steps: vec![en("dandori", &["scenarios", p, "--out", "sc"])], scenarios: Some(("ritsu", p.to_string(), "sc".into())) });

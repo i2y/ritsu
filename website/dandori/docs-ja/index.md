@@ -108,13 +108,13 @@ flow
 <div markdown>
 
 ```text
-dandori build hotel.flow --target temporal
-dandori build hotel.flow --target temporal-python
-dandori build hotel.flow --target temporal-go
-dandori build hotel.flow --target asl
-dandori build hotel.flow --target durable
-dandori build hotel.flow --target argo
-dandori build hotel.flow --target pydantic-graph
+dandori gen hotel.flow --target temporal-typescript
+dandori gen hotel.flow --target temporal-python
+dandori gen hotel.flow --target temporal-go
+dandori gen hotel.flow --target asl
+dandori gen hotel.flow --target durable
+dandori gen hotel.flow --target argo
+dandori gen hotel.flow --target pydantic-graph
 ```
 
 </div>
@@ -122,7 +122,7 @@ dandori build hotel.flow --target pydantic-graph
 
 ### 一つの .flow から、使っているプラットフォーム向けに
 
-主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript、Python、Go のどれかで生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。プラットフォームにできないことは、ビルドがエラーにします。[プラットフォーム別のビルド](platforms.md)
+主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript、Python、Go のどれかで生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。`gen` は `--target` を何度でも受け取り、プラットフォームごとにディレクトリを分けて書きます。プラットフォームにできないことは、エラーにします。[プラットフォーム別のビルド](platforms.md)
 
 </div>
 </div>

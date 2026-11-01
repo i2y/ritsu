@@ -2514,8 +2514,8 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     } else {
         if !packages.is_empty() {
             t.push_str(if dated.is_empty() { "// The rules the workflow calls, as activities around the Go rulec generates. `rulec gen <rule>\n" } else { "// The rules and the dates the workflow calls, as activities around the Go rulec and koyomi generate.\n// `rulec gen <rule>\n" });
-            t.push_str("// --out <this package's directory>/rulec` writes each package these imports read, as a module of its\n");
-            t.push_str("// own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
+            t.push_str("// --target go --out <this package's directory>/rulec` writes each package these imports read, as a\n");
+            t.push_str("// module of its own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
             for p in &packages {
                 t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
             }
@@ -2526,8 +2526,8 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             } else {
                 t.push_str("//\n");
             }
-            t.push_str("// `koyomi gen <file.cal> --out <this package's directory>/koyomi` writes the package of each dates file,\n");
-            t.push_str("// koyomi/go/<package>: give its directory a go.mod (`module koyomi/go/<package>`), which your go.mod\n// requires and replaces with that directory:\n//\n");
+            t.push_str("// `koyomi gen <file.cal> --target go --out <this package's directory>/koyomi` writes the package of each\n");
+            t.push_str("// dates file, koyomi/go/<package>: give its directory a go.mod (`module koyomi/go/<package>`), which your\n// go.mod requires and replaces with that directory:\n//\n");
             for p in &dated {
                 t.push_str(&format!("//\trequire koyomi/go/{p} v0.0.0\n//\treplace koyomi/go/{p} => ./<this package's directory>/koyomi/go/{p}\n"));
             }

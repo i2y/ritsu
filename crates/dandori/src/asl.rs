@@ -1344,7 +1344,7 @@ pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
     let mut text = String::new();
     text.push_str(&m.head("#"));
     text.push_str(&format!("# The Lambda function the state machine calls for the rule {} v{} (sha256:{sha}).\n", ru.info.rule, ru.info.version));
-    text.push_str(&format!("# Deploy it together with {module}.py, which `rulec gen` writes for the rule.\n\n"));
+    text.push_str(&format!("# Deploy it together with {module}.py, which `rulec gen --target python` writes for the rule.\n\n"));
     if ru.info.inputs.iter().chain(&ru.info.outputs).any(|c| c.ty == crate::rulec::RType::Date) {
         text.push_str("import datetime\n\n");
     }
@@ -1390,7 +1390,7 @@ fn date_handler(m: &Model, ru: &RuleUse, d: &DateCall) -> (String, String) {
     let mut text = String::new();
     text.push_str(&m.head("#"));
     text.push_str(&format!("# The Lambda function the state machine calls for the date {} of the dates file {} v{} (sha256:{sha}).\n", d.date, ru.info.rule, ru.info.version));
-    text.push_str(&format!("# Deploy it together with {module}.py, which `koyomi gen` writes for the file.\n\n"));
+    text.push_str(&format!("# Deploy it together with {module}.py, which `koyomi gen --target python` writes for the file.\n\n"));
     text.push_str("import datetime\n\n");
     let imports = if d.at { format!("{f}, {f}_at") } else { f.clone() };
     text.push_str(&format!("from {module} import {imports}\n\n"));
@@ -1446,7 +1446,7 @@ fn book_handler(m: &Model, b: usize) -> (String, String) {
     let mut text = String::new();
     text.push_str(&m.head("#"));
     text.push_str(&format!("# The Lambda function the state machine calls for the operations of the book {} v{} (sha256:{}).\n", f.name, f.version, &f.sha256[..12.min(f.sha256.len())]));
-    text.push_str(&format!("# It runs them with the Python client `chobo build --target postgres-python` (or tigerbeetle-python, or mysql-python) writes,\n# {module}.py: make the handler with the client's book, as\n#   handler = make_handler(lambda: tigerbeetle(ClientSync(cluster_id=0, replica_addresses=\"3000\")))\n\n"));
+    text.push_str(&format!("# It runs them with the Python client `chobo gen --target python` writes (with any `--books`),\n# {module}.py: make the handler with the client's book, as\n#   handler = make_handler(lambda: tigerbeetle(ClientSync(cluster_id=0, replica_addresses=\"3000\")))\n\n"));
     text.push_str("from typing import Any, Callable\n\n");
     text.push_str(&format!("# each transfer: the member of the book value, and its parameters as the client takes them\nNAMES = {}\n", book_py_names(bu)));
     text.push_str(PY_BOOK_RUN);

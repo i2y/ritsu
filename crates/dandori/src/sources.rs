@@ -81,7 +81,7 @@ pub fn with_ports<R>(rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn B
 }
 
 /// Run `f` as `with_ports`, and with what the checks across the borders could not decide of a
-/// flow's calls of rules (`undecided`), which `build`, `run`, `scenarios` and `doc` put into the flow
+/// flow's calls of rules (`undecided`), which `gen`, `run`, `scenarios` and `doc` put into the flow
 /// as checks (DESIGN 1.17): what `ritsu dandori` hands over.
 pub fn with_undecided<R>(rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, undecided: Rc<dyn ritsu_ports::Undecided>, f: impl FnOnce() -> R) -> R {
     with(Rc::new(Disk { rules, dates: Some(dates), books: Some(books), undecided: Some(undecided) }), f)

@@ -1,4 +1,4 @@
-build --target asl:
+gen --target asl:
 エラー[E050]: tests/fixtures/security/W902_loopback.flow:4:1: `notify` には `connection "<EventBridge の接続の ARN>"` が要ります
      4 | task notify(text: string)
 エラー[E050]: tests/fixtures/security/W902_loopback.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`notify` の送信先は `http://localhost:8080/v1/messages` です

@@ -337,7 +337,7 @@ Argo's controller up for it, to look at a workflow again a second after a change
 on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path
 has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories anew.
-After a change to what `check`, `build` or `doc` answers, `website/tools/make_wasm.sh`, at the root of
+After a change to what `check`, `gen` or `doc` answers, `website/tools/make_wasm.sh`, at the root of
 the repository, builds the module of ritsu's playground again (it needs the `wasm32-unknown-unknown`
 target of rustup); after a change to an example,
 `RITSU_BLESS=1 cargo test -p ritsu --test playground the_projects_are_what_the_page_opens` writes its

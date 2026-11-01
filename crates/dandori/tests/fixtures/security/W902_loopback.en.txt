@@ -1,4 +1,4 @@
-build --target asl:
+gen --target asl:
 error[E050]: tests/fixtures/security/W902_loopback.flow:4:1: `notify` needs `connection "<EventBridge connection ARN>"`
      4 | task notify(text: string)
 error[E050]: tests/fixtures/security/W902_loopback.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `notify` sends to `http://localhost:8080/v1/messages`

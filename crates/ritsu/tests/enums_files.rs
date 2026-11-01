@@ -68,9 +68,9 @@ fn a_workflow_uses_the_enums_of_an_enums_file_as_types() {
     for flow in ["types.flow", "types.ja.flow"] {
         let (code, out) = ritsu_in(&project(), &["dandori", "check", flow]);
         assert_eq!((code, out.as_str()), (0, format!("{flow}: ok\n").as_str()));
-        for target in ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"] {
+        for target in ["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"] {
             let dir = tmp.path().join(format!("{flow}-{target}"));
-            let (code, out) = ritsu_in(&project(), &["dandori", "build", flow, "--target", target, "--out", dir.to_str().unwrap()]);
+            let (code, out) = ritsu_in(&project(), &["dandori", "gen", flow, "--target", target, "--out", dir.to_str().unwrap()]);
             assert_eq!(code, 0, "{flow} for {target}: {out}");
             let mut stack = vec![dir];
             while let Some(d) = stack.pop() {

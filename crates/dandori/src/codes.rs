@@ -1,6 +1,6 @@
 //! The ledger of every diagnostic code (ritsu's DESIGN 4.3): `dandori explain` reads it, and
-//! tests/codes.rs runs every entry's example (`check`, and `build` for every platform for the two
-//! codes a build finds) and requires its code to come out, so the example cannot go stale while
+//! tests/codes.rs runs every entry's example (`check`, and `gen` for every platform for the two
+//! codes `gen` finds) and requires its code to come out, so the example cannot go stale while
 //! the prose around it still reads well. The entries are dandori's; how they are written out is
 //! ritsu-base's ([`ritsu_base::ledger`]). The table of the site (reference/codes.md) says the same
 //! in one line a code.
@@ -254,7 +254,7 @@ pub fn ledger() -> Ledger {
         e(
             "E040",
             tr!("一回の実行がプラットフォームの上限を超えることがあります", "One run can grow too large for the platform"),
-            tr!("一回の実行の履歴が、プラットフォームの上限を超えうるとき（`dandori build` が出します）。上限は、Step Functions が 25,000 件、Temporal が 51,200 件、Lambda durable functions が 3,000 操作です。Argo Workflows では、ノードが 10,000 個を超えうるときに出ます。", "From `dandori build`: one run's history can outgrow the platform's limit (25,000 events on Step Functions, 51,200 on Temporal, 3,000 operations on Lambda durable functions), or on Argo Workflows more than 10,000 nodes."),
+            tr!("一回の実行の履歴が、プラットフォームの上限を超えうるとき（`dandori gen` が出します）。上限は、Step Functions が 25,000 件、Temporal が 51,200 件、Lambda durable functions が 3,000 操作です。Argo Workflows では、ノードが 10,000 個を超えうるときに出ます。", "From `dandori gen`: one run's history can outgrow the platform's limit (25,000 events on Step Functions, 51,200 on Temporal, 3,000 operations on Lambda durable functions), or on Argo Workflows more than 10,000 nodes."),
             tr!("ループの回数（`at most`）を下げるか、続きを新しい実行で始めてください。", "Lower the loop counts (`at most`), or start a new execution to go on."),
             "workflow w v1\n\nrecord Status\n  done : bool\n\ntask look() -> Status\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:look\"\n  idempotent\n\nflow\n  repeat at most 9000 times\n    let s = look()\n    match s.done\n      true => break\n      false => pass\n",
             &["E050"],
@@ -263,8 +263,8 @@ pub fn ledger() -> Ledger {
             "E050",
             tr!("プラットフォームに要るものが無いか、できないことです", "What the platform needs is missing, or it cannot do it"),
             tr!(
-                "プラットフォームに要るものが無いときや、プラットフォームにできないことが書かれているとき（`dandori build` が出します）。Step Functions では、呼び出し方や `connection` が無いとき、ネストした実行がエラーを宣言しているとき、`http`・`agent`・`jev` の `timeout` が 60 秒を超えるとき、送信先が HTTPS でないときです。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッドがあるときです。Step Functions と Lambda durable functions では、呼ばれる規則に `lambda` か `connect` が無いとき、呼ばれる日付に `lambda` が無いときです。Step Functions では、帳簿に `lambda` が無いときにも出ます。Lambda durable functions では、invoke する関数に `timeout` があるときです。Argo では、呼び出し方や `image` が無いとき、`workflow template` がエラーを宣言しているとき、`callback` のタスクに `retry` があるとき、`history encrypted` と書いたとき（パラメーターを鍵で暗号化する手段が Argo にありません）です。",
-                "From `dandori build`. On Step Functions, a way of calling or a `connection`, a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS; off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`, and a called date's `lambda`; on Step Functions, a book's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task, `history encrypted` (Argo has no way to encrypt its parameters with a key)."
+                "プラットフォームに要るものが無いときや、プラットフォームにできないことが書かれているとき（`dandori gen` が出します）。Step Functions では、呼び出し方や `connection` が無いとき、ネストした実行がエラーを宣言しているとき、`http`・`agent`・`jev` の `timeout` が 60 秒を超えるとき、送信先が HTTPS でないときです。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッドがあるときです。Step Functions と Lambda durable functions では、呼ばれる規則に `lambda` か `connect` が無いとき、呼ばれる日付に `lambda` が無いときです。Step Functions では、帳簿に `lambda` が無いときにも出ます。Lambda durable functions では、invoke する関数に `timeout` があるときです。Argo では、呼び出し方や `image` が無いとき、`workflow template` がエラーを宣言しているとき、`callback` のタスクに `retry` があるとき、`history encrypted` と書いたとき（パラメーターを鍵で暗号化する手段が Argo にありません）です。",
+                "From `dandori gen`. On Step Functions, a way of calling or a `connection`, a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS; off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`, and a called date's `lambda`; on Step Functions, a book's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task, `history encrypted` (Argo has no way to encrypt its parameters with a key)."
             ),
             tr!("メッセージに挙がったものを書き足すか、そのプラットフォームにできる書き方にしてください。", "Add what the message says the platform needs, or write it in a way the platform can do."),
             "workflow w v1\n\nflow\n  pass\n\non cancel\n  pass\n",

@@ -260,12 +260,13 @@ puts another value in the variable the call was given.
 
 What you put beside the generated code:
 
-- **The dates.** `koyomi gen <file.cal> --out koyomi` writes the code of a dates file, which the
-  generated wrappers import from `koyomi/` beside them. On Temporal in Go, each dates file is a Go
+- **The dates.** `koyomi gen <file.cal> --target <the wrappers' language> --out koyomi` (`typescript`,
+  `python` or `go`) writes the code of a dates file, which the generated wrappers import from
+  `koyomi/` beside them. On Temporal in Go, each dates file is a Go
   module of its own (`koyomi/go/<package>`), which your `go.mod` requires and replaces, as
   `rules.go` says at its top.
-- **The books.** chobo writes a client for the book (`chobo build <file.book> --target
-  postgres-typescript`, `tigerbeetle-python`, `postgres-go`, `mysql-go`, …). Give the `Transport`
+- **The books.** chobo writes a client for the book (`chobo gen <file.book> --target typescript`,
+  `--target python --books tigerbeetle`, `--target go --books mysql`, …). Give the `Transport`
   the book value it makes, by the book's name:
   `transport({ books: { stock: postgres(pool, { tenant }) } })` in TypeScript,
   `transport(books={"stock": postgres(connection)})` in Python, and

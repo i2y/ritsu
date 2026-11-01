@@ -60,8 +60,8 @@ fn a_flow_without_rules_runs_as_it_does_with_rulec() {
             vec!["scenarios", flow],
             vec!["doc", flow],
             vec!["doc", flow, "--format", "html", "--lang", "ja"],
-            vec!["build", flow, "--target", "temporal", "--out", "@"],
-            vec!["build", flow, "--target", "asl", "--out", "@"],
+            vec!["gen", flow, "--target", "temporal-typescript", "--out", "@"],
+            vec!["gen", flow, "--target", "asl", "--out", "@"],
         ]
         .into_iter()
         .enumerate()
@@ -96,7 +96,7 @@ fn a_flow_with_rules_is_told_to_run_with_ritsu_dandori() {
     let (code, _, ja) = binary(&["check", flow, "--lang", "ja"]);
     assert_eq!(code, 2);
     assert!(ja.contains("  = dandori 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu dandori check examples/hotel/temporal/hotel.flow --lang ja` のように走らせてください。"), "{ja}");
-    let (code, json, _) = binary(&["build", flow, "--target", "temporal", "--format", "json"]);
+    let (code, json, _) = binary(&["gen", flow, "--target", "temporal-typescript", "--format", "json"]);
     assert_eq!(code, 2, "{json}");
     assert_eq!(with_rulec(&["check", flow]), (0, String::new(), format!("{flow}: ok\n")));
 }
@@ -151,4 +151,64 @@ fn the_command_writes_where_it_is_told() {
     assert_eq!((code, out.as_str(), err.as_str()), (2, "", "error: there is no command `nope`; run `dandori --help`\n"));
     let (code, out, err) = with_rulec(&[]);
     assert!(code == 2 && out.is_empty() && err.contains("Usage"), "{code} {out} {err}");
+}
+
+/// `gen` builds every platform given before it writes, each into `<out>/<target>/`, in the order of
+/// `TARGETS` whatever the order given; what it writes is what each platform alone writes, and
+/// `--check` writes nothing and says what is missing or differs, with exit 1 (DESIGN 21). When one
+/// platform cannot take the flow, nothing is written.
+#[test]
+fn gen_writes_each_platform_into_its_own_directory() {
+    let tmp = TempDir::new("cli-gen");
+    let flow = "examples/fulfillment/arrange_delivery.flow";
+    let at = |d: &str| tmp.path().join(d).to_str().unwrap().to_string();
+    let (code, out, err) = binary(&["gen", flow, "--target", "temporal-typescript", "--target", "asl", "--out", &at("both")]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let said: Vec<&str> = out.lines().collect();
+    assert!(said[0].ends_with("/both/asl/arrange_delivery.asl.json") && said[1..].iter().all(|l| l.contains("/both/temporal-typescript/arrange_delivery/")), "{out}");
+    for t in ["asl", "temporal-typescript"] {
+        let (code, _, err) = binary(&["gen", flow, "--target", t, "--out", &at("one")]);
+        assert_eq!(code, 0, "{err}");
+    }
+    assert_eq!(written(&tmp.path().join("both")), written(&tmp.path().join("one")));
+    // --check, in either order of the flags: the same; a file changed and a file gone
+    assert_eq!(binary(&["gen", flow, "--target", "asl", "--target", "temporal-typescript", "--out", &at("both"), "--check"]), (0, String::new(), String::new()));
+    std::fs::write(tmp.path().join("both/asl/arrange_delivery.asl.json"), "{}").unwrap();
+    std::fs::remove_file(tmp.path().join("both/temporal-typescript/arrange_delivery/io.ts")).unwrap();
+    let (code, out, err) = binary(&["gen", flow, "--target", "asl", "--target", "temporal-typescript", "--out", &at("both"), "--check"]);
+    assert_eq!((code, err.as_str()), (1, ""));
+    assert_eq!(
+        out.replace(tmp.path().to_str().unwrap(), "@"),
+        "generated file is stale or hand-edited: @/both/asl/arrange_delivery.asl.json\nmissing: @/both/temporal-typescript/arrange_delivery/io.ts\n"
+    );
+    // a flow Step Functions cannot take: nothing is written for Temporal either
+    let cancel = tmp.path().join("cancel.flow");
+    std::fs::write(&cancel, "workflow w v1\n\nflow\n  pass\n\non cancel\n  pass\n").unwrap();
+    let (code, out, err) = binary(&["gen", cancel.to_str().unwrap(), "--target", "temporal-typescript", "--target", "asl", "--out", &at("none")]);
+    assert_eq!((code, out.as_str()), (1, ""), "{err}");
+    assert!(err.starts_with("error[E050]:") && err.matches("error[").count() == 1, "{err}");
+    assert!(!tmp.path().join("none").exists());
+}
+
+/// The verb and the name of 0.40.0 stop with exit 2 and say the word now, in either language; so
+/// do no `--target` and one given twice.
+#[test]
+fn the_words_of_0_40_stop_with_the_words_now() {
+    let flow = "examples/fulfillment/arrange_delivery.flow";
+    let stop = |args: &[&str], en: &str| {
+        let (code, out, err) = binary(args);
+        assert_eq!((code, out.as_str(), err.as_str()), (2, "", format!("error: {en}\n").as_str()), "{args:?}");
+    };
+    stop(&["build", flow, "--target", "asl"], "`dandori build` is `dandori gen` from 0.41.0");
+    stop(&["help", "build"], "`dandori build` is `dandori gen` from 0.41.0");
+    stop(&["gen", flow, "--target", "temporal"], "`temporal` is `temporal-typescript` from 0.41.0");
+    stop(&["run", flow, "--scenario", "s.json", "--target", "temporal"], "`temporal` is `temporal-typescript` from 0.41.0");
+    stop(&["gen", flow], "`dandori gen` needs one or more `--target asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph`");
+    stop(&["gen", flow, "--target", "asl", "--target", "asl"], "`--target asl` is given twice");
+    assert_eq!(binary(&["build", flow, "--lang", "ja"]), (2, String::new(), "エラー: `dandori build` は 0.41.0 から `dandori gen` です\n".to_string()));
+    assert_eq!(binary(&["gen", flow, "--target", "temporal", "--lang", "ja"]), (2, String::new(), "エラー: `temporal` は 0.41.0 から `temporal-typescript` です\n".to_string()));
+    assert_eq!(
+        binary(&["gen", flow, "--lang", "ja"]),
+        (2, String::new(), "エラー: `dandori gen` には `--target asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph` が一つ以上要ります\n".to_string())
+    );
 }

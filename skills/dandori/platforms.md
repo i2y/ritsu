@@ -1,15 +1,18 @@
 # Build for a platform
 
 ```console
-$ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|durable|argo|pydantic-graph [--out <dir>]
+$ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph... [--out <dir>] [--check]
 ```
 
-A build writes the code for one platform, and refuses what that platform cannot do (E050) and a
-workflow whose one run can outgrow it (E040). Temporal is dandori's main platform.
+`gen` writes the code for each platform its `--target` names (give it more than once), each into
+`<out>/<target>/` (`generated/` by default), and refuses what a platform cannot do (E050) and a
+workflow whose one run can outgrow it (E040); when one platform refuses, nothing is written.
+`--check` writes nothing, and exits 1 if a file is missing or differs from what it would write.
+Temporal is dandori's main platform.
 
 ## Temporal (TypeScript)
 
-`--target temporal` writes `workflow.ts`, `types.ts`, `activities.ts`
+`--target temporal-typescript` writes `workflow.ts`, `types.ts`, `activities.ts`
 (`makeActivities(own, transport)`: the tasks dandori writes, with the ones you write), `io.ts` (the
 `Transport`), `rules.ts` (the rules as activities around rulec's TypeScript), `runtime.ts`,
 `worker.ts` (`makeWorker(own)`) and `client.ts`. A rule that says `connect` under `use rule` has no
@@ -193,7 +196,7 @@ it, and the seconds of `wait until` and of `timeout until` are worked out from o
 
 ```console
 $ dandori scenarios <file.flow> [--out <dir>]
-$ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
+$ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 ```
 
 `scenarios` writes inputs and scripted answers that together take every arm, every handler, every way

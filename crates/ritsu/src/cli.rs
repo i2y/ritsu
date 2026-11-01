@@ -73,7 +73,7 @@ fn root_flag() -> Flag {
 /// `ritsu run` (DESIGN 7.9): a workflow run with its rules, dates and books computed.
 fn run() -> Cmd {
     Cmd {
-        usage: Some("ritsu run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph] [--format json]"),
+        usage: Some("ritsu run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph] [--format json]"),
         name: "run",
         args: "<file.flow> --scenario <file.json>",
         purpose: tr!(
@@ -92,7 +92,8 @@ fn run() -> Cmd {
             ),
             flag("--target", Some("<target>"), tr!("呼び出しを、どのプラットフォームの形で出すか", "the platform whose calls the trace shows"))
                 .choices(dandori::cli::RUN_TARGETS)
-                .default("reference"),
+                .default("reference")
+                .renamed(&dandori::commands::RENAMED),
             flag(
                 "--with",
                 Some("<path>"),
@@ -109,7 +110,7 @@ fn run() -> Cmd {
             (1, tr!("フローにエラーがある、モジュールの木にエラーがある、または流れが途中で止まった（シナリオに結果が足りないなど）", "the flow has errors, the tree of modules has an error, or the run could not go on (the scenario ran out of answers, say)")),
             (2, tr!("引数の誤り、読めないファイル、流せないシナリオ、取り出していない依存、新しい ritsu が要るモジュール", "bad arguments, a file that cannot be read, a scenario that cannot be run, a dependency not fetched, or a module that needs a newer ritsu")),
         ],
-        examples: vec!["ritsu run invoice.flow --scenario scenarios/paid.json", "ritsu run invoice.flow --scenario scenarios/paid.json --target temporal --format json"],
+        examples: vec!["ritsu run invoice.flow --scenario scenarios/paid.json", "ritsu run invoice.flow --scenario scenarios/paid.json --target temporal-typescript --format json"],
         codes: vec![],
     }
 }

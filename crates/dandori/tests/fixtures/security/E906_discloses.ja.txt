@@ -8,6 +8,6 @@
   = 印は E906_discloses.flow:5 の `secret` です。
   = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
   = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
-build --target asl:
+gen --target asl:
 エラー[E050]: tests/fixtures/security/E906_discloses.flow:7:1: Step Functions はエージェント `read` を HTTP Task で呼ぶので、OpenAI の API キーを持つ `connection "<EventBridge の接続の ARN>"` が要ります
      7 | task read(text: string) -> string

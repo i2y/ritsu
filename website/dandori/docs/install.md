@@ -18,7 +18,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
 `ritsu dandori <command>` is dandori's command, with the rules read by rulec: `ritsu dandori check`,
-`ritsu dandori build`, and the rest. The package `dandori` in place of `ritsu` installs the `dandori`
+`ritsu dandori gen`, and the rest. The package `dandori` in place of `ritsu` installs the `dandori`
 command alone, for workflows without rules, dates files or books; given one that uses them, it says
 to run it with `ritsu dandori`.
 
@@ -44,13 +44,25 @@ it is given, an enum among its inputs.
 ## Check that it works
 
 The examples are in the repository, under `crates/dandori/examples`. In a clone of it
-(`git clone https://github.com/i2y/ritsu`), in `crates/dandori`, check one of them, then build it:
+(`git clone https://github.com/i2y/ritsu`), in `crates/dandori`, check one of them, then write its code:
 
 ```console
 $ ritsu dandori check examples/hotel/temporal/hotel.flow
 examples/hotel/temporal/hotel.flow: ok
-$ ritsu dandori build examples/hotel/temporal/hotel.flow --target temporal --out out/hotel
+$ ritsu dandori gen examples/hotel/temporal/hotel.flow --target temporal-typescript
+generated/temporal-typescript/hotel_stay/types.ts
+generated/temporal-typescript/hotel_stay/activities.ts
+generated/temporal-typescript/hotel_stay/io.ts
+generated/temporal-typescript/hotel_stay/runtime.ts
+generated/temporal-typescript/hotel_stay/workflow.ts
+generated/temporal-typescript/hotel_stay/client.ts
+generated/temporal-typescript/hotel_stay/rules.ts
+generated/temporal-typescript/hotel_stay/worker.ts
 ```
+
+`gen` writes each platform its `--target` names (give it more than once) into a directory of its
+own under `--out` (`generated/` by default). With `--check` it writes nothing, and exits 1 if a
+file is missing or differs from what it would write.
 
 The hotel booking uses rules. With `dandori` alone, check a flow without rules instead:
 
@@ -85,11 +97,11 @@ The skill runs `ritsu dandori` from the PATH for a workflow that uses rules, and
 
 ## What the output needs
 
-The code a build writes imports each platform's own SDK, and nothing of dandori's:
+The code `gen` writes imports each platform's own SDK, and nothing of dandori's:
 
 | Target | Runs with |
 |---|---|
-| `temporal` | Temporal's TypeScript SDK (`@temporalio/*`); the AWS SDK, OpenAI's Agents SDK or Anthropic's SDK only if a task calls through them |
+| `temporal-typescript` | Temporal's TypeScript SDK (`@temporalio/*`); the AWS SDK, OpenAI's Agents SDK or Anthropic's SDK only if a task calls through them |
 | `temporal-python` | Temporal's Python SDK (`temporalio`); boto3 and the agents' SDKs the same way |
 | `temporal-go` | Temporal's Go SDK (`go.temporal.io/sdk`, which asks for Go 1.26); the AWS SDK for Go v2, OpenAI's Go client or Anthropic's Go SDK only if a task calls through them |
 | `asl` | AWS Step Functions; a rule is a Lambda function around the Python rulec generates, or an HTTP Task to its service |

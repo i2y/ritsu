@@ -9,7 +9,7 @@
 //! is dandori's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
 use crate::check;
-use crate::commands::{self, TARGETS};
+use crate::commands::{self, RENAMED, TARGETS};
 use crate::diag::{self, Lang, Text};
 use ritsu_base::cli::{flag, help_flag, lang_flag, Cmd, Flag, Reading, Table};
 use ritsu_ports::Rules;
@@ -20,7 +20,7 @@ use std::rc::Rc;
 pub use ritsu_base::cli::Args;
 
 /// What `run --target` takes: the reference interpreter's own view, and the platforms'.
-pub const RUN_TARGETS: &[&str] = &["reference", "asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
+pub const RUN_TARGETS: &[&str] = &["reference", "asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
 
 pub fn global_flags() -> Vec<Flag> {
     vec![lang_flag("DANDORI_LANG"), help_flag()]
@@ -58,25 +58,30 @@ pub fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
-            usage: Some("dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph [--out <dir>] [--format json|text]"),
-            name: "build",
-            args: "<file.flow> --target <target>",
+            usage: Some("dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph... [--out <dir>] [--check] [--format json|text]"),
+            name: "gen",
+            args: "<file.flow> --target <target>...",
             purpose: tr!(
-                "AWS Step Functions（ASL、JSONata）、Temporal（TypeScript・Python・Go）、AWS Lambda durable functions（TypeScript）、Argo Workflows（YAML）、pydantic-graph（Python）向けのコードを書き出す。プラットフォームにできないことと、一回の実行が履歴の上限を超えうるワークフローはエラーにする",
-                "compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript, Python or Go), to AWS Lambda durable functions (TypeScript), to Argo Workflows (YAML), or to pydantic-graph (Python); a build also refuses what the platform cannot do, and a run that can outgrow its history"
+                "AWS Step Functions（ASL、JSONata）、Temporal（TypeScript・Python・Go）、AWS Lambda durable functions（TypeScript）、Argo Workflows（YAML）、pydantic-graph（Python）向けのコードを、指定したプラットフォームごとに書き出す。プラットフォームにできないことと、一回の実行が履歴の上限を超えうるワークフローはエラーにする",
+                "compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript, Python or Go), to AWS Lambda durable functions (TypeScript), to Argo Workflows (YAML), or to pydantic-graph (Python), for each platform given; it also refuses what a platform cannot do, and a run that can outgrow its history"
             ),
-            params: vec![("<file.flow>", tr!("ビルドする .flow のファイル", "the .flow file to build"))],
+            params: vec![("<file.flow>", tr!("書き出す .flow のファイル", "the .flow file to compile"))],
             flags: vec![
-                flag("--target", Some("<target>"), tr!("ビルドするプラットフォーム（必ず書く）", "the platform to build for (required)")).choices(&TARGETS),
-                flag("--out", Some("<dir>"), tr!("書き出す先", "where the files are written")).default("out"),
+                flag("--target", Some("<target>"), tr!("書き出すプラットフォーム。`<out>/<target>/` に書く", "a platform to write for, into <out>/<target>/")).choices(&TARGETS).once_each().renamed(&RENAMED),
+                flag("--out", Some("<dir>"), tr!("書き出す先", "where the files are written")).default("generated"),
+                flag("--check", None, tr!("何も書かない。同じ --target で書くはずのファイルが無いか、ディスクのものと違えば 1 で終わる（CI 用）", "write nothing; exit 1 if a file the same --target write is missing or differs from the one on disk (for CI)")),
                 diagnostics_format(),
             ],
-            exits: exits(tr!("書き出した", "written")),
-            examples: vec!["dandori build examples/hotel/temporal/hotel.flow --target temporal --out out"],
+            exits: vec![
+                (0, tr!("書き出した。--check では、全部が同じ", "written, or under --check all the same")),
+                (1, tr!("エラーがある。指定したプラットフォームのどれかがフローを受け取れない（何も書かない）。--check で、無いか違うファイルがある", "errors found, a platform given cannot take the flow (nothing is written), or under --check a file is missing or differs")),
+                (2, tr!("引数が正しくない（`--target` が無い、0.40.0 の名前 `temporal` など）か、ファイルが読めない。規則、日付のファイル、帳簿を使うフローを、それらを読めないこの dandori で走らせた（E018）", "bad arguments (no `--target`, or the name `temporal` of 0.40.0, among them), or a file that cannot be read; a flow that uses rules, dates files or books, run with this dandori, which reads none of them (E018)")),
+            ],
+            examples: vec!["dandori gen examples/hotel/temporal/hotel.flow --target temporal-typescript", "dandori gen examples/review/aws/review.flow --target asl --target durable --check"],
             codes: vec![],
         },
         Cmd {
-            usage: Some("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph] [--format json|text]"),
+            usage: Some("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph] [--format json|text]"),
             name: "run",
             args: "<file.flow> --scenario <file.json>",
             purpose: tr!(
@@ -86,11 +91,11 @@ pub fn commands() -> Vec<Cmd> {
             params: vec![("<file.flow>", tr!("動かす .flow のファイル", "the .flow file to run"))],
             flags: vec![
                 flag("--scenario", Some("<file.json>"), tr!("動かすシナリオ（必ず書く）", "the scenario to play (required)")),
-                flag("--target", Some("<target>"), tr!("呼び出しをどのターゲットの形で出すか", "the target whose calls the trace shows")).choices(RUN_TARGETS).default("reference"),
+                flag("--target", Some("<target>"), tr!("呼び出しをどのターゲットの形で出すか", "the target whose calls the trace shows")).choices(RUN_TARGETS).default("reference").renamed(&RENAMED),
                 diagnostics_format(),
             ],
             exits: exits(tr!("最後まで動いた", "the run went to its end")),
-            examples: vec!["dandori run examples/hotel/temporal/hotel.flow --scenario scenarios/001.json --target temporal"],
+            examples: vec!["dandori run examples/hotel/temporal/hotel.flow --scenario scenarios/001.json --target temporal-typescript"],
             codes: vec![],
         },
         Cmd {
@@ -178,6 +183,9 @@ struct Asked {
     format_html: bool,
     lang: Lang,
     target: Option<String>,
+    /// every `--target` of `gen`, as given
+    targets: Vec<String>,
+    check: bool,
     out: Option<PathBuf>,
     scenario: Option<PathBuf>,
 }
@@ -190,6 +198,8 @@ impl Asked {
             format_html: a.get("--format") == Some("html"),
             lang,
             target: a.get("--target").map(str::to_string),
+            targets: a.all("--target").into_iter().map(str::to_string).collect(),
+            check: a.has("--check"),
             out: a.get("--out").map(PathBuf::from),
             scenario: a.get("--scenario").map(PathBuf::from),
         }
@@ -255,7 +265,7 @@ pub fn with_ritsu() -> String {
 
 /// The `dandori` command as `run_with_ports`, with what the checks across the borders could not
 /// decide of a flow's calls of rules (`undecided`, ritsu-cross's answer to ritsu's X2), which
-/// `build`, `run`, `scenarios` and `doc` put into the flow as checks the code makes when the
+/// `gen`, `run`, `scenarios` and `doc` put into the flow as checks the code makes when the
 /// workflow runs (DESIGN 1.17): what `ritsu dandori` hands over.
 pub fn run_with_undecided(args: &[String], rules: Rc<dyn Rules>, dates: Rc<dyn ritsu_ports::Dates>, books: Rc<dyn ritsu_ports::Books>, undecided: Rc<dyn ritsu_ports::Undecided>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
@@ -313,6 +323,7 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
                         let _ = write!(out, "{}", table.help_cmd(c, lang));
                         0
                     }
+                    None if n == "build" => refuse(ritsu_base::cli::renamed("dandori build", "dandori gen", "0.41.0"), lang, err),
                     None => refuse(tr!("`{n}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{n}`; run `dandori --help`"), lang, err),
                 },
             };
@@ -320,6 +331,10 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         _ => {}
     }
     let Some(cmd) = table.command(first) else {
+        // the verb up to 0.40.0 is not read as `gen` (DESIGN 21)
+        if first == "build" {
+            return refuse(ritsu_base::cli::renamed("dandori build", "dandori gen", "0.41.0"), lang, err);
+        }
         return refuse(tr!("`{first}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{first}`; run `dandori --help`"), lang, err);
     };
     let parsed = match table.parse(cmd, &args[1..]) {
@@ -337,7 +352,7 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let a = Asked::from(&parsed, lang);
     match cmd.name {
         "check" => cmd_check(&a, out, err),
-        "build" => cmd_build(&a, out, err),
+        "gen" => cmd_gen(&a, out, err),
         "run" => cmd_run(&a, out, err),
         "scenarios" => cmd_scenarios(&a, out, err),
         "doc" => cmd_doc(&a, out, err),
@@ -447,34 +462,68 @@ fn cmd_check(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     worst
 }
 
-fn cmd_build(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+/// `dandori gen`: every platform given built before anything is written, each into
+/// `<out>/<target>/` in the order of [`TARGETS`]; nothing is written when one cannot take the flow
+/// (DESIGN 21).
+fn cmd_gen(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            let _ = writeln!(err, "{}", usage("build"));
+            let _ = writeln!(err, "{}", usage("gen"));
             return 2;
         }
     };
+    if a.targets.is_empty() {
+        let names = TARGETS.join("|");
+        return refuse(tr!("`dandori gen` には `--target {names}` が一つ以上要ります", "`dandori gen` needs one or more `--target {names}`"), a.lang, err);
+    }
     let model = match load(&file, a, false, out, err) {
         Ok(Some(m)) => m,
         Ok(None) => return 1,
         Err(c) => return c,
     };
-    let dir = a.out.clone().unwrap_or_else(|| PathBuf::from("out"));
-    let Some(files) = a.target.as_deref().and_then(|t| commands::build(&model, t)) else {
-        let _ = writeln!(err, "--target takes asl, temporal, temporal-python, temporal-go, durable, argo or pydantic-graph");
-        return 2;
-    };
-    let files = match files {
-        Ok(f) => f,
-        Err(diags) => {
-            let src = crate::sources::read(&file).unwrap_or_default();
-            let _ = write!(err, "{}", commands::render(&diags, &file.display().to_string(), &src, a.lang));
-            return 1;
+    let dir = a.out.clone().unwrap_or_else(|| PathBuf::from("generated"));
+    let mut planned: Vec<(PathBuf, String)> = Vec::new();
+    let mut stops: Vec<crate::diag::Diag> = Vec::new();
+    for t in TARGETS.iter().filter(|t| a.targets.iter().any(|g| g == *t)) {
+        match commands::build(&model, t).expect("the choices of --target are the targets") {
+            Ok(files) => planned.extend(files.into_iter().map(|(name, text)| (dir.join(t).join(name), text))),
+            // what two platforms of one generator both stop at (temporal-typescript and durable) is said once
+            Err(diags) => {
+                for d in diags {
+                    let same = |s: &crate::diag::Diag| (s.code, s.line, s.col, &s.en, s.notes.iter().map(|n| &n.en).collect::<Vec<_>>()) == (d.code, d.line, d.col, &d.en, d.notes.iter().map(|n| &n.en).collect::<Vec<_>>());
+                    if !stops.iter().any(same) {
+                        stops.push(d);
+                    }
+                }
+            }
         }
-    };
-    for (name, text) in files {
-        let p = dir.join(&name);
+    }
+    if !stops.is_empty() {
+        let src = crate::sources::read(&file).unwrap_or_default();
+        let _ = write!(err, "{}", commands::render(&stops, &file.display().to_string(), &src, a.lang));
+        return 1;
+    }
+    // what differs, on standard output, where `gen` says the paths it writes
+    if a.check {
+        let mut differs = false;
+        for (p, text) in &planned {
+            let shown = p.display();
+            match ritsu_base::fs::read(p) {
+                Ok(on_disk) if on_disk == text.as_bytes() => {}
+                Ok(_) => {
+                    let _ = writeln!(out, "{}", tr!("生成物が古いか手で編集されています: {shown}", "generated file is stale or hand-edited: {shown}").get(a.lang));
+                    differs = true;
+                }
+                Err(_) => {
+                    let _ = writeln!(out, "{}", tr!("ありません: {shown}", "missing: {shown}").get(a.lang));
+                    differs = true;
+                }
+            }
+        }
+        return u8::from(differs);
+    }
+    for (p, text) in planned {
         if let Some(parent) = p.parent() {
             if let Err(e) = ritsu_base::fs::create_dir_all(parent) {
                 let _ = writeln!(err, "cannot create {}: {e}", parent.display());
@@ -519,7 +568,7 @@ fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let view = match a.target.as_deref() {
         None | Some("reference") | Some("asl") => crate::render::View::Asl,
         // the three SDKs put the same names on the wire
-        Some("temporal") | Some("temporal-python") | Some("temporal-go") => crate::render::View::Temporal,
+        Some("temporal-typescript") | Some("temporal-python") | Some("temporal-go") => crate::render::View::Temporal,
         Some("durable") => crate::render::View::Durable,
         Some("argo") => crate::render::View::Argo,
         Some("pydantic-graph") => crate::render::View::Graph,

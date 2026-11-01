@@ -5,7 +5,7 @@
   そうなる例:
       35  open_payment: p が pending で始まる
       36  capture_payment が失敗する（failure）
-build --target asl:
+gen --target asl:
 エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
     10 | task open_payment() -> Payment
 エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
@@ -14,7 +14,7 @@ build --target asl:
     19 | task void_payment(id: string) -> Payment
 エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:25:1: `settle_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
     25 | task settle_payment(id: string) -> Payment
-build --target argo:
+gen --target argo:
 エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
     10 | task open_payment() -> Payment
 エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります

@@ -8,7 +8,7 @@
 //! - [`check`]: `ritsu check .` — every file by its language's own check, the languages joined once,
 //!   then what ritsu checks across them. It is ritsu's own `check` (`ritsu::check::run`), so a check
 //!   ritsu gains later is in the page with nothing changed here.
-//! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo gen`, `dandori build`,
+//! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo gen`, `dandori gen`,
 //!   `sakai export cml`, `yuen export`, `sekisho gen --target cedar` (the last three given the
 //!   project's root, as `ritsu check` gives it them). geas and `.proto` files generate nothing.
 //! - [`doc`]: one file's page for the people who read it, as HTML and as Markdown: `rulec doc`,
@@ -177,7 +177,7 @@ pub fn generate(r: &Request) -> Value {
             Tool::Koyomi => koyomi_gen(p, l),
             Tool::Chobo => chobo_build(p, l, target.as_deref().unwrap_or_default()),
             Tool::Dandori => {
-                let (args, shown) = words(&["dandori", "build", p, "--target", target.as_deref().unwrap_or_default(), "--out", OUT], l);
+                let (args, shown) = words(&["dandori", "gen", p, "--target", target.as_deref().unwrap_or_default(), "--out", OUT], l);
                 ran(shown, |o, e| ritsu::languages::dandori(&args[1..], o, e))
             }
             Tool::Sakai => {

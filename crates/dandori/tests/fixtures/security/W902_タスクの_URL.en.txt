@@ -2,7 +2,7 @@ warning[W902]: tests/fixtures/security/W902_タスクの_URL.flow:5:3: the task 
      5 |   http POST "http://notify.example.com/v1/messages"
   = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
   = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
-build --target asl:
+gen --target asl:
 error[E050]: tests/fixtures/security/W902_タスクの_URL.flow:4:1: `知らせる` needs `connection "<EventBridge connection ARN>"`
      4 | task 知らせる(本文: string)
 error[E050]: tests/fixtures/security/W902_タスクの_URL.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `知らせる` sends to `http://notify.example.com/v1/messages`

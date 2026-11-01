@@ -12,7 +12,7 @@ dandori は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu 
 $ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-`ritsu dandori <コマンド>` は、規則を rulec で読む dandori のコマンドです（`ritsu dandori check`、`ritsu dandori build` など）。`ritsu` の代わりにパッケージ `dandori` を入れると、`dandori` のコマンドだけが入ります。規則も日付のファイルも帳簿も使わないワークフローのためのもので、それらを使うワークフローを渡すと、`ritsu dandori` で走らせるよう言います。
+`ritsu dandori <コマンド>` は、規則を rulec で読む dandori のコマンドです（`ritsu dandori check`、`ritsu dandori gen` など）。`ritsu` の代わりにパッケージ `dandori` を入れると、`dandori` のコマンドだけが入ります。規則も日付のファイルも帳簿も使わないワークフローのためのもので、それらを使うワークフローを渡すと、`ritsu dandori` で走らせるよう言います。
 
 ## rulec
 
@@ -26,13 +26,23 @@ $ cargo install --git https://github.com/i2y/ritsu --locked rulec
 
 ## 動くか確かめる
 
-例は、リポジトリの `crates/dandori/examples` にあります。リポジトリをクローンし（`git clone https://github.com/i2y/ritsu`）、`crates/dandori` で、例を一つ検査して、ビルドしてみます。
+例は、リポジトリの `crates/dandori/examples` にあります。リポジトリをクローンし（`git clone https://github.com/i2y/ritsu`）、`crates/dandori` で、例を一つ検査して、コードを書き出してみます。
 
 ```console
 $ ritsu dandori check examples/hotel/temporal/hotel.flow
 examples/hotel/temporal/hotel.flow: ok
-$ ritsu dandori build examples/hotel/temporal/hotel.flow --target temporal --out out/hotel
+$ ritsu dandori gen examples/hotel/temporal/hotel.flow --target temporal-typescript
+generated/temporal-typescript/hotel_stay/types.ts
+generated/temporal-typescript/hotel_stay/activities.ts
+generated/temporal-typescript/hotel_stay/io.ts
+generated/temporal-typescript/hotel_stay/runtime.ts
+generated/temporal-typescript/hotel_stay/workflow.ts
+generated/temporal-typescript/hotel_stay/client.ts
+generated/temporal-typescript/hotel_stay/rules.ts
+generated/temporal-typescript/hotel_stay/worker.ts
 ```
+
+`gen` は、`--target`（何度でも書けます）で指定したプラットフォームごとに、`--out`（既定は `generated/`）の下のディレクトリに書きます。`--check` を付けると何も書かず、無いファイルか、書くはずのものと違うファイルがあれば 1 で終わります。
 
 ホテルの予約の例は規則を使います。`dandori` だけで試すなら、代わりに規則を使わないフローを検査してみてください。
 
@@ -65,7 +75,7 @@ Claude Code なら、プラグイン `ritsu` に十のスキルが入ってい�
 
 | ターゲット | 動かすのに要るもの |
 |---|---|
-| `temporal` | Temporal の TypeScript SDK（`@temporalio/*`）。AWS SDK、OpenAI の Agents SDK、Anthropic の SDK は、それを通して呼ぶタスクがあるときだけ |
+| `temporal-typescript` | Temporal の TypeScript SDK（`@temporalio/*`）。AWS SDK、OpenAI の Agents SDK、Anthropic の SDK は、それを通して呼ぶタスクがあるときだけ |
 | `temporal-python` | Temporal の Python SDK（`temporalio`）。boto3 やエージェントの SDK も同じく、使うときだけ |
 | `temporal-go` | Temporal の Go SDK（`go.temporal.io/sdk`。Go 1.26 が要る）。AWS SDK for Go v2、OpenAI の Go のクライアント、Anthropic の Go の SDK は、それを通して呼ぶタスクがあるときだけ |
 | `asl` | AWS Step Functions。規則は、rulec が生成する Python を包んだ Lambda 関数になるか、サービスを呼ぶ HTTP Task になる |

@@ -68,7 +68,7 @@ fn ritsu_dandori_reads_the_dates_and_the_books_of_a_flow() {
         let (code, trace, err) = ritsu(&["dandori", "run", flow, "--scenario", &scenario.to_string_lossy()]);
         assert!(code == 0 && trace.contains("\"end\""), "{flow}: {err}");
         let out_dir = t.path().join("out");
-        let (code, written, err) = ritsu(&["dandori", "build", flow, "--target", "temporal", "--out", &out_dir.to_string_lossy()]);
+        let (code, written, err) = ritsu(&["dandori", "gen", flow, "--target", "temporal-typescript", "--out", &out_dir.to_string_lossy()]);
         assert!(code == 0 && written.contains("workflow.ts") && written.contains("rules.ts"), "{flow}: {written}{err}");
     }
 }
@@ -121,7 +121,7 @@ fn files_under(dir: &std::path::Path) -> std::collections::BTreeMap<String, Stri
     out
 }
 
-const TARGETS: [&str; 7] = ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
+const TARGETS: [&str; 7] = ["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
 
 /// dandori's own command on `args` in `dir`, with rulec, koyomi and chobo joined and the preconditions
 /// `undecided` says ritsu could not decide (None: none).
@@ -142,7 +142,7 @@ fn dandori_lib(dir: &std::path::Path, args: &[&str], undecided: bool) -> u8 {
 }
 
 /// What ritsu cannot decide of a rule's preconditions where a flow calls it (ritsu-cross's W201)
-/// goes to dandori, and the code `ritsu dandori build` writes checks it when the workflow runs
+/// goes to dandori, and the code `ritsu dandori gen` writes checks it when the workflow runs
 /// (DESIGN 7.4 item 3; dandori's DESIGN 1.17). tests/flows/preconditions.flow and its Japanese twin
 /// call rules whose four preconditions ritsu-cross leaves undecided, and tests/flows/quota.flow one
 /// whose precondition adds two inputs up: each builds on every platform
@@ -156,9 +156,9 @@ fn ritsu_dandori_checks_the_preconditions_ritsu_cannot_decide() {
         for target in TARGETS {
             let (a, b) = (ritsu_testkit::TempDir::new("xb-ritsu"), ritsu_testkit::TempDir::new("xb-lib"));
             let rel = format!("tests/flows/{flow}");
-            let (code, _, err) = ritsu(&["dandori", "build", &rel, "--target", target, "--out", a.path().to_str().unwrap()]);
+            let (code, _, err) = ritsu(&["dandori", "gen", &rel, "--target", target, "--out", a.path().to_str().unwrap()]);
             assert_eq!(code, 0, "{flow} {target}: {err}");
-            dandori_lib(&dandori_dir(), &["build", &rel, "--target", target, "--out", b.path().to_str().unwrap()], true);
+            dandori_lib(&dandori_dir(), &["gen", &rel, "--target", target, "--out", b.path().to_str().unwrap()], true);
             let (got, want) = (files_under(a.path()), files_under(b.path()));
             assert_eq!(got.keys().collect::<Vec<_>>(), want.keys().collect::<Vec<_>>(), "{flow} {target}");
             for (name, text) in &got {
@@ -180,9 +180,9 @@ fn ritsu_dandori_checks_the_preconditions_ritsu_cannot_decide() {
         std::fs::write(t.path().join("refund.flow"), &flow).unwrap();
         for target in TARGETS {
             let (a, b) = (t.path().join(format!("ritsu-{target}")), t.path().join(format!("lib-{target}")));
-            let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(t.path()).args(["dandori", "build", "refund.flow", "--target", target, "--out", a.to_str().unwrap()]).output().unwrap();
+            let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(t.path()).args(["dandori", "gen", "refund.flow", "--target", target, "--out", a.to_str().unwrap()]).output().unwrap();
             assert!(o.status.success(), "{name} {target}: {}", String::from_utf8_lossy(&o.stderr));
-            dandori_lib(t.path(), &["build", "refund.flow", "--target", target, "--out", b.to_str().unwrap()], false);
+            dandori_lib(t.path(), &["gen", "refund.flow", "--target", target, "--out", b.to_str().unwrap()], false);
             let (got, want) = (files_under(&a), files_under(&b));
             assert_eq!(got, want, "{name} {target}: a call ritsu decides is built as it is without ritsu-cross");
             assert!(!got.values().any(|t| t.contains("Dandori.BrokenPrecondition")), "{name} {target}");

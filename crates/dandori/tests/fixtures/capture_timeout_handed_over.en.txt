@@ -5,7 +5,7 @@ warning[W101]: tests/fixtures/capture_timeout_handed_over.flow:36:1: if `capture
   the run that gets there:
       35  open_payment: p starts in pending
       36  capture_payment fails (failure)
-build --target asl:
+gen --target asl:
 error[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
     10 | task open_payment() -> Payment
 error[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
@@ -14,7 +14,7 @@ error[E050]: tests/fixtures/capture_timeout_handed_over.flow:19:1: `void_payment
     19 | task void_payment(id: string) -> Payment
 error[E050]: tests/fixtures/capture_timeout_handed_over.flow:25:1: `settle_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
     25 | task settle_payment(id: string) -> Payment
-build --target argo:
+gen --target argo:
 error[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
     10 | task open_payment() -> Payment
 error[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows

@@ -822,10 +822,10 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
         t.push_str("# The modules these imports read are the package's own, which `ritsu gen` writes beside the flows.\n");
     } else {
         if rules {
-            t.push_str("# `rulec gen <rule> --out <this package>/rulec` writes the modules these imports read.\n");
+            t.push_str("# `rulec gen <rule> --target python --out <this package>/rulec` writes the modules these imports read.\n");
         }
         if dates {
-            t.push_str("# `koyomi gen <file.cal> --out <this package>/koyomi` writes the modules of the dates.\n");
+            t.push_str("# `koyomi gen <file.cal> --target python --out <this package>/koyomi` writes the modules of the dates.\n");
         }
     }
     t.push_str("\nfrom __future__ import annotations\n\n");

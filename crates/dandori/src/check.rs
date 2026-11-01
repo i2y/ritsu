@@ -49,7 +49,7 @@ pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
 }
 
 /// `check_file`, and in the model, a check of each precondition of a rule that the program running
-/// dandori says ritsu could not decide at a call (`sources::undecided`; DESIGN 1.17): what `build`,
+/// dandori says ritsu could not decide at a call (`sources::undecided`; DESIGN 1.17): what `gen`,
 /// `run` and `scenarios` read.
 pub fn built(path: &Path) -> Result<(String, Checked), String> {
     let (src, mut checked) = check_file(path)?;

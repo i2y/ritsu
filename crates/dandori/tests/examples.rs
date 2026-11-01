@@ -656,7 +656,7 @@ fn diagnostics_match_the_golden_files() {
         let refusals: Vec<(&str, Vec<dandori::diag::Diag>)> = match &checked.model {
             Some(m) => [
                 ("asl", dandori::asl::build(m)),
-                ("temporal", dandori::temporal::build(m)),
+                ("temporal-typescript", dandori::temporal::build(m)),
                 ("temporal-python", dandori::temporal_py::build(m)),
                 ("temporal-go", dandori::temporal_go::build(m)),
                 ("durable", dandori::temporal::build_flavor(m, dandori::temporal::Flavor::Durable)),
@@ -671,7 +671,7 @@ fn diagnostics_match_the_golden_files() {
         for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
             let mut text: String = checked.diags.iter().map(|d| d.render(&rel(&f), &src, lang)).collect();
             for (target, diags) in &refusals {
-                text.push_str(&format!("build --target {target}:\n"));
+                text.push_str(&format!("gen --target {target}:\n"));
                 text.extend(diags.iter().map(|d| d.render(&rel(&f), &src, lang)));
             }
             let golden = f.with_extension(format!("{tag}.txt"));
@@ -2237,7 +2237,7 @@ fn books_run_on_postgres_tigerbeetle_and_mysql() {
             books.insert(bu.facts.name.clone(), (bu.path.clone(), book.unwrap()));
         }
     }
-    // a client of a book, by chobo's library, as `chobo build` writes it; the path of its first file
+    // a client of a book, by chobo's library, as `chobo gen` writes it; the path of its first file
     let client = |name: &str, target: chobo::target::Target, dir: &Path| -> PathBuf {
         let (p, book) = &books[name];
         let stem = p.file_stem().unwrap().to_string_lossy().to_string();
@@ -2722,7 +2722,7 @@ fn generated_typescript_type_checks() {
         let (_, c) = check_file(&f).unwrap();
         let m = c.model.expect("the flows pass check");
         let builds = [
-            ("temporal", dandori::temporal::build(&m), "tools/temporal/node_modules", false),
+            ("temporal-typescript", dandori::temporal::build(&m), "tools/temporal/node_modules", false),
             ("durable", dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable), "tools/durable/node_modules", false),
             ("argo", dandori::argo::build(&m), "tools/temporal/node_modules", true),
         ];

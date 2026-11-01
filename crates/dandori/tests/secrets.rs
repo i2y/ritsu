@@ -330,7 +330,7 @@ fn the_code_of_an_encrypted_history_takes_the_codec() {
     let tsc = root().join("tools/temporal/node_modules/.bin/tsc");
     if ready(Need::Node, || tsc.exists(), "TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`") {
         for (name, uses, passes) in [("good", TS_GOOD, true), ("bad", TS_BAD, false)] {
-            let code = built("temporal", &scratch.path().join(format!("ts-{name}")));
+            let code = built("temporal-typescript", &scratch.path().join(format!("ts-{name}")));
             std::fs::write(code.join("uses.ts"), uses).unwrap();
             let out = tsc_strict(&tsc, &code);
             if passes {
@@ -411,7 +411,7 @@ fn the_names_of_an_encrypted_client_give_way() {
             }
         }
     };
-    has("temporal", "client.ts", &["export type ConnectionRpc =", "export type PayloadCodecRpc =", "export type ClientOptionsRpc =", "export async function encryptedClientRpc(", "export async function encryptedRpc("]);
+    has("temporal-typescript", "client.ts", &["export type ConnectionRpc =", "export type PayloadCodecRpc =", "export type ClientOptionsRpc =", "export async function encryptedClientRpc(", "export async function encryptedRpc("]);
     has("temporal-python", "client.py", &["\nNewType_rpc = ", "\nPayloadCodec_rpc = ", "\nDataConverter_rpc = ", "async def connect_rpc("]);
     has("temporal-go", "client.go", &["func EncryptedClientRPC(", "func DialRPC(", "func CodecFailureConverterRPC(", "type CodecDataConverterRPC ="]);
     has("temporal-go", "types.go", &["type Dial_ struct", "type EncryptedClient_ struct", "type CodecFailureConverter_ struct", "type CodecDataConverter_ string"]);
@@ -419,7 +419,7 @@ fn the_names_of_an_encrypted_client_give_way() {
     let tsc = root().join("tools/temporal/node_modules/.bin/tsc");
     if ready(Need::Node, || tsc.exists(), "TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`") {
         for f in NAMES {
-            let out = tsc_strict(&tsc, &code_of(f, "temporal"));
+            let out = tsc_strict(&tsc, &code_of(f, "temporal-typescript"));
             assert!(out.status.success(), "tsc --strict refuses the TypeScript of {f}:\n{}", said(&out));
         }
         eprintln!("tsc --strict: the TypeScript of the names of an encrypted client");
@@ -548,7 +548,7 @@ fn the_names_an_encrypted_history_adds_are_the_ones_given_way_to() {
     let text = std::fs::read_to_string(root().join("tests/encrypted/pay.flow")).unwrap();
     assert!(text.contains("\n  history encrypted\n"));
     std::fs::write(&plain, text.replace("\n  history encrypted\n", "\n")).unwrap();
-    let lists: [(&str, &str, &[&str]); 3] = [("temporal", "ts", dandori::temporal::ENCRYPTED_CLIENT), ("temporal-python", "py", dandori::temporal_py::ENCRYPTED_CLIENT), ("temporal-go", "go", dandori::temporal_go::ENCRYPTED)];
+    let lists: [(&str, &str, &[&str]); 3] = [("temporal-typescript", "ts", dandori::temporal::ENCRYPTED_CLIENT), ("temporal-python", "py", dandori::temporal_py::ENCRYPTED_CLIENT), ("temporal-go", "go", dandori::temporal_go::ENCRYPTED)];
     for (target, lang, list) in lists {
         let names = |flow: &Path, side: &str| -> BTreeSet<String> {
             let code = build_into(flow, target, &scratch.path().join(side).join(target));
@@ -748,7 +748,7 @@ fn temporal_keeps_an_encrypted_history_with_the_codec() {
     let mut ran = Vec::new();
     // TypeScript
     if root().join("tools/temporal/node_modules/@temporalio/testing").exists() {
-        let code = built("temporal", &scratch.path().join("ts"));
+        let code = built("temporal-typescript", &scratch.path().join("ts"));
         let out_file = scratch.path().join("ts.json");
         let out = Command::new("node").arg(root().join("tools/temporal/codec.mjs")).arg(&code).arg(&out_file).env("TMPDIR", scratch.path()).output().unwrap();
         assert!(out.status.success(), "tools/temporal/codec.mjs failed:\n{}", said(&out));

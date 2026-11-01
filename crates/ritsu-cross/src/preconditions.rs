@@ -384,8 +384,8 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                         .rel(&f.rel)
                         .note(why)
                         .note(tr!(
-                            "`ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。",
-                            "The workflow's code that `ritsu dandori build` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`."
+                            "`ritsu dandori gen` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。",
+                            "The workflow's code that `ritsu dandori gen` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`."
                         ));
                         out.push(Finding::of(&d, Some(f.rel.clone()), lang));
                     }

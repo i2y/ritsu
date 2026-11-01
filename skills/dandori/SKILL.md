@@ -66,8 +66,11 @@ a transfer's amounts, refusals and holds (the ritsu skill has the codes).
    the person who reviews the workflow. `--format html` writes one page on which each scenario
    lights up the way its run goes, and each rule's page opens with a case to try on it.
    [diagrams.md](diagrams.md) says what is on the picture.
-6. **Build it:** `ritsu dandori build <file.flow> --target temporal --out <dir>`. A build refuses what its
-   platform cannot do (E050) and a run that can outgrow the platform (E040).
+6. **Build it:** `ritsu dandori gen <file.flow> --target temporal-typescript` writes the code into
+   `generated/temporal-typescript/` (`--out` for another directory); give `--target` once for
+   each platform wanted, and each goes into its own `<dir>/<target>/`. `gen` stops, and writes nothing,
+   when a platform cannot do what the workflow asks (E050) or a run can outgrow it (E040). The same
+   line with `--check` in CI writes nothing and exits 1 if a file is missing or differs.
 7. **Wire it up:** write the tasks that are yours (the `OwnTasks` the generated code asks for), give
    the `Transport` (`io.ts`, `io.py`) its credentials, and start the generated worker, or deploy what
    the target wrote. When the
@@ -441,9 +444,9 @@ checker looks at.
 
 ## 6. Platforms
 
-| Target | What `build` writes | What to know |
+| Target | What `gen` writes | What to know |
 |---|---|---|
-| `temporal` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel`, `event` and a service's `status` |
+| `temporal-typescript` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel`, `event` and a service's `status` |
 | `temporal-python` | the same with Temporal's Python SDK | named as in TypeScript, so a worker in one language can serve another |
 | `temporal-go` | the same with Temporal's Go SDK, as one package | values are JSON values (`map[string]any`); your tasks implement `OwnTasks`; Go 1.26 |
 | `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule and date called by `lambda`, and for every book | no code of your own (every task needs a way of calling); `http`, `agent`, `jev` and a rule at its `connect` need `connection` |

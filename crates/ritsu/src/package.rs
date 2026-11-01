@@ -94,7 +94,7 @@ impl Target {
     /// dandori's target for the workflow (Temporal, in this language).
     fn dandori(self) -> &'static str {
         match self {
-            Target::TypeScript => "temporal",
+            Target::TypeScript => "temporal-typescript",
             Target::Python => "temporal-python",
             Target::Go => "temporal-go",
         }

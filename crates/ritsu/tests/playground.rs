@@ -112,7 +112,7 @@ fn shop(name: &str) -> Project {
     let open = "proto/shop/v1/order.proto";
     assert!(files.iter().any(|(p, _)| p == open), "{name} has no {open}");
     let from = files.iter().map(|(p, _)| format!("website/playground/{name}/{p}")).collect();
-    Project { name: name.into(), group: "ritsu".into(), open: open.into(), target: Some("temporal".into()), files, from, ..Project::default() }
+    Project { name: name.into(), group: "ritsu".into(), open: open.into(), target: Some("temporal-typescript".into()), files, from, ..Project::default() }
 }
 
 /// The examples of the playground rulec's site had (until its page sent its readers on to this one),
@@ -176,25 +176,25 @@ const DRAFT: &str = "tests/fixtures/hotel_naive.flow";
 /// Japanese version of each example (`<name>.ja.flow`). A link it gave names one of these paths
 /// (`#flow=examples/hotel/temporal/hotel.flow&view=build`), so this page keeps every one of them.
 const DANDORI_PAGE: [(&str, &str); 19] = [
-    (DRAFT, "temporal"),
-    ("examples/hotel/temporal/hotel.flow", "temporal"),
+    (DRAFT, "temporal-typescript"),
+    ("examples/hotel/temporal/hotel.flow", "temporal-typescript"),
     ("examples/hotel/aws/hotel.flow", "asl"),
     ("examples/hotel/pydantic-graph/hotel.flow", "pydantic-graph"),
-    ("examples/order/temporal/order.flow", "temporal"),
+    ("examples/order/temporal/order.flow", "temporal-typescript"),
     ("examples/order/aws/order.flow", "asl"),
     ("examples/order/pydantic-graph/order.flow", "pydantic-graph"),
-    ("examples/fulfillment/temporal/fulfillment.flow", "temporal"),
+    ("examples/fulfillment/temporal/fulfillment.flow", "temporal-typescript"),
     ("examples/fulfillment/aws/fulfillment.flow", "asl"),
     ("examples/fulfillment/pydantic-graph/fulfillment.flow", "pydantic-graph"),
-    ("examples/fulfillment/arrange_delivery.flow", "temporal"),
-    ("examples/inquiry/temporal/inquiry.flow", "temporal"),
+    ("examples/fulfillment/arrange_delivery.flow", "temporal-typescript"),
+    ("examples/inquiry/temporal/inquiry.flow", "temporal-typescript"),
     ("examples/inquiry/aws/inquiry.flow", "asl"),
     ("examples/inquiry/pydantic-graph/inquiry.flow", "pydantic-graph"),
-    ("examples/review/temporal/review.flow", "temporal"),
+    ("examples/review/temporal/review.flow", "temporal-typescript"),
     ("examples/review/aws/review.flow", "durable"),
     ("examples/review/pydantic-graph/review.flow", "pydantic-graph"),
     ("examples/review/argo/review.flow", "argo"),
-    ("examples/invoice/invoice.flow", "temporal"),
+    ("examples/invoice/invoice.flow", "temporal-typescript"),
 ];
 
 /// The flows the playground lists of dandori's examples for each of its languages, by their paths
@@ -305,7 +305,7 @@ fn target_for(flow: &str, files: &[(String, String)]) -> &'static str {
     } else if flow.contains("/argo/") {
         "argo"
     } else {
-        "temporal"
+        "temporal-typescript"
     }
 }
 
@@ -890,7 +890,7 @@ fn requests(files: &[(String, String)], lang: &str) -> Vec<(&'static str, Value)
     let mut out = vec![("check", base("", None))];
     for (p, _) in files {
         let targets: Vec<&str> = match ritsu_project::project::kind_of(p) {
-            Some(Tool::Dandori) => vec!["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"],
+            Some(Tool::Dandori) => vec!["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"],
             Some(Tool::Chobo) => vec!["postgres", "postgres-typescript", "postgres-python", "postgres-go", "postgres-rust", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "tigerbeetle-rust", "mysql", "mysql-typescript", "mysql-python", "mysql-go", "mysql-rust"],
             Some(Tool::Yuen) => vec!["reqif", "prov"],
             _ => vec![],
@@ -1944,7 +1944,7 @@ fn the_page_starts_in_chrome() {
         looked += 3;
 
         // a link to a file and a view: the flow's generator starts on Temporal, the shop's platform
-        let want = playground::generate(&ask(&shop.files, flow, Some("temporal")));
+        let want = playground::generate(&ask(&shop.files, flow, Some("temporal-typescript")));
         assert_eq!(text_of(&got[1][0], "said"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of {flow} than Temporal's");
         assert_eq!((text_of(&got[1][0], "open"), text_of(&got[1][0], "view")), (flow, "gen"), "{page}: the link does not open {flow} on the generator");
         let n = want["files"].as_array().unwrap().len();
@@ -2386,7 +2386,7 @@ fn the_pages_before_send_their_links_on() {
         ("/ritsu/dandori/playground/", "", draft.clone(), format!("dandori/{DRAFT}"), DRAFT.into(), None),
         ("/ritsu/dandori/playground/", "#flow=examples/hotel/temporal/hotel.flow&view=build&target=asl", "#flow=examples/hotel/temporal/hotel.flow&view=build&target=asl".into(), format!("dandori/{hotel}"), hotel.into(), Some("asl")),
         ("/ritsu/dandori/ja/playground/", "", draft.clone(), format!("dandori/{DRAFT}"), DRAFT.into(), None),
-        ("/ritsu/dandori/ja/playground/", "#flow=examples/hotel/temporal/hotel.ja.flow&view=build", "#flow=examples/hotel/temporal/hotel.ja.flow&view=build".into(), format!("dandori/{hotel_ja}"), hotel_ja.into(), Some("temporal")),
+        ("/ritsu/dandori/ja/playground/", "#flow=examples/hotel/temporal/hotel.ja.flow&view=build", "#flow=examples/hotel/temporal/hotel.ja.flow&view=build".into(), format!("dandori/{hotel_ja}"), hotel_ja.into(), Some("temporal-typescript")),
     ];
     let mut more: Vec<(String, String)> = Vec::new();
     for s in ["rulec", "dandori"] {

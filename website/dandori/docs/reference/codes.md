@@ -1,7 +1,7 @@
 # Diagnostics
 
-`dandori check` finds all of these but E040 and E050, which `dandori build` finds for the platform
-it builds for. An error stops the build; a warning (W) does not. Each diagnostic comes with a run that
+`dandori check` finds all of these but E040 and E050, which `dandori gen` finds for each platform
+it writes for. An error stops `gen`, which then writes nothing; a warning (W) does not. Each diagnostic comes with a run that
 gets there, and `--lang ja` gives the same in Japanese. `dandori explain <code>` says when one comes,
 how to fix it, and the smallest `.flow` that gets it.
 

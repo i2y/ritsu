@@ -171,8 +171,8 @@ task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
 
 生成したコードの横に置くもの：
 
-- **日付**：`koyomi gen <file.cal> --out koyomi` が日付のファイルのコードを書き、生成したコードは、隣の `koyomi/` からそれを読み込みます。Temporal の Go では、日付のファイルごとに Go のモジュール（`koyomi/go/<パッケージ>`）になるので、`rules.go` の頭に書いたとおり、自分の `go.mod` で require して replace します。
-- **帳簿**：chobo が帳簿のクライアントを書きます（`chobo build <file.book> --target postgres-typescript`、`tigerbeetle-python`、`postgres-go`、`mysql-go` など）。クライアントが作る帳簿の値を、帳簿の名前で `Transport` に渡します。TypeScript では `transport({ books: { 在庫: postgres(pool, { tenant }) } })`、Python では `transport(books={"在庫": postgres(connection)})`、Go では `TransportOptions{Books: map[string]any{"在庫": book.Postgres(pool, tenant)}}` です。Step Functions では、`lambda/book_在庫_handler.py` を chobo の Python のクライアントと一緒に置き、`handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` で作ります。
+- **日付**：`koyomi gen <file.cal> --target <包むコードの言語> --out koyomi`（`typescript`、`python`、`go`）が日付のファイルのコードを書き、生成したコードは、隣の `koyomi/` からそれを読み込みます。Temporal の Go では、日付のファイルごとに Go のモジュール（`koyomi/go/<パッケージ>`）になるので、`rules.go` の頭に書いたとおり、自分の `go.mod` で require して replace します。
+- **帳簿**：chobo が帳簿のクライアントを書きます（`chobo gen <file.book> --target typescript`、`--target python --books tigerbeetle`、`--target go --books mysql` など）。クライアントが作る帳簿の値を、帳簿の名前で `Transport` に渡します。TypeScript では `transport({ books: { 在庫: postgres(pool, { tenant }) } })`、Python では `transport(books={"在庫": postgres(connection)})`、Go では `TransportOptions{Books: map[string]any{"在庫": book.Postgres(pool, tenant)}}` です。Step Functions では、`lambda/book_在庫_handler.py` を chobo の Python のクライアントと一緒に置き、`handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` で作ります。
 
 ## どう確かめているか
 

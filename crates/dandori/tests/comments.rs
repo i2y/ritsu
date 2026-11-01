@@ -79,7 +79,7 @@ fn a_description_stays_in_its_comment_on_every_platform() {
 fn a_description_of_one_line_is_one_comment() {
     let checked = dandori::check::check_source(&flow("Says hello."), Path::new("notice.flow"));
     let m = checked.model.expect("the flow passes its check");
-    let ts = dandori::commands::build(&m, "temporal").unwrap().unwrap();
+    let ts = dandori::commands::build(&m, "temporal-typescript").unwrap().unwrap();
     let (_, workflow) = ts.iter().find(|(p, _)| p.ends_with("workflow.ts")).unwrap();
     assert!(workflow.contains("\n// notice v1: Says hello.\n\n"), "{workflow}");
     let argo = dandori::commands::build(&m, "argo").unwrap().unwrap();

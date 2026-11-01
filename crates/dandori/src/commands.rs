@@ -4,18 +4,23 @@
 use crate::diag::{Diag, Lang};
 use crate::model::Model;
 
-/// The platforms `build` writes for, as `--target` names them.
-pub const TARGETS: [&str; 7] = ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
+/// The platforms `gen` writes for, as `--target` names them, in the order `gen` writes them
+/// (DESIGN 21).
+pub const TARGETS: [&str; 7] = ["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
 
-/// The files a build writes, by their paths under `--out`, or the diagnostics of what the
-/// platform cannot do.
+/// The names of `--target` up to an earlier version, which `gen` and `run` stop at and say the name
+/// of now (DESIGN 21): `(old, new, version)`.
+pub const RENAMED: [(&str, &str, &str); 1] = [("temporal", "temporal-typescript", "0.41.0")];
+
+/// The files a target's build writes, by their paths under its directory of `--out`
+/// (`<out>/<target>/`), or the diagnostics of what the platform cannot do.
 pub type Built = Result<Vec<(String, String)>, Vec<Diag>>;
 
 /// Build for a target; None for a target there is not.
 pub fn build(m: &Model, target: &str) -> Option<Built> {
     Some(match target {
         "asl" => crate::asl::build(m),
-        "temporal" => crate::temporal::build(m),
+        "temporal-typescript" => crate::temporal::build(m),
         "temporal-python" => crate::temporal_py::build(m),
         "temporal-go" => crate::temporal_go::build(m),
         "durable" => crate::temporal::build_flavor(m, crate::temporal::Flavor::Durable),
