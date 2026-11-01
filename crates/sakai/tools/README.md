@@ -1,6 +1,6 @@
 # The tools sakai's tests run
 
-`sakai build` writes the settings of four import linters, and `sakai export cml` writes Context
+`sakai gen` writes the settings of four import linters, and `sakai export cml` writes Context
 Mapper's CML. sakai itself runs none of these tools. Its tests do: `tests/imports.rs` runs each
 linter on the settings sakai writes for the example, `tests/cml.rs` runs Context Mapper's
 validator on the CML, and `tests/doc.rs` has Mermaid draw the maps `sakai doc` writes, in headless Chrome. A test whose tool is not here prints `SKIP: <why>` and passes.

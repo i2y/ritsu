@@ -151,12 +151,11 @@ Markdown では図を Mermaid で描くので、GitHub がそのまま表示し�
 
 ## コードの import
 
-sakai はコードの import を読みません。どの言語にも、チームがもう CI で走らせている import の検査のツールがあるので、`sakai build` が地図からその設定を書きます。
+sakai はコードの import を読みません。どの言語にも、チームがもう CI で走らせている import の検査のツールがあるので、`sakai gen` が地図からその設定を書きます。
 
 ```console
-$ sakai build examples/shop.ja/通販.ctx --target import-linter --check --lang ja
+$ sakai gen examples/shop.ja/通販.ctx --target import-linter --target go-arch-lint --check --lang ja
 examples/shop.ja/py/.importlinter: いまの地図から書くものと同じ（契約 11 件）
-$ sakai build examples/shop.ja/通販.ctx --target go-arch-lint --check --lang ja
 examples/shop.ja/go/.go-arch-lint.yml: いまの地図から書くものと同じ（コンポーネント 11 件）
 ```
 
@@ -190,7 +189,7 @@ sakai のクレートのバイナリはほかの言語を持たないので、�
 
 ```console
 $ sakai check examples/shop.ja/通販.ctx --lang ja
-$ sakai build examples/shop.ja/通販.ctx --target archunit --lang ja
+$ sakai gen examples/shop.ja/通販.ctx --target archunit --lang ja
 $ sakai export cml examples/shop.ja/通販.ctx --lang ja
 $ sakai doc examples/shop.ja/通販.ctx --format html --out site --lang ja
 $ sakai api examples/shop.ja/通販.ctx
@@ -198,6 +197,7 @@ $ sakai explain E401 --lang ja
 ```
 
 `check` は地図のファイルとディレクトリを受け取り、`--format json` も付けられます。`--root` は、パスを数える起点のディレクトリを替えます（無ければ、上にたどって `.git` か `ritsu.mod` のある一番近いディレクトリ）。
+`gen` は、設定を書くツール（`import-linter`、`dependency-cruiser`、`archunit`、`go-arch-lint`）ごとに `--target` を一つずつ受け取り、どれかが書けなければ（E501）どれも書きません。0.40.0 までは `sakai build` で、いまは新しい名前を言って 2 で終わります。
 どのコマンドも `--lang ja|en`（無ければ `SAKAI_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--help` を受け付けます。
 終了コードは、エラーが無ければ 0、エラーがあれば 1、引数の誤り、読めないファイル、つながっていない言語の成果物なら 2 です。
 
@@ -211,7 +211,7 @@ $ sakai explain E401 --lang ja
 ## どう確かめているか
 
 `cargo test -p sakai` が、言語を fixture と例に当て、本物のツールを走らせます。
-macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度走らせた結果は、ツールが全部そろい SKIP の無い状態で、テスト 235 件、ビルドのあと 30 秒でした。
+macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度走らせた結果は、ツールが全部そろい SKIP の無い状態で、テスト 237 件、ビルドのあと 28 秒でした。
 
 - 184 の変異（fixture か例を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 90 には、それぞれ英語の名前の対があり、ほかに Rust のものが 4 あります。
 - 四つの import の検査のツールを、56 のコピー（ツールごとに 14）で走らせます。コピーは、例と、生成したコードがコンテキストの内側にある地図の二つを、そのままのものと、地図が許さない import を足したものにし、日本語と英語の名前の両方で作ります。どのツールも、そのままのコピーを通し、足した import をどれも捕まえます。
@@ -223,7 +223,7 @@ macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度�
 
 ## 状態
 
-言語、`check`、`build`、`export cml`、`doc`、`api`、`explain` はできています（[DESIGN.md](DESIGN.md)）。
+言語、`check`、`gen`、`export cml`、`doc`、`api`、`explain` はできています（[DESIGN.md](DESIGN.md)）。
 まだ作っていないもの：持ち主を CODEOWNERS と突き合わせること、規則の `import jsonschema` を対応の先にすること、対応から読み替えのコードを生成すること、契約に書いていない実行時の呼び出しを成果物として書くこと（DESIGN の 14 章と 15.11）。
 
 ## ライセンス

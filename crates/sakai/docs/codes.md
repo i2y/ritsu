@@ -4616,11 +4616,11 @@ See also: [E401](#e401)
 
 ## E501 — The settings of a tool cannot be written
 
-**When**: `sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, the place of the Go code has no go.mod, or the settings of the tool cannot hold an `except` (import-linter and go-arch-lint).
+**When**: `sakai gen` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, the place of the Go code has no go.mod, or the settings of the tool cannot hold an `except` (import-linter and go-arch-lint).
 
 **Fix**: Correct the map's `code`, `owns` and `except`, or where the code is, as the note says.
 
-**Reproduction**: put the files below in one directory, and run `sakai build map.ctx --target import-linter` there.
+**Reproduction**: put the files below in one directory, and run `sakai gen map.ctx --target import-linter` there.
 
 `map.ctx`:
 
@@ -4684,11 +4684,11 @@ See also: [E502](#e502)
 
 ## E502 — The settings on the disk differ from what the map writes now
 
-**When**: `build --check` finds a settings file on the disk that differs from what the map writes now, or none. The note gives the first line that differs and what the map writes there.
+**When**: `gen --check` finds a settings file on the disk that differs from what the map writes now, or none. The note gives the first line that differs and what the map writes there.
 
-**Fix**: Write it again with `sakai build`. Checked with another `--lang` than it was written with, the words of its descriptions differ: give the same one.
+**Fix**: Write it again with `sakai gen`. Checked with another `--lang` than it was written with, the words of its descriptions differ: give the same one.
 
-**Reproduction**: put the files below in one directory, and run `sakai build map.ctx --target import-linter --check` there.
+**Reproduction**: put the files below in one directory, and run `sakai gen map.ctx --target import-linter --check` there.
 
 `map.ctx`:
 

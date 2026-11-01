@@ -1,1 +1,1 @@
-build basic.ctx --target import-linter --check
+gen basic.ctx --target import-linter --check

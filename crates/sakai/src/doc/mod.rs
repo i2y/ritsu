@@ -337,7 +337,7 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang) -> Page {
         t(lang, "コードが、OpenAPI と AsyncAPI の文書のとおりに HTTP を呼び、チャネルに送り、チャネルから受けているか。sakai が確かめるのは、文書どうしと、文書と地図が合っていることまで。", "Whether the code calls HTTP, and sends to and receives from the channels, as the OpenAPI and AsyncAPI documents say: sakai checks the documents against each other and against the map."),
         t(lang, "生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。", "Whether the code where generated code is kept was really generated from the published language."),
         t(lang, "語の定義の文の中身。", "What a term's definition says."),
-        t(lang, "コードの import。これは sakai build が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。", "The imports of the code: the settings `sakai build` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI."),
+        t(lang, "コードの import。これは sakai gen が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。", "The imports of the code: the settings `sakai gen` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI."),
     ]));
     b.push(Block::Para(if lang == Lang::Ja {
         format!("sakai {} が {} から書いた。", env!("CARGO_PKG_VERSION"), code(&file))

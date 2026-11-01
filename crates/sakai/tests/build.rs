@@ -1,4 +1,4 @@
-//! The groups of code and the settings `sakai build` writes (PLAN C.6, C.11; DESIGN 7.1): which
+//! The groups of code and the settings `sakai gen` writes (PLAN C.6, C.11; DESIGN 7.1): which
 //! group may import which, the settings the example keeps (sakai writes them, and they are held
 //! here as golden files: `SAKAI_BLESS=1` writes them again), `--check` (E502), and the maps whose
 //! settings cannot be written (E501).
@@ -118,7 +118,7 @@ fn check_says_when_the_map_moved_on() {
     }
 }
 
-/// What `build` says when it cannot write the settings, for each reason.
+/// What `gen` says when it cannot write the settings, for each reason.
 fn e501(base: &str, edits: &[(&str, &str, &str)], map: &str, t: Target) -> String {
     let dir = common::variant(base, edits);
     let b = build::run_with(dir.path(), map, t, &common::suite(), None, false, Lang::En).unwrap();

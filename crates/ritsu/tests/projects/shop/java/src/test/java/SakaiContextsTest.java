@@ -1,5 +1,5 @@
-// Written by `sakai build --target archunit` from ../../../../shop.ctx.
-// Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.
+// Written by `sakai gen --target archunit` from ../../../../shop.ctx.
+// Edit the .ctx files and write it again; `sakai gen --target archunit --check` says whether it is up to date.
 
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideOutsideOfPackages;

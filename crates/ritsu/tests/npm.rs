@@ -623,9 +623,9 @@ mod npm {
                     reads.push(case("sakai", ".", both("sakai", args).to_vec()));
                 }
                 for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
-                    reads.push(case("sakai", ".", vec![en("sakai", &["build", p, "--target", t, "--check"])]));
-                    writes.push(case("sakai", ".", vec![en("sakai", &["build", p, "--target", t, "--out", "settings"])]));
-                    writes.push(case("sakai", ".", vec![ja("sakai", &["build", p, "--target", t])]));
+                    reads.push(case("sakai", ".", vec![en("sakai", &["gen", p, "--target", t, "--check"])]));
+                    writes.push(case("sakai", ".", vec![en("sakai", &["gen", p, "--target", t, "--out", "settings"])]));
+                    writes.push(case("sakai", ".", vec![ja("sakai", &["gen", p, "--target", t])]));
                 }
                 writes.push(case("sakai", ".", vec![en("sakai", &["doc", p, "--format", "html", "--out", "site"])]));
             }

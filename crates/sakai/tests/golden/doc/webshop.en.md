@@ -176,6 +176,6 @@ Maps `openapi "payments/api/payments.yaml" schema ChargeStatus` to `openapi "shi
 - Whether the code calls HTTP, and sends to and receives from the channels, as the OpenAPI and AsyncAPI documents say: sakai checks the documents against each other and against the map.
 - Whether the code where generated code is kept was really generated from the published language.
 - What a term's definition says.
-- The imports of the code: the settings `sakai build` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.
+- The imports of the code: the settings `sakai gen` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.
 
 Written by sakai 0.40.0 from `webshop.ctx`.

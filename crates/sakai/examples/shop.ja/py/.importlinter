@@ -1,5 +1,5 @@
-# `sakai build --target import-linter --lang ja` が ../通販.ctx から書いた設定。
-# 直すときは .ctx を直して書き直す。古くなっていないかは `sakai build --check` が言う。
+# `sakai gen --target import-linter --lang ja` が ../通販.ctx から書いた設定。
+# 直すときは .ctx を直して書き直す。古くなっていないかは `sakai gen --target import-linter --check --lang ja` が言う。
 
 [importlinter]
 root_packages =

@@ -4,7 +4,7 @@
 //!
 //! A reproduction is a directory of files: the files of [`BASE`] (a map of two contexts, each
 //! with a `.proto`) with the entry's own files laid over them. `sakai check` on that directory
-//! gives the code (`sakai build …` for the codes of the settings). E107's is a map of Rust code
+//! gives the code (`sakai gen …` for the codes of the settings). E107's is a map of Rust code
 //! of its own ([`RUST`]), which the base has none of. The codes that read another
 //! language (E105, E207, E208, E209, E211, E405) come out of `ritsu sakai check`, with every language
 //! joined; E104 comes out of the binary of sakai's own crate, which joins none. N101 is retired:
@@ -170,7 +170,7 @@ fn e(code: &'static str, title: Text, when: Text, fix: Text, files: &'static [(&
     Entry::new(code, title, when, fix, repro, related)
 }
 
-/// An entry run with another command than `check .` (`build` gives E501 and E502).
+/// An entry run with another command than `check .` (`gen` gives E501 and E502).
 trait Running {
     fn running(self, command: &'static [&'static str]) -> Entry;
 }
@@ -1138,25 +1138,25 @@ pub fn ledger() -> Ledger {
             "E501",
             tr!("ツールの設定に書けません", "The settings of a tool cannot be written"),
             tr!(
-                "`sakai build` で、地図にその言語の `code` の行が無いとき、その言語のコードを持つコンテキストが無いとき、ディレクトリの名前がその言語のモジュールの名前にならないとき（Python と Java）、コードのファイルを一つだけ指す項があるとき、Python の置き場所の直下にモジュールがあるとき（import-linter は読めない）、Java にデフォルトパッケージのクラスがあるとき、ArchUnit に `test` の置き場所が無いとき、Go の置き場所に go.mod が無いとき、`except` をツールの設定に書けないとき（import-linter と go-arch-lint）。",
-                "`sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, the place of the Go code has no go.mod, or the settings of the tool cannot hold an `except` (import-linter and go-arch-lint)."
+                "`sakai gen` で、地図にその言語の `code` の行が無いとき、その言語のコードを持つコンテキストが無いとき、ディレクトリの名前がその言語のモジュールの名前にならないとき（Python と Java）、コードのファイルを一つだけ指す項があるとき、Python の置き場所の直下にモジュールがあるとき（import-linter は読めない）、Java にデフォルトパッケージのクラスがあるとき、ArchUnit に `test` の置き場所が無いとき、Go の置き場所に go.mod が無いとき、`except` をツールの設定に書けないとき（import-linter と go-arch-lint）。",
+                "`sakai gen` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, the place of the Go code has no go.mod, or the settings of the tool cannot hold an `except` (import-linter and go-arch-lint)."
             ),
             tr!("注のとおりに、地図の `code`、`owns`、`except` か、コードの置き場所を直してください。", "Correct the map's `code`, `owns` and `except`, or where the code is, as the note says."),
             &[],
             &["E502"],
         )
-        .running(&["build", "地図.ctx", "--target", "import-linter"])
+        .running(&["gen", "地図.ctx", "--target", "import-linter"])
         .en(&[]),
         e(
             "E502",
             tr!("書いてある設定が、いまの地図から書くものと違います", "The settings on the disk differ from what the map writes now"),
             tr!(
-                "`build --check` で、ディスクの設定のファイルが、いまの地図から書くものと一字でも違うとき（無いときも）。注には、最初に違う行と、地図から書くとその行がどうなるかが出ます。",
-                "`build --check` finds a settings file on the disk that differs from what the map writes now, or none. The note gives the first line that differs and what the map writes there."
+                "`gen --check` で、ディスクの設定のファイルが、いまの地図から書くものと一字でも違うとき（無いときも）。注には、最初に違う行と、地図から書くとその行がどうなるかが出ます。",
+                "`gen --check` finds a settings file on the disk that differs from what the map writes now, or none. The note gives the first line that differs and what the map writes there."
             ),
             tr!(
-                "`sakai build` で書き直してください。書いたときと違う `--lang` で確かめると、説明の文が違うので、同じ `--lang` を渡してください。",
-                "Write it again with `sakai build`. Checked with another `--lang` than it was written with, the words of its descriptions differ: give the same one."
+                "`sakai gen` で書き直してください。書いたときと違う `--lang` で確かめると、説明の文が違うので、同じ `--lang` を渡してください。",
+                "Write it again with `sakai gen`. Checked with another `--lang` than it was written with, the words of its descriptions differ: give the same one."
             ),
             &[
                 ("地図.ctx", "map 地図(m) v1\nuse context \"甲.ctx\"\nuse context \"乙.ctx\"\ncovers \".\"\ncode python \"py\"\n"),
@@ -1166,7 +1166,7 @@ pub fn ledger() -> Ledger {
             ],
             &["E501"],
         )
-        .running(&["build", "地図.ctx", "--target", "import-linter", "--check"])
+        .running(&["gen", "地図.ctx", "--target", "import-linter", "--check"])
         .en(&[
                     ("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\ncovers \".\"\ncode python \"py\"\n"),
                     ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\", \"py\"\n"),

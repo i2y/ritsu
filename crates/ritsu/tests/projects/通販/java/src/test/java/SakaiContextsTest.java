@@ -1,5 +1,5 @@
-// `sakai build --target archunit --lang ja` が ../../../../通販.ctx から書いた設定。
-// 直すときは .ctx を直して書き直す。古くなっていないかは `sakai build --check` が言う。
+// `sakai gen --target archunit --lang ja` が ../../../../通販.ctx から書いた設定。
+// 直すときは .ctx を直して書き直す。古くなっていないかは `sakai gen --target archunit --check --lang ja` が言う。
 
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideOutsideOfPackages;

@@ -52,7 +52,7 @@ pub const VALUE: &str = "value";
 pub const METHOD: &str = "method";
 
 /// The languages a map can say where the code is (`code python "py"`). The imports of the first
-/// four are held to the map by the settings `build` writes (DESIGN 7); the dependencies of Rust's
+/// four are held to the map by the settings `gen` writes (DESIGN 7); the dependencies of Rust's
 /// crates, `check` reads from Cargo itself (DESIGN 7.7).
 pub const LANGUAGES: &[&str] = &["python", "typescript", "java", "go", "rust"];
 

@@ -28,7 +28,7 @@ fn no_arguments_help_and_version() {
     assert!(err(&o).contains("sakai check"), "{}", err(&o));
     let o = sakai(&["--help"]);
     assert_eq!(code(&o), 0);
-    for c in ["check", "build", "export", "api", "explain"] {
+    for c in ["check", "gen", "export", "api", "explain"] {
         assert!(out(&o).contains(&format!("sakai {c} ")), "{c} is in --help");
     }
     let o = sakai(&["--version"]);
@@ -38,7 +38,7 @@ fn no_arguments_help_and_version() {
 
 #[test]
 fn every_command_has_its_help() {
-    for c in ["check", "build", "export", "api", "explain"] {
+    for c in ["check", "gen", "export", "api", "explain"] {
         let a = sakai(&[c, "--help"]);
         let b = sakai(&["help", c]);
         let h = sakai(&[c, "-h"]);
@@ -51,9 +51,9 @@ fn every_command_has_its_help() {
     }
     let check = out(&sakai(&["check", "--help"]));
     assert!(check.contains("E401") && check.contains("W103"), "{check}");
-    assert!(!check.contains("E501"), "build's codes are not check's");
-    let build = out(&sakai(&["build", "--help"]));
-    assert!(build.contains("E501 E502") && build.contains("--target <tool>"), "{build}");
+    assert!(!check.contains("E501"), "gen's codes are not check's");
+    let help = out(&sakai(&["gen", "--help"]));
+    assert!(help.contains("E501 E502") && help.contains("--target <tool>..."), "{help}");
 }
 
 #[test]
@@ -83,10 +83,13 @@ fn what_is_refused_with_exit_2() {
         vec!["api", MAP, MAP],
         vec!["api", ROOT],
         vec!["api", MAP, "--format", "json"],
-        vec!["build", MAP],
-        vec!["build", MAP, "--target", "depguard"],
-        vec!["build", MAP, MAP, "--target", "import-linter"],
-        vec!["build", ROOT, "--target", "import-linter"],
+        vec!["gen", MAP],
+        vec!["gen", MAP, "--target", "depguard"],
+        vec!["gen", MAP, MAP, "--target", "import-linter"],
+        vec!["gen", ROOT, "--target", "import-linter"],
+        vec!["gen", MAP, "--target", "import-linter", "--target", "import-linter"],
+        vec!["build", MAP, "--target", "import-linter"],
+        vec!["help", "build"],
         vec!["export", MAP],
         vec!["export", "plantuml", MAP],
         vec!["export", "cml"],
@@ -187,30 +190,30 @@ fn a_map_with_errors_exits_1() {
     assert!(err(&o).contains("error[E401]"), "{}", err(&o));
 }
 
-/// `build` writes nothing from a map with errors, and `--check` says it when the file is not there.
+/// `gen` writes nothing from a map with errors, and `--check` says it when the file is not there.
 #[test]
-fn build_on_the_command_line() {
+fn gen_on_the_command_line() {
     let dir = common::mutant("E401_注文の状態に値が増えた");
-    let o = common::sakai_in(dir.path(), &["build", "基本.ctx", "--target", "import-linter"]);
+    let o = common::sakai_in(dir.path(), &["gen", "基本.ctx", "--target", "import-linter"]);
     assert_eq!(code(&o), 1);
     assert!(out(&o).starts_with("error[E401]: ctx/請求.ctx:17:3:"), "{}", out(&o));
     assert!(!dir.path().join("py/.importlinter").exists());
     let dir = common::variant("基本", &[]);
-    let o = common::sakai_in(dir.path(), &["build", "基本.ctx", "--target", "import-linter", "--check"]);
+    let o = common::sakai_in(dir.path(), &["gen", "基本.ctx", "--target", "import-linter", "--check"]);
     assert_eq!(code(&o), 1);
     assert!(out(&o).starts_with("error[E502]: py/.importlinter: The settings file py/.importlinter is not there"), "{}", out(&o));
-    let o = common::sakai_in(dir.path(), &["build", "基本.ctx", "--target", "import-linter"]);
+    let o = common::sakai_in(dir.path(), &["gen", "基本.ctx", "--target", "import-linter"]);
     assert_eq!(code(&o), 0);
     assert_eq!(out(&o), "py/.importlinter: Written (3 contracts)\n");
-    let o = common::sakai_in(dir.path(), &["build", "基本.ctx", "--target", "import-linter", "--check", "--lang", "ja"]);
+    let o = common::sakai_in(dir.path(), &["gen", "基本.ctx", "--target", "import-linter", "--check", "--lang", "ja"]);
     assert_eq!(code(&o), 1, "the file was written in English");
-    let o = common::sakai_in(dir.path(), &["build", "基本.ctx", "--target", "import-linter", "--check"]);
+    let o = common::sakai_in(dir.path(), &["gen", "基本.ctx", "--target", "import-linter", "--check"]);
     assert_eq!(out(&o), "py/.importlinter: Up to date (3 contracts)\n");
     // --out puts it elsewhere; the header names the map from there.
-    let o = common::sakai_in(dir.path(), &["build", "基本.ctx", "--target", "import-linter", "--out", "lint"]);
+    let o = common::sakai_in(dir.path(), &["gen", "基本.ctx", "--target", "import-linter", "--out", "lint"]);
     assert_eq!(out(&o), "lint/.importlinter: Written (3 contracts)\n");
     let written = std::fs::read_to_string(dir.path().join("lint/.importlinter")).unwrap();
-    assert!(written.starts_with("# Written by `sakai build --target import-linter` from ../基本.ctx."), "{written}");
+    assert!(written.starts_with("# Written by `sakai gen --target import-linter` from ../基本.ctx.\n# Edit the .ctx files and write it again; `sakai gen --target import-linter --check` says whether it is up to date.\n"), "{written}");
 }
 
 #[test]
@@ -275,10 +278,10 @@ fn what_is_refused_with_exit_2_in_english() {
         vec!["api", ROOT_EN],
         vec!["api", MAP_EN, MAP_EN],
         vec!["api", MAP_EN, "--format", "json"],
-        vec!["build", MAP_EN],
-        vec!["build", MAP_EN, "--target", "depguard"],
-        vec!["build", MAP_EN, MAP_EN, "--target", "import-linter"],
-        vec!["build", ROOT_EN, "--target", "import-linter"],
+        vec!["gen", MAP_EN],
+        vec!["gen", MAP_EN, "--target", "depguard"],
+        vec!["gen", MAP_EN, MAP_EN, "--target", "import-linter"],
+        vec!["gen", ROOT_EN, "--target", "import-linter"],
         vec!["export", MAP_EN],
         vec!["export", "plantuml", MAP_EN],
     ] {
@@ -356,27 +359,81 @@ fn a_map_with_errors_exits_1_in_english() {
 }
 
 #[test]
-fn build_on_the_command_line_in_english() {
+fn gen_on_the_command_line_in_english() {
     let dir = common::mutant("E401_value_added_to_the_order_status");
-    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter"]);
+    let o = common::sakai_in(dir.path(), &["gen", "basic.ctx", "--target", "import-linter"]);
     assert_eq!(code(&o), 1);
     assert!(out(&o).starts_with("error[E401]: ctx/billing.ctx:17:3:"), "{}", out(&o));
     assert!(!dir.path().join("py/.importlinter").exists());
     let dir = common::variant("basic", &[]);
-    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--check"]);
+    let o = common::sakai_in(dir.path(), &["gen", "basic.ctx", "--target", "import-linter", "--check"]);
     assert_eq!(code(&o), 1);
     assert!(out(&o).starts_with("error[E502]: py/.importlinter: The settings file py/.importlinter is not there"), "{}", out(&o));
-    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter"]);
+    let o = common::sakai_in(dir.path(), &["gen", "basic.ctx", "--target", "import-linter"]);
     assert_eq!(code(&o), 0);
     assert_eq!(out(&o), "py/.importlinter: Written (3 contracts)\n");
-    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--check", "--lang", "ja"]);
+    let o = common::sakai_in(dir.path(), &["gen", "basic.ctx", "--target", "import-linter", "--check", "--lang", "ja"]);
     assert_eq!(code(&o), 1, "the file was written in English");
-    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--check"]);
+    let o = common::sakai_in(dir.path(), &["gen", "basic.ctx", "--target", "import-linter", "--check"]);
     assert_eq!(out(&o), "py/.importlinter: Up to date (3 contracts)\n");
-    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--out", "lint"]);
+    let o = common::sakai_in(dir.path(), &["gen", "basic.ctx", "--target", "import-linter", "--out", "lint"]);
     assert_eq!(out(&o), "lint/.importlinter: Written (3 contracts)\n");
     let written = std::fs::read_to_string(dir.path().join("lint/.importlinter")).unwrap();
-    assert!(written.starts_with("# Written by `sakai build --target import-linter` from ../basic.ctx."), "{written}");
+    assert!(written.starts_with("# Written by `sakai gen --target import-linter` from ../basic.ctx."), "{written}");
+}
+
+/// `--target` given more than once: every tool's settings, in the order of the tools whatever the
+/// order of the flags, each where its language's code is, or all in `--out`; `--check` holds each
+/// to the map; and a tool whose settings cannot be written (E501) stops the others too.
+#[test]
+fn gen_writes_every_tool_it_is_given() {
+    let all = ["--target", "go-arch-lint", "--target", "archunit", "--target", "dependency-cruiser", "--target", "import-linter"];
+    let dir = common::variant("nested", &[]);
+    let run = |rest: &[&str]| common::sakai_in(dir.path(), &[&["gen", "nested.ctx"][..], rest].concat());
+    let o = run(&all);
+    assert_eq!((code(&o), out(&o).as_str(), err(&o).as_str()), (0, "py/.importlinter: Written (3 contracts)\nts/.dependency-cruiser.cjs: Written (3 rules)\njava/src/test/java/SakaiContextsTest.java: Written (2 rules)\ngo/.go-arch-lint.yml: Written (3 components)\n", ""));
+    // each is what the one-tool run writes
+    for (t, f) in [("import-linter", "py/.importlinter"), ("dependency-cruiser", "ts/.dependency-cruiser.cjs"), ("archunit", "java/src/test/java/SakaiContextsTest.java"), ("go-arch-lint", "go/.go-arch-lint.yml")] {
+        let many = std::fs::read_to_string(dir.path().join(f)).unwrap();
+        assert_eq!(code(&run(&["--target", t])), 0);
+        assert_eq!(std::fs::read_to_string(dir.path().join(f)).unwrap(), many, "{t}");
+    }
+    let o = run(&[&all[..], &["--check"]].concat());
+    assert_eq!((code(&o), out(&o).as_str()), (0, "py/.importlinter: Up to date (3 contracts)\nts/.dependency-cruiser.cjs: Up to date (3 rules)\njava/src/test/java/SakaiContextsTest.java: Up to date (2 rules)\ngo/.go-arch-lint.yml: Up to date (3 components)\n"));
+    // one stale and one missing: each said, the rest up to date
+    std::fs::write(dir.path().join("py/.importlinter"), "# written by hand\n").unwrap();
+    std::fs::remove_file(dir.path().join("ts/.dependency-cruiser.cjs")).unwrap();
+    let o = run(&[&all[..], &["--check"]].concat());
+    assert_eq!(code(&o), 1);
+    assert!(out(&o).starts_with("error[E502]: py/.importlinter:1:1: The settings file py/.importlinter differs from what the map writes now\n"), "{}", out(&o));
+    assert!(out(&o).contains("error[E502]: ts/.dependency-cruiser.cjs: The settings file ts/.dependency-cruiser.cjs is not there\n  = Write it with `sakai gen --target dependency-cruiser`.\n"), "{}", out(&o));
+    assert!(out(&o).ends_with("java/src/test/java/SakaiContextsTest.java: Up to date (2 rules)\ngo/.go-arch-lint.yml: Up to date (3 components)\n"), "{}", out(&o));
+    // --out puts every file in it
+    let o = run(&["--target", "import-linter", "--target", "go-arch-lint", "--out", "lint"]);
+    assert_eq!(out(&o), "lint/.importlinter: Written (3 contracts)\nlint/.go-arch-lint.yml: Written (3 components)\n");
+    // go-arch-lint cannot be written with no go.mod: nothing is
+    std::fs::remove_file(dir.path().join("go/go.mod")).unwrap();
+    std::fs::remove_file(dir.path().join("py/.importlinter")).unwrap();
+    let o = run(&["--target", "import-linter", "--target", "go-arch-lint"]);
+    assert_eq!(code(&o), 1);
+    assert!(out(&o).starts_with("error[E501]: nested.ctx:16:1: There is no go.mod in go\n"), "{}", out(&o));
+    assert!(!out(&o).contains("Written") && !dir.path().join("py/.importlinter").exists(), "{}", out(&o));
+}
+
+/// The verb of 0.40.0 stops with the one of now, as `help` does; no tool is a mistake of its own.
+#[test]
+fn the_verb_of_0_40_stops_with_the_verb_now() {
+    let said = |args: &[&str]| {
+        let o = sakai(args);
+        (code(&o), out(&o), err(&o))
+    };
+    let renamed = (2, String::new(), "error: `sakai build` is `sakai gen` from 0.41.0\n".to_string());
+    assert_eq!(said(&["build", MAP_EN, "--target", "import-linter"]), renamed);
+    assert_eq!(said(&["help", "build"]), renamed);
+    assert_eq!(said(&["build", MAP_EN, "--lang", "ja"]), (2, String::new(), "エラー: `sakai build` は 0.41.0 から `sakai gen` です\n".to_string()));
+    assert_eq!(said(&["gen", MAP_EN]), (2, String::new(), "error: `sakai gen` needs one or more `--target import-linter|dependency-cruiser|archunit|go-arch-lint`\n".to_string()));
+    assert_eq!(said(&["gen", MAP_EN, "--lang", "ja"]), (2, String::new(), "エラー: `sakai gen` には `--target import-linter|dependency-cruiser|archunit|go-arch-lint` が一つ以上要ります\n".to_string()));
+    assert_eq!(said(&["gen", MAP_EN, "--target", "archunit", "--target", "archunit"]), (2, String::new(), "error: `--target archunit` is given twice\n".to_string()));
 }
 
 #[test]

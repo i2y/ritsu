@@ -1,5 +1,5 @@
-// Written by `sakai build --target dependency-cruiser` from ../shop.ctx.
-// Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.
+// Written by `sakai gen --target dependency-cruiser` from ../shop.ctx.
+// Edit the .ctx files and write it again; `sakai gen --target dependency-cruiser --check` says whether it is up to date.
 
 module.exports = {
   forbidden: [

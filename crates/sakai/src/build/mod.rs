@@ -1,4 +1,4 @@
-//! `sakai build` (DESIGN 7; PLAN C.6 to C.11): the settings of an import linter, written from a map
+//! `sakai gen` (DESIGN 7, 28; PLAN C.6 to C.11): the settings of import linters, written from a map
 //! that passes check, or held to the map with `--check` (E502). Each of the four tools gets the
 //! same table of groups and directions (`areas.rs`), in its own words, under the same header: the
 //! map it was written from and the command that wrote it.
@@ -78,9 +78,9 @@ impl Target {
     }
 }
 
-/// What `sakai build` came to.
+/// What `sakai gen` came to for one tool.
 pub struct Built {
-    /// The map's check, with build's own diagnostics (E501, E502) after its own.
+    /// The map's check, with gen's own diagnostics (E501, E502) after its own.
     pub outcome: Outcome,
     /// The settings file, and what was done with it, when nothing was wrong.
     pub done: Option<(PathBuf, Text)>,
@@ -96,13 +96,10 @@ fn header(m: &Model, target: Target, file: &Path, lang: Lang) -> String {
     // doubled too, since `\u000a` written in a comment is a line break to javac
     let map = crate::cml::in_comment(&paths::between(dir, &paths::on_disk(&m.root, &m.map.file)));
     let map = if matches!(target, Target::ArchUnit) { map.replace('\\', "\\\\") } else { map };
-    let cmd = match lang {
-        Lang::En => format!("sakai build --target {}", target.word()),
-        Lang::Ja => format!("sakai build --target {} --lang ja", target.word()),
-    };
+    let t = target.word();
     let lines = match lang {
-        Lang::En => [format!("Written by `{cmd}` from {map}."), "Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.".to_string()],
-        Lang::Ja => [format!("`{cmd}` が {map} から書いた設定。"), "直すときは .ctx を直して書き直す。古くなっていないかは `sakai build --check` が言う。".to_string()],
+        Lang::En => [format!("Written by `sakai gen --target {t}` from {map}."), format!("Edit the .ctx files and write it again; `sakai gen --target {t} --check` says whether it is up to date.")],
+        Lang::Ja => [format!("`sakai gen --target {t} --lang ja` が {map} から書いた設定。"), format!("直すときは .ctx を直して書き直す。古くなっていないかは `sakai gen --target {t} --check --lang ja` が言う。")],
     };
     let c = target.comment();
     lines.iter().map(|l| format!("{c} {l}\n")).collect()
@@ -135,26 +132,85 @@ fn default_dir(c: &Checked, a: &Areas, target: Target) -> Result<String, Box<Dia
     })
 }
 
-/// `sakai build <map> --target <tool> [--out <dir>] [--check]`. `out` is a directory on the disk.
-/// The map is checked first, with no other language joined.
+/// What `sakai gen` came to for every tool it was given.
+pub struct Gen {
+    /// The map's check, with gen's own diagnostics (E501, E502) after its own.
+    pub outcome: Outcome,
+    /// Each settings file and what was done with it, in the order of [`Target::ALL`]: none when a
+    /// tool's settings cannot be written, and with `--check`, those that are up to date.
+    pub done: Vec<(PathBuf, Text)>,
+}
+
+/// `sakai gen <map> --target <tool> [--out <dir>] [--check]` for one tool. `out` is a directory on
+/// the disk. The map is checked first, with no other language joined.
 pub fn run(root: &Path, map: &str, target: Target, out: Option<&Path>, check_only: bool, lang: Lang) -> Result<Built, Text> {
     run_with(root, map, target, &crate::suite::Suite::default(), out, check_only, lang)
 }
 
 /// [`run`], the map checked with the languages `suite` joins.
 pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Suite, out: Option<&Path>, check_only: bool, lang: Lang) -> Result<Built, Text> {
+    let g = gen_with(root, map, &[target], suite, out, check_only, lang)?;
+    Ok(Built { outcome: g.outcome, done: g.done.into_iter().next() })
+}
+
+/// `sakai gen <map> --target <tool>... [--out <dir>] [--check]`, the map checked with the languages
+/// `suite` joins. Every tool's settings are made before any is written, in the order of
+/// [`Target::ALL`] and not of the flags: when one cannot be written (E501), none is (ritsu's DESIGN
+/// 9.6). With `out`, every file goes into that directory; their names differ.
+pub fn gen_with(root: &Path, map: &str, targets: &[Target], suite: &crate::suite::Suite, out: Option<&Path>, check_only: bool, lang: Lang) -> Result<Gen, Text> {
     let mut o = check::check_map_with(root, map, suite)?;
     if o.has_errors() {
-        return Ok(Built { outcome: o, done: None });
+        return Ok(Gen { outcome: o, done: Vec::new() });
     }
     let c = o.checked.as_ref().expect("a map with no errors is checked through");
-    let a = match areas::areas(c, target.language()) {
-        Ok(a) => a,
-        Err(ds) => {
-            o.diags.extend(ds);
-            return Ok(Built { outcome: o, done: None });
+    let mut planned = Vec::new();
+    let mut stops: Vec<Diag> = Vec::new();
+    for t in Target::ALL.into_iter().filter(|t| targets.contains(t)) {
+        match plan(root, c, t, out, lang) {
+            Ok(p) => planned.push(p),
+            Err(ds) => {
+                for d in ds {
+                    // the same finding for two tools is said once
+                    if !stops.iter().any(|s| s.render(Lang::En) == d.render(Lang::En)) {
+                        stops.push(d);
+                    }
+                }
+            }
         }
-    };
+    }
+    if !stops.is_empty() {
+        o.diags.extend(stops);
+        return Ok(Gen { outcome: o, done: Vec::new() });
+    }
+    let mut done = Vec::new();
+    for (target, dir, file, text, entries) in planned {
+        if check_only {
+            match ritsu_base::fs::read_to_string(&file) {
+                Ok(old) if old == text => done.push((file, tr!("いまの地図から書くものと同じ（{}）", "up to date ({})", entries.ja; entries.en))),
+                got => {
+                    let d = stale(target, root, &file, got.ok().as_deref(), &text, lang);
+                    o.diags.push(d);
+                }
+            }
+        } else {
+            ritsu_base::fs::create_dir_all(&dir).map_err(|e| {
+                let (d, e) = (dir.display().to_string(), e.to_string());
+                tr!("{d} を作れません: {e}", "cannot create {d}: {e}")
+            })?;
+            ritsu_base::fs::write(&file, &text).map_err(|e| {
+                let (f, e) = (file.display().to_string(), e.to_string());
+                tr!("{f} に書けません: {e}", "cannot write {f}: {e}")
+            })?;
+            done.push((file, tr!("書きました（{}）", "written ({})", entries.ja; entries.en)));
+        }
+    }
+    Ok(Gen { outcome: o, done })
+}
+
+/// One tool's settings for a map that passed check: the tool, the directory and the file they go
+/// to, their text and how many entries they have; or what stops them (E501).
+fn plan(root: &Path, c: &Checked, target: Target, out: Option<&Path>, lang: Lang) -> Result<(Target, PathBuf, PathBuf, String, Text), Vec<Diag>> {
+    let a = areas::areas(c, target.language())?;
     if target == Target::ImportLinter
         && let Some(f) = a.areas.iter().flat_map(|x| x.files.iter()).find(|f| !f.contains('/'))
     {
@@ -162,11 +218,10 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "python").map(|x| x.pos).unwrap_or_default();
         let sf = paths::shown(&paths::join(&a.dir, f).unwrap_or_default());
-        o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} は Python の置き場所の直下のモジュールで、import-linter が読めません", "The module {sf} is right in the place of the Python code, where import-linter cannot read it")).source(&m.map.src).note(tr!(
+        return Err(vec![diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} は Python の置き場所の直下のモジュールで、import-linter が読めません", "The module {sf} is right in the place of the Python code, where import-linter cannot read it")).source(&m.map.src).note(tr!(
             "import-linter（grimp）はパッケージだけをルートとして読みます。モジュールをパッケージのディレクトリに入れるか、`code python` に、パッケージを持つディレクトリを書いてください。",
             "Only packages can be the roots import-linter (grimp) reads: put the module in a package's directory, or make `code python` the directory that holds the packages."
-        )));
-        return Ok(Built { outcome: o, done: None });
+        ))]);
     }
     if target == Target::ArchUnit
         && let Some(f) = a.areas.iter().flat_map(|x| x.files.iter()).find(|f| !f.contains('/'))
@@ -175,21 +230,19 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "java").map(|x| x.pos).unwrap_or_default();
         let sf = paths::shown(&paths::join(&a.dir, f).unwrap_or_default());
-        o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} はデフォルトパッケージのクラスで、ArchUnit の規則に書けません", "The class {sf} is in the default package, which no ArchUnit rule can name")).source(&m.map.src).note(tr!(
+        return Err(vec![diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} はデフォルトパッケージのクラスで、ArchUnit の規則に書けません", "The class {sf} is in the default package, which no ArchUnit rule can name")).source(&m.map.src).note(tr!(
             "ArchUnit の規則は、まとまりをパッケージで表します。クラスに `package` を書き、そのディレクトリに置いてください。",
             "The rules of ArchUnit name a group by its packages: give the class a `package`, and put it in that directory."
-        )));
-        return Ok(Built { outcome: o, done: None });
+        ))]);
     }
     if target == Target::GoArchLint && !ritsu_base::fs::is_file(paths::on_disk(root, &a.dir).join("go.mod")) {
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "go").map(|x| x.pos).unwrap_or_default();
         let d = paths::shown(&a.dir);
-        o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{d} に go.mod がありません", "There is no go.mod in {d}")).source(&m.map.src).note(tr!(
+        return Err(vec![diag::at("E501", &m.map.file, line.line, line.col, tr!("{d} に go.mod がありません", "There is no go.mod in {d}")).source(&m.map.src).note(tr!(
             "go-arch-lint は、go.mod のあるディレクトリをモジュールのルートとして読みます。`code go` には、go.mod のあるディレクトリを書いてください。",
             "go-arch-lint reads the directory with go.mod as the module's root: write that directory in `code go`."
-        )));
-        return Ok(Built { outcome: o, done: None });
+        ))]);
     }
     let ds = match target {
         Target::ImportLinter => import_linter::unwritable(c, &a),
@@ -197,42 +250,15 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         Target::DependencyCruiser | Target::ArchUnit => Vec::new(),
     };
     if !ds.is_empty() {
-        o.diags.extend(ds);
-        return Ok(Built { outcome: o, done: None });
+        return Err(ds);
     }
     let dir: PathBuf = match out {
         Some(d) => paths::absolute(d),
-        None => match default_dir(c, &a, target) {
-            Ok(d) => paths::on_disk(root, &d),
-            Err(d) => {
-                o.diags.push(*d);
-                return Ok(Built { outcome: o, done: None });
-            }
-        },
+        None => paths::on_disk(root, &default_dir(c, &a, target).map_err(|d| vec![*d])?),
     };
     let file = dir.join(target.file_name());
     let (text, n) = render(c, &a, target, &file, lang);
-    let entries = target.entries(n);
-    if check_only {
-        match ritsu_base::fs::read_to_string(&file) {
-            Ok(old) if old == text => Ok(Built { outcome: o, done: Some((file, tr!("いまの地図から書くものと同じ（{}）", "up to date ({})", entries.ja; entries.en))) }),
-            got => {
-                let d = stale(target, root, &file, got.ok().as_deref(), &text, lang);
-                o.diags.push(d);
-                Ok(Built { outcome: o, done: None })
-            }
-        }
-    } else {
-        ritsu_base::fs::create_dir_all(&dir).map_err(|e| {
-            let (d, e) = (dir.display().to_string(), e.to_string());
-            tr!("{d} を作れません: {e}", "cannot create {d}: {e}")
-        })?;
-        ritsu_base::fs::write(&file, &text).map_err(|e| {
-            let (f, e) = (file.display().to_string(), e.to_string());
-            tr!("{f} に書けません: {e}", "cannot write {f}: {e}")
-        })?;
-        Ok(Built { outcome: o, done: Some((file, tr!("書きました（{}）", "written ({})", entries.ja; entries.en))) })
-    }
+    Ok((target, dir, file, text, target.entries(n)))
 }
 
 /// A file on the disk as `Diag::file` holds a path: from the root when it is under it.
@@ -246,7 +272,7 @@ fn stale(target: Target, root: &Path, file: &Path, old: Option<&str>, new: &str,
     let f = paths::shown(&at);
     let t = target.word();
     let Some(old) = old else {
-        return diag::whole("E502", &at, tr!("{f} がありません", "The settings file {f} is not there")).note(tr!("`sakai build --target {t}` で書いてください。", "Write it with `sakai build --target {t}`."));
+        return diag::whole("E502", &at, tr!("{f} がありません", "The settings file {f} is not there")).note(tr!("`sakai gen --target {t}` で書いてください。", "Write it with `sakai gen --target {t}`."));
     };
     let (ol, nl): (Vec<&str>, Vec<&str>) = (old.lines().collect(), new.lines().collect());
     let i = (0..ol.len().max(nl.len())).find(|&i| ol.get(i) != nl.get(i)).unwrap_or(0);
@@ -264,10 +290,11 @@ fn stale(target: Target, root: &Path, file: &Path, old: Option<&str>, new: &str,
         let was = if written_ja { "ja" } else { "en" };
         d = d.note(tr!("このファイルは --lang {was} で書かれています。確かめるときも、同じ --lang を渡してください。", "The file was written with --lang {was}; check it with the same --lang."));
     }
-    d.note(tr!("`sakai build --target {t}` で書き直してください。", "Write it again with `sakai build --target {t}`."))
+    d.note(tr!("`sakai gen --target {t}` で書き直してください。", "Write it again with `sakai gen --target {t}`."))
 }
 
-/// What `build` prints after the diagnostics: the file, from where sakai runs, and what was done.
+/// What `gen` prints after the diagnostics for one file: the file, from where sakai runs, and what
+/// was done.
 pub fn render_done(root: &Path, done: &(PathBuf, Text), lang: Lang) -> String {
     let f = paths::shown(&diag_path(root, &done.0));
     format!("{f}: {}\n", spaced(&done.1, lang))

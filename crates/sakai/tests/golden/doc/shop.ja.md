@@ -233,6 +233,6 @@ Collects what buyers think and shows it. It has nothing to do with billing
 - コードが、OpenAPI と AsyncAPI の文書のとおりに HTTP を呼び、チャネルに送り、チャネルから受けているか。sakai が確かめるのは、文書どうしと、文書と地図が合っていることまで。
 - 生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。
 - 語の定義の文の中身。
-- コードの import。これは sakai build が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。
+- コードの import。これは sakai gen が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。
 
 sakai 0.40.0 が `shop.ctx` から書いた。

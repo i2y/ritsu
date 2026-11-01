@@ -148,12 +148,11 @@ The Markdown draws the map with Mermaid, which GitHub shows; the HTML is one fil
 
 ## The imports of the code
 
-sakai does not read imports: each language has a linter that teams already run in CI, and `sakai build` writes its settings from the map.
+sakai does not read imports: each language has a linter that teams already run in CI, and `sakai gen` writes its settings from the map.
 
 ```console
-$ sakai build examples/shop/shop.ctx --target import-linter --check
+$ sakai gen examples/shop/shop.ctx --target import-linter --target go-arch-lint --check
 examples/shop/py/.importlinter: Up to date (11 contracts)
-$ sakai build examples/shop/shop.ctx --target go-arch-lint --check
 examples/shop/go/.go-arch-lint.yml: Up to date (11 components)
 ```
 
@@ -187,7 +186,7 @@ The binary of sakai's own crate joins no other language: it stops with E104 at a
 
 ```console
 $ sakai check examples/shop/shop.ctx
-$ sakai build examples/shop/shop.ctx --target dependency-cruiser
+$ sakai gen examples/shop/shop.ctx --target dependency-cruiser
 $ sakai export cml examples/shop/shop.ctx
 $ sakai doc examples/shop/shop.ctx --format html --out site
 $ sakai api examples/shop/shop.ctx
@@ -195,6 +194,7 @@ $ sakai explain E401
 ```
 
 `check` takes map files and directories, and `--format json`; `--root` changes the directory paths are counted from (else the nearest one above that holds `.git` or `ritsu.mod`).
+`gen` takes `--target` once for each tool whose settings it writes (`import-linter`, `dependency-cruiser`, `archunit`, `go-arch-lint`), and writes none when one cannot be written (E501); up to 0.40.0 it was `sakai build`, which now stops with exit 2 and says the new name.
 Every command takes `--lang ja|en` (else `SAKAI_LANG`, then `RITSU_LANG`, else English) and `--help`.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 
@@ -208,7 +208,7 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 ## How it is checked
 
 `cargo test -p sakai` runs the language on its fixtures and on the example, and runs the real tools.
-On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 235 tests, 30 seconds once built.
+On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 237 tests, 28 seconds once built.
 
 - 184 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (90 of them with Japanese names, each with an English twin, and 4 for Rust).
 - The four import linters run on 56 copies (14 for each tool): the example and a map whose generated code sits inside a context, each as it is and with imports added that the map forbids, with English and Japanese names. Every tool passes the copies as they are and catches each added import.
@@ -220,7 +220,7 @@ On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, wi
 
 ## Status
 
-The language, `check`, `build`, `export cml`, `doc`, `api` and `explain` are done, as in [DESIGN.md](DESIGN.md).
+The language, `check`, `gen`, `export cml`, `doc`, `api` and `explain` are done, as in [DESIGN.md](DESIGN.md).
 Not yet: checking owners against CODEOWNERS, a rule's `import jsonschema` as the target of a mapping, generating the code of a mapping, and run-time calls that no contract writes as artifacts (DESIGN 14, 15.11).
 
 ## License

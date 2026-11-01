@@ -1,7 +1,7 @@
 # The import linters and CML
 
 sakai does not read the imports of code.
-Each language already has a linter that teams run in CI; `sakai build` writes that linter's settings from the map, and the linter holds the code to the map.
+Each language already has a linter that teams run in CI; `sakai gen` writes that linter's settings from the map, and the linter holds the code to the map.
 For Rust, `sakai check` reads the crates' dependencies from Cargo itself.
 `sakai export cml` writes the map as Context Mapper's CML.
 
@@ -29,16 +29,14 @@ What the settings cannot say (an `owns` entry naming one file of code, a directo
 The example's map makes 11 groups in each language:
 
 ```console
-$ sakai build examples/shop/shop.ctx --target import-linter --check
+$ sakai gen examples/shop/shop.ctx --target import-linter --target dependency-cruiser --target archunit --target go-arch-lint --check
 examples/shop/py/.importlinter: Up to date (11 contracts)
-$ sakai build examples/shop/shop.ctx --target dependency-cruiser --check
 examples/shop/ts/.dependency-cruiser.cjs: Up to date (11 rules)
-$ sakai build examples/shop/shop.ctx --target archunit --check
 examples/shop/java/src/test/java/SakaiContextsTest.java: Up to date (11 rules)
-$ sakai build examples/shop/shop.ctx --target go-arch-lint --check
 examples/shop/go/.go-arch-lint.yml: Up to date (11 components)
 ```
 
+`--target` is given once for each tool. Each tool's settings are written where the map's `code` line puts its language (for ArchUnit, its `test`), or all into `--out`, in the order above whatever the order of the flags; when one cannot be written (E501), none is.
 `--check` writes nothing: it says whether the settings there are what the map writes now, and E502 when they are not.
 The settings explain each rule in the language of `--lang`, so run `--check` with the `--lang` they were written with.
 Each file starts with the map it was written from.

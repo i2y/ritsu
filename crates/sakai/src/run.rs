@@ -75,6 +75,7 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
                     let _ = write!(out, "{}", table.help_all(lang));
                     0
                 }
+                Some(n) if n == "build" => refuse(err, renamed_build(), lang),
                 Some(n) => match table.command(n) {
                     Some(c) => {
                         let _ = write!(out, "{}", table.help_cmd(c, lang));
@@ -87,6 +88,9 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
         _ => {}
     }
     let Some(cmd) = table.command(first) else {
+        if first == "build" {
+            return refuse(err, renamed_build(), lang);
+        }
         return refuse(err, tr!("`{first}` というコマンドはありません。`sakai --help` を読んでください", "there is no command `{first}`; run `sakai --help`"), lang);
     };
     let a = match table.parse(cmd, &args[1..]) {
@@ -103,7 +107,7 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
     }
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
-        "build" => build_cmd(&a, lang, suite, out, err),
+        "gen" => gen_cmd(&a, lang, suite, out, err),
         "export" => export_cmd(&a, lang, suite, out, err),
         "api" => api_cmd(&a, lang, suite, out, err),
         "doc" => doc_cmd(&a, lang, suite, out, err),
@@ -251,26 +255,30 @@ fn one_map(a: &Args, cmd: &str, lang: Lang, err: &mut dyn Write) -> Result<(Path
     Ok((root, rel[0].clone()))
 }
 
-fn build_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
-    let Some(target) = a.get("--target").and_then(crate::build::Target::from_word) else {
-        return refuse(err, 
-            tr!("`sakai build` には --target が要ります（import-linter | dependency-cruiser | archunit | go-arch-lint）", "`sakai build` needs --target (import-linter | dependency-cruiser | archunit | go-arch-lint)"),
-            lang,
-        );
-    };
-    let (root, map) = match one_map(a, "build", lang, err) {
+/// The verb up to 0.40.0 is not read as the new one (ritsu's DESIGN 9.6).
+fn renamed_build() -> Text {
+    ritsu_base::cli::renamed("sakai build", "sakai gen", "0.41.0")
+}
+
+fn gen_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let targets: Vec<crate::build::Target> = a.all("--target").into_iter().filter_map(crate::build::Target::from_word).collect();
+    if targets.is_empty() {
+        let t = crate::build::Target::ALL.map(|t| t.word()).join("|");
+        return refuse(err, tr!("`sakai gen` には `--target {t}` が一つ以上要ります", "`sakai gen` needs one or more `--target {t}`"), lang);
+    }
+    let (root, map) = match one_map(a, "gen", lang, err) {
         Ok(x) => x,
         Err(code) => return code,
     };
-    let built = match crate::build::run_with(&root, &map, target, suite, a.get("--out").map(Path::new), a.has("--check"), lang) {
-        Ok(b) => b,
+    let g = match crate::build::gen_with(&root, &map, &targets, suite, a.get("--out").map(Path::new), a.has("--check"), lang) {
+        Ok(g) => g,
         Err(e) => return refuse(err, e, lang),
     };
-    let o = &built.outcome;
+    let o = &g.outcome;
     for d in &o.diags {
         let _ = write!(out, "{}", d.render(lang));
     }
-    if let Some(done) = &built.done {
+    for done in &g.done {
         let _ = write!(out, "{}", crate::build::render_done(&root, done, lang));
     }
     exit_of(&o.diags)

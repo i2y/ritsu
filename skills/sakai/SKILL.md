@@ -31,13 +31,13 @@ Two things stay with people:
 1. Read what is there: the directories, the `.proto` files, the rules, workflows, calendars and books. Each artifact must end up in exactly one context.
 2. Write the map (`map`), one context file per context (`context`), then the relationships, each in the downstream's file.
 3. Run the check (`ritsu sakai check`, or `ritsu check` for the whole project) and fix what it says, one diagnostic at a time, from the top; `ritsu sakai explain <code>` says how.
-4. Write the settings of the import linters, and have CI run them with `ritsu sakai build … --check`.
+4. Write the settings of the import linters, and have CI run them with `ritsu sakai gen … --check`.
 5. Write the page for people with `ritsu sakai doc`, and show it to the people who check what the code is to do.
 
 ```console
 $ ritsu sakai check examples/shop/shop.ctx
 $ ritsu sakai explain E401
-$ ritsu sakai build examples/shop/shop.ctx --target import-linter
+$ ritsu sakai gen examples/shop/shop.ctx --target import-linter
 $ ritsu sakai doc examples/shop/shop.ctx --format html --out site
 ```
 
@@ -133,14 +133,14 @@ The usual ones:
 | E401 | an upstream value with no mapping | add the line the note shows, with the value the team decides |
 | E402, E403 | a value line names a value the enum does not have | write one of the values the note lists, as it lists them (in quotes where it quotes them) |
 | E406, E407 | one word in two meanings crosses | rename, `as`, or map it in an anticorruption layer (ask) |
-| E502 | the linter's settings are not what the map writes | run `ritsu sakai build` again with the same `--lang`, and commit |
+| E502 | the linter's settings are not what the map writes | run `ritsu sakai gen` again with the same `--target` and `--lang`, and commit |
 | W901 | a key of a known shape is written in a `.ctx` | take it out and read it where the code runs; tell the person to revoke it if it is real (the history keeps it) |
 
 Fix the first diagnostic first: an error of words or ownership stops what comes after it.
 
 ## 5. The linters and the page
 
-`ritsu sakai build --target import-linter|dependency-cruiser|archunit|go-arch-lint` writes the settings where the map's `code` line puts the language; CI runs the linter and `ritsu sakai build … --check`.
+`ritsu sakai gen --target import-linter|dependency-cruiser|archunit|go-arch-lint` writes the settings where the map's `code` line puts the language; give `--target` once for each tool, and none is written when one cannot be (E501). CI runs the linter and `ritsu sakai gen … --check`. `sakai build` of 0.40.0 stops with exit 2 and says the new name.
 Run dependency-cruiser with `--output-type err`, and with TypeScript below 6 (with TypeScript 6 or later, dependency-cruiser 16 reads nothing and passes).
 `targets.md` has the settings and what each tool catches.
 

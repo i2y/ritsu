@@ -1,5 +1,5 @@
-// `sakai build --target dependency-cruiser --lang ja` が ../通販.ctx から書いた設定。
-// 直すときは .ctx を直して書き直す。古くなっていないかは `sakai build --check` が言う。
+// `sakai gen --target dependency-cruiser --lang ja` が ../通販.ctx から書いた設定。
+// 直すときは .ctx を直して書き直す。古くなっていないかは `sakai gen --target dependency-cruiser --check --lang ja` が言う。
 
 module.exports = {
   forbidden: [

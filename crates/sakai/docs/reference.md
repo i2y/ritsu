@@ -40,7 +40,7 @@ code java "java/src/main/java"
 code go "go"
 ```
 
-- The heading is `map <name>(<alias>) v<n>`. The alias is ASCII (`[A-Za-z_][A-Za-z0-9_]*`) and required (E008): it names the map in CML and in the settings `build` writes. The version is for people; it is copied into `api` and the heads of what sakai writes.
+- The heading is `map <name>(<alias>) v<n>`. The alias is ASCII (`[A-Za-z_][A-Za-z0-9_]*`) and required (E008): it names the map in CML and in the settings `gen` writes. The version is for people; it is copied into `api` and the heads of what sakai writes.
 - `use context "<file>"`: a context of the map.
 - `covers "<dir>"` and `except "<dir>"`: the files the map covers. Every artifact under `covers` and outside `except` must belong to exactly one context. A path with a part that starts with `.` (`.git`, `.venv`), and `node_modules`, `site-packages`, `__pycache__` and `target`, are never covered.
 
@@ -49,7 +49,7 @@ except "py/billing"
 ```
 
 - `proto root "<dir>"`: where the imports of the `.proto` files are looked up.
-- `code <language> "<dir>"`, with `test "<dir>"` under it for Java: where the code of a language is, for `build` and for the artifacts of that language. The languages are `python`, `typescript`, `java`, `go` and `rust`; for Rust, the directory is the Cargo workspace.
+- `code <language> "<dir>"`, with `test "<dir>"` under it for Java: where the code of a language is, for `gen` and for the artifacts of that language. The languages are `python`, `typescript`, `java`, `go` and `rust`; for Rust, the directory is the Cargo workspace.
 
 ```ctx
 code rust "."
@@ -293,7 +293,7 @@ Each code, with when it comes, how to fix it and the smallest reproduction, is i
 - Whether the code calls HTTP, and sends to and receives from channels, as its documents say.
 - Whether generated code really was generated from its published language.
 - What a definition says.
-- The imports of the code: the settings `sakai build` writes have the import linters check them ([targets.md](targets.md)). Rust is the exception: `check` holds a crate's dependencies to the map itself, as Cargo states them.
+- The imports of the code: the settings `sakai gen` writes have the import linters check them ([targets.md](targets.md)). Rust is the exception: `check` holds a crate's dependencies to the map itself, as Cargo states them.
 
 ## The keywords
 
@@ -312,7 +312,7 @@ Every keyword has one English spelling and no synonym.
 | Command | What it does |
 |---|---|
 | `sakai check <map.ctx \| dir>... [--format json] [--root <dir>]` | check maps; a directory stands for every map under it |
-| `sakai build <map.ctx> --target <tool> [--out <dir>] [--check]` | write the settings of an import linter from the map, or check that they are up to date ([targets.md](targets.md)) |
+| `sakai gen <map.ctx> --target <tool>... [--out <dir>] [--check]` | write the settings of each import linter given from the map, or check that they are up to date ([targets.md](targets.md)) |
 | `sakai export cml <map.ctx> [--out <file>]` | write the map as Context Mapper's CML |
 | `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>]` | write the map's page: the context map, each context's artifacts and glossary, the relationships and what crosses them, the mappings |
 | `sakai api <map.ctx>` | print the map, the owners and the crossings as JSON |

@@ -42,7 +42,7 @@ fn ritsu_sakai_checks_the_example_with_every_language() {
     assert_eq!(via, ["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "flow"]);
     // the settings the example keeps are what the map writes, read with every language joined
     for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
-        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "build", "examples/shop.ja/通販.ctx", "--target", t, "--check", "--lang", "ja"]);
+        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "gen", "examples/shop.ja/通販.ctx", "--target", t, "--check", "--lang", "ja"]);
         assert_eq!(code, 0, "{t}: {out}{err}");
         assert!(out.contains("いまの地図から書くものと同じ"), "{t}: {out}");
     }
@@ -96,7 +96,7 @@ fn ritsu_sakai_checks_the_english_example_with_every_language() {
     want.sort();
     assert_eq!(via, want);
     for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
-        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "build", "examples/shop/shop.ctx", "--target", t, "--check"]);
+        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "gen", "examples/shop/shop.ctx", "--target", t, "--check"]);
         assert_eq!(code, 0, "{t}: {out}{err}");
         assert!(out.contains("Up to date"), "{t}: {out}");
     }

@@ -1,5 +1,5 @@
-# Written by `sakai build --target import-linter` from ../基本.ctx.
-# Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.
+# Written by `sakai gen --target import-linter` from ../基本.ctx.
+# Edit the .ctx files and write it again; `sakai gen --target import-linter --check` says whether it is up to date.
 
 [importlinter]
 root_packages =

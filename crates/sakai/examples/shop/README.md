@@ -48,4 +48,4 @@ The artifacts are copies of the examples of ritsu's languages, with their names 
 The code in `py/`, `ts/`, `java/` and `go/` stands in for real code: a few hand-written lines in each file, with the imports that matter to the boundaries.
 Where the real code would be generated (from a `.proto`, or by rulec, koyomi or chobo), the head of the file says which command writes it.
 The import linters look at the boundaries, not at what the code does.
-The settings beside the code (`py/.importlinter`, `ts/.dependency-cruiser.cjs`, `java/src/test/java/SakaiContextsTest.java`, `go/.go-arch-lint.yml`) are what `sakai build … --lang en` writes from this map, and the tests hold them to it.
+The settings beside the code (`py/.importlinter`, `ts/.dependency-cruiser.cjs`, `java/src/test/java/SakaiContextsTest.java`, `go/.go-arch-lint.yml`) are what `sakai gen … --lang en` writes from this map, and the tests hold them to it.

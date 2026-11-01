@@ -17,7 +17,7 @@
    ├── 一式の言語に口で問う ──────── rulec・koyomi・dandori の参照、rulec の列挙と Connect のサービス、chobo の勘定と振替（4.1）
    │
    ├── check：属し方、境界を越える参照、パターンどうしの整合、対応の網羅、同じ語
-   ├── build --target import-linter | dependency-cruiser | archunit | go-arch-lint：コードの import を確かめる設定
+   ├── gen --target import-linter | dependency-cruiser | archunit | go-arch-lint（何度でも）：コードの import を確かめる設定
    ├── export cml：Context Mapper の CML
    ├── api：地図、属し方、境界を越える参照（JSON）
    └── doc：コンテキストマップの図、コンテキストごとの用語集、関係と対応の表（Markdown と HTML）
@@ -49,7 +49,7 @@ sakai は、コンテキストマップのうち、実物と突き合わせら�
 - **P3**：境界を越えて参照してよいのは、公表された言語（proto の package と、rulec が規則ごとに書く Connect のサービスと、OpenAPI と AsyncAPI の文書。15 章）の要素と、共有カーネルに並べた成果物だけである。
 - **P4**：上流と下流の関係は、下流のファイルに書く。下流が、上流のモデルをどう扱うか（そのまま使う順応者か、読み替える腐敗防止層か、要望を出せる顧客か）を決めるのは下流だからである。二つのコンテキストが合意して成り立つパターン（顧客／供給者、共有カーネル、パートナーシップ）は、両方のファイルに書き、検査が食い違いを言う。
 - **P5**：語の意味は確かめない。二つの語が同じ意味かは、書いた人の宣言（`as` で上流の語を取り入れる）だけで決め、定義の文を比べない。
-- **P6**：コードの import は sakai が読まない。各言語の既存のツールの設定を書き、そのツールで確かめる。書いた設定が地図に合っているかは、`sakai build --check` が言う。
+- **P6**：コードの import は sakai が読まない。各言語の既存のツールの設定を書き、そのツールで確かめる。書いた設定が地図に合っているかは、`sakai gen --check` が言う。
 - **P7**：確かめていないことは、確かめていないと言う。ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、その言語の成果物を読めないと言って止める（E104）。言語がファイルに答えないとき（その言語の検査を通らない、読めない）も、そう言う（E105）。契約の文書に書いていない呼び出し（OpenAPI の文書の無い HTTP、AsyncAPI の文書の無いキュー、データベースの共有）は、doc に「確かめていない」と出す（3.7）。黙って通さない。OpenAPI と AsyncAPI の文書に書いた HTTP の操作とチャネルは、ほかの成果物と同じく確かめる（15 章。ritsu 0.23.0 までは、これも「確かめていない」に入れていた）。
 
 ### 0.3 なぜ別の言語にするか
@@ -848,7 +848,7 @@ error[E104]: examples/shop/contexts/delivery.ctx:6:7: This sakai cannot read dan
   = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/shop/shop.ctx`.
 ```
 
-**決定**：E104 は、ほかの言語がつながっていないことを言うコードにする（前は「ツールが無い」）。ritsu の決まりで、言語のクレートはほかの言語のクレートに依存しない（ritsu の DESIGN 3.1）ので、sakai のクレートのバイナリは一式の言語を持てない。そのバイナリで例を確かめるとき、規則やワークフローを属し方でだけ扱って通すこともできるが、それは確かめていない参照を黙って通すことになる（P7）。言語ごとに一つにしたのは、成果物ごとに言うと例でも九つになり、言うことは同じだからである。`check` のほかに `api`、`build`、`export` も、地図の検査を通らなければ出さないので、同じ E104 で止まる。
+**決定**：E104 は、ほかの言語がつながっていないことを言うコードにする（前は「ツールが無い」）。ritsu の決まりで、言語のクレートはほかの言語のクレートに依存しない（ritsu の DESIGN 3.1）ので、sakai のクレートのバイナリは一式の言語を持てない。そのバイナリで例を確かめるとき、規則やワークフローを属し方でだけ扱って通すこともできるが、それは確かめていない参照を黙って通すことになる（P7）。言語ごとに一つにしたのは、成果物ごとに言うと例でも九つになり、言うことは同じだからである。`check` のほかに `api`、`gen`、`export` も、地図の検査を通らなければ出さないので、同じ E104 で止まる。
 
 **捨てたもの**：
 
@@ -946,7 +946,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 
 ### 5.2 台帳
 
-番号と意味はこの表で決め、`src/codes.rs` の台帳と一致させる（`tests/codes.rs` が表と台帳を突き合わせる）。各コードは、いつ出るか、どう直すか、最小の再現を持ち、`sakai explain <コード>` が引く。再現は複数のファイルになるので、台帳は、二つのコンテキスト（甲と乙）の検査を通る地図を土台に持ち、各コードはその上に置き換えるファイルを持つ（rulec の DESIGN 15.59 が、隣に置くファイルを台帳に持たせたのと同じ考え）。テストは全コードの再現を一時ディレクトリに書き、そこで走らせて、そのコードが出ることを確かめる。走らせるのはたいてい `check .` で、`build` が出す E501 と E502 は、再現に `sakai build …` のコマンドを持つ（`sakai explain` もそのコマンドを言う）。E107 の再現は、土台が Rust のコードを持たないので、Rust のコードを持つ一つのコンテキストの地図を自分で持つ。ほかの言語の成果物を含む再現（E105、E207、E208、E209、E405）は `ritsu sakai check .` で走らせ（`sakai explain` もそう言う）、E104 の再現は、何もつながない sakai のクレートのバイナリの `sakai check .` で走らせる。退いたコード（N101）は、台帳に残して `sakai explain` で引けるようにし、退いた理由と版を書く。番号はほかのものに使い回さない（ritsu の DESIGN 7.10）。
+番号と意味はこの表で決め、`src/codes.rs` の台帳と一致させる（`tests/codes.rs` が表と台帳を突き合わせる）。各コードは、いつ出るか、どう直すか、最小の再現を持ち、`sakai explain <コード>` が引く。再現は複数のファイルになるので、台帳は、二つのコンテキスト（甲と乙）の検査を通る地図を土台に持ち、各コードはその上に置き換えるファイルを持つ（rulec の DESIGN 15.59 が、隣に置くファイルを台帳に持たせたのと同じ考え）。テストは全コードの再現を一時ディレクトリに書き、そこで走らせて、そのコードが出ることを確かめる。走らせるのはたいてい `check .` で、`gen` が出す E501 と E502 は、再現に `sakai gen …` のコマンドを持つ（`sakai explain` もそのコマンドを言う）。E107 の再現は、土台が Rust のコードを持たないので、Rust のコードを持つ一つのコンテキストの地図を自分で持つ。ほかの言語の成果物を含む再現（E105、E207、E208、E209、E405）は `ritsu sakai check .` で走らせ（`sakai explain` もそう言う）、E104 の再現は、何もつながない sakai のクレートのバイナリの `sakai check .` で走らせる。退いたコード（N101）は、台帳に残して `sakai explain` で引けるようにし、退いた理由と版を書く。番号はほかのものに使い回さない（ritsu の DESIGN 7.10）。
 
 | コード | いつ出るか |
 |---|---|
@@ -1013,7 +1013,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | W401 | 境界を越えない語 |
 | W402 | 値が無いことを表す 0 番の値に対応を書いている |
 | E501 | ツールの設定に書けない（言語のモジュールにならないディレクトリの名前、`code` の無い言語へのビルド、コードを持つコンテキストが無い） |
-| E502 | `build --check`：書いてある設定が、いまの地図から書くものと違う |
+| E502 | `gen --check`：書いてある設定が、いまの地図から書くものと違う |
 | W901 | 鍵の形の値が、地図か context のファイルに書いてある（16 章） |
 | W902 | 地図の OpenAPI か AsyncAPI の文書のサーバーが、ループバックの外へ、暗号化しない通信をする（16 章） |
 | W903 | 公表された言語の OpenAPI の操作か AsyncAPI のチャネルに、認証の指定が無い（16 章） |
@@ -1166,7 +1166,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 | コマンド | すること |
 |---|---|
 | `sakai check <map.ctx \| dir>... [--format json] [--root <dir>]` | 検査（3 章）。ディレクトリを渡すと、その下の map のファイルを全部（パスの順に）。どの地図にも読まれない context のファイルがあれば、ディレクトリを渡したときだけ W103 を出す |
-| `sakai build <map.ctx> --target import-linter\|dependency-cruiser\|archunit\|go-arch-lint [--out <dir>] [--check] [--root <dir>]` | コードの import の検査の設定を書く（7 章）。検査を通らない地図からは書かない（診断を出して exit 1）。`--out` の既定は、その言語の `code` の置き場所（ArchUnit は `test` の置き場所）。書けば `examples/shop/py/.importlinter: Written (11 contracts)` のように一行で言う。`--check` は、書く代わりに、いまの設定が地図から書くものと同じかを確かめる（同じなら `Up to date (11 contracts)`、違えば E502）。書けない地図は E501 |
+| `sakai gen <map.ctx> --target import-linter\|dependency-cruiser\|archunit\|go-arch-lint... [--out <dir>] [--check] [--root <dir>]` | コードの import の検査の設定を書く（7 章）。`--target` はツールごとに一つずつ、何度でも書け、書く順はフラグの順ではなくこの並びの順（28 章）。検査を通らない地図からは書かない（診断を出して exit 1）。`--out` の既定は、その言語の `code` の置き場所（ArchUnit は `test` の置き場所）で、`--out` があれば、どのツールの設定もそこに書く。書けば `examples/shop/py/.importlinter: Written (11 contracts)` のように一つの設定を一行で言う。`--check` は、書く代わりに、いまの設定が地図から書くものと同じかを確かめる（同じなら `Up to date (11 contracts)`、違えば E502）。書けない地図は E501 で、そのときはどのツールの設定も書かない |
 | `sakai export cml <map.ctx> [--out <file>] [--root <dir>]` | Context Mapper の CML を書く（8 章）。既定は標準出力。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
 | `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>] [--root <dir>]` | コンテキストマップの図、コンテキストごとの成果物と用語集、関係と越える参照、対応の表（10 章）。既定は Markdown を標準出力に。`--out` があれば、地図のファイルの名前から `<名前>.md` か `<名前>.html` を書き、`site/shop.html: Written` のように一行で言う。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
 | `sakai api <map.ctx> [--root <dir>]` | 地図、属し方、境界を越える参照を JSON で（9 章） |
@@ -1178,9 +1178,9 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 
 **決定**：コマンドとフラグの定義を `src/cli.rs` の一枚の表に置き、`--help` の表示と引数の読み取りが同じ表を引く（rulec の 12.1、koyomi、chobo と同じ）。知らないフラグ、閉じた集合の外の値（`--target depguard`）、値の無いフラグ、二度書いたフラグは exit 2 で止める。黙って無視すると、エージェントはフラグが効いたと信じて次に進むからである。
 
-`check`、`api`、`doc`、`export` は、通信も子プロセスもしない（ほかの言語には、同じプロセスの中で口で問う。4.1）。例外は、地図が `code rust` を書くときに、Rust のクレートを尋ねる `cargo metadata` の一回である（7.7。マニフェストを読むだけで、ビルドもネットワークへの接続もしない）。`build` も、設定を書くだけで、import の検査のツールは走らせない。ツールを走らせるのは利用者の CI で、sakai のテストはツールを本当に走らせて設定を確かめる（7.6）。
+`check`、`api`、`doc`、`export` は、通信も子プロセスもしない（ほかの言語には、同じプロセスの中で口で問う。4.1）。例外は、地図が `code rust` を書くときに、Rust のクレートを尋ねる `cargo metadata` の一回である（7.7。マニフェストを読むだけで、ビルドもネットワークへの接続もしない）。`gen` も、設定を書くだけで、import の検査のツールは走らせない。ツールを走らせるのは利用者の CI で、sakai のテストはツールを本当に走らせて設定を確かめる（7.6）。
 
-## 7. コードの import の検査（build）
+## 7. コードの import の検査（gen）
 
 ### 7.1 import を許す単位と向き
 
@@ -1376,7 +1376,7 @@ depguard の利点は、golangci-lint に入っていて、多くのチームが
 
 ### 7.6 突き合わせ
 
-`tests/imports.rs` は、ツールごとに、地図を一時ディレクトリにコピーし、`sakai build --target <ツール> --lang ja` で設定を書き、本物のツールを走らせる。地図は 11 章の例と、生成したコードが内側のディレクトリの中にある `tests/maps/入れ子` の二つである。
+`tests/imports.rs` は、ツールごとに、地図を一時ディレクトリにコピーし、`sakai gen --target <ツール> --lang ja` で設定を書き、本物のツールを走らせる。地図は 11 章の例と、生成したコードが内側のディレクトリの中にある `tests/maps/入れ子` の二つである。
 
 - 例のままでは、どのツールも違反を言わない。
 - 次の四つの import を一つずつ足したコピーでは、どのツールもその import を、足したファイルで言う（`tests/code/<言語>/`）。(1) 受注の内側が在庫の内側を import する、(2) 請求の腐敗防止層の外が、受注の公表された言語から生成したコードを import する、(3) 受注が、請求と配送の共有カーネルのコードを import する、(4) レビューが請求を import する。`tests/maps/入れ子` では、受注が、在庫の生成したコードを囲む内側を import する一つ。
@@ -1393,7 +1393,7 @@ depguard の利点は、golangci-lint に入っていて、多くのチームが
 
 ### 7.7 Rust：Cargo に尋ねて、sakai が確かめる（cargo-deny と比べて）
 
-**決定**：Rust のコードは、地図の `code rust "<パス>"` に、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書く。境界を越える参照は、クレートの依存として読む。Rust では、コードが `use` できるほかのクレートは `Cargo.toml` の依存に書いたものだけで、それ以外はコンパイラがエラーにするので、クレートの依存を確かめれば、コードがほかのクレートを参照するところを全部確かめたことになる。依存は、`check` のたびに sakai が Cargo に尋ねる（`cargo metadata --format-version 1 --no-deps --offline`。マニフェストを読むだけで、ビルドもネットワークへの接続もしない）。Cargo が言うワークスペースのクレートの依存のうち、パスで書いたもの（`[dependencies]` と `[build-dependencies]`）を、依存を書いたマニフェストの行から、依存先のクレートのマニフェストへの参照として、3.3 の検査にかける。設定を書いてほかのツールに任せる `build` の形（7.1〜7.5）にはしない。
+**決定**：Rust のコードは、地図の `code rust "<パス>"` に、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書く。境界を越える参照は、クレートの依存として読む。Rust では、コードが `use` できるほかのクレートは `Cargo.toml` の依存に書いたものだけで、それ以外はコンパイラがエラーにするので、クレートの依存を確かめれば、コードがほかのクレートを参照するところを全部確かめたことになる。依存は、`check` のたびに sakai が Cargo に尋ねる（`cargo metadata --format-version 1 --no-deps --offline`。マニフェストを読むだけで、ビルドもネットワークへの接続もしない）。Cargo が言うワークスペースのクレートの依存のうち、パスで書いたもの（`[dependencies]` と `[build-dependencies]`）を、依存を書いたマニフェストの行から、依存先のクレートのマニフェストへの参照として、3.3 の検査にかける。設定を書いてほかのツールに任せる `gen` の形（7.1〜7.5）にはしない。
 
 `tests/maps/rust` の Billing のクレートに、関係の無い Orders のクレートを `[dependencies]` で足すと（変異の `E201_a_crate_with_no_relationship`）、次のように言う。
 
@@ -1669,7 +1669,7 @@ error[E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto
 
 C の段階で、この例を作った（日本語の名前の `通販.ctx` と五つのコンテキストのファイル）。英語の名前の例は、英語を先にする段階（12.4）で、日本語の例の名前を英語に直した版として足し、日本語の例は `通販` から `shop.ja` に名前を替えた（中身は、`支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、変えていない）。例の README は、D の段階で書いた（英語の例の `examples/shop/README.md` と、日本語の例の `examples/shop.ja/README.ja.md`。コンテキストと関係の表、コピー元、コードが本物の代わりであること）。コピーしたファイルには、頭のコメントにコピー元と直したところを書いた（祝日の表と dandori の `options.proto` は、コピー元のまま）。PLAN の C.0 の直し方のほかに、`受注.flow` のコメントと説明の中の、在庫の値の名前と子の `.flow` のファイルの名前を、直したあとのものに合わせた。コピーしたものと例のために書いたものは、どれもそれぞれのツールの検査を通る（rulec 0.22.1 で規則 4 本、koyomi 0.1.0 でカレンダー 3 本、chobo 0.1.0 で帳簿 1 本、dandori 0.1.0 でワークフロー 2 本。`tests/examples.rs` が確かめる。ritsu の D.8 から、それぞれの言語の口で確かめる）。
 
-四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。英語の例には `--lang en`、日本語の例には `--lang ja`）も置く。CI で `sakai build --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
+四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。英語の例には `--lang en`、日本語の例には `--lang ja`）も置く。CI で `sakai gen --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
 
 ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む。境界を越える参照は 9 件で（3.1）、どれも関係が許す。英語の例では、境界を越える参照を、参照元のファイルの名前の順に並べるので、規則の二つ（`billing_need.rule` と `shipment_fee.rule`）の順が、日本語の例（`出荷の送料.rule` と `請求の要否.rule`）と逆になる。言語ごとの数と、関係と、診断は同じである。
 
@@ -2708,3 +2708,67 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 `ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`sakai check` は地図ごとに、その地図と、地図が読むコンテキストを確かめる。`sakai::run::checked` は、地図ごとに、診断と `ok —` の行に加えて、`sakai check --format json` が地図ごとに書くオブジェクト（`{root, file, ok, summary, diagnostics}`）を、コマンドと同じ `check::to_json` で作り、ritsu-base の JSON に読み直して `ritsu_ports::Checked::json` で渡す。作るのは、パスをコマンドと同じに見せるあいだ（`show_from`）である。ritsu は `root`・`file`・`diagnostics` を除いた `{ok, summary}` を地図の項目に入れる。地図でないコンテキストのファイルは、いくつの地図に読まれるかが決まらない（読まれないことも、二つに読まれることもある）ので、`null` にした。sakai のコマンドの出力は変えていない。
 
 確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、ritsu のテストのプロジェクト（`通販` と `shop`、その変えたコピー）の地図の `check` が、`ritsu sakai check <プロジェクト> --root <プロジェクト> --format json` の地図のオブジェクトから三つのキーを除いたものと同じで、五つのコンテキストのファイルが `null` であること。check の JSON の golden（`crates/ritsu/tests/golden/check/`）。
+
+## 28. `build` を `gen` にし、`--target` を何度でも（2026-11-01）
+
+### 28.1 きっかけ
+
+0.40.0 の `sakai build` は、`--target` に、設定を書くツールの名前（`import-linter`、`dependency-cruiser`、`archunit`、`go-arch-lint`）を一つ取った。四つの言語のコードを持つ地図では、設定を書くのにも、`--check` で確かめるのにも、四度走らせることになる。ほかの生成のコマンド（rulec、koyomi、chobo、dandori、sekisho、`ritsu gen`）は、動詞が `gen` で、`--target` を何度でも書ける（ritsu の DESIGN 9.6）。
+
+### 28.2 原因
+
+`--target` は一つの値を取るフラグで、`build::run` は一つのツールの設定を作って書いた。ツールを足すときは、`--target` の選択肢を一つ足すだけだった。動詞の `build` は、chobo と dandori と同じく、作ったときの名前のままだった。
+
+### 28.3 決定
+
+1. **動詞は `gen`。** `sakai build` と `sakai help build` は exit 2 で止まり、新しい名前を言う（`` `sakai build` is `sakai gen` from 0.41.0``、`` `sakai build` は 0.41.0 から `sakai gen` です``）。`ritsu sakai build` も同じ文で止まる。動く別名にはしない（chobo の 17 章と同じ）。
+2. **`--target` を何度でも書く。** 書く順はフラグの順ではなく、ツールの並び（`Target::ALL`。import-linter、dependency-cruiser、archunit、go-arch-lint）の順で、`Written` と「書きました」の行もその順に並ぶ。同じ `--target` を二度書けば exit 2（`` `--target archunit` is given twice``）。`--target` が無ければ、何も書かずに exit 2 で止まり、四つの名前を言う。文は sekisho と dandori と同じ形にした（0.40.0 は `` `sakai build` needs --target (import-linter | dependency-cruiser | archunit | go-arch-lint)``）。0.40.0 も `--target` が要ったので、0.40.0 と同じものを書くコマンドは示さない。
+
+   ```
+   error: `sakai gen` needs one or more `--target import-linter|dependency-cruiser|archunit|go-arch-lint`
+   ```
+
+   ```
+   エラー: `sakai gen` には `--target import-linter|dependency-cruiser|archunit|go-arch-lint` が一つ以上要ります
+   ```
+
+3. **置き場所は変えない。** どの設定も、0.40.0 と同じく、そのツールが探すところ（地図の `code` の行がその言語を置くところ。ArchUnit は `test` の置き場所）に書く。ほかの生成のコマンドの `<out>/<出力先>/` の段は作らない。ツールは設定をコードのルートで探すので、ほかのディレクトリに書くと読まれない。`--out` を付ければ、どのツールの設定もそのディレクトリに書く。ファイルの名前（`.importlinter`、`.dependency-cruiser.cjs`、`SakaiContextsTest.java`、`.go-arch-lint.yml`）はツールごとに違うので、ぶつからない。
+4. **全部を作ってから書く。** どれかのツールの設定が書けなければ（E501）、どのツールの設定も書かずに exit 1 で終わる。chobo、dandori、`ritsu gen` と同じく、途中まで書いた実行を残さない。止めた診断は一度ずつ言う（二つのツールが同じ文で止まれば、一つにする）。地図が検査を通らなければ、0.40.0 と同じく、どのツールの設定も作らずにその診断を言う。
+5. **`--check` はツールごとに比べる。** 違うか無い設定ごとに E502 を言い、同じ設定には「いまの地図から書くものと同じ」の行を言う。E502 が一つでもあれば exit 1。どれかのツールが E501 で止まれば、比べずに E501 だけを言って 1 で終わる。
+6. **設定の頭の二行は、0.41.0 のコマンドを言う。** 一行目は書いたコマンドで（`` # Written by `sakai gen --target import-linter` from ../shop.ctx.``、日本語は `` # `sakai gen --target import-linter --lang ja` が ../通販.ctx から書いた設定。``）、二行目は確かめるコマンドである。二行目は、ツールを一つ書いた `--check` にした（`` `sakai gen --target import-linter --check` says whether it is up to date.``、日本語は `` 古くなっていないかは `sakai gen --target import-linter --check --lang ja` が言う。``）。0.40.0 の二行目は `sakai build --check` で、動詞だけを替えると、`--target` が無くて止まるコマンドになる。日本語の行に `--lang ja` を書くのは、`--lang` を付けずに確かめると説明の文が英語になり、E502 になるからである（7.1）。
+7. **E502 の注は、`sakai gen --target <ツール>` で書く（書き直す）ことを言う。** 台帳の E501 と E502 の再現のコマンドも `sakai gen …` にした。
+8. **`ritsu.mod` の `target` の行は読まない。** ほかの言語のコマンドと同じである（ritsu の DESIGN 17.3）。行に書くのは言語の名前で、sakai の `--target` はツールの名前である。
+9. **付属物は無い。** 書くものは、どれもツールが読む設定である。
+
+### 28.4 捨てたもの
+
+- **ツールごとに `<out>/<ツール>/` に書くこと**（ほかの生成のコマンドの置き方）。ツールが設定を探すところから外れ、書いた設定が読まれない。
+- **`--target` が無ければ、地図が `code` の行を持つ言語のツールを全部書くこと。** 書くものを名前で指定する決まり（ritsu の DESIGN 9.6）から外れる。地図に言語を足すと、変えていない CI の `--check` が、新しいツールの設定の E502 で落ちる。
+- **`build` を `gen` の別名として残すこと。** 古い名前で通る実行が残ると、文書と出力の両方に二つの名前が要る（chobo の 17 章と同じ）。
+- **頭の二行目を `sakai gen --check` にすること**（動詞だけを替える）。そのコマンドは `--target` が無くて止まる。
+
+### 28.5 変わること
+
+- 前は通っていた実行が落ちるのは、`sakai build`（exit 2）と、0.40.0 が書いた設定の `--check` の二つである（ritsu の DESIGN 9.6）。0.40.0 が書いた設定は頭の一行目が違うので、`sakai gen --target <ツール> --check` は、その行の E502 で 1 になる。一度 `sakai gen --target <ツール>`（書いたときと同じ `--lang`）で書き直せば通る。
+- 設定の頭の二行（決定の 6）。木にある設定の 18 のファイル（例の英日の 8、ritsu のテストのプロジェクトの 8、E502 の変異の 2）を書き直した。二行のほかは一字も変わらない。
+- E502 の注、台帳の E501 と E502 の文と再現のコマンド（`sakai explain`、`docs/codes.md`、`docs/codes.ja.md`）。変異の `command`（E501 の二つと E502 の二つ）を `gen` にした。
+- `src/build/mod.rs` に、ツールの並びを受け取る `gen_with` と、一つのツールの設定を作る `plan` を足した。一つのツールを書く `run` と `run_with` は、`gen_with` を呼ぶ形にして、テストのために残した。モジュールの名前の `build` は変えていない。
+- 文書：`docs/reference.md`、`docs/targets.md`、README（英日）、例の README（英日）、`tools/README.md`、スキル（`skills/sakai/`）。この DESIGN の 0 章の木、0.2 の P6、5.2 の台帳の段落と E502 の行、5 章の E104 の決定、6 章のコマンドの表とその下の段落、7 章の見出しと 7.6・7.7、11 章のいまの形を言うところ。日付のある章と、7.7 の cargo-deny を試した記録は、その時の名前のまま残した。
+
+### 28.6 確かめたこと
+
+- 木の `.ctx` のうち `map` を書く 41 のファイルと、変異の全部（184）で、0.40.0 の公式のバイナリの `ritsu sakai build <地図> --target <ツール>` と、替えた後の `ritsu sakai gen <地図> --target <ツール>` を、ツールを一つずつ、英語と日本語（`--lang ja`）で比べた。41 のうち、根の `ritsu.ctx` は木の中で `--out` を付けて走らせ、変異の中の 6 は変異として走らせ、ほかの 34 はそのディレクトリをコピーして走らせた。変異は、テストと同じく、基にする地図に変異のファイルを重ねて置いた。前と後のコピーは同じ材料で、前のコピーの設定のファイルだけを、替える前のもの（0.40.0 の頭の行のもの）にした。218 の地図のそれぞれで、書く前の `--check`、書く、書けたときの `--check`、`--out` の四つを走らせ、終了コード、標準出力、標準エラー、書いたファイル、コピーの全部のファイルを比べた（5,332 回）。
+  - 5,256 回は一字も違わない。76 回は、E502 の注と、E502 が見せる頭の行の、コマンドの動詞だけが違う。終了コードは (0, 0) が 324 回、(1, 1) が 5,008 回。
+  - 書いたファイルは 200（書いて 100、`--out` で 100）で、どれも頭の二行だけが違う（決定の 6）。ほかの違いは無い。
+  - 根の `ritsu.ctx` は、四つのツールとも英日で E501 で止まり、前と後で一字も違わない。四つを一度に書くと、四つの E501 を言って何も書かない。
+- 四つのツールを一度の実行で（`--target` をツールの並びと逆の順に書いて）、同じ 218 の地図の英日で走らせた（436 回ずつ。書く前の `--check`、書く、書けたときの `--check`、`--out`）。
+  - 四つとも書ける八つの地図（例の英日、ritsu のテストのプロジェクトの `shop` と `通販`、テストの地図の `nested` と `入れ子`、E104 の変異の英日）の 16 回は、一つずつ書いたファイルを合わせたものと一字も違わず、警告は一度、`Written` の行はツールの並びの順で、続く `--check` は四つの「同じ」の行を言って 0 で終わった。`--out` でも同じ。
+  - どれかのツールが E501 で止まる 48 の地図の 96 回は、何も書かずに 1 で終わり、一つずつの実行が止まった E501 を全部言った（合わせて 1,044。二つのツールが同じ文で止まったところは無かった）。
+  - 地図が検査で止まる 162 の地図の 324 回は、一つずつの実行と同じ文と終了コードだった。
+  - 書く前の `--check`：E501 の無い 16 回のうち、6 回は四つとも「同じ」の行で 0。10 回は、設定の無い地図（`nested` と `入れ子`）と、設定を書いたのと違う `--lang` で確かめたもので、四つの E502 をツールの並びの順に言って 1 で終わった。
+- 止まる文（英日）：`build`、`help build`、`--target` が無いとき、同じ `--target` を二度。どれも標準出力に何も出さず、標準エラーに一行を出して exit 2。全文は `tests/cli.rs` の `the_verb_of_0_40_stops_with_the_verb_now` が確かめる。
+- `tests/cli.rs` の `gen_writes_every_tool_it_is_given`：テストの地図 `nested` で、四つのツールをフラグと逆の順に書くと、ツールの並びの順に四つの行を言い（契約 3、規則 3、規則 2、コンポーネント 3）、書いたファイルはどれも一つずつ書いたものと同じ。`--check` は四つの「同じ」の行を言う。一つを手で変え、一つを消すと、二つの E502 と、ほかの二つの「同じ」の行。`--out lint` で、二つの設定がそのディレクトリに入る。`go.mod` を消すと、`nested.ctx:16:1` の E501 を言い、import-linter の設定も書かない。
+
+### 28.7 見つけて直していないもの
+
+- E502 の最後の注は、書き直すコマンドを `sakai gen --target <ツール>` とだけ言い、走らせたときの `--lang` と `--out` を言わない（0.40.0 と同じ）。日本語で書いた設定を `--lang ja` で確かめて E502 になったとき、注のとおりに書き直すと英語の設定になり、次の `--check --lang ja` がまた E502 になる。

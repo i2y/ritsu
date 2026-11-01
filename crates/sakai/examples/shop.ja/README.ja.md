@@ -49,4 +49,4 @@ examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 
 `py/`、`ts/`、`java/`、`go/` のコードは、本物のコードの代わりです。どのファイルも数行の手書きで、境界に関わる import だけを持ちます。
 本物なら生成するコード（`.proto` から、あるいは rulec、koyomi、chobo が書くもの）は、どのコマンドが本物を書くかをファイルの頭に書いています。
 import の検査が見るのは境界で、コードが何をするかではないからです。
-コードの横の設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`）は、この地図から `sakai build … --lang ja` が書いたもので、テストが地図と突き合わせます。
+コードの横の設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`）は、この地図から `sakai gen … --lang ja` が書いたもので、テストが地図と突き合わせます。

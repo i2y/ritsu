@@ -53,7 +53,7 @@ fn the_example_passes_check() {
 fn the_binary_of_this_crate_says_what_it_cannot_read() {
     let o = common::sakai(&["check", "examples/shop.ja/通販.ctx"]);
     assert_eq!(o.status.code(), Some(2));
-    for cmd in [vec!["api", "examples/shop.ja/通販.ctx"], vec!["export", "cml", "examples/shop.ja/通販.ctx"], vec!["build", "examples/shop.ja/通販.ctx", "--target", "import-linter", "--check"]] {
+    for cmd in [vec!["api", "examples/shop.ja/通販.ctx"], vec!["export", "cml", "examples/shop.ja/通販.ctx"], vec!["gen", "examples/shop.ja/通販.ctx", "--target", "import-linter", "--check"]] {
         assert_eq!(common::sakai(&cmd).status.code(), Some(2), "{cmd:?}");
     }
     let out = String::from_utf8_lossy(&o.stdout).to_string();
@@ -235,7 +235,7 @@ fn the_example_passes_check_in_english() {
 fn the_binary_of_this_crate_says_what_it_cannot_read_in_english() {
     let o = common::sakai(&["check", "examples/shop/shop.ctx"]);
     assert_eq!(o.status.code(), Some(2));
-    for cmd in [vec!["api", "examples/shop/shop.ctx"], vec!["export", "cml", "examples/shop/shop.ctx"], vec!["build", "examples/shop/shop.ctx", "--target", "import-linter", "--check"]] {
+    for cmd in [vec!["api", "examples/shop/shop.ctx"], vec!["export", "cml", "examples/shop/shop.ctx"], vec!["gen", "examples/shop/shop.ctx", "--target", "import-linter", "--check"]] {
         assert_eq!(common::sakai(&cmd).status.code(), Some(2), "{cmd:?}");
     }
     let out = String::from_utf8_lossy(&o.stdout).to_string();

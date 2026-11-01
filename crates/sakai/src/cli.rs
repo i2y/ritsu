@@ -56,21 +56,23 @@ pub fn commands() -> Vec<Cmd> {
         },
         Cmd {
             usage: None,
-            name: "build",
+            name: "gen",
             args: "<map.ctx>",
             purpose: tr!(
                 "コードの import の検査の設定を、地図から書く（import-linter、dependency-cruiser、ArchUnit、go-arch-lint）",
-                "write the settings of an import linter from the map (import-linter, dependency-cruiser, ArchUnit, go-arch-lint)"
+                "write the settings of import linters from the map (import-linter, dependency-cruiser, ArchUnit, go-arch-lint)"
             ),
             params: vec![("<map.ctx>", tr!("検査を通る map のファイル", "a map file that passes check"))],
             flags: vec![
-                flag("--target", Some("<tool>"), tr!("書く設定のツール（必ず書く）", "the tool whose settings to write (required)")).choices(&["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"]),
+                flag("--target", Some("<tool>"), tr!("書く設定のツール", "a tool whose settings to write"))
+                    .choices(&["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"])
+                    .once_each(),
                 flag(
                     "--out",
                     Some("<dir>"),
                     tr!(
-                        "書くディレクトリ。無ければ、その言語の `code` の置き場所（archunit は `test` の置き場所）",
-                        "the directory to write to; else where the map's `code` line puts the language (for archunit, its `test`)"
+                        "書くディレクトリ（ツールが二つ以上でも、どれもそこに書く）。無ければ、その言語の `code` の置き場所（archunit は `test` の置き場所）",
+                        "the directory to write to, every tool's file in it; else where the map's `code` line puts the tool's language (for archunit, its `test`)"
                     ),
                 ),
                 flag("--check", None, tr!("書く代わりに、いまの設定が地図から書くものと同じかを確かめる（違えば E502）", "rather than write, check that the settings there are what the map writes (else E502)")),
@@ -78,10 +80,14 @@ pub fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("書いた（--check なら、同じだった）", "written (with --check: up to date)")),
-                (1, tr!("地図にエラーがある、書けない（E501）、違う（E502）", "the map has errors, the settings cannot be written (E501), or differ (E502)")),
-                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+                (1, tr!("地図にエラーがある、書けない（E501。そのときはどのツールの設定も書かない）、違う（E502）", "the map has errors, the settings of a tool cannot be written (E501; then no tool's are), or differ (E502)")),
+                (2, tr!("引数の誤り（`--target` が無い、も含む）、読めないファイル", "bad arguments (no `--target`, among them), or a file that cannot be read")),
             ],
-            examples: vec!["sakai build examples/shop/shop.ctx --target import-linter", "sakai build examples/shop/shop.ctx --target go-arch-lint --check --lang ja"],
+            examples: vec![
+                "sakai gen examples/shop/shop.ctx --target import-linter",
+                "sakai gen examples/shop/shop.ctx --target import-linter --target dependency-cruiser",
+                "sakai gen examples/shop/shop.ctx --target go-arch-lint --check --lang ja",
+            ],
             codes: vec!["E501", "E502"],
         },
         Cmd {
