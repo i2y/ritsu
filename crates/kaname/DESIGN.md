@@ -2035,6 +2035,7 @@ Ja: 16874 of 16874 cases agree with the reference: 14096 vectors (5 that do not 
 - **呼び出しの深さ**：生成した Python で、kaname の呼び出しの一段は Python の一段である。`tests/python.rs` は、`tests/modules/rec.kn` の `countdown` が答える最小の再帰の上限を二分探索で求め（100 段で 103、200 段で 203）、200 段の呼び出しが、CPython の既定の上限 1,000 のまま答えることを確かめる（8 章）。関数の値の呼び出しも一段で、`tests/modules/hof.kn` の `steps_down`（一段下りるごとに、`steps_down`、`via`、`steps_down` を呼ぶラムダの三つを呼ぶ）は、100 段で 103、199 段で 202 の上限で答える（27.3）。自分を含む型の値は、入れ子の一段が、入口の確かめと比べで Python の二段になる。`tests/modules/trees.kn` の `same` は、200 段の分類の連なりを二つ受け取り、上限 405 で答える（100 段なら 205。28.1）。
 - **Rust の帳簿**：`tests/rust.rs` の `the_generated_rust_makes_the_transfers_in_the_books` は、振替を作る四つのモジュール（`payout` の英日と、`tests/modules/` の `inner.kn` と `walks.kn`）のベクタの答えにある振替（30 件のベクタの 57 件）を、`glue/books/` の当てる関数と chobo の Rust のクライアントで、PostgreSQL（使い捨てのクラスタ）と TigerBeetle に当てる。クライアントの答えと、帳簿の残高と保留が、chobo の参照インタプリタの言うとおりになる。MySQL の系統のクライアントでは、クレートを組んで clippy を通し、走らせない（36.9）。
 - **Rust の呼び出しの深さ**：生成した Rust は段を数えず、200 段の呼び出しと値をスタックで受ける。デバッグのビルドのハーネスは、16,770 件に、メインのスレッドのスタックが 1.5 MiB でも答え、1 MiB では `trees.kn` の `leaf_sum` に渡す 200 段の値であふれた（36.15）。リリースのビルドの Wasm は、スタックが 64 KiB でも 16,770 件に同じ行で答えた（既定は 1 MiB。36.15）。
+- **暦に無い日**：`tests/typescript.rs`、`tests/go.rs`、`tests/rust.rs` の `a_day_of_no_calendar_is_outside_every_range` は、ホストの作れる暦に無い日（2026-02-30、2026-13-01、10000-01-01、TypeScript では日付の形でない `2026-0x-yy`）を、`tests/modules/calc.kn` の `days`（範囲の両端を書いた引数）と `open.kn` の `days`（端を型に任せた引数）に渡し、どれも範囲の外の `input` で失敗することを確かめる（22.5。出力は 36.15）。両端を書いた範囲で宣言の外の入力（上の二つ目）が流す日付は、端の次の日と前の日で、どれも暦にある日なので、その範囲の確かめが暦を見ないことには届かない（暦に無い 2026-13-01 を流すのは、端を型に任せた範囲だけである）。
 - **`ritsu gen` の生成物**：kaname のクレートのテストは、言語をまたぐ判定の答えを渡さずに生成するので、答えを待つ場所に確かめを書く（10.4）。`ritsu gen` の生成物は、`crates/ritsu/tests/gen.rs` が同じハーネスで確かめる。`tests/projects/settlement` を `ritsu gen` で書き、三つの型の検査を通し、ベクタと宣言の外の入力を流す（自分を含む型は無い）。答えを渡すと、言語をまたぐ判定の場所の確かめが無くなる：
 
 ```
@@ -2865,7 +2866,27 @@ fn _outside1(v: kaname::Date, what: &str) -> Option<kaname::Outside> {
 }
 ```
 
-範囲の両端を書いた日付も、Rust では暦にある日かを確かめる（`on_calendar()`）。日の番号だけを両端と比べると、2026-02-30 は 2026-03-02 の番号なので、両端のあいだに入るからである。TypeScript と Go は、両端を書いた日付を比べるだけである（36.16）。`tests/modules/calc.kn` の `days` の確かめ（実物）：
+範囲の両端を書いた日付も、暦にある日かを確かめる。日の番号だけを両端と比べると、2026-02-30 は 2026-03-02 の番号なので、両端のあいだに入るからである。TypeScript の文字列は、日付の形でなくても両端のあいだに入りうる（`2026-0x-yy`）。TypeScript と Go は、端を書かない日付と同じ `kaname.isDate` と `Date.Valid` で確かめる。Rust は `on_calendar()` で確かめる（年は両端の中にある）。`examples/late_payment` の `paid_on` の確かめ（実物。TypeScript と Go）：
+
+```ts
+function _outside9(v: string, what: string): kaname.Outside | null {
+  if (!kaname.isDate(v) || (v < "2026-01-01" || v > "2029-12-31")) {
+    return { path: what, shown: v, range: ">=2026-01-01 <=2029-12-31", count: null };
+  }
+  return null;
+}
+```
+
+```go
+func _outside7(v kaname.Date, what string) *kaname.Outside {
+	if !v.Valid() || (v.Days() < 20454 || v.Days() > 21914) {
+		return &kaname.Outside{Path: what, Shown: v.String(), Range: ">=2026-01-01 <=2029-12-31", Count: -1}
+	}
+	return nil
+}
+```
+
+Rust の、`tests/modules/calc.kn` の `days` の確かめ（実物）：
 
 ```rust
 fn _outside11(v: kaname::Date, what: &str) -> Option<kaname::Outside> {
@@ -4698,13 +4719,14 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - 口の `RuleFacts` に `rust` を足した（36.6）。
 - `kaname api` に `wasm` の項を足した（36.11。`generated` の後に入る）。ほかのキーは変わらない。`api` の golden は `KANAME_BLESS=1` で取り直し、16 本とも差は `wasm` の項だけだった。
 - `ritsu_emit::wasm` を足し、koyomi と rulec の Wasm の書き出しはそれを使う（36.12）。koyomi の生成物は変わらず、rulec の生成物は `wasm/<別名>_wasm.rs` だけが変わる（36.15、rulec の DESIGN §15.278）。
+- **範囲の両端を書いた日付**：TypeScript と Go の入口も、範囲の両端を書いた日付が暦にある日かを確かめる（22.5）。前は日の番号（TypeScript は文字列）を両端と比べるだけで、ホストが渡した 2026-02-30 を 2026-03-02 として答え、TypeScript では日付の形でない文字列が入口を通って、中の計算が JavaScript の例外で止まった（36.15）。生成物で変わるのは、そういう引数とフィールドを持つモジュールの、TypeScript と Go の入口の確かめの `if` の行だけで、使う人の `ritsu gen --check` はそのファイルを古いと言う。Python の `datetime.date` は、いつも暦にある日である。
 
 ### 36.15 確かめたこと
 
 **前と後の比べ**。替える前は 0.40.0 の公式のバイナリで、替えた後は手元のビルドで、同じ入力から取ったものを一字ずつ比べた（木をコピーした場所で、ディレクトリの全部、標準出力、標準エラー、終了コード）。
 
 - `rulec gen` と `rulec api`：コーパスと例の `.rule` の全部（英日の 994 ファイル）の `gen` を、そのまま、`--format json`、`--lang ja` の三通りで、ほかに 160 のディレクトリで、`api` を一つずつ、4,136 回。違ったのは `gen` の 1,931 回で、違うファイルはどれも `wasm/<別名>_wasm.rs` だった（2,210。36.12）。ほかに書いた 127,041 のファイルと、`api` の 994 回は同じだった。
-- kaname と `ritsu gen`：木の全部の `.kn`（例、`tests/modules/`、ritsu の `tests/projects/`）の `check` 218 回、`vectors` 52 回、`ritsu gen` の TypeScript・Python・Go（帳簿の置き場所の三つと `--library`）399 回。違ったのは `tests/modules/names.kn` の生成物の三つだけで、差は `letters` の行である。前の生成物はそこで組めなかった：
+- kaname と `ritsu gen`：木の全部の `.kn`（例、`tests/modules/`、ritsu の `tests/projects/`）の `check` 218 回、`vectors` 52 回、`ritsu gen` の TypeScript・Python・Go（帳簿の置き場所の三つと `--library`）399 回。違ったのは 33 回である。30 回は、範囲の両端を書いた日付の引数かフィールドを持つモジュール（例の `late_payment` の英日、`tests/modules/` の `dicts`・`results`・`sums` の英日と `lists`・`walks`、ritsu の `tests/projects/settlement`）の TypeScript と Go で、差は入口の確かめの `if` の行だけだった（ファイルごとに 1 行か 2 行。36.14）。残りの 3 回は `tests/modules/names.kn` の生成物で、差は `letters` の行である。前の生成物はそこで組めなかった：
 
 ```text
 (0.40.0 の Go を gofmt -l で)
@@ -4918,7 +4940,7 @@ en 8 KiB: 16770 calls, 90 trapped
 
 日本語も同じ数だった。64 KiB の答えは 1 MiB の答えと一字も違わない。48 KiB でトラップしたのは、`catalog.kn` とその日本語の版に 200 段と 201 段の値を渡す 18 件（JSON の深さ 403〜405）で、32 KiB では `trees.kn` とその日本語の版の 18 件が加わる。要るスタックは 48 KiB と 64 KiB のあいだで、既定の 1 MiB はその 16 倍より大きい。データはスタックの上（`(data (;0;) (i32.const 1048576)`）から始まるので、スタックがあふれれば 0 番地の下を指し、データを書きつぶさずに「memory access out of bounds」でトラップする。
 
-**暦に無い日**（`a_day_of_no_calendar_is_outside_every_range` の出力。Rust の入口に `on_calendar()` を足す前は、一行目が `calc 2026-02-30: ok` だった）：
+**暦に無い日**（`tests/rust.rs`、`tests/go.rs`、`tests/typescript.rs` の `a_day_of_no_calendar_is_outside_every_range` の出力。16.4）。Rust と Go は、ホストの作った日付を入口の確かめ（`check_days`、`CheckDays`）に渡し、TypeScript は関数（`days`）に渡して、答えか文を一行ずつ書く。Rust と Go は同じ六行を書く：
 
 ```text
 calc 2026-02-30: The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31
@@ -4929,19 +4951,21 @@ open 10000-01-01: The argument `first` of `days` is 10000-01-01, outside its ran
 open 2026-03-02: ok
 ```
 
+TypeScript：
+
+```text
+calc 2026-02-30: The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31
+calc 2026-0x-yy: The argument `a` of `days` is 2026-0x-yy, outside its range >=2026-01-01 <=2026-12-31
+calc 2026-03-02: -1
+open 2026-02-30: The argument `first` of `days` is 2026-02-30, outside its range >=0001-01-01 <=9999-12-31
+open 10000-01-01: The argument `first` of `days` is 10000-01-01, outside its range >=0001-01-01 <=9999-12-31
+open 2026-03-02: -1
+```
+
+両端を書いた日付を暦で確かめる前は、`calc` の一行目が違った。Rust と Go では `calc 2026-02-30: ok` で、TypeScript では `calc 2026-02-30: -1`（2026-03-02 として答えた）と、二行目の `calc 2026-0x-yy: The number NaN cannot be converted to a BigInt because it is not an integer` だった（Rust と Go の 2026-13-01 は、日の番号が 2027-01-01 のものなので、前も範囲の外だった）。前の生成器では、三つのテストとも落ちる。
+
 ### 36.16 見つけて直していないもの
 
 - rulec と koyomi の Rust のモジュールは、clippy に当たる形を持つ（36.8）。どちらも単独の生成物と同じ形で、変えると使う人の `--check` が落ちる。
 - 表のほうがツールの Unicode より新しいとき、表が通す字をツールが名前に取らない（36.3）。`tests/idents.rs` で、Python 3.13.11（Unicode 15.1.0）は 18,040、Go 1.26.10（Unicode 15.0.0）は 19,226、tsc 7.0.2 は 18,040 の名前がそれにあたる。kaname の字句（`starts_name`、`is_name_char`）は Rust の `char` の Unicode（17.0.0）で読むので、その字を名前に取る。ツールの Unicode に合わせて表を分けることはしていない。
 - Rust は識別子を NFC にしてから比べる（36.3）。NFC で同じになる二つの関数の中の名前は、Rust で同じ名前になる。Python の NFKC と同じ形の穴で、確かめていない（chobo の DESIGN 14.6 と同じ）。
-- 範囲の両端を書いた日付の引数では、TypeScript と Go の入口は、日の番号（TypeScript は文字列）を両端と比べるだけで、暦にある日かを確かめない（22.5）。ホストが 2026-02-30 を渡すと 2026-03-02 として答え、TypeScript の文字列が日付の形でもなければ、入口を通って中の計算が JavaScript の例外で止まる。範囲 `>=2026-01-01 <=2026-12-31` の二つの日付の差を返す関数を `ritsu gen` で書いて呼んだ：
-
-```text
-(Go。CheckDays(a, 2026-03-01) と Days(a, 2026-03-01))
-go 2026-02-30: <nil> 1
-(TypeScript。days(a, "2026-03-01"))
-ts 2026-02-30: 1
-ts 2026-0x-yy: The number NaN cannot be converted to a BigInt because it is not an integer
-```
-
-  Rust の入口は確かめる（36.11）。TypeScript と Go に同じ確かめを足すと、両端を書いた日付の範囲を持つモジュールの生成物が変わり、使う人の `ritsu gen --check` が落ちる。

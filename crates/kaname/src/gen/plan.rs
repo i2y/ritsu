@@ -2802,10 +2802,11 @@ impl<'a> Gen<'a> {
     /// The test of a value as it travels against the range `whole` a place holds it to, `written` the
     /// ends the place writes (the others are the type's, DESIGN 22.5): a number to every end in
     /// TypeScript and Python, to the ends written in Go (its int64 holds no other); a date to the ends
-    /// written, and, where an end is not written, to be a day of 0001-01-01 to 9999-12-31 in
-    /// TypeScript (a string) and Go and Rust (a `Date` of any year, month and day); Python's date is
-    /// one. Rust's date is held to be a day of the calendar where both ends are written too: the day
-    /// number of 2026-02-30 is that of 2026-03-02, and falls between the ends.
+    /// written, and to be a day of the calendar, whether the ends are written or not. TypeScript's
+    /// date is a string and Go's and Rust's a `Date` of any year, month and day, held to be a day of
+    /// 0001-01-01 to 9999-12-31; where both ends are written, Rust holds it to the calendar alone,
+    /// the ends holding the year. The day number of 2026-02-30 is that of 2026-03-02, and falls
+    /// between the ends. Python's date is a day of the calendar.
     fn range_test(&self, v: &Ex, t: &Ty, written: Option<&Range>, whole: &Range) -> Option<Ex> {
         match t {
             Ty::Num(n) if !n.is_rate() && matches!(self.t, Target::Go | Target::Rust) => written.and_then(|r| self.out_of(v, t, r)),
@@ -2814,8 +2815,8 @@ impl<'a> Gen<'a> {
                 let compared = written.and_then(|r| self.out_of(v, t, r));
                 let open = written.is_none_or(|r| r.min.is_none() || r.max.is_none());
                 let day = match self.t {
-                    Target::TypeScript if open => Some(Ex::Not(Box::new(self.kcall("isDate", vec![v.clone()])))),
-                    Target::Go if open => Some(Ex::Not(Box::new(Ex::Call(Box::new(v.clone().dot("Valid")), vec![])))),
+                    Target::TypeScript => Some(Ex::Not(Box::new(self.kcall("isDate", vec![v.clone()])))),
+                    Target::Go => Some(Ex::Not(Box::new(Ex::Call(Box::new(v.clone().dot("Valid")), vec![])))),
                     Target::Rust if open => Some(Ex::Not(Box::new(v.clone().method("valid", vec![])))),
                     Target::Rust => Some(Ex::Not(Box::new(v.clone().method("on_calendar", vec![])))),
                     _ => None,

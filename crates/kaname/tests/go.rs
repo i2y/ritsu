@@ -9,7 +9,9 @@
 //!   parameters declare, and the values of types that hold themselves nested as deep as a host may
 //!   give one and one deeper (DESIGN 28.1), and every answer is the reference interpreter's: the
 //!   value, or the kind, the module, the line and the message of the failure (a case that does not
-//!   stop in the interpreter, past its 200 calls, is not run).
+//!   stop in the interpreter, past its 200 calls, is not run);
+//! - a `kaname.Date` a host makes that is no day of the calendar (2026-02-30) is outside the range of
+//!   every parameter, the ends written or not (`a_day_of_no_calendar_is_outside_every_range`).
 //!
 //! Without go or gofmt, the test says SKIP and passes.
 
@@ -82,4 +84,76 @@ fn the_generated_go_answers_as_the_reference_does() {
     for line in report {
         println!("{line}");
     }
+}
+
+/// The program of [`a_day_of_no_calendar_is_outside_every_range`]: the checks of the entry called as a
+/// host calls them, with dates a host can make, each answer a line.
+const CALENDAR: &str = r#"// Dates of no calendar given to the checks of the entry.
+package main
+
+import (
+	"fmt"
+
+	"kanametest/pkg/glue/calc"
+	"kanametest/pkg/glue/kaname"
+	"kanametest/pkg/glue/open"
+)
+
+func main() {
+	d := func(year, month, day int) kaname.Date { return kaname.Date{Year: year, Month: month, Day: day} }
+	said := func(err error) string {
+		if err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	for _, a := range []kaname.Date{d(2026, 2, 30), d(2026, 13, 1), d(2026, 3, 2)} {
+		fmt.Printf("calc %s: %s\n", a, said(calc.CheckDays(a, d(2026, 3, 1))))
+	}
+	for _, a := range []kaname.Date{d(2026, 2, 30), d(10000, 1, 1), d(2026, 3, 2)} {
+		fmt.Printf("open %s: %s\n", a, said(open.CheckDays(a, d(2026, 3, 1))))
+	}
+}
+"#;
+
+/// A host of Go can make a `kaname.Date` of no calendar: the entry finds it outside the range of the
+/// parameter, where the range writes both ends (calc's `days`: the day number of 2026-02-30 is that
+/// of 2026-03-02, between the ends) and where it leaves them to the type (open's `days`). Before, the
+/// check of the first let 2026-02-30 through, and `Days` answered it as 2026-03-02 (DESIGN 22.5).
+#[test]
+fn a_day_of_no_calendar_is_outside_every_range() {
+    if !ritsu_testkit::need(Need::Go) {
+        return;
+    }
+    if !ritsu_testkit::tools::runs("go", &["version"]) {
+        ritsu_testkit::skip("go is not on the PATH; the Go kaname generates is not run");
+        return;
+    }
+    let t = TempDir::new("kaname-go-calendar");
+    let dir = t.path().to_path_buf();
+    deep({
+        let dir = dir.clone();
+        move || {
+            let modules: Vec<_> = modules().into_iter().filter(|(_, s)| s == "tests/modules/calc.kn" || s == "tests/modules/open.kn").collect();
+            assert_eq!(modules.len(), 2);
+            write_package(&dir, Target::Go, Lang::En, &modules);
+        }
+    });
+    for f in ["go.mod", "go.sum"] {
+        std::fs::copy(tools().join("go").join(f), dir.join(f)).unwrap();
+    }
+    std::fs::create_dir_all(dir.join("calendar")).unwrap();
+    std::fs::write(dir.join("calendar/main.go"), CALENDAR).unwrap();
+    let r = ritsu_testkit::run(go_in(&dir).args(["run", "./calendar"]), LIMIT);
+    assert!(r.ok, "{}", r.both());
+    assert_eq!(
+        r.stdout,
+        "calc 2026-02-30: The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31\n\
+         calc 2026-13-01: The argument `a` of `days` is 2026-13-01, outside its range >=2026-01-01 <=2026-12-31\n\
+         calc 2026-03-02: ok\n\
+         open 2026-02-30: The argument `first` of `days` is 2026-02-30, outside its range >=0001-01-01 <=9999-12-31\n\
+         open 10000-01-01: The argument `first` of `days` is 10000-01-01, outside its range >=0001-01-01 <=9999-12-31\n\
+         open 2026-03-02: ok\n"
+    );
+    print!("{}", r.stdout);
 }
