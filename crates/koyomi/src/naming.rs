@@ -170,4 +170,4 @@ impl Target {
 }
 
 /// The one function the Wasm module exports, as its world declares it (rulec's too).
-pub const CALL_SIGNATURE: &str = "call: func(input: string) -> string";
+pub use ritsu_emit::wasm::CALL_SIGNATURE;

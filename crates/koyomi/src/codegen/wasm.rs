@@ -10,7 +10,10 @@
 //!   component of the module with no change to it;
 //! - `<alias>_runner.mjs`, the runner Node runs: every line of `koyomi vectors` through `call`.
 //!
-//! `rustc` alone builds it ([`build_line`]), into a module that imports nothing. The input is a
+//! `rustc` alone builds it ([`build_line`]), into a module that imports nothing. The flags, the
+//! world's names, the three functions of the canonical ABI and the runner's `call` are
+//! `ritsu_emit::wasm`'s, which the Wasm of a package of kaname's modules is written with too; what
+//! the module reads and answers is koyomi's own. The input is a
 //! JSON object with the inputs by name, a date as a `YYYY-MM-DD` string and an integer as a JSON
 //! number (a line of `koyomi vectors`, with them under `"in"`, is read the same way), or
 //! `{"date": "YYYY-MM-DD"}` for the calendar; the answer is the line `koyomi vectors` writes for
@@ -23,9 +26,7 @@ use super::{Unit, rust};
 use crate::ast::{Kind, Ty};
 use ritsu_base::text::Lang;
 
-/// How the module is built, after the line `koyomi api` gives: for size over speed, without
-/// unwinding or symbols (rulec's flags), for the target that imports nothing.
-pub const RUSTC_FLAGS: &str = "-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib";
+pub use ritsu_emit::wasm::{RUSTC_FLAGS, WIT_KEYWORDS, semver, world};
 
 /// The line that builds the module, run in `wasm/`: `rustc` alone, no cargo and no crate.
 pub fn build_line(alias: &str) -> String {
@@ -34,41 +35,13 @@ pub fn build_line(alias: &str) -> String {
 
 /// The two lines that make a component of the module with the `.wit` beside it, run in `wasm/`.
 pub fn component_line(alias: &str) -> String {
-    format!(
-        "wasm-tools component embed {alias}.wit {alias}.wasm -o {alias}.embedded.wasm && wasm-tools component new {alias}.embedded.wasm -o {alias}.component.wasm"
-    )
+    ritsu_emit::wasm::component_line(alias)
 }
 
-/// The words WIT keeps for itself (the component model's WIT.md, as wasm-tools 1.245.1 reads it):
-/// a world or a package named like one is written with `%` before it.
-pub const WIT_KEYWORDS: &[&str] = &[
-    "as", "async", "bool", "borrow", "char", "constructor", "enum", "error-context", "export", "f32", "f64", "flags", "from", "func", "future", "import",
-    "include", "interface", "list", "map", "option", "own", "package", "record", "resource", "result", "s16", "s32", "s64", "s8", "static", "stream",
-    "string", "tuple", "type", "u16", "u32", "u64", "u8", "use", "variant", "with", "world",
-];
-
-/// A WIT identifier from an alias: its words, lowercase, joined by `-` (`payment_terms` gives
-/// `payment-terms`; a run of `_` is one break, and one at either end none, since WIT puts a
-/// letter or a digit on each side of every `-`). An alias starts with a letter, so the identifier
-/// does, and a word after the first may start with a digit (`close-20th`), as WIT allows. One that
-/// is a keyword of WIT is written `%`-escaped.
-pub fn world(alias: &str) -> String {
-    let id = alias.split('_').filter(|w| !w.is_empty()).collect::<Vec<_>>().join("-");
-    if WIT_KEYWORDS.contains(&id.as_str()) { format!("%{id}") } else { id }
-}
-
-/// The version of the package: `v1` gives `1.0.0`. A version past what a semver's major number
-/// holds (more than 64 bits) gives none.
-pub fn semver(v: &str) -> Option<String> {
-    v.parse::<u64>().ok().map(|n| format!("{n}.0.0"))
-}
-
-/// `koyomi:payment-terms@1.0.0`, the package the `.wit` declares.
+/// `koyomi:payment-terms@1.0.0`, the package the `.wit` declares: the file's version `v1` is
+/// `1.0.0`, and one past what a semver's major number holds is left out.
 pub fn package(alias: &str, version: &str) -> String {
-    match semver(version) {
-        Some(s) => format!("koyomi:{}@{s}", world(alias)),
-        None => format!("koyomi:{}", world(alias)),
-    }
+    ritsu_emit::wasm::package("koyomi", alias, semver(version).as_deref())
 }
 
 /// The inputs the module reads: those some date takes, in the order they are declared.
@@ -117,73 +90,7 @@ fn said(lang: Lang) -> Said {
 /// the same for every file but for the words of their comments and refusals.
 fn abi_and_json(u: &Unit) -> String {
     let s = said(u.lang);
-    let mut o = String::new();
-    o.push_str(&doc(
-        &[u.t(tr!(
-            "canonical ABI のアロケーター。ホストは入力の文字列をここに置き、call が読み終えて解放する。",
-            "The allocator of the canonical ABI: the host puts the input string here, and call frees it once read."
-        ))],
-        "",
-    ));
-    o.push_str(
-        r#"#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cabi_realloc(old: *mut u8, old_size: usize, align: usize, new_size: usize) -> *mut u8 {
-    if new_size == 0 {
-        return align as *mut u8;
-    }
-    let p = unsafe {
-        if old_size == 0 {
-            alloc(Layout::from_size_align_unchecked(new_size, align))
-        } else {
-            realloc(old, Layout::from_size_align_unchecked(old_size, align), new_size)
-        }
-    };
-    if p.is_null() {
-        std::process::abort();
-    }
-    p
-}
-
-"#,
-    );
-    o.push_str(&doc(
-        &[
-            u.t(tr!(
-                "`call: func(input: string) -> string`。入力は、このモジュールのメモリにある UTF-8 のポインターと長さ。返す値は、答えのポインターと長さの組を指す。その組は cabi_post_call が解放する。",
-                "`call: func(input: string) -> string`: the input is the pointer and the length of UTF-8 in this module's memory, and what comes back points at the pointer and the length of the answer, which cabi_post_call frees."
-            )),
-        ],
-        "",
-    ));
-    o.push_str(&format!(
-        r#"#[unsafe(no_mangle)]
-pub unsafe extern "C" fn call(ptr: *mut u8, len: usize) -> *mut [u32; 2] {{
-    let bytes = if len == 0 {{ Vec::new() }} else {{ unsafe {{ Vec::from_raw_parts(ptr, len, len) }} }};
-    let out = match std::str::from_utf8(&bytes) {{
-        Ok(text) => _answer(text),
-        Err(_) => _refusal("input", {not_utf8}),
-    }};
-    drop(bytes);
-    let s = out.into_boxed_str();
-    let n = s.len();
-    let p = Box::into_raw(s) as *mut u8;
-    Box::into_raw(Box::new([p as u32, n as u32]))
-}}
-
-"#,
-        not_utf8 = lit(s.not_utf8)
-    ));
-    o.push_str(&doc(&[u.t(tr!("call が返した答えを解放する。", "Frees the answer call gave."))], ""));
-    o.push_str(
-        r#"#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cabi_post_call(ret: *mut [u32; 2]) {
-    let r = unsafe { Box::from_raw(ret) };
-    let (p, n) = (r[0] as *mut u8, r[1] as usize);
-    drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, n) as *mut str) });
-}
-
-"#,
-    );
+    let mut o = ritsu_emit::wasm::abi(u.lang, "_answer(text)", &format!("_refusal(\"input\", {})", lit(s.not_utf8)));
     o.push_str(&doc(
         &[u.t(tr!(
             "JSON の値のうち、入口が読むもの。ファイルが読むのは、その入力がとる種類の値だけである。",
@@ -691,8 +598,9 @@ pub fn root(u: &Unit) -> String {
     };
     o.push_str(&format!("//! {what}\n\n"));
     o.push_str(&format!(
-        "// {}\n#[allow(dead_code)]\n#[path = \"{a}.rs\"]\nmod k;\n\nuse std::alloc::{{Layout, alloc, realloc}};\n\n",
-        u.t(tr!("rust/ に書くものと同じモジュール。この入口が使うのは、その一部だけ。", "The module rust/ gets, as it is; the door uses only some of it."))
+        "// {}\n#[allow(dead_code)]\n#[path = \"{a}.rs\"]\nmod k;\n\n{}\n",
+        u.t(tr!("rust/ に書くものと同じモジュール。この入口が使うのは、その一部だけ。", "The module rust/ gets, as it is; the door uses only some of it.")),
+        ritsu_emit::wasm::ALLOC_USE
     ));
     o.push_str(&abi_and_json(u));
     let taken = taken(u);
@@ -783,7 +691,7 @@ pub fn wit(u: &Unit) -> String {
             o.push_str(&format!("    /// {l}\n"));
         }
     }
-    o.push_str(&format!("    export {};\n}}\n", crate::naming::CALL_SIGNATURE));
+    o.push_str(&format!("    export {};\n}}\n", ritsu_emit::wasm::CALL_SIGNATURE));
     o
 }
 
@@ -818,18 +726,9 @@ pub fn runner(u: &Unit) -> String {
             "One call through the canonical ABI of call: func(input: string) -> string. The views of the memory are made after the call, since the memory may grow during it."
         ))
     ));
+    o.push_str(ritsu_emit::wasm::NODE_CALL);
     o.push_str(
-        r#"function call(text) {
-  const bytes = enc.encode(text);
-  const ptr = ex.cabi_realloc(0, 0, 1, bytes.length);
-  new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
-  const ret = ex.call(ptr, bytes.length);
-  const [p, n] = new Uint32Array(ex.memory.buffer, ret, 2);
-  const out = dec.decode(new Uint8Array(ex.memory.buffer, p, n));
-  ex.cabi_post_call(ret);
-  return out;
-}
-
+        r#"
 let buf = [];
 for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) {
   if (line === "") continue;

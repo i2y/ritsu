@@ -160,3 +160,29 @@ fn a_comment_safe_where_unicode_escapes_are_read() {
     // text with no backslash is unchanged
     assert_eq!(header::for_unicode_comment("rules/送料.rule"), "rules/送料.rule");
 }
+
+/// The world and the package a Wasm module's `.wit` declares (src/wasm.rs): a name's words joined by
+/// `-`, a keyword of WIT `%`-escaped, a version of one number as a semver; and the three functions of
+/// the canonical ABI, with what `call` answers. koyomi's and kaname's tests/wasm.rs hold the worlds
+/// to wasm-tools and the modules to a host and to wasmtime.
+#[test]
+fn the_world_and_the_abi_of_a_wasm_module() {
+    use ritsu_base::text::Lang;
+    use ritsu_emit::wasm;
+    let worlds = ["payment_terms", "close_20th", "a__b", "trailing_", "Fee", "record", "error_context", "records"].map(wasm::world);
+    assert_eq!(worlds, ["payment-terms", "close-20th", "a-b", "trailing", "fee", "%record", "%error-context", "records"]);
+    assert_eq!(["1", "007", "123456789012345678901"].map(wasm::semver), [Some("1.0.0".into()), Some("7.0.0".into()), None]);
+    assert_eq!((wasm::package("koyomi", "payment_terms", Some("1.0.0")), wasm::package("kaname", "use", None)), ("koyomi:payment-terms@1.0.0".into(), "kaname:%use".into()));
+    assert_eq!(wasm::component_line("fees"), "wasm-tools component embed fees.wit fees.wasm -o fees.embedded.wasm && wasm-tools component new fees.embedded.wasm -o fees.component.wasm");
+    let mut seen = std::collections::BTreeSet::new();
+    assert!(wasm::WIT_KEYWORDS.iter().all(|k| seen.insert(*k) && k.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')));
+    for lang in [Lang::En, Lang::Ja] {
+        let abi = wasm::abi(lang, "answer(text)", "refusal()");
+        for f in ["pub unsafe extern \"C\" fn cabi_realloc(", "pub unsafe extern \"C\" fn call(", "pub unsafe extern \"C\" fn cabi_post_call("] {
+            assert_eq!(abi.matches(f).count(), 1, "{f}");
+        }
+        assert_eq!(abi.matches("#[unsafe(no_mangle)]\n").count(), 3);
+        assert!(abi.contains("        Ok(text) => answer(text),\n        Err(_) => refusal(),\n"), "{abi}");
+        assert_eq!(abi.lines().filter(|l| l.starts_with("/// ")).count(), 3, "{abi}");
+    }
+}
