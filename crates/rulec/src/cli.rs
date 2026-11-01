@@ -1635,6 +1635,8 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
         };
         match out_dir {
             Some(d) => {
+                // `--out docs/` is `--out docs`: the path is not said with two slashes (§15.277).
+                let d = d.trim_end_matches('/');
                 let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
                 let p = format!("{d}/{alias}.{}", if html { "html" } else if customer { "customer.md" } else { "md" });
                 if let Some(dir) = std::path::Path::new(&p).parent() {
@@ -2121,6 +2123,8 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
             + "\n";
         match out_dir {
             Some(d) => {
+                // `--out vectors/` is `--out vectors`: the path is not said with two slashes (§15.277).
+                let d = d.trim_end_matches('/');
                 let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
                 let p = format!("{d}/{alias}.jsonl");
                 let _ = std::fs::create_dir_all(d);

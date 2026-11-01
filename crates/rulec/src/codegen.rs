@@ -15518,6 +15518,10 @@ fn dependencies_hold(files: &[&str], read: &[RuleRead]) -> Option<String> {
 /// written under `out_dir`, or under `--check` held to what is there; the exit code.
 pub fn generate(files: &[&str], out_dir: &str, asked: &crate::targets::Asked, check_only: bool, json: bool, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> u8 {
     use crate::targets::{PROTO, Part};
+    // Every path below is `{out_dir}/{rel}`, so the slashes `--out` ends with are dropped first:
+    // `--out generated/` is `--out generated`, and no path is said as `generated//python/…`, as it
+    // was up to 0.40.0 (§15.277). `--out /` keeps its one slash, at the head of each path.
+    let out_dir = out_dir.trim_end_matches('/');
     // In a module of ritsu's, every rule is read first, and what a dependency's file stops is made
     // sure of before anything is written (ritsu's DESIGN 17.6); the loop below takes each rule as it
     // was read. Outside every module, each rule is read where the loop comes to it, as before (M14).

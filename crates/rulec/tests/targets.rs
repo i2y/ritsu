@@ -474,3 +474,31 @@ fn the_page_of_gen_names_the_targets_and_the_extras() {
         }
     }
 }
+
+/// `--out generated/` is `--out generated`: every path `gen` says has one slash between the
+/// directory and what is under it, in its text and in its JSON, and so has every path `vectors` and
+/// `doc` say. Up to 0.40.0 they said `generated//python/…` of the same files (§15.277).
+#[test]
+fn a_slash_at_the_end_of_out_is_not_said_twice() {
+    let t = with_rule("targets-slash");
+    let rule = "member_shipping_fee.rule";
+    let (code, out, err) = rulec_in(t.path(), "en", &["gen", rule, "--target", "python", "--extra", "runner", "--out", "out/"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.lines().any(|l| l == "generated: out/python/member_shipping_fee.py"), "{out}");
+    assert!(!out.contains("//"), "{out}");
+    // the runner is left there by a run that does not ask for it, and named by the same path
+    let (code, out, err) = rulec_in(t.path(), "en", &["gen", rule, "--target", "python", "--out", "out/", "--check", "--format", "json"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(!out.contains("//"), "{out}");
+    let j = rulec::json::parse(out.trim()).unwrap_or_else(|e| panic!("{e}: {out}"));
+    let left: Vec<&str> = j.get("left").and_then(|l| l.as_arr()).unwrap().iter().map(|p| p.as_str().unwrap()).collect();
+    assert_eq!(left, ["out/python/member_shipping_fee_runner.py"], "{out}");
+    for (args, said) in [
+        (["vectors", rule, "--out", "vec/"], "70 vectors: vec/member_shipping_fee.jsonl"),
+        (["doc", rule, "--out", "doc/"], "rendered: doc/member_shipping_fee.md"),
+    ] {
+        let (code, out, err) = rulec_in(t.path(), "en", &args);
+        assert_eq!(code, 0, "{args:?}: {out}{err}");
+        assert!(out.lines().any(|l| l == said), "{args:?}: {out}");
+    }
+}

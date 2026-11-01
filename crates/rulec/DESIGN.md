@@ -6121,12 +6121,12 @@ note: `rules/member_tier_shipping.rule` implements a contract's service (`implem
 
    ```text
    $ rulec gen rules/ --target python --out generated/     # 0.40.0 が全部を書いた出力先で
-   generated no more, and still there: generated//python/member_shipping_fee_runner.py
-   generated no more, and still there: generated//python/member_shipping_fee_mcp.py
-   generated no more, and still there: generated//python/member_shipping_fee_service.py
-   generated no more, and still there: generated//python/member_shipping_fee_connect_runner.py
-   generated no more, and still there: generated//python/_round_test.py
-   generated no more, and still there: generated//python/member_shipping_fee_page.html
+   generated no more, and still there: generated/python/member_shipping_fee_runner.py
+   generated no more, and still there: generated/python/member_shipping_fee_mcp.py
+   generated no more, and still there: generated/python/member_shipping_fee_service.py
+   generated no more, and still there: generated/python/member_shipping_fee_connect_runner.py
+   generated no more, and still there: generated/python/_round_test.py
+   generated no more, and still there: generated/python/member_shipping_fee_page.html
    note: `--extra runner`, `--extra mcp`, `--extra connect` and `--extra round-test` write these files, and this run does not ask for them; gen deletes nothing in the output directory, so they can be deleted if they are not wanted
    ```
 
@@ -6146,6 +6146,7 @@ note: `rules/member_tier_shipping.rule` implements a contract's service (`implem
 
 9. **MCP の `rulec_gen`** は、`target` を必須の配列（`items` の `enum` に 13 の名前、`minItems: 1`）で、`extra` を配列で受け取る。`tools/list` の入力のスキーマは、何度でも書くフラグの選択肢を `items` の `enum` に入れ、必須のフラグを `required` に入れる（`["files","target"]`）。
 10. **`--help` は、何度でも書くフラグを `...` を付けて見せる**（ritsu のほかのコマンドと同じ）。`gen` の `--target <target>...` と `--extra <extra>...` のほかに、`fixtures lint`・`replay`・`diff` の `--fill <field=value>...` も変わった。
+11. **`--out` の終わりの `/` は落としてから、その下のパスとつなぐ。** `gen`・`vectors`・`doc` は、`--out` とその下のパスを `/` でつないで書き、文の出力と JSON でもそのパスを言う。0.40.0 までは、`--out generated/` で `generated//python/member_shipping_fee.py` と言っていた（書くファイルは同じ）。いまは `--out generated/` も `--out generated` と同じに言う。`--out /` では、つないだパスの頭に `/` が一つ残る。`test` は前から二重にしていない。
 
 **捨てたもの**：
 
@@ -6162,21 +6163,21 @@ note: `rules/member_tier_shipping.rule` implements a contract's service (`implem
 - `codegen::generate` は出力先と付属物（`targets::Asked`）を受け取り、言語ごとの `files` は、ファイルごとにライブラリか、どの付属物か（`targets::Part`）を付けて返す。
 - `test` の段の決まり（決定の 8）。
 - MCP の `rulec_gen` の入力（決定の 9）と、`--help`（決定の 10）。
+- `gen`・`vectors`・`doc` が言うパスは、`--out` を `/` で終えても `/` を二重にしない（決定の 11）。書くファイルは変わらない。
 - `gen` を呼ぶほかのところ：CI の `tools.yml` は 13 の出力先と 6 の付属物の全部を、`kani.yml` は `--target rust --extra proof` を書く。dandori の試験の `examples.rs` は typescript・python・go の、`protos.rs` は python・proto と `connect` の、それぞれ要るものだけを頼む。ブラウザで試すページは、0.40.0 と同じ引数を見せて、同じものを書く。サイトの図の二つの道具（`make_flow.py` と `make_overview.py` の `--verify`）は、`diagram.py` に書いた言語の並び（`LANGUAGES`。出力先から `proto` を除いたもの）を `--target` に渡し、書いたディレクトリを図の言語と比べる。その並びは `tests/website.rs` が `targets::target_names()` と比べる。`experiments/kani/run.sh` は `--target rust --extra proof` を書く。全部を書くことを前提にしていた試験は、`targets::UP_TO_0_40` を付けた。
 - 文書：reference の `.proto` の二か所、`formats.md`（`gen` の `--check` と `left`、`test` の表、`api` と MCP の入力）、`generated-code.md`（「`gen` が書くもの」の節で、ライブラリと付属物の表と実物の出力）、`backends.md`、AGENTS.md と README の CI の行（`rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check`）、E076 の直し方の文、スキルのコピー。
 
 **確かめたこと**：
 
-- `tests/targets.rs`（9 件）：出力先を一つずつ指定して、そのライブラリだけを書くこと（13）。付属物を一つずつ足して、その付属物のファイルだけが増えること（30 の組と Connect のランナー。全部を頼めば 60）。フラグの順を変えても同じファイルを書くこと。`--target` が無いときの英日の文（引用符でくくる語と、除く `--extra`）。書けない頼み方（同じ名前の二度、出力先の持たない付属物、`proto` の無い `connect` など 7 つ）が、英日とも何も書かずに 2 で止まること。頼まなかった付属物の残りを挙げ、消さず、`--check` が 0 のままで、JSON の `left` に入ること。`test` のベクタの無いとき・言語の無いときの文、ランナーの無い言語の `skipped` と `--require-all`、無い段の注記（`python3` があるときだけ）。MCP の `tools/list` の `rulec_gen` の入力。`gen --help` の英日の使い方の行。
+- `tests/targets.rs`（10 件）：出力先を一つずつ指定して、そのライブラリだけを書くこと（13）。付属物を一つずつ足して、その付属物のファイルだけが増えること（30 の組と Connect のランナー。全部を頼めば 60）。フラグの順を変えても同じファイルを書くこと。`--target` が無いときの英日の文（引用符でくくる語と、除く `--extra`）。書けない頼み方（同じ名前の二度、出力先の持たない付属物、`proto` の無い `connect` など 7 つ）が、英日とも何も書かずに 2 で止まること。頼まなかった付属物の残りを挙げ、消さず、`--check` が 0 のままで、JSON の `left` に入ること。`test` のベクタの無いとき・言語の無いときの文、ランナーの無い言語の `skipped` と `--require-all`、無い段の注記（`python3` があるときだけ）。MCP の `tools/list` の `rulec_gen` の入力。`gen --help` の英日の使い方の行。`--out` を `/` で終えた `gen`、`gen --check --format json` の `left`、`vectors`、`doc` が、パスの `/` を二重にしないこと。
 - ライブラリが自分だけで組めること：`member_shipping_fee.rule` を出力先ごとに一つずつ書き、Python の import、TypeScript と JavaScript を Node 24 で読み込むこと、Rust の `rustc --crate-type lib`、Ruby の `require`、PHP の `require`、Go の `go vet`（`GOPROXY=off`）、Swift の `swiftc -typecheck`、Java の `javac --release 17`、Wasm の `wasm32-unknown-unknown` の cdylib、NumPy の `rulec_np.load`、`.proto` の `buf build` が、どれも通った。SQL は PostgreSQL に読ませるファイルで、ここでは組んでいない。
 - MCP のページと、`rulec doc --format html` の出力が、一バイトも違わないこと。
 - サイトの図の二つの道具の `--verify` が替えた後のバイナリで通り、描き直した八つの SVG が、コミットしてあるものと一バイトも違わないこと。道具の言語の並びが出力先から `proto` を除いたものと同じこと（`tests/website.rs` の `図の道具が並べる言語はgenの出力先と同じ`）。
-- 替える前と後の突き合わせ：0.40.0 の公式のバイナリと替えた後のバイナリ（どちらも `ritsu` を `rulec` という名前のリンクで呼ぶ）で、木の 994 本の `.rule` を、規則ごとに新しい出力先で比べた。0.40.0 は引数なし、替えた後は `UP_TO_0_40` の引数で、文の出力と標準エラーと終了コード、続けて走らせた `gen --check --format json`、書いたファイルの全部、別の新しい出力先での `gen --format json` とそのファイルである。替えた後のバイナリもまだ版が 0.40.0 なので、頭の行も読み替えずに比べた。994 本とも一字も違わず、終了コードは、三つの実行のどれも、0 が 620 本、1 が 374 本だった。初めの `gen` が書いたファイルは、合わせて 36,248 である。
+- 替える前と後の突き合わせ：0.40.0 の公式のバイナリと替えた後のバイナリ（どちらも `ritsu` を `rulec` という名前のリンクで呼ぶ）で、木の 994 本の `.rule` を、規則ごとに新しい出力先で比べた。0.40.0 は引数なし、替えた後は `UP_TO_0_40` の引数で、文の出力と標準エラーと終了コード、続けて走らせた `gen --check --format json`、書いたファイルの全部、別の新しい出力先での `gen --format json` とそのファイル、`vectors --out` と `doc --out` とそれが書いたファイルである。替えた後のバイナリもまだ版が 0.40.0 なので、頭の行も読み替えずに比べた。`--out` を `/` で終えずに渡すと、994 本とも一字も違わなかった。終了コードは、`gen`・`gen --check`・`vectors`・`doc` のどれも、0 が 620 本、1 が 374 本である。初めの `gen` が書いたファイルは、合わせて 36,248 である。`--out` を `/` で終えると、違ったのは、パスを言う 620 本の文の出力だけだった。0.40.0 の `<出力先>//` を `<出力先>/` と読めば一字も違わず、書いたファイルと終了コードは、読み替えずに同じだった（決定の 11）。
 
 **見つけて直していないもの**：
 
 - **`vectors/` のファイルの残りと、Go のランナーのモジュールの `go.mod`。** どちらも頭の行が無く、rulec が書いたものと見分けられないので挙げない。ランナーのモジュールでは `main.go` が挙がる。
-- **`--out` を `/` で終えると、出力のパスが `generated//python/…` になる。** 0.40.0 からで、書くファイルのパスは同じである。
 
 ## 16. この設計で最も危うい点
 
