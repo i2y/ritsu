@@ -276,9 +276,11 @@ pub fn left_note(extras: &[&str]) -> String {
     let flags: Vec<String> = EXTRAS.iter().filter(|e| extras.contains(e)).map(|e| format!("`--extra {e}`")).collect();
     let en = and_list(&flags);
     let ja = flags.join("・");
+    // `--extra runner` writes, and is not asked for; `--extra runner` and `--extra mcp` write
+    let (write, them) = if flags.len() == 1 { ("writes", "it") } else { ("write", "them") };
     tr!(
         "注記: これらは {ja} が書くファイルで、この実行は頼んでいません。gen は出力先のファイルを消さないので、要らなければ消してかまいません",
-        "note: {en} write these files, and this run does not ask for them; gen deletes nothing in the output directory, so they can be deleted if they are not wanted"
+        "note: {en} {write} these files, and this run does not ask for {them}; gen deletes nothing in the output directory, so they can be deleted if they are not wanted"
     )
 }
 
@@ -314,6 +316,24 @@ mod tests {
         assert_eq!(shell_word("my rules"), "'my rules'");
         assert_eq!(shell_word("it's"), "'it'\\''s'");
         assert_eq!(shell_word(""), "''");
+    }
+
+    #[test]
+    fn the_note_on_what_is_left_says_one_extra_as_one() {
+        crate::i18n::with(crate::i18n::Lang::En, || {
+            let tail = "these files, and this run does not ask for";
+            assert_eq!(
+                left_note(&["round-test"]),
+                format!("note: `--extra round-test` writes {tail} it; gen deletes nothing in the output directory, so they can be deleted if they are not wanted")
+            );
+            assert_eq!(
+                left_note(&["round-test", "runner"]),
+                format!("note: `--extra runner` and `--extra round-test` write {tail} them; gen deletes nothing in the output directory, so they can be deleted if they are not wanted")
+            );
+        });
+        crate::i18n::with(crate::i18n::Lang::Ja, || {
+            assert_eq!(left_note(&["round-test"]), "注記: これらは `--extra round-test` が書くファイルで、この実行は頼んでいません。gen は出力先のファイルを消さないので、要らなければ消してかまいません");
+        });
     }
 
     #[test]
