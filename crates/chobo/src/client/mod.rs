@@ -12,7 +12,9 @@ pub mod go;
 pub mod python;
 pub mod rust;
 pub mod typescript;
-pub mod xid;
+/// The tables of the characters of Rust's names that E063 and the Rust clients read: ritsu-emit's,
+/// made from the Unicode Character Database, which kaname reads too.
+pub use ritsu_emit::xid;
 
 use crate::diag::{self, DiagExt, Diag, OpLine};
 use crate::ids;

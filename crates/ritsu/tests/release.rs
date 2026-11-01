@@ -461,8 +461,8 @@ fn first_difference(a: &str, b: &str) -> String {
 }
 
 /// The sections of CLDR, of the Unicode Character Database and of the WHATWG table are the texts
-/// rulec, chobo and koyomi carry for them, as they are, and the one of zmij's upstream is the code
-/// zmij's README says it is a port of.
+/// rulec, ritsu-emit and koyomi carry for them, as they are, and the one of zmij's upstream is the
+/// code zmij's README says it is a port of.
 #[test]
 fn the_sections_of_the_data_are_the_notices_of_rulec_and_koyomi() {
     let (_, sections) = notices();
@@ -472,11 +472,11 @@ fn the_sections_of_the_data_are_the_notices_of_rulec_and_koyomi() {
     let cldr = section("Unicode CLDR 48.2");
     assert!(cldr.text == rulec, "the section of CLDR is not crates/rulec/THIRD_PARTY_NOTICES: {}", first_difference(&cldr.text, rulec));
     assert!(rulec.contains("Unicode CLDR 48.2 (") && rulec.contains("SPDX-License-Identifier: Unicode-3.0"), "the title says the version rulec's notices give");
-    let chobo = read("crates/chobo/THIRD_PARTY_NOTICES");
-    let chobo = chobo.strip_prefix("Third-party notices for chobo\n=============================\n\n").expect("chobo's notices begin with their title");
+    let emit = read("crates/ritsu-emit/THIRD_PARTY_NOTICES");
+    let emit = emit.strip_prefix("Third-party notices for ritsu-emit\n==================================\n\n").expect("ritsu-emit's notices begin with their title");
     let ucd = section("Unicode Character Database 17.0");
-    assert!(ucd.text == chobo, "the section of the Unicode Character Database is not crates/chobo/THIRD_PARTY_NOTICES: {}", first_difference(&ucd.text, chobo));
-    assert!(chobo.contains("Unicode Character Database 17.0.0, ") && read("crates/chobo/src/client/xid.rs").contains("pub const UNICODE: (u8, u8, u8) = (17, 0, 0);"), "the title says the version chobo's notices and its table give");
+    assert!(ucd.text == emit, "the section of the Unicode Character Database is not crates/ritsu-emit/THIRD_PARTY_NOTICES: {}", first_difference(&ucd.text, emit));
+    assert!(emit.contains("Unicode Character Database 17.0.0, ") && read("crates/ritsu-emit/src/xid.rs").contains("pub const UNICODE: (u8, u8, u8) = (17, 0, 0);"), "the title says the version ritsu-emit's notices and its tables give");
     let koyomi = read("crates/koyomi/THIRD_PARTY_NOTICES.md");
     let whatwg_text = koyomi.split_once("\n## The Shift_JIS table, from the WHATWG Encoding Standard\n\n").map(|(_, t)| t).expect("koyomi's notices have the section of the Shift_JIS table");
     assert!(!whatwg_text.contains("\n## "), "the section of the Shift_JIS table is the last of koyomi's notices");
@@ -513,8 +513,8 @@ fn terms(expr: &str) -> (String, Vec<String>) {
 }
 
 /// What a release hands out is under the workspace's license and what the crates of the workspace
-/// it is built from hold beyond it (rulec the names from Unicode CLDR, chobo the table from the
-/// Unicode Character Database, koyomi the table from the WHATWG): ritsu and ritsu-wasm say all of
+/// it is built from hold beyond it (rulec the names from Unicode CLDR, ritsu-emit the tables from
+/// the Unicode Character Database, koyomi the table from the WHATWG): ritsu and ritsu-wasm say all of
 /// it, in one order, and so do the packages, the formula (in Homebrew's words) and
 /// THIRD_PARTY_NOTICES. A crate of the workspace says only what it holds itself; the crates from
 /// outside keep their own (THIRD_PARTY_NOTICES).

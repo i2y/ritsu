@@ -245,11 +245,12 @@ fn the_crates_the_rust_clients_name_are_the_ones_the_tests_lock() {
     }
 }
 
-/// What E063 lets a Rust name begin with and hold (src/client/xid.rs) is what rustc takes, over
-/// every character a name of chobo's may hold: each one E063 lets a name begin with goes through
-/// `cargo check` as a name, and so does each one it lets a name hold after its first; each one it
-/// keeps out is an error that names it. The table's ranges are of characters chobo takes, so none
-/// of it is dead.
+/// What E063 lets a Rust name begin with and hold (ritsu-emit's src/xid.rs) is what rustc takes,
+/// over every character a name of chobo's may hold: each one E063 lets a name begin with goes
+/// through `cargo check` as a name, and so does each one it lets a name hold after its first; each
+/// one it keeps out is an error that names it. The table's ranges are of characters a name of
+/// ritsu's languages takes, so none of it is dead: chobo's names, and the combining letters a name
+/// of kaname's may begin with besides.
 #[test]
 fn e063_keeps_out_what_rustc_keeps_out() {
     use chobo::client::{rust, xid};
@@ -264,11 +265,13 @@ fn e063_keeps_out_what_rustc_keeps_out() {
     }
     let first = |c: char| !combining(c) && (c.is_alphabetic() || c == '_');
     let after = |c: char| !combining(c) && (c.is_alphanumeric() || c == '_');
-    for (name, table, takes) in [("NOT_FIRST", xid::NOT_FIRST, &first as &dyn Fn(char) -> bool), ("NOT_AFTER", xid::NOT_AFTER, &after)] {
+    let ritsu_first = |c: char| c.is_alphabetic() || c == '_';
+    let ritsu_after = |c: char| c.is_alphanumeric() || c == '_';
+    for (name, table, takes) in [("NOT_FIRST", xid::NOT_FIRST, &ritsu_first as &dyn Fn(char) -> bool), ("NOT_AFTER", xid::NOT_AFTER, &ritsu_after)] {
         for &(lo, hi) in table {
             for u in lo..=hi {
                 let c = char::from_u32(u).unwrap();
-                assert!(takes(c) && c != '_', "{name} has U+{u:04X}, which a name of chobo's does not hold there");
+                assert!(takes(c) && c != '_', "{name} has U+{u:04X}, which a name of ritsu's languages does not hold there");
             }
         }
     }

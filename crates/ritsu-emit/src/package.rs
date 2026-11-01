@@ -204,6 +204,13 @@ pub fn py_from(from: &str, to: &str) -> (String, String) {
     }
 }
 
+/// The path Rust names `to` (as for [`ts_path`]) by in the package's crate: `crate::units`,
+/// `crate::deps::pricing::rules::fee`, a part that is a keyword of Rust as a raw identifier.
+pub fn rust_path(to: &str) -> String {
+    let parts: Vec<String> = to.split('/').filter(|p| !p.is_empty()).map(crate::ident::rust_name).collect();
+    format!("crate::{}", parts.join("::"))
+}
+
 /// The Go import path of `to` (as for [`ts_path`]) in the package whose module is `go_module`.
 pub fn go_path(go_module: &str, to: &str) -> String {
     format!("{go_module}/{to}")

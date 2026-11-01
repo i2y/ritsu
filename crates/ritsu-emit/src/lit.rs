@@ -44,6 +44,25 @@ pub fn go(s: &str) -> String {
     o
 }
 
+/// Rust, in double quotes: `\\`, `\"`, `\n`, `\r`, `\t`, and `\u{NN}` for the other control
+/// characters and DEL (Rust reads no `\u00NN` of JSON's).
+pub fn rust(s: &str) -> String {
+    let mut o = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '\\' => o.push_str("\\\\"),
+            '"' => o.push_str("\\\""),
+            '\n' => o.push_str("\\n"),
+            '\r' => o.push_str("\\r"),
+            '\t' => o.push_str("\\t"),
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => o.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c => o.push(c),
+        }
+    }
+    o.push('"');
+    o
+}
+
 /// SQL: `'本店'`, a `'` written twice.
 pub fn sql(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))

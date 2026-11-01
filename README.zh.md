@@ -144,4 +144,4 @@ ritsu 及其语言是为 AI 智能体使用而设计的。[skills/](skills) 中�
 
 ## 许可证
 
-MIT OR Apache-2.0（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。其中三种语言包含他人的数据，因此 `ritsu` 二进制文件的许可证为 `(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause`。各项数据的来源和许可证全文见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)。
+MIT OR Apache-2.0（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。其中两种语言以及各语言的生成器共用的 crate ritsu-emit 包含他人的数据，因此 `ritsu` 二进制文件的许可证为 `(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause`。各项数据的来源和许可证全文见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)。

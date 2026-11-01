@@ -29,6 +29,54 @@ fn names() {
     assert_eq!(ident::aside("class", |w| python::KEYWORDS.contains(&w)), "class_");
     assert_eq!(ident::aside("klass", |w| python::KEYWORDS.contains(&w)), "klass");
     assert_eq!(ident::unique(vec!["a".into(), "a".into(), "b".into(), "a".into()], &["b"]), ["a", "a_2", "b_2", "a_3"]);
+    // Rust: a keyword as a raw identifier, a word no raw identifier writes moved aside
+    assert_eq!((ident::rust_name("ref"), ident::rust_name("gen"), ident::rust_name("self"), ident::rust_name("Self"), ident::rust_name("_"), ident::rust_name("sku")), ("r#ref".into(), "r#gen".into(), "self_".into(), "Self_".into(), "__".into(), "sku".into()));
+    assert_eq!((ident::rust_raw("crate"), ident::rust_raw("move")), (None, Some("r#move".into())));
+    assert_eq!(ritsu_emit::package::rust_path("deps/pricing/rules/fee"), "crate::deps::pricing::rules::fee");
+    assert_eq!(ritsu_emit::package::rust_path("glue/type"), "crate::glue::r#type");
+}
+
+/// The characters each target takes in a name (src/xid.rs): each table is ranges in order, apart,
+/// of characters a name of ritsu's languages holds where the table is read; and names that part
+/// the targets. kaname's tests/idents.rs holds the tables to the targets' tools.
+#[test]
+fn the_characters_of_names() {
+    use ritsu_emit::xid;
+    for (name, table, first) in [
+        ("NOT_FIRST", xid::NOT_FIRST, true),
+        ("NOT_AFTER", xid::NOT_AFTER, false),
+        ("ID_NOT_FIRST", xid::ID_NOT_FIRST, true),
+        ("ID_NOT_AFTER", xid::ID_NOT_AFTER, false),
+        ("GO_NOT_FIRST", xid::GO_NOT_FIRST, true),
+        ("GO_NOT_AFTER", xid::GO_NOT_AFTER, false),
+    ] {
+        assert!(table.iter().all(|&(lo, hi)| lo <= hi) && table.windows(2).all(|w| w[0].1 + 1 < w[1].0), "{name} is not ranges in order and apart");
+        for &(lo, hi) in table {
+            for u in lo..=hi {
+                let c = char::from_u32(u).unwrap();
+                assert!(c != '_' && if first { c.is_alphabetic() } else { c.is_alphanumeric() }, "{name} has U+{u:04X}, which a name of ritsu's languages does not hold there");
+            }
+        }
+    }
+    assert_eq!(xid::UNICODE, (17, 0, 0));
+    // a name, and whether Rust, Python, TypeScript and Go take it
+    for (n, takes) in [
+        ("a_1", [true, true, true, true]),
+        ("在庫", [true, true, true, true]),
+        ("x\u{FF11}", [true, true, true, true]),  // a fullwidth digit, Nd
+        ("m²", [false, false, false, false]),      // `²` is a number of No
+        ("कीमत", [true, true, true, false]),       // `ी` is a vowel sign, Mc
+        ("Ⅻ", [true, true, true, false]),          // a number of Nl
+        ("\u{FF9E}", [false, false, true, true]), // the halfwidth voiced sound mark, Lm, not XID_Start
+        ("\u{37A}", [false, false, true, true]),  // ͺ, Lm, neither XID_Start nor XID_Continue
+        ("\u{345}a", [false, false, false, false]),
+        ("a\u{345}", [true, true, true, false]),  // a combining letter, Mn
+        ("\u{FF11}x", [false, false, false, false]),
+        ("℃", [false, false, false, false]),
+    ] {
+        let got = [ident::rust_takes(n), ident::python_takes(n), ident::typescript_takes(n), ident::go_takes(n)];
+        assert_eq!(got, takes, "{n:?} ({})", n.chars().map(|c| format!("U+{:04X}", c as u32)).collect::<Vec<_>>().join(" "));
+    }
 }
 
 #[test]
@@ -37,6 +85,7 @@ fn literals() {
     assert_eq!(lit::json(s), "\"a\\\"b'c\\\\d\\ne\\r\\tf\\u0001g\u{7f}h本\"");
     assert_eq!(lit::python(s), "'a\"b\\'c\\\\d\\ne\\r\\tf\\x01g\u{7f}h本'");
     assert_eq!(lit::go(s), "\"a\\\"b'c\\\\d\\ne\\r\\tf\\x01g\\x7fh本\"");
+    assert_eq!(lit::rust(s), "\"a\\\"b'c\\\\d\\ne\\r\\tf\\u{1}g\\u{7f}h本\"");
     assert_eq!(lit::sql("本店's"), "'本店''s'");
     assert_eq!(lit::sql_ident("在\"庫"), "\"在\"\"庫\"");
 }

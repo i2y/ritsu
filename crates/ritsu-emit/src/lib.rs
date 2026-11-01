@@ -3,7 +3,9 @@
 //!
 //! - [`words`]: the words each target will not take as a name, by the standard that lists
 //!   them, and [`copies`]: the tables rulec and dandori hold their names to.
-//! - [`ident`]: a name of the generated code from a name of the source.
+//! - [`ident`]: a name of the generated code from a name of the source, and whether a target
+//!   takes a name of the source as it is, by the tables of [`xid`], made from the Unicode
+//!   Character Database (THIRD_PARTY_NOTICES).
 //! - [`lit`]: a string of the source as a literal of the target.
 //! - [`header`]: the line that says a file is generated, and the comments it is written in.
 //! - [`package`]: where a part goes in the package `ritsu gen` writes, and the paths one part imports
@@ -18,3 +20,4 @@ pub mod ident;
 pub mod lit;
 pub mod package;
 pub mod words;
+pub mod xid;

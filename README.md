@@ -897,11 +897,12 @@ native binary.
 
 ## License
 
-MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Three of the
-languages hold data from others: rulec the names of its built-in divisions, from Unicode CLDR
-(Unicode-3.0), chobo a table of the characters a Rust name cannot hold, made from the Unicode
-Character Database (Unicode-3.0), and koyomi a Shift_JIS table made from the WHATWG Encoding
-Standard (BSD-3-Clause). So the `ritsu` binary is under
+MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Two of the
+languages, and ritsu-emit, the crate their generators share, hold data from others: rulec the
+names of its built-in divisions, from Unicode CLDR (Unicode-3.0), ritsu-emit tables of the
+characters a name of Rust, Python, TypeScript or Go cannot hold, made from the Unicode Character
+Database (Unicode-3.0), which chobo and kaname read, and koyomi a Shift_JIS table made from the
+WHATWG Encoding Standard (BSD-3-Clause). So the `ritsu` binary is under
 `(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause`. It also holds eight crates from
 crates.io, under their own licenses, and, for the examples of `explain`, copies of an article of
 Japan's Civil Code from e-Gov (PDL1.0) and of two sections of the US Code of Federal Regulations.

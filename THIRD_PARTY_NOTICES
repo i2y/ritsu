@@ -9,7 +9,7 @@ package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of other
 loads, beside its module, the libraries its editor and its Markdown are made of:
 
   Unicode CLDR 48.2                the names of rulec's built-in divisions  Unicode-3.0
-  Unicode Character Database 17.0  chobo's table of Rust's name characters  Unicode-3.0
+  Unicode Character Database 17.0  ritsu-emit's tables of name characters  Unicode-3.0
   The WHATWG Encoding Standard     koyomi's Shift_JIS table                 BSD-3-Clause
   Laws from e-Gov and the eCFR     the examples of explain                  PDL1.0; US government work
   equivalent 1.0.2                 a crate from crates.io                   Apache-2.0 OR MIT
@@ -113,20 +113,23 @@ SPDX-License-Identifier: Unicode-3.0
 Unicode Character Database 17.0
 --------------------------------------------------------------------------------
 
-In chobo, and so in `ritsu` and `ritsu.wasm`. The text is crates/chobo/THIRD_PARTY_NOTICES
-without its title; its paths are under crates/chobo.
+In ritsu-emit, which chobo and kaname build in, and so in `ritsu` and `ritsu.wasm`. The text is
+crates/ritsu-emit/THIRD_PARTY_NOTICES without its title; its paths are under crates/ritsu-emit.
 
-chobo's table of the characters a name of chobo's may hold and a Rust name may not
-(src/client/xid.rs, DESIGN.md 14), which E063 and the Rust clients read, is made from two files
-of the Unicode Character Database:
+ritsu-emit's tables of the characters a name of ritsu's languages may hold and a name of Rust's,
+Python's, TypeScript's or Go's may not (src/xid.rs, tools/xid/README.md), which chobo (E063 and
+its Rust clients) and kaname (the names of the code it writes) read, are made from two files of
+the Unicode Character Database:
 
   Unicode Character Database 17.0.0, https://www.unicode.org/Public/17.0.0/ucd/
-    DerivedCoreProperties.txt        the properties Alphabetic, XID_Start and XID_Continue
+    DerivedCoreProperties.txt        the properties Alphabetic, XID_Start, XID_Continue,
+                                     ID_Start and ID_Continue
     extracted/DerivedGeneralCategory.txt
-                                     the general categories of the numbers (Nd, Nl and No)
+                                     the general categories of the letters (Lu, Ll, Lt, Lm and
+                                     Lo) and of the numbers (Nd, Nl and No)
 
-tools/xid/make_table.py writes the table from the two files, and the head of the table gives
-each file's date and SHA-256. The table is two lists of ranges of code points; chobo reads
+tools/xid/make_table.py writes the tables from the two files, and the head of the tables gives
+each file's date and SHA-256. The tables are lists of ranges of code points; ritsu-emit reads
 nothing at run time. The files say that their terms of use and license are at
 https://www.unicode.org/terms_of_use.html, which puts the Unicode data files under the Unicode
 License v3, https://www.unicode.org/license.txt (SPDX-License-Identifier: Unicode-3.0). Its

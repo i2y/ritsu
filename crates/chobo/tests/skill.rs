@@ -93,9 +93,10 @@ fn skill_md_says_what_it_is() {
         let key = line.split(':').next().unwrap_or("");
         assert!(["name", "description", "compatibility", "license", "metadata", "allowed-tools"].contains(&key), "SKILL.md's frontmatter has a field the format does not know: {key}");
     }
-    // the repository's own license, as Cargo.toml names it: the crate's, but for the table made
-    // from the Unicode Character Database (THIRD_PARTY_NOTICES), which the skill does not hold
+    // the repository's own license, which the crate takes from the workspace (the table made from
+    // the Unicode Character Database that E063 reads is ritsu-emit's)
     assert_eq!(field("license").as_deref(), Some("MIT OR Apache-2.0"), "SKILL.md names the repository's license");
     let cargo = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")).unwrap();
-    assert!(cargo.contains("license = \"(MIT OR Apache-2.0) AND Unicode-3.0\""), "Cargo.toml names the same license, and the table's");
+    let workspace = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml")).unwrap();
+    assert!(cargo.contains("\nlicense.workspace = true\n") && workspace.contains("\nlicense = \"MIT OR Apache-2.0\"\n"), "Cargo.toml names the same license, the workspace's");
 }

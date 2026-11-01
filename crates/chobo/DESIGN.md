@@ -1315,9 +1315,9 @@ ritsu の言語の生成物が Rust でも書かれるようになり（kaname �
 
 **決定（Rust が名前にできない字は E063）**：Rust の識別子は XID_Start か `_` で始まり、XID_Continue が続く。chobo の名前（1.6）は文字か `_` で始まり、文字と数字と `_` が続くので、chobo には書けて Rust には書けない名前がある（`area_m²`、`①番`、頭が結合文字の名前）。Rust のターゲットのビルドは、振替、勘定、引数の名前と拒否の理由を確かめ、そういう字があれば E063 で止める。E060、E061、E062 と同じく、出力先が帳簿を受け取れないときの診断なので、`chobo check` は言わない。
 
-- どの字かは、`src/client/xid.rs` の表が決める。Unicode Character Database 17.0.0 の二つのファイル（`DerivedCoreProperties.txt` の Alphabetic、XID_Start、XID_Continue と、`extracted/DerivedGeneralCategory.txt` の数の一般カテゴリ Nd、Nl、No）から、`tools/xid/make_table.py` が書く。17.0 は、rustc 1.94 から 1.97 の識別子と、その `char`（`is_alphabetic`、`is_alphanumeric`）の版である（rustc 1.94.1 と 1.97.1 で、17.0 で足された字を名前に取り、18.0 で足された字を取らないことを確かめた）。
-- 表は、chobo の名前に書けて Rust の名前に書けない字だけを持つ。先頭に置けない字が 265 の範囲の 1,516 字、二字目から後に置けない字が 86 の範囲の 1,053 字である。XID_Start と XID_Continue の表を丸ごと持つ（1,491 の範囲）より小さい。また、新しい Unicode で足された文字は、chobo が `char` で名前に受け付け、この表が止めないので、古い表のまま新しい rustc を使っても、Rust が書ける名前を止めることはない。逆に、新しい版で足された、chobo に書けて Rust に書けない字は止まらない。試験（14.5）がそれを見つける。
-- ritsu の DESIGN 3.1 の決まり 4 で、外のクレートは serde_json だけなので、`unicode-ident` は使わない。表は Unicode のデータから作ったものなので、chobo のライセンスは `(MIT OR Apache-2.0) AND Unicode-3.0` になり、`THIRD_PARTY_NOTICES`（chobo のものと ritsu のもの）に出どころとライセンスの文を書いた。ritsu のバイナリのライセンスは、もとから Unicode-3.0 を含む（rulec の CLDR）ので変わらない。
+- どの字かは、ritsu-emit の `src/xid.rs` の表が決める（`chobo::client::xid` はその表である）。Unicode Character Database 17.0.0 の二つのファイル（`DerivedCoreProperties.txt` の Alphabetic、XID_Start、XID_Continue と、`extracted/DerivedGeneralCategory.txt` の数の一般カテゴリ Nd、Nl、No）から、ritsu-emit の `tools/xid/make_table.py` が書く。17.0 は、rustc 1.94 から 1.97 の識別子と、その `char`（`is_alphabetic`、`is_alphanumeric`）の版である（rustc 1.94.1 と 1.97.1 で、17.0 で足された字を名前に取り、18.0 で足された字を取らないことを確かめた）。表は、はじめ chobo が持ち、2026-11-01 に ritsu-emit へ移した。kaname が、生成するコードの関数の中の名前を、同じ表と、同じ作りの TypeScript と Go の表で確かめるためである（kaname の DESIGN 36.3）。
+- 表は、ritsu の言語の名前に書けて Rust の名前に書けない字だけを持つ。先頭に置けない字が 267 の範囲の 1,530 字、二字目から後に置けない字が 86 の範囲の 1,053 字である。先頭の 1,530 字のうち 14 字は、chobo の名前が持たない結合文字（U+0345 と U+0363〜U+036F。1.6）で、kaname の名前は持てる。XID_Start と XID_Continue の表を丸ごと持つ（1,491 の範囲）より小さい。また、新しい Unicode で足された文字は、chobo が `char` で名前に受け付け、この表が止めないので、古い表のまま新しい rustc を使っても、Rust が書ける名前を止めることはない。逆に、新しい版で足された、chobo に書けて Rust に書けない字は止まらない。試験（14.5）がそれを見つける。
+- ritsu の DESIGN 3.1 の決まり 4 で、外のクレートは serde_json だけなので、`unicode-ident` は使わない。表は Unicode のデータから作ったものなので、表を持つ ritsu-emit のライセンスは `(MIT OR Apache-2.0) AND Unicode-3.0` で、`THIRD_PARTY_NOTICES`（ritsu-emit のものと ritsu のもの）に出どころとライセンスの文がある。chobo は表を持たないので、ワークスペースのライセンス（MIT OR Apache-2.0）である（表を持っていた 0.36.0 から 0.40.0 までは `(MIT OR Apache-2.0) AND Unicode-3.0`）。ritsu のバイナリのライセンスは、もとから Unicode-3.0 を含む（rulec の CLDR）ので変わらない。
 
 **決定（ritsu のパッケージの中のクライアント）**：`target::build_in` に `InPackage` を渡したクライアントは、お金と量の額を、パッケージの単位のモジュールの型（`crate::units::USDc`）で受け取り、どの帳簿でも同じ部分には `i64::from` で直して渡す（4.3。TypeScript、Python、Go と同じ）。単位の型には `From<型> for i64` を求める。数え方の単位の額と、残高は、これまでどおり `i64` である。単位のモジュールを `crate::units` に置くのは、ritsu の生成器がまだ Rust のパッケージを書かないので、ほかの言語のパッケージ（単位のモジュールがパッケージの根にある）にならった置き場である。生成器が Rust のパッケージを書くときに、置き場をこれに合わせるか、この名前を変える。
 
@@ -1340,7 +1340,7 @@ ritsu の言語の生成物が Rust でも書かれるようになり（kaname �
 - `chobo api` の `targets` に `rust` が足される。
 - 診断のコード E063 が足される（Rust のターゲットのビルドだけ）。`chobo explain --all` と `docs/codes.md` に載り、E060、E061、E062 の関係するコードにも載る。
 - ritsu の口の帳簿の事実（`BookFacts`）に、Rust のクライアントの名前（`rust`。モジュール、振替の種類ごとのメソッド、引数の構造体のフィールド）が足される。振替ごとの名前（`ClientTransfer`）には、Rust の型の名前の頭（`type_name`。`Reserve` なら `ReserveArgs`、`ReserveKey`、`ReserveAmounts`）が足される。型の名前は帳簿の名前の語の頭を大文字にしたもので、読む側（kaname の生成器）が自分で作り直さずに済むよう、事実として渡す。ほかの言語では空である。帳簿の事実を作るのは chobo だけである（`tests/ports.rs` が、`chobo api` の `targets.rust` と同じであることを確かめる）。
-- chobo のライセンスが `(MIT OR Apache-2.0) AND Unicode-3.0` になる。
+- chobo のライセンスが `(MIT OR Apache-2.0) AND Unicode-3.0` になる（表を ritsu-emit に移した 2026-11-01 から、ワークスペースのライセンスに戻った）。
 - 前に検査を通った帳簿は、検査の答えも、ほかの出力先の生成物も変わらない（14.5）。
 
 ### 14.5 確かめたこと
