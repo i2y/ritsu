@@ -73,10 +73,10 @@ when it is late and differs again.
 - A book too large for one TigerBeetle request does not build (E060), nor one with a name too long
   for PostgreSQL (E061), nor one whose name MySQL cannot hold (E062), nor, for a Rust target, one
   with a name Rust cannot write (E063), nor, for a target whose code would spell two of its names
-  as one identifier or one as a name its client uses itself, that book (E064). For each case of
-  E064 there is a book under `tests/spellings`: the code chobo would write for the targets W108
-  names stops in that language's own tool (`tsc`, Python, `go vet`, `cargo check`, PostgreSQL)
-  where the note says, and the same book with a name changed as the note says builds on every
+  as one identifier, one as a name its client uses itself, or one its client cannot take as it
+  is, that book (E064). For each case of E064 there is a book under `tests/spellings`: the code
+  chobo would write for the targets W108 names stops in that language's own tool (`tsc` and
+  Node, Python, `go vet`, `cargo check`, PostgreSQL) where the note says, and the same book with a name changed as the note says builds on every
   target and gives every scenario the reference interpreter's answer.
 
 ## The code it writes

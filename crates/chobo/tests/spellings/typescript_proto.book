@@ -1,0 +1,17 @@
+book typescript_proto v1
+description "A transfer with a parameter named __proto__: the TypeScript client takes the arguments as one object, and an object literal takes __proto__ for the object's prototype, not for a property"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(__proto__: string, sku: string, qty: pcs)
+  key __proto__, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

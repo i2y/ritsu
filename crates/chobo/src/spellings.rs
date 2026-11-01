@@ -7,8 +7,12 @@
 //! identifier cannot be and after `_` (`self_`); Python writes `_` after a keyword and after the
 //! names its methods use (`class_`); PostgreSQL names a function `<transfer>_<operation>` and
 //! `balance_<account>`. So two names can be one identifier in one place of the code, a name can
-//! be one the client uses there itself (`balance`, `expire`), and Python changes a name that
-//! begins with `__` inside a class, and the class of a transfer whose name begins with `_`.
+//! be one the client uses there itself (`balance`, `expire`), and some names a client cannot take
+//! as they are: Python changes a name that begins with `__` inside a class, and the class of a
+//! transfer whose name begins with `_`; a TypeScript object literal takes `__proto__` for the
+//! object's prototype, not for a parameter; and the Python module the book is (`<name>.py`) cannot
+//! be imported by a name Python keeps (`class`), or by the name of a module of Python's standard
+//! library, which Python keeps one module of.
 //!
 //! None of it is renamed (rulec's DESIGN 15.263): a call is written with the book's names in
 //! every language. Each form breaks some of the targets (the clients of a language, the clients
@@ -34,6 +38,8 @@ pub enum Name {
     AccountParam(usize, usize),
     /// a bound's reason, by the account and the bound (0 the lower, 1 the upper) that first gives it
     Reason(usize, usize),
+    /// the book's own name
+    Book,
 }
 
 impl Name {
@@ -44,6 +50,7 @@ impl Name {
             Name::Param(k, i) => &b.transfers[k].params[i].name,
             Name::AccountParam(k, i) => &b.accounts[k].params[i],
             Name::Reason(k, w) => &bound(b, k, w).refusal,
+            Name::Book => &b.name,
         }
     }
 
@@ -55,6 +62,7 @@ impl Name {
             Name::Account(k) | Name::AccountParam(k, _) => (b.accounts[k].line, b.accounts[k].col),
             Name::Param(k, i) => (b.transfers[k].params[i].line, b.transfers[k].params[i].col),
             Name::Reason(k, w) => (bound(b, k, w).line, bound(b, k, w).col),
+            Name::Book => (b.line, b.col),
         }
     }
 
@@ -67,6 +75,7 @@ impl Name {
             Name::Param(k, _) => tr!("振替 `{}` の引数 `{n}`", "the parameter `{n}` of the transfer `{}`", b.transfers[k].name),
             Name::AccountParam(k, _) => tr!("勘定 `{}` の引数 `{n}`", "the parameter `{n}` of the account `{}`", b.accounts[k].name),
             Name::Reason(..) => tr!("拒否の理由 `{n}`", "the reason `{n}`"),
+            Name::Book => tr!("帳簿 `{n}`", "the book `{n}`"),
         }
     }
 }
@@ -95,12 +104,12 @@ fn pair(b: &Book, x: Name, y: Name) -> Text {
 }
 
 /// What a finding is of: two names that are one identifier, a name that is one the client uses
-/// itself, or a name Python changes.
+/// itself, or a name a client cannot take as it is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Subject {
     Two(Name, Name),
     Own(Name),
-    Mangled(Name),
+    AsIs(Name),
 }
 
 impl Subject {
@@ -108,7 +117,7 @@ impl Subject {
     fn at(&self) -> Name {
         match *self {
             Subject::Two(_, y) => y,
-            Subject::Own(n) | Subject::Mangled(n) => n,
+            Subject::Own(n) | Subject::AsIs(n) => n,
         }
     }
 }
@@ -119,6 +128,10 @@ pub struct Said {
     pub lang: Lang,
     pub backends: Vec<Backend>,
     pub note: Text,
+    /// Whether it breaks the client where a package of ritsu's holds it too (ritsu's DESIGN 9.3):
+    /// all but the Python module's name. The package holds the module as `<package>.books.<name>`,
+    /// and refuses a name its index cannot import itself.
+    pub in_package: bool,
 }
 
 impl Said {
@@ -471,7 +484,7 @@ fn hits(b: &Book, decls: &[Decl]) -> Vec<Hit> {
                 }
                 None => {
                     let n = match subject {
-                        Subject::Two(n, _) | Subject::Own(n) | Subject::Mangled(n) => n,
+                        Subject::Two(n, _) | Subject::Own(n) | Subject::AsIs(n) => n,
                     };
                     out.push(Hit { subject, rule: x.rule, base: spelled(b, x.rule, n), roles: vec![at], own, on });
                 }
@@ -649,13 +662,13 @@ fn owner_of(r: &Role) -> String {
 /// begins with `_`, which `Book` makes, and an account, or a parameter, whose name begins with `__`.
 fn python_mangled(b: &Book) -> Vec<Found> {
     let mangled = |s: &str| s.starts_with("__") && !s.ends_with("__");
-    let said = |note: Text| vec![Said { lang: Lang::Python, backends: ALL.to_vec(), note }];
+    let said = |note: Text| vec![Said { lang: Lang::Python, backends: ALL.to_vec(), note, in_package: true }];
     let mut out = Vec::new();
     for (k, t) in b.transfers.iter().enumerate() {
         if t.name.starts_with('_') {
             let class = format!("_{}Transfer", t.name);
             out.push(Found {
-                subject: Subject::Mangled(Name::Transfer(k)),
+                subject: Subject::AsIs(Name::Transfer(k)),
                 said: said(tr!(
                     "クライアントは振替をクラス `{class}` にします。Python はクラスの中で、`__` で始まり `__` で終わらない名前を書き換える（名前修飾）ので、`Book` の中で書いた `{class}` は `_Book{class}` になります。`Book` を作れず、どの呼び出しも止まります（`NameError`）。",
                     "the client writes the transfer as the class `{class}`, and Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): `{class}` written in `Book` is `_Book{class}`, so `Book` cannot be made, and no call goes through (`NameError`)."
@@ -671,7 +684,7 @@ fn python_mangled(b: &Book) -> Vec<Found> {
             if mangled(&n) {
                 let m = format!("_{}{n}", class.trim_start_matches('_'));
                 out.push(Found {
-                    subject: Subject::Mangled(Name::Param(k, i)),
+                    subject: Subject::AsIs(Name::Param(k, i)),
                     said: said(tr!(
                         "Python はクラスの中で、`__` で始まり `__` で終わらない名前を書き換える（名前修飾）ので、`{class}` のメソッドの引数 `{n}` は `{m}` になり、`{n}=` で渡せません（`TypeError`）。",
                         "Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): the parameter `{n}` of the methods of `{class}` is `{m}`, which `{n}=` does not reach (`TypeError`)."
@@ -684,7 +697,7 @@ fn python_mangled(b: &Book) -> Vec<Found> {
         let n = python::name(&a.name);
         if mangled(&n) {
             out.push(Found {
-                subject: Subject::Mangled(Name::Account(k)),
+                subject: Subject::AsIs(Name::Account(k)),
                 said: said(tr!(
                     "Python はクラスの中で、`__` で始まり `__` で終わらない名前を書き換える（名前修飾）ので、`_Balances` のメソッド `{n}` は `_Balances{n}` になり、`book.balance.{n}(…)` で呼べません（`AttributeError`）。",
                     "Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): the method `{n}` of `_Balances` is `_Balances{n}`, which `book.balance.{n}(…)` does not reach (`AttributeError`)."
@@ -695,7 +708,7 @@ fn python_mangled(b: &Book) -> Vec<Found> {
             let q = python::name(p);
             if mangled(&q) && !mangled(&n) {
                 out.push(Found {
-                    subject: Subject::Mangled(Name::AccountParam(k, i)),
+                    subject: Subject::AsIs(Name::AccountParam(k, i)),
                     said: said(tr!(
                         "Python はクラスの中で、`__` で始まり `__` で終わらない名前を書き換える（名前修飾）ので、`_Balances` のメソッド `{n}` の引数 `{q}` は `_Balances{q}` になり、`{q}=` で渡せません（`TypeError`）。",
                         "Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): the parameter `{q}` of the method `{n}` of `_Balances` is `_Balances{q}`, which `{q}=` does not reach (`TypeError`)."
@@ -705,6 +718,60 @@ fn python_mangled(b: &Book) -> Vec<Found> {
         }
     }
     out
+}
+
+/// TypeScript: a parameter, of a transfer or of an account, named `__proto__`. The client takes the
+/// arguments as one object, and an object literal's `__proto__: …` sets the object's prototype in
+/// place of a property (a string is not one, and is dropped), so `args.__proto__` is the prototype
+/// of every object, never the string written. The name of a transfer or of an account is a
+/// property of an object the client makes, which it reaches all the same.
+fn typescript_proto(b: &Book) -> Vec<Found> {
+    let said = |n: &Text| vec![Said { lang: Lang::TypeScript, backends: ALL.to_vec(), note: n.clone(), in_package: true }];
+    let note = |call: &str| -> Text {
+        tr!(
+            "クライアントは引数を一つのオブジェクトで受け取ります。オブジェクトリテラルの `__proto__: …` はプロパティではなくオブジェクトのプロトタイプを決める書き方なので（文字列はプロトタイプにならず、捨てられます）、`{call}({{ __proto__: … }})` の `__proto__` は書いた文字列になりません。呼び出しは止まります（`TypeError: chobo: __proto__ is a string`）。",
+            "the client takes the arguments as one object, and `__proto__: …` in an object literal sets the object's prototype, not a property (a string is no prototype, and is dropped): the `__proto__` of `{call}({{ __proto__: … }})` is never the string written, and the call stops (`TypeError: chobo: __proto__ is a string`)."
+        )
+    };
+    let mut out = Vec::new();
+    for (k, t) in b.transfers.iter().enumerate() {
+        for (i, p) in t.params.iter().enumerate() {
+            if p.name == "__proto__" {
+                out.push(Found { subject: Subject::AsIs(Name::Param(k, i)), said: said(&note(&format!("book.{}.do", t.name))) });
+            }
+        }
+    }
+    for (k, a) in b.accounts.iter().enumerate() {
+        for (i, p) in a.params.iter().enumerate() {
+            if p == "__proto__" {
+                out.push(Found { subject: Subject::AsIs(Name::AccountParam(k, i)), said: said(&note(&format!("book.balance.{}", a.name))) });
+            }
+        }
+    }
+    out
+}
+
+/// Python: the book's name, which `chobo build` writes the client as the module of (`<name>.py`),
+/// when it is a word Python keeps (`import class` is no Python) or the name of a module of Python's
+/// standard library, as `sys.stdlib_module_names` lists it (Python keeps one module of a name). A
+/// package of ritsu's holds the module as `<package>.books.<name>`, where the standard library's
+/// module does not meet it, and refuses a word Python keeps itself, as the name its index imports.
+fn python_module(b: &Book) -> Vec<Found> {
+    let n = b.name.as_str();
+    let note = if ritsu_emit::words::python::KEYWORDS.contains(&n) {
+        tr!(
+            "クライアントはモジュール `{n}.py` で、`{n}` は Python が予約している語なので、`import {n}` は Python の文になりません（`SyntaxError`）。`ritsu gen` のパッケージにも、この名前のモジュールは置けません。",
+            "the client is the module `{n}.py`, and `{n}` is a word Python keeps, so `import {n}` is no Python (`SyntaxError`); a package of `ritsu gen` cannot hold a module of that name either."
+        )
+    } else if ritsu_emit::copies::rulec::PY_STDLIB.contains(&n) {
+        tr!(
+            "クライアントはモジュール `{n}.py` で、Python の標準ライブラリにもモジュール `{n}` があります。Python は同じ名前のモジュールを一つしか読み込まず、`import {n}` は先に読み込んだほうを返すので、標準ライブラリの `{n}` を読み込んだあとでは、クライアントを読み込めません。先にクライアントを読み込むと、プログラムのどの `import {n}` も、標準ライブラリのものの代わりにクライアントを返します。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.{n}` として持つので、標準ライブラリのものとぶつかりません。",
+            "the client is the module `{n}.py`, and Python's standard library has a module `{n}` too. Python keeps one module per name, and `import {n}` gives the one imported first: once the standard library's `{n}` is imported, the client cannot be imported; imported before it, the client is what every `import {n}` in the program gets in place of the standard library's. A package of `ritsu gen` holds the module as `<package>.books.{n}`, which does not meet the standard library's."
+        )
+    } else {
+        return Vec::new();
+    };
+    vec![Found { subject: Subject::AsIs(Name::Book), said: vec![Said { lang: Lang::Python, backends: ALL.to_vec(), note, in_package: false }] }]
 }
 
 /// The SQL types of a PostgreSQL function's parameters after the tenant's, and how many of the
@@ -809,7 +876,7 @@ fn pg_found(b: &Book) -> Vec<Found> {
             if out.iter().any(|o| o.subject == subject) {
                 continue;
             }
-            out.push(Found { subject, said: vec![Said { lang: Lang::Sql, backends: vec![Backend::Postgres], note }] });
+            out.push(Found { subject, said: vec![Said { lang: Lang::Sql, backends: vec![Backend::Postgres], note, in_package: true }] });
         }
     }
     out
@@ -821,14 +888,14 @@ pub fn find(b: &Book) -> Vec<Found> {
     for decls in [typescript_decls(b), python_decls(b), go_decls(b), rust_decls(b)] {
         for h in hits(b, &decls) {
             let note = note_of(b, &h);
-            let said = Said { lang: h.rule.lang(), backends: h.on.clone(), note };
+            let said = Said { lang: h.rule.lang(), backends: h.on.clone(), note, in_package: true };
             match out.iter_mut().find(|f| f.subject == h.subject) {
                 Some(f) => f.said.push(said),
                 None => out.push(Found { subject: h.subject, said: vec![said] }),
             }
         }
     }
-    for f in python_mangled(b).into_iter().chain(pg_found(b)) {
+    for f in typescript_proto(b).into_iter().chain(python_module(b)).chain(python_mangled(b)).chain(pg_found(b)) {
         match out.iter_mut().find(|o| o.subject == f.subject) {
             Some(o) => o.said.extend(f.said),
             None => out.push(f),
@@ -858,7 +925,7 @@ fn headline(b: &Book, f: &Found, place: &Text, many: bool) -> Text {
             let uses = if many { "use themselves" } else { "uses itself" };
             tr!("{} は、{}が自分で使う名前と同じになります", "{} is a name {} {uses}", w.ja, place.ja; cap(&w.en), place.en)
         }
-        Subject::Mangled(n) => {
+        Subject::AsIs(n) => {
             let w = n.what(b);
             tr!("{} は、{}でそのままでは使えません", "{} cannot be used as it is in {}", w.ja, place.ja; cap(&w.en), place.en)
         }
@@ -914,20 +981,24 @@ pub fn check(b: &Book) -> Vec<Diag> {
         .collect()
 }
 
-/// E064: the findings that break `target`, which its build does not write.
-pub fn check_target(b: &Book, target: Target) -> Vec<Diag> {
+/// E064: the findings that break `target`, which its build does not write; of the client a
+/// package of ritsu's holds (`in_package`), the ones that break it there.
+pub fn check_target(b: &Book, target: Target, in_package: bool) -> Vec<Diag> {
     find(b)
         .iter()
-        .filter(|f| f.targets().contains(&target))
-        .map(|f| {
+        .filter_map(|f| {
+            let said: Vec<&Said> = f.said.iter().filter(|s| s.targets().contains(&target) && (s.in_package || !in_package)).collect();
+            if said.is_empty() {
+                return None;
+            }
             let t = target.name();
             let place = tr!("`{t}` のコード", "the code of `{t}`");
             let (line, col) = f.subject.at().place(b);
             let mut d = diag::error("E064", line, col, headline(b, f, &place, false));
-            for s in f.said.iter().filter(|s| s.targets().contains(&target)) {
+            for s in said {
                 d = d.note(join(&prefix(s.lang, &s.targets()), &s.note));
             }
-            d.hint(fix(f, true))
+            Some(d.hint(fix(f, true)))
         })
         .collect()
 }

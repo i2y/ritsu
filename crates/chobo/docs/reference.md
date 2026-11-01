@@ -268,10 +268,14 @@ The clients and the SQL write the names as identifiers of their own languages, a
 make room for another. Go writes a name with its first letter in upper case (`Stock` for `stock`,
 `X在庫` for `在庫`), Rust the names of types and reasons in PascalCase (`TakeBack` for
 `take_back`), Python a `_` after a keyword (`class_`), and PostgreSQL's SQL the functions
-`<transfer>_<operation>` and `balance_<account>`. Where that makes two names one identifier, or a
-name one the client uses itself (`balance`, and `expire` on PostgreSQL and the MySQL family),
-`chobo check` warns about it and names the targets, with how each one's code would break (W108),
-and the build of those targets stops (E064). For a target you do not build, leave it as it is.
+`<transfer>_<operation>` and `balance_<account>`; the Python client is the module of the book's
+name (`<name>.py`). Where that makes two names one identifier, or a name one the client uses itself
+(`balance`, and `expire` on PostgreSQL and the MySQL family), and where a client cannot take a name
+as it is (a name Python mangles, such as `__note`; a parameter `__proto__`, which an object literal
+in TypeScript takes as the prototype; a book named like a keyword of Python or a module of its
+standard library), `chobo check` warns about it and names the targets, with how each one's code
+would break (W108), and the build of those targets stops (E064). For a target you do not build,
+leave it as it is.
 
 ## Diagnostics
 

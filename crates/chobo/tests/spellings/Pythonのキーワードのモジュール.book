@@ -1,0 +1,17 @@
+book import v1
+description "Python が予約している語 import を名前にした帳簿。Python のクライアントはモジュール import.py になり、import import は Python の文になりません"
+
+unit 個
+
+account 在庫(品番: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(納品: string, 品番: string, 数: 個)
+  key 納品, 品番
+  move 数 from 仕入先 to 在庫(品番)
+
+transfer 出荷(注文: string, 品番: string, 数: 個)
+  key 注文, 品番
+  move 数 from 在庫(品番) to 客

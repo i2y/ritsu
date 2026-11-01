@@ -11,9 +11,10 @@
 //!
 //! With each language's own tools, the code a target would write of each book
 //! (`target::unchecked`, which leaves out E064) breaks for the targets W108 names and for no
-//! other, and the code of every renamed book passes them all: tsc, the Python client's `Book` as a
-//! caller reaches it, go vet, cargo check, and PostgreSQL loading the SQL and calling it as a
-//! driver that sends no types does.
+//! other, and the code of every renamed book passes them all: tsc and node calling the TypeScript
+//! client with arguments written as object literals, the Python client's `Book` as a caller
+//! reaches it and as `import <name>` does from beside the client, go vet, cargo check, and
+//! PostgreSQL loading the SQL and calling it as a driver that sends no types does.
 
 mod common;
 use chobo::check;
@@ -31,6 +32,7 @@ const GO: &[&str] = &["postgres-go", "tigerbeetle-go", "mysql-go"];
 const GO_AND_RUST: &[&str] = &["postgres-go", "postgres-rust", "tigerbeetle-go", "tigerbeetle-rust", "mysql-go", "mysql-rust"];
 const RUST: &[&str] = &["postgres-rust", "tigerbeetle-rust", "mysql-rust"];
 const PYTHON: &[&str] = &["postgres-python", "tigerbeetle-python", "mysql-python"];
+const TYPESCRIPT: &[&str] = &["postgres-typescript", "tigerbeetle-typescript", "mysql-typescript"];
 /// every client: the `Book` of each has `balance`
 const CLIENTS: &[&str] = &[
     "postgres-typescript",
@@ -81,6 +83,15 @@ const FORMS: &[(&str, &[&str])] = &[
     // a transfer whose class Python changes inside `Book`
     ("python_mangled", PYTHON),
     ("Pythonの名前修飾", PYTHON),
+    // a book named with a word Python keeps, which the Python client is the module of
+    ("python_keyword_module", PYTHON),
+    ("Pythonのキーワードのモジュール", PYTHON),
+    // a book named like a module of Python's standard library that Python imports as it starts
+    ("python_library_module", PYTHON),
+    ("Pythonの標準ライブラリのモジュール", PYTHON),
+    // a parameter named `__proto__`, which a TypeScript object literal takes for the prototype
+    ("typescript_proto", TYPESCRIPT),
+    ("TypeScriptのプロトタイプ", TYPESCRIPT),
     // a transfer named like what reads the balances
     ("own_balance", CLIENTS),
     ("自分の残高", CLIENTS),
@@ -309,6 +320,7 @@ fn the_other_names() {
         chobo::spellings::find(c.book.as_ref().unwrap()).iter().map(|f| f.targets().iter().map(|t| t.name()).collect::<Vec<_>>().join(" ")).collect()
     };
     let python = PYTHON.join(" ");
+    let ts = TYPESCRIPT.join(" ");
     let both: Vec<&str> = Target::ALL.iter().map(|t| t.name()).filter(|n| PYTHON.contains(n) || RUST.contains(n)).collect();
     let cases: &[(&str, String)] = &[
         // `__init__` makes `_Balances`, and an account of that name takes its place
@@ -329,11 +341,25 @@ fn the_other_names() {
         ("transfer adjust(note: string, self: string, self_: string, sku: string, qty: pcs)\n  key note, self, self_\n  move qty from suppliers to stock(sku)\n", both.join(" ")),
         // a name a Python method uses itself
         ("transfer adjust(note: string, _str: string, _str_: string, sku: string, qty: pcs)\n  key note, _str, _str_\n  move qty from suppliers to stock(sku)\n", python.clone()),
+        // an object literal takes `__proto__` for the prototype: an account's parameter, and a
+        // transfer's, each found at its own name
+        (
+            "account bin(__proto__: string) : pcs\n  at least 0 refused as empty\ntransfer bin_it(note: string, __proto__: string, qty: pcs)\n  key note, __proto__\n  move qty from customers to bin(__proto__)\ntransfer unbin(note: string, bin: string, qty: pcs)\n  key note, bin\n  move qty from bin(bin) to customers\n",
+            format!("{ts}\n{ts}"),
+        ),
     ];
     for (more, want) in cases {
         let src = base(more);
         let got = named(&src).join("\n");
         assert_eq!(&got, want, "{more}");
+    }
+    // The book's name is the Python client's module: a word Python keeps, or a module of the standard
+    // library, any of them (`typing` and `random` are what the client imports itself), but not a
+    // word Python keeps only where it reads one (`match`), nor a name that only starts like one.
+    let py = python.as_str();
+    for (name, want) in [("pass", py), ("typing", py), ("random", py), ("collections", py), ("match", ""), ("typing_", ""), ("abcd", "")] {
+        let src = base("").replacen("book other v1", &format!("book {name} v1"), 1);
+        assert_eq!(named(&src).join("\n"), want, "book {name}");
     }
     // A book named `main` is no Go package: the Go client takes the file's name instead, as for a
     // keyword, and nothing is warned of.
@@ -343,7 +369,75 @@ fn the_other_names() {
     assert!(files.iter().all(|(_, text)| text.contains("\npackage shop\n")), "{:?}", files.iter().map(|(p, _)| p).collect::<Vec<_>>());
 }
 
+/// A package of ritsu's holds the Python client as `<package>.books.<name>` (ritsu's DESIGN 9.3),
+/// so the book's name does not stop it there (ritsu gen refuses a word Python keeps itself, as a
+/// name its index cannot import); whatever else breaks a client's own code stops it in a package
+/// too.
+#[test]
+fn a_package_stops_at_what_breaks_the_clients_own_code() {
+    for f in forms() {
+        let module = matches!(f.stem, "python_keyword_module" | "Pythonのキーワードのモジュール" | "python_library_module" | "Pythonの標準ライブラリのモジュール");
+        for t in Target::ALL {
+            let alone: Vec<&str> = target::check(&f.book, t).iter().map(|d| d.code).collect();
+            let in_package: Vec<&str> = target::check_in(&f.book, t, true).iter().map(|d| d.code).collect();
+            if module {
+                assert!(in_package.is_empty(), "{} {}: a package gives {in_package:?}", f.stem, t.name());
+            } else {
+                assert_eq!(alone, in_package, "{} {}", f.stem, t.name());
+            }
+        }
+    }
+}
+
 // ── the tools of each language ────────────────────────────────────────────
+
+/// What the TypeScript probe does with each client: the book made on a driver that stops every
+/// call with `SENT`, and every operation of every transfer, and every account's balance, called
+/// with its arguments written as an object literal, as a caller writes them. One line of JSON a
+/// file, with what is wrong ("broken"), or null when every call reaches the driver.
+const PROBE_TS: &str = r#"import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const SENT = new Error("sent");
+// every property is the driver itself, and calling it stops with SENT
+const driver = new Proxy(function () {}, { get: (_, p) => (p === "then" ? undefined : driver), apply: () => { throw SENT; } });
+// the arguments as a caller writes them: an object literal, `{ "sku": "v", "qty": 1n }`
+const literal = (params) => (0, eval)("({" + params.map(([n, amount]) => JSON.stringify(n) + ": " + (amount ? "1n" : JSON.stringify("v"))).join(", ") + "})");
+
+async function reaches(call) {
+  try {
+    await call();
+  } catch (e) {
+    if (e !== SENT) return String(e);
+  }
+  return null;
+}
+
+async function broken(spec) {
+  let book;
+  try {
+    book = (await import(pathToFileURL(spec.file).href))[spec.make](driver);
+  } catch (e) {
+    return `Book cannot be made: ${e}`;
+  }
+  for (const t of spec.transfers) {
+    const ops = book[t.name];
+    for (const op of Object.keys(ops)) {
+      const why = await reaches(() => ops[op](literal(t.params)));
+      if (why) return `book.${t.name}.${op}: ${why}`;
+    }
+  }
+  for (const a of spec.accounts) {
+    const why = await reaches(() => (a.params.length ? book.balance[a.name](literal(a.params.map((p) => [p, false]))) : book.balance[a.name]()));
+    if (why) return `book.balance.${a.name}: ${why}`;
+  }
+  return null;
+}
+
+for (const spec of JSON.parse(readFileSync(process.argv[2], "utf8"))) {
+  console.log(JSON.stringify({ file: spec.file, broken: await broken(spec) }));
+}
+"#;
 
 #[test]
 fn typescript_breaks_where_w108_says() {
@@ -375,15 +469,34 @@ fn typescript_breaks_where_w108_says() {
     // tsc type-checks every file and names the file of each error: `f3_pg/x.ts(12,5): error TS2300: …`
     let out = Command::new(runner_dir().join("node_modules/.bin/tsc")).args(["-p", ".", "--pretty", "false"]).current_dir(&dir).output().unwrap();
     let said = String::from_utf8_lossy(&out.stdout).to_string();
+    // node calls each client as a caller does (PROBE_TS)
+    let mut specs = Vec::new();
+    for (i, f) in all.iter().enumerate() {
+        for (t, make) in ts.iter().zip(["postgres", "tigerbeetle", "mysql"]) {
+            for (rel, _) in f.files(*t) {
+                let transfers: Vec<serde_json::Value> = f.book.transfers.iter().map(|x| serde_json::json!({"name": x.name, "params": x.params.iter().map(|p| (p.name.clone(), matches!(p.ty, chobo::model::Ty::Amount(_)))).collect::<Vec<_>>()})).collect();
+                let accounts: Vec<serde_json::Value> = f.book.accounts.iter().map(|a| serde_json::json!({"name": a.name, "params": a.params})).collect();
+                specs.push(serde_json::json!({"key": key(i, *t), "file": dir.join(key(i, *t)).join(rel).display().to_string(), "make": make, "transfers": transfers, "accounts": accounts}));
+            }
+        }
+    }
+    std::fs::write(dir.join("probe.mjs"), PROBE_TS).unwrap();
+    std::fs::write(dir.join("probe.json"), serde_json::to_string(&specs).unwrap()).unwrap();
+    let probe = Command::new("node").args(["--disable-warning=ExperimentalWarning", "probe.mjs", "probe.json"]).current_dir(&dir).output().unwrap();
+    assert!(probe.status.success(), "the probe:\n{}", String::from_utf8_lossy(&probe.stderr));
+    let ran: Vec<serde_json::Value> = String::from_utf8_lossy(&probe.stdout).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(ran.len(), specs.len());
     let mut tally = Tally::default();
     for (i, f) in all.iter().enumerate() {
         for t in ts {
             let k = format!("{}/", key(i, t));
-            let errors: Vec<&str> = said.lines().filter(|l| l.starts_with(&k)).collect();
+            let mut errors: Vec<String> = said.lines().filter(|l| l.starts_with(&k)).map(String::from).collect();
+            let at = specs.iter().position(|s| s["key"] == key(i, t)).unwrap();
+            errors.extend(ran[at]["broken"].as_str().map(|b| format!("node: {b}")));
             tally.add(f, t, target::Lang::TypeScript, (!errors.is_empty()).then(|| errors.join("\n")));
         }
     }
-    tally.end("tsc");
+    tally.end("tsc and node");
 }
 
 /// What the Python probe is given of each client: the file, and where each name of the book is to
@@ -430,6 +543,39 @@ for spec in json.load(open(sys.argv[1], encoding="utf-8")):
     print(json.dumps({"file": spec["file"], "broken": broken(spec)}))
 "#;
 
+/// What the second Python probe does with each client, written beside the caller under its own
+/// name (`<book>.py`), as `chobo build` writes it: the caller's `import <book>`, and the `Book` it
+/// makes. One line of JSON a client, with what is wrong ("broken"), or null.
+const BY_NAME: &str = r#"import json, sys
+
+class Nothing:
+    def __getattr__(self, name):
+        return lambda *a, **k: None
+
+def broken(spec):
+    name, beside = spec["name"], spec["dir"]
+    try:
+        code = compile(f"import {name} as m", "<caller>", "exec")
+    except SyntaxError as e:
+        return f"import {name}: SyntaxError: {e.msg}"
+    sys.path.insert(0, beside)
+    ns = {}
+    try:
+        exec(code, ns)
+        getattr(ns["m"], spec["make"])(Nothing())
+    except BaseException as e:
+        return f"import {name}: {type(e).__name__}: {e}"
+    finally:
+        sys.path.remove(beside)
+        m = sys.modules.get(name)
+        if m is not None and (getattr(m, "__file__", None) or "").startswith(beside):
+            del sys.modules[name]
+    return None
+
+for spec in json.load(open(sys.argv[1], encoding="utf-8")):
+    print(json.dumps({"dir": spec["dir"], "broken": broken(spec)}))
+"#;
+
 #[test]
 fn python_breaks_where_w108_says() {
     use chobo::client::python::name;
@@ -466,10 +612,31 @@ fn python_breaks_where_w108_says() {
     assert!(out.status.success(), "the probe:\n{}", String::from_utf8_lossy(&out.stderr));
     let lines: Vec<serde_json::Value> = String::from_utf8_lossy(&out.stdout).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     assert_eq!(lines.len(), at.len());
+    // the same clients under their own names, each in a directory of its own, imported by name
+    let mut named = Vec::new();
+    for (i, t, file) in &at {
+        let beside = work.path().join("by_name").join(key(*i, *t));
+        std::fs::create_dir_all(&beside).unwrap();
+        let rel = format!("{}.py", all[*i].book.name);
+        std::fs::copy(file, beside.join(&rel)).unwrap();
+        let make = match t.backend() {
+            target::Backend::Postgres => "postgres",
+            target::Backend::TigerBeetle => "tigerbeetle",
+            target::Backend::MySql => "mysql",
+        };
+        named.push(serde_json::json!({"dir": beside.display().to_string(), "name": all[*i].book.name, "make": make}));
+    }
+    std::fs::write(work.path().join("by_name.py"), BY_NAME).unwrap();
+    std::fs::write(work.path().join("by_name.json"), serde_json::to_string(&named).unwrap()).unwrap();
+    let out = Command::new(&py).arg("-I").arg(work.path().join("by_name.py")).arg(work.path().join("by_name.json")).output().unwrap();
+    assert!(out.status.success(), "the probe of the names:\n{}", String::from_utf8_lossy(&out.stderr));
+    let by_name: Vec<serde_json::Value> = String::from_utf8_lossy(&out.stdout).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(by_name.len(), at.len());
     let mut tally = Tally::default();
-    for ((i, t, file), got) in at.iter().zip(&lines) {
+    for (((i, t, file), got), imported) in at.iter().zip(&lines).zip(&by_name) {
         assert_eq!(got["file"].as_str(), Some(file.as_str()));
-        tally.add(&all[*i], *t, target::Lang::Python, got["broken"].as_str().map(String::from));
+        let why: Vec<&str> = [got["broken"].as_str(), imported["broken"].as_str()].into_iter().flatten().collect();
+        tally.add(&all[*i], *t, target::Lang::Python, (!why.is_empty()).then(|| why.join("\n")));
     }
     tally.end("Python");
 }

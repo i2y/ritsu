@@ -504,13 +504,16 @@ the ones they ran with. A name of the book that is Japanese is exported in Go wi
 (`b.X引当.Hold`), a name that is a keyword of Python gets a `_` after it, and one that is a keyword
 of Rust is written as a raw identifier (`r#type`; `self_` for the four it cannot be). Every other
 name is written as the book writes it, and none is changed to make room for another: where two
-names are one identifier in a client, or a transfer kind is called `balance` (or `expire`, on
-PostgreSQL and the MySQL family), `chobo check` warns about it (W108) and the build of the targets
-it names stops (E064). A Rust client is one
-module: it holds what every book shares beside the book's own part, as the TypeScript and Python
-files do, and its head says the crates it needs, at the versions its tests run. The module is the
-book's name in lower case when that is an ASCII identifier, else the file's name, else `book`, as
-Go's package: a module named in Japanese would take a `#[path]` attribute in Rust. rustc warns of a
+names are one identifier in a client, a transfer kind is called `balance` (or `expire`, on
+PostgreSQL and the MySQL family), or a client cannot take a name as it is (a parameter `__proto__`
+in TypeScript, a book named like a keyword of Python or a module of its standard library),
+`chobo check` warns about it (W108) and the build of the targets it names stops (E064). A Rust
+client is one module: it holds what every book shares beside the book's own part, as the
+TypeScript and Python files do, and its head says the crates it needs, at the versions its tests
+run. The module is the book's name in lower case when that is an ASCII identifier, else the file's
+name, else `book`, as Go's package: a module named in Japanese would take a `#[path]` attribute in
+Rust. The module allows `non_snake_case` itself, so rustc does not warn of the `mod` line that
+declares a name with two `_` in a row (`mod my__shop;`). rustc warns of a
 name with a character NFKC would change, such as a full-width letter or a half-width kana
 (`uncommon_codepoints`), and the warning is turned off only at the root of the crate the module is
 in (`#![allow(uncommon_codepoints)]`), not in the module.

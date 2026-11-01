@@ -117,11 +117,11 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("書いた", "written")),
-                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061、E062、E063）", "the book has errors, or the target cannot take it (E060, E061, E062, E063)")),
+                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061、E062、E063、E064）", "the book has errors, or the target cannot take it (E060, E061, E062, E063, E064)")),
                 (2, usage_exit.clone()),
             ],
             examples: vec!["chobo build inventory.book --target postgres --out db/", "chobo build inventory.book --target tigerbeetle-go --out internal/"],
-            codes: vec!["E060", "E061", "E062", "E063"],
+            codes: vec!["E060", "E061", "E062", "E063", "E064"],
         },
         Cmd {
             name: "doc",

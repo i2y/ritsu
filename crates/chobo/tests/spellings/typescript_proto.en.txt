@@ -1,0 +1,9 @@
+warning[W108]: typescript_proto.book:11:18: The parameter `__proto__` of the transfer `receive` cannot be used as it is in the TypeScript client
+    11 | transfer receive(__proto__: string, sku: string, qty: pcs)
+  = TypeScript (`postgres-typescript`, `tigerbeetle-typescript`, `mysql-typescript`): the client takes the arguments as one object, and `__proto__: …` in an object literal sets the object's prototype, not a property (a string is no prototype, and is dropped): the `__proto__` of `book.receive.do({ __proto__: … })` is never the string written, and the call stops (`TypeError: chobo: __proto__ is a string`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+typescript_proto.book: ok, 1 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per __proto__, sku; a second call that differs only in qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

@@ -107,12 +107,18 @@ impl Target {
 /// (E063), and the names the target spells as one identifier or cannot take as they are (E064,
 /// what `check` warns of with W108).
 pub fn check(book: &Book, target: Target) -> Vec<Diag> {
+    check_in(book, target, false)
+}
+
+/// [`check`], for the client a package of ritsu's holds when `in_package` (ritsu's DESIGN 9.3),
+/// where the Python module's name is the package's (`<package>.books.<name>`).
+pub fn check_in(book: &Book, target: Target, in_package: bool) -> Vec<Diag> {
     let mut d = match target.backend() {
         Backend::Postgres => postgres::check_names(book),
         Backend::TigerBeetle => client::check_requests(book),
         Backend::MySql => mysql::check_names(book),
     };
-    let names = crate::spellings::check_target(book, target);
+    let names = crate::spellings::check_target(book, target, in_package);
     if target.lang() == Lang::Rust || !names.is_empty() {
         if target.lang() == Lang::Rust {
             d.extend(client::rust::check_names(book));
@@ -134,7 +140,7 @@ pub fn build(book: &Book, stem: &str, target: Target, origin: &Origin) -> Result
 /// ritsu's DESIGN 9.3): its amounts of money and of the quantities are then the package's types of
 /// their units. The SQL is the same either way.
 pub fn build_in(book: &Book, stem: &str, target: Target, origin: &Origin, in_pkg: Option<&client::InPackage>) -> Result<Vec<(String, String)>, Vec<Diag>> {
-    let d = check(book, target);
+    let d = check_in(book, target, in_pkg.is_some());
     if !d.is_empty() {
         return Err(d);
     }
