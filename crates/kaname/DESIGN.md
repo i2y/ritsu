@@ -4668,13 +4668,13 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 
 ### 36.12 Wasm の書き出しを共通にする（`ritsu-emit` の `wasm`）
 
-**決定**：koyomi の Wasm の書き出しのうち、koyomi の生成物を一字も変えずに分けられる部分を `ritsu_emit::wasm` に置き、koyomi と kaname がそれを使う。
+**決定**：koyomi の Wasm の書き出しのうち、koyomi の生成物を一字も変えずに分けられる部分を `ritsu_emit::wasm` に置き、koyomi と kaname と rulec がそれを使う。
 
 - `ritsu_emit::wasm` にあるもの：`RUSTC_FLAGS`（`-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib`）と、同じ設定を cargo で書いた `CARGO_LINE`（36.15。`-- -C lto` は cargo では組めず、`--config profile.release.*` で渡す）、`CALL_SIGNATURE`、WIT の予約語の表（`WIT_KEYWORDS`）、`world`、`semver`、`package`（`<言語>:<world>@<版>`）、component を作る二つのコマンド（`component_line`）、ABI の三つの関数（`abi`。`REALLOC`、`call`、`POST_CALL`）とそれが読む `use`（`ALLOC_USE`）、JavaScript のホストが `call` を呼ぶ関数（`NODE_CALL`）。
-- `call` は、答えを作る式と、UTF-8 でない入力に答える式を受け取る。koyomi は `_answer(text)` と `_refusal("input", …)` を、kaname は `crate::glue::door::answer(text)` と `crate::glue::door::not_utf8()` を渡す。どちらも、入力を `std::str::from_utf8` で確かめてから読む。
+- `call` は、答えを作る式と、UTF-8 でない入力に答える式を受け取る。koyomi は `_answer(text)` と `_refusal("input", …)` を、kaname は `crate::glue::door::answer(text)` と `crate::glue::door::not_utf8()` を、rulec は `answer(text)` と `not_utf8()` を渡す。どれも、入力を `std::str::from_utf8` で確かめてから読む。
 - koyomi に残すもの：JSON を読む部品（`_space`、`_word`、`_number`、`_value`、`_string`）、整数を読む `_whole`、拒否の行を作る `_refusal`、答えを書く部品。kaname の入口（`glue/door.rs`）には同じ役の部品があるが、中身が違うので共通にしない。koyomi の `call` は配列と真偽を読み捨てて 64 段まで読み、正しくないエスケープを U+FFFD にし、制御文字を全部 16 進のエスケープで書く。kaname の入口は、配列と真偽を持ち、36.11 の深さまで読み、正しくない文字列に印を付け、serde_json の書き方で書く。整数も、koyomi の `_whole` は「整数でない」と「int64 の外」を分けずに `None` を返すが、kaname は二つを別の文で拒否する（36.11）。拒否の行も、koyomi は種類（`input`、`range`）を持ち、kaname はいつも `input` である。部品を一つにすれば、0.36.0 で出た koyomi の生成物の文字が、kaname の読み方の直しにつれて変わることになる。
-- 確かめ方：koyomi の生成物（木の全部の `.cal` の `gen` の英日と `api`）が、替える前（0.40.0 の公式のバイナリ）と一字も同じであること（36.15）。
-- **rulec は替えない**。替えると、rulec の生成物で次のことが変わる。export が `#[no_mangle]` から `#[unsafe(no_mangle)]` になり、エディション 2024 でも組める。`call` が UTF-8 でない入力を確かめずに `String::from_raw_parts` で `String` にしている（未定義の動作）ところが、拒否の行になる。`.wit` の `package` と `world` の名前が `world()` で作られ、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名でも、wasm-tools が WIT を読めるようになる（いまは読めない。36.15）。使う人の `rulec gen --check` が落ちるので、替えるかは別に決める（36.16）。
+- 確かめ方：koyomi の生成物（木の全部の `.cal` の `gen` の英日と `api`）が、替える前（0.40.0 の公式のバイナリ）と一字も同じであること。rulec の生成物（木の全部の `.rule` の `gen` と `api`）は、`wasm/<別名>_wasm.rs` のほかが同じであること（36.15）。
+- **rulec**：JSON を読む部品と拒否の行とその文は rulec のものを残し、ABI の三つの関数、組み立てのフラグ、`call` の署名、`.wit` の world と package の名前、component の二つのコマンド、Node のランナーの `call` を `ritsu_emit::wasm` で書く（rulec の DESIGN §15.278）。rulec の生成物で変わるのは `wasm/<別名>_wasm.rs` だけである。export が `#[no_mangle]` から `#[unsafe(no_mangle)]` になってエディション 2024 でも組め、`call` が UTF-8 でない入力を確かめずに `String::from_raw_parts` で `String` にしていた（未定義の動作）ところが、拒否の行になった。`.wit` の `package` と `world` の名前も `world()` で作るので、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名でも、wasm-tools が WIT を読む（前の名前は読めなかった。36.15）。木の規則には、名前の変わるものは無い。使う人の `rulec gen --check` は、前の版が書いた `_wasm.rs` を古いと言う。
 
 ### 36.13 捨てたもの
 
@@ -4697,13 +4697,13 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - **関数の中の名前の字**：TypeScript・Python・Go の生成物で、出力先が名前に取らない字を持つ関数の中の名前が `v` になる（36.3）。変わるのは、前の生成物を各言語が読めなかった行だけで、木の全部の `.kn` では `names.kn` の `letters` の行だけである（36.15）。
 - 口の `RuleFacts` に `rust` を足した（36.6）。
 - `kaname api` に `wasm` の項を足した（36.11。`generated` の後に入る）。ほかのキーは変わらない。`api` の golden は `KANAME_BLESS=1` で取り直し、16 本とも差は `wasm` の項だけだった。
-- `ritsu_emit::wasm` を足し、koyomi の Wasm の書き出しはそれを使う（36.12）。koyomi の生成物は変わらない（36.15）。
+- `ritsu_emit::wasm` を足し、koyomi と rulec の Wasm の書き出しはそれを使う（36.12）。koyomi の生成物は変わらず、rulec の生成物は `wasm/<別名>_wasm.rs` だけが変わる（36.15、rulec の DESIGN §15.278）。
 
 ### 36.15 確かめたこと
 
 **前と後の比べ**。替える前は 0.40.0 の公式のバイナリで、替えた後は手元のビルドで、同じ入力から取ったものを一字ずつ比べた（木をコピーした場所で、ディレクトリの全部、標準出力、標準エラー、終了コード）。
 
-- `rulec gen`：コーパスと例の `.rule` の全部（英日の 994 ファイル）を、そのまま、`--format json`、`--lang ja` の三通りで、ほかに 160 のディレクトリで、3,142 回。どれも同じだった（129,251 のファイル）。
+- `rulec gen` と `rulec api`：コーパスと例の `.rule` の全部（英日の 994 ファイル）の `gen` を、そのまま、`--format json`、`--lang ja` の三通りで、ほかに 160 のディレクトリで、`api` を一つずつ、4,136 回。違ったのは `gen` の 1,931 回で、違うファイルはどれも `wasm/<別名>_wasm.rs` だった（2,210。36.12）。ほかに書いた 127,041 のファイルと、`api` の 994 回は同じだった。
 - kaname と `ritsu gen`：木の全部の `.kn`（例、`tests/modules/`、ritsu の `tests/projects/`）の `check` 218 回、`vectors` 52 回、`ritsu gen` の TypeScript・Python・Go（帳簿の置き場所の三つと `--library`）399 回。違ったのは `tests/modules/names.kn` の生成物の三つだけで、差は `letters` の行である。前の生成物はそこで組めなかった：
 
 ```text
@@ -4797,7 +4797,7 @@ error: unsafe attribute used without unsafe
 
 **スタック**。テストのハーネス（デバッグのビルド。36.9）は、英語のパッケージの 16,770 件に、メインのスレッドのスタックが 1.5 MiB でも 8 MiB と同じ行で答えた。1 MiB では、`trees.kn` の `leaf_sum` に渡す 200 段の値（16,722 件目）でスタックがあふれた（macOS の arm64、`ulimit -s`）。
 
-**WIT の名前**。`package rulec:<名前>@1.0.0; world <名前> { export call: func(input: string) -> string; }` を `wasm-tools component wit` で読んだ。`a--b`、`late-`、`result` は、rulec の `wit_name` が別名 `a__b`、`late_`、`result` から作る名前である：
+**WIT の名前**。`package rulec:<名前>@1.0.0; world <名前> { export call: func(input: string) -> string; }` を `wasm-tools component wit` で読んだ。`a--b`、`late-`、`result` は、前の rulec の `wit_name` が別名 `a__b`、`late_`、`result` から作っていた名前である（いまの rulec は `world()` で、`a-b`、`late`、`%result` にする。36.12）：
 
 ```text
 a--b => error: identifiers must have characters between '-'s
@@ -4934,7 +4934,6 @@ open 2026-03-02: ok
 - rulec と koyomi の Rust のモジュールは、clippy に当たる形を持つ（36.8）。どちらも単独の生成物と同じ形で、変えると使う人の `--check` が落ちる。
 - 表のほうがツールの Unicode より新しいとき、表が通す字をツールが名前に取らない（36.3）。`tests/idents.rs` で、Python 3.13.11（Unicode 15.1.0）は 18,040、Go 1.26.10（Unicode 15.0.0）は 19,226、tsc 7.0.2 は 18,040 の名前がそれにあたる。kaname の字句（`starts_name`、`is_name_char`）は Rust の `char` の Unicode（17.0.0）で読むので、その字を名前に取る。ツールの Unicode に合わせて表を分けることはしていない。
 - Rust は識別子を NFC にしてから比べる（36.3）。NFC で同じになる二つの関数の中の名前は、Rust で同じ名前になる。Python の NFKC と同じ形の穴で、確かめていない（chobo の DESIGN 14.6 と同じ）。
-- rulec の Wasm の `call` は、UTF-8 でない入力を確かめずに `String` にする。送料の規則（rulec の `tests/corpus/送料.rule`）のモジュールに三バイト `7b ff 7d` を渡すと、答えずにトラップする（Node で `RuntimeError: unreachable`）。rulec の `wit_name` は、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名を、wasm-tools が読めない WIT の名前にする（36.15）。rulec を `ritsu_emit::wasm` に替えると、どちらも直る。替えるかは別に決める（36.12）。
 - 範囲の両端を書いた日付の引数では、TypeScript と Go の入口は、日の番号（TypeScript は文字列）を両端と比べるだけで、暦にある日かを確かめない（22.5）。ホストが 2026-02-30 を渡すと 2026-03-02 として答え、TypeScript の文字列が日付の形でもなければ、入口を通って中の計算が JavaScript の例外で止まる。範囲 `>=2026-01-01 <=2026-12-31` の二つの日付の差を返す関数を `ritsu gen` で書いて呼んだ：
 
 ```text

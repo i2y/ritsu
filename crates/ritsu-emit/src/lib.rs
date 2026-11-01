@@ -13,8 +13,9 @@
 //! - [`wasm`]: a Wasm module that answers `call: func(input: string) -> string`: how it is built,
 //!   its world, and the functions of the canonical ABI it exports.
 //!
-//! koyomi, chobo and kaname write with these (chobo writes no Wasm); rulec and dandori read their
-//! tables of words from [`copies`] (C.11), and keep their own ways of making names and literals.
+//! koyomi, chobo and kaname write with these (chobo writes no Wasm), and rulec writes its Wasm
+//! module with [`wasm`]; rulec and dandori read their tables of words from [`copies`] (C.11), and
+//! keep their own ways of making names and literals.
 
 pub mod copies;
 pub mod header;

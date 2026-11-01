@@ -725,8 +725,9 @@ pointer to a (pointer, length) pair holding the answer, and `cabi_post_call(ret)
 The input is a JSON object with the inputs by name, in the wire form of [formats.md](formats.md)
 (a record with them under `"in"` is read the same way); the answer is the record line the other
 languages' `_record` writes, or, for an input outside the contract — an unknown enum value, an
-input that is not there, a number that is not a whole number and a date that is not `YYYY-MM-DD`
-included — the refusal line the runners print, `{"refused":"input","error":"weight is out of
+input that is not there, a number that is not a whole number, a date that is not `YYYY-MM-DD` and
+bytes that are not UTF-8 included — the refusal line the runners print,
+`{"refused":"input","error":"weight is out of
 range: 0"}`: the sentence every language says, followed by the value where the module has one as
 a number, and `"contradiction"` in the place of `"input"` for a case the rule itself cannot
 answer. A host is answered rather than trapped, and never computed on a value it did not send
@@ -754,7 +755,10 @@ call('{"dest":"Hokkaido","weight":2500,"total":12000,"member":"gold"}');
 ```
 
 The `.wit` names the same function as the export of a world, so the module becomes a
-component with no change to it, and a component host calls it like any other:
+component with no change to it, and a component host calls it like any other. The world is the
+rule's alias as WIT spells a name: its words in lowercase joined by `-`, a run of `_` as one `-`
+and a `_` at either end as none, and `%` before a word WIT keeps for itself (`world %list` for a
+rule named `list`), so wasm-tools reads the `.wit` of every rule:
 
 ```console
 $ wasm-tools component embed member_shipping_fee.wit member_shipping_fee.wasm -o member_shipping_fee.embedded.wasm

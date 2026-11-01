@@ -6179,6 +6179,25 @@ note: `rules/member_tier_shipping.rule` implements a contract's service (`implem
 
 - **`vectors/` のファイルの残りと、Go のランナーのモジュールの `go.mod`。** どちらも頭の行が無く、rulec が書いたものと見分けられないので挙げない。ランナーのモジュールでは `main.go` が挙がる。
 
+### 15.278 Wasm のモジュールを、ritsu-emit の `wasm` で書く（2026-11-01）
+
+**決定**：Wasm の出力先（§15.64）の crate root にある canonical ABI の三つの関数（`cabi_realloc`、`call`、`cabi_post_call`）と、組み立てのフラグ、`call` の署名、`.wit` の world と package の名前、component を作る二つのコマンド、Node のランナーが `call` を呼ぶ関数を、ritsu の生成器が共に使う ritsu-emit の `wasm` のものにした。koyomi の日付のモジュール（koyomi の DESIGN 13 章）と kaname のパッケージの Wasm（kaname の DESIGN 36.10〜36.12）も、同じものを使う。入力の JSON を読む部品と、拒否の行とその文は、rulec のものを残した。
+
+生成物で変わること：
+
+- `_wasm.rs` の三つの関数は、`#[no_mangle]` の代わりに `#[unsafe(no_mangle)]` を付け、unsafe な操作を `unsafe { }` で囲む。エディション 2024 でも組める（2024 では `#[no_mangle]` がエラーになる）。三つの関数の doc コメントの文と、`use std::alloc::{Layout, alloc, realloc};` の並びも変わる。コメントは、生成するコードのほかのコメントと同じく英語のままである。
+- `call` は、受け取ったバイトを `std::str::from_utf8` で確かめてから読む。前は確かめずに `String::from_raw_parts` で `String` にしていて、UTF-8 でないバイトでは未定義の動作だった。送料の規則（`tests/corpus/送料.rule`）のモジュールに三バイト `7b ff 7d` を渡すと、前は答えずにトラップし（Node で `RuntimeError: unreachable`）、いまは拒否の行 `{"refused":"input","error":"the input is not UTF-8"}` を返す（`--lang ja` では `入力が UTF-8 ではありません`）。文は `door::not_utf8` にある。ほかの出力先は文字列を受け取るので、この文を言うのは Wasm のモジュールだけで、参照評価器は言わない。空の入力は、前と同じく、入力の無いオブジェクトとして読む（`届け先 is missing`）。
+- `.wit` の world と package の名前は、`ritsu_emit::wasm::world` が別名から作る。語を小文字にして `-` でつなぎ、`_` の続きは一つの `-` に、端の `_` は無しにし、WIT の予約語には `%` を付ける（規則 `list` は `package rulec:%list@1.0.0;` と `world %list`）。前の `wit_name` は `_` を `-` に替えるだけだったので、`__` を持つ別名（`a__b` は `a--b`）、`_` で終わる別名（`trailing_` は `trailing-`）、WIT の予約語の別名（四十三語のうち、規則の名前になれる 39 語）の `.wit` を、wasm-tools が読めなかった（koyomi の DESIGN 13.6）。ほかの別名の world と package は変わらない。`rulec api` の `wasm.world` と `wasm.package` も同じ関数で作る。
+- 組み立ての行（`wasm.build`）、`call_signature`、`component` の二つのコマンド、ランナーは、一字も変わらない。
+
+確かめたこと：
+
+- 0.40.0 の公式のバイナリと替えた後のバイナリ（どちらも `ritsu` を `rulec` という名前のリンクで呼ぶ）で、木の全部の `.rule`（994）について、`gen`（そのまま、`--format json`、`--lang ja`）と `api` を一つずつ、`gen` を 160 のディレクトリごとにかけ、書いたファイル、標準出力、標準エラー、終了コードを比べた（4,136 回）。違ったのは `gen` の 1,931 回で、違うファイルはどれも `wasm/<別名>_wasm.rs` だった（2,210）。そのほかに書いた 127,041 のファイル（`.wit` とランナーを含む）と、`api` の 994 回は、一字も同じだった。コーパスには、前の `wit_name` が読めない名前にする規則は無い。
+- `tests/wasm_target.rs`。`契約の外の入力はerrorの行で返る` に、UTF-8 でないバイトの呼び出しを足した。新しい `規則の名前はどれもwitが読めるworldになる` は、WIT の予約語の四十三語と、`a__b`、`trailing_`、`fee_2nd`、`shipping_fee` を名前にした規則を書き、`gen` が書く `.wit` の package と world が `ritsu_emit::wasm::world` のとおりで、wasm-tools がその `.wit` を読むことを確かめる。四つ（`enum`、`import`、`result`、`with`）は規則の名前になれず、43 の規則の world を読んだ。六つのテストが通る。`tests/` のうち Wasm に触れるほかの 15 本（`api`、`api_errors`、`threeway` など）と、`docs`、`skill`、`website`、`readme` も通る（合わせて 242 件）。
+- 送料の規則のモジュールは、36,961 バイトから 36,927 バイトになった。
+
+使う人に関わること：前のバージョンが生成した `wasm/<別名>_wasm.rs` は、`rulec gen --check` で古いと言われる（生成したコードの文字は 1.x でも約束の外。`docs/compatibility.md`）。`rulec gen` をかけ直せばよい。world と package の名前が変わるのは、前の名前を wasm-tools が読めなかった規則だけである。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

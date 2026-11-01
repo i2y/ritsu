@@ -18,6 +18,12 @@ pub fn missing(name: &str) -> String {
     tr!("{name} がありません", "{name} is missing")
 }
 
+/// Bytes that are not UTF-8, which only the Wasm module is given: a host hands it bytes, and every
+/// other door is handed a string (§15.278).
+pub fn not_utf8() -> String {
+    tr!("入力が UTF-8 ではありません", "the input is not UTF-8")
+}
+
 /// A number that is not a whole count of its unit or its step, or a value that is not a number.
 pub fn not_integer(name: &str) -> String {
     tr!("{name} が整数ではありません", "{name} is not an integer")

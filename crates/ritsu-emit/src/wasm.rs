@@ -1,9 +1,9 @@
 //! A Wasm module that answers one function of the component model, `call: func(input: string) ->
 //! string`, with a line of JSON in and a line of JSON out (DESIGN 9.2): how it is built, the world
 //! its `.wit` declares, the three functions of the canonical ABI its crate exports, and the function
-//! a JavaScript host calls them through. koyomi's module of a file (koyomi's DESIGN 13) and the Wasm
-//! of a package of Rust, which kaname's modules answer in (kaname's DESIGN 36.11), are written with
-//! these. rulec's module of a rule (rulec's DESIGN §15.64) keeps the form it was written in first.
+//! a JavaScript host calls them through. koyomi's module of a file (koyomi's DESIGN 13), rulec's
+//! module of a rule (rulec's DESIGN §15.64, §15.278) and the Wasm of a package of Rust, which
+//! kaname's modules answer in (kaname's DESIGN 36.11), are written with these.
 //!
 //! What a module reads and answers is its language's own: the function `call` hands the input to,
 //! the reader of JSON, and the sentences of the refusals.

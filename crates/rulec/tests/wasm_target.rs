@@ -1,5 +1,6 @@
 //! The Wasm target (§15.64): the files `gen` writes, the module they build into, the
-//! component the `.wit` makes of it, and the agreement of each with the reference evaluator.
+//! component the `.wit` makes of it, and the agreement of each with the reference evaluator; the
+//! world every name of a rule gives, which WIT reads (§15.278).
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -131,13 +132,24 @@ console.log(call('{"\\u5c4a\\u3051\\u5148": "\\u5317\\u6d77\\u9053", "\\u91cd\\u
 // An input that is not there, and one that is not a number: once answered as 0.
 console.log(call('{"届け先":"北海道","注文金額":12000,"会員":"ゴールド"}'));
 console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000,"会員":"ゴールド"}'));
+// Bytes that are not UTF-8, which a host can put in the memory as well (§15.278).
+function bytes(b) {
+  const ptr = ex.cabi_realloc(0, 0, 1, b.length);
+  new Uint8Array(ex.memory.buffer, ptr, b.length).set(b);
+  const ret = ex.call(ptr, b.length);
+  const [p, n] = new Uint32Array(ex.memory.buffer, ret, 2);
+  const out = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, p, n));
+  ex.cabi_post_call(ret);
+  return out;
+}
+console.log(bytes(new Uint8Array([0x7b, 0xff, 0x7d])));
 "#;
     std::fs::write(dir.join("wasm/host.mjs"), js).unwrap();
     let o = Command::new("node").current_dir(dir.join("wasm")).arg("host.mjs").output().expect("node を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let out = String::from_utf8_lossy(&o.stdout);
     let lines: Vec<&str> = out.lines().collect();
-    assert_eq!(lines.len(), 6, "{out}");
+    assert_eq!(lines.len(), 7, "{out}");
     assert!(lines[0].starts_with("{\"in\":{\"届け先\":\"北海道\"") && lines[0].contains("\"observed\":{\"送料\":1800}"), "{out}");
     // A refusal is the line the runners print: which error, and the sentence every door says,
     // the value after it (§15.204).
@@ -151,6 +163,70 @@ console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000
     assert_eq!(lines[3], lines[0], "エスケープした入力で答えが変わった\n{out}");
     assert_eq!(said(lines[4]), "重量 がありません", "{out}");
     assert_eq!(said(lines[5]), "重量 が整数ではありません", "{out}");
+    assert_eq!(said(lines[6]), "入力が UTF-8 ではありません", "{out}");
+}
+
+/// A rule named `@NAME@`, as small as passes check.
+const NAMED: &str = "rule @NAME@ v1
+description \"A rule whose name WIT spells otherwise\"
+
+enum kind = a | b
+
+inputs
+  item : kind
+
+outputs
+  flag : bool
+
+table flag_of
+policy unique
+| item | -> flag : bool |
+| a    | true           |
+| b    | false          |
+
+examples
+| item | -> flag |
+| a    | true    |
+| b    | false   |
+";
+
+/// Every name a rule may take gives a `.wit` WIT reads (§15.278): the words WIT keeps for itself,
+/// which take a `%`, a run of `_`, which is one `-`, and a `_` at an end, which is none. The words
+/// a rule may not be named (they are rulec's own) are left out.
+#[test]
+fn 規則の名前はどれもwitが読めるworldになる() {
+    if !ready(Need::Rustc, || have("wasm-tools"), "wasm-tools is missing; the worlds of the Wasm target are not read") {
+        return;
+    }
+    let t = TempDir::new("wasm-target-names");
+    let mut names: Vec<String> = ritsu_emit::wasm::WIT_KEYWORDS.iter().map(|k| k.replace('-', "_")).collect();
+    names.extend(["a__b", "trailing_", "fee_2nd", "shipping_fee"].map(String::from));
+    let (mut read, mut not_rules) = (Vec::new(), Vec::new());
+    for name in &names {
+        let dir = t.path().join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        let rule = dir.join(format!("{name}.rule"));
+        std::fs::write(&rule, NAMED.replace("@NAME@", name)).unwrap();
+        let out = dir.join("out");
+        let (c, o, e) = run(&["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()]);
+        if c == 1 {
+            not_rules.push(name.clone());
+            continue;
+        }
+        assert_eq!(c, 0, "{name}: {o}{e}");
+        let wit = out.join(format!("wasm/{name}.wit"));
+        let text = std::fs::read_to_string(&wit).unwrap();
+        let world = ritsu_emit::wasm::world(name);
+        assert!(text.contains(&format!("package rulec:{world}@1.0.0;\n")) && text.contains(&format!("\nworld {world} {{\n")), "{name}:\n{text}");
+        let o = Command::new("wasm-tools").args(["component", "wit"]).arg(&wit).output().expect("wasm-tools を起動できない");
+        assert!(o.status.success(), "{name}: {}", String::from_utf8_lossy(&o.stderr));
+        read.push(world);
+    }
+    assert_eq!(ritsu_emit::wasm::world("a__b"), "a-b");
+    assert_eq!(ritsu_emit::wasm::world("trailing_"), "trailing");
+    assert!(read.contains(&"%list".to_string()) && read.contains(&"a-b".to_string()) && read.contains(&"trailing".to_string()), "{read:?}");
+    assert!(read.len() >= 40, "{} worlds read: {read:?}; not names of a rule: {not_rules:?}", read.len());
+    println!("wasm-tools read the worlds of {} rules; {} of the names are not a rule's: {}", read.len(), not_rules.len(), not_rules.join(", "));
 }
 
 #[test]
