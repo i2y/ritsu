@@ -850,7 +850,8 @@ func (r *runner) one(ctx context.Context, sc scenario) (ended, error) {
 	r.settleEvents(run)
 	r.mu.Unlock()
 	// what the query and the search attribute say of the cases once the run is over; a query
-	// the workflow does not answer is a difference to show, and the other runs go on to their end.
+	// the workflow does not answer is a difference to show, and the other runs go on to their end
+	// (one that no worker took in time is asked again first: status).
 	// The search attribute is what the server keeps of the cases as each of them moves, and the query
 	// is what the workflow says from its variables: at the end they say the same. When the query says
 	// something else, it is asked again, up to three times, and what it said is kept in `asked`, for
@@ -859,7 +860,7 @@ func (r *runner) one(ctx context.Context, sc scenario) (ended, error) {
 	var shown any
 	asked := []any{}
 	for attempt := 1; attempt <= 4; attempt++ {
-		where, err := r.flow.Status(ctx, r.client, sc.ID)
+		where, err := r.status(ctx, sc.ID)
 		if err != nil {
 			cases = map[string]any{"the query failed": err.Error()}
 			break
@@ -884,6 +885,24 @@ func (r *runner) one(ctx context.Context, sc scenario) (ended, error) {
 		return ended{}, err
 	}
 	return ended{end: end, cases: cases, shown: shown, asked: asked, histories: histories}, nil
+}
+
+// status asks the query dandori.status of a run that is over, which a worker answers from the
+// run's history. The SDK gives a query 10 seconds at most (the TypeScript and Python SDKs give it
+// no time of their own), and with every run of the flow on one server, beside the other flows'
+// servers, a worker has now and then not taken the query in that time: the server said so, or the
+// call ran out of it. Such a query is asked again, up to three times. A query the workflow answers
+// with an error (QueryFailed: it does not know the query, or its handler failed) is not.
+func (r *runner) status(ctx context.Context, id string) (Where, error) {
+	for attempt := 1; ; attempt++ {
+		where, err := r.flow.Status(ctx, r.client, id)
+		var failed *serviceerror.QueryFailed
+		if err == nil || errors.As(err, &failed) || attempt == 4 {
+			return where, err
+		}
+		fmt.Fprintf(os.Stderr, "the query to %s failed (%v); asking it again (%d)\n", id, err, attempt)
+		time.Sleep(time.Duration(attempt) * time.Second)
+	}
 }
 
 // activitiesBy starts the other language's runner, which serves the activities; done closes its

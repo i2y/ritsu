@@ -1376,6 +1376,10 @@ fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
         Some(a) => format!("the Temporal workflow in {} with its activities in {}", wf.name(), a.name()),
     };
     assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
+    // a query at the end that no worker took in time, which the Go runner asked again (its `status`)
+    for line in String::from_utf8_lossy(&out.stderr).lines().filter(|l| l.contains("asking it again")) {
+        eprintln!("{}: {line}", rel(f));
+    }
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     // what the query dandori.status and the search attribute DandoriCases say of the cases at the end,
     // looked at once the runs themselves are: a run that went another way says why its cases differ
