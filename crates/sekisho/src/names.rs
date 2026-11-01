@@ -1667,7 +1667,7 @@ impl<'a> Ck<'a> {
                             .filter_map(|p| facts.inputs.iter().find(|i| i.name == *p))
                             .map(|i| (i.name.clone(), i.alias.clone(), if i.kind == DateKind::Date { ColumnType::Date } else { ColumnType::Num { written: "int".into(), unit: Some(Unit::number()), min: Some(i.min as i128), max: Some(i.max as i128) } }))
                             .collect();
-                        let empty = RuleFacts { rule: String::new(), alias: String::new(), version: String::new(), sha256: String::new(), rulec: String::new(), inputs: vec![], outputs: vec![], elements: vec![], enums: vec![], machine: None, preconditions: vec![], connect: None, typescript: dummy_call(), python: dummy_call(), go: dummy_call() };
+                        let empty = RuleFacts { rule: String::new(), alias: String::new(), version: String::new(), sha256: String::new(), rulec: String::new(), inputs: vec![], outputs: vec![], elements: vec![], enums: vec![], machine: None, preconditions: vec![], connect: None, typescript: dummy_call(), python: dummy_call(), go: dummy_call(), rust: dummy_call() };
                         self.call_args(a, args, date.span, &date.word, &inputs, &empty, "", &of_the_dates_file());
                     }
                 }

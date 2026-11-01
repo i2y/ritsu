@@ -7216,25 +7216,37 @@ impl<'a> Gen<'a> {
     }
 
     fn rust_with(&self, inline: bool) -> String {
+        // The module of a package of ritsu's (ritsu's DESIGN 9.3): one module of a library crate,
+        // beside the other rules', so what one rule does not call of its helpers is no warning
+        // there, nor is a lint of clippy's on the shapes every rule's module shares.
+        let package = self.package.is_some() && !inline;
         let mut o = self.header("//");
-        o.push_str(
-            "\n#![allow(non_snake_case, uncommon_codepoints, unused_parens)]\n\n",
-        );
+        o.push_str(if package {
+            RS_PACKAGE_ALLOW
+        } else {
+            "\n#![allow(non_snake_case, uncommon_codepoints, unused_parens)]\n\n"
+        });
         // The types of an `enums` file are its module's, which the crate declares at its root
         // (`#[path = "content.rs"] mod content;`, as the runner here does), and are re-exported
-        // so that a caller of this module finds them where it finds the rule's own (§15.212).
+        // so that a caller of this module finds them where it finds the rule's own (§15.212). In a
+        // package, the module is the rules' sibling: `crate::rules::content`, under a dependency's
+        // directory for a dependency's file (ritsu's DESIGN 17.8).
         if !inline {
-            for (module, types) in self.foreign_enums() {
+            for (module, dir, types) in self.foreign_owners() {
                 let ts: Vec<String> = types.iter().map(|(_, t)| t.clone()).collect();
                 let one = if ts.len() == 1 { ts[0].clone() } else { format!("{{{}}}", ts.join(", ")) };
-                o.push_str(&format!("pub use crate::{module}::{one};\n"));
+                let from = if package { ritsu_emit::package::rust_path(&format!("{dir}rules/{module}")) } else { format!("crate::{module}") };
+                o.push_str(&format!("pub use {from}::{one};\n"));
             }
             if !self.foreign_enums().is_empty() {
                 o.push('\n');
             }
         }
 
-        // Brands: a newtype over i64, which is what the overflow proof is stated in.
+        // Brands: a newtype over i64, which is what the overflow proof is stated in. In a package,
+        // the brands of money and of the quantities are the package's `units` (§15.248), read
+        // from it and handed on, so that what one rule returns is what another rule and a book
+        // take; a rate keeps its brand here.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.branded() {
             // An optional amount is the same brand when it is there: the runner builds it, and
@@ -7242,6 +7254,14 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(v).present().clone();
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
+            }
+        }
+        if package {
+            let units: Vec<String> = self.brands().1.into_keys().collect();
+            brands.retain(|b, _| !units.contains(b));
+            if !units.is_empty() {
+                let one = if units.len() == 1 { units[0].clone() } else { format!("{{{}}}", units.join(", ")) };
+                o.push_str(&format!("pub use crate::units::{one};\n\n"));
             }
         }
         for (b, doc) in &brands {
@@ -7345,7 +7365,10 @@ impl<'a> Gen<'a> {
             .map(|v| self.value_names.get(&(jp.to_string(), v.clone())).map(|(_, a)| pascal(a)).unwrap_or_else(|| v.clone()))
             .collect();
         let ordered = self.c.ordered.contains(jp);
-        let derive = if ordered { "Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug" } else { "Clone, Copy, PartialEq, Eq, Debug" };
+        // In a package of ritsu's every enum is in the order its values are declared in: a value of
+        // one is a key of a dict or a member of a set of kaname's code there (kaname's DESIGN 24.1),
+        // which Rust keeps in that order. `rank` stays the ordered enums' alone.
+        let derive = if ordered || self.package.is_some() { "Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug" } else { "Clone, Copy, PartialEq, Eq, Debug" };
         o.push_str(&format!(
             "#[derive({derive})]\npub enum {ascii} {{\n{}}}\n\n",
             members.iter().map(|m| format!("    {m},\n")).collect::<String>()
@@ -10230,9 +10253,9 @@ impl Gen<'_> {
         (params, self.f.outputs.iter().map(|o| param(&o.name)).collect())
     }
 
-    /// How the generated code is called in TypeScript, Python and Go: the same names `api`
+    /// How the generated code is called in TypeScript, Python, Go and Rust: the same names `api`
     /// lists, from the same helpers (for ritsu's port of rules, `crate::ports`).
-    pub fn calls(&self) -> (ritsu_ports::Call, ritsu_ports::Call, ritsu_ports::Call) {
+    pub fn calls(&self) -> (ritsu_ports::Call, ritsu_ports::Call, ritsu_ports::Call, ritsu_ports::Call) {
         let alias = pub_name(&self.f.name);
         let (ts_params, ts_outputs) = self.param_list(|n| pub_name(n), |t| self.ts_ty(t), "readonly Element[]");
         let typescript = ritsu_ports::Call {
@@ -10261,7 +10284,18 @@ impl Gen<'_> {
             outputs: go_outputs,
             enums: self.enum_list(|t, a| format!("{t}{a}")),
         };
-        (typescript, python, go)
+        // a Rust enum's member is the value's alias in Pascal case on the enum's type, as `api`
+        // lists it
+        let (rs_params, rs_outputs) = self.param_list(|n| pub_name(n), |t| self.rs_ty(t), "&[Element]");
+        let rust = ritsu_ports::Call {
+            module: format!("{alias}.rs"),
+            function: alias.clone(),
+            input_type: String::new(),
+            params: rs_params,
+            outputs: rs_outputs,
+            enums: self.enum_list(|_, a| pascal(a)),
+        };
+        (typescript, python, go, rust)
     }
 
     /// `rulec api <file.rule> --format json`. Language independent throughout: every field is
@@ -15035,10 +15069,19 @@ impl<'a> Gen<'a> {
 /// the command does (dandori's tests build their workflows against it, ritsu's DESIGN 3.3).
 /// The languages a package of ritsu's is written in (ritsu's DESIGN 9.3), as `ritsu gen --target`
 /// names them.
-pub const PACKAGE_TARGETS: [&str; 3] = ["typescript", "python", "go"];
+pub const PACKAGE_TARGETS: [&str; 4] = ["typescript", "python", "go", "rust"];
 
-/// The module of a rule in TypeScript, Python or Go as a package of ritsu's holds it (ritsu's DESIGN
-/// 9.3): the file `rulec gen` writes as the rule's library (not its runner, MCP server, page,
+/// The head of a rule's module of Rust in a package of ritsu's (ritsu's DESIGN 9.3): the lints of
+/// `rulec gen`'s module, and those a module of a library crate beside the other rules' meets. The
+/// helpers every module holds (the five ways of rounding, `min_i64`) are not each called by
+/// every rule; the shapes of the helpers and of the tables are clippy's lints the same in every
+/// rule, written for the proof of §8.3 to read, so the package's `rules.rs` allows clippy's lints on
+/// each rule's module. The lints of the names' letters are the crate's, which a module's own allowing
+/// does not reach (`uncommon_codepoints`): the package's `lib.rs` allows them.
+const RS_PACKAGE_ALLOW: &str = "\n#![allow(non_snake_case, unused_parens, dead_code)]\n\n";
+
+/// The module of a rule in TypeScript, Python, Go or Rust as a package of ritsu's holds it (ritsu's
+/// DESIGN 9.3): the file `rulec gen` writes as the rule's library (not its runner, MCP server, page,
 /// `.proto` or vectors), at its path under the package's `rules/`, its head naming the rule's file
 /// as `shown` (its path from the project's root). The rule is read from `src`, which was read from
 /// `path`; nothing is made from a rule that does not pass check, and the error says so.
@@ -15080,6 +15123,7 @@ pub fn package_parts_at(src: &str, path: &str, shown: &str, target: &str, go_mod
         "typescript" => (format!("{alias}.ts"), g.typescript()),
         "python" => (format!("{alias}.py"), g.python()),
         "go" => (format!("{}/{alias}.go", crate::backend::go_package(&alias)), g.go()),
+        "rust" => (format!("{alias}.rs"), g.rust()),
         _ => return Err(format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", "))),
     };
     Ok((rel, body, g.package_units()))
@@ -15105,6 +15149,11 @@ pub fn units_module(target: &str, units: &[ritsu_units::Unit]) -> Option<(String
 /// library's code gives is an amount this package's code takes, in Python and Go as in TypeScript.
 /// The brand's name is the same in every package, the unit as the table spells it first. The other
 /// spellings stay aliases here.
+///
+/// Rust's `units` is a module of the package's crate: a brand is a newtype of an i64 that converts
+/// into an i64 (`From`), as the clients of the books read it, and another spelling is the brand
+/// under another name (`pub use`, which names its constructor too). A package of Rust is no
+/// library (ritsu's DESIGN 17.16), so `shared` is not read for it.
 pub fn units_module_in(target: &str, units: &[ritsu_units::Unit], shared: &BTreeMap<String, String>) -> Option<(String, String)> {
     // each brand by its name: the unit as the table spells it first, and its other names
     let mut brands: BTreeMap<String, (String, BTreeMap<String, String>)> = BTreeMap::new();
@@ -15233,6 +15282,21 @@ pub fn units_module_in(target: &str, units: &[ritsu_units::Unit], shared: &BTree
             }
             ("units/units.go".to_string(), o)
         }
+        "rust" => {
+            let mut o = format!(
+                "{}//! The types of the units the package's rules and books take amounts in, one type of each unit (ritsu\n//! gen). The modules of the rules, the clients of the books and the code of kaname name these types,\n//! so that the compiler keeps an amount of one unit from where another unit is taken.\n",
+                head(Comment::Slashes)
+            );
+            for (base, (shown, others)) in &brands {
+                o.push_str(&format!(
+                    "\n/// An amount of {shown}.\n#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]\npub struct {base}(pub i64);\n\nimpl From<{base}> for i64 {{\n    fn from(v: {base}) -> i64 {{\n        v.0\n    }}\n}}\n"
+                ));
+                for (name, written) in others {
+                    o.push_str(&format!("\n/// An amount of {written}, the same unit as {base}.\npub use {base} as {name};\n"));
+                }
+            }
+            ("units.rs".to_string(), o)
+        }
         _ => return None,
     })
 }
@@ -15262,13 +15326,14 @@ impl<'a> Gen<'a> {
     }
 
     /// The module of an `enums` file for one language of a package of ritsu's (ritsu's DESIGN
-    /// 9.3): Python, TypeScript or Go.
+    /// 9.3): Python, TypeScript, Go or Rust.
     pub fn enums_module_for(&self, target: &str) -> Option<(String, String)> {
         let alias = pub_name(&self.f.name);
         Some(match target {
             "python" => (format!("{alias}.py"), self.py_enums_module()),
             "typescript" => (format!("{alias}.ts"), self.ts_enums_module()),
             "go" => (format!("{}/{alias}.go", crate::backend::go_package(&alias)), self.go_enums_module()),
+            "rust" => (format!("{alias}.rs"), self.rs_enums_module_as(true)),
             _ => return None,
         })
     }
@@ -15292,8 +15357,14 @@ impl<'a> Gen<'a> {
     }
 
     fn rs_enums_module(&self) -> String {
+        self.rs_enums_module_as(false)
+    }
+
+    /// The same, as `rulec gen` writes it or (`package`) as a module of a package's crate, whose
+    /// root allows the lints of the names' letters.
+    fn rs_enums_module_as(&self, package: bool) -> String {
         let mut o = self.header("//");
-        o.push_str("\n#![allow(non_snake_case, uncommon_codepoints, dead_code)]\n\n");
+        o.push_str(if package { "\n#![allow(non_snake_case, dead_code)]\n\n" } else { "\n#![allow(non_snake_case, uncommon_codepoints, dead_code)]\n\n" });
         for (jp, ascii) in self.own_enums() {
             o.push_str(&self.rs_enum(&jp, &ascii));
         }

@@ -469,7 +469,7 @@ impl Engine {
     /// The facts of a rule already read and checked.
     pub fn facts_of(&self, f: &RuleFile, c: &Checked, src: &str, path: &str) -> Result<RuleFacts, Vec<Said>> {
         let g = crate::codegen::Gen::new(f, c, src, path);
-        let (typescript, python, go) = g.calls();
+        let (typescript, python, go, rust) = g.calls();
         let machine = match crate::cert::machine_facts(f, c) {
             None => None,
             Some(Ok(m)) => Some(m),
@@ -504,6 +504,7 @@ impl Engine {
             typescript,
             python,
             go,
+            rust,
         })
     }
 }

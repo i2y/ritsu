@@ -294,6 +294,7 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
         check_call(&format!("{path} typescript"), &facts.typescript, ts, "module", "function", "params", "outputs");
         check_call(&format!("{path} python"), &facts.python, api.get("python").unwrap(), "module", "function", "params", "outputs");
         check_call(&format!("{path} go"), &facts.go, api.get("go").unwrap(), "package", "func", "input_fields", "output_fields");
+        check_call(&format!("{path} rust"), &facts.rust, api.get("rust").unwrap(), "module", "function", "params", "outputs");
         assert_eq!(facts.go.input_type, st(api.get("go").and_then(|g| g.get("input_type"))), "{path}");
         rules += 1;
     }

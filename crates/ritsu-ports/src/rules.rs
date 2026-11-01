@@ -36,10 +36,12 @@ pub struct RuleFacts {
     /// The rule's Connect service. None for an `enums` file (rulec's §15.212), which is made into
     /// modules of types and nothing else: no service is generated from it (rulec's §15.258).
     pub connect: Option<Connect>,
-    /// How the generated code is called in the three languages a workflow calls it from.
+    /// How the generated code is called in the three languages a workflow calls it from, and in
+    /// Rust, which kaname's code of a package calls it in.
     pub typescript: Call,
     pub python: Call,
     pub go: Call,
+    pub rust: Call,
 }
 
 /// An input, an output, or a field of an element.
