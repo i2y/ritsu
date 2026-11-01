@@ -2,7 +2,8 @@
 //! functional cores (kaname's modules) and the code that asks the gates of a project, as one package
 //! for each language it is given (TypeScript, Python, Go), and the gates' Cedar beside them, written
 //! once, when it is given `cedar`. What it is given is `--target`'s, or else the `target` line of
-//! the module's ritsu.mod (DESIGN 17.3); with neither, nothing is written. kaname's
+//! the module's ritsu.mod (DESIGN 17.3); with neither, nothing is written. Every target given is
+//! made before any is written, so a run that stops writes none of them (DESIGN 9.6). kaname's
 //! modules go under glue/, a name kept because a host's code imports them by that path.
 //!
 //! ```text
@@ -696,13 +697,13 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     Ok(Package { files })
 }
 
-/// What stops the packages of a module for the modules' sake, made sure of before any target is
-/// written (DESIGN 17.8): two flows of two modules that make one Temporal workflow type, two gates of
+/// What stops the packages of a module for the modules' sake, made sure of once, before any target
+/// is made (DESIGN 17.8): two flows of two modules that make one Temporal workflow type, two gates of
 /// two modules that declare one name of Cedar's, and, when Python is among the targets, a dependency
-/// named with a word Python keeps. Each stops the run whatever is written, so none of them leaves the
-/// targets made before it; a stop of another kind is met where its target is made, as in a tree
-/// without a manifest, which none of these can stop. A file that does not pass is left to the target
-/// that reads it.
+/// named with a word Python keeps. Each stops the run whatever target is made; a stop of another
+/// kind is met where its target is made, as in a tree without a manifest, which none of these can
+/// stop. Either way nothing is written, as every target is made before any is (DESIGN 9.6). A file
+/// that does not pass is left to the target that reads it.
 pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], lang: Lang) -> Result<(), Refusal> {
     if project.tree.is_none() {
         return Ok(());
@@ -1615,7 +1616,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         Ok(m) => m,
         Err(r) => return say(r, answer),
     };
-    // what stops the packages of a module for the modules' sake, before any target is written
+    // what stops the packages of a module for the modules' sake, once, before any target is made
     if let Err(r) = modules_hold(&project, &joined, &targets, lang) {
         return say(r, answer);
     }
@@ -1631,7 +1632,10 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     let o = Options { name, module, books, authorizer, lang, library: None };
     let out = PathBuf::from(&answer.out);
     let check = a.has("--check");
-    let mut st = Emitted::default();
+    // Every target given is made before any is written (DESIGN 9.6): one that cannot be made stops
+    // the run with nothing written, so a run that stops leaves no target of its own behind; only a
+    // write the disk refuses can.
+    let mut made: Vec<(PathBuf, &'static str, Package, bool)> = Vec::new();
     for t in targets {
         let o = for_target(&o, &libraries, t);
         let p = match package(&project, &contributions, &joined, &modules, t, &o) {
@@ -1657,14 +1661,9 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
                 );
             }
         }
-        let emitted = emit(&out.join(t.key()), t.key(), &p, check, o.library.is_some(), &mut st, lang);
-        answer.files.append(&mut st.files);
-        if let Err(r) = emitted {
-            return say(r, answer);
-        }
+        made.push((out.join(t.key()), t.key(), p, o.library.is_some()));
     }
-    // the gates' Cedar, once beside the packages, when `cedar` is given (DESIGN 9.6); when it is
-    // not, what an earlier run wrote into <out>/cedar/ is said and left as it is
+    // the gates' Cedar, once beside the packages, when `cedar` is given (DESIGN 9.6)
     if cedar_given {
         let (p, warnings, warned) = match cedar(&project, &joined, authorizer, lang) {
             Ok(p) => p,
@@ -1675,12 +1674,18 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         } else {
             print!("{warnings}");
         }
-        let emitted = emit(&out.join("cedar"), CEDAR, &p, check, false, &mut st, lang);
+        made.push((out.join("cedar"), CEDAR, p, false));
+    }
+    let mut st = Emitted::default();
+    for (dir, target, p, library) in &made {
+        let emitted = emit(dir, *target, p, check, *library, &mut st, lang);
         answer.files.append(&mut st.files);
         if let Err(r) = emitted {
             return say(r, answer);
         }
-    } else {
+    }
+    // when `cedar` is not given, what an earlier run wrote into <out>/cedar/ is said and left as it is
+    if !cedar_given {
         for p in leftovers(&out.join("cedar"), &BTreeSet::new(), false) {
             let shown = p.display().to_string();
             st.note(CEDAR, &shown, &None, "left");

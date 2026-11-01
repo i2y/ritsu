@@ -1305,6 +1305,59 @@ fn a_dates_file_whose_names_break_the_target_stops_the_package() {
     }
 }
 
+/// A target that cannot be made stops the run before any target is written (DESIGN 9.6), whichever
+/// of the targets given it is: the Go of a dates file whose names break it, after the TypeScript; the
+/// Python of a rule named with a word Python keeps, after the TypeScript; the Go of two flows that
+/// write one file of it, after the TypeScript and the Python. Up to 0.40.0 the targets before it were
+/// left written. The run says what the target alone says, the JSON names no file, and what an
+/// earlier run wrote is left as it was.
+#[test]
+fn a_target_that_cannot_be_made_leaves_every_target_unwritten() {
+    let t = TempDir::new("gen-none-written");
+    let out = t.path().join("out");
+    // koyomi's E016 for Go, the second target written
+    let dates = t.path().join("dates");
+    std::fs::create_dir_all(&dates).unwrap();
+    std::fs::copy(here().join("../koyomi/tests/spellings/go_functions.cal"), dates.join("terms.cal")).unwrap();
+    let (code, _, alone) = generate(&dates, &out, &["--target", "go"]);
+    assert_eq!(code, 1);
+    let (code, stdout, err) = generate(&dates, &out, &["--target", "typescript", "--target", "go"]);
+    assert_eq!((code, stdout.as_str(), err.as_str()), (1, "", alone.as_str()));
+    assert!(!out.exists(), "the TypeScript, made first, is not written either");
+    let (code, stdout, err) = generate(&dates, &out, &["--target", "go", "--target", "typescript", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (1, ""));
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    assert_eq!((&v["targets"], &v["files"]), (&serde_json::json!(["typescript", "go"]), &serde_json::json!([])));
+    assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`terms.cal` cannot be made into the go package"}));
+    assert!(!out.exists());
+    // a rule named with a word Python keeps: the Python, after the TypeScript
+    let kept = t.path().join("kept");
+    ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &kept);
+    let rule = kept.join("rules/delivery.rule");
+    std::fs::write(&rule, read(&rule).replace("rule delivery v1", "rule pass v1")).unwrap();
+    let (code, stdout, err) = generate(&kept, &out, &["--target", "typescript", "--target", "python"]);
+    assert_eq!((code, stdout.as_str()), (2, ""));
+    assert_eq!(err, "error: `rules/delivery.rule` makes the module `pass`, a word Python keeps, which the package cannot hold in its rules/; give it another name (an alias)\n");
+    assert!(!out.exists());
+    // two flows that write one file of the Go, the third target, after two that are made
+    let shop = here().join(SHOP);
+    let (code, stdout, err) = generate(&shop, &out, &UP_TO_0_40);
+    assert_eq!((code, stdout.as_str()), (2, ""));
+    assert!(err.ends_with(" both write go/flows/workflow/doc.go of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)\n"), "{err}");
+    assert!(!out.exists());
+    // what an earlier run wrote: neither written again nor taken away
+    let (code, _, err) = generate(&shop, &out, &["--target", "typescript"]);
+    assert_eq!(code, 0, "{err}");
+    let index = out.join("typescript/index.ts");
+    std::fs::write(&index, format!("{}// edited by hand\n", read(&index))).unwrap();
+    let before: Vec<(String, String)> = files(&out).into_iter().map(|f| (f.clone(), read(&out.join(&f)))).collect();
+    let (code, stdout, _) = generate(&shop, &out, &UP_TO_0_40);
+    assert_eq!((code, stdout.as_str()), (2, ""));
+    let after: Vec<(String, String)> = files(&out).into_iter().map(|f| (f.clone(), read(&out.join(&f)))).collect();
+    assert!(after == before, "the run that stopped wrote nothing over the TypeScript an earlier run wrote");
+    assert!(!out.join("python").exists() && !out.join("go").exists());
+}
+
 /// The package of a project whose rules are added to by contributions (rulec's §15.231): each rule's
 /// module is the rule merged with the project's contributions that reach it, its header names them,
 /// and a contribution has no module of its own. The new kind is a member of the enum's module, and
