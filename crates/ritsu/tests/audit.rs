@@ -195,7 +195,11 @@ fn packages(t: &TempDir) -> Vec<PathBuf> {
     let mut outs = Vec::new();
     for (project, flag, value) in [("crates/ritsu/tests/projects/stockroom", "--books", "postgres"), ("crates/ritsu/tests/projects/stockroom", "--books", "tigerbeetle"), ("crates/ritsu/tests/projects/stockroom", "--books", "mysql"), ("crates/sekisho/examples/refunds", "--authorizer", "cedar"), ("crates/sekisho/examples/refunds", "--authorizer", "avp")] {
         let out = t.path().join(format!("{}-{value}", project.rsplit('/').next().unwrap()));
-        let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(root().join(project)).args(["gen", "--root", ".", "--out", out.to_str().unwrap(), flag, value]).output().unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_ritsu"))
+            .current_dir(root().join(project))
+            .args(["gen", "--root", ".", "--out", out.to_str().unwrap(), flag, value, "--target", "typescript", "--target", "python", "--target", "go", "--target", "cedar"])
+            .output()
+            .unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         outs.push(out);
     }

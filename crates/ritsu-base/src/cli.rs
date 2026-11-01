@@ -2,7 +2,9 @@
 //! from it and the command line is read against it, so a flag cannot be documented and
 //! ignored, or taken and left undocumented. An unknown flag, a value outside a closed set, a
 //! flag without its value, and a flag given twice (unless the table says it repeats) all stop
-//! the run with exit 2: an agent that is told nothing believes the flag worked.
+//! the run with exit 2: an agent that is told nothing believes the flag worked. So do a value given
+//! twice to a flag that takes each value once, and a value a flag took up to an earlier version,
+//! which is named with the value it is now (DESIGN 9.6).
 //!
 //! koyomi, yuen and sakai wrote this table three times; it differed in two places, which are
 //! now [`Reading`]: whether `-5` is an argument (koyomi), and whether a value may start with
@@ -20,11 +22,19 @@ pub struct Flag {
     pub default: Option<String>,
     /// Whether it may be given more than once.
     pub repeats: bool,
+    /// Of a flag that repeats, whether each value is given once at most (`--target`, DESIGN 9.6):
+    /// the same target twice does no harm, but is the sign of a line written in error.
+    pub once_each: bool,
+    /// The values it took up to an earlier version and takes no more, each with what is written
+    /// now and the version that changed it (`("temporal", "temporal-typescript", "0.41.0")`). Given
+    /// one, the run stops and says what to write instead (DESIGN 9.6): no old value is read as the
+    /// new one.
+    pub renamed: &'static [(&'static str, &'static str, &'static str)],
     pub help: Text,
 }
 
 pub fn flag(name: &'static str, value: Option<&'static str>, help: Text) -> Flag {
-    Flag { name, value, choices: &[], default: None, repeats: false, help }
+    Flag { name, value, choices: &[], default: None, repeats: false, once_each: false, renamed: &[], help }
 }
 
 impl Flag {
@@ -40,6 +50,19 @@ impl Flag {
 
     pub fn repeats(mut self) -> Flag {
         self.repeats = true;
+        self
+    }
+
+    /// It may be given more than once, each value once at most.
+    pub fn once_each(mut self) -> Flag {
+        self.repeats = true;
+        self.once_each = true;
+        self
+    }
+
+    /// The values it took up to an earlier version: `(old, new, version)`.
+    pub fn renamed(mut self, r: &'static [(&'static str, &'static str, &'static str)]) -> Flag {
+        self.renamed = r;
         self
     }
 
@@ -118,6 +141,10 @@ pub enum Misuse {
     NotAChoice { flag: &'static str, value: String, choices: &'static [&'static str] },
     /// A flag that does not repeat, given twice.
     Twice(&'static str),
+    /// A flag that takes each value once, given one value twice.
+    SameTwice { flag: &'static str, value: String },
+    /// A value the flag took up to `since`, which is `new` from that version on.
+    Renamed { flag: &'static str, old: String, new: &'static str, since: &'static str },
 }
 
 impl Misuse {
@@ -135,8 +162,25 @@ impl Misuse {
                 tr!("`{flag}` に `{value}` は使えません。使えるのは {cs} だけです", "`{flag} {value}` is not a value this flag takes; it takes only {cs}")
             }
             Misuse::Twice(flag) => tr!("`{flag}` が二度書かれています", "`{flag}` is given twice"),
+            Misuse::SameTwice { flag, value } => tr!("`{flag} {value}` が二度書かれています", "`{flag} {value}` is given twice"),
+            Misuse::Renamed { old, new, since, .. } => renamed(old, new, since),
         }
     }
+}
+
+/// What stops a word that was one thing up to `since` and is another from that version on: a
+/// value of a flag (`temporal`), or a command (`chobo build`, which is `chobo gen`). The old word
+/// is not read as the new one (DESIGN 9.6).
+pub fn renamed(old: &str, new: &str, since: &str) -> Text {
+    tr!("`{old}` は {since} から `{new}` です", "`{old}` is `{new}` from {since}")
+}
+
+/// A word of a command line as a shell reads it back: as it is when it holds nothing a shell would
+/// take apart, else in single quotes. What stops a run given no target writes the line that writes
+/// what the earlier version wrote with it (DESIGN 9.6), the words given among it.
+pub fn shell_word(w: &str) -> String {
+    let plain = !w.is_empty() && w.chars().all(|c| c.is_alphanumeric() || "_./:=@%+,-".contains(c));
+    if plain { w.to_string() } else { format!("'{}'", w.replace('\'', "'\\''")) }
 }
 
 /// A tool's commands, its flags for every command, and the lines of its `--help`.
@@ -305,10 +349,16 @@ impl Table {
                 }
             };
             if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
+                if let Some((_, new, since)) = f.renamed.iter().find(|(old, _, _)| *old == v) {
+                    return Err(Misuse::Renamed { flag: f.name, old: v, new, since });
+                }
                 return Err(Misuse::NotAChoice { flag: f.name, value: v, choices: f.choices });
             }
             if out.has(f.name) && !f.repeats {
                 return Err(Misuse::Twice(f.name));
+            }
+            if f.once_each && out.all(f.name).contains(&v.as_str()) {
+                return Err(Misuse::SameTwice { flag: f.name, value: v });
             }
             out.got.push((f.name, v));
             i += 1;

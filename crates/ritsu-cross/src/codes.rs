@@ -537,12 +537,12 @@ pub fn ledger() -> Ledger {
             "E301",
             tr!("`ritsu.mod` として読めないファイル", "A `ritsu.mod` that does not read"),
             tr!(
-                "モジュールの `ritsu.mod` を読めないとき。知らない語で始まる行、値の無い語、文字列の中の `\\\"` と `\\\\` のほかのエスケープ、一度しか書けない語（`module`、`version`、`description`、`ritsu`、`license`、`source`）の二度目、`module` が無いか最初の文でないこと、文字列の外の全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` の知らない出力先などです。木のどれかのモジュールの `ritsu.mod` を読めなければ、依存の木が決まらないので、言語の検査に入らずに止まります（exit 1）。",
-                "A module's `ritsu.mod` that ritsu cannot read: a line that starts with a word ritsu does not know, a word with no value, an escape in a string other than `\\\"` and `\\\\`, a second statement of a word written once at most (`module`, `version`, `description`, `ritsu`, `license`, `source`), no `module` or a `module` that is not the first statement, a full-width space outside a string, a control character other than a tab, bytes that are not UTF-8, a target of `library` ritsu does not know. When the `ritsu.mod` of a module of the tree does not read, the tree of dependencies is not known, and ritsu stops before any language checks a file (exit 1)."
+                "モジュールの `ritsu.mod` を読めないとき。知らない語で始まる行、値の無い語、文字列の中の `\\\"` と `\\\\` のほかのエスケープ、一度しか書けない語（`module`、`version`、`description`、`ritsu`、`license`、`source`、`target`）の二度目、`module` が無いか最初の文でないこと、文字列の外の全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` と `target` の知らない出力先、`target` の行に二度書いた出力先などです。木のどれかのモジュールの `ritsu.mod` を読めなければ、依存の木が決まらないので、言語の検査に入らずに止まります（exit 1）。",
+                "A module's `ritsu.mod` that ritsu cannot read: a line that starts with a word ritsu does not know, a word with no value, an escape in a string other than `\\\"` and `\\\\`, a second statement of a word written once at most (`module`, `version`, `description`, `ritsu`, `license`, `source`, `target`), no `module` or a `module` that is not the first statement, a full-width space outside a string, a control character other than a tab, bytes that are not UTF-8, a target of `library` or `target` ritsu does not know, a target written twice on the `target` line. When the `ritsu.mod` of a module of the tree does not read, the tree of dependencies is not known, and ritsu stops before any language checks a file (exit 1)."
             ),
             tr!(
-                "示された行を直してください。文は `module`、`version`、`description`、`ritsu`、`license`、`source`、`require`、`exclude`、`signature`、`library` のどれかで始まり、最初の文は `module` です。",
-                "Correct the line it points at. A statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature` and `library`, and the first is `module`."
+                "示された行を直してください。文は `module`、`version`、`description`、`ritsu`、`license`、`source`、`require`、`exclude`、`signature`、`library`、`target` のどれかで始まり、最初の文は `module` です。",
+                "Correct the line it points at. A statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature`, `library` and `target`, and the first is `module`."
             ),
             Repro::Dir { files: vec![("ritsu.mod", "module shop\nversion 1.0.0\n\nrequires tax path \"tax\"\n"), ("fee.rule", FEE_RULE)], command: CHECK.to_vec() },
             &["E302"],

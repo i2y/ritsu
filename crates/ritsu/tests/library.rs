@@ -1,6 +1,6 @@
 //! `ritsu gen --library` (DESIGN 17.16; PLAN E.5): the example's `tax`, `pricing` and `shop`, each
-//! with `library` lines added to a copy of its ritsu.mod, written as the libraries their registries
-//! take. `shop` reads `pricing`'s rules and its type of money from `pricing`'s library, by the
+//! with `library` lines added to a copy of its ritsu.mod, and the `target` line of the three
+//! languages (DESIGN 17.3), written as the libraries their registries take. `shop` reads `pricing`'s rules and its type of money from `pricing`'s library, by the
 //! library's name; `pricing` applies `tax`'s rule and imports nothing of it, so its manifests do
 //! not name `tax`. The golden files are each library's files, and the whole of what ritsu writes
 //! beside the parts: the manifests, the indexes and the units module. Beside them: a dependency
@@ -40,14 +40,16 @@ const LINES: [(&str, &str, &str, &str); 3] = [
     ("shop", "@acme/shop", "acme-shop", "example.com/acme/shop-go"),
 ];
 
-/// The example's modules, copied, the ritsu.mod of each that `with` names with its `library` lines.
+/// The example's modules, copied, the ritsu.mod of each that `with` names with its `library` lines
+/// and the `target` line of their three languages, which a library is written in when no `--target`
+/// is given (DESIGN 9.6).
 fn example(with: &[&str]) -> TempDir {
     let t = TempDir::new("library");
     for (m, ts, py, go) in LINES {
         ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/modules").join(m), &t.path().join(m));
         if with.contains(&m) {
             let rel = format!("{m}/ritsu.mod");
-            t.write(&rel, format!("{}\nlibrary typescript \"{ts}\"\nlibrary python \"{py}\"\nlibrary go \"{go}\"\n", t.read(&rel)));
+            t.write(&rel, format!("{}\nlibrary typescript \"{ts}\"\nlibrary python \"{py}\"\nlibrary go \"{go}\"\ntarget typescript python go\n", t.read(&rel)));
         }
     }
     t
@@ -211,7 +213,10 @@ fn a_dependency_with_no_library_line_stops_the_run_unless_it_is_embedded() {
 /// What a library refuses, each with exit 2 and nothing written, said in English and in Japanese
 /// (the golden file refused.txt): `--embed` without `--library`; paths, `--name` and `--module`
 /// with it; `--embed` of a name the tree has not, of a dependency with a line, and of one a library
-/// holds; a language with no line, no line at all, no version (the module's, a dependency's); a
+/// holds; a language with no line, no target and no line at all (what 0.40.0 wrote then was
+/// nothing, so no line is said for it), no target with the lines (said with the line that writes the
+/// languages of the lines), a target line with no `library` line of a language on it,
+/// no version (the module's, a dependency's); a
 /// Python name Python cannot import; a pre-release PEP 440 has no form of (the module's, a
 /// dependency's); a directory that is not a module; and a contribution to a rule a library holds,
 /// which the library's code cannot take.
@@ -229,6 +234,8 @@ fn what_a_library_refuses() {
         ("shop", &["gen", "--library", "--embed", "tax"], &["pricing", "shop"], |_| {}),
         ("pricing", &["gen", "--library", "--target", "go"], all, |t| replace(t, "pricing/ritsu.mod", "library go \"example.com/acme/pricing-go\"\n", "")),
         ("pricing", &["gen", "--library"], &["tax"], |_| {}),
+        ("pricing", &["gen", "--library"], all, |t| replace(t, "pricing/ritsu.mod", "target typescript python go\n", "")),
+        ("pricing", &["gen", "--library"], all, |t| replace(t, "pricing/ritsu.mod", "library go \"example.com/acme/pricing-go\"\n", "")),
         ("pricing", &["gen", "--library"], all, |t| replace(t, "pricing/ritsu.mod", "version 1.1.0\n", "")),
         ("pricing", &["gen", "--library"], all, |t| replace(t, "tax/ritsu.mod", "version 1.0.0\n", "")),
         ("pricing", &["gen", "--library", "--target", "python"], all, |t| replace(t, "pricing/ritsu.mod", "\"acme-pricing\"", "\"2pricing\"")),

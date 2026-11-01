@@ -1,6 +1,8 @@
-//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books, the workflows, the
+//! `ritsu gen` (DESIGN 9.3, 9.6): the rules, the dates, the clients of the books, the workflows, the
 //! functional cores (kaname's modules) and the code that asks the gates of a project, as one package
-//! for each of TypeScript, Python and Go, with the gates' Cedar beside them, written once. kaname's
+//! for each language it is given (TypeScript, Python, Go), and the gates' Cedar beside them, written
+//! once, when it is given `cedar`. What it is given is `--target`'s, or else the `target` line of
+//! the module's ritsu.mod (DESIGN 17.3); with neither, nothing is written. kaname's
 //! modules go under glue/, a name kept because a host's code imports them by that path.
 //!
 //! ```text
@@ -98,6 +100,28 @@ impl Target {
         }
     }
 }
+
+/// The target that is no language: the gates' Cedar, written once beside the packages, into
+/// `<out>/cedar/` (DESIGN 9.3).
+pub const CEDAR: &str = "cedar";
+
+/// The names `--target` takes, in the order `ritsu gen` writes them whatever the order they are
+/// given in (DESIGN 9.6): each language's, in [`Target::ALL`]'s order, then `cedar`. They are the
+/// words of the `target` line of a ritsu.mod (ritsu-base's `TARGET_WORDS`, which the table of `gen`
+/// takes its choices from): ritsu-base cannot read [`Target`], so a test holds the two to each other.
+pub fn target_names() -> Vec<&'static str> {
+    Target::ALL.iter().map(|t| t.key()).chain([CEDAR]).collect()
+}
+
+/// The names given, in the order of [`target_names`]: the order they are written in, and said in.
+fn in_order(given: &[&str]) -> Vec<&'static str> {
+    target_names().into_iter().filter(|n| given.contains(n)).collect()
+}
+
+/// The languages `ritsu gen` wrote up to 0.40.0 when it was given no `--target` (DESIGN 9.6), and
+/// the Cedar too when the project had gates or `<out>/cedar/` was there. Kept as 0.40.0 had it: a
+/// target added later is not one of them.
+pub const UP_TO_0_40: [&str; 3] = ["typescript", "python", "go"];
 
 /// Where the books are kept: the client chobo writes for each (DESIGN 9.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1212,6 +1236,9 @@ struct Emitted {
     stale: Vec<String>,
     missing: Vec<String>,
     left: Vec<String>,
+    /// The files an earlier run wrote for a target this one is not given (`<out>/cedar/`): said,
+    /// and left as they are, under `--check` too (DESIGN 9.6).
+    unasked: Vec<String>,
     files: Vec<Emit>,
 }
 
@@ -1225,7 +1252,7 @@ struct Emit {
     /// is made of (the index, the manifest) and for a file that is generated no more.
     from: Option<String>,
     /// `written`, `same` or `removed` when ritsu writes; `same`, `missing`, `stale` or `left` under
-    /// `--check`.
+    /// `--check`; `left` too, under both, for a file of a target not given (DESIGN 9.6).
     state: &'static str,
 }
 
@@ -1339,7 +1366,8 @@ fn asks_json(args: &[String]) -> bool {
 /// no project was read), whether all is well (the exit code is 0) — then whether it was `--check`,
 /// `--out` and the languages asked for, every file of the packages with its state, the
 /// diagnostics that stopped it or warn (each as `ritsu check --format json` writes one), and why
-/// nothing was generated, with the exit code (null when something was).
+/// nothing was generated, with the exit code (null when something was), and, when it was given no
+/// target, the words of the line that writes what 0.40.0 wrote (DESIGN 9.6).
 struct Answer {
     root: Option<String>,
     check: bool,
@@ -1348,6 +1376,7 @@ struct Answer {
     files: Vec<Emit>,
     diagnostics: Vec<Json>,
     error: Option<(u8, String)>,
+    instead: Option<Vec<String>>,
     /// No JSON is written: the modules of the tree could not be read, and what to run was said on
     /// the standard error (DESIGN 17.8).
     silent: bool,
@@ -1364,7 +1393,13 @@ impl Answer {
             ])
         };
         let error = match &self.error {
-            Some((c, m)) => Json::obj([("code", Json::int(i128::from(*c))), ("message", Json::str(m))]),
+            Some((c, m)) => {
+                let mut pairs = vec![("code", Json::int(i128::from(*c))), ("message", Json::str(m))];
+                if let Some(words) = &self.instead {
+                    pairs.push(("instead", Json::arr(words.iter().map(Json::str))));
+                }
+                Json::obj(pairs)
+            }
             None => Json::Null,
         };
         Json::obj([
@@ -1394,8 +1429,8 @@ fn for_target(o: &Options, libraries: &[(Target, library::Library)], t: Target) 
     }
 }
 
-/// `ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--books
-/// postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--library
+/// `ritsu gen [<path>...] [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--books
+/// postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--library
 /// [--embed <name>]...] [--root <dir>] [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
@@ -1403,7 +1438,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let asked = args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) });
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
     let json = asks_json(args);
-    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, silent: false };
+    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
     let code = generate(args, &table, cmd, lang, json, &mut answer);
     if json && !answer.silent {
         println!("{}", answer.json(code).pretty());
@@ -1488,11 +1523,9 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         _ => Books::Postgres,
     };
     let authorizer = a.get("--authorizer").and_then(sekisho::r#gen::Authorizer::parse).unwrap_or(sekisho::r#gen::Authorizer::Cedar);
-    let targets: Vec<Target> = match a.get("--target") {
-        Some(t) => Target::parse(t).into_iter().collect(),
-        None => Target::ALL.to_vec(),
-    };
-    answer.targets = targets.iter().map(|t| t.key()).collect();
+    // the targets (DESIGN 9.6): `--target`'s, else the `target` line of the module's ritsu.mod
+    let given = in_order(&a.all("--target"));
+    answer.targets = given.clone();
     let project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
         Err(e) => return say(refusal(2, e, lang), answer),
@@ -1522,17 +1555,33 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         }
         _ => {}
     }
-    // a library: the languages of its `library` lines, and its module's files but what it leaves out
-    let (project, targets) = if library {
-        match library::targets(&project, a.get("--target"), lang) {
-            Ok(ts) => {
-                answer.targets = ts.iter().map(|t| t.key()).collect();
-                (library::whole_module(project), ts)
-            }
-            Err(r) => return say(r, answer),
+    // a library is a module's, which has a version (DESIGN 17.16)
+    if library && let Err(r) = library::module(&project, lang) {
+        return say(r, answer);
+    }
+    // with no `--target`, the `target` line of the module's ritsu.mod (DESIGN 17.3); with neither,
+    // nothing is written, and the line that writes what 0.40.0 wrote is said (DESIGN 9.6)
+    let line = match project.tree.as_deref() {
+        Some(Ok(tree)) => tree.main().manifest.targets.as_ref().map(|t| in_order(&t.value.iter().map(String::as_str).collect::<Vec<_>>())),
+        _ => None,
+    };
+    let Some(names) = Some(given).filter(|g| !g.is_empty()).or(line) else {
+        let (r, instead) = no_target(args, &project, library, Path::new(&answer.out), lang);
+        answer.instead = instead;
+        return say(r, answer);
+    };
+    answer.targets = names.clone();
+    let cedar_given = names.contains(&CEDAR);
+    let targets: Vec<Target> = names.iter().filter_map(|n| Target::parse(n)).collect();
+    // a library: a `library` line for each language it is written in, and its module's files but
+    // what it leaves out
+    let project = if library {
+        if let Err(r) = library::lines(&project, &targets, lang) {
+            return say(r, answer);
         }
+        library::whole_module(project)
     } else {
-        (project, targets)
+        project
     };
     if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Kaname, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
         let given = project.given.join(" ");
@@ -1614,8 +1663,9 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
             return say(r, answer);
         }
     }
-    // the gates' Cedar, once beside the packages, whatever the targets
-    if !project.of(Tool::Sekisho).is_empty() || out.join("cedar").exists() {
+    // the gates' Cedar, once beside the packages, when `cedar` is given (DESIGN 9.6); when it is
+    // not, what an earlier run wrote into <out>/cedar/ is said and left as it is
+    if cedar_given {
         let (p, warnings, warned) = match cedar(&project, &joined, authorizer, lang) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
@@ -1625,11 +1675,18 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         } else {
             print!("{warnings}");
         }
-        let emitted = emit(&out.join("cedar"), "cedar", &p, check, false, &mut st, lang);
+        let emitted = emit(&out.join("cedar"), CEDAR, &p, check, false, &mut st, lang);
         answer.files.append(&mut st.files);
         if let Err(r) = emitted {
             return say(r, answer);
         }
+    } else {
+        for p in leftovers(&out.join("cedar"), &BTreeSet::new(), false) {
+            let shown = p.display().to_string();
+            st.note(CEDAR, &shown, &None, "left");
+            st.unasked.push(shown);
+        }
+        answer.files.append(&mut st.files);
     }
     if !json {
         let mut stdout = std::io::stdout();
@@ -1647,6 +1704,20 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         }
         for p in &st.left {
             let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
+        }
+        for p in &st.unasked {
+            let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
+        }
+        if !st.unasked.is_empty() {
+            let _ = writeln!(
+                stdout,
+                "{}",
+                tr!(
+                    "注記: これらは `--target cedar` が書くファイルで、この実行は頼んでいません。gen は指定していない出力先のファイルに触らないので、要らなければ消してかまいません",
+                    "note: `--target cedar` writes these files, and this run does not ask for it; gen touches no file of a target it is not given, so they can be deleted if they are not wanted"
+                )
+                .get(lang)
+            );
         }
         // the ritsu that wrote the lock is a record (DESIGN 17.4): when it is not this one, what
         // differs may be what the two versions write
@@ -1673,9 +1744,69 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     u8::from(check && !(st.missing.is_empty() && st.stale.is_empty() && st.left.is_empty()))
 }
 
+/// What stops `ritsu gen` given no target and no `target` line (DESIGN 9.6): that it writes only the
+/// targets given, and the line that writes what 0.40.0 wrote with no `--target` — the words given
+/// (`typed`, the words after `gen`), then `--target` of each of [`UP_TO_0_40`], and of `cedar` when
+/// the project has gates or `<out>/cedar/` is there, as 0.40.0 wrote the Cedar then. Under
+/// `--library`, 0.40.0 wrote the languages of the module's `library` lines, and stopped when it had
+/// none: then there is no line to say. The JSON's `instead` is the line, as its words.
+fn no_target(typed: &[String], project: &Project, library: bool, out: &Path, lang: Lang) -> (Refusal, Option<Vec<String>>) {
+    let names = target_names().join("|");
+    let first = if project.tree.is_some() {
+        tr!(
+            "`ritsu gen` が書くのは、指定した出力先だけです。`--target {names}` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください",
+            "`ritsu gen` writes only the targets it is given: give one or more `--target {names}`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)"
+        )
+    } else {
+        tr!(
+            "`ritsu gen` が書くのは、指定した出力先だけです。`--target {names}` を一つ以上付けるか、モジュールにして（`ritsu mod init`）ritsu.mod に `target` の行（`target typescript python go`）を書いてください",
+            "`ritsu gen` writes only the targets it is given: give one or more `--target {names}`, or make it a module (`ritsu mod init`) and write them on the `target` line of its ritsu.mod (`target typescript python go`)"
+        )
+    };
+    let held = if library { library::whole_module(project.clone()) } else { project.clone() };
+    let cedar = !held.of(Tool::Sekisho).is_empty() || out.join(CEDAR).exists();
+    let langs: Vec<&str> = if library { library::languages(project).into_iter().map(Target::key).filter(|k| UP_TO_0_40.contains(k)).collect() } else { UP_TO_0_40.to_vec() };
+    if langs.is_empty() {
+        return (refusal(2, first, lang), None);
+    }
+    let mut words: Vec<String> = ["ritsu", "gen"].into_iter().map(String::from).chain(typed.iter().cloned()).collect();
+    for t in langs.into_iter().chain(cedar.then_some(CEDAR)) {
+        words.extend(["--target".to_string(), t.to_string()]);
+    }
+    let line = words.iter().map(|w| ritsu_base::cli::shell_word(w)).collect::<Vec<_>>().join(" ");
+    let what = match (library, cedar) {
+        (false, false) => tr!(
+            "注記: 0.40.0 までの `ritsu gen` は、`--target` が無ければ、TypeScript・Python・Go のパッケージを書きました。同じファイルを書くのは次のコマンドです",
+            "note: up to 0.40.0, `ritsu gen` with no `--target` wrote the packages of TypeScript, Python and Go; this writes the same files:"
+        ),
+        (false, true) => tr!(
+            "注記: 0.40.0 までの `ritsu gen` は、`--target` が無ければ、TypeScript・Python・Go のパッケージと、ゲートの Cedar を書きました。同じファイルを書くのは次のコマンドです",
+            "note: up to 0.40.0, `ritsu gen` with no `--target` wrote the packages of TypeScript, Python and Go, and the gates' Cedar; this writes the same files:"
+        ),
+        (true, false) => tr!(
+            "注記: 0.40.0 までの `ritsu gen --library` は、`--target` が無ければ、`library` の行の言語ごとにライブラリを書きました。同じファイルを書くのは次のコマンドです",
+            "note: up to 0.40.0, `ritsu gen --library` with no `--target` wrote a library for each language of the `library` lines; this writes the same files:"
+        ),
+        (true, true) => tr!(
+            "注記: 0.40.0 までの `ritsu gen --library` は、`--target` が無ければ、`library` の行の言語ごとのライブラリと、ゲートの Cedar を書きました。同じファイルを書くのは次のコマンドです",
+            "note: up to 0.40.0, `ritsu gen --library` with no `--target` wrote a library for each language of the `library` lines, and the gates' Cedar; this writes the same files:"
+        ),
+    };
+    let said = tr!("{}\n{}\n  {}", "{}\n{}\n  {}", first.ja, what.ja, line; first.en, what.en, line);
+    (refusal(2, said, lang), Some(words))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The names `--target` takes are the words of the `target` line of a ritsu.mod (DESIGN 17.3),
+    /// in the order they are written in: ritsu-base reads the line, and cannot read [`Target`].
+    #[test]
+    fn the_targets_are_the_words_of_the_target_line() {
+        assert_eq!(target_names(), ritsu_base::modules::manifest::TARGET_WORDS);
+        assert_eq!(in_order(&["cedar", "go", "typescript"]), ["typescript", "go", "cedar"]);
+    }
 
     /// The `go` line of each Go module a package imports, and of each raised one, is the one its
     /// go.mod says at that version, read from the module cache the tools level fills (from the

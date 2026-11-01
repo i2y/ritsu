@@ -7,8 +7,9 @@
 //! Cedar's), which stops the run; a contribution of the module to a dependency's rule, which check
 //! and gen answer alike; the tree's errors and what stops it, said as `ritsu check` says them; the
 //! note of `--check` on the ritsu that wrote the lock; a dependency named with a word Python keeps;
-//! and a `.proto` of the module that imports a dependency's by the path of its package (DESIGN
-//! 17.6). At the tools level, the packages pass `tsc --strict`, `mypy --strict` and `go vet` (the
+//! a `.proto` of the module that imports a dependency's by the path of its package (DESIGN
+//! 17.6); and the `target` line of the module's ritsu.mod, which says what gen writes when it is
+//! given no `--target` (DESIGN 17.3, 9.6). At the tools level, the packages pass `tsc --strict`, `mypy --strict` and `go vet` (the
 //! type checkers of tests/gen.rs, in tests/type_checkers), and protoc builds the `.proto` from the
 //! roots ritsu reads it from, in their order.
 //!
@@ -46,11 +47,15 @@ fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
 }
 
 /// `ritsu gen` of the module at `dir`, run there, writing under `out`, its Go in the module
-/// [`MODULE`].
+/// [`MODULE`]: the targets of `more`, or else the three languages, what 0.40.0 wrote when it was
+/// given no `--target` (DESIGN 9.6).
 fn generate(dir: &Path, store: &Path, out: &Path, more: &[&str]) -> (i32, String, String) {
     let o = out.to_str().unwrap();
     let mut args = vec!["gen", "--out", o, "--module", MODULE];
     args.extend_from_slice(more);
+    if !more.contains(&"--target") {
+        args.extend(["--target", "typescript", "--target", "python", "--target", "go"]);
+    }
     ritsu_in(dir, store, &args)
 }
 
@@ -349,7 +354,7 @@ const PRICE_ORDER_FLOW: &str = "# The price of an order, from the workflow of th
 
 /// The gate of the module's desk reads the gate of `pricing`'s staff with `use gate`: one namespace,
 /// which sekisho holds the two files to, and the package holds both gates, `pricing`'s Cedar under
-/// `cedar/deps/pricing/`. A gate of the module's counter, in the namespace `Shop` but not read with
+/// `cedar/deps/pricing/` (`--target cedar`). A gate of the module's counter, in the namespace `Shop` but not read with
 /// `pricing`'s, declares `Shop::Role` too: Cedar knows a type by its name in its namespace, so gen
 /// names both files and stops (exit 2).
 #[test]
@@ -359,7 +364,8 @@ fn a_name_of_cedars_two_modules_declare_stops_gen() {
     t.write("shop/authz/desk.gate", "gate desk v1\ndescription \"Who may serve at the shop's desk, beside the staff of the module pricing\"\nnamespace Shop\n\nuse gate \"@pricing/authz/staff.gate\"\n\nrole clerk\n  description \"Serves customers at the desk\"\n");
     let shop = t.path().join("shop");
     let out = t.path().join("out");
-    let (code, _, err) = generate(&shop, t.path(), &out, &[]);
+    let all = ["--target", "typescript", "--target", "python", "--target", "go", "--target", "cedar"];
+    let (code, _, err) = generate(&shop, t.path(), &out, &all);
     assert_eq!(code, 0, "{err}");
     let gates: Vec<String> = files(&out).into_iter().filter(|f| f.starts_with("cedar/") || f.contains("authz/")).collect();
     assert_eq!(
@@ -389,20 +395,20 @@ fn a_name_of_cedars_two_modules_declare_stops_gen() {
     assert_has(&out.join("cedar/deps/pricing/staff.cedar"), ", module example.com/acme/pricing 1.1.0)\n");
     // a gate of the module in pricing's namespace, not read with pricing's
     t.write("shop/authz/counter.gate", "gate counter v1\ndescription \"Who may take payments at the shop's counter\"\nnamespace Shop\n\nrole cashier\n  description \"Takes payments at the counter\"\n");
-    let (code, stdout, err) = generate(&shop, t.path(), &out, &["--check"]);
+    let (code, stdout, err) = generate(&shop, t.path(), &out, &[&all[..], &["--check"]].concat());
     assert_eq!((code, stdout.as_str()), (2, ""));
     assert_eq!(
         err,
         "error: `@pricing/authz/staff.gate` and `authz/counter.gate` both declare the Cedar `Shop::Role`: Cedar knows a type or an action by its name in its namespace, so one package cannot hold both; if one is this module's gate, give it another `namespace` or name\n"
     );
-    let (_, _, err) = generate(&shop, t.path(), &out, &["--lang", "ja"]);
+    let (_, _, err) = generate(&shop, t.path(), &out, &[&all[..], &["--lang", "ja"]].concat());
     assert_eq!(
         err,
         "エラー: `@pricing/authz/staff.gate` と `authz/counter.gate` は、どちらも Cedar の `Shop::Role` を宣言しています。Cedar は型と操作を名前空間の中の名前で知るので、一つのパッケージに二つは置けません。手元のゲートなら、`namespace` か名前を変えてください\n"
     );
     // in its own namespace, it is the module's own
     replace(&t, "shop/authz/counter.gate", "namespace Shop", "namespace Counter");
-    let (code, _, err) = generate(&shop, t.path(), &out, &[]);
+    let (code, _, err) = generate(&shop, t.path(), &out, &all);
     assert_eq!(code, 0, "{err}");
 }
 
@@ -550,6 +556,42 @@ fn the_tree_stops_gen_as_it_stops_check() {
         assert_eq!((code, stdout.as_str()), (2, ""), "{more:?}");
         assert_eq!(err, "error: the dependency `example.com/acme/pricing` 1.1.0 is neither in the store nor in this module's copy of it; run `ritsu mod fetch`\n");
     }
+}
+
+/// The `target` line of the module's ritsu.mod (DESIGN 17.3, 9.6): given no `--target`, gen writes
+/// what it names, in the order of the names whatever the order of the line, and `--check` checks
+/// that; `--target` stands in for the line, adding nothing to it; a dependency's line is not read;
+/// and a line that does not read stops gen as it stops check (E301, exit 1).
+#[test]
+fn the_target_line_says_what_gen_writes() {
+    let t = example();
+    replace(&t, "shop/ritsu.mod", "\nrequire pricing", "target go python\n\nrequire pricing");
+    replace(&t, "pricing/ritsu.mod", "\nrequire tax", "target typescript\n\nrequire tax");
+    let shop = t.path().join("shop");
+    let store = t.path().join("store");
+    let out = t.path().join("out");
+    let o = out.to_str().unwrap();
+    let dirs = |out: &Path| -> Vec<String> {
+        let mut d: Vec<String> = std::fs::read_dir(out).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        d.sort();
+        d
+    };
+    let (code, _, err) = ritsu_in(&shop, &store, &["gen", "--out", o, "--module", MODULE]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(dirs(&out), ["go", "python"], "the line's, not the dependency's");
+    let (code, stdout, _) = ritsu_in(&shop, &store, &["gen", "--out", o, "--module", MODULE, "--check"]);
+    assert_eq!((code, stdout.as_str()), (0, ""));
+    let (code, stdout, _) = ritsu_in(&shop, &store, &["gen", "--out", o, "--module", MODULE, "--check", "--format", "json"]);
+    assert_eq!((code, &json(&stdout)["targets"]), (0, &serde_json::json!(["python", "go"])), "in the order of the names");
+    let other = t.path().join("other");
+    let (code, _, err) = ritsu_in(&shop, &store, &["gen", "--out", other.to_str().unwrap(), "--module", MODULE, "--target", "typescript"]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(dirs(&other), ["typescript"], "--target stands in for the line");
+    // a line that does not read
+    replace(&t, "shop/ritsu.mod", "target go python\n", "target go python go\n");
+    let (code, stdout, err) = ritsu_in(&shop, &store, &["gen", "--out", o, "--module", MODULE, "--target", "go"]);
+    assert_eq!((code, stdout.as_str()), (1, ""));
+    assert_eq!(err, "error[ritsu E301]: ritsu.mod:6:18: `go` is written twice on the `target` line\n     6 | target go python go\nerror: the modules could not be read (1 error), so nothing is generated\n");
 }
 
 /// The `ritsu` line of the lock is a record (DESIGN 17.4): `gen --check` does not compare it, and

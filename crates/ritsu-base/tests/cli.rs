@@ -197,6 +197,42 @@ fn what_a_command_line_says() {
     assert_eq!(Misuse::Twice("--format").text("chobo", "check").ja, "`--format` が二度書かれています");
 }
 
+/// A flag that takes each value once (`--target`, DESIGN 9.6): any number of values, the same one
+/// twice stops; a value it took up to an earlier version stops with what is written now.
+#[test]
+fn a_flag_that_takes_each_value_once_and_a_value_renamed() {
+    const RENAMED: &[(&str, &str, &str)] = &[("temporal", "temporal-typescript", "0.41.0")];
+    let mut t = koyomi();
+    t.commands = vec![Cmd {
+        flags: vec![flag("--target", Some("<name>"), Text::same("t")).choices(&["asl", "temporal-typescript", "argo"]).once_each().renamed(RENAMED)],
+        ..cmd("gen", "<file>...", Text::same("gen"))
+    }];
+    let g = t.command("gen").unwrap();
+    let a = t.read(g, &args(&["f", "--target", "argo", "--target=asl"])).unwrap();
+    assert_eq!(a.all("--target"), ["argo", "asl"], "in the order written; the tool sorts them");
+    assert!(g.flags[0].repeats, "once_each repeats");
+    assert_eq!(g.flags[0].spelled(), "--target <name>...");
+    let twice = t.read(g, &args(&["--target", "asl", "--target", "argo", "--target", "asl"])).unwrap_err();
+    assert_eq!(twice, Misuse::SameTwice { flag: "--target", value: "asl".into() });
+    assert_eq!((twice.text("dandori", "gen").en.as_str(), twice.text("dandori", "gen").ja.as_str()), ("`--target asl` is given twice", "`--target asl` が二度書かれています"));
+    let old = t.read(g, &args(&["--target", "temporal"])).unwrap_err();
+    assert_eq!(old, Misuse::Renamed { flag: "--target", old: "temporal".into(), new: "temporal-typescript", since: "0.41.0" });
+    let said = old.text("dandori", "gen");
+    assert_eq!((said.en.as_str(), said.ja.as_str()), ("`temporal` is `temporal-typescript` from 0.41.0", "`temporal` は 0.41.0 から `temporal-typescript` です"));
+    // a value neither taken nor renamed is what it was
+    assert_eq!(
+        t.read(g, &args(&["--target", "durable"])),
+        Err(Misuse::NotAChoice { flag: "--target", value: "durable".into(), choices: &["asl", "temporal-typescript", "argo"] })
+    );
+    // a flag that repeats without once_each takes a value twice (`--embed`)
+    let mut e = koyomi();
+    e.commands = vec![Cmd { flags: vec![flag("--embed", Some("<name>"), Text::same("e")).repeats()], ..cmd("gen", "<file>...", Text::same("gen")) }];
+    assert_eq!(e.read(e.command("gen").unwrap(), &args(&["--embed", "x", "--embed", "x"])).unwrap().all("--embed"), ["x", "x"]);
+    // a command renamed is said with the same words
+    let c = ritsu_base::cli::renamed("chobo build", "chobo gen", "0.41.0");
+    assert_eq!((c.en.as_str(), c.ja.as_str()), ("`chobo build` is `chobo gen` from 0.41.0", "`chobo build` は 0.41.0 から `chobo gen` です"));
+}
+
 #[test]
 fn the_usage_line_and_a_flag_spelled() {
     let y = yuen();

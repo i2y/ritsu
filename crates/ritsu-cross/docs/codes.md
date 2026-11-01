@@ -1090,9 +1090,9 @@ See also: [E206](#e206)
 
 ## E301 — A `ritsu.mod` that does not read
 
-**When**: A module's `ritsu.mod` that ritsu cannot read: a line that starts with a word ritsu does not know, a word with no value, an escape in a string other than `\"` and `\\`, a second statement of a word written once at most (`module`, `version`, `description`, `ritsu`, `license`, `source`), no `module` or a `module` that is not the first statement, a full-width space outside a string, a control character other than a tab, bytes that are not UTF-8, a target of `library` ritsu does not know. When the `ritsu.mod` of a module of the tree does not read, the tree of dependencies is not known, and ritsu stops before any language checks a file (exit 1).
+**When**: A module's `ritsu.mod` that ritsu cannot read: a line that starts with a word ritsu does not know, a word with no value, an escape in a string other than `\"` and `\\`, a second statement of a word written once at most (`module`, `version`, `description`, `ritsu`, `license`, `source`, `target`), no `module` or a `module` that is not the first statement, a full-width space outside a string, a control character other than a tab, bytes that are not UTF-8, a target of `library` or `target` ritsu does not know, a target written twice on the `target` line. When the `ritsu.mod` of a module of the tree does not read, the tree of dependencies is not known, and ritsu stops before any language checks a file (exit 1).
 
-**Fix**: Correct the line it points at. A statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature` and `library`, and the first is `module`.
+**Fix**: Correct the line it points at. A statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature`, `library` and `target`, and the first is `module`.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 

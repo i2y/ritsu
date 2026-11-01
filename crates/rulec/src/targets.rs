@@ -5,6 +5,8 @@
 //! The languages are `src/backend.rs`'s to state (§15.20); this file adds the one target that is
 //! no language, the `.proto`, and says which file of a language is its library and which an extra.
 
+use ritsu_base::cli::shell_word;
+
 /// What a generated file is to its target: the library, or the extra it is written for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Part {
@@ -266,13 +268,6 @@ pub fn no_target(typed: &[String]) -> String {
         "{first}\n注記: 0.40.0 までの `rulec gen` は、`--target` が無ければ、全部の出力先を全部の付属物つきで書きました。同じファイルを書くのは次のコマンドです\n  {cmd}",
         "{first}\nnote: up to 0.40.0, `rulec gen` with no `--target` wrote every target with every extra; this writes the same files:\n  {cmd}"
     )
-}
-
-/// A word of a command line as a shell reads it back: as it is when it holds nothing a shell
-/// would take apart, else in single quotes.
-fn shell_word(w: &str) -> String {
-    let plain = !w.is_empty() && w.chars().all(|c| c.is_alphanumeric() || "_./:=@%+,-".contains(c));
-    if plain { w.to_string() } else { format!("'{}'", w.replace('\'', "'\\''")) }
 }
 
 /// What `gen` says, once, after the files of extras it was not asked for that it found where it

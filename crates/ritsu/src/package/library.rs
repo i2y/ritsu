@@ -174,10 +174,9 @@ fn lines_of(tree: &Tree) -> Vec<Target> {
     Target::ALL.into_iter().filter(|t| named(tree, 0, *t).is_some()).collect()
 }
 
-/// What `--library` runs on: the module at hand's tree, and the languages it writes (`--target`'s,
-/// or every language the module has a `library` line of). Exit 2 when the root has no `ritsu.mod`,
-/// no `version`, or no line of a language asked for.
-pub fn targets(project: &Project, asked: Option<&str>, lang: Lang) -> Result<Vec<Target>, Refusal> {
+/// What `--library` runs on (DESIGN 17.16): a module, which has a `version`. Exit 2 when the root has
+/// no `ritsu.mod`, or it has no `version` line.
+pub fn module(project: &Project, lang: Lang) -> Result<(), Refusal> {
     let Some(Ok(tree)) = project.tree.as_deref() else {
         return Err(refusal(
             2,
@@ -195,32 +194,36 @@ pub fn targets(project: &Project, asked: Option<&str>, lang: Lang) -> Result<Vec
             lang,
         ));
     }
-    let lines = lines_of(tree);
-    match asked {
+    Ok(())
+}
+
+/// The languages a library is written in each have a `library` line, which names its package: the
+/// languages are the targets given (`--target`, or the `target` line), as for the app form
+/// (DESIGN 9.6). Exit 2 for a language with no line.
+pub fn lines(project: &Project, asked: &[Target], lang: Lang) -> Result<(), Refusal> {
+    let have = languages(project);
+    match asked.iter().find(|t| !have.contains(t)) {
+        None => Ok(()),
         Some(t) => {
-            let Some(t) = Target::parse(t) else { return Ok(Vec::new()) };
-            if !lines.contains(&t) {
-                let w = t.key();
-                return Err(refusal(
-                    2,
-                    tr!(
-                        "ritsu.mod に `library {w}` の行がありません。パッケージの名前にする `library {w} \"<名前>\"` を書いてください",
-                        "ritsu.mod has no `library {w}` line: write `library {w} \"<name>\"`, the name of the package"
-                    ),
-                    lang,
-                ));
-            }
-            Ok(vec![t])
+            let w = t.key();
+            Err(refusal(
+                2,
+                tr!(
+                    "ritsu.mod に `library {w}` の行がありません。パッケージの名前にする `library {w} \"<名前>\"` を書いてください",
+                    "ritsu.mod has no `library {w}` line: write `library {w} \"<name>\"`, the name of the package"
+                ),
+                lang,
+            ))
         }
-        None if lines.is_empty() => Err(refusal(
-            2,
-            tr!(
-                "ritsu.mod に `library` の行がありません。書く言語ごとに、パッケージの名前にする `library typescript|python|go \"<名前>\"` を書いてください",
-                "ritsu.mod has no `library` line: write `library typescript|python|go \"<name>\"` for each language to write, the name of its package"
-            ),
-            lang,
-        )),
-        None => Ok(lines),
+    }
+}
+
+/// The languages the module at hand has a `library` line of, in `--target`'s order: what 0.40.0's
+/// `--library` wrote when it was given no `--target`.
+pub fn languages(project: &Project) -> Vec<Target> {
+    match project.tree.as_deref() {
+        Some(Ok(tree)) => lines_of(tree),
+        _ => Vec::new(),
     }
 }
 

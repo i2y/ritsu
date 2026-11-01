@@ -1090,9 +1090,9 @@ flow
 
 ## E301 — `ritsu.mod` として読めないファイル
 
-**いつ出るか**: モジュールの `ritsu.mod` を読めないとき。知らない語で始まる行、値の無い語、文字列の中の `\"` と `\\` のほかのエスケープ、一度しか書けない語（`module`、`version`、`description`、`ritsu`、`license`、`source`）の二度目、`module` が無いか最初の文でないこと、文字列の外の全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` の知らない出力先などです。木のどれかのモジュールの `ritsu.mod` を読めなければ、依存の木が決まらないので、言語の検査に入らずに止まります（exit 1）。
+**いつ出るか**: モジュールの `ritsu.mod` を読めないとき。知らない語で始まる行、値の無い語、文字列の中の `\"` と `\\` のほかのエスケープ、一度しか書けない語（`module`、`version`、`description`、`ritsu`、`license`、`source`、`target`）の二度目、`module` が無いか最初の文でないこと、文字列の外の全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` と `target` の知らない出力先、`target` の行に二度書いた出力先などです。木のどれかのモジュールの `ritsu.mod` を読めなければ、依存の木が決まらないので、言語の検査に入らずに止まります（exit 1）。
 
-**直し方**: 示された行を直してください。文は `module`、`version`、`description`、`ritsu`、`license`、`source`、`require`、`exclude`、`signature`、`library` のどれかで始まり、最初の文は `module` です。
+**直し方**: 示された行を直してください。文は `module`、`version`、`description`、`ritsu`、`license`、`source`、`require`、`exclude`、`signature`、`library`、`target` のどれかで始まり、最初の文は `module` です。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 

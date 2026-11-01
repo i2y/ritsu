@@ -168,10 +168,18 @@ pub struct Manifest {
     pub excludes: Vec<At<String>>,
     pub signatures: Vec<Signature>,
     pub libraries: Vec<Library>,
+    /// The `target` line (DESIGN 17.3): what `ritsu gen` writes when it is given no `--target`,
+    /// each a word of [`TARGET_WORDS`], in the order written. Its place is the line and the first
+    /// name's column.
+    pub targets: Option<At<Vec<String>>>,
 }
 
 /// The words a statement starts with, in the order the file usually has them.
-pub const STATEMENTS: [&str; 10] = ["module", "version", "description", "ritsu", "license", "source", "require", "exclude", "signature", "library"];
+pub const STATEMENTS: [&str; 11] = ["module", "version", "description", "ritsu", "license", "source", "require", "exclude", "signature", "library", "target"];
+
+/// The names a `target` line takes (DESIGN 17.3, 9.6): the targets of `ritsu gen`. ritsu-base
+/// cannot read ritsu's own list of them, so a test of ritsu's holds the two to each other.
+pub const TARGET_WORDS: [&str; 4] = ["typescript", "python", "go", "cedar"];
 
 /// How a statement is written, for the sentence that says a line is not.
 fn form(word: &str) -> Text {
@@ -191,6 +199,7 @@ fn form(word: &str) -> Text {
             "signature \"<頭の部分>\" key \"<パス>\"`（あとに `tlog off` を付けてもよい）、`signature \"<頭の部分>\" by \"<署名者>\" issuer \"<発行者>\"`、`signature \"<頭の部分>\" by matching \"<正規表現>\" issuer \"<発行者>\"",
             "signature \"<start>\" key \"<path>\"` (with `tlog off` after it, if need be), `signature \"<start>\" by \"<identity>\" issuer \"<issuer>\"` or `signature \"<start>\" by matching \"<pattern>\" issuer \"<issuer>\""
         ),
+        "target" => tr!("target typescript|python|go|cedar …", "target typescript|python|go|cedar …"),
         _ => tr!("library typescript|python|go \"<名前>\"", "library typescript|python|go \"<name>\""),
     }
 }
@@ -354,6 +363,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
         excludes: Vec::new(),
         signatures: Vec::new(),
         libraries: Vec::new(),
+        targets: None,
     };
     let mut first = true;
     let mut said_first = false;
@@ -394,7 +404,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
         first = false;
         // the statements written once, and `library` once a target
         let key: Option<&'static str> = match word {
-            "module" | "version" | "description" | "ritsu" | "license" | "source" => Some(word),
+            "module" | "version" | "description" | "ritsu" | "license" | "source" | "target" => Some(word),
             _ => None,
         };
         if let Some(k) = key {
@@ -405,9 +415,11 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
             }
             once.push((k, n));
         }
-        // the words each statement takes
+        // the words each statement takes; `target`, one name or more
+        let names = vec![Want::Any; ts.len().saturating_sub(1).max(1)];
         let shape: &[Want] = match word {
             "module" | "version" | "ritsu" => &[Want::Any],
+            "target" => &names,
             "description" | "license" | "source" | "exclude" => &[Want::Str],
             "library" => &[Want::Any, Want::Str],
             "require" => match ts.get(2).map(|t| t.text.as_str()) {
@@ -564,6 +576,29 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                     r.at(E302, n, col, src, t);
                 }
             },
+            "target" => {
+                let mut names: Vec<String> = Vec::new();
+                let wrong = args.iter().find_map(|t| {
+                    let w = &t.text;
+                    let said = if !TARGET_WORDS.contains(&w.as_str()) {
+                        let all = TARGET_WORDS.join("、");
+                        let en = format!("{} and {}", TARGET_WORDS[..TARGET_WORDS.len() - 1].join(", "), TARGET_WORDS[TARGET_WORDS.len() - 1]);
+                        tr!("`target` の出力先 `{w}` はありません。{all} のどれかです", "`{w}` is not a target of `target`; the targets are {en}")
+                    } else if names.contains(w) {
+                        tr!("`target` の `{w}` が二度書かれています", "`{w}` is written twice on the `target` line")
+                    } else {
+                        names.push(w.clone());
+                        return None;
+                    };
+                    Some((t.col, said))
+                });
+                match wrong {
+                    Some((col, said)) => {
+                        r.at(E301, n, col, src, said);
+                    }
+                    None => m.targets = Some(At { value: names, line: n, col: v(0).col }),
+                }
+            }
             _ => {
                 let Some(target) = Target::from_word(&v(0).text) else {
                     let t = &v(0).text;

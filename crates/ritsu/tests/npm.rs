@@ -302,6 +302,18 @@ mod npm {
         out
     }
 
+    /// `ritsu gen` with `more`, and the targets 0.40.0 wrote when it was given none (DESIGN 9.6): the
+    /// three languages, and the Cedar of a project with gates.
+    fn gen_all<'a>(more: &[&'a str], gates: bool) -> Vec<&'a str> {
+        let mut args = vec!["gen"];
+        args.extend_from_slice(more);
+        args.extend(["--target", "typescript", "--target", "python", "--target", "go"]);
+        if gates {
+            args.extend(["--target", "cedar"]);
+        }
+        args
+    }
+
     /// What is run on the examples of each language, ritsu's projects and the playground's shops.
     fn groups(links: &Path) -> Vec<Group> {
         let mut gs = Vec::new();
@@ -348,26 +360,28 @@ mod npm {
             ("website/playground/shop.ja", true),
         ] {
             let mut reads = vec![case("ritsu", ".", vec![en("ritsu", &["check"]), en("ritsu", &["check", ".", "--format", "json"]), ja("ritsu", &["check", "."])])];
-            reads.push(case("ritsu", ".", both("ritsu", &["gen", "--check"]).to_vec()));
-            reads.push(case("ritsu", ".", both("ritsu", &["gen", "--check", "--format", "json"]).to_vec()));
+            reads.push(case("ritsu", ".", both("ritsu", &gen_all(&["--check"], gates)).to_vec()));
+            reads.push(case("ritsu", ".", both("ritsu", &gen_all(&["--check", "--format", "json"], gates)).to_vec()));
+            // given no target, what stops it
+            reads.push(case("ritsu", ".", both("ritsu", &["gen"]).to_vec()));
+            reads.push(case("ritsu", ".", vec![en("ritsu", &["gen", "--format", "json"])]));
             let mut writes = Vec::new();
-            for t in [&[][..], &["--target", "typescript"], &["--target", "python"], &["--target", "go", "--module", "example.com/shop/generated"]] {
-                let mut args = vec!["gen"];
-                args.extend(t);
-                writes.push(case("ritsu", ".", vec![en("ritsu", &args)]));
-                writes.push(case("ritsu", ".", vec![ja("ritsu", &args)]));
+            let all = gen_all(&[], gates);
+            for args in [&all[..], &["gen", "--target", "typescript"], &["gen", "--target", "python"], &["gen", "--target", "go", "--module", "example.com/shop/generated"]] {
+                writes.push(case("ritsu", ".", vec![en("ritsu", args)]));
+                writes.push(case("ritsu", ".", vec![ja("ritsu", args)]));
             }
-            writes.push(case("ritsu", ".", vec![en("ritsu", &["gen", "--format", "json"]), en("ritsu", &["gen", "--check"]), en("ritsu", &["gen", "--check", "--format", "json"])]));
+            writes.push(case("ritsu", ".", vec![en("ritsu", &gen_all(&["--format", "json"], gates)), en("ritsu", &gen_all(&["--check"], gates)), en("ritsu", &gen_all(&["--check", "--format", "json"], gates))]));
             writes.push(case(
                 "ritsu",
                 ".",
-                vec![en("ritsu", &["gen", "--books", "tigerbeetle", "--name", "store", "--out", "pkg"]), ja("ritsu", &["gen", "--books", "tigerbeetle", "--name", "store", "--out", "pkg", "--check"])],
+                vec![en("ritsu", &gen_all(&["--books", "tigerbeetle", "--name", "store", "--out", "pkg"], gates)), ja("ritsu", &gen_all(&["--books", "tigerbeetle", "--name", "store", "--out", "pkg", "--check"], gates))],
             ));
             // a package made, then changed by hand: --check says so, and the JSON says which
             writes.push(case("ritsu", ".", vec![en("ritsu", &["gen", "--target", "typescript"]), en("ritsu", &["gen", "--target", "typescript", "--check", "--format", "json"])]));
             if gates {
-                writes.push(case("ritsu", ".", both("ritsu", &["gen", "--authorizer", "avp"]).to_vec()));
-                writes.push(case("ritsu", ".", vec![en("ritsu", &["gen", "--authorizer", "avp", "--format", "json"])]));
+                writes.push(case("ritsu", ".", both("ritsu", &gen_all(&["--authorizer", "avp"], gates)).to_vec()));
+                writes.push(case("ritsu", ".", vec![en("ritsu", &gen_all(&["--authorizer", "avp", "--format", "json"], gates))]));
             }
             if from.ends_with("invoice") {
                 for f in files(from, ".json") {
@@ -630,7 +644,7 @@ mod npm {
                 ".",
                 vec![en("ritsu", &["check", "examples/refunds"]), en("ritsu", &["check", "examples/refunds", "--format", "json"]), ja("ritsu", &["check", "examples/refunds"])],
             )];
-            let mut writes = vec![case("ritsu", "examples/refunds", vec![en("ritsu", &["gen"]), en("ritsu", &["gen", "--check", "--format", "json"])])];
+            let mut writes = vec![case("ritsu", "examples/refunds", vec![en("ritsu", &gen_all(&[], true)), en("ritsu", &gen_all(&["--check", "--format", "json"], true))])];
             for f in files("crates/sekisho/examples", ".gate") {
                 let p = format!("examples/{f}");
                 let p = p.as_str();
@@ -671,7 +685,7 @@ mod npm {
                 ".",
                 vec![en("ritsu", &["check", "examples/late_payment"]), en("ritsu", &["check", "examples/payout", "--format", "json"]), ja("ritsu", &["check", "examples/discount_split"])],
             )];
-            let writes = vec![case("ritsu", "examples/payout", vec![en("ritsu", &["gen"]), en("ritsu", &["gen", "--check", "--format", "json"])])];
+            let writes = vec![case("ritsu", "examples/payout", vec![en("ritsu", &gen_all(&[], false)), en("ritsu", &gen_all(&["--check", "--format", "json"], false))])];
             for f in files("crates/kaname/examples", ".kn") {
                 let p = format!("examples/{f}");
                 let p = p.as_str();

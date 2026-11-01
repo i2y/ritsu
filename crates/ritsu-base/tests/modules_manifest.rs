@@ -69,6 +69,29 @@ fn the_example_reads_every_statement() {
     assert_eq!(m.signatures[0].text(), r#"signature "example.com/acme/" key "keys/acme.pub""#);
     let libs: Vec<(Target, &str)> = m.libraries.iter().map(|l| (l.target, l.name.as_str())).collect();
     assert_eq!(libs, [(Target::Typescript, "@acme/pricing"), (Target::Python, "acme-pricing"), (Target::Go, "example.com/acme/pricing-go")]);
+    assert_eq!(m.targets, None);
+}
+
+/// The `target` line (DESIGN 17.3): one name or more, each a word of `TARGET_WORDS` once, in the
+/// order written, at its line and the column of its first name; the line is written back as it was.
+#[test]
+fn the_target_line_reads_its_names_in_the_order_written() {
+    let text = "module shop\nversion 1.0.0\n\ntarget go typescript cedar  # what ritsu gen writes\n";
+    let m = read(text);
+    let t = m.targets.as_ref().unwrap();
+    assert_eq!((t.value.as_slice(), t.line, t.col), (["go", "typescript", "cedar"].map(String::from).as_slice(), 4, 8));
+    assert_eq!(m.text(), text);
+    assert_eq!(read("module shop\ntarget python\n").targets.unwrap().value, ["python"]);
+    assert_eq!(manifest::TARGET_WORDS, ["typescript", "python", "go", "cedar"]);
+    // the Japanese of what does not read
+    let ds = manifest::parse("module shop\ntarget go cobol\ntarget go\n".as_bytes(), "ritsu.mod").unwrap_err();
+    let ja: Vec<&str> = ds.iter().map(|d| d.message.ja.as_str()).collect();
+    assert_eq!(ja, ["`target` の出力先 `cobol` はありません。typescript、python、go、cedar のどれかです", "`target` は一度しか書けません。2 行目にもう書いてあります"]);
+    let ds = manifest::parse("module shop\ntarget go go\ntarget\n".as_bytes(), "ritsu.mod").unwrap_err();
+    let ja: Vec<&str> = ds.iter().map(|d| d.message.ja.as_str()).collect();
+    assert_eq!(ja, ["`target` の `go` が二度書かれています", "`target` は一度しか書けません。2 行目にもう書いてあります"]);
+    let ds = manifest::parse("module shop\ntarget\n".as_bytes(), "ritsu.mod").unwrap_err();
+    assert_eq!((ds[0].message.ja.as_str(), ds[0].notes[0].ja.as_str()), ("`target` の行は `target typescript|python|go|cedar …` の形で書いてください", "値が足りません"));
 }
 
 #[test]
@@ -159,7 +182,7 @@ fn init_writes_the_name_the_version_the_least_ritsu_and_exclude_generated() {
 #[test]
 fn a_line_that_cannot_be_read_is_e301() {
     let cases: &[(&str, &str)] = &[
-        ("module shop\nrequires x path \"../x\"\n", "no statement starts with `requires`; a statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature` and `library`"),
+        ("module shop\nrequires x path \"../x\"\n", "no statement starts with `requires`; a statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature`, `library` and `target`"),
         ("module shop\nversion\n", "write the `version` line as `version <version>`"),
         ("module shop\nversion 1.0.0 1.1.0\n", "write the `version` line as `version <version>`"),
         ("module shop\ndescription prices\n", "write the `description` line as `description \"<text>\"`"),
@@ -168,6 +191,11 @@ fn a_line_that_cannot_be_read_is_e301() {
         ("module shop\nmodule shop\n", "`module` is written once, and it is already on line 1"),
         ("module shop\nlibrary go \"example.com/a\"\nlibrary go \"example.com/b\"\n", "`library go` is written once, and it is already on line 2"),
         ("module shop\nlibrary rust \"x\"\n", "`rust` is not a target of `library`; the targets are typescript, python and go"),
+        ("module shop\ntarget\n", "write the `target` line as `target typescript|python|go|cedar …`"),
+        ("module shop\ntarget \"go\"\n", "write the `target` line as `target typescript|python|go|cedar …`"),
+        ("module shop\ntarget go cobol\n", "`cobol` is not a target of `target`; the targets are typescript, python, go and cedar"),
+        ("module shop\ntarget go python go\n", "`go` is written twice on the `target` line"),
+        ("module shop\ntarget go\ntarget python\n", "`target` is written once, and it is already on line 2"),
         ("version 1.0.0\nmodule shop\n", "the first statement is `module`: start `ritsu.mod` with the line `module <module name>`"),
         ("# only a comment\n", "there is no `module` line: start `ritsu.mod` with the line `module <module name>`"),
         ("module\u{3000}shop\n", "there is a full-width space outside a string; a value with a blank in it is written in `\"…\"`"),

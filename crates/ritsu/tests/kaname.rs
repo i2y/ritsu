@@ -345,7 +345,8 @@ fn the_hosts_of_the_examples_call_the_generated_code() {
         let example = kaname_dir().join("examples").join(name);
         let want = std::fs::read_to_string(example.join("host/output.txt")).unwrap();
         let out = t.path().join(name);
-        let (code, _, err) = ritsu_in(&example, &["gen", "--root", ".", "--out", out.to_str().unwrap(), "--module", &format!("example.com/{name}")]);
+        let module = format!("example.com/{name}");
+        let (code, _, err) = ritsu_in(&example, &["gen", "--root", ".", "--out", out.to_str().unwrap(), "--module", &module, "--target", "typescript", "--target", "python", "--target", "go"]);
         assert_eq!(code, 0, "ritsu gen of {name}: {err}");
         let said = |o: std::process::Output, what: &str| -> String {
             assert!(o.status.success(), "{name}: {what}:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));

@@ -323,6 +323,8 @@ fn misuse(m: &Misuse, cmd: &str, c: &Cmd, lang: Lang) -> String {
             tr!("`chobo {cmd}` に `{x}` というフラグはありません\n\n", "`chobo {cmd}` has no flag `{x}`\n\n").get(lang).to_string() + &cmd_help(c, lang)
         }
         Misuse::Twice(x) => tr!("`{x}` が二度あります\n", "`{x}` is given twice\n").get(lang).to_string(),
+        Misuse::SameTwice { flag: x, value: v } => tr!("`{x} {v}` が二度あります\n", "`{x} {v}` is given twice\n").get(lang).to_string(),
+        Misuse::Renamed { .. } => format!("{}\n", m.text("chobo", cmd).get(lang)),
         Misuse::NotAChoice { flag: x, value: v, choices } => {
             let ch = choices.join(", ");
             tr!("`{x}` に渡せるのは {ch} です（`{v}` ではなく）\n", "`{x}` takes {ch}, not `{v}`\n").get(lang).to_string()
