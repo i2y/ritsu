@@ -285,7 +285,7 @@ Four things it does **not** prove, and they are kept beside the word:
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
 
-For the Rust, a second tool reads what was generated: `gen` writes proof harnesses for
+For the Rust, a second tool reads what was generated: `gen --extra proof` writes proof harnesses for
 [Kani](https://model-checking.github.io/kani/), and over every input in the declared domain
 they hold that no table falls through, that the guard of (3) never fires, that nothing
 overflows an `i64`, and that the rows of each `unique` table cover the domain exactly once.

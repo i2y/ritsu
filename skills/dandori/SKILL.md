@@ -71,8 +71,9 @@ a transfer's amounts, refusals and holds (the ritsu skill has the codes).
 7. **Wire it up:** write the tasks that are yours (the `OwnTasks` the generated code asks for), give
    the `Transport` (`io.ts`, `io.py`) its credentials, and start the generated worker, or deploy what
    the target wrote. When the
-   workflow calls rules, `ritsu rulec gen <rule> --out rulec` writes the code the generated wrappers
-   import (`ritsu gen` writes a whole project as one package instead). A precondition of a rule
+   workflow calls rules, `ritsu rulec gen <rule> --target <the wrappers' language> --out rulec` writes
+   the code the generated wrappers import (`typescript`, `python` or `go`; `ritsu gen` writes a whole
+   project as one package instead). A precondition of a rule
    that `ritsu check` could not decide (its W201) is checked by the built workflow when it runs,
    and a run that breaks it fails with `Dandori.BrokenPrecondition`.
    [platforms.md](platforms.md) says what each target writes.

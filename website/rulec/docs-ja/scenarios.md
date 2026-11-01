@@ -111,14 +111,18 @@ $ rulec doc rules/印紙税.rule --lang ja > 印紙税.md
 
 ### 1-5. 生成して、突き合わせる
 
-担当: エージェント。12 言語の一致は rulec が確かめます
+担当: エージェント。生成した言語の一致は rulec が確かめます
 
 ```console
-$ rulec gen rules/印紙税.rule --out generated/
+$ rulec gen rules/印紙税.rule --target python --target sql --extra runner --extra vectors --out generated/
+…
 $ rulec test generated/
+…
 ok    stamp_duty_split (Python) ベクタ 296 件、受け付けない入力 13 件
 ok    stamp_duty_split (SQL) ベクタ 296 件、受け付けない入力 13 件
-…
+ok    stamp_duty_split (SQL, PostgreSQL) ベクタ 296 件、受け付けない入力 13 件
+
+3 件すべて一致しました。
 ```
 
 生成したファイルのヘッダには、転記元の条文と、その時点と、コピーのハッシュが書かれます。コードを読む人が、どの条文から作られたかを確かめられます。
@@ -541,10 +545,18 @@ $ rulec diff 送料.rule 送料_新.rule --fixtures 記録.jsonl --lang ja --ter
 担当: エージェント
 
 ```console
-$ rulec gen rules/送料.rule --out generated/
+$ rulec gen rules/送料.rule --target python --target typescript --target go --target sql --target wasm --extra runner --extra vectors --out generated/
+生成しました: generated/python/shipping_fee.py
+生成しました: generated/python/shipping_fee_runner.py
+生成しました: generated/typescript/shipping_fee.ts
+生成しました: generated/typescript/shipping_fee_runner.ts
+…
+生成しました: generated/vectors/shipping_fee.jsonl
+生成しました: generated/vectors/shipping_fee.expected.jsonl
+生成しました: generated/vectors/shipping_fee.refused.jsonl
 ```
 
-`generated/` の下に、言語ごとのディレクトリができます。Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java は関数、NumPy は規則そのものと固定の評価器、SQL は入力の関係に対する一つの問い合わせと、同じ中身の関数、Wasm は一つのモジュールです。ランタイムも依存もありません。
+アプリとバッチが読む言語を `--target` で挙げ、4-3 で走らせるものを `--extra runner --extra vectors` で頼みます。`generated/` の下に、頼んだ言語ごとのディレクトリと、`vectors/` ができます。Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java は関数、NumPy は規則そのものと固定の評価器、SQL は入力の関係に対する一つの問い合わせと、同じ中身の関数、Wasm は一つのモジュールです。ランタイムも依存もありません。
 
 ### 4-2. 呼び方を読む
 
@@ -569,15 +581,18 @@ func ShippingFee(in Input) (YenInclTax, error)
 
 ```console
 $ rulec test generated/
+…
 ok    shipping_fee (Python) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (TypeScript) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (Go) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (SQL) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (SQL, PostgreSQL) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
-…
+
+6 件すべて一致しました。
 ```
 
-ツールチェーンが入っていない言語は飛ばし、飛ばしたことを表示します。
+ツールチェーンが入っていない言語は飛ばし、飛ばしたことを表示します。ここでの MCP のサーバのように、生成していないものは、それを書く `--extra` を添えた注記を出して飛ばします。
 
 ### 4-4. 組み込む
 
@@ -600,10 +615,10 @@ ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
 
 担当: CI（rulec gen --check）
 
-git には生成物もコミットしておき、CI で `--check` を付けて生成し直します。表が変わったのに生成物が古いままなら、そこで止まります。
+git には生成物もコミットしておき、CI で、4-1 と同じ `--target` と `--extra` に `--check` を付けて生成し直します。表が変わったのに生成物が古いままなら、そこで止まります。
 
 ```console
-$ rulec gen rules/ --out generated/ --check
+$ rulec gen rules/ --target python --target typescript --target go --target sql --target wasm --extra runner --extra vectors --out generated/ --check
 ```
 
 CI のジョブ全体は[インストール](install.md#ci-に置く)にあります。改定の影響を PR に貼る二行も、そこにあります。

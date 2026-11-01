@@ -81,10 +81,10 @@ only thing that can catch that is an answer a person wrote down.
 
 ## 4. The vectors, and twelve languages
 
-`rulec gen` writes a vector suite beside the code: cases built from the boundaries of the
-rule, each with the answer the reference evaluator gives. `rulec test` then runs every
-generated language over them and compares **byte for byte** — not "close enough", and not
-only the answer: the rows that fired are compared too.
+`rulec gen --extra vectors` writes a vector suite beside the code: cases built from the
+boundaries of the rule, each with the answer the reference evaluator gives. `rulec test` then
+runs every language generated with `--extra runner` over them and compares **byte for byte** —
+not "close enough", and not only the answer: the rows that fired are compared too.
 
 Twelve languages, and more doors than languages: the module itself, the MCP server, the same
 server over HTTP, the Rust runner compiled to WASI, the Wasm component, the SQL query and the
@@ -114,7 +114,7 @@ found still counts, and shows as missing.
 
 ## 6. The model checker
 
-Beside the generated Rust, `gen` writes proof harnesses for
+Beside the generated Rust, `gen --extra proof` writes proof harnesses for
 [Kani](https://model-checking.github.io/kani/), behind `#[cfg(kani)]` so `rustc` never reads
 them. They hold the generated code over **every** input in the declared domain: no table
 falls through, no runtime guard of layer 2 fires, nothing overflows an `i64`, and the rows of

@@ -73,7 +73,7 @@ method (`Fulfill`, `AnswerPacking`). Everything on the wire is named as in the T
   shape, which the workflow has to see to refuse it. `types.go` still has a struct for each record and a
   string type for each enum, and `Decode` reads a task's arguments into them; each of your tasks gets
   its arguments as `map[string]any` and answers any value the SDK can write as JSON.
-- **The rules.** `rulec gen <rule> --out <the package's directory>/rulec` writes each rule's Go as a
+- **The rules.** `rulec gen <rule> --target go --out <the package's directory>/rulec` writes each rule's Go as a
   module of its own (`rulec/go/holdamount`), which your `go.mod` requires and replaces with that
   directory, as `rules.go` says at its top.
 - **The default `Transport`** uses `net/http`, the AWS SDK for Go v2 for Lambda and the AWS APIs, OpenAI's

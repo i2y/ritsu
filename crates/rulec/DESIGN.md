@@ -6165,7 +6165,7 @@ note: `rules/member_tier_shipping.rule` implements a contract's service (`implem
 - MCP の `rulec_gen` の入力（決定の 9）と、`--help`（決定の 10）。
 - `gen`・`vectors`・`doc` が言うパスは、`--out` を `/` で終えても `/` を二重にしない（決定の 11）。書くファイルは変わらない。
 - `gen` を呼ぶほかのところ：CI の `tools.yml` は 13 の出力先と 6 の付属物の全部を、`kani.yml` は `--target rust --extra proof` を書く。dandori の試験の `examples.rs` は typescript・python・go の、`protos.rs` は python・proto と `connect` の、それぞれ要るものだけを頼む。ブラウザで試すページは、0.40.0 と同じ引数を見せて、同じものを書く。サイトの図の二つの道具（`make_flow.py` と `make_overview.py` の `--verify`）は、`diagram.py` に書いた言語の並び（`LANGUAGES`。出力先から `proto` を除いたもの）を `--target` に渡し、書いたディレクトリを図の言語と比べる。その並びは `tests/website.rs` が `targets::target_names()` と比べる。`experiments/kani/run.sh` は `--target rust --extra proof` を書く。全部を書くことを前提にしていた試験は、`targets::UP_TO_0_40` を付けた。
-- 文書：reference の `.proto` の二か所、`formats.md`（`gen` の `--check` と `left`、`test` の表、`api` と MCP の入力）、`generated-code.md`（「`gen` が書くもの」の節で、ライブラリと付属物の表と実物の出力）、`backends.md`、AGENTS.md と README の CI の行（`rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check`）、E076 の直し方の文、スキルのコピー。
+- 文書：reference の `.proto` の二か所、`formats.md`（`gen` の `--check` と `left`、`test` の表、`api` と MCP の入力）、`generated-code.md`（「`gen` が書くもの」の節で、ライブラリと付属物の表と実物の出力）、`backends.md`、AGENTS.md と README の CI の行（`rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check`）、E076 の直し方の文、スキルのコピー。サイトの generate・install・scenarios・assurance・checks（英日）は、コマンドに `--target` と `--extra` を足して出力を取り直し、付属物を書くと言う文には、それを頼む `--extra` を添えた。dandori のページとスキルの、規則のコードを書く行は、`--target go`（Go のパッケージ）か、ラッパーの言語の `--target` を付けた。
 
 **確かめたこと**：
 

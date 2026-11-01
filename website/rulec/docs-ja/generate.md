@@ -1,10 +1,14 @@
 # 生成して呼ぶ
 
 ```console
-$ rulec gen rules/ --out generated/
+$ rulec gen rules/ --target python --target typescript --out generated/
+生成しました: generated/python/shipping_fee.py
+生成しました: generated/typescript/shipping_fee.ts
 ```
 
-出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・PHP・Swift のモジュールと、Java のクラスと、普通の Go パッケージと、SQL の問い合わせと関数と、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません。最後の一つは、言っているだけでなく**確かめています**。`rulec test` は Go 側を `GOPROXY=off` で走らせるので、外から何かを取ってこようとすれば落ちます。例外は二つです。NumPy では、出るのはコードではなく、規則そのものと、それを読む固定の評価器で、こちらは numpy に依存します。列ごとまとめて判定したいホストが、もう持っているはずのものです。もう一つは Connect のサービスで、`connectrpc` に依存します（下の「ほかのチームが呼ぶサービスにする」）。
+コードが読む言語を `--target` で一つずつ挙げると、その言語のライブラリが出て、ほかには何も出ません。出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・PHP・Swift のモジュールと、Java のクラスと、普通の Go パッケージと、SQL の問い合わせと関数と、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません。最後の一つは、言っているだけでなく**確かめています**。`rulec test` は Go 側を `GOPROXY=off` で走らせるので、外から何かを取ってこようとすれば落ちます。例外は二つです。NumPy では、出るのはコードではなく、規則そのものと、それを読む固定の評価器で、こちらは numpy に依存します。列ごとまとめて判定したいホストが、もう持っているはずのものです。もう一つは Connect のサービスで、`connectrpc` に依存します（下の「ほかのチームが呼ぶサービスにする」）。
+
+ライブラリの横に置くものは、`--extra` で一つずつ名前を挙げて頼みます。`runner` と `vectors` は `rulec test` が走らせるもの（下の「生成物を走らせる」）、`mcp` は規則をエージェントのツールにするサーバ、`connect` はほかのチームが呼ぶサービス、`round-test` は丸めヘルパのテスト、`proof` はモデル検査器に読ませる証明ハーネスです。`--target proto` は規則の `.proto` を書きます。ほかのプログラムが読む契約です。`gen` は頼まれたものしか書かないので、あとの rulec が出力先や付属物を足しても、コマンドで頼むまでは書かず、`gen --check` もそれで落ちません。`--target` が一つも無ければ、何も書かずに 2 で止まり、0.40.0 までの `gen` が書いたもの、つまり全部の出力先と全部の付属物を書くコマンドを示します。
 
 検査を通らない規則からは、何も生成されません。
 
@@ -188,7 +192,7 @@ if 残高A <= 1000 and 残高B >= 3980:
 
 ### 生成した Rust を、モデル検査器にも読ませる
 
-Rust のモジュールの隣に、`gen` は `<別名>_proof.rs` を書きます。[Kani](https://model-checking.github.io/kani/)（モデル検査器）の証明ハーネスで、`#[cfg(kani)]` の下にあるので `rustc` は読みません。`kani <別名>_proof.rs`、または `rulec test --proofs` が、ベクタではなく**宣言した範囲のすべての入力**について生成コードを読みます。確かめるのは、どの表も素通りしないこと、矛盾のガードが当たらないこと、`i64` があふれないこと、そして `unique` の表の行が範囲をちょうど一度ずつ覆うことです。
+`--extra proof` を付けると、`gen` は Rust のモジュールの隣に `<別名>_proof.rs` を書きます。[Kani](https://model-checking.github.io/kani/)（モデル検査器）の証明ハーネスで、`#[cfg(kani)]` の下にあるので `rustc` は読みません。`kani <別名>_proof.rs`、または `rulec test --proofs` が、ベクタではなく**宣言した範囲のすべての入力**について生成コードを読みます。確かめるのは、どの表も素通りしないこと、矛盾のガードが当たらないこと、`i64` があふれないこと、そして `unique` の表の行が範囲をちょうど一度ずつ覆うことです。
 
 モデル検査器と、表を証明した検査器は、コードを一行も共有していません。走らせる値打ちはそこにあります。一致すれば、無関係な二つのツールが同じことを言ったことになります。食い違えば、どちらかが誤っていて、それを示す入力がそのまま出てきます。コーパス 143 本では、ハーネス 301 本が 777 秒で通ります。
 
@@ -200,7 +204,7 @@ Rust のモジュールの隣に、`gen` は `<別名>_proof.rs` を書きます
 
 これは「モデルに判断させるな」という話ではありません。**もう決まっている判断**（規約に書いてある、料金表に載っている、承認を経ている）を毎回考え直させるな、という話です。毎回考え直した答えは境界のあたりで揺れ、あとから監査もできません。まだ決まっていない判断 — どの区分か、どのくらい深刻か — は人かモデルの仕事で、その答えを**値として渡せば**、そこから先は表が決めます。
 
-そのために `gen` は、規則そのものを MCP サーバとしてモジュールの隣に書きます。Python のモジュールの隣に `shipping_fee_mcp.py`、JavaScript の隣に `shipping_fee_mcp.mjs`。登録すれば、規則がその別名のツール一つになります。
+そのために `gen --extra mcp` は、規則そのものを MCP サーバとしてモジュールの隣に書きます。Python のモジュールの隣に `shipping_fee_mcp.py`、JavaScript の隣に `shipping_fee_mcp.mjs`。登録すれば、規則がその別名のツール一つになります。
 
 ```console
 $ claude mcp add shipping_fee -- python3 generated/python/shipping_fee_mcp.py
@@ -233,7 +237,7 @@ http://127.0.0.1:8000/mcp
 
 ## ほかのチームが呼ぶサービスにする
 
-エージェントは呼び手の一つです。もう一つは、別のリポジトリにある、たいていは別の言語で書かれた、すでに何かのやりとりの作法を持っているコードです。そちらのために `gen` は、規則を [Connect](https://connectrpc.com/) のサービスとして書きます。契約は `.proto` 一枚、その後ろに立つのは二十五行ほどの変換です。
+エージェントは呼び手の一つです。もう一つは、別のリポジトリにある、たいていは別の言語で書かれた、すでに何かのやりとりの作法を持っているコードです。そちらのために `gen --target python --target proto --extra connect` は、規則を [Connect](https://connectrpc.com/) のサービスとして書きます。契約は `.proto` 一枚、その後ろに立つのは二十五行ほどの変換です。
 
 ```proto
 service ShippingFeeService {
@@ -268,7 +272,7 @@ $ uvicorn shipping_fee_service:app --port 8080      # ASGI
 $ gunicorn 'shipping_fee_service:wsgi_app'          # WSGI
 ```
 
-`connectrpc` は、NumPy の評価器が使う numpy を除けば、`gen` の出すものの中で唯一よその依存で、それもサービスの一枚に閉じています。呼ばれるモジュールのほうは相変わらず何も import しません。`rulec test` は全ベクタを、二つのアプリそれぞれに POST と GET で、合わせて四回通して参照評価器と突き合わせます。
+`connectrpc` は、NumPy の評価器が使う numpy を除けば、`gen` の出すものの中で唯一よその依存で、それもサービスの一枚に閉じています。呼ばれるモジュールのほうは相変わらず何も import しません。`--extra runner` も付けてあれば、`rulec test` は全ベクタを、二つのアプリそれぞれに POST と GET で、合わせて四回通して参照評価器と突き合わせます。
 
 **契約が先にあるなら**、規則をその契約のサービスとして出せます。サービスの `.proto` をもう持っているなら、規則の頭に `implements proto "<ファイル>" <サービス>` と書きます。`gen` は規則の `.proto` を作る代わりに契約をコピーし、パスもメッセージもフィールドの番号も、契約のものになります。規則の `.proto` は規則に書いた順に番号を振るので、途中に入力を足すと、後ろの番号がずれます。契約に持たせれば、新しい入力は契約が付けた番号を持ち、ほかの番号は動きません。`rulec check` は規則とサービスをフィールドごとに突き合わせ、合わないところを E076 で言います。`gen` は出力先のファイルを消しません。前に規則のために生成した `.proto` が、契約のコピーと違うパスに残っていれば、`gen` がもう生成しないファイルとして挙げます。
 
@@ -292,20 +296,27 @@ JSON Schema は、OpenAPI のパラメータやリクエストボディにその
 ## 生成物を走らせる
 
 ```console
+$ rulec gen rules/ --target python --target go --extra runner --extra mcp --extra round-test --extra vectors --out generated/
+…
 $ rulec test generated/ --lang ja
+注記: Connect: サービスとそのランナーが生成されていないので、走らせていません（`rulec gen --target python --target proto --extra connect --extra runner` が書きます）
 ok    shipping_fee (Python) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Python, MCP) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Python, MCP/HTTP) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (Go) ベクタ 70 件、受け付けない入力 16 件
 ok    丸めヘルパ (Python) 単体ベクタ
 ok    丸めヘルパ (Go) 単体ベクタ
 
-4 件すべて一致しました。
+6 件すべて一致しました。
 ```
+
+`rulec test` は、見つけたものだけを走らせます。ランナーと一緒に生成した言語と、書いてあれば MCP のサーバ・Connect のサービス・丸めのテストです。書いていないものは、それを書く `--extra` を添えた注記を出して飛ばします。ランナー抜きで生成した言語は、警告を出して、飛ばした数に入れます。
 
 出力の「ベクタ」は、**規則の境界から自動で作ったテストケース**のことです。出どころが規則の境界であって、生成コードではないところが要点です。丸めヘルパにも専用のテストが付きます — 表ごとの一致だけを見ていると、端数の出ない表ではヘルパの誤りが隠れてしまうからです。「受け付けない入力」は、その裏側です。入口が拒む理由ごとに一つずつ（渡していない入力、型の違う値、範囲の端の外の値、`constraint` が除く組み合わせなど）、どの言語も参照評価器と同じ文で拒むことを確かめます。
 
 ## Wasm: どの実行環境にも入る一つのモジュール
 
-九つ目の生成対象は、言語の関数ではなくモジュールです。`wasm/` には、`rust/` と同じ Rust のモジュール、それを canonical ABI の `call: func(input: string) -> string` で包む crate root、その関数を world の export として書いた `.wit`、`rulec test` が回す Node の runner が入ります。cargo もクレートも要らず、`rustc` だけで組めます。送料の規則で 40 KB、import は一つもありません。
+九つ目の生成対象は、言語の関数ではなくモジュールです。`wasm/` には、`rust/` と同じ Rust のモジュール、それを canonical ABI の `call: func(input: string) -> string` で包む crate root、その関数を world の export として書いた `.wit` が入り、`--extra runner` を付ければ、`rulec test` が回す Node の runner も入ります。cargo もクレートも要らず、`rustc` だけで組めます。送料の規則で 40 KB、import は一つもありません。
 
 ```console
 $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
@@ -317,14 +328,18 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
 `rulec test` はモジュールを組み、ほかの言語と同じようにベクタと突き合わせます。
 
 ```console
+$ rulec gen rules/ --target rust --target wasm --extra runner --extra vectors --out generated/
+…
 $ rulec test generated/ --lang ja
+注記: 丸めの試験が生成されていないので、丸めヘルパを走らせていません（`rulec gen --extra round-test` が書きます）
 ok    shipping_fee (Rust) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (Rust, WASI) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
-…
+
+3 件すべて一致しました。
 ```
 
-二行目と三行目は別のものです。二行目は Rust の runner そのものを `wasm32-wasip1` 向けにコンパイルして wasmtime で走らせたもので、Fastly Compute や Spin のように標準入出力でやり取りする実行環境の形です。Shopify Functions が取るのは三行目のほう、名前の付いた関数を export する形です。どの実行環境がどちらの形を取り、その境界をどこで切るかは、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions)にまとめてあります。
+`Rust, WASI` の行と `Wasm` の行は別のものです。`Rust, WASI` は Rust の runner そのものを `wasm32-wasip1` 向けにコンパイルして wasmtime で走らせたもので、Fastly Compute や Spin のように標準入出力でやり取りする実行環境の形です。Shopify Functions が取るのは `Wasm` のほう、名前の付いた関数を export する形です。どの実行環境がどちらの形を取り、その境界をどこで切るかは、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions)にまとめてあります。
 
 ## テストケースの側は足りているか
 
@@ -349,13 +364,13 @@ rules/送料.rule
 
 ## もとの表とずれないように
 
-生成物はコミットし、CI が作り直して突き合わせます。
+生成物はコミットし、CI が、書いたときと同じ `--target` と `--extra` で作り直して突き合わせます。
 
 ```console
-$ rulec gen rules/ --out generated/ --check
+$ rulec gen rules/ --target python --target typescript --out generated/ --check
 ```
 
-`--check` は何も書かず、生成物が新しい生成と違うか欠けていれば 1 で落ちます。**生成コードを手で直さないでください** — ヘッダに `DO NOT EDIT` と書いてあり、次の `gen` が上書きします。
+`--check` は何も書かず、生成物が新しい生成と違うか欠けていれば 1 で落ちます。前の `gen` が書いた付属物のうち、この `gen` が頼まれていないもののファイルは、もう生成しないものとして挙げ、消さずに残します。検査も落ちません。**生成コードを手で直さないでください** — ヘッダに `DO NOT EDIT` と書いてあり、次の `gen` が上書きします。
 
 整形はジェネレーターが内蔵しています。後段で `gofmt` や `black` を走らせません — 環境に入っているツールのバージョンに出力が依存した瞬間、生成が決定的でなくなるからです。代わりに `gofmt -l` が空であることと、`ruff check --select E,W` が行長を除いて無指摘であることをテストが確かめています。
 

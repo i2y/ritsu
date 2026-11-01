@@ -1,16 +1,29 @@
 # Generate and call
 
 ```console
-$ rulec gen rules/ --out generated/
+$ rulec gen rules/ --target python --target typescript --out generated/
+generated: generated/python/member_shipping_fee.py
+generated: generated/typescript/member_shipping_fee.ts
 ```
 
-Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, PHP and Swift, a class in Java, an ordinary Go package, a query and a function in SQL,
-one Wasm module, and a plan for NumPy. No runtime to install, no configuration, and no
+Name each language your code reads with a `--target` of its own, and out comes that
+language's library and nothing else: an ordinary module in Python, TypeScript, JavaScript,
+Rust, Ruby, PHP and Swift, a class in Java, an ordinary Go package, a query and a function in
+SQL, one Wasm module, or a plan for NumPy. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
 property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`. There are two
 exceptions. The NumPy plan is not code but the rule itself, read by one fixed evaluator that
 needs `numpy`, which a host deciding whole columns at once already has; and the Connect
 service needs `connectrpc` (below).
+
+What goes beside a library is asked for by name, with an `--extra` for each: `runner` and
+`vectors` are what `rulec test` runs (below), `mcp` writes the rule as an agent's tool,
+`connect` the service another team calls, `round-test` the rounding helpers' own tests, and
+`proof` the harnesses for the model checker. `--target proto` writes the rule's `.proto`, the
+contract other programs read. `gen` writes what it is asked for and nothing more, so a target
+or an extra that a later rulec adds is not written until a command line asks for it, and
+`gen --check` does not fail over it. With no `--target` at all, `gen` writes nothing, exits 2
+and prints the command that writes what it wrote up to 0.40.0: every target, with every extra.
 
 A rule that does not pass `check` generates nothing.
 
@@ -310,7 +323,7 @@ if high and low:
 
 ### A second opinion on the Rust
 
-Beside the Rust module, `gen` writes `<alias>_proof.rs`: proof harnesses
+With `--extra proof`, `gen` writes `<alias>_proof.rs` beside the Rust module: proof harnesses
 for the [Kani Rust Verifier](https://model-checking.github.io/kani/),
 behind `#[cfg(kani)]` so `rustc` never reads them. `kani
 <alias>_proof.rs` — or `rulec test --proofs` — holds the
@@ -347,7 +360,7 @@ which class this is, how severe that is — is a person's to settle or a
 model's; hand that answer in **as a value** and the table takes it from
 there.
 
-So `gen` writes the rule as one MCP server beside the module:
+So `gen --extra mcp` writes the rule as one MCP server beside the module:
 `member_shipping_fee_mcp.py` next to the Python one, `member_shipping_fee_mcp.mjs`
 next to the JavaScript one. Register it and the rule is one tool named
 after its alias:
@@ -412,7 +425,7 @@ evaluator.
 
 An agent is one caller. The other is ordinary code in another
 repository, often in another language, that already speaks a wire. For
-that one, `gen` writes the rule as a
+that one, `gen --target python --target proto --extra connect` writes the rule as a
 [Connect](https://connectrpc.com/) service: the contract as one
 `.proto`, and the conversion that stands between it and the module.
 
@@ -468,8 +481,8 @@ $ gunicorn 'member_shipping_fee_service:wsgi_app'          # WSGI
 Apart from the `numpy` the NumPy plan's evaluator needs, `connectrpc` is the one dependency
 anything `gen` writes has, and it is confined to the service file: the module it calls still
 imports nothing.
-`rulec test` puts every vector through the service four times — each
-application, asked by POST and by GET — and holds all four to the
+With `--extra runner` as well, `rulec test` puts every vector through the service four times —
+each application, asked by POST and by GET — and holds all four to the
 reference evaluator.
 
 **When the contract comes first**, the rule can be served as the service it declares. A team
@@ -518,18 +531,24 @@ in the rule.
 ## Running the generated code
 
 ```console
+$ rulec gen rules/ --target python --target go --extra runner --extra mcp --extra round-test --extra vectors --out generated/
+…
 $ rulec test generated/
+note: Connect: the service and its runner were not generated, so it was not run (`rulec gen --target python --target proto --extra connect --extra runner` writes them)
 ok    member_shipping_fee (Python) 70 vectors, 16 refused
 ok    member_shipping_fee (Python, MCP) 70 vectors, 16 refused
-…
+ok    member_shipping_fee (Python, MCP/HTTP) 70 vectors, 16 refused
 ok    member_shipping_fee (Go) 70 vectors, 16 refused
-…
 ok    rounding helper (Python) unit vectors
-ok    rounding helper (NumPy) unit vectors
-…
+ok    rounding helper (Go) unit vectors
 
-All 36 matched.
+All 6 matched.
 ```
+
+`rulec test` runs what it finds: every language generated with its runner, and the MCP
+servers, the Connect service and the round tests where they were written. What was not written
+is passed over with a note naming the `--extra` that writes it, and a language generated
+without its runner is counted as skipped, with a warning.
 
 The vectors are built from the boundaries of the rule, not from the
 generated code, and the rounding helpers get their own unit vectors —
@@ -545,8 +564,9 @@ sentence the reference evaluator says.
 The ninth target is a module rather than a function in a language. `wasm/` holds the same
 Rust module `rust/` gets, a crate root that puts it behind the canonical ABI of
 `call: func(input: string) -> string`, a `.wit` that names that function as the export of a
-world, and the Node runner `rulec test` drives. `rustc` alone builds it, with no cargo and no
-crate; the shipping rule comes to thirty-seven kilobytes and imports nothing.
+world, and, with `--extra runner`, the Node runner `rulec test` drives. `rustc` alone builds
+it, with no cargo and no crate; the shipping rule comes to thirty-seven kilobytes and imports
+nothing.
 
 ```console
 $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
@@ -564,19 +584,22 @@ what `rulec api` says under `wasm`.
 `rulec test` builds the module and holds it to the vectors like every other language:
 
 ```console
+$ rulec gen rules/ --target rust --target wasm --extra runner --extra vectors --out generated/
+…
 $ rulec test generated/
+note: the round tests were not generated, so the rounding helpers were not run (`rulec gen --extra round-test` writes them)
 ok    member_shipping_fee (Rust) 70 vectors, 16 refused
 ok    member_shipping_fee (Rust, WASI) 70 vectors, 16 refused
-…
 ok    member_shipping_fee (Wasm) 70 vectors, 16 refused
-…
+
+All 3 matched.
 ```
 
-The second line is a different thing from the third: the Rust runner itself compiled for
-`wasm32-wasip1` and run under wasmtime, the shape a platform that speaks through stdin and
+The `Rust, WASI` line is a different thing from the `Wasm` one: the Rust runner itself compiled
+for `wasm32-wasip1` and run under wasmtime, the shape a platform that speaks through stdin and
 stdout takes, such as Fastly Compute or Spin. [Targeting a language rulec does not
 generate](backends.md#a-wasm-host-shopify-functions) says which shape a platform takes — a
-Shopify Function takes the third, a named export — and where its boundary runs.
+Shopify Function takes the `Wasm` one, a named export — and where its boundary runs.
 
 ## Is the vector suite itself complete?
 
@@ -618,14 +641,17 @@ missing.
 
 ## Keeping it in step
 
-The generated files are committed, and CI re-derives them:
+The generated files are committed, and CI re-derives them with the `--target` and the
+`--extra` they were written with:
 
 ```console
-$ rulec gen rules/ --out generated/ --check
+$ rulec gen rules/ --target python --target typescript --out generated/ --check
 ```
 
 `--check` writes nothing and exits 1 if a file differs from a fresh
-generation or is missing. **Never edit generated code by hand**: the
+generation or is missing. The files of an extra that an earlier `gen` wrote and this one is
+not asked for are named as generated no more and left where they are; they do not fail the
+check. **Never edit generated code by hand**: the
 header says `DO NOT EDIT`, and the next `gen` overwrites it.
 
 Formatting is built into the generator — no `gofmt` or `black` runs

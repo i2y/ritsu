@@ -110,7 +110,7 @@ $ ./target/release/rulec --help
 
 外に出るのは二つだけです。
 
-- **`rulec test`** — 生成した Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`go`・`swiftc` が要ります（SQL は同じ `python3` の中の `sqlite3` で走ります）。無ければ「どれを飛ばしたか」を言って、落ちはしません。
+- **`rulec test`** — 生成した Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy のうち、ランナーと一緒に生成した言語を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`php`・`go`・`swiftc`・JDK のうち、走らせる言語の分が要ります（SQL は同じ `python3` の中の `sqlite3` で走ります）。無ければ「どれを飛ばしたか」を言って、落ちはしません。
 - **`rulec verify`** — アダプタを子プロセスとして起動するので、そのアダプタを書いた言語が要ります。
 
 生成物を**型検査したい**場合だけ、さらにツールが要ります。生成 Python は `mypy --strict` を、生成 TypeScript は `tsc --strict` を通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どれも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。
@@ -151,7 +151,7 @@ $ claude mcp add rulec -- rulec mcp
 
 **こちらは stdio だけです。** 渡しているのはファイルを読み書きするコマンドそのものなので、シェルの代わりとして同じマシンに置くものです。`--http` はありません。これは足りないのではなく、そう決めています。
 
-**MCP サーバはもう一つあって、そちらは別物です。** ここまでは規則を**書く**エージェントのためのツールでした。規則を**呼ぶ**エージェントには、`gen` が規則そのものをサーバとしてモジュールの隣に書きます。そちらは stdio と、**MCP の Streamable HTTP**（`--http 8000`）の両方を話します。URL しか受け付けない相手のためです。**MCP Apps** を表示できるホストには、人が読むページをそのツールの view としても渡します: [規則をエージェントのツールにする](generate.md#規則をエージェントのツールにする)。
+**MCP サーバはもう一つあって、そちらは別物です。** ここまでは規則を**書く**エージェントのためのツールでした。規則を**呼ぶ**エージェントには、`gen --extra mcp` が規則そのものをサーバとしてモジュールの隣に書きます。そちらは stdio と、**MCP の Streamable HTTP**（`--http 8000`）の両方を話します。URL しか受け付けない相手のためです。**MCP Apps** を表示できるホストには、人が読むページをそのツールの view としても渡します: [規則をエージェントのツールにする](generate.md#規則をエージェントのツールにする)。
 
 ## 言語
 
@@ -180,10 +180,12 @@ check:
     - uses: i2y/ritsu@v0.38.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
-    - run: rulec gen rules/ --out generated/ --check
+    - run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
     - run: rulec coverage rules/
     - run: rulec test generated/
 ```
+
+`--target` で、コードが読む言語を一つずつ挙げ（`--target python --target typescript`）、`--extra runner --extra vectors` で、`rulec test` が走らせるランナーとベクタを頼みます。`gen --check` は、同じフラグで書くものと突き合わせます。
 
 走るのは Linux（x86_64 / aarch64）と macOS（x86_64 / arm64）の runner です。リリースがその四つしか無いので、ほかの runner では `no ritsu release is built for …` と言って止まります。
 

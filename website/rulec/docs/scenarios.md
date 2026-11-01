@@ -111,14 +111,18 @@ The reader compares the rows with that quotation and nothing else. How to read t
 
 ### 1-5. Generate and hold the code to the table
 
-Who: the agent. rulec checks that the twelve languages agree
+Who: the agent. rulec checks that the languages generated agree
 
 ```console
-$ rulec gen rules/stamp_duty.rule --out generated/
+$ rulec gen rules/stamp_duty.rule --target python --target sql --extra runner --extra vectors --out generated/
+…
 $ rulec test generated/
+…
 ok    japan_stamp_duty_split (Python) 296 vectors, 13 refused
 ok    japan_stamp_duty_split (SQL) 296 vectors, 13 refused
-…
+ok    japan_stamp_duty_split (SQL, PostgreSQL) 296 vectors, 13 refused
+
+All 3 matched.
 ```
 
 The header of every generated file names the article, its date and its digest, so a reader of the code can tell which text it was made from:
@@ -500,10 +504,20 @@ You have a `.rule` that passes check and want it inside your app or your batch, 
 Who: the agent
 
 ```console
-$ rulec gen rules/shipping_fee.rule --out generated/
+$ rulec gen rules/shipping_fee.rule --target python --target typescript --target go --target sql --target wasm --extra runner --extra vectors --out generated/
+generated: generated/python/shipping_fee.py
+generated: generated/python/shipping_fee_runner.py
+generated: generated/typescript/shipping_fee.ts
+generated: generated/typescript/shipping_fee_runner.ts
+…
+generated: generated/vectors/shipping_fee.jsonl
+generated: generated/vectors/shipping_fee.expected.jsonl
+generated: generated/vectors/shipping_fee.refused.jsonl
 ```
 
-Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java get a function; SQL gets one query over a relation of inputs and the same query as a PostgreSQL function; Wasm gets one module; NumPy gets the rule as data and one fixed evaluator. No runtime, no dependency.
+`--target` names the languages the app and the batch read, and `--extra runner --extra vectors`
+asks for what 4-3 runs. Under `generated/`, one directory for each language asked for, and
+`vectors/`. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java get a function; SQL gets one query over a relation of inputs and the same query as a PostgreSQL function; Wasm gets one module; NumPy gets the rule as data and one fixed evaluator. No runtime, no dependency.
 
 ### 4-2. Read how to call it
 
@@ -528,15 +542,19 @@ Every generated language is run over the cases built from the table's boundaries
 
 ```console
 $ rulec test generated/
+…
 ok    shipping_fee (Python) 70 vectors, 16 refused
 ok    shipping_fee (TypeScript) 70 vectors, 16 refused
 ok    shipping_fee (Go) 70 vectors, 16 refused
 ok    shipping_fee (SQL) 70 vectors, 16 refused
+ok    shipping_fee (SQL, PostgreSQL) 70 vectors, 16 refused
 ok    shipping_fee (Wasm) 70 vectors, 16 refused
-…
+
+All 6 matched.
 ```
 
-A toolchain that is not installed is skipped, and the skip is reported.
+A toolchain that is not installed is skipped, and the skip is reported. What was not generated,
+such as the MCP servers here, is passed over with a note naming the `--extra` that writes it.
 
 ### 4-4. Wire it in
 
@@ -559,10 +577,10 @@ Generated code is never edited. What you want changed is in the table, and a cha
 
 Who: CI (rulec gen --check)
 
-Commit the generated code and regenerate in CI with `--check`. A table that changed while its generated code did not stops the build there.
+Commit the generated code and regenerate in CI with `--check`, given the `--target` and the `--extra` of 4-1. A table that changed while its generated code did not stops the build there.
 
 ```console
-$ rulec gen rules/ --out generated/ --check
+$ rulec gen rules/ --target python --target typescript --target go --target sql --target wasm --extra runner --extra vectors --out generated/ --check
 ```
 
 The whole job is on the [install page](install.md#in-ci), with the two lines that post the impact of a revision to a pull request.

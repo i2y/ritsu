@@ -164,8 +164,9 @@ Nothing, for the checks. `rulec check`, `fmt`, `gen`, `vectors`,
 Two steps reach outside:
 
 - **`rulec test`** runs the generated Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go,
-  Swift, Java, NumPy, SQL and Wasm and compares them with the reference evaluator. It needs
-  `python3`, `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK on the path (the SQL runs
+  Swift, Java, NumPy, SQL and Wasm — each language that was generated with its runner — and
+  compares them with the reference evaluator. It needs the toolchain of each language it runs
+  on the path: `python3`, `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` or a JDK (the SQL runs
   on the `sqlite3` inside that `python3`); without one it says which side it skipped and does
   not fail.
 - **`rulec verify`** starts your adapter as a child process, so it needs
@@ -230,7 +231,7 @@ write your files, so it belongs on the same machine as the shell it stands in fo
 no `--http`, and that is a decision rather than a gap.
 
 **The other MCP server is a different thing.** That one is the tool for the agent that
-*writes* a rule; for the agent that *calls* one, `gen` writes the rule itself as a server
+*writes* a rule; for the agent that *calls* one, `gen --extra mcp` writes the rule itself as a server
 beside the module, and that server speaks stdio **and MCP's Streamable HTTP**
 (`--http 8000`) for the hosts that only take a URL. Where the host renders **MCP Apps**, it
 also offers the page for people as the tool's own view:
@@ -276,10 +277,14 @@ check:
     - uses: i2y/ritsu@v0.38.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
-    - run: rulec gen rules/ --out generated/ --check
+    - run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
     - run: rulec coverage rules/
     - run: rulec test generated/
 ```
+
+`--target` names the languages your code reads, once each (`--target python --target
+typescript`), and `--extra runner --extra vectors` the runners and the vectors `rulec test` puts
+through them; `gen --check` compares what those same flags write.
 
 It runs on the Linux (x86_64, aarch64) and macOS (x86_64, arm64) runners.
 Those are the four releases there are, so any other runner stops with

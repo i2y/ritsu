@@ -69,7 +69,7 @@ $ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|du
 
 ### 規則
 
-`rulec gen <rule> --out <パッケージのディレクトリ>/rulec` は、規則ごとの Go を、それぞれ独立したモジュール（`rulec/go/holdamount`）として書き出します。`rules.go` の先頭に書いてあるとおり、自分の `go.mod` でそのモジュールを require し、replace でそのディレクトリを指してください。
+`rulec gen <rule> --target go --out <パッケージのディレクトリ>/rulec` は、規則ごとの Go を、それぞれ独立したモジュール（`rulec/go/holdamount`）として書き出します。`rules.go` の先頭に書いてあるとおり、自分の `go.mod` でそのモジュールを require し、replace でそのディレクトリを指してください。
 
 ### 既定の Transport
 
