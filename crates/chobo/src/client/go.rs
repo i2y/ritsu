@@ -16,36 +16,38 @@ use ritsu_emit::words::go::KEYWORDS;
 pub use ritsu_emit::ident::go_exported as go_name;
 
 /// The package: the book's name when it is an ASCII identifier, else the file's name
-/// (`inventory.ja.book` is `inventory_ja`), else `book` (PLAN 0.3).
+/// (`inventory.ja.book` is `inventory_ja`), else `book` (PLAN 0.3). A keyword is passed over, and so
+/// is `main`, which Go builds as a program that no package imports.
 pub fn package(book: &Book, stem: &str) -> String {
     let file = stem.replace(['.', '-'], "_");
     for c in [book.name.to_ascii_lowercase(), file.to_ascii_lowercase()] {
-        if ascii_ident(&c) && !KEYWORDS.contains(&c.as_str()) && c != "_" {
+        if ascii_ident(&c) && !KEYWORDS.contains(&c.as_str()) && c != "_" && c != "main" {
             return c;
         }
     }
     "book".into()
 }
 
-/// The fields of the book value, one per transfer kind, kept apart from `Balance` and `Expire`
-/// (the PostgreSQL client's method), so that the two clients name them alike.
+/// The fields of the book value, one per transfer kind, named as [`go_name`] spells them. Two that
+/// come out the same, and one named like the book value's own `Balance` or `Expire`, are W108 and
+/// E064 (`crate::spellings`); so are two fields and two methods below.
 pub fn members(book: &Book) -> Vec<String> {
-    unique(book.transfers.iter().map(|t| go_name(&t.name)).collect(), &["Balance", "Expire"])
+    book.transfers.iter().map(|t| go_name(&t.name)).collect()
 }
 
 /// The fields of a struct of the parameters `which` of `t`.
 pub fn fields(t: &TransferKind, which: &[usize]) -> Vec<String> {
-    unique(which.iter().map(|i| go_name(&t.params[*i].name)).collect(), &[])
+    which.iter().map(|i| go_name(&t.params[*i].name)).collect()
 }
 
 /// The fields of an account kind's arguments.
 pub fn account_fields(a: &AccountKind) -> Vec<String> {
-    unique(a.params.iter().map(|p| go_name(p)).collect(), &[])
+    a.params.iter().map(|p| go_name(p)).collect()
 }
 
 /// The methods of `Balances`, one per account kind.
 pub fn balance_methods(book: &Book) -> Vec<String> {
-    unique(book.accounts.iter().map(|a| go_name(&a.name)).collect(), &[])
+    book.accounts.iter().map(|a| go_name(&a.name)).collect()
 }
 
 /// A string as a Go literal.

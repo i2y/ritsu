@@ -1,0 +1,17 @@
+book python_parameters_renamed v1
+description "python_parameters.book with class_ renamed grade, as its note says"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, class: string, grade: string, sku: string, qty: pcs)
+  key delivery, class, grade
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

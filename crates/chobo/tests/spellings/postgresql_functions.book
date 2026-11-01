@@ -1,0 +1,18 @@
+book postgresql_functions v1
+description "An account and a transfer whose functions in PostgreSQL's SQL have one name, balance_order_hold, and take the same parameters"
+
+unit JPY
+
+account order_hold(order: string) : JPY
+  at least 0 refused as nothing_held
+account customers : JPY outside
+account shops : JPY outside
+
+transfer balance_order(order: string)
+  key order
+  pending expires after 30 minutes
+  move 100 from customers to order_hold(order)
+
+transfer settle(order: string, amount: JPY)
+  key order
+  move amount from order_hold(order) to shops

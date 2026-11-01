@@ -30,6 +30,7 @@ chobo が出すコードの全部について、いつ出るかと、どう直�
 | [E061](#e061) | エラー | 名前が PostgreSQL の識別子に収まりません |
 | [E062](#e062) | エラー | 名前を MySQL がそのままでは持てません |
 | [E063](#e063) | エラー | 名前を Rust が識別子にできません |
+| [E064](#e064) | エラー | 名前がこのターゲットのコードで同じ識別子になります |
 | [W101](#w101) | 警告 | 残高がたまる一方の勘定 |
 | [W102](#w102) | 警告 | いつも拒否される振替 |
 | [W103](#w103) | 警告 | 移動の順序のせいで拒否される振替 |
@@ -37,6 +38,7 @@ chobo が出すコードの全部について、いつ出るかと、どう直�
 | [W105](#w105) | 警告 | 使われない宣言 |
 | [W106](#w106) | 警告 | 効かない境界 |
 | [W107](#w107) | 警告 | 前のリビジョンにあった勘定や振替がありません |
+| [W108](#w108) | 警告 | ターゲットのコードで同じ識別子になる名前 |
 | [W901](#w901) | 警告 | 鍵がファイルに書かれています |
 
 ## E001
@@ -606,7 +608,7 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ```
 
-関係するコード: [E060](#e060), [E062](#e062), [E063](#e063)
+関係するコード: [E060](#e060), [E062](#e062), [E063](#e063), [E064](#e064)
 
 ## E062
 
@@ -661,7 +663,39 @@ transfer build(permit: string, site: string, area_m²: sqm)
   move area_m² from builders to floor(site)
 ```
 
-関係するコード: [E061](#e061), [E062](#e062)
+関係するコード: [E061](#e061), [E062](#e062), [E064](#e064)
+
+## E064
+
+`エラー` — **名前がこのターゲットのコードで同じ識別子になります**
+
+**いつ出るか。** `chobo build` のターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前と同じになるとき、または名前をそのままでは使えないときに出ます。`check` が W108 で知らせることのうち、このターゲットを壊すものです。そのまま書くと、コードをコンパイルできないか読み込めないか、呼び出しがほかの振替や勘定に届くので、このターゲットは何も書きません。
+
+**直し方。** 注が挙げる名前のどれかを変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください（W107）。
+
+**どのコマンドで出るか**: `chobo build <file.book> --target postgres-go`
+
+**最小の再現**:
+
+```book
+book shop v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+transfer Ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+```
+
+関係するコード: [W108](#w108), [E061](#e061), [E063](#e063)
 
 ## W101
 
@@ -855,6 +889,36 @@ transfer send(order: string, sku: string, qty: pcs)
 ```
 
 関係するコード: [E050](#e050), [E051](#e051)
+
+## W108
+
+`警告` — **ターゲットのコードで同じ識別子になる名前**
+
+**いつ出るか。** どれかのターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前（`balance`、`expire` など）と同じになるとき、または名前をそのままでは使えないときに出ます。クライアントは、振替、勘定、引数の名前と拒否の理由を、言語ごとの綴りで識別子にします。Go は名前の頭の一字を大文字にし（大文字の無い字で始まる名前には、頭に `X` を付けます）、Rust は型の名前と列挙の値を PascalCase で書き、フィールドとメソッドでは、生の識別子にできないキーワードの後ろに `_` を付けます。Python はキーワードの後ろに `_` を付け、クラスの中では `__` で始まる名前を書き換えます。TypeScript は名前をそのまま書きます。PostgreSQL の SQL では、関数の名前が `<振替>_<操作>` と `balance_<勘定>` になります。どれも、壊れるのは言語のクライアントか PostgreSQL のターゲットの一部で、名前を書くほかのターゲットは組めるので、警告です。壊れるターゲットの `chobo build` は E064 で止まります。chobo は名前を書き換えません。どの言語の呼び出しも、帳簿の名前で書きます。
+
+**直し方。** 使わないターゲットなら、このままで構いません。使うなら、注が挙げる名前のどれかを変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください（W107）。
+
+**最小の再現**:
+
+```book
+book shop v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+transfer Ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+```
+
+関係するコード: [E064](#e064), [E063](#e063), [W107](#w107)
 
 ## W901
 

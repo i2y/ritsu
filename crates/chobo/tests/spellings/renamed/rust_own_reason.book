@@ -1,0 +1,18 @@
+book rust_own_reason_renamed v1
+description "rust_own_reason.book with keyConflict renamed shelf_full, as its note says"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+  at most 100 refused as shelf_full
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

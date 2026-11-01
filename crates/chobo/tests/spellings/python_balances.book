@@ -1,0 +1,17 @@
+book python_balances v1
+description "An account the Python client writes as the method _r of _Balances, which keeps what its methods call through in its attribute _r"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account _r : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from _r to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

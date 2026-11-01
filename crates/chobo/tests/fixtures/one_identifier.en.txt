@@ -1,0 +1,10 @@
+warning[W108]: one_identifier.book:19:10: The transfers `ship` and `Ship` are one identifier in the Go and Rust clients
+    19 | transfer Ship(order: string, sku: string, qty: pcs)
+  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Ship`: the types `ShipArgs` and `ShipCalls`, and the field `Ship` of `Book`, would be declared twice, and the package does not compile.
+  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `Ship`: the types `ShipArgs` and `ShipCalls` would be declared twice, and the module does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+error[E064]: one_identifier.book:19:10: The transfers `ship` and `Ship` are one identifier in the code of `postgres-go`
+    19 | transfer Ship(order: string, sku: string, qty: pcs)
+  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Ship`: the types `ShipArgs` and `ShipCalls`, and the field `Ship` of `Book`, would be declared twice, and the package does not compile.
+  hint: Rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+one_identifier.book: 1 error(s), 1 warning(s)

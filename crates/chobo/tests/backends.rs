@@ -1,4 +1,5 @@
-//! Every scenario of every book, on every target, against the reference interpreter (PLAN C5):
+//! Every scenario of every book, on every target, against the reference interpreter (PLAN C5),
+//! the test books and the renamed books of tests/spellings (`backend_cases`):
 //! the SQL itself through psql, the PostgreSQL clients in TypeScript, Python, Go and Rust, the
 //! TigerBeetle clients in the four, and the clients of the MySQL family in the four, on MySQL,
 //! TiDB and Vitess (DESIGN 4.5, 14). Each answer, the balances at the end and the holds must be
@@ -230,7 +231,7 @@ fn every_scenario_matches_on_every_target() {
         return;
     }
     let started = Instant::now();
-    let cases = cases();
+    let cases = backend_cases();
     let work = TempDir::new("backends");
     let go = match go() {
         Ok(()) => Some(build_go(&cases, work.path()).unwrap_or_else(|e| panic!("{e}"))),
@@ -389,7 +390,7 @@ fn mysql_family(my: &MySql, slug: &str, cases: &[Case], work: &std::path::Path, 
 #[test]
 fn every_scenario_matches_on_the_mysql_family() {
     let started = Instant::now();
-    let cases = cases();
+    let cases = backend_cases();
     let work = TempDir::new("backends-mysql");
     let go = match go() {
         Ok(()) => Some(build_go(&cases, work.path()).unwrap_or_else(|e| panic!("{e}"))),

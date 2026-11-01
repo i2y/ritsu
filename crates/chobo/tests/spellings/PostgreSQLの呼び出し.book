@@ -1,0 +1,28 @@
+book PostgreSQLの呼び出し v1
+description "PostgreSQL の SQL で同じ名前の関数 balance_注文_hold になり、引数の数も同じで型が違う勘定と振替。psql や TypeScript のクライアントのように、値に型を付けずに呼ぶと、勘定の関数に届きます"
+
+unit 円
+
+account 注文_hold(注文: string, 明細: string) : 円
+  at least 0 refused as 押さえなし
+account 前払い(注文: string) : 円
+  at least 0 refused as 前払いなし
+account 客 : 円 outside
+account 店 : 円 outside
+
+transfer 明細の押さえ(注文: string, 明細: string, 額: 円)
+  key 注文, 明細
+  move 額 from 客 to 注文_hold(注文, 明細)
+
+transfer 明細の精算(注文: string, 明細: string, 額: 円)
+  key 注文, 明細
+  move 額 from 注文_hold(注文, 明細) to 店
+
+transfer balance_注文(注文: string, 額: 円)
+  key 注文
+  pending expires after 30 minutes
+  move 額 from 客 to 前払い(注文)
+
+transfer 注文の精算(注文: string, 額: 円)
+  key 注文
+  move 額 from 前払い(注文) to 店

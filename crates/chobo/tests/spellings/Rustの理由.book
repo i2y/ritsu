@@ -1,0 +1,27 @@
+book Rustの理由 v1
+description "Rust のクライアントが列挙 Reason の一つの値 残高不足 で書く二つの拒否の理由"
+
+unit 円
+
+account 財布(会員: string) : 円
+  at least 0 refused as 残高不足
+account 与信(会員: string) : 円
+  at least 0 refused as 残高_不足
+account 銀行 : 円 outside
+account 店 : 円 outside
+
+transfer 入金(支払: string, 会員: string, 額: 円)
+  key 支払
+  move 額 from 銀行 to 財布(会員)
+
+transfer 与信枠(承認: string, 会員: string, 額: 円)
+  key 承認
+  move 額 from 銀行 to 与信(会員)
+
+transfer 購入(注文: string, 会員: string, 額: 円)
+  key 注文
+  move 額 from 財布(会員) to 店
+
+transfer 掛けで購入(注文: string, 会員: string, 額: 円)
+  key 注文
+  move 額 from 与信(会員) to 店

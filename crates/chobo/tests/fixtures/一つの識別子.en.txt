@@ -1,0 +1,9 @@
+warning[W108]: 一つの識別子.book:19:10: The transfers `出荷` and `X出荷` are one identifier in the Go client
+    19 | transfer X出荷(注文: string, 品番: string, 数: 個)
+  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `X出荷`: the types `X出荷Args` and `X出荷Calls`, and the field `X出荷` of `Book`, would be declared twice, and the package does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+error[E064]: 一つの識別子.book:19:10: The transfers `出荷` and `X出荷` are one identifier in the code of `postgres-go`
+    19 | transfer X出荷(注文: string, 品番: string, 数: 個)
+  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `X出荷`: the types `X出荷Args` and `X出荷Calls`, and the field `X出荷` of `Book`, would be declared twice, and the package does not compile.
+  hint: Rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+一つの識別子.book: 1 error(s), 1 warning(s)

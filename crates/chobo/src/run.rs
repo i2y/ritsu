@@ -575,7 +575,7 @@ fn cmd_build(a: &Args) -> u8 {
         return 2;
     };
     let target = Target::parse(t).expect("the choices of --target are the targets");
-    let (src, book, _) = match load(&path, a.lang) {
+    let (src, book, c) = match load(&path, a.lang) {
         Ok(x) => x,
         Err(c) => return c,
     };
@@ -588,7 +588,10 @@ fn cmd_build(a: &Args) -> u8 {
             for d in &diags {
                 eprint!("{}", d.shown(&file, &src, a.lang));
             }
-            eprintln!("{}", diag::summary(&file, &diags, a.lang));
+            // the summary counts the warnings `load` printed above as well
+            let mut all = c.diags.clone();
+            all.extend(diags);
+            eprintln!("{}", diag::summary(&file, &all, a.lang));
             return 1;
         }
     };

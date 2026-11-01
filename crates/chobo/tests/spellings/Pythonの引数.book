@@ -1,0 +1,17 @@
+book Pythonの引数 v1
+description "Python のクライアントが一つの名前 class_ で書く二つの引数。class は Python のキーワードなので、後ろに _ を付けて書きます"
+
+unit 個
+
+account 在庫(品番: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(納品: string, class: string, class_: string, 品番: string, 数: 個)
+  key 納品, class, class_
+  move 数 from 仕入先 to 在庫(品番)
+
+transfer 出荷(注文: string, 品番: string, 数: 個)
+  key 注文, 品番
+  move 数 from 在庫(品番) to 客

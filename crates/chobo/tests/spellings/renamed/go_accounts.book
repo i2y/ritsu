@@ -1,0 +1,17 @@
+book go_accounts_renamed v1
+description "go_accounts.book with Stock renamed supplier_stock, as its note says"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier_stock : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from supplier_stock to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

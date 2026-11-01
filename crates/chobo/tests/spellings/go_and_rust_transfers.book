@@ -1,0 +1,21 @@
+book go_and_rust_transfers v1
+description "Two transfers whose names differ only in the case of their first letter: the Go client writes both as Sale, and the types the Rust client writes for both begin with Sale"
+
+unit JPY
+
+account wallet(member: string) : JPY
+  at least 0 refused as short
+account bank : JPY outside
+account shops : JPY outside
+
+transfer top_up(payment: string, member: string, amount: JPY)
+  key payment
+  move amount from bank to wallet(member)
+
+transfer sale(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops
+
+transfer Sale(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops

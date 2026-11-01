@@ -1,0 +1,9 @@
+warning[W108]: python_balances.book:8:9: The account `_r` is a name the Python client uses itself
+     8 | account _r : pcs outside
+  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client writes the account `_r` as the method `_r` of `_Balances`, and `_Balances` has the attribute `_r`, which holds what its methods call through: the attribute hides the account's method, and reading this account's balance stops (`TypeError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+python_balances.book: ok, 1 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

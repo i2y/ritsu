@@ -1,0 +1,21 @@
+# W108 and E064: the Go and Rust clients write the transfers `ship` and `Ship` as one identifier, and `chobo build --target postgres-go` stops
+book shop v1
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+
+transfer Ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

@@ -502,8 +502,11 @@ started with `--development`, a MySQL 8.4.11 server, and a TiDB 8.5.8 cluster wh
 made with `tidb_enable_check_constraint` ON; the connection strings of psycopg and sqlx stand for
 the ones they ran with. A name of the book that is Japanese is exported in Go with an `X` in front
 (`b.X引当.Hold`), a name that is a keyword of Python gets a `_` after it, and one that is a keyword
-of Rust is written as a raw identifier (`r#type`; `self_` for the four it cannot be). No transfer
-kind is called `balance` or `expire` in a client, whatever the book calls it. A Rust client is one
+of Rust is written as a raw identifier (`r#type`; `self_` for the four it cannot be). Every other
+name is written as the book writes it, and none is changed to make room for another: where two
+names are one identifier in a client, or a transfer kind is called `balance` (or `expire`, on
+PostgreSQL and the MySQL family), `chobo check` warns about it (W108) and the build of the targets
+it names stops (E064). A Rust client is one
 module: it holds what every book shares beside the book's own part, as the TypeScript and Python
 files do, and its head says the crates it needs, at the versions its tests run. The module is the
 book's name in lower case when that is an ASCII identifier, else the file's name, else `book`, as

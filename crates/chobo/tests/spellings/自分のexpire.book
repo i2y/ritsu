@@ -1,0 +1,17 @@
+book 自分のexpire v1
+description "名前が expire の振替。PostgreSQL と MySQL のクライアントの Book は、同じ名前のメソッドを自分で持ちます"
+
+unit ポイント
+
+account ポイント残高(会員: string) : ポイント
+  at least 0 refused as 残高不足
+account 発行元 : ポイント outside
+account 失効分 : ポイント outside
+
+transfer 付与(購入: string, 会員: string, 額: ポイント)
+  key 購入
+  move 額 from 発行元 to ポイント残高(会員)
+
+transfer expire(通知: string, 会員: string, 額: ポイント)
+  key 通知
+  move 額 from ポイント残高(会員) to 失効分

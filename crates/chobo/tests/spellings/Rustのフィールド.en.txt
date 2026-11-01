@@ -1,0 +1,9 @@
+warning[W108]: Rustのフィールド.book:11:40: The parameters `crate` and `crate_` of the transfer `入荷` are one identifier in the Rust client
+    11 | transfer 入荷(納品: string, crate: string, crate_: string, 品番: string, 数: 個)
+  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes `_` after a keyword a raw identifier cannot be (`self`, `Self`, `super`, `crate`) and after `_`, so both are `crate_`: the field `crate_` of `入荷Args` would be declared twice, and the module does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+Rustのフィールド.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, crate, crate_; a second call that differs only in 品番 or 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

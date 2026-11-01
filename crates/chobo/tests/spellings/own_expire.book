@@ -1,0 +1,17 @@
+book own_expire v1
+description "A transfer named expire, the method the Book of the PostgreSQL and MySQL clients has itself"
+
+unit pts
+
+account points(member: string) : pts
+  at least 0 refused as short
+account issuer : pts outside
+account lapsed : pts outside
+
+transfer grant(purchase: string, member: string, amount: pts)
+  key purchase
+  move amount from issuer to points(member)
+
+transfer expire(notice: string, member: string, amount: pts)
+  key notice
+  move amount from points(member) to lapsed

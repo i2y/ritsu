@@ -129,46 +129,46 @@ pub fn module(book: &Book, stem: &str) -> String {
     "book".into()
 }
 
-/// The methods of the book value, one per transfer kind, kept apart from `balance` and `expire`.
+/// The methods of the book value, one per transfer kind, named as [`ident`] spells them. Two that
+/// come out the same, and one named like the book value's own `balance` or `expire`, are W108 and
+/// E064 (`crate::spellings`); so are two fields, two methods, two types and two variants below.
 pub fn members(book: &Book) -> Vec<String> {
-    unique(book.transfers.iter().map(|t| ident(&t.name)).collect(), &["balance", "expire"])
+    book.transfers.iter().map(|t| ident(&t.name)).collect()
 }
 
 /// The fields of a struct of the parameters `which` of `t`.
 pub fn fields(t: &TransferKind, which: &[usize]) -> Vec<String> {
-    unique(which.iter().map(|i| ident(&t.params[*i].name)).collect(), &[])
+    which.iter().map(|i| ident(&t.params[*i].name)).collect()
 }
 
 /// The fields of an account kind's arguments.
 pub fn account_fields(a: &AccountKind) -> Vec<String> {
-    unique(a.params.iter().map(|p| ident(p)).collect(), &[])
+    a.params.iter().map(|p| ident(p)).collect()
 }
 
 /// The methods of `Balances`, one per account kind.
 pub fn balance_methods(book: &Book) -> Vec<String> {
-    unique(book.accounts.iter().map(|a| ident(&a.name)).collect(), &[])
+    book.accounts.iter().map(|a| ident(&a.name)).collect()
 }
 
 /// What the types of a transfer kind's arguments begin with (`ReserveArgs`, `ReserveKey`,
 /// `ReserveAmounts`, `ReserveCalls`), one per transfer kind.
 pub fn transfer_types(book: &Book) -> Vec<String> {
-    unique(book.transfers.iter().map(|t| type_base(&t.name)).collect(), &[])
+    book.transfers.iter().map(|t| type_base(&t.name)).collect()
 }
 
 /// What the type of an account kind's arguments begins with (`StockAccount`).
 pub fn account_types(book: &Book) -> Vec<String> {
-    unique(book.accounts.iter().map(|a| type_base(&a.name)).collect(), &[])
+    book.accounts.iter().map(|a| type_base(&a.name)).collect()
 }
 
-/// The variants of `Reason`: the ones chobo gives itself have their names (`KeyConflict`, …), and
-/// the bounds' own, first in the enum, the names left over.
+/// The variants of `Reason`, each its reason in PascalCase ([`type_base`]): the bounds' own, first
+/// in the enum, then the ones chobo gives itself (`KeyConflict`, …).
 pub fn reason_variants(book: &Book) -> Vec<(String, String)> {
-    let own: Vec<String> = REASONS.iter().map(|r| type_base(r)).collect();
-    let taken: Vec<&str> = own.iter().map(String::as_str).collect();
     let all = reasons(book);
-    let bounds: Vec<&String> = all.iter().filter(|r| !REASONS.contains(&r.as_str())).collect();
-    let mut out: Vec<(String, String)> = bounds.iter().zip(unique(bounds.iter().map(|r| type_base(r)).collect(), &taken)).map(|(r, v)| (r.to_string(), v)).collect();
-    out.extend(REASONS.iter().zip(own).map(|(r, v)| (r.to_string(), v)));
+    let bounds = all.iter().filter(|r| !REASONS.contains(&r.as_str()));
+    let mut out: Vec<(String, String)> = bounds.map(|r| (r.to_string(), type_base(r))).collect();
+    out.extend(REASONS.iter().map(|r| (r.to_string(), type_base(r))));
     out
 }
 

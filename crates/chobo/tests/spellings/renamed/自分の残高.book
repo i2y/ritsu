@@ -1,0 +1,17 @@
+book 自分の残高_改 v1
+description "../自分の残高.book の balance を、注のとおりに 残高調整 にした帳簿"
+
+unit 円
+
+account 財布(会員: string) : 円
+  at least 0 refused as 残高不足
+account 銀行 : 円 outside
+account 店 : 円 outside
+
+transfer 残高調整(調整: string, 会員: string, 額: 円)
+  key 調整
+  move 額 from 銀行 to 財布(会員)
+
+transfer 購入(注文: string, 会員: string, 額: 円)
+  key 注文
+  move 額 from 財布(会員) to 店

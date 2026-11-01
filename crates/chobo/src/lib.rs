@@ -29,6 +29,7 @@ pub mod render;
 pub mod run;
 pub mod scenario;
 pub mod scenarios;
+pub mod spellings;
 pub mod syntax;
 pub mod target;
 pub mod witness;

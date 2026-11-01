@@ -1,0 +1,17 @@
+book own_balance_renamed v1
+description "own_balance.book with balance renamed adjust_balance, as its note says"
+
+unit JPY
+
+account wallet(member: string) : JPY
+  at least 0 refused as short
+account bank : JPY outside
+account shops : JPY outside
+
+transfer adjust_balance(adjustment: string, member: string, amount: JPY)
+  key adjustment
+  move amount from bank to wallet(member)
+
+transfer buy(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops

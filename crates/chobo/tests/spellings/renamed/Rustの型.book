@@ -1,0 +1,25 @@
+book Rustの型_改 v1
+description "../Rustの型.book の 返品受付 を、注のとおりに 回収受付 にした帳簿"
+
+unit 個
+
+account 在庫(品番: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(納品: string, 品番: string, 数: 個)
+  key 納品, 品番
+  move 数 from 仕入先 to 在庫(品番)
+
+transfer 出荷(注文: string, 品番: string, 数: 個)
+  key 注文, 品番
+  move 数 from 在庫(品番) to 客
+
+transfer 返品_受付(返品票: string, 品番: string, 数: 個)
+  key 返品票, 品番
+  move 数 from 客 to 在庫(品番)
+
+transfer 回収受付(回収: string, 品番: string, 数: 個)
+  key 回収, 品番
+  move 数 from 客 to 在庫(品番)

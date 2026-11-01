@@ -1,6 +1,6 @@
 ---
 name: chobo
-description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL, TigerBeetle or a database of the MySQL family (MySQL, TiDB, Vitess). Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E063, W101-W107, W901) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL, TigerBeetle or the MySQL family and its client (TypeScript, Python, Go or Rust) called.
+description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL, TigerBeetle or a database of the MySQL family (MySQL, TiDB, Vitess). Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E064, W101-W108, W901) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL, TigerBeetle or the MySQL family and its client (TypeScript, Python, Go or Rust) called.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run chobo as `ritsu chobo <command>`, or as `chobo <command>` through a link to ritsu named for it. The code it builds needs PostgreSQL, TigerBeetle with its official client 0.17.9, or MySQL 8.4, TiDB 8.5 or Vitess, in the program that calls it.
 license: MIT OR Apache-2.0
 ---
@@ -62,7 +62,7 @@ data (§6).
    life of a hold, and every scenario with the balances after each step. `--format html` writes
    one page whose scenarios can be stepped through; `--lang ja` writes it in Japanese.
 7. **Build it:** `ritsu chobo build <file.book> --target <target> --out <dir>` (§7). A build stops when
-   a target cannot take the book (E060, E061, E062, E063).
+   a target cannot take the book (E060, E061, E062, E063, E064).
 8. **Call it:** a refusal is an answer, not an exception: handle each reason the check listed. A
    retry with the same arguments is safe; the key makes it `done_before`. On PostgreSQL and the
    MySQL family, call `expire()` from a job, one at a time.
@@ -189,11 +189,13 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | E061 | a name past PostgreSQL's 63 bytes | a shorter name |
 | E062 | a name MySQL cannot hold: a book's name past 51 characters, or with a character beyond the Basic Multilingual Plane (𠮷 and the like) | a shorter name, without such a character |
 | E063 | with a Rust target, a name with a character no Rust identifier holds where the name has it (`²`, `½`, `①`, `Ⓐ`, a combining mark first) | the name without it (`area_m²` as `area_m2`) |
+| E064 | with a target W108 names, the build of that target | rename one of the names W108 gives |
 | W101 | an account that only ever fills | a transfer that takes from it, or `outside` |
 | W102 | a transfer always refused: nothing fills what it takes from | a transfer that fills it |
 | W103 | a transfer refused because of the order of its moves | the move that puts in first (the one that takes out first, for an upper bound) |
 | W104 | a hold that counts on what another of its moves puts in | have it there beforehand, or a second transfer after the post |
 | W105, W106 | something never used, a bound that never matters | remove it, or write what uses it |
+| W108 | two names one target's code spells as one identifier (Go's `stock` and `Stock`, Rust's `take_back` and `TakeBack`, Python's `class` and `class_`, PostgreSQL's `balance_<account>` and `<transfer>_<operation>`), or a name a client uses itself (a transfer `balance`, or `expire`) | leave it for a target you do not build; else rename one of them, and check against the revision in use with `--diff-base` |
 | W901 | a key written in the file, in a string or a comment (the kind, its prefix and its length; never the key) | take it out and read it from where the code runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 
 [codes.md](codes.md) has every code with the smallest book that shows it, as `ritsu chobo explain

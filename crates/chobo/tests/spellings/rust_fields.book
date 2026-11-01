@@ -1,0 +1,17 @@
+book rust_fields v1
+description "Two parameters the Rust client writes as one field, crate_: it writes crate, a keyword a raw identifier cannot be, with _ after it"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, crate: string, crate_: string, sku: string, qty: pcs)
+  key delivery, crate, crate_
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

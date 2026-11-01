@@ -1,0 +1,17 @@
+book own_balance v1
+description "A transfer named balance, a member the Book of every client has itself"
+
+unit JPY
+
+account wallet(member: string) : JPY
+  at least 0 refused as short
+account bank : JPY outside
+account shops : JPY outside
+
+transfer balance(adjustment: string, member: string, amount: JPY)
+  key adjustment
+  move amount from bank to wallet(member)
+
+transfer buy(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops

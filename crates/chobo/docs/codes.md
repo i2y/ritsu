@@ -30,6 +30,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 | [E061](#e061) | error | A name too long for PostgreSQL |
 | [E062](#e062) | error | A name MySQL cannot hold as written |
 | [E063](#e063) | error | A name Rust takes as no identifier |
+| [E064](#e064) | error | Names that are one identifier in the code of the target |
 | [W101](#w101) | warning | An account that only fills |
 | [W102](#w102) | warning | A transfer that is always refused |
 | [W103](#w103) | warning | A transfer refused for the order of its moves |
@@ -37,6 +38,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 | [W105](#w105) | warning | Declared and never used |
 | [W106](#w106) | warning | A bound that never matters |
 | [W107](#w107) | warning | An account or transfer kind gone since the revision compared with |
+| [W108](#w108) | warning | Names that are one identifier in a target's code |
 | [W901](#w901) | warning | A key is written in the file |
 
 ## E001
@@ -606,7 +608,7 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ```
 
-Related codes: [E060](#e060), [E062](#e062), [E063](#e063)
+Related codes: [E060](#e060), [E062](#e062), [E063](#e063), [E064](#e064)
 
 ## E062
 
@@ -661,7 +663,39 @@ transfer build(permit: string, site: string, area_m²: sqm)
   move area_m² from builders to floor(site)
 ```
 
-Related codes: [E061](#e061), [E062](#e062)
+Related codes: [E061](#e061), [E062](#e062), [E064](#e064)
+
+## E064
+
+`error` — **Names that are one identifier in the code of the target**
+
+**When.** With a target of `chobo build`: in its client or its SQL, two names are one identifier, a name is one the client uses itself, or a name cannot be used as it is. It is what `check` warns of with W108 that breaks this target: written as it is, the code would not compile or load, or a call would reach another transfer or account, so the target writes nothing.
+
+**Fix.** Rename one of the names the notes give. If the book is in use, check the renamed book against the revision in use with `chobo check --diff-base` (W107).
+
+**The command that shows it**: `chobo build <file.book> --target postgres-go`
+
+**Smallest reproduction**:
+
+```book
+book shop v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+transfer Ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+```
+
+Related codes: [W108](#w108), [E061](#e061), [E063](#e063)
 
 ## W101
 
@@ -855,6 +889,36 @@ transfer send(order: string, sku: string, qty: pcs)
 ```
 
 Related codes: [E050](#e050), [E051](#e051)
+
+## W108
+
+`warning` — **Names that are one identifier in a target's code**
+
+**When.** In the client or the SQL of some target, two names are one identifier, a name is one the client uses itself (`balance`, `expire`, …), or a name cannot be used as it is. A client writes the names of transfers, accounts and parameters, and the reasons, as identifiers in its language's spelling: Go writes a name with its first letter in upper case (with an `X` before one whose first letter has none); Rust writes the names of types and variants in PascalCase, and a field or a method with `_` after a keyword a raw identifier cannot be; Python writes `_` after a keyword, and changes a name that begins with `__` inside a class; TypeScript writes a name as it is. In the SQL of PostgreSQL, a function is named `<transfer>_<operation>` or `balance_<account>`. Each case breaks some of the targets, a language's clients or PostgreSQL's, and the other targets that write the names build, so it is a warning, and `chobo build` of a target it breaks stops with E064. chobo renames nothing: a call is written with the book's names in every language.
+
+**Fix.** For a target you do not build, leave it as it is. For one you do, rename one of the names the notes give. If the book is in use, check the renamed book against the revision in use with `chobo check --diff-base` (W107).
+
+**Smallest reproduction**:
+
+```book
+book shop v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+transfer Ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+```
+
+Related codes: [E064](#e064), [E063](#e063), [W107](#w107)
 
 ## W901
 

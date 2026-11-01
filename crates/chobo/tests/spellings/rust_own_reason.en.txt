@@ -1,0 +1,9 @@
+warning[W108]: rust_own_reason.book:8:3: The reason `keyConflict` is a name the Rust client uses itself
+     8 |   at most 100 refused as keyConflict
+  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the reason `keyConflict` as the variant `KeyConflict` of `Reason`, and `Reason` has the variant `KeyConflict`, of `key_conflict`, a reason chobo gives itself: it would be declared twice, and the module does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+rust_own_reason.book: ok, 1 warning(s)
+  receive.do  may be refused: keyConflict (stock(sku) at most 100), key_conflict, already_refused
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

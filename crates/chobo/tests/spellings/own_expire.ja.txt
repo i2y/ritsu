@@ -1,0 +1,12 @@
+警告[W108]: own_expire.book:15:10: 振替 `expire` は、TypeScript・Python・Go・Rust のクライアントが自分で使う名前と同じになります
+    15 | transfer expire(notice: string, member: string, amount: pts)
+  = TypeScript（`postgres-typescript`、`mysql-typescript`）: クライアントは、振替 `expire` を `Book` のメンバ `expire` にしますが、`Book` には、期限の切れた仮押さえを戻すメソッド `expire` があります。`Book` に同じ名前のメンバが二つでき、型の検査を通りません。
+  = Python（`postgres-python`、`mysql-python`）: クライアントは、振替 `expire` を `Book` の属性 `expire` にしますが、`Book` には、期限の切れた仮押さえを戻すメソッド `expire` があります。振替の属性がメソッドを隠すので、`expire()` を呼ぶと止まります（`TypeError`）。
+  = Go（`postgres-go`、`mysql-go`）: クライアントは、振替 `expire` を `Book` のフィールド `Expire` にしますが、`Book` には、期限の切れた仮押さえを戻すメソッド `Expire` があります。Go は一つの型に同じ名前のフィールドとメソッドを持てないので、コンパイルできません。
+  = Rust（`postgres-rust`、`mysql-rust`）: クライアントは、振替 `expire` を `Book` のメソッド `expire` にしますが、`Book` には、期限の切れた仮押さえを戻すメソッド `expire` があります。二度宣言することになり、コンパイルできません。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+own_expire.book: ok、警告 1 件
+  grant.do   拒否されうる理由: key_conflict
+  expire.do  拒否されうる理由: short（points(member) at least 0）、key_conflict、already_refused
+  キー: grant は、purchase ごとに一度だけ動きます。キーが同じで member、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: expire は、notice ごとに一度だけ動きます。キーが同じで member、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。

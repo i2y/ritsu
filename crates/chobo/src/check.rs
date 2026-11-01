@@ -1,6 +1,7 @@
 //! The check: the errors of how the book is written (`model`), the findings that only show
 //! when it is called (E012, W101–W104, each with the operations that get there), what is
-//! never used or never matters (W105, W106), a key written in the book (W901, ritsu's DESIGN
+//! never used or never matters (W105, W106), the names a client spells as one identifier or
+//! cannot take as they are (W108, `spellings`), a key written in the book (W901, ritsu's DESIGN
 //! 16.3), and the report of what each operation can be refused with (DESIGN 3).
 
 use crate::diag::{self, DiagExt, Diag, Show};
@@ -64,6 +65,10 @@ pub fn check_source(src: &str) -> Checked {
         return Checked { book: None, diags, report: None };
     };
     diags.extend(findings(&book));
+    // the names a client spells as one identifier, or cannot take as they are (W108)
+    if !diag::has_errors(&diags) {
+        diags.extend(crate::spellings::check(&book));
+    }
     model::sort(&mut diags);
     let report = if diag::has_errors(&diags) { None } else { Some(report(&book)) };
     Checked { book: Some(book), diags, report }

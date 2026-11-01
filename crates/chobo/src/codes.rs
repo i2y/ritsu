@@ -397,6 +397,23 @@ transfer build(permit: string, site: string, area_m²: sqm)
   move area_m² from builders to floor(site)
 ";
 
+const X_W108: &str = "book shop v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+transfer Ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+";
+
 /// The one fake key the reproduction of W901 holds (ritsu's DESIGN 16.10): a Google API key that
 /// reads as a fake. It is put together from two pieces, so that no file of the source holds a key
 /// in one run; the pages of codes that `explain` writes hold it whole.
@@ -725,7 +742,7 @@ pub fn ledger() -> Vec<Entry> {
                 ),
                 tr!("名前を短くしてください。ASCII なら 63 字、日本語なら 21 字までです（関数の名前では、後ろに付く `_hold` などの分を引いた字数です）。", "Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …)."),
                 X_E061,
-                &["E060", "E062", "E063"],
+                &["E060", "E062", "E063", "E064"],
             )
         },
         Entry {
@@ -759,7 +776,24 @@ pub fn ledger() -> Vec<Entry> {
                     "Take the character out of the name, or write another in its place (`area_m²` as `area_m2`, for one). The same name is in the clients of every language, so a call in any of them is then written with the new name."
                 ),
                 X_E063,
-                &["E061", "E062"],
+                &["E061", "E062", "E064"],
+            )
+        },
+        Entry {
+            target: Some("postgres-go"),
+            ..e(
+                "E064",
+                tr!("名前がこのターゲットのコードで同じ識別子になります", "Names that are one identifier in the code of the target"),
+                tr!(
+                    "`chobo build` のターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前と同じになるとき、または名前をそのままでは使えないときに出ます。`check` が W108 で知らせることのうち、このターゲットを壊すものです。そのまま書くと、コードをコンパイルできないか読み込めないか、呼び出しがほかの振替や勘定に届くので、このターゲットは何も書きません。",
+                    "With a target of `chobo build`: in its client or its SQL, two names are one identifier, a name is one the client uses itself, or a name cannot be used as it is. It is what `check` warns of with W108 that breaks this target: written as it is, the code would not compile or load, or a call would reach another transfer or account, so the target writes nothing."
+                ),
+                tr!(
+                    "注が挙げる名前のどれかを変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください（W107）。",
+                    "Rename one of the names the notes give. If the book is in use, check the renamed book against the revision in use with `chobo check --diff-base` (W107)."
+                ),
+                X_W108,
+                &["W108", "E061", "E063"],
             )
         },
         e(
@@ -854,6 +888,20 @@ pub fn ledger() -> Vec<Entry> {
                 &["E050", "E051"],
             )
         },
+        e(
+            "W108",
+            tr!("ターゲットのコードで同じ識別子になる名前", "Names that are one identifier in a target's code"),
+            tr!(
+                "どれかのターゲットのクライアントか SQL で、二つの名前が同じ識別子になるとき、名前がクライアントの自分で使う名前（`balance`、`expire` など）と同じになるとき、または名前をそのままでは使えないときに出ます。クライアントは、振替、勘定、引数の名前と拒否の理由を、言語ごとの綴りで識別子にします。Go は名前の頭の一字を大文字にし（大文字の無い字で始まる名前には、頭に `X` を付けます）、Rust は型の名前と列挙の値を PascalCase で書き、フィールドとメソッドでは、生の識別子にできないキーワードの後ろに `_` を付けます。Python はキーワードの後ろに `_` を付け、クラスの中では `__` で始まる名前を書き換えます。TypeScript は名前をそのまま書きます。PostgreSQL の SQL では、関数の名前が `<振替>_<操作>` と `balance_<勘定>` になります。どれも、壊れるのは言語のクライアントか PostgreSQL のターゲットの一部で、名前を書くほかのターゲットは組めるので、警告です。壊れるターゲットの `chobo build` は E064 で止まります。chobo は名前を書き換えません。どの言語の呼び出しも、帳簿の名前で書きます。",
+                "In the client or the SQL of some target, two names are one identifier, a name is one the client uses itself (`balance`, `expire`, …), or a name cannot be used as it is. A client writes the names of transfers, accounts and parameters, and the reasons, as identifiers in its language's spelling: Go writes a name with its first letter in upper case (with an `X` before one whose first letter has none); Rust writes the names of types and variants in PascalCase, and a field or a method with `_` after a keyword a raw identifier cannot be; Python writes `_` after a keyword, and changes a name that begins with `__` inside a class; TypeScript writes a name as it is. In the SQL of PostgreSQL, a function is named `<transfer>_<operation>` or `balance_<account>`. Each case breaks some of the targets, a language's clients or PostgreSQL's, and the other targets that write the names build, so it is a warning, and `chobo build` of a target it breaks stops with E064. chobo renames nothing: a call is written with the book's names in every language."
+            ),
+            tr!(
+                "使わないターゲットなら、このままで構いません。使うなら、注が挙げる名前のどれかを変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください（W107）。",
+                "For a target you do not build, leave it as it is. For one you do, rename one of the names the notes give. If the book is in use, check the renamed book against the revision in use with `chobo check --diff-base` (W107)."
+            ),
+            X_W108,
+            &["E064", "E063", "W107"],
+        ),
         e(
             "W901",
             tr!("鍵がファイルに書かれています", "A key is written in the file"),

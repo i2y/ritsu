@@ -20,10 +20,11 @@ pub fn name(s: &str) -> String {
 /// A string as a Python literal, in single quotes.
 use ritsu_emit::lit::python as q;
 
-/// The attributes of the book value, one per transfer kind, kept apart from `balance` and
-/// `expire` (the PostgreSQL client's), so that the two clients name them alike.
+/// The attributes of the book value, one per transfer kind, named as [`name`] spells them. Two that
+/// come out the same, and one named like the book value's own `balance` or `expire`, are W108 and
+/// E064 (`crate::spellings`).
 pub fn members(book: &Book) -> Vec<String> {
-    unique(book.transfers.iter().map(|t| name(&t.name)).collect(), &["balance", "expire"])
+    book.transfers.iter().map(|t| name(&t.name)).collect()
 }
 
 /// The type of a parameter: an amount is an `int`, or in a package of ritsu's the package's type

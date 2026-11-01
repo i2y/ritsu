@@ -1,0 +1,12 @@
+warning[W108]: GoとRustの振替.book:19:10: The transfers `eギフト` and `Eギフト` are one identifier in the Go and Rust clients
+    19 | transfer Eギフト(注文: string, 会員: string, 額: 円)
+  = Go (`postgres-go`, `tigerbeetle-go`, `mysql-go`): the client writes a name with its first letter in upper case (with an `X` before one whose first letter has none), so both are `Eギフト`: the types `EギフトArgs` and `EギフトCalls`, and the field `Eギフト` of `Book`, would be declared twice, and the package does not compile.
+  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `Eギフト`: the types `EギフトArgs` and `EギフトCalls` would be declared twice, and the module does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+GoとRustの振替.book: ok, 1 warning(s)
+  入金.do     may be refused: key_conflict
+  eギフト.do  may be refused: 残高不足 (財布(会員) at least 0), key_conflict, already_refused
+  Eギフト.do  may be refused: 残高不足 (財布(会員) at least 0), key_conflict, already_refused
+  key: 入金 once per 支払; a second call that differs only in 会員 or 額 is refused with key_conflict
+  key: eギフト once per 注文; a second call that differs only in 会員 or 額 is refused with key_conflict
+  key: Eギフト once per 注文; a second call that differs only in 会員 or 額 is refused with key_conflict

@@ -96,6 +96,16 @@ pub fn cases() -> Vec<Case> {
     paths.iter().map(|p| case(p)).collect()
 }
 
+/// What the backends run: [`cases`], and the books of tests/spellings/renamed, each a book of
+/// tests/spellings with the name its W108 points to changed (tests/spellings.rs holds the books
+/// before to breaking the targets that warning names): what its note asks for is a book every
+/// target answers as the reference does.
+pub fn backend_cases() -> Vec<Case> {
+    let mut v = cases();
+    v.extend(books_in("tests/spellings/renamed").iter().map(|p| case(p)));
+    v
+}
+
 // ── the tools ─────────────────────────────────────────────────────────────
 
 fn runs(cmd: &str, arg: &str) -> bool {
@@ -574,7 +584,16 @@ pub fn book_input_of(c: &Case, client: &str, combo: &str, only: Option<&[usize]>
             json!({"tenant": tenant(combo, c, i), "steps": steps, "accounts": accounts, "holds": holds.into_iter().map(|h| h.2).collect::<Vec<_>>()})
         })
         .collect();
-    json!({"name": c.stem, "client": client, "expiry": EXPIRY, "keys": keys, "scenarios": scenarios})
+    // the names the Python client writes otherwise (a keyword with `_` after it), for runner.py
+    let mut python = serde_json::Map::new();
+    let names = c.book.transfers.iter().flat_map(|t| std::iter::once(&t.name).chain(t.params.iter().map(|p| &p.name))).chain(c.book.accounts.iter().flat_map(|a| std::iter::once(&a.name).chain(&a.params)));
+    for n in names {
+        let py = chobo::client::python::name(n);
+        if py != *n {
+            python.insert(n.clone(), json!(py));
+        }
+    }
+    json!({"name": c.stem, "client": client, "expiry": EXPIRY, "keys": keys, "python": python, "scenarios": scenarios})
 }
 
 pub fn tenant(combo: &str, c: &Case, i: usize) -> String {

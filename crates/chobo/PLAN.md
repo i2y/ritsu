@@ -187,12 +187,12 @@ README.md、README.ja.md（D）。LICENSE-MIT と LICENSE-APACHE（2026-10-03 �
 
 - TypeScript：`postgres(db, { tenant })` と `tigerbeetle(client, { tenant })` が帳簿の値を返す。`<種類>.do(args)`、`<種類>.hold(args)`、`<種類>.post(key, amounts?)`、`<種類>.void(key)`、`<種類>.status(key)`、`balance.<勘定>(args)`、PostgreSQL では `expire()` も。結果は `{ result: "done" } | { result: "done_before" } | { result: "refused"; reason: Reason }`、状態は `"held" | "posted" | "voided" | "expired" | null`、残高は `{ posted, held_in, held_out }`。額は `bigint`。型は `<種類>Args`、`<種類>Key`、`<種類>Amounts`、`<勘定>Account`。ファイルは、Node が型を剥がすだけで走る書き方にする（`enum`、実行時のコードを含む `namespace`、コンストラクタの引数でのプロパティ宣言を使わない）。
 - Python：`postgres(conn, tenant="")` と `tigerbeetle(client, tenant="")`。メソッドの名前は TypeScript と同じで、引数はキーワード引数（`post` の額は `None` が既定）。結果は `Result(result, reason)`、残高は `Balance(posted, held_in, held_out)`（どちらも `dataclass`）、状態は `str` か `None`。額は `int`。キーワードと `self` などの名前は後ろに `_` を付ける。
-- Go：パッケージの名前は、帳簿の名前が ASCII の識別子ならそれ（小文字にする）、でなければファイル名（`inventory.ja.book` なら `inventory_ja`）、それも使えなければ `book`。`Postgres(q Querier, tenant string) *Book` と `TigerBeetle(c TigerBeetleClient, tenant string) *Book`（どちらもインターフェースを受け取り、テストが包めるようにする）。`b.X引当.Hold(ctx, X引当Args{…})`、`Post(ctx, X引当Key{…}, *X引当Amounts)`、`Void`、`Status`（`HoldState`、無ければ `""`）、`b.Balance.X在庫(ctx, X在庫Account{…})`、PostgreSQL では `b.Expire(ctx)`。外から見える名前で日本語の名前には前に `X` を付ける（`X引当`）。結果は `Result{Outcome, Reason string}`、失敗は `error`。額は `int64`。
-- 三つの言語とも、振替の種類の名前は `balance` と `expire`（Go では `Balance` と `Expire`）を避け、同じ名前になる二つは後の方に `_2` を付ける。`src/client/{typescript,python,go}.rs` の `members` がこれを決め、`chobo api` の `targets` がその名前を出す。
+- Go：パッケージの名前は、帳簿の名前が ASCII の識別子で、キーワードでも `main` でもなければそれ（小文字にする）、でなければファイル名（`inventory.ja.book` なら `inventory_ja`）、それも使えなければ `book`。`Postgres(q Querier, tenant string) *Book` と `TigerBeetle(c TigerBeetleClient, tenant string) *Book`（どちらもインターフェースを受け取り、テストが包めるようにする）。`b.X引当.Hold(ctx, X引当Args{…})`、`Post(ctx, X引当Key{…}, *X引当Amounts)`、`Void`、`Status`（`HoldState`、無ければ `""`）、`b.Balance.X在庫(ctx, X在庫Account{…})`、PostgreSQL では `b.Expire(ctx)`。外から見える名前で日本語の名前には前に `X` を付ける（`X引当`）。結果は `Result{Outcome, Reason string}`、失敗は `error`。額は `int64`。
+- どの言語でも、名前は帳簿のとおりで、付け替えない。振替の種類の名前がクライアントの `balance` や `expire`（Go では `Balance` と `Expire`）になるときと、二つの名前が言語の綴りで一つの識別子になるときは、`chobo check` が W108 で言い、そのターゲットの `chobo build` が E064 で止まる（DESIGN 16 章）。`src/client/{typescript,python,go,rust}.rs` の `members` が名前を作り、`chobo api` の `targets` がその名前を出す。
 
 #### 診断のコード
 
-DESIGN 3.1 の表のとおり。E001〜E005、E010〜E013、E020〜E023、E030、E031、E040、E041、E050、E051、E060、E061、W101〜W107。増やすときは末尾から足し、番台をまたがない（E013 は段階 B で足した）。
+DESIGN 3.1 の表のとおり。E001〜E005、E010〜E014、E020〜E023、E030、E031、E040、E041、E050、E051、E060〜E064、W101〜W108、W901。増やすときは末尾から足し、番台をまたがない（E013 は段階 B で足した）。
 
 #### コマンドの表
 

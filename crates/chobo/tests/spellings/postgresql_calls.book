@@ -1,0 +1,28 @@
+book postgresql_calls v1
+description "An account and a transfer whose functions in PostgreSQL's SQL have one name, balance_order_hold, and as many parameters, of other types: a call whose values come with no type, as the ones of psql and of the TypeScript client do, reaches the account's"
+
+unit JPY
+
+account order_hold(order: string, line: string) : JPY
+  at least 0 refused as nothing_held
+account prepaid(order: string) : JPY
+  at least 0 refused as nothing_prepaid
+account customers : JPY outside
+account shops : JPY outside
+
+transfer hold_line(order: string, line: string, amount: JPY)
+  key order, line
+  move amount from customers to order_hold(order, line)
+
+transfer settle_line(order: string, line: string, amount: JPY)
+  key order, line
+  move amount from order_hold(order, line) to shops
+
+transfer balance_order(order: string, amount: JPY)
+  key order
+  pending expires after 30 minutes
+  move amount from customers to prepaid(order)
+
+transfer settle_order(order: string, amount: JPY)
+  key order
+  move amount from prepaid(order) to shops

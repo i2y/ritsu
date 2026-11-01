@@ -1,0 +1,18 @@
+book postgresql_functions_renamed v1
+description "postgresql_functions.book with balance_order renamed hold_order, as its note says"
+
+unit JPY
+
+account order_hold(order: string) : JPY
+  at least 0 refused as nothing_held
+account customers : JPY outside
+account shops : JPY outside
+
+transfer hold_order(order: string)
+  key order
+  pending expires after 30 minutes
+  move 100 from customers to order_hold(order)
+
+transfer settle(order: string, amount: JPY)
+  key order
+  move amount from order_hold(order) to shops

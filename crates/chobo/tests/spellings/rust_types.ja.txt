@@ -1,0 +1,13 @@
+警告[W108]: rust_types.book:23:10: 振替 `take_back` と `takeBack` は、Rust のクライアントで同じ識別子になります
+    23 | transfer takeBack(recall: string, sku: string, qty: pcs)
+  = Rust（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）: クライアントは、型の名前と列挙の値を PascalCase で書く（`_` で区切った語の頭を大文字にして、`_` を除く）ので、どちらも `TakeBack` です。型 `TakeBackArgs`・`TakeBackCalls` を二度宣言することになり、コンパイルできません。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+rust_types.book: ok、警告 1 件
+  receive.do    拒否されうる理由: key_conflict
+  ship.do       拒否されうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  take_back.do  拒否されうる理由: key_conflict
+  takeBack.do   拒否されうる理由: key_conflict
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: ship は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: take_back は、return_slip と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: takeBack は、recall と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。

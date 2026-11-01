@@ -1,0 +1,28 @@
+book postgresql_calls_renamed v1
+description "postgresql_calls.book with balance_order renamed prepay_order, as its note says"
+
+unit JPY
+
+account order_hold(order: string, line: string) : JPY
+  at least 0 refused as nothing_held
+account prepaid(order: string) : JPY
+  at least 0 refused as nothing_prepaid
+account customers : JPY outside
+account shops : JPY outside
+
+transfer hold_line(order: string, line: string, amount: JPY)
+  key order, line
+  move amount from customers to order_hold(order, line)
+
+transfer settle_line(order: string, line: string, amount: JPY)
+  key order, line
+  move amount from order_hold(order, line) to shops
+
+transfer prepay_order(order: string, amount: JPY)
+  key order
+  pending expires after 30 minutes
+  move amount from customers to prepaid(order)
+
+transfer settle_order(order: string, amount: JPY)
+  key order
+  move amount from prepaid(order) to shops

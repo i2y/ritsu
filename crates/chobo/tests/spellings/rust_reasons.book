@@ -1,0 +1,27 @@
+book rust_reasons v1
+description "Two reasons the Rust client writes as one variant of Reason, Short"
+
+unit JPY
+
+account wallet(member: string) : JPY
+  at least 0 refused as short
+account credit(member: string) : JPY
+  at least 0 refused as Short
+account bank : JPY outside
+account shops : JPY outside
+
+transfer top_up(payment: string, member: string, amount: JPY)
+  key payment
+  move amount from bank to wallet(member)
+
+transfer grant(approval: string, member: string, amount: JPY)
+  key approval
+  move amount from bank to credit(member)
+
+transfer buy(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops
+
+transfer buy_on_credit(order: string, member: string, amount: JPY)
+  key order
+  move amount from credit(member) to shops

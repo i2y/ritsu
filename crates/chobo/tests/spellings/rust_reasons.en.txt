@@ -1,0 +1,13 @@
+warning[W108]: rust_reasons.book:9:3: The reasons `short` and `Short` are one identifier in the Rust client
+     9 |   at least 0 refused as Short
+  = Rust (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the client writes the names of types and variants in PascalCase (each word between `_` begins in upper case, and the `_` go), so both are `Short`: the variant `Short` of `Reason` would be declared twice, and the module does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+rust_reasons.book: ok, 1 warning(s)
+  top_up.do         may be refused: key_conflict
+  grant.do          may be refused: key_conflict
+  buy.do            may be refused: short (wallet(member) at least 0), key_conflict, already_refused
+  buy_on_credit.do  may be refused: Short (credit(member) at least 0), key_conflict, already_refused
+  key: top_up once per payment; a second call that differs only in member or amount is refused with key_conflict
+  key: grant once per approval; a second call that differs only in member or amount is refused with key_conflict
+  key: buy once per order; a second call that differs only in member or amount is refused with key_conflict
+  key: buy_on_credit once per order; a second call that differs only in member or amount is refused with key_conflict

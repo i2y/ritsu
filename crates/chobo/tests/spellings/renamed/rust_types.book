@@ -1,0 +1,25 @@
+book rust_types_renamed v1
+description "rust_types.book with takeBack renamed call_back, as its note says"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+
+transfer take_back(return_slip: string, sku: string, qty: pcs)
+  key return_slip, sku
+  move qty from customers to stock(sku)
+
+transfer call_back(recall: string, sku: string, qty: pcs)
+  key recall, sku
+  move qty from customers to stock(sku)

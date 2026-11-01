@@ -1,0 +1,11 @@
+warning[W108]: python_mangled.book:19:10: The transfer `_adjust` cannot be used as it is in the Python client
+    19 | transfer _adjust(count: string, sku: string, qty: pcs)
+  = Python (`postgres-python`, `tigerbeetle-python`, `mysql-python`): the client writes the transfer as the class `__adjustTransfer`, and Python changes a name that begins with `__`, and does not end with it, inside a class (name mangling): `__adjustTransfer` written in `Book` is `_Book__adjustTransfer`, so `Book` cannot be made, and no call goes through (`NameError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+python_mangled.book: ok, 1 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  _adjust.do  may be refused: key_conflict
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict
+  key: _adjust once per count, sku; a second call that differs only in qty is refused with key_conflict

@@ -72,7 +72,12 @@ when it is late and differs again.
   set them: there they go through under the mode it keeps).
 - A book too large for one TigerBeetle request does not build (E060), nor one with a name too long
   for PostgreSQL (E061), nor one whose name MySQL cannot hold (E062), nor, for a Rust target, one
-  with a name Rust cannot write (E063).
+  with a name Rust cannot write (E063), nor, for a target whose code would spell two of its names
+  as one identifier or one as a name its client uses itself, that book (E064). For each case of
+  E064 there is a book under `tests/spellings`: the code chobo would write for the targets W108
+  names stops in that language's own tool (`tsc`, Python, `go vet`, `cargo check`, PostgreSQL)
+  where the note says, and the same book with a name changed as the note says builds on every
+  target and gives every scenario the reference interpreter's answer.
 
 ## The code it writes
 
@@ -122,7 +127,7 @@ the proofs rests on `sorry` or on an axiom of its own.
 The README, the reference, the agent skill and the pages of this site are held to the tool: every
 diagnostic shown is in a golden file, every line of a book is a line of a real book, every `chobo`
 command shown with its output prints that output now, every relative link leads somewhere, and
-the counts they give, such as the 468 scenarios above and the 32 codes, are the counts.
+the counts they give, such as the 468 scenarios above and the 34 codes, are the counts.
 
 ## Running them
 

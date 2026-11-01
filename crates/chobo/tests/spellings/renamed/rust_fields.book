@@ -1,0 +1,17 @@
+book rust_fields_renamed v1
+description "rust_fields.book with crate_ renamed pallet, as its note says"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, crate: string, pallet: string, sku: string, qty: pcs)
+  key delivery, crate, pallet
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

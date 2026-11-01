@@ -246,6 +246,15 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
     def hold_key(kind: str, args: dict) -> str:
         return kind + json.dumps([args[k] for k in book["keys"][kind]], ensure_ascii=False)
 
+    # a name of the book as the client writes it: a keyword has `_` after it (`class_`)
+    python = book.get("python", {})
+
+    def py(name: str) -> str:
+        return python.get(name, name)
+
+    def kw(args: dict) -> dict:
+        return {py(k): v for k, v in args.items()}
+
     def caller() -> tuple:
         rec = Recorder()
         return rec, factory(connection(rec), tenant=sc["tenant"])
@@ -258,15 +267,15 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
         rec.current = requests
         asked = time.monotonic()
         try:
-            calls = getattr(b, op["kind"])
+            calls = getattr(b, py(op["kind"]))
             if op["op"] == "do":
-                r = calls.do(**op["args"])
+                r = calls.do(**kw(op["args"]))
             elif op["op"] == "hold":
-                r = calls.hold(**op["args"])
+                r = calls.hold(**kw(op["args"]))
             elif op["op"] == "post":
-                r = calls.post(**op["args"], **op.get("amounts", {}))
+                r = calls.post(**kw(op["args"]), **kw(op.get("amounts", {})))
             else:
-                r = calls.void(**op["args"])
+                r = calls.void(**kw(op["args"]))
         finally:
             rec.current = None
         at = {"step": step}
@@ -346,11 +355,11 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
             steps.append(call(main, step, i + 1, None))
     accounts = []
     for a in sc["accounts"]:
-        b = getattr(main[1].balance, a["account"])(**a["params"])
+        b = getattr(main[1].balance, py(a["account"]))(**kw(a["params"]))
         accounts.append({"account": a["account"], "args": a["args"], "posted": b.posted, "held_in": b.held_in, "held_out": b.held_out})
     holds = []
     for h in sc["holds"]:
-        state = getattr(main[1], h["kind"]).status(**h["args"])
+        state = getattr(main[1], py(h["kind"])).status(**kw(h["args"]))
         if state is not None:
             holds.append({"kind": h["kind"], "key": h["key"], "state": state})
     outlived()

@@ -1,0 +1,25 @@
+book rust_types v1
+description "Two transfers the Rust client writes with one type's name, TakeBack"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+
+transfer take_back(return_slip: string, sku: string, qty: pcs)
+  key return_slip, sku
+  move qty from customers to stock(sku)
+
+transfer takeBack(recall: string, sku: string, qty: pcs)
+  key recall, sku
+  move qty from customers to stock(sku)

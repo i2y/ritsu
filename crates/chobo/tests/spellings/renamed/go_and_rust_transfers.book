@@ -1,0 +1,21 @@
+book go_and_rust_transfers_renamed v1
+description "go_and_rust_transfers.book with Sale renamed event_sale, as its note says"
+
+unit JPY
+
+account wallet(member: string) : JPY
+  at least 0 refused as short
+account bank : JPY outside
+account shops : JPY outside
+
+transfer top_up(payment: string, member: string, amount: JPY)
+  key payment
+  move amount from bank to wallet(member)
+
+transfer sale(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops
+
+transfer event_sale(order: string, member: string, amount: JPY)
+  key order
+  move amount from wallet(member) to shops

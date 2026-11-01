@@ -1,0 +1,15 @@
+warning[W108]: postgresql_calls.book:21:10: The account `order_hold` and the transfer `balance_order` are one function in the SQL of PostgreSQL
+    21 | transfer balance_order(order: string, amount: JPY)
+  = PostgreSQL (`postgres`, `postgres-typescript`, `postgres-python`, `postgres-go`, `postgres-rust`): the SQL names the function of a transfer's operation `<transfer>_<operation>`, and the one of an account's balance `balance_<account>`, so the function of the balance of the account `order_hold` and the function of `hold` of the transfer `balance_order` are both `balance_order_hold`. PostgreSQL tells functions of one name apart by the types of their parameters, and both of these take 3 arguments: a call that sends them with no type (as pg, the TypeScript client's driver, does) reaches the one that takes only strings.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+postgresql_calls.book: ok, 1 warning(s)
+  hold_line.do        may be refused: key_conflict
+  settle_line.do      may be refused: nothing_held (order_hold(order, line) at least 0), key_conflict, already_refused
+  balance_order.hold  may be refused: key_conflict
+  balance_order.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  balance_order.void  may be refused: already_posted, expired, no_such_hold
+  settle_order.do     may be refused: nothing_prepaid (prepaid(order) at least 0), key_conflict, already_refused
+  key: hold_line once per order, line; a second call that differs only in amount is refused with key_conflict
+  key: settle_line once per order, line; a second call that differs only in amount is refused with key_conflict
+  key: balance_order once per order; a second call that differs only in amount is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: settle_order once per order; a second call that differs only in amount is refused with key_conflict

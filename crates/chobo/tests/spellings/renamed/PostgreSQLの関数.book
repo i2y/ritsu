@@ -1,0 +1,18 @@
+book PostgreSQLの関数_改 v1
+description "../PostgreSQLの関数.book の balance_注文 を、注のとおりに 注文の仮押さえ にした帳簿"
+
+unit 円
+
+account 注文_hold(注文: string) : 円
+  at least 0 refused as 押さえなし
+account 客 : 円 outside
+account 店 : 円 outside
+
+transfer 注文の仮押さえ(注文: string)
+  key 注文
+  pending expires after 30 minutes
+  move 100 from 客 to 注文_hold(注文)
+
+transfer 精算(注文: string, 額: 円)
+  key 注文
+  move 額 from 注文_hold(注文) to 店

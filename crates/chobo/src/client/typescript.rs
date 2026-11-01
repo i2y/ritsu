@@ -12,10 +12,10 @@ const MY_RUNTIME: &str = include_str!("runtime/mysql.ts");
 /// A string as a TypeScript literal.
 use ritsu_emit::lit::json as q;
 
-/// The members of the book value, one per transfer kind, kept apart from `balance` and `expire`
-/// (the PostgreSQL client's), so that the two clients name them alike.
+/// The members of the book value, one per transfer kind, named as the book names them. One named
+/// like the book value's own `balance` or `expire` is W108 and E064 (`crate::spellings`).
 pub fn members(book: &Book) -> Vec<String> {
-    unique(book.transfers.iter().map(|t| t.name.clone()).collect(), &["balance", "expire"])
+    book.transfers.iter().map(|t| t.name.clone()).collect()
 }
 
 fn reason_type(book: &Book) -> String {

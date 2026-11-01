@@ -1,0 +1,17 @@
+book 自分のexpire_改 v1
+description "../自分のexpire.book の expire を、注のとおりに 失効 にした帳簿"
+
+unit ポイント
+
+account ポイント残高(会員: string) : ポイント
+  at least 0 refused as 残高不足
+account 発行元 : ポイント outside
+account 失効分 : ポイント outside
+
+transfer 付与(購入: string, 会員: string, 額: ポイント)
+  key 購入
+  move 額 from 発行元 to ポイント残高(会員)
+
+transfer 失効(通知: string, 会員: string, 額: ポイント)
+  key 通知
+  move 額 from ポイント残高(会員) to 失効分

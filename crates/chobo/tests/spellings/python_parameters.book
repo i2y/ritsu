@@ -1,0 +1,17 @@
+book python_parameters v1
+description "Two parameters the Python client writes as one, class_: it writes class, a keyword of Python, with _ after it"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, class: string, class_: string, sku: string, qty: pcs)
+  key delivery, class, class_
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

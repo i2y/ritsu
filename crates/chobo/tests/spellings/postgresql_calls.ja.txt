@@ -1,0 +1,15 @@
+警告[W108]: postgresql_calls.book:21:10: 勘定 `order_hold` と振替 `balance_order` は、PostgreSQL の SQL で同じ関数になります
+    21 | transfer balance_order(order: string, amount: JPY)
+  = PostgreSQL（`postgres`、`postgres-typescript`、`postgres-python`、`postgres-go`、`postgres-rust`）: SQL は、振替の操作を `<振替>_<操作>`、勘定の残高を `balance_<勘定>` という関数にするので、勘定 `order_hold` の残高の関数と振替 `balance_order` の `hold` の関数は、どちらも `balance_order_hold` です。PostgreSQL は同じ名前の関数を引数の型で分けますが、この二つはどちらも引数 3 個で呼べるので、型を付けずに送る呼び出し（TypeScript のクライアントの pg がそう送ります）は、文字列だけを取るほうの関数に届きます。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+postgresql_calls.book: ok、警告 1 件
+  hold_line.do        拒否されうる理由: key_conflict
+  settle_line.do      拒否されうる理由: nothing_held（order_hold(order, line) at least 0）、key_conflict、already_refused
+  balance_order.hold  拒否されうる理由: key_conflict
+  balance_order.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  balance_order.void  拒否されうる理由: already_posted、expired、no_such_hold
+  settle_order.do     拒否されうる理由: nothing_prepaid（prepaid(order) at least 0）、key_conflict、already_refused
+  キー: hold_line は、order と line の組ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: settle_line は、order と line の組ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: balance_order は、order ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+  キー: settle_order は、order ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。

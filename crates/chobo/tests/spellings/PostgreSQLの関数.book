@@ -1,0 +1,18 @@
+book PostgreSQLの関数 v1
+description "PostgreSQL の SQL で同じ名前の関数 balance_注文_hold になり、引数も同じ勘定と振替"
+
+unit 円
+
+account 注文_hold(注文: string) : 円
+  at least 0 refused as 押さえなし
+account 客 : 円 outside
+account 店 : 円 outside
+
+transfer balance_注文(注文: string)
+  key 注文
+  pending expires after 30 minutes
+  move 100 from 客 to 注文_hold(注文)
+
+transfer 精算(注文: string, 額: 円)
+  key 注文
+  move 額 from 注文_hold(注文) to 店

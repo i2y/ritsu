@@ -1,0 +1,12 @@
+警告[W108]: GoとRustの振替.book:19:10: 振替 `eギフト` と `Eギフト` は、Go・Rust のクライアントで同じ識別子になります
+    19 | transfer Eギフト(注文: string, 会員: string, 額: 円)
+  = Go（`postgres-go`、`tigerbeetle-go`、`mysql-go`）: クライアントは、名前の頭の一字を大文字にして書く（大文字の無い字で始まる名前には、頭に `X` を付ける）ので、どちらも `Eギフト` です。型 `EギフトArgs`・`EギフトCalls` と、`Book` のフィールド `Eギフト` を二度宣言することになり、コンパイルできません。
+  = Rust（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）: クライアントは、型の名前と列挙の値を PascalCase で書く（`_` で区切った語の頭を大文字にして、`_` を除く）ので、どちらも `Eギフト` です。型 `EギフトArgs`・`EギフトCalls` を二度宣言することになり、コンパイルできません。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+GoとRustの振替.book: ok、警告 1 件
+  入金.do     拒否されうる理由: key_conflict
+  eギフト.do  拒否されうる理由: 残高不足（財布(会員) at least 0）、key_conflict、already_refused
+  Eギフト.do  拒否されうる理由: 残高不足（財布(会員) at least 0）、key_conflict、already_refused
+  キー: 入金 は、支払 ごとに一度だけ動きます。キーが同じで 会員、額 のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: eギフト は、注文 ごとに一度だけ動きます。キーが同じで 会員、額 のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: Eギフト は、注文 ごとに一度だけ動きます。キーが同じで 会員、額 のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。

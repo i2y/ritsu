@@ -1,0 +1,28 @@
+book PostgreSQLの呼び出し_改 v1
+description "../PostgreSQLの呼び出し.book の balance_注文 を、注のとおりに 注文の前払い にした帳簿"
+
+unit 円
+
+account 注文_hold(注文: string, 明細: string) : 円
+  at least 0 refused as 押さえなし
+account 前払い(注文: string) : 円
+  at least 0 refused as 前払いなし
+account 客 : 円 outside
+account 店 : 円 outside
+
+transfer 明細の押さえ(注文: string, 明細: string, 額: 円)
+  key 注文, 明細
+  move 額 from 客 to 注文_hold(注文, 明細)
+
+transfer 明細の精算(注文: string, 明細: string, 額: 円)
+  key 注文, 明細
+  move 額 from 注文_hold(注文, 明細) to 店
+
+transfer 注文の前払い(注文: string, 額: 円)
+  key 注文
+  pending expires after 30 minutes
+  move 額 from 客 to 前払い(注文)
+
+transfer 注文の精算(注文: string, 額: 円)
+  key 注文
+  move 額 from 前払い(注文) to 店

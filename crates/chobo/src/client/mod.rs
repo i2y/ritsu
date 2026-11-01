@@ -294,5 +294,3 @@ pub fn head(book: &Book, origin: &Origin, c: Comment) -> String {
 
 pub use ritsu_emit::header::{Comment, Origin, generated};
 
-/// Names made unique: the second of two that come out the same gets `_2`, the third `_3`.
-pub use ritsu_emit::ident::unique;

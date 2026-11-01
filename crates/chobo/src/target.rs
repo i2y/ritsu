@@ -103,16 +103,21 @@ impl Target {
 
 /// What a target needs of the book before it writes anything: the names PostgreSQL would cut
 /// short (E061), an operation that does not fit one TigerBeetle request (E060), the names MySQL
-/// cannot hold as written (E062), and for a client in Rust, the names Rust takes as no identifier
-/// (E063).
+/// cannot hold as written (E062), for a client in Rust, the names Rust takes as no identifier
+/// (E063), and the names the target spells as one identifier or cannot take as they are (E064,
+/// what `check` warns of with W108).
 pub fn check(book: &Book, target: Target) -> Vec<Diag> {
     let mut d = match target.backend() {
         Backend::Postgres => postgres::check_names(book),
         Backend::TigerBeetle => client::check_requests(book),
         Backend::MySql => mysql::check_names(book),
     };
-    if target.lang() == Lang::Rust {
-        d.extend(client::rust::check_names(book));
+    let names = crate::spellings::check_target(book, target);
+    if target.lang() == Lang::Rust || !names.is_empty() {
+        if target.lang() == Lang::Rust {
+            d.extend(client::rust::check_names(book));
+        }
+        d.extend(names);
         crate::model::sort(&mut d);
     }
     d
@@ -133,6 +138,13 @@ pub fn build_in(book: &Book, stem: &str, target: Target, origin: &Origin, in_pkg
     if !d.is_empty() {
         return Err(d);
     }
+    unchecked(book, stem, target, origin, in_pkg)
+}
+
+/// The files of [`build_in`] without [`check`]: what the target would write of a book its check
+/// stops. The tests hold the code of a book `check` warns of (W108) to the language's own tools
+/// with it, which is how they know that the target that warning names is the one that breaks.
+pub fn unchecked(book: &Book, stem: &str, target: Target, origin: &Origin, in_pkg: Option<&client::InPackage>) -> Result<Vec<(String, String)>, Vec<Diag>> {
     Ok(match target {
         Target::Postgres => vec![(format!("{}.sql", book.name), postgres::build(book, origin)?)],
         Target::PostgresTypeScript => vec![(format!("{}.ts", book.name), client::typescript::postgres(book, origin, in_pkg))],

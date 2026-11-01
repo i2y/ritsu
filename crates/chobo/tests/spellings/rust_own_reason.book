@@ -1,0 +1,18 @@
+book rust_own_reason v1
+description "A reason the Rust client writes as KeyConflict, the variant of key_conflict, a reason chobo gives itself"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+  at most 100 refused as keyConflict
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
