@@ -654,7 +654,7 @@ sekisho は SMT のソルバーに頼らない。ritsu の検査は、ネット�
 
 ## 5. 生成するもの
 
-`sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>]` が書く。`ritsu gen` は、プロジェクトの `.gate` から、同じものをパッケージの中に書く（5.6）。段階 B で `--target cedar` を、段階 C で `typescript`・`python`・`go` と `--authorizer`・`--module` を作った。`--target` は省けない。三つの言語のコードは、サービスの言語を一つ選んで書くもので、全部をいつも書くものではないからである。
+`sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>]` が書く。`ritsu gen` は、プロジェクトの `.gate` から、同じものをパッケージの中に書く（5.6）。段階 B で `--target cedar` を、段階 C で `typescript`・`python`・`go` と `--authorizer`・`--module` を作った。`--target` は省けず、何度でも書ける（23 章）。三つの言語のコードは、サービスの言語を選んで書くもので、全部をいつも書くものではないからである。
 
 `.gate` ごとに、`--target typescript` は `<out>/typescript/authz/<別名>.ts` を、`python` は `<out>/python/authz/<別名>.py` を、`go` は `<out>/go/authz/<パッケージ>/<パッケージ>.go` を書く。中身は `ritsu gen` がパッケージに入れるもの（5.6）と同じで、隣の `rules/` と `dates/` にある規則と日付の生成物を読む。rulec と koyomi の生成物の場所をコマンドごとに変えず、どちらから書いても同じコードにするためである。Go の import のパスは `--module` で決める（既定は `generated`。`ritsu gen` の既定と同じ）。
 
@@ -1588,7 +1588,7 @@ error[E110]: tests/mutants/E110_input_given_nothing.gate:73:18: The input `amoun
 
 ```
 sekisho check <file.gate>... [--format json] [--budget <n>] [--root <dir>] [--lang en|ja]
-sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang en|ja]
+sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang en|ja]
 sekisho doc <file.gate> [--format markdown|html] [--root <dir>] [--lang en|ja]
 sekisho vectors <file.gate> [--action <action>] [--root <dir>]          全部の組み合わせを cedar run-tests の形で
 sekisho api <file.gate> [--root <dir>]                                   外のツールのための JSON（action、守る操作、役割、ポリシーの @id、期待）
@@ -2091,3 +2091,14 @@ ritsu のサイトの sekisho のページ（英日）の `gate` の塊五つず
 `ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。`check::unit` は、診断と最後の行に加えて、`sekisho check --format json` がファイルごとに書くオブジェクト（`{file, ok, summary, diagnostics}`）を、コマンドと同じ `to_json` で作り、`ritsu_ports::Checked::json` で渡す。ritsu は `file` と `diagnostics` を除いた `{ok, summary}` を入れる。読めないファイルは `null` になる。sekisho のコマンドの出力は変えていない。
 
 確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、ritsu のテストのプロジェクト `cold_chain` と `regions`（検査を通らないゲートを含む）、例の `refunds` のゲートの `check` が、`ritsu sekisho check --format json --root <プロジェクト>` のオブジェクトから二つのキーを除いたものと同じであること。
+
+## 23. `gen` の `--target` を何度でも書ける（2026-11-01）
+
+ritsu の生成のコマンドは、どれも `--target` を何度でも書き、指定した出力先だけを書く形にそろえた（ritsu の DESIGN 9.6）。`sekisho gen` は前から `--target` が要り、指定した出力先だけを書いていたので、変えたのは一度に書ける数だけである。0.40.0 で通っていた実行は変わらない。
+
+- `--target cedar|typescript|python|go` を何度でも書ける。書く順はフラグの順ではなく、`TARGETS` の順（cedar、typescript、python、go）である。`--authorizer` は三つの言語のコードに、`--module` は Go のコードに効く。
+- 置き方（`<out>/<出力先>/`）、`--out` の既定（`generated`）、`--check` は変えない。
+- `--target` が無いときの文を「`--target cedar|typescript|python|go` が一つ以上要ります」にした。同じ名前を二度書けば「二度書かれています」で、知らない名前は前と同じくフラグの選択肢の文で、どちらも何も書かずに exit 2。
+- 付属物は無い。三つの言語のコードはポリシーとスキーマを中に持ち（`POLICIES` と `SCHEMA`）、`cedar/` のファイルを読まない。
+
+確かめたこと：`tests/cli.rs` の `gen_writes_every_target_named_in_one_run` で、例の `refunds.gate` について、`--target go --target python --target typescript --target cedar` の一度の実行が書くファイルの全部と出力の行が、四つを一つずつ書いたものを cedar、typescript、python、go の順につないだものと同じであること（`--target go --target cedar` も同じ）。同じ名前を二度書いたとき（英日）、`--target` が無いとき（英日）、知らない名前のときに、標準エラーに一行を出し、何も書かずに exit 2 で終わること。

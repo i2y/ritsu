@@ -64,7 +64,7 @@ pub fn table() -> Table {
                 codes: every_code(),
             },
             Cmd {
-                usage: Some("sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]"),
+                usage: Some("sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]"),
                 name: "gen",
                 args: "<file.gate>...",
                 purpose: tr!(
@@ -77,11 +77,12 @@ pub fn table() -> Table {
                         "--target",
                         Some("cedar|typescript|python|go"),
                         tr!(
-                            "生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。typescript は <out>/typescript/authz/<別名>.ts、python は <out>/python/authz/<別名>.py、go は <out>/go/authz/<パッケージ>/<パッケージ>.go に、action ごとにリクエストを組み立てて Cedar に尋ねるコードを書く。規則と日付の生成物は、ritsu gen のパッケージと同じく、隣の rules/ と dates/ から読む。sekisho が書く文（頭、@doc、コメント、拒んだ理由）は --lang の言語になる",
-                            "what to generate: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); typescript writes <out>/typescript/authz/<alias>.ts, python <out>/python/authz/<alias>.py and go <out>/go/authz/<package>/<package>.go, the code that builds each action's request and asks Cedar, which reads the rules' and the dates' code from rules/ and dates/ beside it, as in a package of ritsu gen; what sekisho writes (the heads, the @doc, the comments, why a request is refused) is in the language of --lang"
+                            "生成するもの（書く順は、フラグの順でなく cedar、typescript、python、go）。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。typescript は <out>/typescript/authz/<別名>.ts、python は <out>/python/authz/<別名>.py、go は <out>/go/authz/<パッケージ>/<パッケージ>.go に、action ごとにリクエストを組み立てて Cedar に尋ねるコードを書く。規則と日付の生成物は、ritsu gen のパッケージと同じく、隣の rules/ と dates/ から読む。sekisho が書く文（頭、@doc、コメント、拒んだ理由）は --lang の言語になる",
+                            "what to generate, written in the order cedar, typescript, python, go whatever the order of the flags: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); typescript writes <out>/typescript/authz/<alias>.ts, python <out>/python/authz/<alias>.py and go <out>/go/authz/<package>/<package>.go, the code that builds each action's request and asks Cedar, which reads the rules' and the dates' code from rules/ and dates/ beside it, as in a package of ritsu gen; what sekisho writes (the heads, the @doc, the comments, why a request is refused) is in the language of --lang"
                         ),
                     )
-                    .choices(&crate::r#gen::TARGETS),
+                    .choices(&crate::r#gen::TARGETS)
+                    .repeats(),
                     flag(
                         "--authorizer",
                         Some("cedar|avp"),
@@ -116,6 +117,7 @@ pub fn table() -> Table {
                     "sekisho gen shop.gate --target cedar --out generated --lang ja",
                     "ritsu sekisho gen examples/refunds/refunds.gate --target typescript --authorizer avp",
                     "ritsu sekisho gen examples/refunds/refunds.gate --target python",
+                    "ritsu sekisho gen examples/refunds/refunds.gate --target cedar --target typescript --target python --target go",
                     "ritsu sekisho gen examples/refunds/refunds.gate --target go --authorizer avp --module example.com/shop",
                 ],
                 codes: vec![],

@@ -30,7 +30,8 @@ use std::path::PathBuf;
 pub use plan::Authorizer;
 
 /// The targets `gen` writes (DESIGN 5): Cedar, and the code that builds the requests in TypeScript,
-/// Python and Go.
+/// Python and Go. One run writes those it is given, in this order whatever the order of the flags
+/// (DESIGN 23).
 pub const TARGETS: [&str; 4] = ["cedar", "typescript", "python", "go"];
 
 /// What the code of a target is written with, besides the gate: where it asks Cedar
@@ -203,16 +204,21 @@ fn not_generated(o: &check::Outcome, why: ritsu_base::text::Text, lang: Lang, ou
     let _ = writeln!(err, "{head}: {}", why.get(lang));
 }
 
-/// `sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module
-/// <path>] [--out <dir>] [--check]`: the exit code.
+/// `sekisho gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp]
+/// [--module <path>] [--out <dir>] [--check]`: the exit code.
 pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.is_empty() {
         return refuse(err, tr!("`sekisho gen` には .gate のファイルが要ります", "`sekisho gen` needs .gate files"), lang);
     }
-    let Some(target) = a.get("--target") else {
+    let given = a.all("--target");
+    if given.is_empty() {
         let t = TARGETS.join("|");
-        return refuse(err, tr!("`sekisho gen` には `--target {t}` が要ります", "`sekisho gen` needs `--target {t}`"), lang);
-    };
+        return refuse(err, tr!("`sekisho gen` には `--target {t}` が一つ以上要ります", "`sekisho gen` needs one or more `--target {t}`"), lang);
+    }
+    if let Some(t) = given.iter().enumerate().find_map(|(i, t)| given[..i].contains(t).then_some(t)) {
+        return refuse(err, tr!("`--target {t}` が二度書かれています", "`--target {t}` is given twice"), lang);
+    }
+    let targets: Vec<&str> = TARGETS.iter().copied().filter(|t| given.contains(t)).collect();
     let authorizer = a.get("--authorizer").and_then(Authorizer::parse).unwrap_or(Authorizer::Cedar);
     let go_module = a.get("--module").unwrap_or("generated").to_string();
     let out_dir = PathBuf::from(a.get("--out").unwrap_or("generated"));
@@ -249,17 +255,19 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
                 let _ = write!(out, "{}", d.render(lang));
             }
         }
-        let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone(), place: ritsu_emit::package::Place::here() }, &shown, lang, suite) {
-            Ok(m) => m,
-            Err(e) => {
-                return refuse(err, tr!("`{f}` から生成できません（{e}）。sekisho の不具合です。報告してください", "cannot generate from `{f}` ({e}): a bug in sekisho, please report it"), lang);
+        for target in &targets {
+            let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone(), place: ritsu_emit::package::Place::here() }, &shown, lang, suite) {
+                Ok(m) => m,
+                Err(e) => {
+                    return refuse(err, tr!("`{f}` から生成できません（{e}）。sekisho の不具合です。報告してください", "cannot generate from `{f}` ({e}): a bug in sekisho, please report it"), lang);
+                }
+            };
+            for (rel, body) in made {
+                if let Some((_, _, from)) = planned.iter().find(|(p, _, _)| *p == rel) {
+                    return refuse(err, tr!("`{f}` と `{from}` が同じ {rel} を書き出します。どちらかの別名を変えてください", "`{f}` and `{from}` both write {rel}; give one of them another alias"), lang);
+                }
+                planned.push((rel, body, f.clone()));
             }
-        };
-        for (rel, body) in made {
-            if let Some((_, _, from)) = planned.iter().find(|(p, _, _)| *p == rel) {
-                return refuse(err, tr!("`{f}` と `{from}` が同じ {rel} を書き出します。どちらかの別名を変えてください", "`{f}` and `{from}` both write {rel}; give one of them another alias"), lang);
-            }
-            planned.push((rel, body, f.clone()));
         }
     }
     let mut dirty = false;

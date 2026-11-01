@@ -539,11 +539,14 @@ $ sekisho explain E302
 
 - `check <file.gate>... [--format json] [--budget <n>] [--root <dir>]`: the checks above. `--budget`
   is the most combinations one action may have.
-- `gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>]
-  [--out <dir>] [--check] [--root <dir>]`: what is above. `--module` is the Go module the code of
-  `go` imports the rules' and the dates' packages from (`generated` by default, as `ritsu gen`).
-  `--check` writes nothing and exits 1 when a file on disk differs from what `gen` would write.
-  Nothing is written from a file that does not pass check.
+- `gen <file.gate>... --target cedar|typescript|python|go... [--authorizer cedar|avp] [--module
+  <path>] [--out <dir>] [--check] [--root <dir>]`: what is above. `--target` may be given more
+  than once, and one run writes each target named and no other, in the order cedar, typescript,
+  python, go whatever the order of the flags; with none, or one given twice, nothing is written
+  (exit 2). `--module` is the Go module the code of `go` imports the rules' and the dates'
+  packages from (`generated` by default, as `ritsu gen`). `--check` writes nothing and exits 1
+  when a file on disk differs from what `gen` would write. Nothing is written from a file that
+  does not pass check.
 - `doc <file.gate> [--format markdown|html] [--root <dir>]`: the page for people: each action's
   table of the combinations allowed and denied, the policies beside the Cedar they compile to, the
   computed values with the pages rulec and koyomi draw of their rules and dates, the expectations,

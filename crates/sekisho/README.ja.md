@@ -143,6 +143,7 @@ Cedar は、リクエストに書いてある値をそのまま信じます。
 呼ぶ側が `refund_band` を送れるなら、自分の返金を自分で許せてしまいます。
 そこで `gen --target typescript`、`python`、`go` は、action ごとに関数を書きます。関数は、principal と注文をサービス自身のデータから読み、返金の区分と日付を rulec と koyomi が生成したコードで計算してリクエストを組み立て、Cedar に尋ねます。尋ねる先は、プロセスの中の cedar-wasm、cedarpy、cedar-go か、`--authorizer avp` なら Amazon Verified Permissions です。
 関数は、計算した値を呼ぶ側から受け取りません。データがゲートの宣言と合わないときや、ゲートを確かめた範囲の外の日には、Cedar に尋ねる前に拒みます。
+`--target` は何度でも書けます。`--target typescript --target cedar` なら一度に両方を書き、Cedar を先に書きます。
 `ritsu gen` は、同じものをプロジェクトのパッケージに、読む規則と日付のコードと並べて書きます。
 
 ## 言語をまたいで確かめること

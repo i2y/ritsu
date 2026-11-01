@@ -127,6 +127,7 @@ Cedar trusts what a request tells it.
 If the caller sent `refund_band`, the caller could allow their own refund.
 So `gen --target typescript`, `python` or `go` writes, for each action, a function that reads the principal and the order from the service's own data, computes the band and the dates with the code rulec and koyomi generate, builds the request and asks Cedar: cedar-wasm, cedarpy or cedar-go in the process, or Amazon Verified Permissions with `--authorizer avp`.
 The function takes no computed value from the caller, and refuses before asking Cedar when the data is not what the gate declared or the day is outside the range the gate was checked over.
+`--target` may be given more than once: `--target typescript --target cedar` writes both in one run, the Cedar first.
 `ritsu gen` writes the same into the package of a project, beside the code of the rules and dates it reads.
 
 ## Across the languages

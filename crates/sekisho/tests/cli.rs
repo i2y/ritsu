@@ -188,6 +188,73 @@ fn gen_writes_the_cedar_of_each_gate() {
     }
 }
 
+/// `--target` may be given more than once (DESIGN 23): one run writes each target named and no
+/// other, in the order cedar, typescript, python, go whatever the order of the flags, each the
+/// same as when it is written alone; a target given twice, none, or one it does not know stops at
+/// 2 with nothing written.
+#[test]
+fn gen_writes_every_target_named_in_one_run() {
+    use std::collections::BTreeMap;
+    let gate = "examples/refunds/refunds.gate";
+    // the files under a directory, by their path from it
+    fn files(dir: &std::path::Path) -> BTreeMap<String, Vec<u8>> {
+        let (mut found, mut todo) = (BTreeMap::new(), vec![dir.to_path_buf()]);
+        while let Some(d) = todo.pop() {
+            for e in std::fs::read_dir(&d).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    todo.push(p);
+                } else {
+                    found.insert(p.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/"), std::fs::read(&p).unwrap());
+                }
+            }
+        }
+        found
+    }
+    // what `gen` writes and prints with these targets, the directory written to put as `OUT`
+    let made = |targets: &[&str]| {
+        let t = ritsu_testkit::TempDir::new("sekisho-gen-targets");
+        let out = t.path().to_string_lossy().to_string();
+        let mut args = vec!["gen", gate, "--out", &out];
+        for target in targets {
+            args.extend(["--target", *target]);
+        }
+        let (code, said, err) = run(&args, common::joined());
+        assert_eq!((code, err.as_str()), (0, ""), "{targets:?}: {said}");
+        (files(t.path()), said.replace(&out, "OUT"))
+    };
+    let alone: Vec<_> = sekisho::r#gen::TARGETS.iter().map(|t| made(&[t])).collect();
+    let joined = |which: &[usize]| {
+        let (mut files, mut said) = (BTreeMap::new(), String::new());
+        for &i in which {
+            files.extend(alone[i].0.clone());
+            said.push_str(&alone[i].1);
+        }
+        (files, said)
+    };
+    for (i, (files, said)) in alone.iter().enumerate() {
+        assert!(!files.is_empty() && files.keys().all(|f| f.starts_with(&format!("{}/", sekisho::r#gen::TARGETS[i]))), "{files:?}");
+        assert_eq!(said.lines().count(), files.len(), "{said}");
+    }
+    assert_eq!(made(&["go", "python", "typescript", "cedar"]), joined(&[0, 1, 2, 3]));
+    assert_eq!(made(&["go", "cedar"]), joined(&[0, 3]));
+    // a target twice, none, one it does not know: one line on stderr, exit 2, nothing written
+    for (targets, lang, said) in [
+        (&["--target", "go", "--target", "go"][..], "en", "error: `--target go` is given twice\n"),
+        (&["--target", "go", "--target", "go"], "ja", "エラー: `--target go` が二度書かれています\n"),
+        (&[], "en", "error: `sekisho gen` needs one or more `--target cedar|typescript|python|go`\n"),
+        (&[], "ja", "エラー: `sekisho gen` には `--target cedar|typescript|python|go` が一つ以上要ります\n"),
+        (&["--target", "go", "--target", "cobol"], "en", "error: `--target cobol` is not a value this flag takes; it takes only cedar | typescript | python | go\n"),
+    ] {
+        let t = ritsu_testkit::TempDir::new("sekisho-gen-refused");
+        let out = t.path().join("out").to_string_lossy().to_string();
+        let mut args = vec!["gen", gate, "--out", &out, "--lang", lang];
+        args.extend(targets);
+        assert_eq!(run(&args, common::joined()), (2, String::new(), said.to_string()), "{targets:?}");
+        assert!(!t.path().join("out").exists(), "{targets:?}");
+    }
+}
+
 /// W401 (DESIGN 5.8): under `--authorizer avp`, `gen` says what of the Cedar is over a quota of
 /// Verified Permissions — here a policy and the schema, each made long by its description — and
 /// writes the files all the same; without it, it says nothing.
