@@ -121,8 +121,8 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("生成するコードが使えない名前です", "A name the generated code cannot take"),
             tr!(
-                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。フィールドを持つ値のある列挙の値に、`kind` という名前のフィールドを付けたときも出ます。生成する TypeScript は、値を `kind` で見分けます。",
-                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart."
+                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。フィールドを持つ値のある列挙の値に、`kind` という名前のフィールドを付けたときも出ます。生成する TypeScript は、値を `kind` で見分けます。モジュールの名前が `crate`、`self`、`Self`、`mod`、`door` のときも出ます。生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になり、はじめの三つは Rust がモジュールに付けられない語、あとの二つは kaname が `glue/` に書くファイルの名前です。Rust の予約語は、ほかの名前には使えます（生の識別子 `r#ref` にします）。",
+                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. So is a module named `crate`, `self`, `Self`, `mod` or `door`: in the generated Rust a module's name is the name of its Rust module in `glue/` and of its file, the first three are words Rust names no module, and the other two are files kaname writes into `glue/`. A reserved word of Rust is free to be any other name (it is a raw identifier, `r#ref`)."
             ),
             tr!("別の名前か別名にしてください。", "Choose another name or alias."),
             "module example v1\n\nrecord Seat\n  class : string\n",

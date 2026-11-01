@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/discount_split.ts",
     "python": "glue/discount_split.py",
-    "go": "glue/discountsplit/discountsplit.go"
+    "go": "glue/discountsplit/discountsplit.go",
+    "rust": "glue/discount_split.rs"
   },
   "uses": [
     {
@@ -49,7 +50,8 @@
       "generated": {
         "typescript": "Line",
         "python": "Line",
-        "go": "Line"
+        "go": "Line",
+        "rust": "Line"
       }
     },
     {
@@ -77,7 +79,8 @@
       "generated": {
         "typescript": "Share",
         "python": "Share",
-        "go": "Share"
+        "go": "Share",
+        "rust": "Share"
       }
     }
   ],
@@ -150,7 +153,12 @@
       "generated": {
         "typescript": "split",
         "python": "split",
-        "go": "Split"
+        "go": "Split",
+        "rust": "split"
+      },
+      "check": {
+        "go": "CheckSplit",
+        "rust": "check_split"
       }
     }
   ],

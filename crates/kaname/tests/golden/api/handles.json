@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/handles.ts",
     "python": "glue/handles.py",
-    "go": "glue/handles/handles.go"
+    "go": "glue/handles/handles.go",
+    "rust": "glue/handles.rs"
   },
   "uses": [],
   "enums": [],
@@ -41,7 +42,8 @@
       "generated": {
         "typescript": "Tag",
         "python": "Tag",
-        "go": "Tag"
+        "go": "Tag",
+        "rust": "Tag"
       }
     }
   ],
@@ -76,7 +78,12 @@
       "generated": {
         "typescript": "normalized",
         "python": "normalized",
-        "go": "Normalized"
+        "go": "Normalized",
+        "rust": "normalized"
+      },
+      "check": {
+        "go": "CheckNormalized",
+        "rust": "check_normalized"
       }
     },
     {
@@ -109,7 +116,12 @@
       "generated": {
         "typescript": "problems",
         "python": "problems",
-        "go": "Problems"
+        "go": "Problems",
+        "rust": "problems"
+      },
+      "check": {
+        "go": "CheckProblems",
+        "rust": "check_problems"
       }
     },
     {
@@ -151,7 +163,12 @@
       "generated": {
         "typescript": "handle",
         "python": "handle",
-        "go": "Handle"
+        "go": "Handle",
+        "rust": "handle"
+      },
+      "check": {
+        "go": "CheckHandle",
+        "rust": "check_handle"
       }
     },
     {
@@ -189,7 +206,12 @@
       "generated": {
         "typescript": "tag",
         "python": "tag",
-        "go": "TagFn"
+        "go": "TagFn",
+        "rust": "tag"
+      },
+      "check": {
+        "go": "CheckTagFn",
+        "rust": "check_tag"
       }
     }
   ],

@@ -373,6 +373,12 @@ pub fn taken_word(w: &str) -> bool {
     ritsu_emit::words::typescript::NAMES.contains(w) || ritsu_emit::words::python::KEYWORDS.contains(&w) || ritsu_emit::words::go::KEYWORDS.contains(&w) || kw::HELPERS.contains(&w)
 }
 
+/// The names no module can have, for the Rust of its package (E007, DESIGN 36.2): a module is a
+/// module of Rust's `glue/` and its file, and `crate`, `self` and `Self` are words Rust names no
+/// module (`super` is a reserved word of TypeScript), and `mod` and `door` the files kaname writes
+/// there itself (the directory's own, which `glue.rs` is, and the package's door).
+pub const NO_RUST_MODULE: [&str; 5] = ["crate", "self", "Self", "mod", "door"];
+
 /// The declarations of a module and the names they give, checked: what [`declare`] answers.
 pub struct Declared {
     pub decls: Decls,
@@ -464,6 +470,14 @@ impl<'a> Dc<'a> {
     pub fn names(&mut self) {
         let m = self.module;
         self.public_name(&m.name, &tr!("モジュール", "module"));
+        let a = m.name.ascii();
+        if NO_RUST_MODULE.contains(&a) && ritsu_emit::ident::is_ascii_ident(a) {
+            let sp = m.name.alias.as_ref().map(|(_, s)| *s).unwrap_or(m.name.span);
+            self.err("E007", sp, tr!("生成するコードは、`{a}` をモジュールの名前に使えません", "The generated code cannot take `{a}` as the name of a module")).notes.push(tr!(
+                "生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。別の名前か別名にしてください。",
+                "In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door); choose another name or alias."
+            ));
+        }
         let mut all: Vec<(Name, Text)> = Vec::new();
         for u in &m.uses {
             all.push((Name { text: u.name.clone(), alias: None, span: u.name_span }, tr!("`use` の名前", "`use` name")));

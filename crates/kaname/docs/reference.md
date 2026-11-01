@@ -49,10 +49,15 @@ Thirteen words cannot be names (E002): `let` `if` `then` `else` `match` `some` `
 `false` `and` `or` `not` `in`. The other keywords stand where nothing else can, so a field may be
 `total` and a parameter `description`. An alias that is a reserved word of the TypeScript, Python
 or Go it is generated in, or a name of kaname's helper module (`kaname`, `KanameError`, `Q`,
-`Date`, `Rat`, `glue`), is E007. One name or alias given twice in one space is E006: the names of
-a module's `use` lines and its declarations, the fields of a record, the parameters of a function,
-the values of an enum, and the names inside a function, which also cannot be one a `use` line
-gives. A function cannot take the name of a builtin.
+`Date`, `Rat`, `glue`), is E007, and so is a module named or aliased `crate`, `self`, `Self`,
+`mod` or `door`, which cannot name the module's file in the generated Rust: no Rust module can
+take the first three, Rust reads `mod.rs` as a directory's own file, and `door.rs` is the
+package's door. Elsewhere a keyword of Rust is not E007: the generated Rust writes it as a raw
+identifier (`r#type`), or with `_` after it where no raw identifier writes it (`self_`). One name
+or alias given twice in one space is E006: the names of a module's `use` lines and its
+declarations, the fields of a record, the parameters of a function, the values of an enum, and the
+names inside a function, which also cannot be one a `use` line gives. A function cannot take the
+name of a builtin.
 
 The English and the Japanese versions of an example (`<name>.kn` and `<name>.ja.kn`) give their
 declarations the same aliases and differ in the module's alias (`late_payment` and
@@ -946,8 +951,10 @@ chosen.
 declarations with their types, ranges and counts (and, for a sum, each value's fields and the name
 the code gives its type), each function with its effect inferred and
 written, the calls it makes into the other languages with what each check across them came to,
-the places kaname could not show, and the names the generated code gives it; and each operation of
-a transfer with the reasons it can be refused with. A generic declaration has its `type_params`
+the places kaname could not show, the names the generated code gives it, and the functions a host
+that does not trust its input calls first (`check`: Go's `Check<Name>` and Rust's
+`check_<name>`, `null` for an inner or private function); and each operation of a transfer with
+the reasons it can be refused with. A generic declaration has its `type_params`
 (each a name, an alias and whether it is held to keys), an inner function `"inner": true`, and what
 is `private` `"private": true`.
 

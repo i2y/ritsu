@@ -127,7 +127,7 @@ See also: [E005](#e005), [E110](#e110)
 
 ## E007 — A name the generated code cannot take
 
-**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart.
+**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. So is a module named `crate`, `self`, `Self`, `mod` or `door`: in the generated Rust a module's name is the name of its Rust module in `glue/` and of its file, the first three are words Rust names no module, and the other two are files kaname writes into `glue/`. A reserved word of Rust is free to be any other name (it is a raw identifier, `r#ref`).
 
 **Fix**: Choose another name or alias.
 

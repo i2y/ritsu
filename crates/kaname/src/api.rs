@@ -223,8 +223,14 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         o.push(("calls".into(), calls.unwrap_or(Json::Null)));
         // an inner function's one function, which the generated code calls (DESIGN 21.3, 26.7)
         let a = if info.inner() { crate::r#gen::plan::inner_name(crate::r#gen::Target::TypeScript, c, f) } else { alias(&info.name) };
-        let go = if info.inner() { crate::r#gen::plan::generic_name(crate::r#gen::Target::Go, c, f) } else { crate::r#gen::plan::fn_name(crate::r#gen::Target::Go, c, f) };
-        o.push(("generated".into(), Json::obj([("typescript", Json::str(a.clone())), ("python", Json::str(a)), ("go", Json::str(go))])));
+        let named_in = |t| if info.inner() { crate::r#gen::plan::generic_name(t, c, f) } else { crate::r#gen::plan::fn_name(t, c, f) };
+        let (go, rust) = (named_in(crate::r#gen::Target::Go), named_in(crate::r#gen::Target::Rust));
+        // the checks of what a host gives the function, which a host calls first where it does not
+        // trust its input: Go's `Check<function>` (DESIGN 10.3) and Rust's `check_<function>`
+        // (DESIGN 36.4), whose functions panic where it is outside; an inner function has none
+        let check = if info.inner() { Json::Null } else { Json::obj([("go", Json::str(format!("Check{go}"))), ("rust", Json::str(crate::r#gen::plan::check_name(crate::r#gen::Target::Rust, c, f)))]) };
+        o.push(("generated".into(), Json::obj([("typescript", Json::str(a.clone())), ("python", Json::str(a)), ("go", Json::str(go)), ("rust", Json::str(rust))])));
+        o.push(("check".into(), check));
         Json::Obj(o)
     });
     // each operation of a transfer the module builds, with the reasons it can be refused with: the
@@ -272,7 +278,7 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         ("kaname", Json::str(env!("CARGO_PKG_VERSION"))),
         ("file", Json::str(file)),
         ("module", Json::Obj(module)),
-        ("generated", Json::obj([("typescript", Json::str(format!("glue/{a}.ts"))), ("python", Json::str(format!("glue/{a}.py"))), ("go", Json::str(format!("glue/{pkg}/{pkg}.go")))])),
+        ("generated", Json::obj([("typescript", Json::str(format!("glue/{a}.ts"))), ("python", Json::str(format!("glue/{a}.py"))), ("go", Json::str(format!("glue/{pkg}/{pkg}.go"))), ("rust", Json::str(format!("glue/{a}.rs")))])),
         ("uses", Json::arr(uses)),
         ("enums", Json::arr(enums)),
         ("records", Json::arr(records)),
@@ -312,5 +318,10 @@ fn generated_value_type(enum_alias: &str, value_alias: &str, private: bool) -> J
 fn generated_type(alias: &str, private: bool) -> Json {
     let t = ritsu_emit::ident::pascal(alias);
     let h = |n: String| crate::r#gen::plan::hidden(n, private);
-    Json::obj([("typescript", Json::str(h(t.clone()))), ("python", Json::str(h(t.clone()))), ("go", Json::str(h(ritsu_emit::ident::go_exported(&t))))])
+    Json::obj([
+        ("typescript", Json::str(h(t.clone()))),
+        ("python", Json::str(h(t.clone()))),
+        ("go", Json::str(h(ritsu_emit::ident::go_exported(&t)))),
+        ("rust", Json::str(h(crate::r#gen::plan::type_name(crate::r#gen::Target::Rust, alias)))),
+    ])
 }

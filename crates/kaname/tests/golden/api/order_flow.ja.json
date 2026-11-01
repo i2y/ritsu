@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/order_flow_ja.ts",
     "python": "glue/order_flow_ja.py",
-    "go": "glue/orderflowja/orderflowja.go"
+    "go": "glue/orderflowja/orderflowja.go",
+    "rust": "glue/order_flow_ja.rs"
   },
   "uses": [],
   "enums": [
@@ -37,7 +38,8 @@
           "generated": {
             "typescript": "OrderCart",
             "python": "OrderCart",
-            "go": "OrderCart"
+            "go": "OrderCart",
+            "rust": "OrderCart"
           }
         },
         {
@@ -73,7 +75,8 @@
           "generated": {
             "typescript": "OrderPlaced",
             "python": "OrderPlaced",
-            "go": "OrderPlaced"
+            "go": "OrderPlaced",
+            "rust": "OrderPlaced"
           }
         },
         {
@@ -101,7 +104,8 @@
           "generated": {
             "typescript": "OrderPaid",
             "python": "OrderPaid",
-            "go": "OrderPaid"
+            "go": "OrderPaid",
+            "rust": "OrderPaid"
           }
         },
         {
@@ -129,7 +133,8 @@
           "generated": {
             "typescript": "OrderShipped",
             "python": "OrderShipped",
-            "go": "OrderShipped"
+            "go": "OrderShipped",
+            "rust": "OrderShipped"
           }
         },
         {
@@ -149,7 +154,8 @@
           "generated": {
             "typescript": "OrderCancelled",
             "python": "OrderCancelled",
-            "go": "OrderCancelled"
+            "go": "OrderCancelled",
+            "rust": "OrderCancelled"
           }
         }
       ],
@@ -157,7 +163,8 @@
       "generated": {
         "typescript": "Order",
         "python": "Order",
-        "go": "Order"
+        "go": "Order",
+        "rust": "Order"
       }
     },
     {
@@ -182,7 +189,8 @@
           "generated": {
             "typescript": "EventAdd",
             "python": "EventAdd",
-            "go": "EventAdd"
+            "go": "EventAdd",
+            "rust": "EventAdd"
           }
         },
         {
@@ -202,7 +210,8 @@
           "generated": {
             "typescript": "EventRemove",
             "python": "EventRemove",
-            "go": "EventRemove"
+            "go": "EventRemove",
+            "rust": "EventRemove"
           }
         },
         {
@@ -222,7 +231,8 @@
           "generated": {
             "typescript": "EventPlace",
             "python": "EventPlace",
-            "go": "EventPlace"
+            "go": "EventPlace",
+            "rust": "EventPlace"
           }
         },
         {
@@ -242,7 +252,8 @@
           "generated": {
             "typescript": "EventPay",
             "python": "EventPay",
-            "go": "EventPay"
+            "go": "EventPay",
+            "rust": "EventPay"
           }
         },
         {
@@ -262,7 +273,8 @@
           "generated": {
             "typescript": "EventShip",
             "python": "EventShip",
-            "go": "EventShip"
+            "go": "EventShip",
+            "rust": "EventShip"
           }
         },
         {
@@ -282,7 +294,8 @@
           "generated": {
             "typescript": "EventCancel",
             "python": "EventCancel",
-            "go": "EventCancel"
+            "go": "EventCancel",
+            "rust": "EventCancel"
           }
         }
       ],
@@ -290,7 +303,8 @@
       "generated": {
         "typescript": "Event",
         "python": "Event",
-        "go": "Event"
+        "go": "Event",
+        "rust": "Event"
       }
     }
   ],
@@ -328,7 +342,8 @@
       "generated": {
         "typescript": "Line",
         "python": "Line",
-        "go": "Line"
+        "go": "Line",
+        "rust": "Line"
       }
     }
   ],
@@ -363,7 +378,12 @@
       "generated": {
         "typescript": "total",
         "python": "total",
-        "go": "Total"
+        "go": "Total",
+        "rust": "total"
+      },
+      "check": {
+        "go": "CheckTotal",
+        "rust": "check_total"
       }
     },
     {
@@ -408,7 +428,12 @@
       "generated": {
         "typescript": "next",
         "python": "next",
-        "go": "Next"
+        "go": "Next",
+        "rust": "next"
+      },
+      "check": {
+        "go": "CheckNext",
+        "rust": "check_next"
       }
     },
     {
@@ -450,7 +475,12 @@
       "generated": {
         "typescript": "replay",
         "python": "replay",
-        "go": "Replay"
+        "go": "Replay",
+        "rust": "replay"
+      },
+      "check": {
+        "go": "CheckReplay",
+        "rust": "check_replay"
       }
     },
     {
@@ -495,7 +525,12 @@
       "generated": {
         "typescript": "after",
         "python": "after",
-        "go": "After"
+        "go": "After",
+        "rust": "after"
+      },
+      "check": {
+        "go": "CheckAfter",
+        "rust": "check_after"
       }
     },
     {
@@ -528,7 +563,12 @@
       "generated": {
         "typescript": "open",
         "python": "open",
-        "go": "Open"
+        "go": "Open",
+        "rust": "open"
+      },
+      "check": {
+        "go": "CheckOpen",
+        "rust": "check_open"
       }
     }
   ],

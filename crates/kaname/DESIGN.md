@@ -1,10 +1,10 @@
 # kaname 設計文書
 
-Functional Core を書くための小さな汎用の言語。ファイルは `.kn`、コマンドは `ritsu kaname`、クレートは `crates/kaname`。プログラムのうち、入出力を持たずに計算して決める部分（状態とイベントから次の状態を決めること、入力の検証と正規化、集計と差分、木の変換、規則・日付・帳簿を呼ぶ手前と後ろの計算）を、関数、レコード、直和型、リスト・辞書・集合、文字列、ジェネリクス、関数の値で書く。型は ritsu のもの（単位、通貨と税区分、率の刻み、範囲、列挙、日付）で、範囲、丸め、int64 を、規則・日付・帳簿と同じ決まりで確かめ、関数ごとにどこまで確かめたかをエフェクトとして型に持たせる。rulec の規則、koyomi の日付の関数、chobo の帳簿の振替は、ritsu の型のまま呼べる。確かめた関数を、ritsu の一つの生成パッケージの TypeScript・Python・Go にする。
+Functional Core を書くための小さな汎用の言語。ファイルは `.kn`、コマンドは `ritsu kaname`、クレートは `crates/kaname`。プログラムのうち、入出力を持たずに計算して決める部分（状態とイベントから次の状態を決めること、入力の検証と正規化、集計と差分、木の変換、規則・日付・帳簿を呼ぶ手前と後ろの計算）を、関数、レコード、直和型、リスト・辞書・集合、文字列、ジェネリクス、関数の値で書く。型は ritsu のもの（単位、通貨と税区分、率の刻み、範囲、列挙、日付）で、範囲、丸め、int64 を、規則・日付・帳簿と同じ決まりで確かめ、関数ごとにどこまで確かめたかをエフェクトとして型に持たせる。rulec の規則、koyomi の日付の関数、chobo の帳簿の振替は、ritsu の型のまま呼べる。確かめた関数を、ritsu の一つの生成パッケージの TypeScript・Python・Go にし、Rust にもする（36 章）。
 
 名前は要（かなめ）から取った。扇の骨を一つに留める部品である。
 
-この文書は、ritsu 0.35.0 の上の kaname の設計である（2026-10-22）。言語（字句と構文、名前と読むファイル、型、エフェクト、範囲の解析と例を探すこと、逃げ道の警告、言語をまたぐ判定とそのための口）、コマンド（`check`、`run`、`vectors`、`doc`、`api`、`explain`）、`ritsu gen` が書く TypeScript・Python・Go、意味の中心の Lean のモデルと定理は、ここに書いたとおりに実装してある。例の 16 の `.kn`（八つの例の英語と日本語の版）は `ritsu kaname check` を警告も無く通り、その `examples` も成り立つ。そのうち四つの例は、生成したコードを TypeScript・Python・Go のホストから呼ぶプログラムも持つ（17.5）。生成したコードは、例とテストのモジュールの全部のベクタで、三つの出力先とも参照インタプリタと同じ答えを返す（16.4）。範囲の解析と参照インタプリタは、Lean のモデルと、例とテストのモジュールの全部で同じ答えを出す（15.3）。実装したものの出力は、実物を貼ってある（4 章、5 章、7 章、8 章、9 章、10 章、11.1、12 章、13 章、14 章、15.3、16.4、17 章）。内側のファイル（`.rule`・`.cal`・`.book`）は、ritsu 0.34.1 の `ritsu check` を通し、規則の `examples` も走らせてある。丸めの五つの仕方と日の番号の計算は rulec と koyomi の手順と照らし合わせ、rulec のコーパスの `derive` と `define` の式の全部は、kaname の式として読んで型と値が rulec と同じになる（16.2、16.3）。段階ごとの作業と完了の条件は PLAN.md にある。
+この文書は、ritsu 0.35.0 の上の kaname の設計である（2026-10-22）。言語（字句と構文、名前と読むファイル、型、エフェクト、範囲の解析と例を探すこと、逃げ道の警告、言語をまたぐ判定とそのための口）、コマンド（`check`、`run`、`vectors`、`doc`、`api`、`explain`）、`ritsu gen` が書く TypeScript・Python・Go、意味の中心の Lean のモデルと定理は、ここに書いたとおりに実装してある。例の 16 の `.kn`（八つの例の英語と日本語の版）は `ritsu kaname check` を警告も無く通り、その `examples` も成り立つ。そのうち四つの例は、生成したコードを TypeScript・Python・Go のホストから呼ぶプログラムも持つ（17.5）。生成したコードは、例とテストのモジュールの全部のベクタで、TypeScript・Python・Go・Rust の四つの出力先とも参照インタプリタと同じ答えを返す（16.4）。Rust の生成物は kaname の生成の関数が書き、kaname のテストがクレートにして確かめる。`ritsu gen` が書くのは、まだ TypeScript・Python・Go である（36 章、19 章）。範囲の解析と参照インタプリタは、Lean のモデルと、例とテストのモジュールの全部で同じ答えを出す（15.3）。実装したものの出力は、実物を貼ってある（4 章、5 章、7 章、8 章、9 章、10 章、11.1、12 章、13 章、14 章、15.3、16.4、17 章）。内側のファイル（`.rule`・`.cal`・`.book`）は、ritsu 0.34.1 の `ritsu check` を通し、規則の `examples` も走らせてある。丸めの五つの仕方と日の番号の計算は rulec と koyomi の手順と照らし合わせ、rulec のコーパスの `derive` と `define` の式の全部は、kaname の式として読んで型と値が rulec と同じになる（16.2、16.3）。段階ごとの作業と完了の条件は PLAN.md にある。
 
 この文書の並び：
 
@@ -21,6 +21,7 @@ Functional Core を書くための小さな汎用の言語。ファイルは `.k
 - 18〜20 章：捨てた形、まだやらないこと、決めたこと。
 - 21〜28 章：汎用のコアを書く型と式。汎用の言語としての芯、範囲を書かない値、直和型と `match`、辞書と集合、文字列、ジェネリクスと `result`、関数の値、再帰する型と `private`。
 - 29〜30 章：入れないものと、rulec との関係。
+- 31〜36 章：あとから足した決まり（サイトのコードの色、規則の答えの範囲と `running_totals`、Lean の関係、`ritsu check` の JSON、確かめの語、Rust の出力先とパッケージの Wasm）。
 
 ## 0. 全体像
 
@@ -35,7 +36,7 @@ Functional Core を書くための小さな汎用の言語。ファイルは `.k
    ├── 逃げ道の警告（表にすべき判断）
    ├── 参照インタプリタ（内側の層は口の eval）── examples・run・vectors・例を探す
    ├── doc（人が読むページ）・api（外のツールのための JSON）
-   └── 生成：ritsu gen の一つのパッケージの glue/（TypeScript・Python・Go）
+   └── 生成：ritsu gen の一つのパッケージの glue/（TypeScript・Python・Go。Rust は 36 章）
 ```
 
 例（`examples/order_flow/order_flow.kn`。17.1）。注文の状態を、状態ごとにフィールドの違う直和型の値で持ち、イベントで次の状態か、イベントを拒む理由を答える：
@@ -177,7 +178,7 @@ kaname は、この計算を書くための、入出力を持たない汎用の�
 | koyomi | 期日（締め、営業日、月の足し算） | kaname が呼ぶ。日付の足し算は koyomi に書く（kaname は日付の差だけを持つ。3.4） |
 | chobo | 数を動かす（勘定の上限と下限、キー、仮押さえ） | kaname は振替の呼び出しを値として組み立てて返す。当てるのはホスト（6.3） |
 | dandori | 待ちと外への副作用のあるワークフロー | いまは互いに呼ばない。dandori のフローから total な kaname の関数を呼ぶことは、まだやらない（19 章） |
-| ホスト（TypeScript・Python・Go） | 入出力、状態、時刻、乱数。kaname の関数に値を渡して答えを受け取り、振替を帳簿に当てる | 生成したコードを呼ぶ（10 章、17.5）。kaname からホストの関数は呼べない（29 章） |
+| ホスト（TypeScript・Python・Go・Rust） | 入出力、状態、時刻、乱数。kaname の関数に値を渡して答えを受け取り、振替を帳簿に当てる | 生成したコードを呼ぶ（10 章、17.5）。kaname からホストの関数は呼べない（29 章） |
 | rulec の `shape` と `from` | 契約のコレクションの一つのフィールドを数え、足し、調べて、規則の入力にするコードの生成 | それで足りるものは rulec に書く。kaname はその外（明細ごとの計算、二つ以上の入力の組み立て、規則から規則へ）を受け持つ（1.2） |
 
 ### 0.4 ほかの言語にそろえるもの
@@ -195,7 +196,7 @@ kaname は、この計算を書くための、入出力を持たない汎用の�
 
 - **コア**（Functional Core）：プログラムのうち、入出力を持たずに計算して決める部分。kaname が書くもの。**つなぐコード**：そのうち、規則・日付・帳簿を呼ぶ手前と後ろの計算。
 - **内側の層**：rulec・koyomi・chobo のファイルと、その言語の検査。kaname から見て、呼ぶ相手。
-- **ホスト**：kaname の生成したコードを呼ぶ、TypeScript・Python・Go のプログラム。入出力を持つのはホストである。
+- **ホスト**：kaname の生成したコードを呼ぶ、TypeScript・Python・Go・Rust のプログラム。入出力を持つのはホストである。
 - **モジュール**：一つの `.kn`。**プログラム**：`use` でつながったモジュールと内側のファイルの全部。
 - **呼び出しの場所**：kaname の関数が、規則・日付の関数・ほかの関数を呼ぶところと、振替を組み立てるところ。
 - **渡す先**：範囲や型の決まった、値を渡すところ。規則の入力、日付の関数の入力、関数の引数と結果、レコードのフィールド、振替の額。
@@ -424,7 +425,7 @@ kaname のクレートのバイナリ（`kaname`）は内側の言語を持た�
 
 ### 2.6 名前と別名
 
-名前は rulec と同じ字句で、漢字、かな、ラテン文字が使える。名前は書いたとおりに比べ、NFC に正規化しない。rulec も、依存を持たず Unicode の表を持たないので、正規化を約束していない（rulec の DESIGN §15.70）。生成するコードに出る名前（モジュール、関数、引数、レコード、フィールド、列挙、列挙の値）が ASCII でなければ、丸括弧で ASCII の別名を付ける（無ければ E005。別名が ASCII の名前でなくても E005）。ASCII の名前には要らない。別名か、別名の無い名前が、出力先（TypeScript の strict mode、Python、Go）の予約語か、補助のモジュールの名前（`kaname`、`KanameError` など。10.1）なら E007 にする。`let` の名前とラムダの引数は、生成するコードの関数の中の名前なので、別名を付けない（rulec が内部の名前に日本語の識別子をそのまま使うのと同じ。TypeScript・Python・Go のどれも、関数の中の日本語の識別子を受け付ける）。
+名前は rulec と同じ字句で、漢字、かな、ラテン文字が使える。名前は書いたとおりに比べ、NFC に正規化しない。rulec も、依存を持たず Unicode の表を持たないので、正規化を約束していない（rulec の DESIGN §15.70）。生成するコードに出る名前（モジュール、関数、引数、レコード、フィールド、列挙、列挙の値）が ASCII でなければ、丸括弧で ASCII の別名を付ける（無ければ E005。別名が ASCII の名前でなくても E005）。ASCII の名前には要らない。別名か、別名の無い名前が、出力先（TypeScript の strict mode、Python、Go）の予約語か、補助のモジュールの名前（`kaname`、`KanameError` など。10.1）なら E007 にする。Rust の予約語は生の識別子（`r#ref`）にするので E007 にしないが、モジュールの名前が `crate`、`self`、`Self`、`mod`、`door`（Rust がモジュールに付けられない語と、kaname が Rust の `glue/` に書くファイルの名前）なら E007 にする（36.3）。`let` の名前とラムダの引数は、生成するコードの関数の中の名前なので、別名を付けない（rulec が内部の名前に日本語の識別子をそのまま使うのと同じ。TypeScript・Python・Go のどれも、関数の中の日本語の識別子を受け付け、Rust もクレートの根で字の lint を許せば受け付ける。36.8）。出力先が名前に取らない字を持つ名前（`m²`）は、その出力先の生成物では `v` になる（36.3）。
 
 **決定（宣言したものは、名前でも別名でも指せる）**：レコードとフィールド、列挙とその値、関数とその引数、規則の入力と出力は、宣言した名前でも別名でも指せる（sekisho と同じ）。英語の版と日本語の版が同じ別名を持つので、日本語の版の中で英語の別名を使っても同じものを指す。そのかわり、名前と別名は一つの名前空間にあり、ほかの名前とも別名とも重なれない（E006）。規則の列挙とその値も、規則のファイルに書いた名前か別名で指す（`due.緊急度`、`due.urgency`、`due.urgency.later`）。口は、列挙の名前と、規則が括弧の中に書いた別名（列挙の公開名、`urgency`）を渡す（`RuleEnum::public`。14.1）。生成するコードの型の名前（`Urgency`）では指さない。
 
@@ -918,7 +919,7 @@ kaname の関数がほかの kaname の関数を呼ぶところは、入口で�
 
 **決定（あふれの決まり）**：途中の値を既約分数にしたとき、分子が int64 に収まり（−2⁶³ から 2⁶³ − 1）、分母が 1 から 2⁶³ − 1 に収まらなければ、失敗する（種類は `overflow`）。途中の値は、その式の型の単位で数えた値である（お金は宣言した単位、量はその単位、率は分数そのもの、数はそのまま。8 章）。丸めた金額と量と数は分母が 1 なので、値そのものが int64 に収まることで、率の分母は刻みから決まる。定数を相手の単位で読むところ（`15lb` を `mass[oz]` と比べる）では、読んだ値（240）も、この決まりで確かめる。
 
-既約分数の分子と分母で決めたのは、決まりが値だけで決まり、表し方（刻みの静的な倍率、途中の分数の形）に依らないからである。rulec は、値を「実行時の整数 × 型に付いた静的な倍率」で持ち、その整数が int64 に収まることを E108 で示す（rulec の DESIGN §7.1）。kaname は値で割れるので、倍率が静的に決まらない。値で決めれば、参照インタプリタと三つの出力先が同じところで失敗する。
+既約分数の分子と分母で決めたのは、決まりが値だけで決まり、表し方（刻みの静的な倍率、途中の分数の形）に依らないからである。rulec は、値を「実行時の整数 × 型に付いた静的な倍率」で持ち、その整数が int64 に収まることを E108 で示す（rulec の DESIGN §7.1）。kaname は値で割れるので、倍率が静的に決まらない。値で決めれば、参照インタプリタと四つの出力先が同じところで失敗する。
 
 一つの演算の途中の積（分数の足し算の `n1·d2 + n2·d1`）は、どの値も int64 に収まっていれば、128 ビットの整数に収まる。試作で確かめた桁数は、最大 127 ビットの絶対値である。参照インタプリタは i128 で計算して、答えを既約にしてから確かめる。生成したコードは、TypeScript が `bigint`、Python が `int` で計算してから同じ確かめをし、Go は和と差を符号で見て、積と丸めていない値を標準ライブラリの `math/big` で計算する（10.4）。
 
@@ -959,7 +960,7 @@ kaname は規則を、口 `Rules` の `facts`（`RuleFacts`）で読む。入力
 - **前提**（rulec の `constraint`、並びの合計と長さ、`range from koyomi` の日）：ritsu-cross の X2 が決める（ritsu の DESIGN 7.4）。kaname は、渡す値の区間、出どころ、二つの値の関係、並びの長さの上限を口 `Programs` で渡し、区間で示せない前提があれば、見た値も渡す（14.2）。並びの長さは、kaname がリストの要素の数を知っているので、dandori と違って決められることがある（口の `preconditions_hold` の `max_len` に渡す）。
 - **koyomi の日を日付の入力に渡す**：X3 の (a)（ritsu の DESIGN 7.5）。渡す日が koyomi の日付の答えなら、koyomi が数えた日の集合で、kaname の区間の日付なら、その区間の日で決める（14.2）。
 - **並び**（`elements`）：並びの名前の引数に、要素のレコード `<規則>.<並び>` のリストを渡す。要素のフィールドの範囲も、入力と同じく確かめる。
-- **生成したコードの呼び方**：口の `Call`（TypeScript・Python・Go のモジュール、関数、引数の名前と型、列挙のメンバー）から書く。rulec の生成物を読まずに書ける。
+- **生成したコードの呼び方**：口の `Call`（TypeScript・Python・Go・Rust のモジュール、関数、引数の名前と型、列挙のメンバー）から書く。rulec の生成物を読まずに書ける。
 
 ### 6.2 日付の関数
 
@@ -1163,7 +1164,7 @@ kaname の意味は、参照インタプリタ一つが決める（P2）。`src/
 
 ### 10.1 パッケージの中の置き場所
 
-**決定**：kaname の生成は、`ritsu gen` の一つのパッケージ（ritsu の DESIGN 9.3）の中だけに書く。出力先は、パッケージと同じ TypeScript・Python・Go である。kaname のモジュールは、同じパッケージの `rules/` と `dates/` の生成物を呼ぶので、それを持たない単独の生成（`kaname gen`）では動くコードにならない。sekisho の TypeScript・Python・Go がパッケージの `rules/` と `dates/` を読むのと同じ形である（sekisho の DESIGN 5.6）。
+**決定**：kaname の生成は、`ritsu gen` の一つのパッケージ（ritsu の DESIGN 9.3）の中だけに書く。出力先は、パッケージと同じ TypeScript・Python・Go と、Rust である（Rust のパッケージは一つのクレート。36 章）。kaname のモジュールは、同じパッケージの `rules/` と `dates/` の生成物を呼ぶので、それを持たない単独の生成（`kaname gen`）では動くコードにならない。sekisho の TypeScript・Python・Go がパッケージの `rules/` と `dates/` を読むのと同じ形である（sekisho の DESIGN 5.6）。
 
 ```
 generated/typescript/          generated/python/<name>/       generated/go/
@@ -1177,11 +1178,24 @@ generated/typescript/          generated/python/<name>/       generated/go/
 
 `<モジュール>` はモジュールの別名、Go の `<パッケージ>` はその別名から作るパッケージの名前（`late_payment` は `latepayment`）である。
 
+Rust のパッケージは一つのクレートで、kaname はその `glue/` の下を書く（36 章）。`glue.rs` と `glue/books.rs` は Rust のモジュールの木をつなぐファイル（TypeScript の `index.ts` にあたる）、`glue/door.rs` は、ホストが呼ぶ関数を JSON の一行で呼ぶ入口（36.11）である。
+
+```
+<クレート>/
+  glue.rs                      glue/ のモジュールの宣言
+  glue/kaname.rs               補助のモジュール
+  glue/<モジュール>.rs         モジュールごと
+  glue/door.rs                 JSON の一行の呼び出しに答える入口
+  glue/books.rs                glue/books/ のモジュールの宣言
+  glue/books/<帳簿>.rs         振替の値の型（帳簿ごと）
+  glue/books/<帳簿>_apply.rs   振替を当てる関数（帳簿ごと。wasm32 では外す）
+```
+
 - **補助のモジュール**（`glue/kaname.*`）：丸めていない値（有理数）、確かめつきの算術、丸めの五つ、`allocate` と `isqrt`、日付と日の番号の換算、`KanameError`、入口と渡す先の確かめの答えの型、`text` の書き方。パッケージに一つだけ書き、kaname のどのモジュールもそれを読む。rulec と koyomi は、補助の関数を生成物ごとに書く（依存の無い一つのファイルにするため）。kaname は、モジュールどうしが互いのレコードと振替の型を読むので、補助の型（`KanameError` など）を一つにしなければ、モジュールをまたいで値を渡せない。Python と Go の型は名前で比べるからである。パッケージの中の生成物で、パッケージの外に依存しないことは変わらない（rulec の P5）。
-- **インデックス**：`glue/` と `glue/books/` のインデックス（TypeScript の `index.ts`、Python の `__init__.py`）は kaname が書き、モジュール、補助のモジュール `kaname`、`books` を名前で並べる。パッケージの頭のインデックス（`index.ts`、`<name>/__init__.py`）は ritsu が書き、そこに `glue` を足す。Go にはインデックスが無い。
+- **インデックス**：`glue/` と `glue/books/` のインデックス（TypeScript の `index.ts`、Python の `__init__.py`）は kaname が書き、モジュール、補助のモジュール `kaname`、`books` を名前で並べる。パッケージの頭のインデックス（`index.ts`、`<name>/__init__.py`）は ritsu が書き、そこに `glue` を足す。Go にはインデックスが無い。Rust では `glue.rs` と `glue/books.rs` を kaname が書き、クレートの根（`lib.rs`）が `glue` を宣言する。
 - **振替の値の型**（`glue/books/<帳簿>.*`）：帳簿ごとに一度だけ書く。同じ帳簿の振替の値を作る二つのモジュールが、同じ型を使うためである（6.3）。chobo のクライアントを読まない。
 - **振替を当てる関数**（`glue/books/<帳簿>_apply.*`）：振替の値を chobo のクライアントの呼び出しに直す。chobo のクライアントを読むので、別のファイル（Go は別のパッケージ）にした。振替の値を作るだけのモジュールは、帳簿のドライバ（`pg`、`tigerbeetle-node` など）を読まずに済む。
-- 依存を書くファイル（`package.json`、`pyproject.toml`、`doc.go`）に足すものは無い。kaname の生成物は、各言語の標準ライブラリしか使わない。
+- 依存を書くファイル（`package.json`、`pyproject.toml`、`doc.go`）に足すものは無い。kaname の生成物は、各言語の標準ライブラリしか使わない。Rust も同じで、帳簿のクライアントのクレート（sqlx、tigerbeetle）を読むのは、chobo のクライアントだけである。
 
 `crates/ritsu/tests/projects/settlement`（17.6 の `payout` と 17.7 の `late_payment` の英語の版と、それが読む規則、日付のファイル、帳簿）を `ritsu gen` で書いたときの、TypeScript の `glue/` の全部である（`crates/ritsu/tests/golden/gen/settlement.txt`。ファイルごとに、頭が言う書いた言語と、元のファイル）：
 
@@ -1197,32 +1211,32 @@ generated/typescript/          generated/python/<name>/       generated/go/
 
 ### 10.2 型と値
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| お金、量 | パッケージの `units` の型（`units.USDc`。`bigint` に単位の印を付けたもの） | `units` の型（`int` の `NewType`） | `units` の型（名前付きの `int64`） |
-| `number` | `bigint` | `int` | `int64` |
-| 刻みのある率 | 刻みの数の `bigint` | 刻みの数の `int` | 刻みの数の `int64` |
-| 関数の中で計算する値 | 刻みが整数の値は `bigint`、ほかは補助の `Q`（`bigint` の分子と分母） | `int`、ほかは `fractions.Fraction` | `int64`、ほかは補助の `Q`（`*big.Rat`） |
-| `bool`、`string` | `boolean`、`string` | `bool`、`str` | `bool`、`string` |
-| `date` | `"YYYY-MM-DD"` の `string`（koyomi の生成物と同じ） | `datetime.date` | 補助の `Date`（`Year`、`Month`、`Day`） |
-| モジュールの列挙 | 凍結したオブジェクトと値の合併型（rulec の生成物と同じ形） | `enum.Enum`（値は値の名前） | 名前付きの `string` と定数（`SizeSmall`） |
-| 規則の列挙 | 規則の生成物の列挙をそのまま使う | 同じ | 同じ |
-| 直和型 | 値の型の合併型（`OrderDraft \| OrderPlaced \| …`） | 値の型の `Union` | 値の型を見分けるメソッドを持つインターフェース（23.8） |
-| 値の型 | 値の名前の `kind` を持つ `interface` | `@dataclass(frozen=True)` | 構造体 |
-| レコード | `interface`（読み取り専用のフィールド） | `@dataclass(frozen=True)` | 構造体 |
-| `list[T]` | `readonly T[]` | `list[T]` | `[]T` |
-| `dict[K, V]` | `ReadonlyMap<K, V>` | `Mapping[K, V]`（作るのは `dict`） | `map[K]V` |
-| `set[T]` | `ReadonlySet<T>` | `AbstractSet[T]`（作るのは `frozenset`） | `map[T]struct{}` |
-| `entry[K, V]`、`indexed[T]` | 補助のモジュールの `interface` | 補助のモジュールの `@dataclass(frozen=True)` | 補助のモジュールの構造体 |
-| `T?` | `T \| null` | `T \| None` | `*T` |
-| `result[T, E]` | 補助の `Result<T, E>`（`{ kind: "ok", value }` か `{ kind: "err", error }`） | 補助の `Ok`・`Err` と `Result = Union[Ok[T], Err[E]]` | 補助の `Result[T, E]`（interface）と `Ok[T, E]`・`Err[T, E]` |
-| 型の引数 | 関数と型の型の引数（`<T>`） | モジュールの `TypeVar` と `Generic[T]` | 型の引数（`[T any]`、鍵に限ったものは `[K comparable]`） |
-| 振替の値 | `interface`（`book`・`transfer`・`op`・`args`） | `@dataclass(frozen=True)`（`book`・`transfer`・`op` はクラスの値） | 構造体 |
-| 関数の型 `(T) -> U` | `(x: T) => U` | `Callable[[T], U]` | `func(T) U`（27.6） |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| お金、量 | パッケージの `units` の型（`units.USDc`。`bigint` に単位の印を付けたもの） | `units` の型（`int` の `NewType`） | `units` の型（名前付きの `int64`） | `units` の型（`i64` のタプル構造体 `units::USDc`） |
+| `number` | `bigint` | `int` | `int64` | `i64` |
+| 刻みのある率 | 刻みの数の `bigint` | 刻みの数の `int` | 刻みの数の `int64` | 刻みの数の `i64` |
+| 関数の中で計算する値 | 刻みが整数の値は `bigint`、ほかは補助の `Q`（`bigint` の分子と分母） | `int`、ほかは `fractions.Fraction` | `int64`、ほかは補助の `Q`（`*big.Rat`） | `i64`、ほかは補助の `Q`（`i128` の分子と分母） |
+| `bool`、`string` | `boolean`、`string` | `bool`、`str` | `bool`、`string` | `bool`、`String`（引数は `&str`） |
+| `date` | `"YYYY-MM-DD"` の `string`（koyomi の生成物と同じ） | `datetime.date` | 補助の `Date`（`Year`、`Month`、`Day`） | 補助の `Date`（`year`、`month`、`day`） |
+| モジュールの列挙 | 凍結したオブジェクトと値の合併型（rulec の生成物と同じ形） | `enum.Enum`（値は値の名前） | 名前付きの `string` と定数（`SizeSmall`） | フィールドの無い `enum`（`Size::Small`） |
+| 規則の列挙 | 規則の生成物の列挙をそのまま使う | 同じ | 同じ | 同じ |
+| 直和型 | 値の型の合併型（`OrderDraft \| OrderPlaced \| …`） | 値の型の `Union` | 値の型を見分けるメソッドを持つインターフェース（23.8） | 値ごとの構造体を持つ `enum`（`Order::Placed(OrderPlaced)`） |
+| 値の型 | 値の名前の `kind` を持つ `interface` | `@dataclass(frozen=True)` | 構造体 | 構造体 |
+| レコード | `interface`（読み取り専用のフィールド） | `@dataclass(frozen=True)` | 構造体 | 構造体 |
+| `list[T]` | `readonly T[]` | `list[T]` | `[]T` | `Vec<T>`（引数は `&[T]`） |
+| `dict[K, V]` | `ReadonlyMap<K, V>` | `Mapping[K, V]`（作るのは `dict`） | `map[K]V` | `BTreeMap<K, V>` |
+| `set[T]` | `ReadonlySet<T>` | `AbstractSet[T]`（作るのは `frozenset`） | `map[T]struct{}` | `BTreeSet<T>` |
+| `entry[K, V]`、`indexed[T]` | 補助のモジュールの `interface` | 補助のモジュールの `@dataclass(frozen=True)` | 補助のモジュールの構造体 | 補助のモジュールの構造体 |
+| `T?` | `T \| null` | `T \| None` | `*T` | `Option<T>` |
+| `result[T, E]` | 補助の `Result<T, E>`（`{ kind: "ok", value }` か `{ kind: "err", error }`） | 補助の `Ok`・`Err` と `Result = Union[Ok[T], Err[E]]` | 補助の `Result[T, E]`（interface）と `Ok[T, E]`・`Err[T, E]` | 標準の `Result<T, E>` |
+| 型の引数 | 関数と型の型の引数（`<T>`） | モジュールの `TypeVar` と `Generic[T]` | 型の引数（`[T any]`、鍵に限ったものは `[K comparable]`） | 型の引数（`<T: Clone + PartialEq>`、鍵に限ったものは `<K: Ord + Clone>`） |
+| 振替の値 | `interface`（`book`・`transfer`・`op`・`args`） | `@dataclass(frozen=True)`（`book`・`transfer`・`op` はクラスの値） | 構造体 | 構造体と、帳簿ごとの `enum Call` |
+| 関数の型 `(T) -> U` | `(x: T) => U` | `Callable[[T], U]` | `func(T) U`（27.6） | `&dyn Fn(T) -> Result<U, KanameError>`（27.6、36.2） |
 
 **決定（境目では受け渡す形、関数の中では計算する形）**：関数の引数と答え、レコードのフィールド、規則と日付と帳簿に渡す値（境目）は、表の上の形で受け渡す。お金と量はパッケージの `units` の型、数は整数、刻みのある率は刻みの数の整数（3.49% は刻み 0.01% の 349）で、率の型は作らない。関数の中では、刻みが整数の値（数、お金、量、日付の差）を整数で、ほかの値（率、丸めていない値）を有理数で計算し、境目で直す。レコードは境目の形で値を持つ。辞書と集合も、どこでも境目の形で持つ（鍵を値で比べるため。24.6）。`running_totals` の答えの要素も同じで、重みが丸めた値であることは型の検査が確かめる（3.6）。率の重みは重みの型の刻みの数で持ち、いつも `0%` の重み（型の刻みが 0）は 0.01% の刻みの数で持つ（どの刻みでも 0 個である）。規則の生成物は規則ごとに率の型 `Rate` を持つので、規則に率を渡すところでは、規則の刻みの数に直してその型にする。
 
-単位の型：生成パッケージの中では、お金と量の額は、パッケージの単位のモジュール（TypeScript の `units.ts`、Python の `<name>/units.py`、Go の `<module>/units`）が宣言する、単位ごとに一つの型である（ritsu の DESIGN 9.3）。規則の生成物と帳簿のクライアントもその型で受け渡すので、kaname の生成物も初めからその型を使い、規則と帳簿を呼ぶところで型を直さない（PLAN の D.6）。kaname の生成物が名前を出す単位は、`ritsu gen` が、規則と帳簿の単位と合わせて単位のモジュールに入れる。計算した整数を単位の型にするところは、TypeScript では型を付け（`x as units.USDc`。リストは要素ごと）、Python では型を作る呼び出し（`_units.USDc(x)`）、Go では変換（`units.USDc(x)`。リストとオプショナルな値は補助の `kaname.Ints` と `kaname.Int`）である。単位の型の値は、TypeScript と Python ではそのまま整数として読め、Go では `int64(x)` で読む。
+単位の型：生成パッケージの中では、お金と量の額は、パッケージの単位のモジュール（TypeScript の `units.ts`、Python の `<name>/units.py`、Go の `<module>/units`、Rust の `units.rs`）が宣言する、単位ごとに一つの型である（ritsu の DESIGN 9.3）。規則の生成物と帳簿のクライアントもその型で受け渡すので、kaname の生成物も初めからその型を使い、規則と帳簿を呼ぶところで型を直さない（PLAN の D.6）。kaname の生成物が名前を出す単位は、`ritsu gen` が、規則と帳簿の単位と合わせて単位のモジュールに入れる。計算した整数を単位の型にするところは、TypeScript では型を付け（`x as units.USDc`。リストは要素ごと）、Python では型を作る呼び出し（`_units.USDc(x)`）、Go では変換（`units.USDc(x)`。リストとオプショナルな値は補助の `kaname.Ints` と `kaname.Int`）である。Rust ではタプル構造体を作る（`units::USDc(x)`）。単位の型の値は、TypeScript と Python ではそのまま整数として読め、Go では `int64(x)` で、Rust では `x.0` で読む。
 
 自分を含む型（28.1）は、ほかのレコードと直和型と同じ形に書く。TypeScript の `interface` と、Python のデータクラス（生成物は `from __future__ import annotations` で、型の注釈を前に置いた型の名前でも読む）は、そのまま自分を指せる。Go の構造体は自分をじかには持てないが、自分を含むのはいつも、オプショナルな値の `*T`、スライス、マップ、直和型のインターフェースを通してなので書ける（`tests/modules/trees.kn` の `Category`、`Node`、`Tree[T]` を生成したもの。実物）：
 
@@ -1246,16 +1260,39 @@ type TreeNode[T any] struct {
 }
 ```
 
+Rust の構造体も自分をじかには持てない。同じ強連結成分の型へのフィールドのうち、`Vec`・`BTreeMap`・`BTreeSet` を通らないものを `Box` にする（36.2。同じ型の Rust の実物。ドキュメントのコメントと derive の行を省いた）：
+
+```rust
+pub struct Category {
+    pub name: String,
+    pub children: Vec<Category>,
+}
+
+pub struct Node {
+    pub value: i64,
+    pub next: Option<Box<Node>>,
+}
+
+pub enum Tree<T: Clone + PartialEq> {
+    Leaf(TreeLeaf<T>),
+    Node(TreeNode<T>),
+}
+
+pub struct TreeNode<T: Clone + PartialEq> {
+    pub children: Vec<Tree<T>>,
+}
+```
+
 ### 10.3 関数
 
-- 名前：関数は別名で、Go はパスカルケース（`weight_of` は `WeightOf`）。Go で、モジュールのレコードか列挙の型と同じ名前になる関数は `Fn` を足す（`fn claim` と `record Claim` の `ClaimFn`）。レコードと列挙の型はパスカルケース、フィールドは TypeScript と Python が別名のまま、Go がパスカルケース。モジュールの列挙の値は、TypeScript と Python が大文字（`Size.SMALL`）、Go が型の名前を前に付けたもの（`SizeSmall`）。直和型の値の型は、列挙と値の別名をつなげたパスカルケース（`Order.placed` は `OrderPlaced`。23.8）。`api` の `generated` も、この名前を言う（11.1）。
-- 関数の中の名前：TypeScript と Python は、引数を別名で、`let`・ラムダの引数・`some` の名前を書いたとおりに書く。Go は、どれも小文字で始まるキャメルケースにする（`paid_on` は `paidOn`、`days_late` は `daysLate`）。同じパッケージの rulec の Go が、中の名前を `roundDown` や `minInt` と書くのにそろえた。中の関数（入口を通らない関数）の名前は、TypeScript と Python が `_` と別名（`_weight_of`）、Go が `_` とキャメルケース（`_weightOf`）である。
-- **決定（名前がぶつかったとき）**：関数の中の名前が、出力先の予約語か、生成したコードが使う名前（TypeScript の `BigInt`・`Math`・`Error` など、Python の `len`・`int`・`str`・`range`・`min`・`max` など、Go の `err`・`ctx`・`fmt`・`big`、補助のモジュールの `kaname` と単位のモジュールの `units`）か、モジュールのコードの名前（関数、型、読み込んだモジュール）か、前に付けた名前と同じになるときは、名前を足して分ける。TypeScript と Python の引数は `_` を足し（`len` は `len_`。それも取られていれば `len_2`、`len_3`）、`let` とラムダの引数と `some` の名前は、2 からの番号を `_` のあとに足す（`int` は `int_2`）。Go は、キャメルケースにした名前に 2 からの番号を足す（`type` は `type2`、`len` は `len2`）。キャメルケースにすると同じになる二つの名前（`paid_on` と `paidOn`）も、あとのほうが番号を取る（`paidOn` と `paidOn2`）。`tests/modules/names.kn` が、この形を三つの出力先で確かめる（16.4）。
-- 引数：TypeScript と Go は並べた順に、Python はキーワードだけで受け取る（`def claim(*, invoice, paid_on, reference_rate)`）。kaname の呼び出しが名前で書くのに合わせ、Python では取り違えを書けなくした。Python のホストが呼ぶ関数のキーワードは別名のままで、中の関数には、上の決まりで分けた名前で渡す（`names.kn` の `words` なら `return _words(Type=Type, len_=len, max_=max, items=items)`）。ホストが呼ぶ関数の本体は、引数の名前が隠すかもしれない組み込みの名前を使わない（要素の数を文に書くのは補助の `kaname.itoa` である）。TypeScript と Go の引数の取り違えは、単位の型が違えば型の検査が言う。
-- 入口：ホストが呼ぶ関数には、引数を型と範囲と要素の数で確かめて外れれば `input` で失敗する公開する関数（`claim`）と、入口を通らない中の関数（`_claim`）を書く（4.4）。同じモジュールの関数どうしの呼び出しは中の関数を、ほかのモジュールの関数は公開する関数を呼ぶ。範囲の解析が引数を示せなかった呼び出しは、呼ぶ前に確かめる（`range`）。型の引数を持つ関数は、入口の確かめの無い一つの関数だけを書き、ほかのモジュールの生成物から呼べるように外に見せる（TypeScript の `export function _first_or`、Python のモジュールの `_first_or`、Go の `FirstOr`。21.3、26.7）。鍵に限った型の引数の順は、隠れた一つ目の引数として渡す（26.7）。
-- エフェクト：Go は、失敗しうる関数だけが `(T, error)` を返し、total な関数は `T` を返す（入口の外れは panic。4.4）。どの関数にも、引数を確かめるだけの `Check<関数>(…) error` を書く。TypeScript と Python は、関数ごとに失敗の種類の型の別名（`export type ClaimFails = "rule" | "overflow"`、`ClaimFails = Literal["rule", "overflow"]`）を書き、ドキュメントのコメントに `@throws` と `Raises:` を書く。total な関数は `never`（TypeScript）と `NoReturn`（Python）で、`input` のほかは投げないと書く。止まらないかもしれない関数は、そうコメントに書く。
-- 本体：`let` は定数の宣言（Go は型を書いた `var`）、`if` と `match` はその言語の `if` 文で、答えを関数の `return` にするか、宣言した変数に入れる。直和型の `match` は、TypeScript と Python が `kind` と `isinstance` の `if` の並び、Go が型の switch である（23.8）。`let` の行は、生成物の行のコメントに元の行を書く（`// 20: let due = terms.due(invoiced: invoice.invoiced)`）。
-- 関数の値：ラムダは、TypeScript のアロー関数、Python の入れ子の `def`、Go の関数のリテラルにし、値として書いた関数は、それを呼ぶラムダにする（27.6）。関数の型の引数を持つ関数と `private` の関数は、入口の確かめの無い一つの関数だけを書く。関数を取る関数は外に見せ（型の引数を持つ関数と同じ）、`private` の関数とレコードと列挙は見せない（TypeScript は `export` を付けず、Python と Go は名前を `_` で始める。28.2）。
+- 名前：関数は別名で、Go はパスカルケース（`weight_of` は `WeightOf`）。Go で、モジュールのレコードか列挙の型と同じ名前になる関数は `Fn` を足す（`fn claim` と `record Claim` の `ClaimFn`）。レコードと列挙の型はパスカルケース、フィールドは TypeScript と Python が別名のまま、Go がパスカルケース。モジュールの列挙の値は、TypeScript と Python が大文字（`Size.SMALL`）、Go が型の名前を前に付けたもの（`SizeSmall`）。直和型の値の型は、列挙と値の別名をつなげたパスカルケース（`Order.placed` は `OrderPlaced`。23.8）。Rust は、関数とフィールドを別名で、型と列挙の値をパスカルケースで書き（`Size::Small`）、型と同じ名前の関数にも何も足さない（関数と型の名前空間が別だからである）。Rust の予約語は生の識別子にし（`r#ref`）、生の識別子にできない語と、生成物が名前だけで書く標準の型と値の名前には `_` を足す（`self_`、`Option_`、`Some_`。36.3）。`api` の `generated` も、この名前を言う（11.1）。
+- 関数の中の名前：TypeScript・Python・Rust は、引数を別名で、`let`・ラムダの引数・`some` の名前を書いたとおりに書く。Go は、どれも小文字で始まるキャメルケースにする（`paid_on` は `paidOn`、`days_late` は `daysLate`）。同じパッケージの rulec の Go が、中の名前を `roundDown` や `minInt` と書くのにそろえた。中の関数（入口を通らない関数）の名前は、TypeScript・Python・Rust が `_` と別名（`_weight_of`）、Go が `_` とキャメルケース（`_weightOf`）である。どの出力先も、出力先が名前に取らない字を持つ関数の中の名前は `v` にする（`m²`。36.3）。
+- **決定（名前がぶつかったとき）**：関数の中の名前が、出力先の予約語か、生成したコードが使う名前（TypeScript の `BigInt`・`Math`・`Error` など、Python の `len`・`int`・`str`・`range`・`min`・`max` など、Go の `err`・`ctx`・`fmt`・`big`、補助のモジュールの `kaname` と単位のモジュールの `units`）か、モジュールのコードの名前（関数、型、読み込んだモジュール）か、前に付けた名前と同じになるときは、名前を足して分ける。TypeScript と Python の引数は `_` を足し（`len` は `len_`。それも取られていれば `len_2`、`len_3`）、`let` とラムダの引数と `some` の名前は、2 からの番号を `_` のあとに足す（`int` は `int_2`）。Go は、キャメルケースにした名前に 2 からの番号を足す（`type` は `type2`、`len` は `len2`）。キャメルケースにすると同じになる二つの名前（`paid_on` と `paidOn`）も、あとのほうが番号を取る（`paidOn` と `paidOn2`）。Rust は TypeScript と Python と同じ形で `_` と番号を足す。分けるのは、モジュールのコードの名前（関数、`check_<関数>`、`_MODULE`）、生の識別子にできない語、`Some`・`None`・`Ok`・`Err` などで、パスの頭は `let` に隠されないので `kaname` と `units` は分けない（36.3）。`tests/modules/names.kn` が、この形を四つの出力先で確かめる（16.4）。
+- 引数：TypeScript・Go・Rust は並べた順に、Python はキーワードだけで受け取る（`def claim(*, invoice, paid_on, reference_rate)`）。Rust は `Copy` の型を値で、ほかを借りて受け取る（`&Invoice`、`&str`、`&[T]`。36.4）。kaname の呼び出しが名前で書くのに合わせ、Python では取り違えを書けなくした。Python のホストが呼ぶ関数のキーワードは別名のままで、中の関数には、上の決まりで分けた名前で渡す（`names.kn` の `words` なら `return _words(Type=Type, len_=len, max_=max, items=items)`）。ホストが呼ぶ関数の本体は、引数の名前が隠すかもしれない組み込みの名前を使わない（要素の数を文に書くのは補助の `kaname.itoa` である）。TypeScript と Go の引数の取り違えは、単位の型が違えば型の検査が言う。
+- 入口：ホストが呼ぶ関数には、引数を型と範囲と要素の数で確かめて外れれば `input` で失敗する公開する関数（`claim`）と、入口を通らない中の関数（`_claim`）を書く（4.4）。同じモジュールの関数どうしの呼び出しは中の関数を、ほかのモジュールの関数は公開する関数を呼ぶ。範囲の解析が引数を示せなかった呼び出しは、呼ぶ前に確かめる（`range`）。型の引数を持つ関数は、入口の確かめの無い一つの関数だけを書き、ほかのモジュールの生成物から呼べるように外に見せる（TypeScript の `export function _first_or`、Python のモジュールの `_first_or`、Go の `FirstOr`、Rust の `pub fn _first_or`。21.3、26.7）。鍵に限った型の引数の順は、隠れた一つ目の引数として渡す（26.7。Rust は渡さず、`K: Ord` の境界で書く。36.2）。
+- エフェクト：Go は、失敗しうる関数だけが `(T, error)` を返し、total な関数は `T` を返す（入口の外れは panic。4.4）。どの関数にも、引数を確かめるだけの `Check<関数>(…) error` を書く。Rust も同じ分け方で、失敗しうる関数が `Result<T, kaname::KanameError>` を、total な関数が `T` を返し（入口の外れは panic）、どの関数にも `check_<関数>(…) -> Result<(), kaname::KanameError>` を書く（36.4）。TypeScript と Python は、関数ごとに失敗の種類の型の別名（`export type ClaimFails = "rule" | "overflow"`、`ClaimFails = Literal["rule", "overflow"]`）を書き、ドキュメントのコメントに `@throws` と `Raises:` を書く。total な関数は `never`（TypeScript）と `NoReturn`（Python）で、`input` のほかは投げないと書く。止まらないかもしれない関数は、そうコメントに書く。
+- 本体：`let` は定数の宣言（Go は型を書いた `var`）、`if` と `match` はその言語の `if` 文で、答えを関数の `return` にするか、宣言した変数に入れる。直和型の `match` は、TypeScript と Python が `kind` と `isinstance` の `if` の並び、Go が型の switch である（23.8）。Rust は型を書いた `let` と、式の `if` と `match` で、直和型も `match` である。`let` の行は、生成物の行のコメントに元の行を書く（`// 20: let due = terms.due(invoiced: invoice.invoiced)`）。
+- 関数の値：ラムダは、TypeScript のアロー関数、Python の入れ子の `def`、Go の関数のリテラル、Rust のクロージャ（`&|l: &Line| -> … { … }`）にし、値として書いた関数は、それを呼ぶラムダにする（27.6）。関数の型の引数を持つ関数と `private` の関数は、入口の確かめの無い一つの関数だけを書く。関数を取る関数は外に見せ（型の引数を持つ関数と同じ）、`private` の関数とレコードと列挙は見せない（TypeScript は `export` を付けず、Python と Go は名前を `_` で始め、Rust は `pub` を付けずに名前を `_` で始める。28.2）。
 - 組み込みの関数：その場のループにする。そこに書いたラムダは出力先の関数にせず、要素の名前を置いた本体として書く。`any`・`all`・`first` は答えの決まった要素でループを抜ける（8 章）。生成した Python で、kaname の呼び出しの一段が Python の一段になるのは、このためである（8 章、16.4）。
 - 評価の順：参照インタプリタの順（8 章）を保つ。引数とフィールドは書いた順に評価し、渡す先の型で読み、渡す先の確かめは宣言の順にする。呼び出しが引数を宣言の順に並べ直すとき、渡す先の確かめが間に入るとき、読み替えが失敗しうるときは、書いた順に一時的な名前に入れてから並べる。`tests/modules/calc.kn` の `right_first` は、宣言の順と逆に引数を書いた呼び出しで、あふれる引数が先に評価される：
 
@@ -1277,14 +1314,14 @@ function _right_first(a: bigint, z: bigint): bigint {
 
 確かめる場所（4.2、6.4）と同じところで、同じ順に確かめ、同じ `KanameError` にする。
 
-- `KanameError` は、種類（`input`・`rule`・`date`・`range`・`overflow`・`zero`）、モジュール、`.kn` の行、文を持つ。TypeScript は `Error` の、Python は `Exception` の子で、Go は `error` を満たす `*KanameError`（`Kind`、`Module`、`Line`、`Message`）である。文は生成するときの `--lang` の言語で、参照インタプリタの失敗の文と同じ文字列にする（英語は最初の ASCII の文字を大文字に、日本語は ASCII の語と日本語のあいだに空白を入れる。ritsu-base の `spaced` と同じ）。突き合わせのテストが比べる（16.4）。
-- 規則の呼び出し：生成物の `RuleInputError` と `RuleContradictionError`（Go はそのエラー）を `rule` にする。日付の呼び出し：`KoyomiError` を `date` にする。文は「The rule `charges` refuses its inputs」「The date `terms.due` cannot be worked out」（日本語は「規則 `charges` が入力を受け付けません」「日付 `terms.due` が求まりません」）で、理由を書かず、生成物の例外を原因として持たせる（TypeScript の `cause`、Python の `raise … from e`、Go の `Err` と `Unwrap`）。示した呼び出しでは包まない。そこで生成物がエラーを返すのは ritsu の不具合なので、Go では panic にする（koyomi の生成物が、起きないはずの `none` で panic にするのと同じ）。規則の列挙の入力に書いた範囲（`campaign : tier  range >=basic <=gold`）も、数の範囲と同じく範囲の解析の場所で（6.1）、示せなければ包む。範囲の外の値は、参照インタプリタ（口の `eval`）でも生成物（入口）でも受け付けられず、どちらも `rule` の失敗になる（`tests/modules/lift.kn` を三つの出力先で流す。16.4）。
-- あふれ：示せなかった演算だけ、確かめつきで計算する。TypeScript と Python は計算してから int64 の範囲と比べ（`heldInt`、`held_int`）、Go は和と差を符号で、積を `math/big` で見る。丸めていない値は、演算ごとに既約にしてから分子と分母を比べる（5.6）。
+- `KanameError` は、種類（`input`・`rule`・`date`・`range`・`overflow`・`zero`）、モジュール、`.kn` の行、文を持つ。TypeScript は `Error` の、Python は `Exception` の子で、Go は `error` を満たす `*KanameError`（`Kind`、`Module`、`Line`、`Message`）、Rust は `std::error::Error` を持つ `kaname::KanameError`（`kind`、`module`、`line`、`message`、`cause`。36.5）である。文は生成するときの `--lang` の言語で、参照インタプリタの失敗の文と同じ文字列にする（英語は最初の ASCII の文字を大文字に、日本語は ASCII の語と日本語のあいだに空白を入れる。ritsu-base の `spaced` と同じ）。突き合わせのテストが比べる（16.4）。
+- 規則の呼び出し：生成物の `RuleInputError` と `RuleContradictionError`（Go はそのエラー、Rust は `RuleError`）を `rule` にする。日付の呼び出し：`KoyomiError` を `date` にする。文は「The rule `charges` refuses its inputs」「The date `terms.due` cannot be worked out」（日本語は「規則 `charges` が入力を受け付けません」「日付 `terms.due` が求まりません」）で、理由を書かず、生成物の例外を原因として持たせる（TypeScript の `cause`、Python の `raise … from e`、Go の `Err` と `Unwrap`、Rust の `cause` と `source`）。示した呼び出しでは包まない。そこで生成物がエラーを返すのは ritsu の不具合なので、Go と Rust では panic にする（koyomi の生成物が、起きないはずの `none` で panic にするのと同じ）。規則の列挙の入力に書いた範囲（`campaign : tier  range >=basic <=gold`）も、数の範囲と同じく範囲の解析の場所で（6.1）、示せなければ包む。範囲の外の値は、参照インタプリタ（口の `eval`）でも生成物（入口）でも受け付けられず、どちらも `rule` の失敗になる（`tests/modules/lift.kn` を四つの出力先で流す。16.4）。
+- あふれ：示せなかった演算だけ、確かめつきで計算する。TypeScript と Python は計算してから int64 の範囲と比べ（`heldInt`、`held_int`）、Go は和と差を符号で、積を `math/big` で見る。Rust は `checked_add` などで見る（補助の `kaname::add` など）。丸めていない値は、演算ごとに既約にしてから分子と分母を比べる（5.6）。
 - 0 で割る：示せなかった割り算の前に比べる。
-- 渡す先の範囲と要素の数：値を渡す前に、モジュールに一つずつ書く確かめの関数（`_outside1` など）で比べ、外れれば `range`（入口では `input`）。レコードのフィールドは、レコードごとの確かめ（TypeScript と Python の `_outside_<レコード>`、Go の `KanameOutside` のメソッド）で見る。直和型のフィールドは、値ごとに見る（`_outside_Order` と、Go の値の型ごとの `KanameOutside`。23.8）。振替の額は、0 より小さければ `range`（6.3）。
-- 入れ子の深さ：ホストが呼ぶ関数の入口は、自分を含む型の値を持ちうる引数ごとに、範囲の確かめの前に、型ごとに書く深さの関数（`_nest1` など。自分を含む型の値を一つ通るたびに一段足す）で数え、200 段を超えれば `input` で失敗する。自分を含むレコードと直和型の値のフィールドは、入口だけの確かめ（TypeScript と Python の `_enter_<型>`、Go の `KanameEnter` のメソッド）で、どの深さのものも見る。kaname の関数を呼ぶところの確かめ（`_outside_<型>`、`KanameOutside`）は、自分を含む型には書かず、その値の中を見ない（28.1）。
-- 文字列：入口では、正しい文字列か（TypeScript と Python は孤立したサロゲート、Go は正しくない UTF-8）と、書いた `count`（コードポイントの数）を確かめ、外れれば `input` である。文は「The argument `s` of `place` is no well-formed string of Unicode」と「… has 13 code points, outside its count <=12」（25.7）。
-- 範囲を書かない値：入口と、kaname の関数の引数に渡すところでは、型の全体で確かめる。TypeScript の `bigint` と Python の `int` は int64 に収まるかを、TypeScript の文字列の日付は `kaname.isDate` で、Go の `Date` は `Valid` で、0001-01-01 から 9999-12-31 の正しい日かを確かめる。Go の `int64` と Python の `datetime.date` は、その外の値を持てないので確かめない。文は参照インタプリタの入口と同じで、範囲に型の全体を書く（`outside its range >=-9223372036854775808 <=9223372036854775807`。22.5）。
+- 渡す先の範囲と要素の数：値を渡す前に、モジュールに一つずつ書く確かめの関数（`_outside1` など）で比べ、外れれば `range`（入口では `input`）。レコードのフィールドは、レコードごとの確かめ（TypeScript と Python の `_outside_<レコード>`、Go の `KanameOutside` と Rust の `kaname_outside` のメソッド）で見る。直和型のフィールドは、値ごとに見る（`_outside_Order` と、Go の値の型ごとの `KanameOutside`。23.8）。振替の額は、0 より小さければ `range`（6.3）。
+- 入れ子の深さ：ホストが呼ぶ関数の入口は、自分を含む型の値を持ちうる引数ごとに、範囲の確かめの前に、型ごとに書く深さの関数（`_nest1` など。自分を含む型の値を一つ通るたびに一段足す）で数え、200 段を超えれば `input` で失敗する。自分を含むレコードと直和型の値のフィールドは、入口だけの確かめ（TypeScript と Python の `_enter_<型>`、Go の `KanameEnter` と Rust の `kaname_enter` のメソッド）で、どの深さのものも見る。kaname の関数を呼ぶところの確かめ（`_outside_<型>`、`KanameOutside`）は、自分を含む型には書かず、その値の中を見ない（28.1）。
+- 文字列：入口では、正しい文字列か（TypeScript と Python は孤立したサロゲート、Go は正しくない UTF-8）と、書いた `count`（コードポイントの数）を確かめ、外れれば `input` である。Rust の `&str` はいつも正しい UTF-8 なので、`count` だけを確かめ、正しくない文字列は JSON の一行で呼ぶ入口が言う（36.5、36.11）。文は「The argument `s` of `place` is no well-formed string of Unicode」と「… has 13 code points, outside its count <=12」（25.7）。
+- 範囲を書かない値：入口と、kaname の関数の引数に渡すところでは、型の全体で確かめる。TypeScript の `bigint` と Python の `int` は int64 に収まるかを、TypeScript の文字列の日付は `kaname.isDate` で、Go の `Date` は `Valid` で、Rust の `Date` は `valid()` で、0001-01-01 から 9999-12-31 の正しい日かを確かめる。Go と Rust の `int64`（`i64`）と Python の `datetime.date` は、その外の値を持てないので確かめない。文は参照インタプリタの入口と同じで、範囲に型の全体を書く（`outside its range >=-9223372036854775808 <=9223372036854775807`。22.5）。
 
 **決定（確かめるのは、示したでない場所だけ）**：生成したコードが確かめるのは、範囲の解析の答え（`Place::outcome`）が示したでない場所だけである。`ritsu gen` は、`ritsu check` と同じく言語をまたぐ判定の答え（`ProgramVerdicts`）を渡してモジュールを検査するので、言語をまたぐ判定で示せた場所は確かめない。答えを渡さない生成（kaname のクレートのテスト）では、その場所は答えを待つ場所（4.3）で、確かめを書く。`late_payment` の期日（X6）は、`ritsu gen` では示せた場所で、包まない（`examples/late_payment` を `ritsu gen` で書いたもの）：
 
@@ -1310,9 +1347,9 @@ function _right_first(a: bigint, z: bigint): bigint {
 
 ### 10.5 内側の層の生成物を呼ぶ
 
-- **読み込み**：パッケージのモジュールを、名前空間ごと別名で読む（TypeScript の `import * as rule_card_fee from "../rules/card_fee";`、Python の `from ..rules import card_fee as _rule_card_fee`、Go の `"<module>/rules/cardfee"`）。sekisho の生成物と同じ形で、モジュールの中の名前とぶつからない。
-- **規則**：関数の名前と引数の順と型は、口の `Call` から書く（6.1）。Go は入力の構造体を作る。出力が一つの規則は値を直に返し、二つ以上ならレコード（Python の `Output`、Go の構造体）を返すので、kaname の出力のレコードに読み替える。率は規則の `Rate` の型で、規則の刻みの数にして渡し、受け取る。並びは、規則の生成物の要素のレコード（`LinesElement` など）のリストにして渡す。
-- **日付**：rulec の生成物は日付を日の番号で受け取り、返す。koyomi の生成物は、TypeScript が `YYYY-MM-DD` の文字列、Python が `datetime.date`、Go が koyomi のパッケージの `Date` で受け取り、返す。kaname の生成物は、呼ぶところで換算する（dandori のつなぐコードと sekisho の生成物と同じ。dandori の DESIGN 1.17）。
+- **読み込み**：パッケージのモジュールを、名前空間ごと別名で読む（TypeScript の `import * as rule_card_fee from "../rules/card_fee";`、Python の `from ..rules import card_fee as _rule_card_fee`、Go の `"<module>/rules/cardfee"`、Rust の `use crate::rules::card_fee as rule_card_fee;`）。sekisho の生成物と同じ形で、モジュールの中の名前とぶつからない。
+- **規則**：関数の名前と引数の順と型は、口の `Call` から書く（6.1。Rust は `RuleFacts::rust`。36.6）。Go は入力の構造体を作る。出力が一つの規則は値を直に返し、二つ以上ならレコード（Python の `Output`、Go の構造体）を返すので、kaname の出力のレコードに読み替える。率は規則の `Rate` の型で、規則の刻みの数にして渡し、受け取る。並びは、規則の生成物の要素のレコード（`LinesElement` など）のリストにして渡す。
+- **日付**：rulec の生成物は日付を日の番号で受け取り、返す。koyomi の生成物は、TypeScript が `YYYY-MM-DD` の文字列、Python が `datetime.date`、Go が koyomi のパッケージの `Date`、Rust が koyomi のモジュールの `Date` で受け取り、返す（Rust は、kaname の `Date` とフィールドを入れ替えて組み直す。36.6）。kaname の生成物は、呼ぶところで換算する（dandori のつなぐコードと sekisho の生成物と同じ。dandori の DESIGN 1.17）。
 - **列挙**：規則の列挙の値は、規則の生成物の列挙のメンバー（口の `CallEnum`）で渡し、受け取る。モジュールの列挙と規則の列挙のあいだは、kaname の `match` が書いたとおりに対応づける。
 
 ### 10.6 振替の値と、ホストでの当て方
@@ -1362,6 +1399,21 @@ export async function applyLedger(book: Book, call: calls.LedgerCall): Promise<R
 
 当てる関数は、chobo のクライアントの答え（`{ result: "done" } | { result: "done_before" } | { result: "refused"; reason: … }`）をそのまま返す。答えの `reason` の型は、chobo のクライアントでは帳簿の全部の理由の合併型である。振替の値の型ごとの合併型（`ProcessingFeeDoRefusal`）は、その操作で起きうる理由だけを並べるので、ホストは `switch` でそれだけを扱えばよい。Python は、操作ごとの `@dataclass(frozen=True)` と `Literal` の別名（理由が無ければ `NoReturn`）、当てる関数 `apply_ledger(book, call)` である。Go は、操作ごとの構造体と、理由の名前付きの `string` と定数（`CaptureDoRefusalKeyConflict`）、当てる関数 `ledgerapply.Apply(ctx, book, call)` で、帳簿のクライアントのパッケージを `client`、振替の型のパッケージを `calls` という名前で読む（帳簿のパッケージの名前が、引数の名前 `book` と同じになっても読めるように。日本語の名前の帳簿のパッケージは `book` である）。
 
+Rust は、操作ごとの構造体（帳簿と振替と操作の名前を `BOOK`・`TRANSFER`・`OP` の定数で持つ）と拒否の理由の列挙（`CaptureDoRefusal`。`as_str()` が帳簿の書く名前を返す）、帳簿ごとの `enum Call` と `From`、当てる関数 `apply(book, call)` である。クライアントのモジュールを `client`、振替の型のモジュールを `calls` という名前で読むのは Go と同じで、トレイト境界は帳簿の置き場所ごとに書く（PostgreSQL と MySQL の系統は `Database`、TigerBeetle は `TigerBeetleClient`。36.6）。`examples/payout` の台帳を kaname のテストで書いたもの（実物。`glue/books/ledger_apply.rs`）：
+
+```rust
+use crate::books::ledger as client;
+use crate::glue::books::ledger as calls;
+
+/// Makes `call` through the client `book`: what the client answers.
+pub async fn apply<D: client::Database>(book: &client::Book<D>, call: &calls::Call) -> Result<client::Outcome, client::Error> {
+    match call {
+        calls::Call::CaptureDo(c) => book.capture().r#do(client::CaptureArgs { payment: &c.payment, seller: &c.seller, amount: c.amount }).await,
+        calls::Call::ProcessingFeeDo(c) => book.processing_fee().r#do(client::ProcessingFeeArgs { payment: &c.payment, seller: &c.seller, fee: c.fee }).await,
+    }
+}
+```
+
 ### 10.7 `ritsu gen` へのつなぎ方
 
 - `ritsu gen` は、プロジェクトの `.kn` を、ほかの言語のファイルと同じく検査する。全部の言語をつなぎ、言語をまたぐ判定の答え（`ProgramVerdicts`）を渡して、`ritsu check` と同じに検査し（10.4）、通らなければ何も書かない。`.kn` が読む規則、日付のファイル、帳簿、ほかの `.kn` は、プロジェクトのファイルでなければならない（ワークフローとゲートと同じ）。モジュールだけを渡せば、こう言って何も書かない：
@@ -1379,6 +1431,8 @@ generated file is stale or hand-edited: <out>/typescript/glue/payout.ts
 generated file is stale or hand-edited: <out>/python/generated/glue/payout.py
 generated file is stale or hand-edited: <out>/go/glue/payout/payout.go
 ```
+
+- Rust：`ritsu gen` は、まだ Rust のパッケージを書かない（19 章）。Rust の生成物を書くのは kaname の生成の関数（`package_in` に `Target::Rust`）で、kaname のテストがパッケージの残りを書いて確かめる（36.9）。
 
 ### 10.8 捨てた形
 
@@ -1912,7 +1966,8 @@ kaname の呼び出しでの X2 は、`crates/ritsu-model/tests/cross.rs` が確
 | 例 | `tests/examples.rs` | 八つの例に英語と日本語の版がそろうこと、どの例も全部の言語をつないだ `check` を警告も無く通り、`examples` が成り立つこと、汎用の四つの例が `use` を持たず、ホストのプログラム（`host/`）を持つこと（17.5）、規則が転記した文書を、横に置いて固定したコピーから引用すること（八つの規則が固定する出典は 10）、日付のファイルが、規則の固定したコピーをコメントで名指すこと（17.11）。英語と日本語の版が同じ答えを返すことは `tests/vectors.rs`（16.6） |
 | ベクタ、run、doc、api | `tests/vectors.rs`、`tests/run.rs`、`tests/cli.rs`、`tests/doc.rs`、`tests/api.rs` | golden（`tests/golden/vectors/`、`tests/golden/run/`、`tests/golden/doc/`、`tests/golden/api/`）。英語と日本語の版のベクタ（16.6）。ページが中に置く規則と日付のページが、rulec と koyomi の `doc` が描くものと一字も違わないこと、HTML が外から何も読まないこと、Chrome でページが描け、中のページがボタンと `#page=<n>` で開くこと（13 章）。コマンドと終了コード |
 | 口 | `tests/ports.rs` | `Programs` の答え（区間、出どころ、関係、並びの長さ、見た値）、`Items`、`References` |
-| 出力先の突き合わせ | `tests/typescript.rs`、`tests/python.rs`、`tests/go.rs` | 16.4 |
+| 出力先の突き合わせ | `tests/typescript.rs`、`tests/python.rs`、`tests/go.rs`、`tests/rust.rs` | 16.4 |
+| 名前の字 | `tests/idents.rs` | 生成したコードの名前にする字の表（ritsu-emit の `xid.rs`）が通す名前を、rustc、Python、Node と tsc、Go が名前に取り、表が外す名前を取らないこと（36.3、36.9） |
 | 文書とスキル | `tests/docs.rs`、`tests/skill.rs`、`tests/design.rs` | README と `docs/reference.md` とスキルの `kn` の行が、例かテストの `.kn` の行であること、見せるコマンドが kaname のコマンドであること（出力を添えたものは ritsu の `tests/kaname.rs` が走らせる）、リファレンスが全部のキーワードを挙げること、リンクの先があること、サイトで `kn` に色を付ける字句の定義（`website/tools/knlexer.py`）の語の一覧と数の文字が `kw.rs` と `lex.rs` のものと同じであること（31 章）。スキルのコピーが `skills/sync.sh` の作るものと同じで、スキルの外へのリンクが無いこと。この文書の `kn` の塊が構文として通ること |
 | 言語をまたぐ判定 | `crates/ritsu-cross/tests/programs.rs` | 14.3 の判定（関係、見た値での確かめ、日付の区間、どこから来た額も）。16.5 |
 | ritsu の入口 | `crates/ritsu/tests/kaname.rs`、`check.rs`、`cross.rs`、`gen.rs`、`codes.rs`、`readme.rs`、`website.rs` | `ritsu kaname` のコマンド（`api` と `doc` も）、`ritsu check` のテキストが `ritsu kaname check` を並べたものと同じこと、言語をまたぐ判定の診断と境目の数、sakai と yuen が中のものと参照を読むこと、`ritsu gen` の `glue/`、台帳の再現（八つにモジュールがあること）、例のページ（`tests/golden/kaname-doc/`）、例のホストのプログラムが `ritsu gen` のパッケージを呼んで `output.txt` のとおりに出力すること（17.5）、kaname の README とリファレンスとスキルが出力を添えて見せるコマンド、根の README の kaname の節（`order_flow` のホストの行と出力も）、サイトの頭のページと kaname のページ（11.2。組んだページの `kn` の塊の色は 31 章） |
@@ -1938,36 +1993,45 @@ ritsu 0.30.0 のコーパスでは、85 のファイルの `derive` と `define`
 
 ### 16.4 出力先の突き合わせ
 
-例（`examples/` の八つの例の、英語と日本語の版で十六）とテストのモジュール（`tests/modules/` の三十四と、`calls.kn` が読む `lib.kn`、`gcalls.kn` が読む `glib.kn`）の 52 のモジュールで、テストの中で一つの生成パッケージを作る。規則、日付のファイル、帳簿の生成物は、rulec・koyomi・chobo の生成の関数を dev-dependency で、`ritsu gen` と同じに呼んで書く（帳簿のクライアントは PostgreSQL のもの。`tests/common/targets.rs`）。そこに出力先ごとのハーネス（`kaname::r#gen::harness`。パッケージには入れない）を置き、三つの入力を流して、参照インタプリタの答えと比べる。
+例（`examples/` の八つの例の、英語と日本語の版で十六）とテストのモジュール（`tests/modules/` の三十四と、`calls.kn` が読む `lib.kn`、`gcalls.kn` が読む `glib.kn`）の 52 のモジュールで、テストの中で一つの生成パッケージを作る。規則、日付のファイル、帳簿の生成物は、rulec・koyomi・chobo の生成の関数を dev-dependency で、`ritsu gen` と同じに呼んで書く（帳簿のクライアントは PostgreSQL のもの。`tests/common/targets.rs`）。Rust は `ritsu gen` がまだ書かないので、規則はパッケージの形の rulec の Rust、日付と帳簿は koyomi と chobo の Rust で書き、一つのクレートにする（36.9）。そこに出力先ごとのハーネス（`kaname::r#gen::harness`。パッケージには入れない。Rust のハーネスは、パッケージの入口 `glue::door::answer` を呼ぶ小さな `main` である）を置き、三つの入力を流して、参照インタプリタの答えと比べる。
 
 - 全部の関数の全部のベクタ（9 章）。止まらないベクタ（200 段を超える呼び出し。8 章）は流さない。
-- 引数の宣言の外の入力：引数の一つの部分（数の範囲の端の一つ外、日付の範囲の端の次の日と前の日、リストの要素の数の一つ多いものと一つ少ないもの、文字列の `count` の一つ外、正しくない文字列。25.8）だけを外し、ほかを基本の値にした入力。範囲を書かない値は型の端の一つ外で、数は TypeScript と Python で、日付（と正しくない日 2026-13-01）は TypeScript と Go で流す（22.4）。入口の失敗 `input`（4.4）を見る。ベクタはどれも宣言の中にあるので、ベクタだけでは入口の確かめの文に届かない。
+- 引数の宣言の外の入力：引数の一つの部分（数の範囲の端の一つ外、日付の範囲の端の次の日と前の日、リストの要素の数の一つ多いものと一つ少ないもの、文字列の `count` の一つ外、正しくない文字列。25.8）だけを外し、ほかを基本の値にした入力。範囲を書かない値は型の端の一つ外で、数は TypeScript と Python で、日付（と正しくない日 2026-13-01）は TypeScript と Go と Rust で流す（22.4）。入口の失敗 `input`（4.4）を見る。ベクタはどれも宣言の中にあるので、ベクタだけでは入口の確かめの文に届かない。
 - 自分を含む型の値を入れ子にした入力：自分を含む型の値を持ちうる引数ごとに、ホストが渡せるいちばん深い 200 段の値と、入口が `input` で止める 201 段の値（`vectors::nested_value`）を、ほかを基本の値にして流す（28.1）。答えが止まらないもの（値をたどる関数をほかの関数から呼んで、呼び出しが 200 段を超えるもの）は流さない。200 段の値をそのまま答えるもの（`trees.kn` の `named` と `simplify`、`catalog.kn` の `pruned`）も、出力先の答えの行を、参照インタプリタの答えの深さまで読んで比べる（`harness::compare`。28.1）。
 
-比べるのは、答えの値、失敗の種類とモジュールと行、`KanameError` の文で、英語と日本語の両方の文で流す。型の検査も通す：TypeScript は `tsc --strict --erasableSyntaxOnly`（型を剥がすだけで走る書き方。TypeScript 7.0.2）、Python は `mypy --strict`（2.4.0）、Go は gofmt と `go vet`（go.mod が求める Go 1.26）。道具は `tools/`（`package.json` と `package-lock.json`、`requirements.txt`、`go/go.mod` と `go.sum`）に置き、CI の `tools.yml` が入れる。どれも `tools` の段で、道具が無ければ SKIP の行を出して通す（ritsu-testkit）。kaname の生成物は第三者のパッケージを使わないので、ランナーの依存は型の検査の道具と、帳簿のクライアントが読む pgx だけである。
+比べるのは、答えの値、失敗の種類とモジュールと行、`KanameError` の文で、英語と日本語の両方の文で流す。型の検査も通す：TypeScript は `tsc --strict --erasableSyntaxOnly`（型を剥がすだけで走る書き方。TypeScript 7.0.2）、Python は `mypy --strict`（2.4.0）、Go は gofmt と `go vet`（go.mod が求める Go 1.26）、Rust は `cargo clippy --all-targets -- -D warnings` をエディション 2021 と 2024 の二度（`rust-version` は 1.94。36.8）。道具は `tools/`（`package.json` と `package-lock.json`、`requirements.txt`、`go/go.mod` と `go.sum`、`rust/Cargo.toml` と `Cargo.lock`）に置き、CI の `tools.yml` が入れる（Rust のクレートの依存は `cargo fetch --locked` で先に取ってくる）。どれも `tools` の段で、道具が無ければ SKIP の行を出して通す（ritsu-testkit）。kaname の生成物は第三者のパッケージを使わないので、ランナーの依存は型の検査の道具と、帳簿のクライアントが読むもの（Go の pgx、Rust の sqlx・tokio・tigerbeetle）と、Rust のテストが振替を帳簿に当てるプログラムで JSON を読む serde_json だけである。
 
 ```
-$ cargo test -p kaname --test typescript --test python --test go -- --nocapture
-gofmt -l and go vet (go version go1.26.0 darwin/arm64) pass the package in English and in Japanese
-En: 16613 of 16613 cases agree with the reference: 13982 vectors (5 that do not stop are not run), 2541 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
-Ja: 16613 of 16613 cases agree with the reference: 13982 vectors (5 that do not stop are not run), 2541 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+$ cargo test -p kaname --test typescript --test python --test go --test rust -- --nocapture --test-threads 1
+gofmt -l and go vet (go version go1.26.10 darwin/arm64) pass the package in English and in Japanese
+En: 16770 of 16770 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2584 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+Ja: 16770 of 16770 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2584 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
 mypy --strict (mypy 2.4.0 (compiled: yes)) passes the package and the harness in English and in Japanese
 Python 3.13.11
-En: 16633 of 16633 cases agree with the reference: 13982 vectors (5 that do not stop are not run), 2561 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+En: 16790 of 16790 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2604 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
 a call of kaname is 1 frame of Python: 200 calls answer at a limit of 203 (100 at 103), within CPython's 1000
 a call through a function value is 1 frame of Python too: steps_down(66), 199 calls, answers at a limit of 202 (steps_down(33), 100 calls, at 103)
 a value nested one deeper is 2 frames of Python held at the entry and compared: same of two chains of categories 200 deep answers at a limit of 405 (100 deep at 205), within CPython's 1000
-Ja: 16633 of 16633 cases agree with the reference: 13982 vectors (5 that do not stop are not run), 2561 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+Ja: 16790 of 16790 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2604 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+cargo clippy --all-targets -- -D warnings (cargo 1.94.1 (29ea6fb6a 2026-03-24), rustc 1.94.1 (e408947bf 2026-03-25)) passes the crate on the 2021 and the 2024 editions in English and in Japanese
+En: 16770 of 16770 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2584 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+Ja: 16770 of 16770 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2584 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+30 vectors of 4 modules answer 57 transfers of 3 books: the reference makes 40 done, 17 refused
+on postgres (PostgreSQL) 18.0: the 57 transfers come to what the reference says, and so do the balances and the holds
+on TigerBeetle TigerBeetle version 0.17.9+cc1c06a: the 57 transfers come to what the reference says, and so do the balances and the holds
+the crate with chobo's clients of the MySQL family builds and passes clippy, and is not run
 tsc --strict --erasableSyntaxOnly (Version 7.0.2) passes the package in English and in Japanese
-En: 16717 of 16717 cases agree with the reference: 13982 vectors (5 that do not stop are not run), 2645 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
-Ja: 16717 of 16717 cases agree with the reference: 13982 vectors (5 that do not stop are not run), 2645 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+En: 16874 of 16874 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2688 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
+Ja: 16874 of 16874 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2688 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules
 ```
 
-（テストの行のほかを省いた。）
+（テストの行のほかを省き、`test … ...` の前置きを外した。）
 
-13,982 件のベクタのうち 4,076 件が例の、9,906 件がテストのモジュールのもので、答えは値が 13,933 件（例の 4,076 件は全部が値）、失敗が 49 件（`overflow` が 24、`rule` が 11、`range` が 7、`zero` が 5、`date` が 2）である。例のベクタの多くは Functional Core の四つの例のもので、`order_flow` が 1,657 件ずつ（直和型の値ごとの候補が、状態とイベントの組の全部を試す。17.1）、`stock_diff` が 124 件ずつ、`handles` が 64 件ずつ、`catalog` が 140 件ずつである。宣言の外の入力は、TypeScript が 2,645 件、Python が 2,561 件、Go が 2,541 件で（例のものは TypeScript が 584 件、Python が 530 件、Go が 560 件。出力先で数が違うのは、型の端の一つ外の値を、持てる出力先でだけ流すからで、例では `order_flow` の範囲を書かないお金と日付である。22.4）、どれも `input` で失敗する。自分を含む型の値を入れ子にした入力は、どの出力先も 90 件で（`trees.kn` と `trees.ja.kn` の 36 件ずつ、`catalog.kn` と `catalog.ja.kn` の 9 件ずつ）、201 段の値はどれも `input` で失敗する。答えが止まらない 14 件（`trees.kn` の `leaf_sum` と `sizes`、`catalog.kn` の `paths`、`slugged`、`items`、`names`、`cheapest` に渡す 200 段の値。値をたどる関数をほかの関数から呼ぶので、呼び出しが 200 段を超える）は流さない。規則の列挙の入力の範囲は、`tests/modules/lift.kn` と `lift.ja.kn`（列挙の引数を一つとる四つの関数で、ベクタは列挙の四つの値）で確かめる。範囲に入らない `platinum`（`プラチナ`）をそのまま渡すベクタは、三つの出力先とも、規則の生成物の入口が受け付けずに `rule` で失敗し、参照インタプリタと同じ答えになる。生成したコードの名前を分ける決まり（10.3）は、`tests/modules/names.kn`（Go のキャメルケースで同じになる二つの引数、出力先の語と同じ名前の引数と `let`）で確かめる。直和型（受け渡す形、`match` の分岐、作る式、一部を替えたレコード、等しさ。23 章）は `tests/modules/sums.kn` と `sums.ja.kn`（ベクタは 696 件ずつ）で、温度を別の単位で読む換算と零より下の定数（3.10）は `temps.kn` と `temps.ja.kn`（88 件ずつ）で、辞書と集合とリストの組み込みの関数（24 章）は `dicts.kn` と `dicts.ja.kn`（611 件ずつ）、`lists2.kn` と `lists2.ja.kn`（331 件ずつ）で、文字列（25 章）は `texts.kn` と `texts.ja.kn`（1,922 件ずつ。宣言の外の入力は 86 件ずつ）で、総称の宣言と `result`（26 章）は `generic.kn` と `generic.ja.kn`（206 件ずつ）、`results.kn` と `results.ja.kn`（280 件ずつ）、ほかのモジュールの総称の関数を呼ぶ `gcalls.kn`（27 件）で確かめる（`tsc`、`mypy --strict`、`go vet` が総称の型と、鍵に限った型の引数に渡す順を通すこと。鍵に限った型の引数と関数の型の引数を持つ `index_by` で、隠れた順の引数が先頭に並ぶことも）。関数の値と `private`（27 章、28.2）は `hof.kn` と `hof.ja.kn`（205 件ずつ。値が 199、`overflow` の失敗が 5、止まらないものが 1）で確かめる（`tsc`、`mypy --strict`、`go vet` がアロー関数、入れ子の `def`、関数のリテラルと、`private` の名前を通すこと）。自分を含む型（28.1）は `trees.kn` と `trees.ja.kn`（213 件ずつ。どれも値）で確かめる（`tsc`、`mypy --strict`、`go vet` が、自分を指す `interface` とデータクラス、`*T` とスライスで自分を持つ構造体、総称の `Tree[T]` を通すこと）。同じ鍵の要素の並べ替えの順、Map と dict を回す順、負の数の `mod` の答えも、コードポイントで数える長さと切り出しと位置、文字列の大小と並べ替え、空白と ASCII の大文字と小文字、数と日付を読むこと、正しくない文字列の入口の失敗も、三つの出力先で参照インタプリタと同じである。
+14,096 件のベクタのうち 4,076 件が例の、10,020 件がテストのモジュールのもので、答えは値が 14,047 件（例の 4,076 件は全部が値）、失敗が 49 件（`overflow` が 24、`rule` が 11、`range` が 7、`zero` が 5、`date` が 2）である。例のベクタの多くは Functional Core の四つの例のもので、`order_flow` が 1,657 件ずつ（直和型の値ごとの候補が、状態とイベントの組の全部を試す。17.1）、`stock_diff` が 124 件ずつ、`handles` が 64 件ずつ、`catalog` が 140 件ずつである。宣言の外の入力は、TypeScript が 2,688 件、Python が 2,604 件、Go と Rust が 2,584 件で（例のものは TypeScript が 584 件、Python が 530 件、Go と Rust が 560 件。出力先で数が違うのは、型の端の一つ外の値を、持てる出力先でだけ流すからで、例では `order_flow` の範囲を書かないお金と日付である。22.4）、どれも `input` で失敗する。自分を含む型の値を入れ子にした入力は、どの出力先も 90 件で（`trees.kn` と `trees.ja.kn` の 36 件ずつ、`catalog.kn` と `catalog.ja.kn` の 9 件ずつ）、201 段の値はどれも `input` で失敗する。答えが止まらない 14 件（`trees.kn` の `leaf_sum` と `sizes`、`catalog.kn` の `paths`、`slugged`、`items`、`names`、`cheapest` に渡す 200 段の値。値をたどる関数をほかの関数から呼ぶので、呼び出しが 200 段を超える）は流さない。規則の列挙の入力の範囲は、`tests/modules/lift.kn` と `lift.ja.kn`（列挙の引数を一つとる四つの関数で、ベクタは列挙の四つの値）で確かめる。範囲に入らない `platinum`（`プラチナ`）をそのまま渡すベクタは、四つの出力先とも、規則の生成物の入口が受け付けずに `rule` で失敗し、参照インタプリタと同じ答えになる。生成したコードの名前を分ける決まり（10.3、36.3）は、`tests/modules/names.kn`（162 件。Go のキャメルケースで同じになる二つの引数、出力先の語と同じ名前の引数と `let`、Rust の予約語と生の識別子にできない語の名前、標準の型と値と同じ名前の型と関数、出力先が名前にできない字）で確かめる。直和型（受け渡す形、`match` の分岐、作る式、一部を替えたレコード、等しさ。23 章）は `tests/modules/sums.kn` と `sums.ja.kn`（ベクタは 696 件ずつ）で、温度を別の単位で読む換算と零より下の定数（3.10）は `temps.kn` と `temps.ja.kn`（88 件ずつ）で、辞書と集合とリストの組み込みの関数（24 章）は `dicts.kn` と `dicts.ja.kn`（611 件ずつ）、`lists2.kn` と `lists2.ja.kn`（331 件ずつ）で、文字列（25 章）は `texts.kn` と `texts.ja.kn`（1,922 件ずつ。宣言の外の入力は 86 件ずつ）で、総称の宣言と `result`（26 章）は `generic.kn` と `generic.ja.kn`（206 件ずつ）、`results.kn` と `results.ja.kn`（280 件ずつ）、ほかのモジュールの総称の関数を呼ぶ `gcalls.kn`（27 件）で確かめる（`tsc`、`mypy --strict`、`go vet` が総称の型と、鍵に限った型の引数に渡す順を通すこと。鍵に限った型の引数と関数の型の引数を持つ `index_by` で、隠れた順の引数が先頭に並ぶことも。clippy が、`Ord` を境界にした鍵の型の引数と、`::<…>` で型の引数を書いた呼び出しを通すこと。36.2）。関数の値と `private`（27 章、28.2）は `hof.kn` と `hof.ja.kn`（205 件ずつ。値が 199、`overflow` の失敗が 5、止まらないものが 1）で確かめる（`tsc`、`mypy --strict`、`go vet` がアロー関数、入れ子の `def`、関数のリテラルと、`private` の名前を通すこと。clippy が `&dyn Fn` で借りた関数の値とクロージャを通すこと）。自分を含む型（28.1）は `trees.kn` と `trees.ja.kn`（213 件ずつ。どれも値）で確かめる（`tsc`、`mypy --strict`、`go vet` が、自分を指す `interface` とデータクラス、`*T` とスライスで自分を持つ構造体、総称の `Tree[T]` を通すこと。clippy が `Box` と `Vec` で自分を持つ構造体と列挙を通すこと）。同じ鍵の要素の並べ替えの順、Map と dict を回す順、負の数の `mod` の答えも、コードポイントで数える長さと切り出しと位置、文字列の大小と並べ替え、空白と ASCII の大文字と小文字、数と日付を読むこと、正しくない文字列の入口の失敗も、四つの出力先で参照インタプリタと同じである。
 
 - **呼び出しの深さ**：生成した Python で、kaname の呼び出しの一段は Python の一段である。`tests/python.rs` は、`tests/modules/rec.kn` の `countdown` が答える最小の再帰の上限を二分探索で求め（100 段で 103、200 段で 203）、200 段の呼び出しが、CPython の既定の上限 1,000 のまま答えることを確かめる（8 章）。関数の値の呼び出しも一段で、`tests/modules/hof.kn` の `steps_down`（一段下りるごとに、`steps_down`、`via`、`steps_down` を呼ぶラムダの三つを呼ぶ）は、100 段で 103、199 段で 202 の上限で答える（27.3）。自分を含む型の値は、入れ子の一段が、入口の確かめと比べで Python の二段になる。`tests/modules/trees.kn` の `same` は、200 段の分類の連なりを二つ受け取り、上限 405 で答える（100 段なら 205。28.1）。
+- **Rust の帳簿**：`tests/rust.rs` の `the_generated_rust_makes_the_transfers_in_the_books` は、振替を作る四つのモジュール（`payout` の英日と、`tests/modules/` の `inner.kn` と `walks.kn`）のベクタの答えにある振替（30 件のベクタの 57 件）を、`glue/books/` の当てる関数と chobo の Rust のクライアントで、PostgreSQL（使い捨てのクラスタ）と TigerBeetle に当てる。クライアントの答えと、帳簿の残高と保留が、chobo の参照インタプリタの言うとおりになる。MySQL の系統のクライアントでは、クレートを組んで clippy を通し、走らせない（36.9）。
+- **Rust の呼び出しの深さ**：生成した Rust は段を数えず、200 段の呼び出しと値をスタックで受ける。デバッグのビルドのハーネスは、16,770 件に、メインのスレッドのスタックが 1.5 MiB でも答え、1 MiB では `trees.kn` の `leaf_sum` に渡す 200 段の値であふれた（36.15）。
 - **`ritsu gen` の生成物**：kaname のクレートのテストは、言語をまたぐ判定の答えを渡さずに生成するので、答えを待つ場所に確かめを書く（10.4）。`ritsu gen` の生成物は、`crates/ritsu/tests/gen.rs` が同じハーネスで確かめる。`tests/projects/settlement` を `ritsu gen` で書き、三つの型の検査を通し、ベクタと宣言の外の入力を流す（自分を含む型は無い）。答えを渡すと、言語をまたぐ判定の場所の確かめが無くなる：
 
 ```
@@ -2312,7 +2376,10 @@ ok rules/値引きの配分.rule
 - **帳簿の口からページを読むこと**（`Books` に `doc` を足して、chobo のページを埋め込む）：いまは振替の操作と理由を kaname のページに並べるだけである。
 - **逃げ道の警告を、意図を書いて消す書き方**：7 章。
 - **`fmt` と LSP**：ritsu の LSP と同じく作らない（ritsu の DESIGN 15 章）。
-- **TypeScript・Python・Go のほかの出力先**（rulec の 12 の出力先のような）。
+- **`ritsu gen` の Rust**（`--target rust`）：kaname の Rust の生成物は、kaname の生成の関数が書き、kaname のテストが規則・日付・帳簿の Rust と一つのクレートにして確かめる（36.9）。`ritsu gen` は、まだ Rust のパッケージを書かない。書くのは、モジュールの木をつなぐファイル（`lib.rs`、`rules.rs`、`dates.rs`、`books.rs`）と、`Cargo.toml`（帳簿の置き場所ごとの依存の行）と、`--check` と `--format json` で、形はテストのクレート（36.8、36.9）と同じにする。
+- **パッケージの Wasm**：形は 36.10〜36.12 に決めた。生成器が `.wit` と組む行を書き、テストがパッケージのクレートを wasm32 に組んで、ネイティブのハーネスと同じケースに同じ答えを返すことを確かめる。Wasm のスタックは 1 MiB なので、リリースのビルドで、200 段の呼び出しと値がその中に収まることも確かめる（36.15）。
+- **モジュールを Rust のライブラリにすること**（`ritsu gen --library --target rust`）：ライブラリの形（ritsu の DESIGN 17.8）は npm・PyPI・Go のモジュールで書き、Rust では exit 2 で止まる。足すには三つを決める。一つ目は crates.io のクレートの名前で、モジュールの正規の書き方の連なりと別名から、crates.io が受け付ける名前を作る決まりである。二つ目は依存の版の書き方で、Cargo の版の範囲（`^`）と、ritsu の DESIGN 17.16 の「ちょうどの版」で書く決まりをどう合わせるかである。三つ目はライブラリの単位の型で、`units` をライブラリごとに持つか、共通のクレートから読むかである。単位の型が別のクレートで別の型になると、ライブラリの額とパッケージの額を同じ型で受け渡せない。
+- **TypeScript・Python・Go・Rust のほかの出力先**（rulec の 12 の出力先のような）。
 - **前提を破る入力を解いて、見た値に足すこと**：見た値の入力は、ベクタと、振替の額と日を渡す先の範囲の一つ外にする入力だけである（14.2）。二つの入力の関係（`before <= upto`）を破る入力は解かないので、区間の端で破る前提は、ベクタに破る実行が無ければ決められない（W201）になる。
 
 ## 20. 決めたこと
@@ -2510,7 +2577,7 @@ ok rules/値引きの配分.rule
 段階 H4（文字列）で決めたこと：
 
 149. ★ 文字列は、Unicode のスカラー値（コードポイント）の並びである。長さ、切り出し、位置、大小を、どれもコードポイントで決め、正規化はしない。大小は鍵の順と同じ一つの比べで、文字列の大小と `min`・`max` を E105 にする決まりを外した（25.1、25.2）。
-150. 空白は Unicode の White_Space の 25 文字、大文字と小文字は ASCII の文字だけである。参照インタプリタ、三つの出力先の補助のモジュール、Lean のモデルが同じ表を持つ（25.3）。
+150. 空白は Unicode の White_Space の 25 文字、大文字と小文字は ASCII の文字だけである。参照インタプリタ、四つの出力先の補助のモジュール、Lean のモデルが同じ表を持つ（25.3）。
 151. `parse_number` と `parse_date` は、kaname が決めた一つの形だけを読み、読めなければ `none` を答える。答えの区間は型の全体で、端に型の端の印を付ける（25.4、25.6）。
 152. 文字列のエスケープは入れない。書けない文字は `char(n)` で書き、`n` はスカラー値を書いた整数の定数に限る（ほかは E109）。値の数からは `to_text` で作る。`char` という名前のモジュールの関数は E006 である（25.2）。
 153. 足した文字列の関数は、メソッドの形だけで書く。`slice`・`take`・`drop`・`contains` はリストと同じ名前で、`.` の前の値の型で分ける。どれも失敗しない。`pad_start` と `pad_end` が 1,000,000 コードポイントより長く伸ばすときは、`numbers` と同じく評価を止める（25.2、25.5）。
@@ -2584,7 +2651,7 @@ ok rules/値引きの配分.rule
 段階 H8（例と文書、総称の関数の呼び出しの輪、`run` の入力の深さ）で決めたこと：
 
 208. ★ 総称の関数の呼び出しの輪の中では、型の引数をそのまま（入れ替えてもよい）渡すか、型の引数を含まない型を渡す。型の引数から作った型を渡せば E112 である。自分を含む総称の型の決まり（197）と同じ決まりで、生成した Go が「instantiation cycle」で組めない形を検査で止める。言うところは呼び出しなので、E108 でなく、呼び出しの型の引数を言う E112 にした。Go が止める形だけを止める、型の引数の流れを追う決まりは、19 章に残す（26.2）。
-209. 輪は、名前で渡した関数も呼び出しに数える（27.5 と同じ）。呼び出しごとに一つだけ言い、注に書き方を書く。台帳の E112 の文に足す。材料は `tests/modules/generic.kn` と `generic.ja.kn` の `swap_down`・`settle_down`・`rings`（三つの出力先が組めることを確かめる）と、`tests/types.rs`、`tests/codes.rs` の英日の再現である（26.2）。
+209. 輪は、名前で渡した関数も呼び出しに数える（27.5 と同じ）。呼び出しごとに一つだけ言い、注に書き方を書く。台帳の E112 の文に足す。材料は `tests/modules/generic.kn` と `generic.ja.kn` の `swap_down`・`settle_down`・`rings`（四つの出力先が組めることを確かめる）と、`tests/types.rs`、`tests/codes.rs` の英日の再現である（26.2）。
 210. 値を読む関数（`from_json`）と入口の確かめ（`outside`）を、値の種類ごとの関数に分ける（ふるまいは同じ）。再帰する一段ごとのスタックが小さくなり、デバッグのビルドで、`Category` の 200 段の値を読んで確かめるのに使うスタックが、6 MiB 余りから 3 MiB 以下になる（28.1）。
 211. 突き合わせのハーネスは、出力先の答えの行を、参照インタプリタの答えの JSON の深さまで読む（`harness::compare` が `json::parse_nested` で読む。ritsu の読み手の 256 段より浅くは読まない）。200 段の値をそのまま答える関数（`trees.kn` の `named` と `simplify`、`catalog.kn` の `pruned`）の答えも、そうして比べる（16.4、28.1）。
 212. ★ kaname は「Functional Core を書くための小さな汎用の言語」で、README、DESIGN の頭と 0・1 章、リファレンス、スキル、サイトの説明は、この姿で書く。規則・日付・帳簿を ritsu の型のまま呼べることは、汎用の言語の強みの一つとして書く。
@@ -2622,7 +2689,7 @@ ok rules/値引きの配分.rule
 | 保証 | 守り方 |
 |---|---|
 | 入出力を持たない | 範囲を書かない値も、ホストから受け取る値である。直和型の値を分けて作ること、一部を替えたレコード、等しさも、値から値を計算するだけである。辞書と集合も値で、どの組み込みの関数も新しい値を答え、渡したものを変えない（24.2）。型の引数を持つ関数は中の関数で、ホストは呼ばない（21.3）。`result` も値で、`try` は関数の答えを決めるだけである（26.3） |
-| 参照インタプリタと三つの出力先が同じ答えを返す | 範囲を書かない値の入口の確かめ（数は int64、日付は 0001-01-01 から 9999-12-31）を、参照インタプリタと三つの出力先が同じ文で言う。int64 の外の数と、その外の日付を、出力先の突き合わせの宣言の外の入力に入れる（16.4、22.4、22.5）。直和型の値の受け渡す形を一つに決め（23.6）、中身での等しさは補助の関数と生成した比べの関数で書き、言語の比べ（参照や番地の比べ）に頼らない（23.8）。辞書と集合は、作った順に頼らず鍵の順で回し、鍵の順は補助のモジュールの一つの比べで書く。並べ替えは三つの出力先とも安定な手順で、`mod` は言語の `%` を使わず補助の関数で計算する（24.6）。総称の関数の鍵に限った型の引数の順は、呼ぶ側が具体的な型の順を渡し、型の引数の値の等しさは、補助の関数が中身で比べる（26.7）。自分を含む型の値の入れ子の深さを、参照インタプリタと三つの出力先が入口で同じ文で言い、200 段と 201 段の値を出力先の突き合わせに入れる（28.1、16.4） |
+| 参照インタプリタと四つの出力先が同じ答えを返す | 範囲を書かない値の入口の確かめ（数は int64、日付は 0001-01-01 から 9999-12-31）を、参照インタプリタと四つの出力先が同じ文で言う。int64 の外の数と、その外の日付を、出力先の突き合わせの宣言の外の入力に入れる（16.4、22.4、22.5）。直和型の値の受け渡す形を一つに決め（23.6）、中身での等しさは補助の関数と生成した比べの関数（Rust は `derive(PartialEq)`）で書き、言語の比べ（参照や番地の比べ）に頼らない（23.8）。辞書と集合は、作った順に頼らず鍵の順で回し、鍵の順は補助のモジュールの一つの比べで書く（Rust は、鍵の順と同じ `Ord` で並ぶ `BTreeMap` と `BTreeSet`。36.2）。並べ替えは四つの出力先とも安定な手順で、`mod` は言語の `%` を使わず補助の関数で計算する（24.6）。総称の関数の鍵に限った型の引数の順は、呼ぶ側が具体的な型の順を渡し（Rust は `Ord` の境界）、型の引数の値の等しさは、補助の関数が中身で比べる（Rust は `PartialEq`。26.7）。自分を含む型の値の入れ子の深さを、参照インタプリタと四つの出力先が入口で同じ文で言い、200 段と 201 段の値を出力先の突き合わせに入れる（28.1、16.4） |
 | 範囲の解析が健全で、Lean のモデルがそれを示す | 範囲を書かない値は、型の全体の区間から始める。区間の端の印は、int64 のあふれの場所の言い方だけを変え、場所が示されたかどうかも抽象の値も変えないので、モデルの意味は変わらない（22.2、22.6）。直和型の値と抽象の値、`match` の狭め方、作るところ、等しさの答えも `KanameCore` にあり、健全性の定理はそれを含む（23.10）。辞書と集合の値と抽象の値、24.5 の表もモデルにあり、組み込みの関数ごとの補題で健全性を示す（24.7）。呼ぶところでの読み直しは、その呼び出しの値の上からの見積もりで本体を解析し直すだけなので、健全性はそのまま言え、モデルで示す（`reread_case`。26.9）。自分を含む型の値は、同じ型を二つまでたどって、その先を何も分からない値にする。呼ぶところでその中を確かめないことは、モデルの確かめ（`Slot.outsideD`）と判定（`keepsD`）が表を指す場所の中を見ないことで同じに言うので、定理の範囲は変わらない（28.1、15.1） |
 | エフェクトを推し量れる | 型の端から来たあふれも `overflow` の場所で、関数のエフェクトに入る。範囲を書いたフィールドを持つ値を作るところは、レコードと同じ `range` の場所である。辞書・集合・リストの組み込みの関数は失敗せず、場所を持つのは `numbers` の要素の数と値で割る `mod` だけである。読み直した呼び出しのエフェクトは、読み直しの場所と呼び出しで決まる。自分を含む型をたどる関数は再帰を持つので `diverges` で、入れ子の深さの外れは入口の `input` である。失敗の種類は増やさない（22.3、23.10、24.7、26.6、28.1） |
 | 規則・日付・帳簿を ritsu の型のまま呼べる | 範囲を書かない値を規則と日付の入力に渡せば、規則と日付の入力の範囲で確かめる（E301・W301 と、言語をまたぐ判定。22.2）。直和型の値と、辞書と集合、`result` は、規則・日付・振替に渡せない（E102）。渡すには、`match` で分けるか、リストや値に直す |
@@ -2634,7 +2701,7 @@ ok rules/値引きの配分.rule
 - **ホストが呼ぶ関数**：型の引数も関数の型の引数も持たず、`private` でない関数。引数と答えに、総称のレコードや列挙に具体的な型を当てた型（`Page[Line]`）と `result` を書ける。生成したコードは、入口で引数を確かめる公開する関数と、入口を通らない中の関数の二つを書き（10.3）、ベクタ（9 章）を作る。
 - **中の関数**：型の引数を持つ関数、関数の型の引数を持つ関数（27.2）、`private` の関数（28.2）。モジュールの中と、`use module` で読むほかのモジュールから（`private` の関数はモジュールの中だけから）呼ぶ。入口の確かめもベクタも持たず、呼ぶ側の関数のベクタと解析を通して確かめる。`run` は流さずに exit 2 で終わり、`vectors --function` は注を出す（26.4）。
 
-生成したコードでは、中の関数も、ほかのモジュールの生成物から呼ぶので外に見せる（TypeScript の `export function _first_or`、Python のモジュールの `_first_or`、Go の `FirstOr`）。`private` の関数は見せない（28.2）。ドキュメントのコメントに「kaname の生成したコードが呼ぶ関数で、入口で引数を確かめない」と書く（26.7）。`api` と `check --format json` は、中の関数に `"inner": true` を書く（11.1）。
+生成したコードでは、中の関数も、ほかのモジュールの生成物から呼ぶので外に見せる（TypeScript の `export function _first_or`、Python のモジュールの `_first_or`、Go の `FirstOr`、Rust の `pub fn _first_or`）。`private` の関数は見せない（28.2）。ドキュメントのコメントに「kaname の生成したコードが呼ぶ関数で、入口で引数を確かめない」と書く（26.7）。`api` と `check --format json` は、中の関数に `"inner": true` を書く（11.1）。
 
 理由：型の引数を持つ関数は、入口でどの範囲を確かめるかも、ベクタにどの値を選ぶかも型から決まらない。関数を取る関数も、渡される関数が値として入口を通らない（27.1）。具体的な型の関数だけをホストに見せれば、入口の確かめもベクタも、引数の型から作れる。
 
@@ -2763,11 +2830,11 @@ error[E401]: example.kn:6:1: `doubled` is written `total`, but it can fail with 
 {"function":"next_id","in":{"last":9223372036854775807},"fails":{"kind":"overflow","module":"example","line":4,"message":"The value of `last + 1` does not fit in int64"},"why":"last: the upper end of the type"}
 ```
 
-宣言の外の入力（16.4）には、型の端の一つ外を足す。数は 2⁶³ と −2⁶³ − 1 で、TypeScript と Python で流す（Go の `int64` はその値を持てない）。日付は 10000-01-01 と 0000-12-31 と、正しくない日 2026-13-01 で、TypeScript と Go で流す（Python の `datetime.date` はそういう日を作れない）。参照インタプリタは 2026-13-01 を値として持てないので、10000-01-01 の答え（`input` の失敗）の日を 2026-13-01 に書き替えたものを答えとする。ケースをどの出力先で流すかは、ケースが持つ出力先の一覧で決める（`harness::Case::targets`）。
+宣言の外の入力（16.4）には、型の端の一つ外を足す。数は 2⁶³ と −2⁶³ − 1 で、TypeScript と Python で流す（Go の `int64` と Rust の `i64` はその値を持てない）。日付は 10000-01-01 と 0000-12-31 と、正しくない日 2026-13-01 で、TypeScript と Go と Rust で流す（Python の `datetime.date` はそういう日を作れない。Go の `Date` と Rust の `kaname::Date` は年と月と日の整数なので持てる）。参照インタプリタは 2026-13-01 を値として持てないので、10000-01-01 の答え（`input` の失敗）の日を 2026-13-01 に書き替えたものを答えとする。ケースをどの出力先で流すかは、ケースが持つ出力先の一覧で決める（`harness::Case::targets`）。
 
 ### 22.5 生成したコード
 
-- 入口：範囲を書かない数は、TypeScript の `bigint` と Python の `int` で int64 に収まるかを確かめ、外れれば `input` で失敗する。Go の `int64` は確かめるまでもない。範囲の書かない端のある日付は、TypeScript の文字列が `YYYY-MM-DD` の 0001-01-01 から 9999-12-31 の正しい日であること（補助のモジュールの `kaname.isDate`）、Go の `Date` が同じく正しい日であること（`Date.Valid`）を確かめる。Python の `datetime.date` は、作った時点で正しい日である。
+- 入口：範囲を書かない数は、TypeScript の `bigint` と Python の `int` で int64 に収まるかを確かめ、外れれば `input` で失敗する。Go の `int64` と Rust の `i64` は確かめるまでもない。範囲の書かない端のある日付は、TypeScript の文字列が `YYYY-MM-DD` の 0001-01-01 から 9999-12-31 の正しい日であること（補助のモジュールの `kaname.isDate`）、Go の `Date` と Rust の `kaname::Date` が同じく正しい日であること（`Date.Valid`、`valid()`）を確かめる。Python の `datetime.date` は、作った時点で正しい日である。
 - 文は参照インタプリタの入口と同じで、範囲に型の全体を書く。`tests/modules/open.kn` から生成した TypeScript の確かめ：
 
 ```ts
@@ -2779,7 +2846,24 @@ function _outside1(v: bigint, what: string): kaname.Outside | null {
 }
 ```
 
-- レコードの確かめの関数（TypeScript と Python の `_outside_<レコード>`、Go の `KanameOutside`）は、引数が届いたレコードのフィールドを確かめる関数なので、範囲を書かないフィールドも型の全体で確かめる。答えにだけ使うレコードのこの関数も同じ形になる（`examples/late_payment` の `Claim` の `due`、`compensation`、`interest`）。
+Rust では、範囲を書かない数だけを受け取る関数の確かめは何も見ず、日付の確かめは `valid()` を見る（同じモジュールの `next_id` の確かめと、`days` と `since` が日付を確かめる関数。実物）：
+
+```rust
+pub fn check_next_id(_: i64) -> Result<(), kaname::KanameError> {
+    Ok(())
+}
+```
+
+```rust
+fn _outside1(v: kaname::Date, what: &str) -> Option<kaname::Outside> {
+    if !v.valid() {
+        return Some(kaname::outside(what, v.to_string(), ">=0001-01-01 <=9999-12-31"));
+    }
+    None
+}
+```
+
+- レコードの確かめの関数（TypeScript と Python の `_outside_<レコード>`、Go の `KanameOutside`、Rust の `kaname_outside` のメソッド）は、引数が届いたレコードのフィールドを確かめる関数なので、範囲を書かないフィールドも型の全体で確かめる。答えにだけ使うレコードのこの関数も同じ形になる（`examples/late_payment` の `Claim` の `due`、`compensation`、`interest`）。
 - リストのリストは、内側のリストの要素も確かめる。参照インタプリタの確かめも、同じに入れ子をたどる（8 章）。
 - 場所：示せなかったあふれは、確かめつきで計算する（10.4）。型の端から来たあふれも同じである。
 
@@ -2937,22 +3021,24 @@ fn moved_to(p: Order.placed, on: date range >=2026-01-01 <=2027-12-31) -> Order
 
 ### 23.8 生成したコード
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| 直和型 `Order` | `export type Order = OrderDraft \| OrderPlaced \| …` | `Order = Union[OrderDraft, OrderPlaced, …]` | `type Order interface { isOrder(); KanameOutside(what string) *kaname.Outside }` |
-| 値の型 `Order.placed` | `export interface OrderPlaced { readonly kind: "placed"; readonly items: readonly Item[]; readonly on: string }` | `@dataclass(frozen=True) class OrderPlaced`（フィールドの無い値も、フィールドの無いデータクラス） | `type OrderPlaced struct { Items []Item; On kaname.Date }` と `func (OrderPlaced) isOrder() {}` |
-| 作る | `{ kind: "placed", items: d.items, on: p.on }` | `OrderPlaced(items=d.items, on=p.on)` | `OrderPlaced{Items: d.Items, On: p.On}` |
-| `match` | `if (o.kind === "draft") { const d: OrderDraft = o; … } else if …` | `if isinstance(o, OrderDraft): d: OrderDraft = o …` | `switch _t1 := o.(type) { case OrderDraft: var d OrderDraft = _t1 … }` |
-| 一部を替えたレコード | `{ ...p, on: q.on }` | `dataclasses.replace(p, on=q.on)` | 値をコピーしてからフィールドを入れる |
-| 等しさ | 補助の `kaname.eq(a, b)`（整数、真偽、文字列、日付、フィールドの無い列挙の値と、それのオプショナルな値は `===`） | `==`（データクラスとリストの比べ）。直和型の値は補助の `kaname.eq(a, b)` | 型ごとに生成する比べの関数（`_eq1(a, b Order) bool`）。`==` で中身を比べられる型は `==` |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| 直和型 `Order` | `export type Order = OrderDraft \| OrderPlaced \| …` | `Order = Union[OrderDraft, OrderPlaced, …]` | `type Order interface { isOrder(); KanameOutside(what string) *kaname.Outside }` | `pub enum Order { Draft(OrderDraft), Placed(OrderPlaced), … }` |
+| 値の型 `Order.placed` | `export interface OrderPlaced { readonly kind: "placed"; readonly items: readonly Item[]; readonly on: string }` | `@dataclass(frozen=True) class OrderPlaced`（フィールドの無い値も、フィールドの無いデータクラス） | `type OrderPlaced struct { Items []Item; On kaname.Date }` と `func (OrderPlaced) isOrder() {}` | `pub struct OrderPlaced { pub items: Vec<Item>, pub on: kaname::Date }`（フィールドの無い値も、フィールドの無い構造体 `EventReopen {}`） |
+| 作る | `{ kind: "placed", items: d.items, on: p.on }` | `OrderPlaced(items=d.items, on=p.on)` | `OrderPlaced{Items: d.Items, On: p.On}` | `Order::Placed(OrderPlaced { items: d.items.clone(), on: p.on })` |
+| `match` | `if (o.kind === "draft") { const d: OrderDraft = o; … } else if …` | `if isinstance(o, OrderDraft): d: OrderDraft = o …` | `switch _t1 := o.(type) { case OrderDraft: var d OrderDraft = _t1 … }` | `match o { Order::Draft(d) => { … } … _ => { … } }` |
+| 一部を替えたレコード | `{ ...p, on: q.on }` | `dataclasses.replace(p, on=q.on)` | 値をコピーしてからフィールドを入れる | `OrderPlaced { on: q.on, ..p_2.clone() }`（構造体の更新の書き方） |
+| 等しさ | 補助の `kaname.eq(a, b)`（整数、真偽、文字列、日付、フィールドの無い列挙の値と、それのオプショナルな値は `===`） | `==`（データクラスとリストの比べ）。直和型の値は補助の `kaname.eq(a, b)` | 型ごとに生成する比べの関数（`_eq1(a, b Order) bool`）。`==` で中身を比べられる型は `==` | `==`（`derive(PartialEq)` が中身で比べる） |
 
 - TypeScript の `kind` は値を見分けるためのフィールドなので、フィールドの名前（別名）に `kind` を付ければ E007 である。フィールドを持たない値も、直和型の中では `{ kind: "reopen" }` のオブジェクトにする（同じ型の値を同じ形にするため）。フィールドを持つ値の無い列挙は、10.2 の形のままである。
 - 直和型の `match` は、TypeScript と Python では上の分岐から順に試す `if` の並びで、最後の分岐は条件を書かずに受ける（来る値を全部受けることは、kaname が E106 で確かめている）。来ない値のための補助の関数は置かない。Go は型の switch で、分岐ごとに `case` を書き、`else` を `default` にする。`else` の無い `match` には、`default` の `panic("kaname: no arm takes the value")` を置く。Go のコンパイラは、型の switch がどの値も受けるとは見ないので、答えを返す switch の後ろに `return` か `panic` が要るからである。リテラルの `match` は、どの出力先でも `if` の並びで、`else` が最後の分岐である。
+- Rust の直和型の `match` は Rust の `match` で、分岐ごとに値の構造体を借りて名前に置く（`Order::Draft(d)` の `d` は `&OrderDraft`）。最後の分岐は TypeScript と Python と同じく条件を書かずに受け（`_ =>`）、`else` の無い `match` にも `panic` は要らない。分岐の名前が、同じ関数の前の名前と同じなら、10.3 の決まりで番号を足す（`next` の `placed p` は、前の `place p` と同じ名前なので `p_2` になる。上の表の一部を替えたレコード）。
+- Rust の等しさは `derive(PartialEq)` の `==` で、フィールドの型の `PartialEq` が中身で比べる（`Vec` は要素を、`Box` は指す先を）。Go のような型ごとの比べの関数は要らない。一部を替えたレコードは、借りた値をコピーしてから替えるフィールドを入れる、構造体の更新の書き方である。
 - Python の `kaname.eq`：`isinstance` で一方を狭めた二つの直和型の値は、型が重ならないとして `mypy --strict` が `==` での比べを通さない。そこで直和型の値の比べだけを、`==` を呼ぶ補助の関数にした。
 - Go の比べの関数：`==` では中身で比べられない型（スライスとマップは比べられず、`*T` は指す先でなく番地を比べ、インターフェースは中の値の型が比べられないと panic する）を含むので、モジュールの中で型ごとに一つ生成する。
-- 一部を替えたレコードで、範囲を確かめる場所は、作るところと同じに置く（10.4）。入口では、直和型の引数を値ごとに確かめる（TypeScript と Python の `_outside_Order`、Go の値の型ごとの `KanameOutside` のメソッド）。文のパスは `o.placed.on` の形である。
+- 一部を替えたレコードで、範囲を確かめる場所は、作るところと同じに置く（10.4）。入口では、直和型の引数を値ごとに確かめる（TypeScript と Python の `_outside_Order`、Go の値の型ごとの `KanameOutside` のメソッド、Rust の列挙の `kaname_outside` のメソッド。値の構造体のメソッドを呼ぶ）。文のパスは `o.placed.on` の形である。
 
-`tests/modules/sums.kn` から生成したもの（実物。TypeScript の `next` の始めと、Go の比べの関数）：
+`tests/modules/sums.kn` から生成したもの（実物。TypeScript と Rust の `next` の始めと、Go の比べの関数）：
 
 ```ts
 function _next(o: Order, e: Event): Step {
@@ -2965,6 +3051,20 @@ function _next(o: Order, e: Event): Step {
       } else {
         return { kind: "moved", order: { kind: "placed", items: d.items, on: p.on } };
       }
+```
+
+```rust
+fn _next(o: &Order, e: &Event) -> Step {
+    match o {
+        Order::Draft(d) => {
+            match e {
+                Event::Place(p) => {
+                    if (d.items.len() as i64) == 0 {
+                        Step::Refused(StepRefused { why: "an empty order is not placed".to_string() })
+                    } else {
+                        Step::Moved(StepMoved { order: Order::Placed(OrderPlaced { items: d.items.clone(), on: p.on }) })
+                    }
+                }
 ```
 
 ```go
@@ -3175,22 +3275,22 @@ error[E101]: example.kn:4:3: There is no function `keys`
 
 ### 24.6 生成したコード
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| `dict[K, V]` | `ReadonlyMap<K, V>` | `Mapping[K, V]`（作るのは `dict`） | `map[K]V` |
-| `set[T]` | `ReadonlySet<T>` | `AbstractSet[T]`（作るのは `frozenset`） | `map[T]struct{}` |
-| 鍵の順に回す | `kaname.sortedKeys(m, 比べ)` | `kaname.keys_of(d, 比べ)` | `kaname.SortedKeys(m, 比べ)` |
-| 並べ替え | `Array.prototype.sort`（安定）と鍵の比べ | `sorted(…, key=…)`（安定） | `slices.SortStableFunc` |
-| `entry[K, V]`、`indexed[T]` | 補助のモジュールの `interface` | 補助のモジュールの `@dataclass(frozen=True)` | 補助のモジュールの構造体 |
-| `mod(x, n)` | `kaname.mod` | `kaname.mod` | `kaname.Mod` |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| `dict[K, V]` | `ReadonlyMap<K, V>` | `Mapping[K, V]`（作るのは `dict`） | `map[K]V` | `BTreeMap<K, V>`（引数は `&BTreeMap<K, V>`） |
+| `set[T]` | `ReadonlySet<T>` | `AbstractSet[T]`（作るのは `frozenset`） | `map[T]struct{}` | `BTreeSet<T>` |
+| 鍵の順に回す | `kaname.sortedKeys(m, 比べ)` | `kaname.keys_of(d, 比べ)` | `kaname.SortedKeys(m, 比べ)` | `iter()`（`BTreeMap` と `BTreeSet` は鍵の順に回る） |
+| 並べ替え | `Array.prototype.sort`（安定）と鍵の比べ | `sorted(…, key=…)`（安定） | `slices.SortStableFunc` | `kaname::sorted` と `kaname::by_key`（`sort` と `sort_by`。安定） |
+| `entry[K, V]`、`indexed[T]` | 補助のモジュールの `interface` | 補助のモジュールの `@dataclass(frozen=True)` | 補助のモジュールの構造体 | 補助のモジュールの構造体（`kaname::Entry<K, V>`、`kaname::Indexed<T>`） |
+| `mod(x, n)` | `kaname.mod` | `kaname.mod` | `kaname.Mod` | `kaname::r#mod` |
 
-- 辞書と集合は、どこでも受け渡す形で持つ。鍵と値は境目の型（10.2）で、鍵は、TypeScript の Map がそのまま値で比べる型（`bigint`、`string`、`boolean`。日付は `YYYY-MM-DD` の文字列、列挙の値は名前の文字列）にだけなる。丸めた値でなければ辞書と集合に入れられない（24.1）のは、このためである。
-- 鍵の順の比べは、型ごとに補助のモジュールの関数を使う（文字列はコードポイントの順の `cmpStr`、列挙は宣言の順の番号 `byRank`）。辞書と集合を作る関数（`kaname.mapOf`、`kaname.dict_of`）は、TypeScript の Map と Set と Python の dict に鍵の順で入れるので、ホストが受け取る Map と dict は鍵の順で回る。Go の map は順を持たない。生成したコードの中で回すところは、作った順に頼らず、いつも鍵の順に並べてから回す。
-- `put` と `remove` は、新しい Map・dict・map を作る（元のものを書き換えない）。一つ入れるたびに全部をコピーするので、たくさんの組を作るときは、一度に作る `to_dict` と `group_by` を使う。
-- 鍵が同じ要素の元の順を保つ並べ替えは、三つの出力先とも標準の安定な並べ替えを使う。Go の `sort.Slice` は安定でないので使わない。
-- 等しさ（23.8）：TypeScript の `kaname.eq` は、Map を組の数と鍵ごとの値で、Set を要素で比べる。Python は `==`（`Mapping` と `frozenset` の比べ）、Go は型ごとに生成する比べの関数である。
+- 辞書と集合は、どこでも受け渡す形で持つ。鍵と値は境目の型（10.2）で、鍵は、TypeScript の Map がそのまま値で比べる型（`bigint`、`string`、`boolean`。日付は `YYYY-MM-DD` の文字列、列挙の値は名前の文字列）にだけなる。丸めた値でなければ辞書と集合に入れられない（24.1）のは、このためである。Rust の鍵も受け渡す形の型で、その `Ord` が鍵の順である（36.2）。
+- 鍵の順の比べは、型ごとに補助のモジュールの関数を使う（文字列はコードポイントの順の `cmpStr`、列挙は宣言の順の番号 `byRank`）。辞書と集合を作る関数（`kaname.mapOf`、`kaname.dict_of`）は、TypeScript の Map と Set と Python の dict に鍵の順で入れるので、ホストが受け取る Map と dict は鍵の順で回る。Go の map は順を持たない。生成したコードの中で回すところは、作った順に頼らず、いつも鍵の順に並べてから回す。Rust の `BTreeMap` と `BTreeSet` は鍵の順で持つので、並べずにそのまま回す。
+- `put` と `remove` は、新しい Map・dict・map・`BTreeMap` を作る（元のものを書き換えない。Rust は `kaname::put` と `kaname::remove` がコピーしてから入れる）。一つ入れるたびに全部をコピーするので、たくさんの組を作るときは、一度に作る `to_dict` と `group_by` を使う。
+- 鍵が同じ要素の元の順を保つ並べ替えは、四つの出力先とも標準の安定な並べ替えを使う。Go の `sort.Slice` と Rust の `sort_unstable` は安定でないので使わない。
+- 等しさ（23.8）：TypeScript の `kaname.eq` は、Map を組の数と鍵ごとの値で、Set を要素で比べる。Python は `==`（`Mapping` と `frozenset` の比べ）、Go は型ごとに生成する比べの関数、Rust は `==`（`BTreeMap` と `BTreeSet` の `PartialEq`）である。
 
-`tests/modules/dicts.kn` の `combined` から生成したもの（実物。TypeScript、Python、Go の順）：
+`tests/modules/dicts.kn` の `combined` から生成したもの（実物。TypeScript、Python、Go、Rust の順）：
 
 ```ts
 function _combined(a: ReadonlyMap<string, bigint>, b: ReadonlyMap<string, bigint>): ReadonlyMap<string, bigint> {
@@ -3235,6 +3335,20 @@ func _combined(a map[string]int64, b map[string]int64) map[string]int64 {
 }
 ```
 
+```rust
+fn _combined(a: &BTreeMap<String, i64>, b: &BTreeMap<String, i64>) -> BTreeMap<String, i64> {
+    let mut _t1: BTreeMap<String, i64> = a.clone();
+    for (_t2, _t3) in b.iter() {
+        if let Some(_t4) = a.get(_t2) {
+            _t1.insert(_t2.clone(), *_t4 + *_t3);
+        } else {
+            _t1.insert(_t2.clone(), *_t3);
+        }
+    }
+    _t1.clone()
+}
+```
+
 ### 24.7 エフェクト、診断、Lean、テスト
 
 - **エフェクト**：辞書、集合、リストの組み込みの関数は、どれも失敗しない。場所を持つのは、`numbers` の要素の数（`overflow`）と、値で割る `mod`（`zero`）と、引数を辞書の鍵と値、集合の要素、答えの型で読むところ（単位を読み替える `overflow`。5.6）だけである。辞書と集合の引数と答えに書いた範囲と数は、リストと同じく渡す先で確かめる（`range`）。
@@ -3246,7 +3360,7 @@ func _combined(a map[string]int64, b map[string]int64) map[string]int64 {
   - 範囲の解析（`Analysis.lean`）：24.5 の表（`primAbs`、`pairsAbs`、`ev` の新しい場合）と、引数を場所の型で読む `convAll`。
   - 定理：`ranges_sound`・`no_failure`・`total_sound` の帰納法（`SoundAt` に、辞書のリテラル、`to_dict`、`merge_with` の三つの場合）の場合を持つ。関数ごとの補題は `SoundPrim.lean`（答えの組と要素が元の組と要素から来ること、数の区間。`primAbs_sound`、`mergedC_sound`、`countIv_sound`、`numbers_sound` など）に、式ごとの場合は `SoundDict.lean`（`case_dict`、`case_prim`、`case_walkK`、`case_toDict`、`case_mergeWith`）にある。並べ替えの答えが元の並べ替えであることは `List.mergeSort_perm` で言う。
   - 突き合わせ（15.3）：材料に `dicts.kn`・`dicts.ja.kn`・`lists2.kn`・`lists2.ja.kn` が入る。わざと壊して突き合わせが落ちることを確かめた五か所は、`put` の数（上の端に 1 を足さないと、`restock` の答えの組の数が 1 から 3 になり、Rust の 1 から 4 と違う）、`merge` の値の合わせ方（`o` の値を合わせないと、`overlay` の答えの値が 0 から 5 になり、Rust の 0 から 20 と違う）、`slice` の切り詰め（0 より前の場所を終わりから数えると、`cut` の 6 件の答えが違う）、並べ替えの鍵の順（文字列を逆の順に比べると、`diff` ほか `dicts.kn` の 118 件の答えが違う）、`mod` の向き（割られる数の符号の余りにすると、`walks.kn` の 1 件と、`dicts.kn` の `turn` と `wrapped` の 2 件の答えが違う）である。
-- **テスト**：`tests/modules/dicts.kn` と `dicts.ja.kn`（在庫の差分、価格の表、`group_by` と `to_dict`、集合の和と積と差、同じ鍵の要素の並べ替え、鍵の順、辞書と集合の等しさ、値で割る `mod` と `numbers`。34 の関数）、`lists2.kn` と `lists2.ja.kn`（リストの組み込みの関数と、3.7 の関数のメソッドの形。24 の関数）。範囲の解析の健全性（`tests/ranges.rs`）、出力先の突き合わせ（英日。16.4。三つの出力先で、同じ鍵の要素の並べ替えの順、Map と dict を回す順、負の数の `mod` が参照インタプリタと同じ）、Lean との突き合わせ（15.3）に入る。`tests/parse.rs`（辞書のリテラル、型の語）、`tests/types.rs`（E114、メソッドの形、関数の形、組み込みの関数の型）、`tests/interp.rs`（鍵の順、受け渡す形、評価の順）、`tests/effects.rs`（`numbers` と `mod` の場所）、`tests/codes.rs`（上の診断）。
+- **テスト**：`tests/modules/dicts.kn` と `dicts.ja.kn`（在庫の差分、価格の表、`group_by` と `to_dict`、集合の和と積と差、同じ鍵の要素の並べ替え、鍵の順、辞書と集合の等しさ、値で割る `mod` と `numbers`。34 の関数）、`lists2.kn` と `lists2.ja.kn`（リストの組み込みの関数と、3.7 の関数のメソッドの形。24 の関数）。範囲の解析の健全性（`tests/ranges.rs`）、出力先の突き合わせ（英日。16.4。四つの出力先で、同じ鍵の要素の並べ替えの順、Map と dict と `BTreeMap` を回す順、負の数の `mod` が参照インタプリタと同じ）、Lean との突き合わせ（15.3）に入る。`tests/parse.rs`（辞書のリテラル、型の語）、`tests/types.rs`（E114、メソッドの形、関数の形、組み込みの関数の型）、`tests/interp.rs`（鍵の順、受け渡す形、評価の順）、`tests/effects.rs`（`numbers` と `mod` の場所）、`tests/codes.rs`（上の診断）。
 
 ## 25. 文字列
 
@@ -3254,7 +3368,7 @@ func _combined(a map[string]int64, b map[string]int64) map[string]int64 {
 
 **決定（文字列はコードポイントの並び）**：`string` の値は、Unicode のスカラー値（サロゲートを除くコードポイント）の並びである。長さ、切り出し、位置は、どれもコードポイントで数える。大小は、コードポイントの値を初めから一つずつ比べる順（コードポイントの順）で決める。二つの文字列が等しいのは、同じコードポイントの並びのときで、正規化はしない（e と U+0301 の並びと、一つのコードポイントの é は、違う文字列である）。
 
-理由：三つの出力先の言語で、長さ（TypeScript は UTF-16 の単位、Go はバイトで数える）と比べる順（TypeScript は UTF-16 の単位の順）が実際に違った。コードポイントは三つの言語のどれでも数えられ、Rust の `char` と Lean の `Char` も同じものである。
+理由：出力先の言語で、長さ（TypeScript は UTF-16 の単位、Go と Rust はバイトで数える）と比べる順（TypeScript は UTF-16 の単位の順）が実際に違った。コードポイントはどの出力先の言語でも数えられ（Rust では `char`）、Lean の `Char` も同じものである。
 
 - リテラルは、引用符のあいだをそのまま読み、エスケープを持たない（rulec と同じ）。改行のように書けない文字は、コードポイントの数で `char(10)` と書く（25.2）。
 - 文字列の引数、答え、フィールドには、コードポイントの数の範囲を `count` で書ける（`name : string count <=40`）。書かなければ 0 から 2⁶³ − 1 である（22.1）。文字列に `range` は書けない（E108）。
@@ -3310,7 +3424,7 @@ error[E109]: diag.kn:7:8: `char` is given 55296, which is no Unicode scalar valu
 
 ### 25.3 空白と、大文字と小文字
 
-**決定（空白は White_Space の 25 文字）**：`trim`・`trim_start`・`trim_end` と `words` が空白と読むのは、Unicode の White_Space の性質を持つ 25 のコードポイントである。U+0009〜U+000D、U+0020、U+0085、U+00A0、U+1680、U+2000〜U+200A、U+2028、U+2029、U+202F、U+205F、U+3000。この表を、参照インタプリタ（`src/text.rs` の `SPACES`）、三つの出力先の補助のモジュール、Lean のモデル（`Text.lean`）が同じに持つ。
+**決定（空白は White_Space の 25 文字）**：`trim`・`trim_start`・`trim_end` と `words` が空白と読むのは、Unicode の White_Space の性質を持つ 25 のコードポイントである。U+0009〜U+000D、U+0020、U+0085、U+00A0、U+1680、U+2000〜U+200A、U+2028、U+2029、U+202F、U+205F、U+3000。この表を、参照インタプリタ（`src/text.rs` の `SPACES`）、四つの出力先の補助のモジュール、Lean のモデル（`Text.lean`）が同じに持つ。
 
 理由：標準の `trim` が除くものが、三つの言語で違った。TypeScript は U+FEFF を除いて U+0085 を残し、Python は U+0085 と U+001C を除き、Go（White_Space の表を使う）は U+0085 を除いて U+FEFF と U+001C を残した。Unicode が決めた表なら、どの言語でも同じ文字を除ける。
 
@@ -3321,7 +3435,7 @@ error[E109]: diag.kn:7:8: `char` is given 55296, which is no Unicode scalar valu
 - `parse_number` が読むのは、`+` か `-` を一つ前に置いてもよい、ASCII の数字（0〜9）の一つ以上の並びだけで、int64 に収まるときに数を答える。前後の空白、`_`、全角やほかの文字体系の数字、小数点、指数は読まず、`none` を答える。単位は付かない（お金にするには、`n * 1USDc` のように単位の値を掛ける）。
 - `parse_date` が読むのは `YYYY-MM-DD`（0001 年から 9999 年の正しい日）だけである。
 
-理由：Python の `int` は前後の空白、`_`、全角とアラビア・インドの数字を読み、TypeScript の `BigInt` は前後の空白を読み、Go の `ParseInt` はどれも読まなかった。補助のモジュールに kaname の手順で書けば、三つの出力先が同じものを読む。
+理由：Python の `int` は前後の空白、`_`、全角とアラビア・インドの数字を読み、TypeScript の `BigInt` は前後の空白を読み、Go の `ParseInt` はどれも読まなかった。補助のモジュールに kaname の手順で書けば、四つの出力先が同じものを読む。
 
 ### 25.5 参照インタプリタとやりとりする形
 
@@ -3372,21 +3486,21 @@ fails: input (line 73): The argument `s` of `place` has 13 code points, outside 
 
 ### 25.7 生成したコード
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| 長さ（`count`） | `kaname.cpCount(s)` | `len(s)` | `kaname.CpCount(s)` |
-| `slice`、`take`、`drop` | `kaname.cpSlice`、`cpTake`、`cpDrop` | `kaname.text_slice`、`text_take`、`text_drop` | `kaname.TextSlice`、`TextTake`、`TextDrop` |
-| `index_of` | `kaname.cpIndexOf` | `kaname.index_of` | `kaname.IndexOf` |
-| 大小 | `kaname.cmpStr`（コードポイントの順） | `<`（`str` はコードポイントの並び） | `<`（正しい UTF-8 のバイトの順は、コードポイントの順と同じ） |
-| 空白、大文字と小文字、数と日付を読む | 補助のモジュールの表と手順 | 同じ（`str.strip`、`str.lower`、`int` は使わない） | 同じ |
-| 入口の正しい文字列 | `kaname.isText`（孤立したサロゲートが無い） | `kaname.is_text`（サロゲートが無い） | `kaname.IsText`（`utf8.ValidString`） |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| 長さ（`count`） | `kaname.cpCount(s)` | `len(s)` | `kaname.CpCount(s)` | `kaname::cp_count(s)` |
+| `slice`、`take`、`drop` | `kaname.cpSlice`、`cpTake`、`cpDrop` | `kaname.text_slice`、`text_take`、`text_drop` | `kaname.TextSlice`、`TextTake`、`TextDrop` | `kaname::text_slice`、`text_take`、`text_drop` |
+| `index_of` | `kaname.cpIndexOf` | `kaname.index_of` | `kaname.IndexOf` | `kaname::index_of` |
+| 大小 | `kaname.cmpStr`（コードポイントの順） | `<`（`str` はコードポイントの並び） | `<`（正しい UTF-8 のバイトの順は、コードポイントの順と同じ） | `<`（`str` の比べは UTF-8 のバイトの順で、コードポイントの順と同じ） |
+| 空白、大文字と小文字、数と日付を読む | 補助のモジュールの表と手順 | 同じ（`str.strip`、`str.lower`、`int` は使わない） | 同じ | 同じ（`str::trim` と `to_lowercase` は使わない） |
+| 入口の正しい文字列 | `kaname.isText`（孤立したサロゲートが無い） | `kaname.is_text`（サロゲートが無い） | `kaname.IsText`（`utf8.ValidString`） | 確かめない（`&str` と `String` は正しい UTF-8 しか持てない。入口の `glue::door` が JSON を読むところで言う。36.11） |
 
 - TypeScript の `string` は UTF-16 の単位の並びなので、長さ、切り出し、位置、比べは、補助のモジュールのコードポイントで数える関数で書く。`for (const c of s)` はコードポイントを一つずつ回るので、補助のモジュールはそれを使う。`s.length` と `<` は使わない。
-- Python の `str` はもともとコードポイントの並びなので、長さと比べはそのまま書く。Go の `string` は UTF-8 で、長さと切り出しと位置は `[]rune` と `utf8` で数える。
-- 入口では、引数とそれが届く文字列（レコードのフィールド、リストの要素、直和型の値のフィールドも）を、正しい文字列かと、書いた `count` で確かめる。確かめの関数の答え（`kaname.Outside`）は、文字列の `count` の外れを言う `chars` と、正しくない文字列を言う `bad` を持ち、文はそれで分ける。`count` を書かない文字列も、正しい文字列かは確かめる。
+- Python の `str` はもともとコードポイントの並びなので、長さと比べはそのまま書く。Go の `string` は UTF-8 で、長さと切り出しと位置は `[]rune` と `utf8` で数える。Rust の `str` も UTF-8 で、長さと切り出しと位置は補助のモジュールが `chars()` で数え、比べは `<` のまま書く。
+- 入口では、引数とそれが届く文字列（レコードのフィールド、リストの要素、直和型の値のフィールドも）を、正しい文字列かと、書いた `count` で確かめる。確かめの関数の答え（`kaname.Outside`）は、文字列の `count` の外れを言う `chars` と、正しくない文字列を言う `bad` を持ち、文はそれで分ける。`count` を書かない文字列も、正しい文字列かは確かめる。Rust の確かめは `count` だけを見る（`kaname::outside_chars`）。
 - 文字列の組み込みの関数は、どれも補助のモジュールの関数の呼び出しで、その場で計算する。
 
-`tests/modules/texts.kn` の `place`（`s.index_of(t)`）から生成したもの（実物。ホストが呼ぶ関数と中の関数。TypeScript、Python、Go の順。Go はホストが呼ぶ `Place` の前に、引数を確かめる `CheckPlace` がある）：
+`tests/modules/texts.kn` の `place`（`s.index_of(t)`）から生成したもの（実物。ホストが呼ぶ関数と中の関数。TypeScript、Python、Go、Rust の順。Go と Rust は、ホストが呼ぶ関数の前に、引数を確かめる `CheckPlace` と `check_place` がある。Rust の三つの関数は 36.4）：
 
 ```ts
 export function place(s: string, t: string): bigint | null {
@@ -3438,6 +3552,19 @@ func _outside8(v string, what string) *kaname.Outside {
 		return &kaname.Outside{Path: what, Shown: "", Range: "<=12", Count: int(kaname.CpCount(v)), Chars: true}
 	}
 	return nil
+}
+```
+
+```rust
+fn _place(s: &str, t: &str) -> Option<i64> {
+    kaname::index_of(s, t)
+}
+
+fn _outside7(v: &str, what: &str) -> Option<kaname::Outside> {
+    if kaname::cp_count(v) > 12 {
+        return Some(kaname::outside_chars(what, kaname::cp_count(v), "<=12"));
+    }
+    None
 }
 ```
 
@@ -3525,7 +3652,7 @@ fn largest[K: key](xs: list[K]) -> K?
 - 総称のレコードと列挙の、型の引数でないフィールドにも、範囲と要素の数を書ける（`Page[T]` の `items` の `count <=100`、`Found[T]` の `at` の範囲）。具体的な型を当てた型のフィールドは、宣言の型に型の引数を当てた型である。
 - **呼び出しの輪の中の総称の関数**：呼び出しの輪（自分を呼ぶ関数と、互いを呼ぶ関数の組。名前で渡すことも呼ぶことに数える。27.5）の中で、総称の関数を呼ぶところは、その関数の型の引数に、呼ぶ側の型の引数をそのまま渡すか（入れ替えてもよい）、型の引数を含まない型を渡す。型の引数から作った型（`wrap_deep(x: [x], …)` の `list[T]`）を渡せば E112 で、輪の中のほかの関数を通しても、関数を名前で渡しても同じである。
 
-  **決定（呼び出しの輪の中では、型の引数から作った型を渡さない）**：自分を含む総称の型の決まり（28.1。輪の中の型には、型の引数そのものか、型の引数を含まない型を渡す）と同じ決まりを、呼び出しの輪にも置く。型の引数から作った型を輪の中で渡すと、呼び出しが輪を回るたびに型の引数が一段ずつ深くなり（`list[T]`、`list[list[T]]`、…）、呼ぶ型が限りなく増える。参照インタプリタは型の引数を消して評価するので答えを出し、生成した TypeScript と Python も `tsc --strict` と `mypy --strict` を通るが、生成した Go は、型の引数ごとに関数を作る形なので「instantiation cycle」で組めない。検査で止めれば、三つの出力先が同じモジュールを受け付ける。型の引数をそのまま渡す形、入れ替えて渡す形、型の引数を含まない型を渡す形は、どれも Go が組める（`tests/modules/generic.kn` の `count_down`、`swap_down`、`settle_down`。三つの出力先の突き合わせが、`tsc`、`mypy --strict`、`go vet` を通すことを確かめる）。
+  **決定（呼び出しの輪の中では、型の引数から作った型を渡さない）**：自分を含む総称の型の決まり（28.1。輪の中の型には、型の引数そのものか、型の引数を含まない型を渡す）と同じ決まりを、呼び出しの輪にも置く。型の引数から作った型を輪の中で渡すと、呼び出しが輪を回るたびに型の引数が一段ずつ深くなり（`list[T]`、`list[list[T]]`、…）、呼ぶ型が限りなく増える。参照インタプリタは型の引数を消して評価するので答えを出し、生成した TypeScript と Python も `tsc --strict` と `mypy --strict` を通るが、生成した Go は、型の引数ごとに関数を作る形なので「instantiation cycle」で組めない。検査で止めれば、四つの出力先が同じモジュールを受け付ける。型の引数をそのまま渡す形、入れ替えて渡す形、型の引数を含まない型を渡す形は、どれも Go が組める（`tests/modules/generic.kn` の `count_down`、`swap_down`、`settle_down`。出力先の突き合わせが、`tsc`、`mypy --strict`、`go vet`、clippy を通すことを確かめる）。
 
   **捨てたもの**：Go が止める形だけを止めること。Go が止めるのは、型の引数から作った型を渡す呼び出しが、型の引数の流れの輪（呼ばれた関数の型の引数が、輪を回って呼ぶ側の型の引数に戻る道）の上にあるときだけで、その流れを追えば、いまの決まりより多くの輪を許せる。いまの決まりは、輪の中の呼び出しを一つずつ見るだけで言える（19 章）。
 
@@ -3616,23 +3743,49 @@ error[E401]: generic.kn:152:1: `far` is written `total`, but it can fail with `o
 
 ### 26.7 生成したコード
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| `fn first_or[T](…)` | `export function _first_or<T>(…)` | `T = TypeVar("T")` と `def _first_or(*, xs: list[T], fallback: T) -> T` | `func FirstOr[T any](…)` |
-| `fn largest[K: key](…)` | `export function _largest<K>(order_K: kaname.Order<K>, xs: readonly K[]): K \| null` | `def _largest(key_K: Callable[[K], Any], /, *, xs: list[K]) -> K \| None` | `func Largest[K comparable](orderK func(a, b K) int, xs []K) *K` |
-| `record Page[T]` | `interface Page<T>` | `@dataclass(frozen=True) class Page(Generic[T])` | `type Page[T any] struct` |
-| `enum Found[T]`（直和型） | `type Found<T> = FoundHit<T> \| FoundMiss<T>` と値ごとの `interface FoundHit<T>` | `Found = Union[FoundHit[T], FoundMiss[T]]` と値ごとの `class FoundHit(Generic[T])` | `type Found[T any] interface { isFound(T) }` と値ごとの `type FoundHit[T any] struct` |
-| `result[T, E]` | 補助のモジュールの `Result<T, E>`（`{ kind: "ok", value }` か `{ kind: "err", error }`） | 補助のモジュールの `Ok`・`Err` と `Result = Union[Ok[T], Err[E]]` | 補助のモジュールの `Result[T, E any]`（`isResult(T, E)` のメソッドを持つ interface）と `Ok[T, E]`・`Err[T, E]` |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| `fn first_or[T](…)` | `export function _first_or<T>(…)` | `T = TypeVar("T")` と `def _first_or(*, xs: list[T], fallback: T) -> T` | `func FirstOr[T any](…)` | `pub fn _first_or<T: Clone + PartialEq>(xs: &[T], fallback: &T) -> T` |
+| `fn largest[K: key](…)` | `export function _largest<K>(order_K: kaname.Order<K>, xs: readonly K[]): K \| null` | `def _largest(key_K: Callable[[K], Any], /, *, xs: list[K]) -> K \| None` | `func Largest[K comparable](orderK func(a, b K) int, xs []K) *K` | `pub fn _largest<K: Ord + Clone>(xs: &[K]) -> Option<K>`（順は渡さない） |
+| `record Page[T]` | `interface Page<T>` | `@dataclass(frozen=True) class Page(Generic[T])` | `type Page[T any] struct` | `pub struct Page<T: Clone + PartialEq>` |
+| `enum Found[T]`（直和型） | `type Found<T> = FoundHit<T> \| FoundMiss<T>` と値ごとの `interface FoundHit<T>` | `Found = Union[FoundHit[T], FoundMiss[T]]` と値ごとの `class FoundHit(Generic[T])` | `type Found[T any] interface { isFound(T) }` と値ごとの `type FoundHit[T any] struct` | `pub enum Found<T: Clone + PartialEq> { Hit(FoundHit<T>), Miss(FoundMiss) }` と値ごとの `pub struct FoundHit<T: Clone + PartialEq>` |
+| `result[T, E]` | 補助のモジュールの `Result<T, E>`（`{ kind: "ok", value }` か `{ kind: "err", error }`） | 補助のモジュールの `Ok`・`Err` と `Result = Union[Ok[T], Err[E]]` | 補助のモジュールの `Result[T, E any]`（`isResult(T, E)` のメソッドを持つ interface）と `Ok[T, E]`・`Err[T, E]` | 標準の `Result<T, E>`（`Ok(x)` と `Err(e)`） |
 
-- **中の関数の名前と見せ方**：型の引数を持つ関数は、入口のある公開の関数を持たず、一つの関数だけを生成する。ほかのモジュールの生成物から呼ぶので外に見せる（TypeScript は `export`、Python はモジュールの `_first_or`、Go は大文字で始める `FirstOr`）。ドキュメントのコメントに「kaname の生成したコードが呼ぶ関数で、入口で引数を確かめない」と書く。
-- **型の引数の名前**：別名をそのまま使い、モジュールのコードの名前、出力先の語、型の名前（TypeScript の `ReadonlyMap`、Python の `typing` の名前、Go の `any`）と重なれば、TypeScript と Python は `_` を、Go は番号を付ける（`T_`、`T2`）。Python は型の変数をモジュールに一度だけ宣言し、同じ別名の型の引数は宣言のあいだで同じ変数を使う。Python 3.10 で動く書き方（`TypeVar` と `Generic`）である。
-- **値の持ち方**：型の引数の値は、受け渡す形（9 章）で持つ。総称の関数を呼ぶところは、具体的な型を当てた引数の型で値を受け渡す形にし、答えを具体的な型で読む。TypeScript と Go の呼び出しは、型の引数をいつも書く（`_first_or<units.USDc>(…)`、`FirstOr[units.USDc](…)`。Go は答えの型から型の引数を決めない）。Python は書かず、mypy が引数と置かれた場所から決める。
-- **比べ方を渡す**：鍵に限った型の引数（`K: key`）ごとに、その順を、隠れた一つ目の引数として渡す（TypeScript の `kaname.Order<K>`、Python の鍵の関数 `Callable[[K], Any]`（位置で渡す引数。`/` の前）、Go の `func(a, b K) int`）。`key` と書いた型の引数には、本体が順を使うかによらず、いつも渡す。呼ぶ側は、具体的な型の順（TypeScript の `kaname.cmpInt`・`kaname.cmpStr`・`kaname.cmpBool`・`kaname.byRank(_rank1)`、Python の `kaname.natural` と `_rank1`、Go の `kaname.CmpInt[units.USDc]`・`kaname.CmpStr`・`kaname.Compare`・`kaname.ByRank(_rank1)`）か、自分が受け取った順を渡す。Go の `K` は、辞書と集合の鍵にするために `comparable` にする（比べには使わない）。ほかの型の引数は `any` である。
-- **鍵に限った型の引数を持つレコードの順**：`Pair[K]` や `indexed[K]` を鍵にして並べる総称の関数の本体では、レコードの順が、関数の受け取った `K` の順を使う。TypeScript と Python は、使うところに書く関数（`(a: Pair<K>, b: Pair<K>): number => order_K(a.key, b.key) || kaname.cmpInt(a.rank, b.rank) || 0`、`lambda r: (key_K(r.key), r.rank,)`）で、Go は、モジュールに一度だけ作る関数（`func _cmp1[K comparable](orderK func(a, b K) int) func(a, b Pair[K]) int`）を、受け取った順で呼ぶ（`_cmp1[K](orderK)`）。gofmt は、式の中に書いた関数の本体を行に分けるので、Go では使うところに書かない。
-- **型の引数の値の等しさ**：渡さずに、中身で比べる補助の関数を使う。TypeScript は `kaname.eq`（23.8）、Python は `==`、Go は補助のモジュールの `kaname.Equal`（リフレクションで中身を比べ、値の無いリスト・辞書・集合は `nil` かどうかによらず同じとする。`reflect.DeepEqual` はそれを分けるので使わない）である。型の引数を含む型（`list[T]`、`Page[T]`）の等しさも同じで、Go の型ごとの比べの関数（`_eq1`）は、型の引数を含まない型にだけ作る。
-- **総称のレコードと直和型**：TypeScript は型の引数を持つ `interface` と union、Python は `Generic` のデータクラスで、作るところで型の引数を書き（`Page[str](items=…, next=None)`、`kaname.Ok[int](value=…)`。mypy は `Ok(value=[])` の型を決めないため）、`isinstance` は型の引数の無いクラスで分ける。Go は型の引数を持つ型で、直和型の印のメソッドは型の引数を引数に持つ（`isFound(T)`。型の引数の違う二つの型が、同じ interface を満たさないようにするため）。
-- **`result` を作ること、分けること**：TypeScript は `{ kind: "ok", value: x }`、Python は `kaname.Ok[A](value=x)`、Go は `kaname.Ok[A, E]{Value: x}`。`match` は直和型と同じで、TypeScript は `kind`、Python は `isinstance(v, kaname.Ok)` で分け、Go は型の switch（`case kaname.Ok[A, E]:`）である。名前を付けた値は、`value` と `error` から読む。
-- **入口と、場所の確かめ**：総称の宣言には、宣言ごとの確かめ（`_outside_Page`、Go の `KanameOutside`）を作らない。ホストの関数が具体的な型を当てた型（`Page[Line]`）を受け取るところは、その型ごとの確かめの関数（`_outside3` など）を作り、型の引数を当てたフィールドを確かめる。`result` は、`ok` と `err` の中の値を確かめる。総称の関数の本体で確かめる場所の関数は、型の引数を宣言する（TypeScript の `<T>`、Go の `[T any]`）。
+- **中の関数の名前と見せ方**：型の引数を持つ関数は、入口のある公開の関数を持たず、一つの関数だけを生成する。ほかのモジュールの生成物から呼ぶので外に見せる（TypeScript は `export`、Python はモジュールの `_first_or`、Go は大文字で始める `FirstOr`、Rust は `pub fn _first_or`）。ドキュメントのコメントに「kaname の生成したコードが呼ぶ関数で、入口で引数を確かめない」と書く。
+- **型の引数の名前**：別名をそのまま使い、モジュールのコードの名前、出力先の語、型の名前（TypeScript の `ReadonlyMap`、Python の `typing` の名前、Go の `any`、Rust の `Option` や `i64`）と重なれば、TypeScript と Python と Rust は `_` を、Go は番号を付ける（`T_`、`T2`）。Python は型の変数をモジュールに一度だけ宣言し、同じ別名の型の引数は宣言のあいだで同じ変数を使う。Python 3.10 で動く書き方（`TypeVar` と `Generic`）である。
+- **値の持ち方**：型の引数の値は、受け渡す形（9 章）で持つ。総称の関数を呼ぶところは、具体的な型を当てた引数の型で値を受け渡す形にし、答えを具体的な型で読む。TypeScript と Go と Rust の呼び出しは、型の引数をいつも書く（`_first_or<units.USDc>(…)`、`FirstOr[units.USDc](…)`、`_first_or::<units::USDc>(…)`。Go は答えの型から型の引数を決めない）。Python は書かず、mypy が引数と置かれた場所から決める。
+- **比べ方を渡す**：鍵に限った型の引数（`K: key`）ごとに、その順を、隠れた一つ目の引数として渡す（TypeScript の `kaname.Order<K>`、Python の鍵の関数 `Callable[[K], Any]`（位置で渡す引数。`/` の前）、Go の `func(a, b K) int`）。`key` と書いた型の引数には、本体が順を使うかによらず、いつも渡す。呼ぶ側は、具体的な型の順（TypeScript の `kaname.cmpInt`・`kaname.cmpStr`・`kaname.cmpBool`・`kaname.byRank(_rank1)`、Python の `kaname.natural` と `_rank1`、Go の `kaname.CmpInt[units.USDc]`・`kaname.CmpStr`・`kaname.Compare`・`kaname.ByRank(_rank1)`）か、自分が受け取った順を渡す。Go の `K` は、辞書と集合の鍵にするために `comparable` にする（比べには使わない）。ほかの型の引数は `any` である。Rust は順を渡さず、`K` を `K: Ord + Clone` にする。鍵にできる型の `Ord` が鍵の順だからである（36.2）。
+- **鍵に限った型の引数を持つレコードの順**：`Pair[K]` や `indexed[K]` を鍵にして並べる総称の関数の本体では、レコードの順が、関数の受け取った `K` の順を使う。TypeScript と Python は、使うところに書く関数（`(a: Pair<K>, b: Pair<K>): number => order_K(a.key, b.key) || kaname.cmpInt(a.rank, b.rank) || 0`、`lambda r: (key_K(r.key), r.rank,)`）で、Go は、モジュールに一度だけ作る関数（`func _cmp1[K comparable](orderK func(a, b K) int) func(a, b Pair[K]) int`）を、受け取った順で呼ぶ（`_cmp1[K](orderK)`）。gofmt は、式の中に書いた関数の本体を行に分けるので、Go では使うところに書かない。Rust では何も書かない。レコードの `derive(Ord)` がフィールドを宣言の順に比べ、`K` の順もその `Ord` だからである（`sort_by(p => p)` は、レコードを鍵にした `kaname::by_key`）。
+- **型の引数の値の等しさ**：渡さずに、中身で比べる補助の関数を使う。TypeScript は `kaname.eq`（23.8）、Python と Rust は `==`（Rust は `T: PartialEq` の境界）、Go は補助のモジュールの `kaname.Equal`（リフレクションで中身を比べ、値の無いリスト・辞書・集合は `nil` かどうかによらず同じとする。`reflect.DeepEqual` はそれを分けるので使わない）である。型の引数を含む型（`list[T]`、`Page[T]`）の等しさも同じで、Go の型ごとの比べの関数（`_eq1`）は、型の引数を含まない型にだけ作る。
+- **総称のレコードと直和型**：TypeScript は型の引数を持つ `interface` と union、Python は `Generic` のデータクラスで、作るところで型の引数を書き（`Page[str](items=…, next=None)`、`kaname.Ok[int](value=…)`。mypy は `Ok(value=[])` の型を決めないため）、`isinstance` は型の引数の無いクラスで分ける。Go は型の引数を持つ型で、直和型の印のメソッドは型の引数を引数に持つ（`isFound(T)`。型の引数の違う二つの型が、同じ interface を満たさないようにするため）。Rust は型の引数を持つ構造体と列挙で、型の引数に `Clone + PartialEq` の境界を付け、作るところで型の引数を書く（`FoundHit::<T> { … }`、`Page::<T> { … }`）。値の構造体は、フィールドが使う型の引数だけを持つ（`FoundMiss` は持たない。Rust は使わない型の引数を受け付けない）。
+- **`result` を作ること、分けること**：TypeScript は `{ kind: "ok", value: x }`、Python は `kaname.Ok[A](value=x)`、Go は `kaname.Ok[A, E]{Value: x}`。`match` は直和型と同じで、TypeScript は `kind`、Python は `isinstance(v, kaname.Ok)` で分け、Go は型の switch（`case kaname.Ok[A, E]:`）である。名前を付けた値は、`value` と `error` から読む。Rust は標準の `Ok(x)` と `Err(e)` で作り、`match` で分ける。`try` も `?` でなく `match` で書き、`err` の値をそのまま答える（36.2）。
+- **入口と、場所の確かめ**：総称の宣言には、宣言ごとの確かめ（`_outside_Page`、Go の `KanameOutside`）を作らない。ホストの関数が具体的な型を当てた型（`Page[Line]`）を受け取るところは、その型ごとの確かめの関数（`_outside3` など）を作り、型の引数を当てたフィールドを確かめる。`result` は、`ok` と `err` の中の値を確かめる。総称の関数の本体で確かめる場所の関数は、型の引数を宣言する（TypeScript の `<T>`、Go の `[T any]`、Rust の `<T: Clone + PartialEq>`）。
+
+`tests/modules/results.kn` の `parse_item`（`let n = try parse_qty(text: qty)`）と、`tests/modules/generic.kn` の `cheapest` の終わり（`first_or` を呼ぶところ）から生成した Rust（実物）：
+
+```rust
+fn _parse_item(sku: &str, qty: &str) -> Result<Item, String> {
+    let _t1: Result<i64, String> = _parse_qty(qty);
+    match &_t1 {
+        Err(r#try) => {
+            Err(r#try.clone())
+        }
+        Ok(n) => {
+            if kaname::cp_count(sku) == 0 {
+                Err("no sku".to_string())
+            } else {
+                Ok(Item { sku: sku.to_string(), qty: *n })
+            }
+        }
+    }
+}
+```
+
+```rust
+    let _t6: units::USDc = _first_or::<units::USDc>(&_t5, &units::USDc(0));
+    units::USDc(_t6.0)
+}
+```
 
 ### 26.8 診断
 
@@ -3778,20 +3931,21 @@ error[E402]: example.kn:7:28: The parameter `test` of `all_within` writes `total
 
 ### 27.6 生成したコード
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| 関数の型 `(T) -> U` | `(x: T) => U` | `Callable[[T], U]` | `func(T) U` |
-| ラムダ | アロー関数（本体は文の塊） | その文の前に書く入れ子の `def _t1(…)` | 関数のリテラル |
-| 名前で渡した関数 | その関数を呼ぶアロー関数 | その関数を呼ぶ入れ子の `def` | その関数を呼ぶ関数のリテラル |
-| 関数の値を呼ぶ | `f(x)` | `f(x)` | `f(x)` |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| 関数の型 `(T) -> U` | `(x: T) => U` | `Callable[[T], U]` | `func(T) U` | `&dyn Fn(&T) -> Result<U, kaname::KanameError>`（`total` と書いた型は `-> U`） |
+| ラムダ | アロー関数（本体は文の塊） | その文の前に書く入れ子の `def _t1(…)` | 関数のリテラル | 借りたクロージャ（`&\|l: &Line\| -> Result<…> { … }`。本体は文の塊） |
+| 名前で渡した関数 | その関数を呼ぶアロー関数 | その関数を呼ぶ入れ子の `def` | その関数を呼ぶ関数のリテラル | その関数を呼ぶクロージャ |
+| 関数の値を呼ぶ | `f(x)` | `f(x)` | `f(x)` | `f(x)?`（`total` と書いた型は `f(x)`） |
 
-- ラムダの本体の式は、範囲の確かめや確かめつきの算術の文を要することがあるので、Python では式の `lambda` でなく、入れ子の `def` にし、TypeScript のアロー関数も文の塊にする。範囲の解析が示した算術は確かめない（`order_total` の `l.unit * l.qty` は、読み直しで 1,000,000 セント以下と示せるので、そのまま掛ける）。
+- ラムダの本体の式は、範囲の確かめや確かめつきの算術の文を要することがあるので、Python では式の `lambda` でなく、入れ子の `def` にし、TypeScript のアロー関数と Rust のクロージャも文の塊にする。範囲の解析が示した算術は確かめない（`order_total` の `l.unit * l.qty` は、読み直しで 1,000,000 セント以下と示せるので、そのまま掛ける）。
 - **決定（Go の関数の型は `func(T) U` にする）**：Go の生成したコードは、kaname の失敗を `*KanameError` の panic で運び、ホストが呼ぶ関数の入口で `kaname.Recover` が `error` にする（4.4、10.4）。関数の値の失敗も同じに運ぶので、関数の型に `error` を足さない。`func(T) (U, error)` にすると、関数の値を呼ぶたびに `error` を確かめる文が要り、ほかの呼び出しと失敗の運び方が分かれる。
+- **Rust の関数の型**：Rust の生成物は、kaname の失敗を `Result` で運ぶ（36.4）。関数の値の失敗も同じに運ぶので、関数の型は答えを `Result<U, kaname::KanameError>` にし、呼ぶところは `?` で失敗を渡す。`total` と書いた関数の型だけが `U` を答え、total な関数を渡すところは `Ok(…)` で包む。関数の値は借りて渡す（`&dyn Fn`。36.2）。範囲の解析が失敗しないと示した呼び出し（`order_total` が `total_by` を呼ぶところ）は、起きない `Err` を `unwrap_or_else(|e| panic!("{e}"))` で受ける（36.4）。
 - 組み込みの関数に関数の値を渡したとき（`xs.map(f)`）は、その場のループの中で、その関数の値を呼ぶ。
-- 関数を取る関数は中の関数で、入口の確かめの無い一つの関数を外に見せる（TypeScript の `export function _total_by`、Python の `_total_by`、Go の `TotalBy`。26.7 と同じ）。
+- 関数を取る関数は中の関数で、入口の確かめの無い一つの関数を外に見せる（TypeScript の `export function _total_by`、Python の `_total_by`、Go の `TotalBy`、Rust の `pub fn _total_by`。26.7 と同じ）。
 - Go の補助のモジュールの `kaname.Equal`（26.7）は、関数の値を受け取らない。関数の値は `=` にも、データにも、型の引数にも入らないからである（E113、E112）。
 
-`hof.kn` の `order_total` と `bumped` と `adjusted` から生成したもの（実物。TypeScript、Python、Go の順）：
+`hof.kn` の `order_total` と `bumped` と `adjusted` から生成したもの（実物。TypeScript、Python、Go の順。そのあとに Rust の三つ）：
 
 ```ts
 function _order_total(lines: readonly Line[]): units.USDc {
@@ -3823,6 +3977,35 @@ func _adjusted(price units.USDc, steps []Adjustment) units.USDc {
 	}
 	var _t5 units.USDc = ApplyAll[units.USDc](units.USDc(_t1), steps, _t2)
 	return units.USDc(int64(_t5))
+}
+```
+
+```rust
+fn _order_total(lines: &[Line]) -> units::USDc {
+    // 34: let line_total = (l: Line) => l.unit * l.qty
+    let _t1 = &|l: &Line| -> Result<units::USDc, kaname::KanameError> {
+        Ok(units::USDc(l.unit.0 * l.qty))
+    };
+    let line_total: &dyn Fn(&Line) -> Result<units::USDc, kaname::KanameError> = _t1;
+    let _t2: units::USDc = _total_by::<Line>(lines, line_total).unwrap_or_else(|e| panic!("{e}"));
+    units::USDc(_t2.0)
+}
+
+fn _bumped(xs: &[i64]) -> Result<Vec<i64>, kaname::KanameError> {
+    let _t1 = &|&x: &i64| -> Result<i64, kaname::KanameError> {
+        kaname::add(x, 1, _MODULE, 68, "The value of `x + 1` does not fit in int64")
+    };
+    let _t2: Vec<i64> = _apply_each::<i64>(xs, _t1)?;
+    Ok(_t2.clone())
+}
+
+fn _adjusted(price: units::USDc, steps: &[Adjustment]) -> units::USDc {
+    let _t1 = &|&v: &units::USDc, v_2: &Adjustment| -> Result<units::USDc, kaname::KanameError> {
+        let _t2: units::USDc = _adjust_price(units::USDc(v.0), v_2);
+        Ok(units::USDc(_t2.0))
+    };
+    let _t3: units::USDc = _apply_all::<units::USDc>(&units::USDc(price.0), steps, _t1).unwrap_or_else(|e| panic!("{e}"));
+    units::USDc(_t3.0)
 }
 ```
 
@@ -3909,7 +4092,7 @@ error[E108]: example.kn:5:11: Where `Wrap` holds itself (`Wrap[list[T]]`), it gi
 **決定（同じ型は二つまでたどる）**：自分を含むフィールドを二つ持つ値（`Expr` の `add` と `mul`）があると、一段たどるごとに抽象の値が何倍にもなる。`UNFOLD` を 100 にして、自分を含む型もほかの型と同じく 8 段までたどると、`trees.kn` の `check` に 95 秒と 17 GiB のメモリがかかった（二つまでなら 0.4 秒と 12 MB）。
 
 - **ベクタ**：基本の値は自分を含まない値で、候補は、自分を含む値の中に自分を含まない値を一つ置いたものまでである（9 章）。出力先の突き合わせは、自分を含む型の引数ごとに、200 段と 201 段の値も流す（16.4）。
-- **生成したコード**：TypeScript の `interface` と Python のデータクラスは、そのまま自分を指せる。Go の構造体は、自分を含むのがいつも `*T`、スライス、マップ、直和型のインターフェースを通してなので書ける（10.2）。入口は、型ごとの深さの関数（`_nest1` など）で数えてから、自分を含む型ごとの入口だけの確かめ（`_enter_<型>`、`KanameEnter`）でどの深さのフィールドも見る（10.4）。中の関数（`_size`）は、引数を確かめずに自分を呼ぶ。`size` の入口（TypeScript。実物）：
+- **生成したコード**：TypeScript の `interface` と Python のデータクラスは、そのまま自分を指せる。Go の構造体は、自分を含むのがいつも `*T`、スライス、マップ、直和型のインターフェースを通してなので書ける（10.2）。Rust の構造体と列挙は、同じ強連結成分の型へのフィールドのうち `Vec`・`BTreeMap`・`BTreeSet` を通らないものを `Box` で持つ（`left: Box<Expr>`、`next: Option<Box<Node>>`。36.2）。入口は、型ごとの深さの関数（`_nest1` など）で数えてから、自分を含む型ごとの入口だけの確かめ（`_enter_<型>`、`KanameEnter`、Rust の `kaname_enter` のメソッド）でどの深さのフィールドも見る（10.4）。中の関数（`_size`）は、引数を確かめずに自分を呼ぶ。`size` の入口（TypeScript。実物）：
 
 ```ts
 export function size(c: Category): bigint {
@@ -3942,6 +4125,30 @@ function _nest1(v: Category, above: number): string | null {
 }
 ```
 
+Rust の `size` の確かめと深さの関数（実物。Rust の文字列はいつも正しく、`Category` に範囲を書いたフィールドは無いので、確かめは深さだけを見る）：
+
+```rust
+pub fn check_size(c: &Category) -> Result<(), kaname::KanameError> {
+    if let Some(n_c) = _nest1(c, 0) {
+        return Err(kaname::fail("input", _MODULE, 55, format!("The argument `c` of `size` nests `{n_c}` more than 200 deep")));
+    }
+    Ok(())
+}
+```
+
+```rust
+fn _nest1(v: &Category, above: i64) -> Option<&'static str> {
+    let here = above + 1;
+    if here > 200 {
+        return Some("Category");
+    }
+    if let Some(o2) = _nest2(&v.children, here) {
+        return Some(o2);
+    }
+    None
+}
+```
+
 - **Lean**：`crates/ritsu-model/tests/kaname.rs` は、自分を含む型ごとの場所を一度だけ表（`Module.slots`）に書き出し、自分を含む型の値を持つ場所は、表の番号でその型を指す（`Slot.ref`）。モデルの入口の確かめ（`Slot.enterD`）は、表をたどってどの深さでも確かめ、深さを数える。kaname の関数を呼ぶところの確かめ（`Slot.outsideD`）と、それを示したかの判定（`keepsD`）は、`ref` の場所の中を見ない（15.1）。モデルを壊して落ちることを確かめたのは、入口で深さを数えないこと、入口で表をたどらないこと、`keepsD` が `ref` の場所を示さないことで、Rust の側では、自分を含む型の値の中で範囲を書かない刻みのある率を 0% から 100% と読むことと、呼ぶところで自分を含む型の値を示したとしないことである（15.3）。
 - **`run` の入力**：**決定（`run` は、引数の型が入れ子にできる深さまで入力を読む）**：`run` は入力の JSON を、引数の型の値が自分を含む型を 201 段まで入れ子にしたときの JSON の深さに、引数のオブジェクトの一段を足した深さまで読む（`Program::json_depth`）。JSON の段は、レコードが一つ、フィールドを持つ値が二つ（`{"<値>": {…}}`）、リストと集合が一つ、辞書が二つ（`[[鍵, 値], …]`）、`result` が一つで、オプショナルな値は増やさない。ritsu の読み手の 256 段より浅くは読まず、1,024 段より深くは読まない（`interp::READ_DEPTH`）。200 段の値は読んで答え、201 段の値は、入口の確かめが型の名前を言って `input` で失敗する（生成したコードと同じ文）。それより深い値は JSON として読めない。`Category` の一段は JSON の二段なので、`size` の入力は 1 + 2 × 201 = 403 段まで読む：
 
@@ -3970,7 +4177,7 @@ private fn place_of(x: number range >=0 <=99, b: Bounds) -> number
 
 - `fn`、`record`、`enum` の前に `private` を書ける。`private` のものは、そのモジュールの中からだけ使える。`use module` で読むほかのモジュールから使えば E101 で、注に `private` であることを書く。ホストからは呼べない（`private` の関数は中の関数で、入口の確かめもベクタも持たない。21.3）。
 - `private` でない関数の引数と答え、`private` でないレコードのフィールド、`private` でない列挙の値のフィールドに、`private` のレコードと列挙は書けない（E108）。ほかのモジュールもホストも、その型の値を作れないからである。
-- 生成したコード：TypeScript は `export` を付けず（`function _place_of`、`interface _Bounds`）、Python と Go は名前を `_` で始める（`_place_of`、`class _Bounds`、`_placeOf`、`type _Bounds struct`）。Go の `_` で始まる名前は、ほかのパッケージから読めない。
+- 生成したコード：TypeScript は `export` を付けず（`function _place_of`、`interface _Bounds`）、Python と Go は名前を `_` で始める（`_place_of`、`class _Bounds`、`_placeOf`、`type _Bounds struct`）。Go の `_` で始まる名前は、ほかのパッケージから読めない。Rust は `pub` を付けず、名前を `_` で始める（`fn _place_of`、`struct _Bounds`、`enum _Side`）。`pub` の無いものは、そのモジュールの外から使えない。
 - `api` は、`private` の関数・レコード・列挙に `"private": true` を書く。`doc` のページは、`private` の関数に、ホストは呼ばず、このモジュールの関数だけが呼ぶと書く。
 - `private` は、行頭の `enum`・`record`・`fn` の前でだけ読む語で、名前にもできる（2.2）。書かなければ、ほかのモジュールからもホストからも使える。
 
@@ -3982,11 +4189,11 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 
 ## 29. 入れないもの
 
-汎用の言語がふつう持つもののうち、kaname が持たないものと、その理由である。どれも、21.2 の五つの保証のどれかを崩すか、出力先の三つの言語で同じ答えを返せなくなる。まだ作っていないだけのもの（作る理由が見えたら作るもの）は 19 章にある。
+汎用の言語がふつう持つもののうち、kaname が持たないものと、その理由である。どれも、21.2 の五つの保証のどれかを崩すか、出力先の言語で同じ答えを返せなくなる。まだ作っていないだけのもの（作る理由が見えたら作るもの）は 19 章にある。
 
 | 入れないもの | 理由 |
 |---|---|
-| 浮動小数点 | 三つの出力先と範囲の解析と Lean が同じ答えを出せるのは、値が正確な有理数で、int64 に収まるからである（P4） |
+| 浮動小数点 | 出力先と範囲の解析と Lean が同じ答えを出せるのは、値が正確な有理数で、int64 に収まるからである（P4） |
 | 入出力、時刻、乱数、書き換えられる状態 | P1。ホストが読んで、引数として渡す |
 | ホストの関数を呼ぶこと、ホストから関数の値を受け取ること | P1。ホストのコードは kaname の検査の外にあり、入出力を持たないことを確かめられない（21.3） |
 | 関数を答える関数、関数の値をデータに入れること | 関数の値の行き先を追う解析と、その健全性の定理が要る。渡すことと呼ぶことだけなら、呼ぶ場所で渡した関数の中まで読めば足りる（27.1） |
@@ -3998,10 +4205,10 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 | 書き換えられる変数とループの文 | 値は書き換えない。畳み込み（`reduce`）と再帰で書く |
 | 任意の大きさの整数 | P4。値は int64 に収まる |
 | 添え字での読み書き（`xs[i]`） | 範囲の外という失敗の種類が増える。`xs.at(i)` が `T?` を答える（24.3） |
-| タプル | レコードならフィールドに名前が付き、三つの出力先でも名前で読める |
+| タプル | レコードならフィールドに名前が付き、どの出力先でも名前で読める |
 | 演算子の多重定義と、自分で書く演算子 | 一つの式を一通りにだけ読むため |
-| 正規表現 | 三つの言語で書き方と文字の種類の扱いが違い、補助のモジュールに一つ書くには大きすぎる |
-| Unicode の正規化と、ASCII の外の大文字と小文字 | Go の標準ライブラリに正規化が無く、大文字と小文字の替え方は三つの言語で違った（25.3） |
+| 正規表現 | 出力先の言語で書き方と文字の種類の扱いが違い、補助のモジュールに一つ書くには大きすぎる |
+| Unicode の正規化と、ASCII の外の大文字と小文字 | Go と Rust の標準ライブラリに正規化が無く、大文字と小文字の替え方は TypeScript・Python・Go で違った（25.3） |
 | 言語や地域に合わせた比べ方と書式 | 出力先と動かす環境で答えが変わる |
 | 文字列のエスケープ | rulec と同じに読むため（P3）。書けない文字は `char(n)` で作る（25.2） |
 
@@ -4165,3 +4372,443 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 **変わること**：`kaname check --format json` の `places` と、`kaname api` の `checks` の `check` の値が変わる。`X2` は `precondition`、`X3` は `rule_date_input`、`X4` は `transfer_amount`（拒否の理由の確かめは `transfer_refusals`）、`X6` は `koyomi_date_input` になる。`doc` のページで答えを待つ場所の文（ritsu-cross をつながない実行）も、番号ではなくコードの書式の語で言う（「ritsu's check `transfer_amount` has not answered in this run.」、帳簿の表の拒否の理由の欄は `transfer_refusals`）。`check` のテキストの出力は変わらない。
 
 **確かめたこと**：`tests/api.rs`（golden 6 本を `KANAME_BLESS=1` で取り直し、差は `check` の値だけだった。`what_the_api_says_and_what_stops_it` は答えを待つ日付の場所を `koyomi_date_input` で見る）、`tests/doc.rs`（答えを待つページの golden 2 本を取り直し、差は二つの場所の文だけだった）、`tests/cli.rs`、`tests/effects.rs`、`tests/ranges.rs`（場所の `check` の語）、ritsu-cross の `tests/borders.rs` の `kaname_names_a_check_by_the_word_of_its_record`。kaname の fast の段（200 件）と、ritsu・ritsu-cross・ritsu-ports の fast の段が通った。
+
+## 36. Rust の出力先と、パッケージの Wasm（2026-11-01）
+
+### 36.1 きっかけと範囲
+
+**きっかけ**：rulec と koyomi は Rust と Wasm を書き、chobo は Rust のクライアントを書く。kaname の生成物は TypeScript・Python・Go だけだったので、Rust のホストは、規則と日付と帳簿を直に呼べても、それをつなぐ kaname のモジュールを呼べなかった。Wasm のホスト（ブラウザや、ほかの言語のランタイム）も同じである。
+
+**決定**：kaname の出力先に Rust（キーは `rust`、`kaname::r#gen::Target::Rust`）を足す。H1〜H7 の全部（21〜28 章、32〜35 章）を Rust で書き、出力先の突き合わせ（16.4）を英語と日本語で通す。Rust のパッケージは一つのクレートで、kaname はその `glue/` を書く（10.1）。パッケージの Wasm は、そのクレートを wasm32 に組んだもので、rulec・koyomi と同じ `call: func(input: string) -> string` を export し、`glue::door::answer` で答える（36.10〜36.12）。
+
+**原因**（Go の形をなぞるだけでは足りない理由）：Go の生成物は、中の関数の失敗を panic で運び、入口の `kaname.Recover` で `error` に直す（10.4）。wasm32 の Rust は `panic=abort` で組む（rulec と koyomi の組み方と同じ）ので、panic はトラップになり、「どの入力にもトラップせずに答える」という Wasm の約束が守れない。そこで Rust では、失敗を `Result` で運ぶ（36.4）。もう一つは値の持ち方で、Rust の値には持ち主があるので、借りるかコピーするかを生成物が決める（36.4）。
+
+いまの範囲：Rust の生成物は kaname の生成の関数（`kaname::r#gen::package_in` に `Target::Rust`）が書き、kaname のテスト（`tests/rust.rs`）が、規則・日付・帳簿の Rust と一つのクレートにして確かめる（36.9）。`ritsu gen --target rust`（パッケージの残りと `Cargo.toml` を書くこと）と、パッケージの Wasm を書くことは、まだ無い（19 章）。
+
+### 36.2 型と値（10.2 の表の Rust の列）
+
+受け渡す形（引数、答え、レコードのフィールド）と、計算のあいだの形を、ほかの出力先と同じに分ける（10.2）。引数は、`Copy` の型を値で、ほかを借りて受け取る（36.4）。
+
+| kaname | 受け渡す形（レコード・答え） | 引数 | 計算のあいだ |
+|---|---|---|---|
+| お金・量 | パッケージの単位の型 `units::USDc`（`pub struct USDc(pub i64)`） | 同じ | `i64`、丸めていなければ `kaname::Q` |
+| `number` | `i64` | `i64` | `i64` か `kaname::Q` |
+| 刻みのある率 | 刻みの数の `i64` | `i64` | `kaname::Q`（`kaname::rate(k, step)`） |
+| `bool` | `bool` | `bool` | `bool` |
+| `string` | `String` | `&str` | `String` |
+| `date` | `kaname::Date { year: i32, month: u32, day: u32 }` | 同じ（`Copy`） | 同じ |
+| モジュールの列挙（値にフィールドが無い） | `pub enum Size { Small, Large }` | 値で（`Copy`） | 同じ |
+| 規則の列挙 | rulec の Rust の列挙（`rule_coupon::Kind`） | 値で（`Copy`） | 同じ |
+| 直和型 | `pub enum Order { Draft(OrderDraft), … }` と、値ごとの `pub struct OrderDraft { … }` | `&Order` | 同じ |
+| レコード | `pub struct Invoice { pub id: String, … }` | `&Invoice` | 同じ |
+| `list[T]` | `Vec<T>` | `&[T]` | `Vec<T>` |
+| `dict[K, V]` | `BTreeMap<K, V>` | `&BTreeMap<K, V>` | 同じ |
+| `set[T]` | `BTreeSet<T>` | `&BTreeSet<T>` | 同じ |
+| `entry[K, V]`・`indexed[T]` | 補助のモジュールの `kaname::Entry<K, V>`・`kaname::Indexed<T>` | 借りる | 同じ |
+| `T?` | `Option<T>` | `Option<T>`（`Copy` の型）か `Option<&T>`（`string?` は `Option<&str>`） | 同じ |
+| `result[T, E]` | 標準の `Result<T, E>` | `&Result<T, E>`（`T` と `E` が `Copy` なら値で） | 同じ |
+| 型の引数 `[T]`・`[K: key]` | `T: Clone + PartialEq`、`K: Ord + Clone` | — | — |
+| 関数の型 `(A) -> R` | （受け渡さない。27.1） | `&dyn Fn(A) -> Result<R, kaname::KanameError>`（`total` と書いた型は `-> R`） | — |
+| 振替の値 | `glue::books::<帳簿>::CaptureDo` と、帳簿ごとの `enum Call` | 借りる | 同じ |
+
+- **数**：`kaname::Q` は、既約の分数を `i128` の分子と分母（分母は 1 以上）で持つ。kaname の値はどれも int64 の決まり（5.6。分子は int64、分母は 1 から 2⁶³ − 1）に収まるので、演算の途中の積は `i128` に収まり、途中であふれて答えが変わることはない。演算と丸めは参照インタプリタの `num.rs` と同じ手順で、言語の割り算に頼らない（ほかの出力先と同じ）。
+- **日付**：`kaname::Date` は、koyomi の Rust の `Date` と同じフィールドの型にした。koyomi を呼ぶところは、フィールドを入れ替えて組み直すだけである（36.6）。暦に無い日（2026-13-01）、9999-12-31 の次の日、0001-01-01 の前の日も持てるので、入口が `valid()` で確かめる（Go の `Date.Valid` と同じ。22.5）。範囲は日の番号（`days()`。1970-01-01 からの日数）で比べる。
+- **辞書と集合**：`BTreeMap` と `BTreeSet` で持つ。鍵にできる型（24.1）の Rust の順（`Ord`）が、どれも kaname の鍵の順と同じだからである。数とお金と量と率は受け渡す形の整数で比べる（一つの鍵の型の単位は一つなので、整数の順が値の順になる）。文字列は `String` の順（UTF-8 のバイトの順は、コードポイントの順と同じ）、`bool` は `false` が先、日付は `(year, month, day)` の順（正しい日どうしでは早い順。入口を通らない日は鍵にならない）、モジュールの列挙は `derive(Ord)` の宣言の順である。規則の列挙も、パッケージの rulec の Rust が、どの列挙にも宣言の順の `Ord` を付ける（36.6）。回す順は鍵の順、等しさは `BTreeMap` と `BTreeSet` の `PartialEq`（同じ組、同じ要素）である。Go のように順の関数を受け渡す（`SortedKeys`、隠れた一つ目の引数）必要は無い。
+- **型の引数**：鍵に限った型の引数（`[K: key]`）は `K: Ord + Clone` にし、ほかの出力先が隠れた一つ目の引数で渡す順（26.7）は渡さない。上のとおり、鍵にできる型の `Ord` が鍵の順だからである。鍵に限らない型の引数は `T: Clone + PartialEq` にする（要素を新しいリストに入れるので `Clone`、`=` を書けるので `PartialEq`）。
+- **derive**：レコード、直和型、値ごとの構造体は `Clone, Debug, PartialEq, Eq` で、フィールドの型がどれも順を持てば `PartialOrd, Ord` を足す（`Gen::orderable`）。鍵にできる型のフィールドだけを持つレコードは並べ替えと `max_by`・`min_by` の鍵になり、フィールドを宣言の順に比べる（24.1）。`derive(Ord)` の比べ方がそれと同じである。順を持たないのは、振替の値、関数の値、規則の要素と、出力が二つ以上の規則の答え（rulec の構造体）を持つ型である。フィールドの無い列挙は `Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash`、振替の値は `Clone, Debug, PartialEq, Eq`、拒否の理由の列挙は `Clone, Copy, Debug, PartialEq, Eq, Hash` である。受け渡す形には浮動小数点数が無く、規則の列挙も `Eq` を持つので、`Eq` はいつも付けられる。
+- **`result`**：標準の `Result` を値の型として使う。ホストがそのまま読めるからである。失敗しうる関数が `result` を答えると、`Result<Result<T, E>, kaname::KanameError>` になる。`try`（26.3）は `?` でなく `match` で書く。`?` は kaname の失敗（`KanameError`）を返す書き方で、`err` の値を答えるのとは別だからである（26.7）。
+- **関数の型**：関数の値は、渡すことと呼ぶことにしか使えず、書いた関数の実行の外へ出ない（27.1）。そこで `&dyn Fn` で借りる。`Box` も型の引数も要らず、総称の関数の実体がラムダごとに増えることもない。エフェクトを書かない関数の型は、どのエフェクトの関数も受け取る（27.5）ので、答えを `Result<R, kaname::KanameError>` にし、total な関数を渡すときは `Ok(…)` で包む。`total` と書いた関数の型だけが `R` を答える（27.6）。
+- **自分を含む型**：型のグラフで同じ強連結成分に入る型へのフィールドのうち、`Vec`・`BTreeMap`・`BTreeSet` を通らないものを `Box` にする（`next: Option<Box<Node>>`、`left: Box<Expr>`）。`Vec` などを通る辺はもう間接なので `Box` にしない（`children: Vec<Category>`。28.1）。
+- **振替の値**：帳簿ごとに `glue/books/<帳簿>.rs` に、振替の操作ごとの構造体（`CaptureDo`。帳簿と振替と操作の名前を `BOOK`・`TRANSFER`・`OP` の定数で持つ）、拒否の理由の列挙（`CaptureDoRefusal`。`as_str()` が帳簿の書く名前を返す）、帳簿ごとの `enum Call`（`From<CaptureDo> for Call`）を書く（10.6）。帳簿のクライアントを読まないので、Wasm にも入る。
+
+### 36.3 名前（10.3 の Rust の版）
+
+- **宣言の名前**（関数、引数、フィールド、型、列挙の値）は、ほかの出力先と同じく ASCII の別名から作る（検査を通るモジュールでは、別名の無い名前は ASCII である）。関数は別名のまま（`late_payment`）。Rust では関数と、名前付きフィールドの構造体が別の名前空間にあるので、Go のように型と同じ名前の関数に `Fn` を足すことはない（`fn claim` と `record Claim` は `claim` と `Claim`）。型はパスカルケース（`ritsu_emit::ident::pascal`）、フィールドは別名のまま、モジュールの列挙の値は、値の別名のパスカルケースで型の下に置く（`Size::Small`）。直和型の値の型は Go と同じ名前（`OrderPlaced`。23.8）で、値は `Order::Placed(OrderPlaced { … })` になる。
+- **関数の中の名前**（`let`、ラムダの引数、`some` の名前）は書いたとおりにする（TypeScript と Python と同じ）。日本語の `let` の名前もそのまま置く。引数は別名で書く。どれも、生成物が使う名前（モジュールの関数、`check_<関数>`、`_<関数>`、`_MODULE`、生の識別子にできない語、`Some`・`None`・`Ok`・`Err`、`std`・`core`・`alloc`）か前に付けた名前と同じになれば、TypeScript と Python の決まり（10.3）で `_` と番号を足す。値の名前空間で、引数と `let` はモジュールの関数を隠すからである（`tests/modules/names.kn` の `helpers(units, ctx)` の `units` は、同じモジュールに関数 `units` があるので `units_` になる）。パスの頭（`kaname::add` の `kaname`、`units::USDc` の `units`、`rule_late_payment_charges::late_payment_charges` の `rule_late_payment_charges`）は型の名前空間で探すので、`let` と引数には隠されない。そこで Rust では、TypeScript と Go が分けている `kaname` と `units` を分けない（36.15）。
+- **Rust の予約語**：E007 は、TypeScript の strict モードの予約語、Python と Go の予約語、補助のモジュールの名前を、宣言の名前から外している（`names::taken_word`）。Rust の予約語はそこに足さない。足すと、`ref`、`box`、`move`、`use` のような、いま通っているモジュールの名前が止まるからである。代わりに、Rust の予約語は生の識別子にする（`r#ref`、`r#move`、`r#impl`、`r#dyn`、`r#where`、`r#mut`、`r#loop`。エディション 2024 の予約語 `gen` も `r#gen` にし、これは 2021 でも書ける）。生の識別子にできない五つ（`crate`、`self`、`super`、`Self`、`_`。`ritsu_emit::ident::RUST_UNRAW`）は、フィールドと関数と型なら `_` を足す（`self_`、`crate_`、`Self_`。chobo の Rust のクライアントと同じ）。関数の中の名前と引数は、上の決まりで `_` と番号を足す。
+- **標準の型と値の名前**：モジュールの型の名前が、生成物が名前だけで書く標準の型かトレイト（`Option`、`Result`、`Vec`、`String`、`Box`、`BTreeMap`、`BTreeSet`、`Fn`、`FnOnce`、`Clone`、`Ord`、`PartialOrd`、`PartialEq`、`Eq`、`From`。`plan::RUST_STD_TYPES`）と同じなら、`_` を足す（`record Vec` は `Vec_`、`enum Option` は `Option_`）。モジュールの型が標準の型を隠すと、生成物の `Option<…>` がその型を指すからである。関数の名前が、生成物が名前だけで書く値（`Some`、`None`、`Ok`、`Err`。`plan::RUST_STD_VALUES`）と同じなら、関数にも `_` を足す（`fn Some` は `Some_`、中の関数は `_Some`、確かめは `check_Some`）。関数は値の名前空間にあり、`Some(…)` を隠すからである。名前付きフィールドの構造体は値の名前空間に入らないので、型の名前は値を隠さない（36.15）。モジュールのコードの名前（関数）が標準の型と同じ名前のときは、生成物がその型をパスで書く（`::std::vec::Vec`。`Gen::std_type`）。
+- **モジュールの名前（E007）**：Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になる。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前なので、モジュールの名前か別名がこの五つなら E007 にする（`names::NO_RUST_MODULE`。`super` は TypeScript の予約語として、もう E007 である）。どの出力先で生成するかによらず、`check` が止める。ほかの Rust の予約語（`match` など）は生の識別子のモジュールにする（`pub mod r#match;` は `match.rs` を読む。36.15）。
+
+  ```text
+  error[E007]: example.kn:1:8: The generated code cannot take `door` as the name of a module
+       1 | module door v1
+    = In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door); choose another name or alias.
+  ```
+
+  ```text
+  エラー[E007]: example.ja.kn:1:11: 生成するコードは、`door` をモジュールの名前に使えません
+       1 | module 入口(door) v1
+    = 生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。別の名前か別名にしてください。
+  ```
+
+- **生成物が足す名前**：入口の確かめは `check_<関数>`（別名から作る。モジュールの関数の名前と同じになれば、2 からの番号を足す）、入口を通らない中の関数は `_<関数>`（10.3 の `_claim`）、モジュールの名前は `const _MODULE: &str`、計算のあいだの値は一時的な名前（`_t4`）にする。
+- **`private`**：`pub` を付けず、名前を `_` で始める（`struct _Bounds`、`fn _place_of`。同じモジュールからしか使わない。28.2）。型の引数を持つ関数と関数を取る関数は、ほかのモジュールの生成物から呼ぶので `pub fn _first_or<T…>(…)` にする（TypeScript と同じ名前）。ドキュメントのコメントに「kaname の生成したコードが呼ぶ関数で、入口で引数を確かめない」と書く（26.7）。
+- **出力先が名前にできない字**：kaname は `m²`（`²` は一般カテゴリ No の数）や `कीमत`（二字目の `ी` は結合文字 Mc）を名前に取る。出力先の識別子の決まりはそれぞれ違い、Rust と Python は XID_Start か `_` で始まって XID_Continue が続く名前、TypeScript は ID_Start と ID_Continue（XID に、NFKC で別の字になる少しの字を足したもの。`ͺ` と半角の `ﾞ`）、Go は文字（Lu、Ll、Lt、Lm、Lo）か `_` で始まって文字と十進の数字（Nd）が続く名前を取る。そこで、関数の中の名前は、出力先がその字を名前に取るときだけ書いたとおりに書き、取らなければ `v` にする（`plan::ident_ok`）。字の表は ritsu-emit の `xid.rs` で、Unicode Character Database 17.0.0 の二つのファイルから作る（`crates/ritsu-emit/tools/xid/`。chobo の E063 と Rust のクライアントも同じ表を読む）。宣言の名前は ASCII なので、新しい診断は要らない。`names.kn` の `letters`（実物。Rust）：
+
+  ```rust
+  fn _letters(n: i64) -> i64 {
+      // 64: let m² = n * n
+      let v: i64 = n * n;
+      // 65: let कीमत = m² + 1
+      let कीमत: i64 = v + 1;
+      // 66: let Ⅻ = कीमत + 12
+      let Ⅻ: i64 = कीमत + 12;
+      // 67: let ﾞ = Ⅻ * 2
+      let v_2: i64 = Ⅻ * 2;
+  ```
+
+  Go はこのうち `कीमत` と `Ⅻ`（一般カテゴリ Nl）も `v` にし、TypeScript は `ﾞ` を書いたとおりに書く。表のほうがツールの Unicode より新しいと、表が通す字をツールがまだ知らないことがある（Python 3.13 は Unicode 15.1.0、Go 1.26 は 15.0.0、rustc 1.94 は 17.0.0）。その字を持つ名前は、新しい Unicode で加わった文字で、kaname の字句が文字と読むものである。古いツールはそれを名前に取らない（36.16）。
+- **NFC**：Rust は識別子を NFC にしてから比べる。NFC で同じになる二つの関数の中の名前（ハングルの字母を並べたものと、合わせた音節）は、kaname では別の名前で、Rust では同じ名前になり、後の `let` が前の名前を隠す。kaname は名前を正規化しない（36.16）。
+
+### 36.4 関数の形とエフェクト
+
+ホストが呼ぶ関数（21.3）一つに、三つの関数を書く。引数を確かめるだけの `check_<関数>`、ホストが呼ぶ関数、入口を通らない中の関数である。`tests/modules/texts.kn` の `place`（total。実物）：
+
+```rust
+/// Whether the arguments are what `place` takes: a `KanameError` of the kind input when one is
+/// outside what its parameter declares.
+pub fn check_place(s: &str, t: &str) -> Result<(), kaname::KanameError> {
+    if let Some(o_s) = _outside7(s, "s") {
+        return Err(kaname::fail("input", _MODULE, 73, format!("The argument `{}` of `place` has {} code points, outside its count {}", o_s.path, kaname::itoa(o_s.count), o_s.range)));
+    }
+    if let Some(o_t) = _outside11(t, "t") {
+        return Err(kaname::fail("input", _MODULE, 73, format!("The argument `{}` of `place` has {} code points, outside its count {}", o_t.path, kaname::itoa(o_t.count), o_t.range)));
+    }
+    Ok(())
+}
+
+/// Effect: total (it answers every input). It panics when an argument is outside what its parameter declares; `check_place` says so
+/// first, with a `KanameError` of the kind input.
+pub fn place(s: &str, t: &str) -> Option<i64> {
+    if let Err(e) = check_place(s, t) {
+        panic!("{e}");
+    }
+    _place(s, t)
+}
+
+fn _place(s: &str, t: &str) -> Option<i64> {
+    kaname::index_of(s, t)
+}
+```
+
+失敗しうる関数は、入口の外れも `Err` で返す。`tests/modules/trees.kn` の `size`（実物。28.1）：
+
+```rust
+/// Effect: fails overflow (it checks some places when it runs). It recurses, and may not stop. It returns a `KanameError` of the kind input when an argument is outside what its
+/// parameter declares, and of a kind of its effect.
+pub fn size(c: &Category) -> Result<i64, kaname::KanameError> {
+    check_size(c)?;
+    _size(c)
+}
+```
+
+- **決定（失敗しうる関数は `Result`、total な関数は値と panic）**：失敗しうる関数（`fails`）は `Result<R, kaname::KanameError>` を答え、入口の外れも `Err`（種類 `input`）で返す。total な関数は `R` を答え、入口の外れでは panic する。Go と同じ分け方で（10.3）、エフェクトが型に出る。Rust の標準のライブラリも、呼ぶ側が約束を破った入力（範囲の外の添字）では panic する。信用できない入力は、先に `check_<関数>` で確かめる。`kaname api` は二つの名前を `check` に書く（36.14）。
+  **捨てたもの**：どの関数も `Result` を答える形（rulec と koyomi の Rust はそうしている）。total な関数と失敗しうる関数の違いが型から消え、total な関数をほかのモジュールから呼ぶたびに、起こらない `Err` を扱うことになる。
+- **中の関数**：失敗しうる中の関数は `Result` を答え、呼ぶ側は `?` で運ぶ。total な中の関数は `R` を答える。同じモジュールの関数は中の関数を、ほかのモジュールの関数は公開する関数を呼ぶ（10.3 と同じ）。範囲の解析が引数を示せなかった呼び出しは、呼ぶ前に確かめて `range` で失敗する（「The argument `…` given to `…`」の文）ので、ほかのモジュールの total な公開する関数の panic には届かない。関数を取る関数は、渡された関数の型がエフェクトを書かなければ、渡された関数の失敗が通るので（27.5 の `through`）、`Result` を答える。
+- **示した場所**：解析が失敗しないと示した呼び出し（規則と日付の関数、関数の型の値、`Result` を答える中の関数）の `Err` は、`.unwrap_or_else(|e| panic!("{e}"))` で受ける。届かない枝である（Go の `panic(_t3)` と同じ）。示した演算は素の `+`・`*` で書く。示したとおりなら、デバッグのビルドのあふれの panic にも届かない。
+- **評価の順と一時的な名前**：参照インタプリタの順（8 章）を保つ形は、ほかの出力先と同じ計画（`_t1`、`_t2`）を使い、`let _t1: T = …;` と書く。関数の終わりの値は、`let` に入れずに式で返す（clippy の `let_and_return`）。
+- **借りるかコピーするか**：引数は、`Copy` の型（`i64`、単位の型、`bool`、`kaname::Date`、`kaname::Q`、フィールドの無い列挙と規則の列挙、関数の型の値、それらの `Option` と `Result`）を値で、ほかを借りて受け取る（`&Invoice`、`&str`、`&[T]`、`&BTreeMap<K, V>`、`Option<&T>`）。`let` は値を持つか、借りた値を名前で持つ（`let c: &rule_late_payment_charges::Output = &_t4;`）。計画の値に、持っている値か借りている値かの印を持たせ、使う場所ごとに決める。借りる先に渡すなら `&x`（すでに借りているなら `x`）、持つところ（レコードのフィールド、リストの要素、答え）に置くならコピーする（`x.clone()`。`&str` は `.to_string()`、`&[T]` は `.to_vec()`、`Option<&T>` は `.cloned()`）。`Copy` の型は clone しない（clippy の `clone_on_copy`）。最後に使う場所でコピーせずに移す解析はしない。kaname の値は書き換えないので、コピーしても答えは変わらず、コピーの量は値の大きさまでである。
+- **ラムダ**：関数の型の引数に渡すラムダは Rust のクロージャにし（`&|l: &Line| -> Result<units::USDc, kaname::KanameError> { … }`）、借りて渡す。名前で渡した関数は、それを呼ぶクロージャにする（27.6）。組み込みの関数に渡すラムダは、ほかの出力先と同じく、その場のループの本体にする。クロージャではないので、本体の `?` はそのまま関数から失敗を返す。並べ替えは、先に鍵を順に求め（失敗すればそこで返る）、鍵と要素の組を安定な `sort_by` で並べる（Go と同じ。`slice::sort_by` は安定）。
+- **再帰の深さ**：参照インタプリタは 200 段で「止まらない」と言う（8 章）。生成物は段を数えないので、200 段まで答える入力を Rust のスタックが受け止めればよい。テストのハーネスはデバッグのビルドをメインのスレッドで走らせ、全部のケースに答える（36.9）。止まらない入力では、ネイティブではスタックがあふれてプロセスが止まり、Wasm はトラップする（36.11）。
+
+### 36.5 実行時の確かめと `KanameError`（10.4）
+
+```rust
+pub enum Kind { Input, Rule, Date, Range, Overflow, Zero }
+
+#[derive(Debug)]
+pub struct KanameError {
+    pub kind: Kind,
+    pub module: &'static str,
+    pub line: u32,
+    pub message: String,
+    pub cause: Option<Box<dyn std::error::Error + Send + Sync>>,
+}
+```
+
+`Display` は文、`std::error::Error::source` は `cause`（規則の `RuleError`、日付の `KoyomiError`。どちらも `std::error::Error` を持つ）である。`Kind::as_str` は kaname の種類の名前（`input` など）を返す。原因の型が `PartialEq` を持たないので、`KanameError` の derive は `Debug` だけにした。文は生成するときの `--lang` の言語で、ほかの出力先と同じく ritsu-base の `spaced` の形にする（補助のモジュールの `spaced`）。
+
+- **あふれ**：示さなかった整数の演算は、補助のモジュールの `kaname::add`・`sub`・`mul`・`neg` で書き、`?` で `overflow` を返す（27.6 の `_bumped`）。`kaname::Q` の値が int64 の決まりに収まるかは `kaname::held` で見る。
+- **0 で割る**：`kaname::over(a, b, …)` が、`b` が 0 なら `zero` を返す。
+- **範囲と要素の数**：入口の `check_<関数>` が、引数を宣言の順に `_outsideN(v, what) -> Option<kaname::Outside>` で見る（Go の `_outsideN` と同じ）。`kaname::Outside` は Go と同じく、パス、見せる値、範囲、要素の数、それがコードポイントの数か、を持つ。レコードは `pub fn kaname_outside(&self, what: &str) -> Option<kaname::Outside>` を持ち、ほかのモジュールの入口からも呼ぶ（Go の `KanameOutside`。22.5）。数の範囲は端ごとに比べる（`if v.0 < 1 || v.0 > 100000000 { … }`。ほかの出力先と同じ形。36.8）。
+- **入れ子の深さ**：自分を含む型の引数は、入口で型ごとの深さの関数（`_nest1` など）で 200 段まで数え、201 段なら `input` で失敗する（28.1）。
+- **文字列**：Rust の `String` と `&str` は、いつも正しい UTF-8 である。ホストは正しくない文字列を渡せないので、入口の「Unicode の文字列として正しくない」の確かめ（25.8）は書かない。要素の数はコードポイントで数える（`kaname::cp_count`）。正しくない文字列は、JSON の一行で呼ぶ入口（`glue::door::answer`）にだけ届き、そこで入口と同じ文で答える（36.11）。
+- **範囲を書かない値の型の端（22.5）**：数は `i64` が int64 そのものなので確かめない（Go と同じ。`pub fn check_next_id(_: i64) -> Result<(), kaname::KanameError> { Ok(()) }`）。2⁶³ と −2⁶³ − 1 の入力は、Rust では流さない。日付は `valid()` で、0001-01-01 から 9999-12-31 の正しい日かを見る。10000-01-01、0000-12-31、2026-13-01 の入力（22.4）は `kaname::Date` が持てるので、Rust でも流す（TypeScript と Go と同じ）。
+- 示した場所の確かめは書かない（10.4）。`ritsu gen` が渡す、言語をまたぐ判定の答えも同じである。
+
+### 36.6 内側の層を呼ぶ（10.5、10.6）
+
+**規則（rulec の Rust）**。パッケージの規則のモジュールは、rulec のパッケージの形の Rust である（`rulec::codegen::package_parts_at` に `rust`。ritsu の DESIGN 9.3）。`rulec gen` の Rust と同じ関数を持ち、違いは三つである。お金と量の型を、自分で宣言せずにパッケージの単位のモジュールから読んで公開する（`pub use crate::units::{GBP, GBPc};`。TypeScript・Python・Go と同じ。rulec の §15.248）。どの列挙にも、宣言の順の `PartialOrd` と `Ord` を付ける（36.2）。頭の許しは `#![allow(non_snake_case, unused_parens, dead_code)]` で、字の lint はクレートの根が許す（36.8）。率は規則ごとの `Rate(pub i64)`（刻みの数）、日付は日の番号の `i64` のままである。
+
+- 呼び方は、口の `RuleFacts::rust`（`Call`。モジュール、関数、引数と出力の名前と型、列挙のメンバー）から書く。rulec の `ports.rs` が、`rulec api` の `rust` と同じ名前を、同じ関数（`Gen::calls`）で埋める。rulec の `tests/ports.rs` が、全部の規則で二つが同じことを確かめる。sekisho が構造体のリテラルで作る `RuleFacts`（`names.rs`）も `rust` を持つ。
+- 規則が失敗すれば、`KanameError` は種類 `rule`、文は「The rule `charges` refuses its inputs」、`cause` は `RuleError` になる。示した呼び出しは包まない（36.4）。額は単位の型のまま渡し、規則の答えも単位の型で受け取る。`examples/late_payment` の `_claim`（実物。言語をまたぐ判定の答えを渡さない生成なので、期日の呼び出しは包む。10.4）：
+
+```rust
+fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Result<Option<Claim>, kaname::KanameError> {
+    let _t1: kaname::Q = kaname::rate(reference_rate, kaname::frac(1, 10000));
+    // 20: let due = terms.due(invoiced: invoice.invoiced)
+    let _t3: dates_payment_terms::Date = dates_payment_terms::due(dates_payment_terms::Date { year: invoice.invoiced.year, month: invoice.invoiced.month, day: invoice.invoiced.day }).map_err(|e| kaname::refused("date", _MODULE, 20, "The date `terms.due` cannot be worked out", e))?;
+    let _t2: kaname::Date = kaname::Date { year: _t3.year, month: _t3.month, day: _t3.day };
+    let due: kaname::Date = _t2;
+    // 21: let late = paid_on - due
+    let late: i64 = kaname::between(paid_on, due);
+    if late >= 1 {
+        // 23: let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)
+        let _t4: rule_late_payment_charges::Output = rule_late_payment_charges::late_payment_charges(units::GBPc(invoice.amount.0), late, rule_late_payment_charges::Rate(kaname::steps(_t1, kaname::frac(1, 10000)))).unwrap_or_else(|e| panic!("{e}"));
+        let c: &rule_late_payment_charges::Output = &_t4;
+        Ok(Some(Claim { due, days_late: late, compensation: units::GBP(c.compensation.0), interest: units::GBPc(c.interest.0) }))
+    } else {
+        Ok(None)
+    }
+}
+```
+
+**日付（koyomi の Rust）**。モジュールごとに `pub fn <日付の別名>(…) -> Result<Date, KoyomiError>` がある（`koyomi::codegen::rust::module`）。引数は口の `DateFunction::params` の順。koyomi の `Date` はそのモジュールの型なので、上のようにフィールドを入れ替えて組み直して渡し、答えも組み直す。失敗は、種類 `date`、文「The date `terms.due` cannot be worked out」、`cause` は `KoyomiError` である。
+
+**読み込み**。パッケージのモジュールをモジュールごとに別名で読む（`use crate::rules::late_payment_charges as rule_late_payment_charges;`、`use crate::dates::payment_terms as dates_payment_terms;`、`use crate::glue::kaname;`、`use crate::units;`）。依存の部分は、そのディレクトリの下のパス（`crate::deps::<名前>::…`。`ritsu_emit::package::rust_path`）で読む。
+
+**帳簿（chobo の Rust のクライアント）**。振替の値の型は kaname が書く（36.2）。当てる関数は、帳簿ごとに `glue/books/<帳簿>_apply.rs` に置く（10.6 の実物）。
+
+- クライアントのモジュール、メソッド（`capture()`）、引数の構造体の名前（`CaptureArgs`）とフィールドは、口の `BookFacts::rust` から読む。文字列は借りて（`&c.payment`）、額は値で渡す。
+- **決定（トレイト境界は帳簿の置き場所ごと）**：PostgreSQL と MySQL の系統のクライアントは `Book<D: Database>`（chobo が書く `Database` のトレイト）、TigerBeetle のものは `Book<C: TigerBeetleClient>` で、トレイトの名前が違う。そこで kaname の生成の選択（`kaname::r#gen::Options`）に帳簿の置き場所（`Store::Sql` と `Store::TigerBeetle`。既定は `Sql`）を足し、当てる関数はその置き場所のトレイトを書く。TypeScript・Python・Go の当てる関数は置き場所によらないので変わらない。
+  **捨てたもの**：chobo のクライアントが、置き場所によらない別名（`pub use … as Driver`）を書く形。chobo の Rust のクライアントの出力が変わる。
+- 当てる関数は async で、Wasm には入れない（`glue/books.rs` が `#[cfg(not(target_arch = "wasm32"))]` で外す。36.10）。
+
+### 36.7 補助のモジュール（`glue/kaname.rs`）
+
+パッケージに一つ置く。中身は次のとおり。
+
+- `Kind`、`KanameError`、`fail`・`fails`・`refused`、`At`、文の書き方の `spaced`。
+- `Q` とその演算（和、差、積、商、比べ、整数との行き来、刻みの数と率）、あふれを見る整数の演算（`add`、`sub`、`mul`、`neg`）、`held`・`over`、五つの丸め（`round`）、`allocate`・`mod`・`isqrt`・`root`。
+- `Date`（`valid`、`days`、`Display`）と、日の番号からの `date_of`、`between`。
+- `Outside`、`Entry`・`Indexed`・`Running`、値を文に書く関数（入口の失敗の文の `1.5%`、`70GBP`）。
+- 辞書と集合の関数（`put`、`remove`、`merge`、`union`、`intersect`、`difference` など）、リストの関数（`slice`、`take`、`drop`、`sorted`、`by_key`、`distinct`、`numbers` など）、文字列の関数（コードポイントで数える・切る・探す、`pad`、kaname の空白の決まりの `trim`、ASCII の大文字と小文字、`split`・`words`、数と日付を読む）。
+
+一つだけ置く理由は 10.1 と同じで、Rust ではもっと強い。モジュールどうしで `kaname::Date` や `kaname::Q` を渡すので、型が一つでなければならない（Go の `kaname` のパッケージが一つなのと同じ）。依存のモジュールも、パッケージの根の `crate::glue::kaname` を読む。中身は版と言語のほかは決まった文なので、`include_str!` で読む `src/gen/runtime/kaname.rs` に `@HEAD@` と `@LANG@` を置いて埋める（ほかの出力先と同じ）。外のクレートは使わない。
+
+### 36.8 生成物の頭、`#![allow(…)]`、エディション、rustc の版
+
+- **頭**：`// Code generated by kaname <版>. DO NOT EDIT.` と `// Source: <パス> (module <名前> v<n>, sha256:<16 桁>)`（10.7、ritsu の DESIGN 9.2）。続けて `//! The module <名前> of kaname: <説明>`。補助のモジュール、帳簿ごとのファイル、`glue.rs`、`glue/books.rs`、`glue/door.rs` は一行目だけ。
+- **決定（モジュールの `#![allow(…)]`）**：kaname のモジュールのファイルは、どれも同じ一行を持つ（`module::RUST_ALLOW`）。
+
+  ```rust
+  #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::too_many_arguments, clippy::type_complexity, clippy::large_enum_variant, clippy::result_large_err, clippy::eq_op, clippy::identity_op, clippy::erasing_op, clippy::if_same_then_else, clippy::nonminimal_bool, clippy::explicit_auto_deref, clippy::manual_range_contains, clippy::needless_late_init, clippy::match_like_matches_macro, clippy::manual_map, clippy::manual_filter, clippy::collapsible_if, clippy::collapsible_else_if)]
+  ```
+
+  中身は三つの組である。テストのモジュールの全部に二つのエディションで clippy をかけ、要るものだけを残した。
+  1. ソースが書いた名前：`non_snake_case`（`paidOn`、`Type`、`check_Some`）、`non_camel_case_types`（`Option_`）、`non_upper_case_globals`。
+  2. 生成物の形：`clippy::too_many_arguments`（引数が八つ以上の関数）、`clippy::type_complexity`（入れ子の型）、`clippy::large_enum_variant`（大きさの違う値を持つ直和型）、`clippy::result_large_err`（大きなレコードを `err` に持つ `result`）、`clippy::explicit_auto_deref`（借りた値を、どこでも同じ書き方で読むこと）、`clippy::needless_late_init`（`if` と `match` の答えを入れる名前を、先に宣言すること）。ほかの出力先と同じ形が当たるものもある。範囲を端ごとに比べること（`manual_range_contains`）、分岐ごとに名前に値を入れること（`manual_map`、`manual_filter`、`match_like_matches_macro`）である。エディション 2021 の形（let のチェーンを書かない）も、2024 の clippy の `collapsible_if` と `collapsible_else_if` に当たる。
+  3. ソースが書いたとおりの式：`clippy::eq_op`（`a = a`。既定でエラー）、`clippy::identity_op`（`x * 1`）、`clippy::erasing_op`（`x * 0`）、`clippy::if_same_then_else`、`clippy::nonminimal_bool`。kaname の検査が言わない冗長さを、clippy が生成物の上で言うことになるからである。
+
+  生成物で避けられるものは避ける。`Copy` の値を clone しない、`&String` と `&Vec` を引数にしない（`ptr_arg`）、フィールドの省略形を使う（`Claim { due, … }`。`redundant_field_names`）、負のリテラルを括弧で包まない（`unused_parens`、`double_parens`）、終わりの値を式で返す（`let_and_return`）。
+- **ほかの生成物の許し**：帳簿ごとの振替の値のファイルは `#![allow(non_snake_case, non_camel_case_types)]`、補助のモジュールと `glue/door.rs` は `#![allow(dead_code)]` である（パッケージの関数の全部を使うとは限らない）。
+- **クレートの根に要るもの**（kaname のテストの `lib.rs`）：`#![allow(confusable_idents, mixed_script_confusables, uncommon_codepoints)]`。三つともクレートの単位の lint で、モジュールに書いても効かない（36.15。モジュールに書いた `allow(uncommon_codepoints)` は「is ignored unless specified at crate level」の警告になり、`confusable_idents` はモジュールで許しても出る）。関数の中の日本語の名前を書いたとおりに置く限り要る。カタカナが紛らわしい字（`ロ`、`エ`、`ニ`）だけのクレートは `mixed_script_confusables` に、`ロ` と `口` の二つの名前は `confusable_idents` に当たる。NFKC で変わる字（全角の英字、半角のカナ）は `uncommon_codepoints` に当たる（chobo の DESIGN 14.6）。
+- **規則と日付の部分**：rulec と koyomi の Rust のモジュールは、clippy に当たる形を持つ（規則の `manual_range_contains`、エディション 2024 の日付の `collapsible_if`）。どちらも生成器ごとの形で、kaname からは直せない。そこでテストのパッケージの `rules.rs` と `dates.rs` は、モジュールの宣言ごとに `#[allow(clippy::all)]` を付ける。rustc の lint は許さない。それぞれの中身は、それぞれの言語のテストが確かめる（ritsu の DESIGN 9.3 の「中身ごとの突き合わせ」と同じ考え）。
+- **二つのエディション**：生成物は、エディションで意味の変わる書き方を使わない。let のチェーン（2024 だけ）を書かない。`gen` は `r#gen` にする。`impl Trait` を答えに書かない。`static mut` を使わない。テストは、同じクレートを `edition = "2021"` と `"2024"` で `cargo clippy --all-targets -- -D warnings` にかける（36.9）。
+- **rustc の版**：テストのクレートの `rust-version` は `1.94` にした。ここで確かめるいちばん古いツールチェーンで、帳簿のクライアントの sqlx 0.9.0 も 1.94 を求める（chobo の DESIGN 14）。
+
+### 36.9 試験（16.4 の Rust の段）
+
+- **`tests/rust.rs`**（`go.rs` と同じ形）：例の 16 と `tests/modules/` の 34（と、それが読むモジュール）を一つのパッケージにし、英語と日本語の二つを書く（`tests/common/targets.rs` の `write_package` に `Target::Rust`）。規則は rulec のパッケージの形の Rust、日付は `koyomi::codegen::rust::module`、帳簿は chobo の PostgreSQL の Rust のクライアント、ほかに `units.rs`（rulec の `units_module_in("rust")`）、kaname の `glue/`、テストが書く `lib.rs`・`rules.rs`・`dates.rs`・`books.rs` と `Cargo.toml` を置く。クレートの依存は `tools/rust/`（`Cargo.toml` と `Cargo.lock`）から持ってきて `--locked` で組む。chobo のテストがランナーの `Cargo.lock` を使うのと同じ形である。`the_crates_are_those_the_clients_name` が、sqlx、tokio、tigerbeetle の版が `chobo::client::rust::crates` の版と同じであることを確かめる。ritsu の `tests/audit.rs` は、`tools/` の下の `Cargo.toml` の横に `Cargo.lock` があることを確かめ、監査もその lock を読む。
+- **ハーネス**：JSON の一行で呼ぶ入口 `glue::door::answer(&str) -> String`（36.11）を、ネイティブのまま呼ぶ小さな `main` にした（`harness::call_lines` が書くケースを一行ずつ渡し、panic すれば `{"error":"the call panicked"}` と書く）。ケースは一行に一つの呼び出し（`{"module":…,"function":…,"in":…}`）で、答えの行の `out` か `fails` を参照インタプリタの答えと比べ、ベクタのケースは、行の全体（`kaname vectors` の行から `why` を除いたもの）とも一字一句比べる。Wasm も同じ入口を通るので、Wasm のテストは、組み方とホストの違いだけを見ればよい。
+  **捨てたもの**：Go のように型ごとの JSON の読み書きを持つハーネスを別に生成すること。入口と同じものを二度書くことになる。
+- **三つの入力**：全部のベクタ、宣言の外の入力、入れ子の 200 段と 201 段（16.4）。宣言の外の入力のうち Rust で流さないのは、int64 の外の数である。正しくない文字列は、JSON の孤立したサロゲートのエスケープ（`"\ud800"`）で書き、入口が答える（36.11）。数は Go と同じ 2,584 件になる。
+- **型の検査**：英語と日本語のパッケージのそれぞれで、`cargo clippy --all-targets -- -D warnings` を、エディション 2024 と 2021（`Cargo.toml` の `edition` を書き換えて二度）で走らせる。警告が一つでも出れば落とす。
+- **帳簿**：`the_generated_rust_makes_the_transfers_in_the_books` が、振替を作る四つのモジュールのベクタから振替を作り、`glue/books/` の当てる関数と chobo のクライアントで、PostgreSQL（使い捨てのクラスタ）と TigerBeetle に当てる。クライアントの答え（`done`、`done_before`、`refused` と理由）と、帳簿の残高と保留が、chobo の参照インタプリタの言うとおりであることを見る。MySQL の系統のクライアントでは、クレートを組んで clippy を通し、走らせない（手元にも CI にも MySQL の系統のサーバーを置かないため）。
+- **名前の字**：`tests/idents.rs` が、kaname の名前が取れる字の全部を、名前の一字目（`ä`）と二字目より後（`aä`）に置いた 296,529 の名前にし、rustc（`cargo check`）、Python の `str.isidentifier`、Node（`new Function`）と tsc、Go の `go/token.IsIdentifier` に通す。どのツールも、ritsu-emit の表が通す名前を取り、外す名前を取らない。ツールの Unicode が表より古いところ（36.3）は分けて数える。
+- 道具が無ければ SKIP の行を出して通す。CI の tools の段は SKIP を許さない（`ci/skips/tools.txt` に足す行は無い）。CI は tools の段で `tools/rust` の依存を先に取ってくる（`cargo fetch --locked`）。
+
+### 36.10 Wasm：どの関数を入れるか
+
+ここから 36.12 までは、決めた形である。生成器はまだパッケージの Wasm を書かない（19 章）。
+
+- パッケージの Wasm には、パッケージの kaname の全部のモジュールの、ホストが呼ぶ関数（21.3。型の引数も関数の型の引数も持たず、`private` でない）を入れる。ベクタを持つ関数と同じ集まりで、`glue::door::answer` が答える関数である。中の関数は入れない（ベクタも入口も無い）。
+- 帳簿を使うモジュールも入る。振替の値はデータで、vectors と同じ `{"book","transfer","op","args"}` で答える。当てる関数と chobo のクライアントは入れない（async で、データベースのドライバに依る）。Rust のクレートでは `#[cfg(not(target_arch = "wasm32"))]` で外し、`Cargo.toml` は帳簿のクレートを `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` に書く。
+- **決定（パッケージに一つの Wasm）**：Wasm はパッケージに一つで、呼ぶモジュールを入力の `module` で選ぶ。
+  **捨てたもの**：Wasm をモジュールごとに一つ組む形（rulec と koyomi のファイルごとと同じ）。vectors の行を `module` 無しで渡せるが、パッケージのクレートをモジュールの数だけ組むことになり、テストのパッケージ（52 のモジュール）では組むだけで数分かかる。一つのクレートを組んだものがネイティブのハーネスと同じコードになる、という利点も無くなる。
+- 何も止めないので、診断は無い。入る関数と「振替は値で答え、当てる関数は入らない」は、`.wit` のドキュメントのコメントと、kaname のサイトのページに書く。
+
+### 36.11 Wasm：受け渡し
+
+- **形**：rulec と koyomi と同じ `call: func(input: string) -> string`、`cabi_realloc`、`cabi_post_call`、`memory`。import は無い。
+- **入力**：`{"module": <モジュール>, "function": <関数>, "in": {<引数の名前>: <値>, …}}`。関数と引数とフィールドと列挙の値は、vectors の行と同じく書いたとおりの名前で書く（別名ではない。日本語の名前もある）。モジュールは、手元のモジュールなら書いたとおりの名前（`支払いの遅れ`）、依存のモジュールなら正規の書き方の連なりを前に付けたもの（`@pricing/fees`。ritsu の DESIGN 17.8）。ほかのキーは読まない。ホストが呼ぶ関数を持つモジュールがパッケージに一つなら、`module` を省ける。そうすれば vectors の行をそのまま渡せる（`out` と `why` は読まない）。二つ以上なら `module` が要る。
+- **読み方**：どの JSON のエンコーダーが書いたものも読む（koyomi の 13.2 と同じ）。キーの `\u` のエスケープ（Python の `json.dumps` は既定で日本語の名前をそう書く）、空白、整数の値のいろいろな書き方（`20`、`20.0`、`2e1`。rulec の §15.205 と同じ）を読む。同じキーが二度あれば、後の値を読む（JavaScript の `JSON.parse` と同じ）。
+- **値**：vectors の値の形（9 章）。お金は宣言した単位の整数、率は刻みの数、日付は `YYYY-MM-DD`、列挙は値の名前、フィールドを持つ値は `{"<値の名前>": {フィールド}}`、`result` は `{"ok": 値}` か `{"err": 値}`、レコードはフィールドの名前のオブジェクト、リストは配列、辞書は組の配列、集合は配列、`none` は `null`、振替の値は `{"book", "transfer", "op", "args"}`。日付は「4 桁以上の年-2 桁の月-2 桁の日」の数字の形なら `kaname::Date` に読み、暦に無い日（2026-02-30、2026-13-01）も 9999 年より後の日（10000-01-01）も年 0 の日も、入口が確かめる（Go のハーネスの読み方と同じ）。
+- **答え**：その入力の vectors の行から `why` を除いたもの（`{"function":…,"in":…,"out":…}`、失敗なら `"fails": {"kind","module","line","message"}`）で、文字も同じにする。`in` は、読んだ値を出力と同じ書き方で書き直したもの（辞書と集合は鍵の順、レコードは宣言の順）。文字列の書き方は ritsu-base の JSON（serde_json と同じ。`\n`・`\t` などは名前で、ほかの制御文字は 16 進の 4 桁のエスケープ、日本語はそのまま）に合わせる。
+- **`KanameError` と拒否の行**：関数の失敗（`input` を含む六つの種類）は、拒否ではなく、vectors と同じ `fails` の行で答える。入口の外れも、先に `check_<関数>` を呼んで `fails` で答え、panic しない。拒否の行 `{"refused":"input","error":"<文>"}` は、入力を呼び出しとして読めないときだけに使い、種類はいつも `input` である（rulec と koyomi の Wasm の、自分で拒む入力と同じ）。JSON でない、オブジェクトでない、そのモジュールか関数が無い（中の関数も）、`in` が無いかオブジェクトでない、引数が無いか JSON の種類が違う、整数でない数、int64 の外の数、日付の数字の形でない文字列、列挙の値でない名前、深すぎる入れ子、がそれにあたる（「The input is not a JSON object」「There is no module `…`」「The module `…` has no function `…` a host calls」「The argument `…` of `…` is outside int64」など）。文は生成の言語（`--lang`）で書く。
+- **深すぎる入れ子**：読む JSON の深さの上限（`DEPTH`）は、引数の型の 201 段の入れ子が JSON でとる深さ（生成のときに型から求める）と 1,024 の大きいほうにする。201 段の入力は読んで入口が `input` で答え、それより深いものは読まずに拒否する（「The input nests deeper than 1024」）。スタックを守るためである。
+- **正しくない文字列**：JSON の `"\ud800"` のような、Unicode のスカラー値にならないエスケープは、入口の失敗「The argument `<パス>` of `<関数>` is no well-formed string of Unicode」（25.8）の `fails` の行で答える。TypeScript と Python の入口が答えるのと同じである。Rust の値はその文字列を持てないので、入口は引数を読むあいだに、確かめる順（宣言の順、フィールドの宣言の順、要素の順）で最初の正しくない文字列の場所を覚え、範囲の確かめより先に言う。ほかの出力先の入口は範囲の外れと同じ順で確かめるので、一つの入力に正しくない文字列と範囲の外れの両方があると、答える失敗が違いうる（宣言の外の入力のケースは、どれも一か所だけを外す）。int64 の外の数は持てないので拒否する（その入力は Rust では流さない。Go と同じ）。
+- **止まらない入力**：参照インタプリタが止まらないと言う入力（200 段を超える再帰）では、生成物が段を数えないので、Wasm のスタックを使い切ってトラップすることがある。`call` がトラップしないと言えるのは、参照インタプリタが止まる入力までである。そう `.wit` と文書に書く。
+- **`.wit` の名前**：`package kaname:<world>@<版>; world <world> { export call: func(input: string) -> string; }`。`<world>` はパッケージの名前（`ritsu gen` の `--name`）を、koyomi と同じ `world()` で直したもの（`_` を `-` にし、続く `-` と端の `-` をまとめ、WIT の予約語なら前に `%` を付ける）。版は、`ritsu.mod` があればその `version` を semver にし、無ければ書かない。
+
+### 36.12 Wasm の書き出しを共通にする（`ritsu-emit` の `wasm`）
+
+**決定**：koyomi の Wasm の書き出しのうち、一字も変えずに分けられる部分を `ritsu_emit::wasm` に置き、koyomi と kaname がそれを使う。
+
+- 置くもの：`RUSTC_FLAGS`（`-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib`）と、同じ設定を cargo で書いた組む行（36.15。`-- -C lto` は cargo では組めず、`--config profile.release.*` で渡す）、`CALL_SIGNATURE`、WIT の予約語の表、`world`、`semver`、`package`、ABI の三つの関数（`cabi_realloc`、`call`、`cabi_post_call`）の文。
+- koyomi に残すもの：JSON を読む部品と書く部品。koyomi の `call` は配列と真偽を読み捨てて 64 段まで読み、正しくないエスケープを U+FFFD にし、制御文字を全部 16 進のエスケープで書く。kaname の入口（`glue/door.rs`）は、配列と真偽を持ち 36.11 の深さまで読み、正しくない文字列を印にし、serde_json の書き方で書く。同じ役の部品で中身が違うので、共通にはしない。
+- 確かめ方：koyomi の Wasm の生成物（木の全部の `.cal` とカレンダーの、`wasm/` の四つのファイル）が、替える前（0.40.0 の公式のバイナリ）と一字も同じであること。
+- **rulec は替えない**。替えると、rulec の生成物で次のことが変わる。export が `#[no_mangle]` から `#[unsafe(no_mangle)]` になり、エディション 2024 でも組める。`call` が UTF-8 でない入力を確かめずに `String::from_raw_parts` で `String` にしている（未定義の動作）ところが、拒否の行になる。`.wit` の `package` と `world` の名前が `world()` で作られ、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名でも、wasm-tools が WIT を読めるようになる（いまは読めない。36.15）。使う人の `rulec gen --check` が落ちるので、替えるかは別に決める（36.16）。
+
+### 36.13 捨てたもの
+
+- **辞書と集合を、鍵の順に並べた `Vec` と順の関数で持つ形**（Go の `SortedKeys` と同じ考え）。どの鍵の型の `Ord` も鍵の順になるので、`BTreeMap` で同じことが標準のライブラリだけでできる。ホストも普通の `BTreeMap` を渡せる。
+- **鍵に限った型の引数の順を、隠れた一つ目の引数で渡す形**（26.7）。`Ord` のトレイト境界で足りる。
+- **値を全部持つ形**（引数も値で受け取り、使うたびにコピーする）。生成は易しいが、ホストが呼ぶたびにレコードとリストをコピーさせることになる。
+- **関数の型を型の引数（`impl Fn`）にする形**。ラムダごとに総称の関数の実体が増え、エフェクトを書かない関数の型の扱いも楽にならない。
+- **生成物の失敗を panic にして、Wasm だけ `catch_unwind` で受ける形**。wasm32 は `panic=abort` で組むので受けられない。
+- **Rust では ASCII でない名前を全部 `v` などに替える形**。TypeScript と Python と Go は書いたとおりにしているので、生成物をソースと並べて読めなくなる。代わりに、クレートの根で三つの lint を許し（36.8）、出力先が名前にできない字だけを替える（36.3）。
+- **Rust の予約語を E007 に足す形**。いま通っているモジュールが止まる（36.3）。
+- **標準の型と同じ名前のモジュールの型を、名前を変えずに置き、標準の型をそのモジュールではパスで書く形**。生成物のどこで標準の型を書くかを全部パスにすることになり、ホストの書くコードでも、モジュールの型と標準の型が同じ名前になる。`_` を足す形（`Option_`）は、生の識別子にできない語と同じ決まりで済む。
+- **規則の Rust の名前を、口の言語によらない事実（規則の別名、入力と出力の名前と順）から、rulec の Rust の名前の決まりで kaname が作る形**。決まりが二か所に分かれ、ずれればパッケージが組めない。口の `RuleFacts::rust` に足し、rulec が `api` と同じ関数で埋めるほうが確かである（36.6）。
+
+### 36.14 変わること
+
+- `kaname::r#gen::Target` に `Rust`（キー `rust`）を足した。`Target::ALL` に入るので、`kaname api` の `generated` に `rust` のキーが増える。増えるキーは、頭の `generated.rust`（モジュールのファイル。`glue/late_payment.rs`）、`enums[].generated.rust`、`enums[].values[].generated.rust`、`records[].generated.rust`、`functions[].generated.rust` である。あわせて、`functions[]` に `check` を足した。入口の確かめの名前（`{"go": "CheckClaimFn", "rust": "check_claim"}`）で、中の関数は `null` である。ほかのキーは変わらない。`api` の golden は、`KANAME_BLESS=1` で取り直した。
+- `kaname::r#gen::Options` に帳簿の置き場所（`store`）を足した（Rust の当てる関数だけが読む）。
+- 生成物のファイル：`glue/kaname.rs`、`glue/<別名>.rs`、`glue/books/<帳簿>.rs`、`glue/books/<帳簿>_apply.rs`、`glue.rs` と `glue/books.rs`（Rust のモジュールの木をつなぐファイル）、`glue/door.rs`（JSON の一行の呼び出しに答える入口）。
+- **E007**：モジュールの名前か別名が `crate`、`self`、`Self`、`mod`、`door` のとき、どの出力先で生成するかによらず E007 になる（36.3）。前は通っていたモジュールが止まりうる変更である。例とテストのモジュールと、ritsu のテストのプロジェクトには、この名前のモジュールは無い。
+- **関数の中の名前の字**：TypeScript・Python・Go の生成物で、出力先が名前に取らない字を持つ関数の中の名前が `v` になる（36.3）。変わるのは、前の生成物を各言語が読めなかった行だけで、木の全部の `.kn` では `names.kn` の `letters` の行だけである（36.15）。
+- 口の `RuleFacts` に `rust` を足した（36.6）。
+
+### 36.15 確かめたこと
+
+**前と後の比べ**。替える前は 0.40.0 の公式のバイナリで、替えた後は手元のビルドで、同じ入力から取ったものを一字ずつ比べた（木をコピーした場所で、ディレクトリの全部、標準出力、標準エラー、終了コード）。
+
+- `rulec gen`：コーパスと例の `.rule` の全部（英日の 994 ファイル）を、そのまま、`--format json`、`--lang ja` の三通りで、ほかに 160 のディレクトリで、3,142 回。どれも同じだった（129,251 のファイル）。
+- kaname と `ritsu gen`：木の全部の `.kn`（例、`tests/modules/`、ritsu の `tests/projects/`）の `check` 218 回、`vectors` 52 回、`ritsu gen` の TypeScript・Python・Go（帳簿の置き場所の三つと `--library`）399 回。違ったのは `tests/modules/names.kn` の生成物の三つだけで、差は `letters` の行である。前の生成物はそこで組めなかった：
+
+```text
+(0.40.0 の Go を gofmt -l で)
+glue/names/names.go:374:7: illegal character U+00B2 '²'
+glue/names/names.go:376:9: illegal character U+0940 'ी'
+glue/names/names.go:376:28: illegal character U+00B2 '²'
+glue/names/names.go:378:6: illegal character U+216B 'Ⅻ'
+glue/names/names.go:378:21: illegal character U+0940 'ी'
+glue/names/names.go:380:18: illegal character U+216B 'Ⅻ'
+glue/names/names.go:381:2: expected ';', found 'return'
+
+(0.40.0 の Python を ast.parse で)
+  File "glue/names.py", line 363
+    m²: int = n * n
+     ^
+SyntaxError: invalid character '²' (U+00B2)
+
+(0.40.0 の TypeScript を tsc --noEmit --strict で)
+glue/names.ts(359,10): error TS1127: Invalid character.
+glue/names.ts(359,11): error TS1134: Variable declaration expected.
+glue/names.ts(361,25): error TS1127: Invalid character.
+glue/names.ts(361,27): error TS1134: Variable declaration expected.
+```
+
+  後の生成物では、三つとも何も言わない（16.4 の型の検査も通る）。検査を通らない 9 のモジュールは、どちらの版の `ritsu gen` も書かないので、その生成物は出力先の突き合わせのテストだけが確かめる。
+- koyomi の生成物（木の `.cal` とカレンダーの 283 回。Wasm を含む全部の出力先）と chobo の生成物（110 の帳簿の 14 の出力先、1,540 回）は、どれも同じだった。chobo の E063 と Rust のクライアントは、ritsu-emit に移した表を読む。
+
+**パッケージの形のクレート**（形の実験）。0.40.0 の `ritsu gen --target go` が `crates/ritsu/tests/projects/settlement` に書く Go の `glue/` を見て、同じ関数を 36.2〜36.8 の形の Rust で手で書き、rulec 0.40.0 の Rust、koyomi 0.40.0 の Rust、単位のモジュールと合わせて、一つのクレートにして組んだ。根に三つの lint の許しだけを置いたとき（rustc 1.94.1、エディション 2021 と 2024 で同じ）、rustc の警告は十三件とも rulec の単独の形の二つのモジュールのもので、kaname の形のファイルからは一件も出なかった：
+
+```text
+   1 warning: 13 warnings emitted
+   2 warning: allow(uncommon_codepoints) is ignored unless specified at crate level
+   2 warning: function `max_i64` is never used
+   2 warning: function `min_i64` is never used
+   2 warning: function `round_bankers` is never used
+   1 warning: function `round_down` is never used
+   2 warning: function `round_half_down` is never used
+   2 warning: function `round_up` is never used
+```
+
+この二つはパッケージの形の規則のモジュール（36.6）で無くなった。clippy の指摘も、規則と日付のファイルのものだけだった：
+
+```text
+== clippy edition 2021
+error: manual `!RangeInclusive::contains` implementation
+   --> rules/late_payment_charges.rs:110:8
+error: aborting due to 1 previous error
+
+== clippy edition 2024
+error: manual `!RangeInclusive::contains` implementation
+   --> rules/late_payment_charges.rs:110:8
+error: this `if` statement can be collapsed
+   --> dates/payment_terms.rs:120:5
+error: this `if` statement can be collapsed
+   --> dates/payment_terms.rs:121:9
+error: aborting due to 3 previous errors
+```
+
+**クレートの単位の lint**（モジュールにだけ許しを書いたとき）：
+
+```text
+warning: found both `ロ` and `口` as identifiers, which look alike
+  = note: `#[warn(confusable_idents)]` on by default
+warning: allow(uncommon_codepoints) is ignored unless specified at crate level
+  = note: `#[warn(unused_attributes)]` (part of `#[warn(unused)]`) on by default
+```
+
+カタカナが `エ カ タ ト ニ ハ ロ` だけのクレート：
+
+```text
+warning: the usage of Script Group `Japanese, Katakana` in this crate consists solely of mixed script confusables
+  = note: `#[warn(mixed_script_confusables)]` on by default
+```
+
+`々`、`〇`、`ヶ`、`ー` を持つ名前は `uncommon_codepoints` に当たらなかった。
+
+**名前空間**（rustc 1.94.1、二つのエディションで `-D warnings`）。`use crate::glue::kaname;` のあるモジュールで、`let kaname = 1;` の後の `kaname::add(kaname, …)` が通った。名前付きフィールドの `pub struct Some { … }` を置いたモジュールで `Some(3)` が通った。引数 `r#gen` が通った。`pub mod r#match;` は `rules/match.rs` を読んだ。止まったものは次のとおり：
+
+```text
+(pub struct Option { … } を置いたモジュールの Option<i64>)
+error[E0107]: struct takes 0 generic arguments but 1 generic argument was supplied
+error[E0308]: mismatched types
+
+(rules.rs の pub mod r#mod;)
+error[E0761]: file for module `rules` found at both "a/rules.rs" and "a/rules/mod.rs"
+
+(エディション 2024 の #[no_mangle])
+error: unsafe attribute used without unsafe
+```
+
+**スタック**。テストのハーネス（デバッグのビルド。36.9）は、英語のパッケージの 16,770 件に、メインのスレッドのスタックが 1.5 MiB でも 8 MiB と同じ行で答えた。1 MiB では、`trees.kn` の `leaf_sum` に渡す 200 段の値（16,722 件目）でスタックがあふれた（macOS の arm64、`ulimit -s`）。
+
+**WIT の名前**。`package rulec:<名前>@1.0.0; world <名前> { export call: func(input: string) -> string; }` を `wasm-tools component wit` で読んだ。`a--b`、`late-`、`result` は、rulec の `wit_name` が別名 `a__b`、`late_`、`result` から作る名前である：
+
+```text
+a--b => error: identifiers must have characters between '-'s
+late- => error: identifiers must have characters between '-'s
+result => error: expected an identifier or string, found keyword `result`
+r-1st => ok
+%result => ok
+```
+
+**`call` がクレートの根でなくてもよいこと**。`#[unsafe(no_mangle)]` の三つの関数を、クレートの根ではない `mod door` に置いたライブラリを、`RUSTC_FLAGS` で wasm32 の cdylib に組んだ。二つのエディションとも次を export し、import は無かった（15,551 バイト）：
+
+```text
+  (export "memory" (memory 0))
+  (export "cabi_post_call" (func 0))
+  (export "cabi_realloc" (func 2))
+  (export "call" (func 6))
+  (export "__data_end" (global 1))
+  (export "__heap_base" (global 2))
+```
+
+スタックの頭は `(global (;0;) (mut i32) i32.const 1048576)` で、スタックは 1 MiB である。
+
+**cargo で組む行**。同じライブラリを `[lib] path = "lib.rs"` のクレートにし、cargo 1.94.1 で組んだ：
+
+```text
+$ cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib -- -C lto
+error: options `-C embed-bitcode=no` and `-C lto` are incompatible
+
+$ cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib \
+    --config 'profile.release.opt-level="s"' --config 'profile.release.lto=true' \
+    --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"'
+exit 0
+```
+
+二つ目は、rustc で組んだものと同じ 15,551 バイトで、同じ六つを export した。
+
+### 36.16 見つけて直していないもの
+
+- rulec と koyomi の Rust のモジュールは、clippy に当たる形を持つ（36.8）。どちらも単独の生成物と同じ形で、変えると使う人の `--check` が落ちる。
+- 表のほうがツールの Unicode より新しいとき、表が通す字をツールが名前に取らない（36.3）。`tests/idents.rs` で、Python 3.13.11（Unicode 15.1.0）は 18,040、Go 1.26.10（Unicode 15.0.0）は 19,226、tsc 7.0.2 は 18,040 の名前がそれにあたる。kaname の字句（`starts_name`、`is_name_char`）は Rust の `char` の Unicode（17.0.0）で読むので、その字を名前に取る。ツールの Unicode に合わせて表を分けることはしていない。
+- Rust は識別子を NFC にしてから比べる（36.3）。NFC で同じになる二つの関数の中の名前は、Rust で同じ名前になる。Python の NFKC と同じ形の穴で、確かめていない（chobo の DESIGN 14.6 と同じ）。
+- rulec の Wasm の `call` は、UTF-8 でない入力を確かめずに `String` にする。rulec の `wit_name` は、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名を、wasm-tools が読めない WIT の名前にする（36.15）。

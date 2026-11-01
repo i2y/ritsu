@@ -8,6 +8,10 @@
 //! "module", "line", "message"}}` for a `KanameError`, or `{"error": …}` for anything else. The
 //! values on the wire are those of `vectors` (DESIGN 9): an amount in its unit, a rate as a count of
 //! its step, a date `YYYY-MM-DD`, an enum's value by its name, a record by its fields' names.
+//!
+//! Rust's harness is the package's door instead (DESIGN 36.9): a `main` that gives each line of a file
+//! to `glue::door::answer` and prints the line it answers. Each line is a call as the package's Wasm
+//! takes it ([`call_lines`]), and [`compare_lines`] holds the answers to the reference interpreter's.
 
 use super::Target;
 use super::plan::{field_name, fn_name, go_package, type_name, variant_name};
@@ -31,14 +35,17 @@ pub struct Case {
     pub input: Json,
     pub expected: Option<Json>,
     /// The targets it runs in: all of them, but for an input a target's values cannot hold (DESIGN
-    /// 22.4): a number past int64 (Go's `int64`), a day outside 0001-01-01 to 9999-12-31 and a day of
-    /// no calendar (Python's `datetime.date`).
+    /// 22.4): a number past int64 (Go's and Rust's `int64`), a day outside 0001-01-01 to 9999-12-31
+    /// and a day of no calendar (Python's `datetime.date`).
     pub targets: Vec<Target>,
+    /// Of a vector, the line `vectors` writes for it without its `why`: Rust's door answers it to the
+    /// letter (DESIGN 36.11).
+    pub line: Option<String>,
 }
 
 impl Case {
     fn of(module: String, function: String, input: Json, expected: Option<Json>) -> Case {
-        Case { module, function, input, expected, targets: Target::ALL.to_vec() }
+        Case { module, function, input, expected, targets: Target::ALL.to_vec(), line: None }
     }
 }
 
@@ -66,7 +73,11 @@ pub fn cases(modules: &[Rc<Checked>], suite: &Suite, lang: Lang) -> (Vec<Case>, 
                     diverged += 1;
                     None
                 };
-                out.push(Case::of(c.module.name.ascii().to_string(), f.to_string(), line.get("in").cloned().unwrap_or(Json::Null), expected));
+                let mut case = Case::of(c.module.name.ascii().to_string(), f.to_string(), line.get("in").cloned().unwrap_or(Json::Null), expected);
+                if let Json::Obj(fs) = &line {
+                    case.line = Some(Json::Obj(fs.iter().filter(|(k, _)| k != "why").cloned().collect()).compact());
+                }
+                out.push(case);
             }
         }
     }
@@ -80,11 +91,12 @@ pub fn cases(modules: &[Rc<Checked>], suite: &Suite, lang: Lang) -> (Vec<Case>, 
 /// the parameters declare) and the code's public function is held to as well. Where a range is not
 /// written, past the type's ends (DESIGN 22.4): 2⁶³ and −2⁶³ − 1 for a number, run in TypeScript and
 /// Python; 10000-01-01 and 0000-12-31 for a date, and 2026-13-01, a day of no calendar (the
-/// reference's answer is that of 10000-01-01, the day written so), run in TypeScript and Go. A string
+/// reference's answer is that of 10000-01-01, the day written so), run in TypeScript, Go and Rust. A string
 /// one code point past its count, or one short of it; and a string that is not well formed, which the
 /// reference interpreter cannot hold, so its answer is the entry's failure `input` made here (DESIGN
 /// 25.8): each target makes its own of the marker the case writes (`{"bad": "string"}`), a lone
-/// surrogate in TypeScript and Python and a byte that is no UTF-8 in Go.
+/// surrogate in TypeScript and Python, a byte that is no UTF-8 in Go, and the escape of a lone surrogate
+/// in the JSON Rust's door reads.
 pub fn outside_cases(modules: &[Rc<Checked>], suite: &Suite, lang: Lang) -> Vec<Case> {
     use crate::vectors::{Path, Step, Vector, base_at, set_at, value_at};
     /// A day the cases write where a date's range is not written, of no calendar.
@@ -141,7 +153,8 @@ pub fn outside_cases(modules: &[Rc<Checked>], suite: &Suite, lang: Lang) -> Vec<
                             if crate::num::fits(v) {
                                 put(Value::Num(v), &Target::ALL);
                             } else if !mine {
-                                // past int64, where the range is not written: Go's int64 cannot hold it
+                                // past int64, where the range is not written: Go's and Rust's int64 cannot
+                                // hold it
                                 put(Value::Num(v), &[Target::TypeScript, Target::Python]);
                             }
                         }
@@ -158,10 +171,10 @@ pub fn outside_cases(modules: &[Rc<Checked>], suite: &Suite, lang: Lang) -> Vec<
                         // cannot hold them
                         let open = slot.range.as_ref().is_none_or(|r| r.min.is_none() || r.max.is_none());
                         if open {
-                            if let Some(i) = put(Value::Date(crate::date::MAX + 1), &[Target::TypeScript, Target::Go]) {
+                            if let Some(i) = put(Value::Date(crate::date::MAX + 1), &[Target::TypeScript, Target::Go, Target::Rust]) {
                                 past_days.push(i);
                             }
-                            put(Value::Date(crate::date::MIN - 1), &[Target::TypeScript, Target::Go]);
+                            put(Value::Date(crate::date::MIN - 1), &[Target::TypeScript, Target::Go, Target::Rust]);
                         }
                     }
                     _ => {}
@@ -395,6 +408,89 @@ pub fn cases_json(cases: &[Case]) -> String {
     Json::arr(cases.iter().filter(|c| c.expected.is_some()).map(|c| Json::obj([("m", Json::str(c.module.clone())), ("f", Json::int(c.function.parse::<i128>().unwrap_or(0))), ("in", c.input.clone())]))).compact()
 }
 
+/// The cases as Rust's harness reads them, those the interpreter answers: each a line of the call the
+/// package's door takes (`{"module","function","in"}`, each name as the module writes it). The marker
+/// of a string that is not well formed is written as the escape of a lone surrogate (`"\ud800"`),
+/// which the door reads as such a string (DESIGN 36.11).
+pub fn call_lines(modules: &[Rc<Checked>], cases: &[Case]) -> String {
+    const SENTINEL: &str = "\u{fdd0}kaname: a lone surrogate\u{fdd0}";
+    fn unmarked(j: &Json) -> Json {
+        match j {
+            Json::Obj(fs) if fs.len() == 1 && fs[0].0 == "bad" && fs[0].1 == Json::str("string") => Json::str(SENTINEL),
+            Json::Arr(xs) => Json::Arr(xs.iter().map(unmarked).collect()),
+            Json::Obj(fs) => Json::Obj(fs.iter().map(|(k, v)| (k.clone(), unmarked(v))).collect()),
+            x => x.clone(),
+        }
+    }
+    let mut out = String::new();
+    for c in cases.iter().filter(|c| c.expected.is_some()) {
+        let m = modules.iter().find(|m| m.module.name.ascii() == c.module);
+        let info = m.and_then(|m| c.function.parse::<usize>().ok().and_then(|f| m.decls.fns.get(f)));
+        let (Some(m), Some(info)) = (m, info) else {
+            out.push_str("{}\n");
+            continue;
+        };
+        let line = Json::obj([("module", Json::str(m.module.name.text.clone())), ("function", Json::str(info.name.text.clone())), ("in", unmarked(&c.input))]).compact();
+        out.push_str(&line.replace(&ritsu_base::json::quote(SENTINEL), "\"\\ud800\""));
+        out.push('\n');
+    }
+    out
+}
+
+/// Rust's harness's lines held to the cases: the number that agree, and each that does not (the first
+/// twenty). A line's `out` or `fails` is held to the reference's as [`compare`] holds them, and a
+/// vector's whole line to the line `vectors` writes, to the letter.
+pub fn compare_lines(cases: &[Case], stdout: &str) -> (usize, Vec<String>) {
+    let run: Vec<&Case> = cases.iter().filter(|c| c.expected.is_some()).collect();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let mut wrong = Vec::new();
+    let mut agree = 0;
+    if lines.len() != run.len() {
+        wrong.push(format!("the harness printed {} lines for {} cases", lines.len(), run.len()));
+    }
+    for (c, line) in run.iter().zip(&lines) {
+        let Some(want) = c.expected.as_ref() else { continue };
+        let depth = json_depth(want).max(json_depth(&c.input) + 1).max(ritsu_base::json::MAX_DEPTH) + 2;
+        let answer = ritsu_base::json::parse_nested(line, depth).ok().map(|g| match (g.get("out"), g.get("fails")) {
+            (Some(x), _) => Json::obj([("out", x.clone())]),
+            (None, Some(x)) => Json::obj([("fails", x.clone())]),
+            _ => g,
+        });
+        let letter = c.line.as_ref().is_none_or(|l| l == line);
+        match answer {
+            Some(a) if same(&a, want) && letter => agree += 1,
+            _ => {
+                if wrong.len() < 20 {
+                    let shown = c.line.clone().unwrap_or_else(|| want.compact());
+                    wrong.push(format!("{}.{} {}:\n  reference: {shown}\n  generated: {line}", c.module, c.function, c.input.compact()));
+                }
+            }
+        }
+    }
+    (agree, wrong)
+}
+
+/// Rust's harness: a `main` beside the package's crate `name` that answers each line of the file its
+/// first argument names through the door, a line each. A call that panics, which no call the door
+/// answers should, is said as an error, and the next one is run.
+fn rust_program(name: &str) -> String {
+    format!(
+        "//! The harness of kaname's tests: each call through the package's door, a line of JSON each.
+
+fn main() {{
+    let path = std::env::args().nth(1).expect(\"the file of the calls\");
+    let text = std::fs::read_to_string(path).expect(\"the file of the calls\");
+    for line in text.lines() {{
+        match std::panic::catch_unwind(|| {name}::glue::door::answer(line)) {{
+            Ok(answer) => println!(\"{{answer}}\"),
+            Err(_) => println!(\"{{{{\\\"error\\\":\\\"the call panicked\\\"}}}}\"),
+        }}
+    }}
+}}
+"
+    )
+}
+
 /// Two values of JSON alike, an object's keys in any order.
 fn same(a: &Json, b: &Json) -> bool {
     match (a, b) {
@@ -475,9 +571,12 @@ pub fn compare(cases: &[Case], stdout: &str) -> (usize, Vec<String>) {
     (agree, wrong)
 }
 
-/// The program, in `t`, for the modules (their package's Python package is `name`; Go's import path
-/// of the package's directory is `go_module`).
+/// The program, in `t`, for the modules (their package's Python package is `name`, and Rust's crate;
+/// Go's import path of the package's directory is `go_module`). Rust's reads lines of [`call_lines`].
 pub fn program(modules: &[Rc<Checked>], t: Target, name: &str, go_module: &str) -> String {
+    if t == Target::Rust {
+        return rust_program(name);
+    }
     let mut h = H { t, codecs: BTreeMap::new(), defs: Vec::new(), modules: modules.to_vec(), name: name.to_string(), go_module: go_module.to_string(), imports: BTreeMap::new(), units: false, named: std::cell::RefCell::default() };
     let mut cases = Vec::new();
     for (mi, c) in modules.iter().enumerate() {
@@ -518,6 +617,7 @@ impl H {
             Target::TypeScript => format!("c.in[{q}]"),
             Target::Python => format!("c[\"in\"][{q}]"),
             Target::Go => format!("c.In[{}]", ritsu_emit::lit::go(k)),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -540,6 +640,7 @@ impl H {
             }
             Target::Python => (format!("r_{}", facts.alias), format!("from {}.rules import {} as r_{}", self.name, facts.python.module, facts.alias)),
             Target::Go => (facts.go.module.clone(), format!("\"{}/rules/{}\"", self.go_module, facts.go.module)),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         };
         self.imports.insert(key.clone(), line);
         key
@@ -551,6 +652,7 @@ impl H {
             Target::TypeScript => (format!("b_{}", b.name), format!("import type * as b_{} from \"./glue/books/{}\";", b.name, b.name)),
             Target::Python => (format!("b_{}", b.name), format!("from {}.glue.books import {} as b_{}", self.name, b.name, b.name)),
             Target::Go => (format!("b{}", b.go.module), format!("b{} \"{}/glue/books/{}\"", b.go.module, self.go_module, b.go.module)),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         };
         self.imports.insert(key.clone(), line);
         key
@@ -566,6 +668,7 @@ impl H {
                 format!("m{mi}.{f}({})", kw.join(", "))
             }
             Target::Go => format!("{}.{f}({})", go_package(c.module.name.ascii()), args.join(", ")),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -604,6 +707,7 @@ impl H {
                         let gt = self.go_type(p, inner);
                         return format!("func {n}(x any) *{gt} {{\n\tif x == nil {{\n\t\treturn nil\n\t}}\n\tv := {d}\n\treturn &v\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::List(inner) => {
@@ -615,6 +719,7 @@ impl H {
                         let gt = self.go_type(p, inner);
                         return format!("func {n}(x any) []{gt} {{\n\tout := []{gt}{{}}\n\tfor _, e := range x.([]any) {{\n\t\tout = append(out, {d})\n\t}}\n\treturn out\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             // a dict from its pairs, a set from its members, on the wire in any order (DESIGN 24.4)
@@ -628,6 +733,7 @@ impl H {
                         let gt = self.go_type(p, t);
                         return format!("func {n}(x any) {gt} {{\n\tout := {gt}{{}}\n\tfor _, p := range x.([]any) {{\n\t\tq := p.([]any)\n\t\tout[{dk}] = {dv}\n\t}}\n\treturn out\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Set(inner) => {
@@ -639,6 +745,7 @@ impl H {
                         let gt = self.go_type(p, t);
                         return format!("func {n}(x any) {gt} {{\n\tout := {gt}{{}}\n\tfor _, e := range x.([]any) {{\n\t\tout[{d}] = struct{{}}{{}}\n\t}}\n\treturn out\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Record(RecId::Entry(k, v)) => {
@@ -654,6 +761,7 @@ impl H {
                         let gt = self.go_type(p, t);
                         return format!("func {n}(x any) {gt} {{\n\treturn {gt}{{Key: {dk}, Value: {dv}}}\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Record(RecId::Indexed(x0)) => {
@@ -670,6 +778,7 @@ impl H {
                         let gt = self.go_type(p, t);
                         return format!("func {n}(x any) {gt} {{\n\treturn {gt}{{Index: {di}, Item: {dx}}}\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Num(nt) => match tt {
@@ -679,11 +788,13 @@ impl H {
                     let gt = if nt.is_rate() { "int64".to_string() } else { self.unit_go(&nt.unit) };
                     return format!("func {n}(x any) {gt} {{\n\treturn {gt}(num(x))\n}}\n");
                 }
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             },
             Ty::Date => match tt {
                 Target::TypeScript => "x".into(),
                 Target::Python => "_dt.date.fromisoformat(x)".into(),
                 Target::Go => return format!("func {n}(x any) kaname.Date {{\n\treturn date(x)\n}}\n"),
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             },
             Ty::Bool => match tt {
                 Target::Go => return format!("func {n}(x any) bool {{\n\treturn x.(bool)\n}}\n"),
@@ -695,6 +806,7 @@ impl H {
                 Target::TypeScript => "typeof x === \"string\" ? x : String.fromCharCode(0xd800)".into(),
                 Target::Python => "x if isinstance(x, str) else chr(0xD800)".into(),
                 Target::Go => return format!("func {n}(x any) string {{\n\tif s, ok := x.(string); ok {{\n\t\treturn s\n\t}}\n\treturn string([]byte{{0xff}})\n}}\n"),
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             },
             Ty::Enum(id @ crate::ty::EnumId { owner: Owner::Module(file), .. }) if p.is_sum(id) => return self.sum_decoder(p, c, id, file, n),
             Ty::Record(r @ RecId::Variant { .. }) => {
@@ -731,6 +843,7 @@ impl H {
                     let alias = rule_enum_alias(p.rules.get(f).map(|r| &r.go), &id.name);
                     return format!("func {n}(x any) {r}.{alias} {{\n\tv, ok := {r}.Parse{alias}(x.(string))\n\tif !ok {{\n\t\tpanic(x)\n\t}}\n\treturn v\n}}\n");
                 }
+                (_, Target::Rust) => unreachable!("Rust's harness answers through the door"),
             },
             // a result from its one pair, `ok` or `err` (DESIGN 26.4)
             Ty::Result(a, e) => {
@@ -748,6 +861,7 @@ impl H {
                             "func {n}(x any) kaname.Result[{ga}, {ge}] {{\n\tm := x.(map[string]any)\n\tif v, ok := m[\"ok\"]; ok {{\n\t\treturn kaname.Ok[{ga}, {ge}]{{Value: {da}}}\n\t}}\n\treturn kaname.Err[{ga}, {ge}]{{Error: {de}}}\n}}\n"
                         );
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Record(rid @ RecId::Module { file, name, .. }) => {
@@ -764,6 +878,7 @@ impl H {
                         Target::TypeScript => format!("x[{}]", ritsu_emit::lit::json(&f.text)),
                         Target::Python => format!("x[{}]", ritsu_emit::lit::json(&f.text)),
                         Target::Go => format!("x.(map[string]any)[{}]", ritsu_emit::lit::go(&f.text)),
+                        Target::Rust => unreachable!("Rust's harness answers through the door"),
                     };
                     // a field that may be none may be left out of the JSON
                     let at = match (tt, &slot.ty) {
@@ -778,6 +893,7 @@ impl H {
                     Target::TypeScript => format!("({{ {} }})", fields.iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join(", ")),
                     Target::Python => format!("{ty}({})", fields.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(", ")),
                     Target::Go => return format!("func {n}(x any) {ty} {{\n\treturn {ty}{{{}}}\n}}\n", fields.iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join(", ")),
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             _ => match tt {
@@ -789,6 +905,7 @@ impl H {
             Target::TypeScript => format!("function {n}(x: any): any {{\n  return {body};\n}}\n"),
             Target::Python => format!("def {n}(x: Any) -> Any:\n    return {body}\n"),
             Target::Go => format!("func {n}(x any) any {{\n\treturn {body}\n}}\n"),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -811,6 +928,7 @@ impl H {
                     Target::TypeScript => format!("{{ kind: {} }}", ritsu_emit::lit::json(&v.text)),
                     Target::Python => format!("{vt}()"),
                     Target::Go => format!("{vt}{{}}"),
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 };
                 plain.push((v.text.clone(), built));
                 continue;
@@ -833,6 +951,7 @@ impl H {
                 Target::TypeScript => format!("{{ kind: {}, {} }}", ritsu_emit::lit::json(&v.text), fields.iter().map(|(k, d)| format!("{k}: {d}")).collect::<Vec<_>>().join(", ")),
                 Target::Python => format!("{vt}({})", fields.iter().map(|(k, d)| format!("{k}={d}")).collect::<Vec<_>>().join(", ")),
                 Target::Go => format!("{vt}{{{}}}", fields.iter().map(|(k, d)| format!("{k}: {d}")).collect::<Vec<_>>().join(", ")),
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             };
             with.push((v.text.clone(), built));
         }
@@ -878,6 +997,7 @@ impl H {
                 s.push_str("\t\t}\n\t}\n\tpanic(x)\n}\n");
                 s
             }
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -914,6 +1034,7 @@ impl H {
                     Target::TypeScript => format!("{{ {}: {{ {} }} }}", ritsu_emit::lit::json(&v.text), parts.join(", ")),
                     Target::Python => format!("{{{}: {{{}}}}}", ritsu_emit::lit::json(&v.text), parts.join(", ")),
                     Target::Go => format!("map[string]any{{{}: map[string]any{{{}}}}}", ritsu_emit::lit::go(&v.text), parts.join(", ")),
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             };
             arms.push((v.text.clone(), vt, out));
@@ -945,6 +1066,7 @@ impl H {
                 s.push_str("\t}\n\treturn nil\n}\n");
                 s
             }
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -1034,6 +1156,7 @@ impl H {
                     Target::TypeScript => format!("x === null ? null : {e}"),
                     Target::Python => format!("None if x is None else {e}"),
                     Target::Go => return format!("func {n}(x {gt}) any {{\n\tif x == nil {{\n\t\treturn nil\n\t}}\n\treturn {e}\n}}\n"),
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::List(inner) => {
@@ -1042,6 +1165,7 @@ impl H {
                     Target::TypeScript => format!("x.map((e: any) => {e})"),
                     Target::Python => format!("[{e} for e in x]"),
                     Target::Go => return format!("func {n}(x {gt}) any {{\n\tout := []any{{}}\n\tfor _, e := range x {{\n\t\tout = append(out, {e})\n\t}}\n\treturn out\n}}\n"),
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             // a dict as its pairs and a set as its members: in the order TypeScript's `Map` and `Set`
@@ -1058,6 +1182,7 @@ impl H {
                         let (kt, vt) = (self.go_type(p, k), self.go_type(p, v));
                         return format!("func {n}(x {gt}) any {{\n\treturn pairs(x, func(k {kt}) any {{ return {ek} }}, func(v {vt}) any {{ return {ev} }}, {rank})\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Set(inner) => {
@@ -1073,6 +1198,7 @@ impl H {
                         let et = self.go_type(p, inner);
                         return format!("func {n}(x {gt}) any {{\n\treturn members(x, func(e {et}) any {{ return {e} }}, {rank})\n}}\n");
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Record(RecId::Entry(k, v)) => {
@@ -1093,6 +1219,7 @@ impl H {
                 Target::TypeScript => "x".into(),
                 Target::Python => "x.isoformat()".into(),
                 Target::Go => return format!("func {n}(x kaname.Date) any {{\n\treturn x.String()\n}}\n"),
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             },
             Ty::Enum(id @ crate::ty::EnumId { owner: Owner::Module(file), .. }) if p.is_sum(id) => return self.sum_encoder(p, c, id, file, n),
             Ty::Record(r @ RecId::Variant { .. }) => {
@@ -1108,6 +1235,7 @@ impl H {
                 (Target::Python, _) => "x.value".into(),
                 (Target::Go, Owner::Module(_)) => return format!("func {n}(x {gt}) any {{\n\treturn string(x)\n}}\n"),
                 (Target::Go, Owner::Rule(_)) => return format!("func {n}(x {gt}) any {{\n\treturn x.String()\n}}\n"),
+                (Target::Rust, _) => unreachable!("Rust's harness answers through the door"),
             },
             Ty::Record(rid @ RecId::Module { .. }) => {
                 let mut fields = Vec::new();
@@ -1130,6 +1258,7 @@ impl H {
                             "func {n}(x {gt}) any {{\n\tswitch v := x.(type) {{\n\tcase kaname.Ok[{ga}, {ge}]:\n\t\treturn map[string]any{{\"ok\": {ea}}}\n\tcase kaname.Err[{ga}, {ge}]:\n\t\treturn map[string]any{{\"err\": {ee}}}\n\t}}\n\treturn nil\n}}\n"
                         );
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             Ty::Record(RecId::Outputs(f)) => {
@@ -1139,6 +1268,7 @@ impl H {
                     Target::TypeScript => &facts.typescript,
                     Target::Python => &facts.python,
                     Target::Go => &facts.go,
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 };
                 let mut fields = Vec::new();
                 for (k, col) in facts.outputs.iter().enumerate() {
@@ -1205,6 +1335,7 @@ impl H {
                         ));
                         return s;
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             _ => match tt {
@@ -1216,6 +1347,7 @@ impl H {
             Target::TypeScript => format!("function {n}(x: any): any {{\n  return {body};\n}}\n"),
             Target::Python => format!("def {n}(x: Any) -> Any:\n    return {body}\n"),
             Target::Go => format!("func {n}(x {gt}) any {{\n\treturn {body}\n}}\n"),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -1255,17 +1387,20 @@ impl H {
                         let gt = self.col_go(r, t, facts);
                         format!("func(v {gt}) any {{ if v == nil {{ return nil }}; return {inner} }}({at})")
                     }
+                    Target::Rust => unreachable!("Rust's harness answers through the door"),
                 }
             }
             ColumnType::Date => match tt {
                 Target::TypeScript => format!("kaname.dateOf(Number({at}))"),
                 Target::Python => format!("kaname.date_of({at}).isoformat()"),
                 Target::Go => format!("kaname.DateOf(int64({at})).String()"),
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             },
             ColumnType::Enum { .. } => match tt {
                 Target::TypeScript => at.to_string(),
                 Target::Python => format!("{at}.value"),
                 Target::Go => format!("{at}.String()"),
+                Target::Rust => unreachable!("Rust's harness answers through the door"),
             },
             ColumnType::Num { .. } => match tt {
                 Target::Go => format!("int64({at})"),
@@ -1281,6 +1416,7 @@ impl H {
             Target::TypeScript => format!("function {n}(x: any): any {{\n  return {{ {} }};\n}}\n", fields.iter().map(|(k, v)| format!("{}: {v}", ritsu_emit::lit::json(k))).collect::<Vec<_>>().join(", ")),
             Target::Python => format!("def {n}(x: Any) -> Any:\n    return {{{}}}\n", fields.iter().map(|(k, v)| format!("{}: {v}", ritsu_emit::lit::json(k))).collect::<Vec<_>>().join(", ")),
             Target::Go => format!("func {n}(x {gt}) any {{\n\treturn map[string]any{{{}}}\n}}\n", fields.iter().map(|(k, v)| format!("{}: {v}", ritsu_emit::lit::go(k))).collect::<Vec<_>>().join(", ")),
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 
@@ -1366,6 +1502,7 @@ impl H {
                 s.push_str("\t}\n\treturn nil, errors.New(\"no such function\")\n}\n\nfunc main() {\n\tcases := read(os.Args[1])\n\tfor _, c := range cases {\n\t\tout, err := run(c)\n\t\tvar k *kaname.KanameError\n\t\tswitch {\n\t\tcase errors.As(err, &k):\n\t\t\tsay(map[string]any{\"fails\": map[string]any{\"kind\": k.Kind, \"module\": k.Module, \"line\": k.Line, \"message\": k.Message}})\n\t\tcase err != nil:\n\t\t\tsay(map[string]any{\"error\": err.Error()})\n\t\tdefault:\n\t\t\tsay(map[string]any{\"out\": out})\n\t\t}\n\t}\n}\n");
                 s
             }
+            Target::Rust => unreachable!("Rust's harness answers through the door"),
         }
     }
 }

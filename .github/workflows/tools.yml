@@ -357,6 +357,13 @@ jobs:
           uv venv --python 3.13 crates/kaname/tools/.venv
           uv pip install --python crates/kaname/tools/.venv/bin/python --require-hashes -r crates/kaname/tools/requirements.txt
 
+      # kaname's tests/rust.rs builds the Rust it generates, with the Rust of the rules, the dates and
+      # the books, into one crate of tools/rust's Cargo.toml and Cargo.lock (the crates chobo's
+      # clients name), in the target directory's tmp, held to the lock (--locked).
+      - name: "kaname: the crates of the Rust crate"
+        if: matrix.group == 'the others'
+        run: cargo fetch --locked --manifest-path crates/kaname/tools/rust/Cargo.toml
+
       # The Rust runner's crates (sqlx, tokio, tigerbeetle) at its Cargo.lock's versions: the tests build
       # it, with the generated modules, in the target directory's tmp, held to the lock (--locked).
       - name: "chobo: the runners, Mermaid and TigerBeetle"

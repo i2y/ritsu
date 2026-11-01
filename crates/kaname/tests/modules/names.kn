@@ -1,5 +1,5 @@
 module names v1
-description "Names the generated code keeps apart: two parameters with one name in Go's mixed caps, parameters and locals that are words of a target"
+description "Names the generated code keeps apart: two parameters with one name in Go's mixed caps, parameters, locals and fields that are words of a target, records, enums and functions that take the names of Rust's own types and values, and locals with letters a target does not take"
 
 record Item
   qty : number  range >=0 <=9
@@ -18,3 +18,51 @@ fn words(Type: number range >=0 <=9, len: number range >=0 <=9, max: number rang
 fn helpers(units: number range >=0 <=9, ctx: number range >=0 <=9) -> number
   let err = units + ctx
   err
+
+record Box
+  ref   : number range >=0 <=9
+  self  : number range >=0 <=9
+  crate : number range >=0 <=9
+
+record Vec
+  items : list[Box] count <=2
+  label : string count <=3
+
+record String
+  text : string count <=3
+
+record Result
+  ok : bool
+
+enum Option
+  yes
+  no
+
+fn crate(move: number range >=0 <=9, impl: number range >=0 <=9, b: Box) -> number
+  let mut = move + impl
+  let gen = mut + b.ref + b.self + b.crate
+  gen
+
+fn wrap(v: Vec, s: String, o: Option) -> Result
+  Result { ok: count(v.items) > 0 and s.text != "" and o = Option.yes }
+
+fn units(n: number range >=0 <=9) -> number
+  n + 1
+
+fn kaname_like(dyn: number range >=0 <=9, where: number range >=0 <=9) -> number
+  let loop = dyn + where
+  let unsafe = loop * 2
+  unsafe
+
+fn Some(n: number range >=0 <=9) -> number
+  n + 1
+
+fn twice_some(n: number range >=0 <=9) -> number
+  Some(n: n) * 2
+
+fn letters(n: number range >=0 <=9) -> number
+  let m² = n * n
+  let कीमत = m² + 1
+  let Ⅻ = कीमत + 12
+  let ﾞ = Ⅻ * 2
+  ﾞ - 1

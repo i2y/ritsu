@@ -31,7 +31,7 @@ pub fn go_package_of(p: &Program, book: &Path) -> String {
 }
 
 /// The name of each parameter of a transfer as the target's code of it names it: the book's name in
-/// TypeScript (the client's), the client's in Python and Go.
+/// TypeScript (the client's), the client's in Python, Go and Rust.
 pub fn param_names(t: Target, book: &BookFacts, transfer: &str) -> Vec<String> {
     let Some(k) = book.transfers.iter().position(|x| x.name == transfer) else { return Vec::new() };
     let tr = &book.transfers[k];
@@ -39,22 +39,28 @@ pub fn param_names(t: Target, book: &BookFacts, transfer: &str) -> Vec<String> {
         Target::TypeScript => tr.params.iter().map(|p| p.name.clone()).collect(),
         Target::Python => book.python.transfers.get(k).map(|c| c.params.clone()).unwrap_or_default(),
         Target::Go => book.go.transfers.get(k).map(|c| c.params.clone()).unwrap_or_default(),
+        Target::Rust => book.rust.transfers.get(k).map(|c| c.params.clone()).unwrap_or_default(),
     }
 }
 
-/// The parameters of a `post` that may be left out (its amounts), by the target's names of them.
+/// The parameters of a `post` that may be left out (its amounts), by Go's names of them.
 pub fn optional_amounts(book: &BookFacts, transfer: &str, op: &str) -> Vec<String> {
+    optional_amounts_in(Target::Go, book, transfer, op)
+}
+
+/// [`optional_amounts`], by the names of the target `t`.
+pub fn optional_amounts_in(t: Target, book: &BookFacts, transfer: &str, op: &str) -> Vec<String> {
     if op != "post" {
         return Vec::new();
     }
     let Some(tr) = book.transfers.iter().find(|x| x.name == transfer) else { return Vec::new() };
-    let names = param_names(Target::Go, book, transfer);
+    let names = param_names(t, book, transfer);
     tr.params.iter().zip(names).filter(|(p, _)| p.unit.is_some()).map(|(_, n)| n).collect()
 }
 
 /// The parameters an operation takes, by their places among the transfer's: every one for `do` and
 /// `hold`, the key's and the amounts (which may be left out) for `post`, the key's for `void`.
-pub(crate) fn op_params(book: &BookFacts, transfer: &str, op: &str) -> Vec<(usize, bool)> {
+pub fn op_params(book: &BookFacts, transfer: &str, op: &str) -> Vec<(usize, bool)> {
     let Some(tr) = book.transfers.iter().find(|x| x.name == transfer) else { return Vec::new() };
     tr.params
         .iter()
@@ -140,12 +146,14 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
         match crate::names::book_unit(book, unit).and_then(|u| u.type_name()) {
             Some(n) => match t {
                 Target::Python => format!("_units.{n}"),
+                Target::Rust => format!("units::{n}"),
                 _ => format!("units.{n}"),
             },
             None => match t {
                 Target::TypeScript => "bigint".into(),
                 Target::Python => "int".into(),
                 Target::Go => "int64".into(),
+                Target::Rust => "i64".into(),
             },
         }
     };
@@ -342,5 +350,174 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             apply.push_str("\t}\n\treturn client.Result{}, fmt.Errorf(\"kaname: no such transfer %T\", call)\n}\n");
             vec![(format!("glue/books/{pkg}/{pkg}.go"), types), (format!("glue/books/{apkg}/{apkg}.go"), apply)]
         }
+        Target::Rust => rust_files(book, ops, opts, units_used, &amount_type, &what_types, &what_apply),
     }
+}
+
+/// Rust's two files of a book (DESIGN 36.2, 36.6): the type of each operation the modules build (its
+/// book, transfer and operation as constants, its arguments as fields) and of the reasons it can be
+/// refused with, and the book's `Call`; and the function that makes a `Call` through chobo's client
+/// of the book, which takes the database by the trait of where the package keeps its books.
+fn rust_files(book: &BookFacts, ops: &[(TransferId, Vec<String>)], opts: &Options, units_used: bool, amount_type: &dyn Fn(&str) -> String, what_types: &str, what_apply: &str) -> Vec<(String, String)> {
+    let t = Target::Rust;
+    let head = ritsu_emit::header::Comment::Slashes.line(&ritsu_emit::header::generated("kaname"));
+    let name = &book.name;
+    let module = &book.rust.module;
+    let lit = ritsu_emit::lit::rust;
+    let mut types = format!("{head}//! {what_types}
+
+#![allow(non_snake_case, non_camel_case_types)]
+
+");
+    if units_used {
+        types.push_str(&format!("use {};
+
+", ritsu_emit::package::rust_path("units")));
+    }
+    let names = |tr: &str| param_names(t, book, tr);
+    let mut union = Vec::new();
+    for (id, reasons) in ops {
+        let ty = op_type(t, &id.transfer, &id.op);
+        let tr = book.transfers.iter().find(|x| x.name == id.transfer).expect("built from the book");
+        let pn = names(&id.transfer);
+        let doc = if id.op == "do" || id.op == "hold" { "the reasons it can be refused with, at the amounts the modules build it with, are its type's `Refusal`" } else { "the reasons are chobo's" };
+        types.push_str(&format!("/// {}.{} of the book {name}: {doc}.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct {ty} {{
+", id.transfer, id.op));
+        for (i, optional) in op_params(book, &id.transfer, &id.op) {
+            let p = &tr.params[i];
+            let pty = p.unit.as_ref().map(|u| amount_type(u)).unwrap_or_else(|| "String".into());
+            let pty = if optional { format!("Option<{pty}>") } else { pty };
+            types.push_str(&format!("    pub {}: {pty},
+", pn[i]));
+        }
+        types.push_str("}
+
+");
+        types.push_str(&format!(
+            "impl {ty} {{
+    /// The book, the transfer and the operation, as the vectors write them.
+    pub const BOOK: &'static str = {};
+    pub const TRANSFER: &'static str = {};
+    pub const OP: &'static str = {};
+}}
+
+",
+            lit(name),
+            lit(&id.transfer),
+            lit(&id.op)
+        ));
+        let rt = format!("{ty}Refusal");
+        let variants: Vec<String> = reasons.iter().map(|r| ritsu_emit::ident::rust_name(&ritsu_emit::ident::pascal(r))).collect();
+        types.push_str(&format!("/// The reasons {}.{} can be refused with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum {rt} {{
+", id.transfer, id.op));
+        for (v, r) in variants.iter().zip(reasons) {
+            types.push_str(&format!("    /// `{r}`
+    {v},
+"));
+        }
+        types.push_str("}
+
+");
+        types.push_str(&format!("impl {rt} {{
+    /// The reason as the book names it.
+    pub fn as_str(self) -> &'static str {{
+        match self {{
+"));
+        for (v, r) in variants.iter().zip(reasons) {
+            types.push_str(&format!("            {rt}::{v} => {},
+", lit(r)));
+        }
+        types.push_str("        }
+    }
+}
+
+");
+        union.push(ty);
+    }
+    types.push_str(&format!("/// Every transfer of {name} the modules build.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Call {{
+"));
+    for u in &union {
+        types.push_str(&format!("    {u}({u}),
+"));
+    }
+    types.push_str("}
+");
+    for u in &union {
+        types.push_str(&format!("
+impl From<{u}> for Call {{
+    fn from(c: {u}) -> Call {{
+        Call::{u}(c)
+    }}
+}}
+"));
+    }
+    // the function that makes them
+    let client = ritsu_emit::package::rust_path(&format!("{}books/{module}", opts.place.dir));
+    let calls = ritsu_emit::package::rust_path(&format!("{}glue/books/{module}", opts.place.dir));
+    let bound = opts.store.bound();
+    let mut apply = format!(
+        "{head}//! {what_apply}
+
+use {client} as client;
+use {calls} as calls;
+
+/// Makes `call` through the client `book`: what the client answers.
+pub async fn apply<D: client::{bound}>(book: &client::Book<D>, call: &calls::Call) -> Result<client::Outcome, client::Error> {{
+    match call {{
+"
+    );
+    for (id, _) in ops {
+        let k = book.transfers.iter().position(|x| x.name == id.transfer).unwrap_or(0);
+        let tr = &book.transfers[k];
+        let client_tr = book.rust.transfers.get(k).cloned().unwrap_or_default();
+        let member = &client_tr.member;
+        let base = &client_tr.type_name;
+        let pn = names(&id.transfer);
+        // a string lent, an amount by its value
+        let field = |i: usize| if tr.params[i].unit.is_some() { format!("{}: c.{}", pn[i], pn[i]) } else { format!("{}: &c.{}", pn[i], pn[i]) };
+        let all: Vec<String> = (0..tr.params.len()).map(field).collect();
+        let keys: Vec<String> = tr.params.iter().enumerate().filter(|(_, p)| tr.key.contains(&p.name)).map(|(i, _)| field(i)).collect();
+        let amounts: Vec<usize> = tr.params.iter().enumerate().filter(|(_, p)| p.unit.is_some()).map(|(i, _)| i).collect();
+        let ty = op_type(t, &id.transfer, &id.op);
+        let key = format!("client::{base}Key {{ {} }}", keys.join(", "));
+        let arm = match id.op.as_str() {
+            "do" | "hold" => format!("book.{member}().{}(client::{base}Args {{ {} }}).await", ritsu_emit::ident::rust_name(&id.op), all.join(", ")),
+            "post" if amounts.is_empty() => format!("book.{member}().post({key}).await"),
+            "post" => {
+                // every amount, or none: all of the hold
+                let given: Vec<String> = amounts.iter().map(|i| format!("c.{}", pn[*i])).collect();
+                let bound: Vec<String> = amounts.iter().map(|i| pn[*i].clone()).collect();
+                let whole = if amounts.len() == 1 {
+                    format!("{}.map(|{}| client::{base}Amounts {{ {} }})", given[0], bound[0], bound[0])
+                } else {
+                    format!(
+                        "match ({}) {{
+                ({}) => Some(client::{base}Amounts {{ {} }}),
+                _ => None,
+            }}",
+                        given.join(", "),
+                        bound.iter().map(|b| format!("Some({b})")).collect::<Vec<_>>().join(", "),
+                        bound.join(", ")
+                    )
+                };
+                format!("{{
+            let amounts = {whole};
+            book.{member}().post({key}, amounts).await
+        }}")
+            }
+            _ => format!("book.{member}().void({key}).await"),
+        };
+        apply.push_str(&format!("        calls::Call::{ty}(c) => {arm},
+"));
+    }
+    apply.push_str("    }
+}
+");
+    vec![(format!("glue/books/{module}.rs"), types), (format!("glue/books/{module}_apply.rs"), apply)]
 }

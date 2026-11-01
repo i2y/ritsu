@@ -45,6 +45,12 @@ fn what_the_api_says_and_what_stops_it() {
     assert!(json.contains("\"check\": \"koyomi_date_input\""), "{json}");
     assert!(json.contains("\"outcome\": \"waiting\""), "{json}");
     assert!(json.contains("\"go\": \"Claim\""), "{json}");
+    // the Rust of the module (DESIGN 36.3): its file, and the checks of what a host gives a
+    // function, which a host that does not trust its input calls first: Go's (DESIGN 10.3) and
+    // Rust's (DESIGN 36.4). An inner function has none, as the golden files of catalog hold
+    let claim = v.get("functions").and_then(|f| f.as_arr()).map(|f| f[0].clone()).unwrap();
+    assert_eq!(v.get("generated").and_then(|g| g.get("rust")).map(|g| g.compact()).as_deref(), Some(r#""glue/late_payment.rs""#));
+    assert_eq!((claim.get("generated").and_then(|g| g.get("rust")).map(|g| g.compact()), claim.get("check").map(|c| c.compact())), (Some(r#""claim""#.into()), Some(r#"{"go":"CheckClaimFn","rust":"check_claim"}"#.into())));
     // a module whose names do not pass has no api: exit 1, with what check says
     let t = TempDir::new("kaname-api");
     let f = t.write("main.kn", "module main v1\n\nfn f(n: number range >=0 <=9) -> number\n  m + 1\n");
@@ -64,7 +70,7 @@ fn what_the_api_says_and_what_stops_it() {
     let v = ritsu_base::json::parse(&json).unwrap();
     let enums = v.get("enums").and_then(|e| e.as_arr()).unwrap();
     let placed = enums[0].get("values").and_then(|vs| vs.as_arr()).map(|vs| vs[1].clone()).unwrap();
-    assert_eq!(placed.get("generated").map(|g| g.compact()).as_deref(), Some(r#"{"typescript":"OrderPlaced","python":"OrderPlaced","go":"OrderPlaced"}"#));
+    assert_eq!(placed.get("generated").map(|g| g.compact()).as_deref(), Some(r#"{"typescript":"OrderPlaced","python":"OrderPlaced","go":"OrderPlaced","rust":"OrderPlaced"}"#));
     let on = placed.get("fields").and_then(|f| f.as_arr()).map(|f| f[1].compact()).unwrap();
     assert_eq!(on, r#"{"name":"on","alias":"on","type":"date","range":">=2026-01-01 <=2027-12-31","count":null,"line":14}"#);
     let f = t.write("tiers.kn", "module tiers v1\n\nenum tier = basic < gold\n\nfn top(t: tier) -> bool\n  t = tier.gold\n");

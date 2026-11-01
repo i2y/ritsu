@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/late_payment.ts",
     "python": "glue/late_payment.py",
-    "go": "glue/latepayment/latepayment.go"
+    "go": "glue/latepayment/latepayment.go",
+    "rust": "glue/late_payment.rs"
   },
   "uses": [
     {
@@ -64,7 +65,8 @@
       "generated": {
         "typescript": "Invoice",
         "python": "Invoice",
-        "go": "Invoice"
+        "go": "Invoice",
+        "rust": "Invoice"
       }
     },
     {
@@ -108,7 +110,8 @@
       "generated": {
         "typescript": "Claim",
         "python": "Claim",
-        "go": "Claim"
+        "go": "Claim",
+        "rust": "Claim"
       }
     }
   ],
@@ -187,7 +190,12 @@
       "generated": {
         "typescript": "claim",
         "python": "claim",
-        "go": "ClaimFn"
+        "go": "ClaimFn",
+        "rust": "claim"
+      },
+      "check": {
+        "go": "CheckClaimFn",
+        "rust": "check_claim"
       }
     }
   ],

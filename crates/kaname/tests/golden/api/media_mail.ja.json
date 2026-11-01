@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/media_mail_ja.ts",
     "python": "glue/media_mail_ja.py",
-    "go": "glue/mediamailja/mediamailja.go"
+    "go": "glue/mediamailja/mediamailja.go",
+    "rust": "glue/media_mail_ja.rs"
   },
   "uses": [
     {
@@ -65,7 +66,8 @@
       "generated": {
         "typescript": "Line",
         "python": "Line",
-        "go": "Line"
+        "go": "Line",
+        "rust": "Line"
       }
     }
   ],
@@ -100,7 +102,12 @@
       "generated": {
         "typescript": "weight_of",
         "python": "weight_of",
-        "go": "WeightOf"
+        "go": "WeightOf",
+        "rust": "weight_of"
+      },
+      "check": {
+        "go": "CheckWeightOf",
+        "rust": "check_weight_of"
       }
     },
     {
@@ -150,7 +157,12 @@
       "generated": {
         "typescript": "quote",
         "python": "quote",
-        "go": "Quote"
+        "go": "Quote",
+        "rust": "quote"
+      },
+      "check": {
+        "go": "CheckQuote",
+        "rust": "check_quote"
       }
     }
   ],

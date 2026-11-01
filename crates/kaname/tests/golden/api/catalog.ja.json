@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/catalog_ja.ts",
     "python": "glue/catalog_ja.py",
-    "go": "glue/catalogja/catalogja.go"
+    "go": "glue/catalogja/catalogja.go",
+    "rust": "glue/catalog_ja.rs"
   },
   "uses": [],
   "enums": [],
@@ -49,7 +50,8 @@
       "generated": {
         "typescript": "Item",
         "python": "Item",
-        "go": "Item"
+        "go": "Item",
+        "rust": "Item"
       }
     },
     {
@@ -85,7 +87,8 @@
       "generated": {
         "typescript": "Category",
         "python": "Category",
-        "go": "Category"
+        "go": "Category",
+        "rust": "Category"
       }
     }
   ],
@@ -125,7 +128,12 @@
       "generated": {
         "typescript": "paths",
         "python": "paths",
-        "go": "Paths"
+        "go": "Paths",
+        "rust": "paths"
+      },
+      "check": {
+        "go": "CheckPaths",
+        "rust": "check_paths"
       }
     },
     {
@@ -170,7 +178,12 @@
       "generated": {
         "typescript": "paths_under",
         "python": "paths_under",
-        "go": "PathsUnder"
+        "go": "PathsUnder",
+        "rust": "paths_under"
+      },
+      "check": {
+        "go": "CheckPathsUnder",
+        "rust": "check_paths_under"
       }
     },
     {
@@ -208,7 +221,12 @@
       "generated": {
         "typescript": "pruned",
         "python": "pruned",
-        "go": "Pruned"
+        "go": "Pruned",
+        "rust": "pruned"
+      },
+      "check": {
+        "go": "CheckPruned",
+        "rust": "check_pruned"
       }
     },
     {
@@ -257,8 +275,10 @@
       "generated": {
         "typescript": "_relabel",
         "python": "_relabel",
-        "go": "Relabel"
-      }
+        "go": "Relabel",
+        "rust": "_relabel"
+      },
+      "check": null
     },
     {
       "name": "スラッグにする",
@@ -295,7 +315,12 @@
       "generated": {
         "typescript": "slugged",
         "python": "slugged",
-        "go": "Slugged"
+        "go": "Slugged",
+        "rust": "slugged"
+      },
+      "check": {
+        "go": "CheckSlugged",
+        "rust": "check_slugged"
       }
     },
     {
@@ -351,8 +376,10 @@
       "generated": {
         "typescript": "_collect",
         "python": "_collect",
-        "go": "Collect"
-      }
+        "go": "Collect",
+        "rust": "_collect"
+      },
+      "check": null
     },
     {
       "name": "品物の一覧",
@@ -389,7 +416,12 @@
       "generated": {
         "typescript": "items",
         "python": "items",
-        "go": "Items"
+        "go": "Items",
+        "rust": "items"
+      },
+      "check": {
+        "go": "CheckItems",
+        "rust": "check_items"
       }
     },
     {
@@ -427,7 +459,12 @@
       "generated": {
         "typescript": "names",
         "python": "names",
-        "go": "Names"
+        "go": "Names",
+        "rust": "names"
+      },
+      "check": {
+        "go": "CheckNames",
+        "rust": "check_names"
       }
     },
     {
@@ -465,7 +502,12 @@
       "generated": {
         "typescript": "cheapest",
         "python": "cheapest",
-        "go": "Cheapest"
+        "go": "Cheapest",
+        "rust": "cheapest"
+      },
+      "check": {
+        "go": "CheckCheapest",
+        "rust": "check_cheapest"
       }
     }
   ],

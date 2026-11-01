@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/payout.ts",
     "python": "glue/payout.py",
-    "go": "glue/payout/payout.go"
+    "go": "glue/payout/payout.go",
+    "rust": "glue/payout.rs"
   },
   "uses": [
     {
@@ -72,7 +73,8 @@
       "generated": {
         "typescript": "Payment",
         "python": "Payment",
-        "go": "Payment"
+        "go": "Payment",
+        "rust": "Payment"
       }
     },
     {
@@ -100,7 +102,8 @@
       "generated": {
         "typescript": "Settlement",
         "python": "Settlement",
-        "go": "Settlement"
+        "go": "Settlement",
+        "rust": "Settlement"
       }
     }
   ],
@@ -181,7 +184,12 @@
       "generated": {
         "typescript": "settle",
         "python": "settle",
-        "go": "Settle"
+        "go": "Settle",
+        "rust": "settle"
+      },
+      "check": {
+        "go": "CheckSettle",
+        "rust": "check_settle"
       }
     }
   ],

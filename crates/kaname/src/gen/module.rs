@@ -4,7 +4,7 @@
 //! that check — with the checks and the orders the bodies ask for.
 
 use super::ex::{Ex, Node, print};
-use super::plan::{Fx, Gen, Import, Reach, Said, fails_name, field_name, fn_name, generic_name, go_package, hidden, inner_name, member_name, param_names, type_name, variant_name};
+use super::plan::{Fx, Gen, Import, Reach, Said, check_name, fails_name, field_name, fn_name, generic_name, go_package, hidden, inner_name, member_name, param_names, type_name, variant_name};
 use super::{Options, Target};
 use crate::check::Checked;
 use crate::ty::{EnumId, Owner, RecId, Ty};
@@ -23,6 +23,7 @@ pub fn module(c: &Rc<Checked>, t: Target, opts: &Options) -> (String, String, Ve
             let p = go_package(&alias);
             format!("glue/{p}/{p}.go")
         }
+        Target::Rust => format!("glue/{alias}.rs"),
     };
     // the declarations and the functions first: they say what the imports are
     let parts: Vec<String> = vec![typevars(&g), enums(&g), records(&g), functions(&g), outsides(&g), nests(&g), ranks(&g), eqs(&g), cmps(&g)];
@@ -33,7 +34,7 @@ pub fn module(c: &Rc<Checked>, t: Target, opts: &Options) -> (String, String, Ve
 }
 
 /// No two blank lines in a row, and one newline at the end.
-fn tidy(t: Target, s: &str) -> String {
+pub(super) fn tidy(t: Target, s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut blank = 0;
     let most = if t == Target::Python { 2 } else { 1 };
@@ -54,6 +55,19 @@ fn tidy(t: Target, s: &str) -> String {
         out.pop();
     }
     out
+}
+
+/// The lints every file of Rust kaname writes allows (DESIGN 36.8): the names as the source writes
+/// them; the shapes of the generated code, which are the other targets' (a range checked end by end,
+/// a name given its value in each branch) and the 2021 edition's (no `if let` chains); and what the
+/// source writes that clippy would say of it (a `match` that answers `true` and `false`, or `none`
+/// and a value).
+pub const RUST_ALLOW: &str = "#![allow(non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::too_many_arguments, clippy::type_complexity, clippy::large_enum_variant, clippy::result_large_err, clippy::eq_op, clippy::identity_op, clippy::erasing_op, clippy::if_same_then_else, clippy::nonminimal_bool, clippy::explicit_auto_deref, clippy::manual_range_contains, clippy::needless_late_init, clippy::match_like_matches_macro, clippy::manual_map, clippy::manual_filter, clippy::collapsible_if, clippy::collapsible_else_if)]\n";
+
+/// A text as Rust's doc comment of as many lines as it has: `///` before an item, `//!` at the top of
+/// a module.
+pub fn rs_doc(mark: &str, text: &str) -> String {
+    Comment::Slashes.lines(text).lines().map(|l| format!("{mark}{}\n", &l[2..])).collect()
 }
 
 fn comment(t: Target) -> Comment {
@@ -94,6 +108,13 @@ fn head(g: &Gen, alias: &str) -> String {
                 s.push_str(&cm.lines(&format!("Package {p} is the module {} of kaname: {what}", c.module.name.text)));
             }
             s.push_str(&format!("package {p}\n\n"));
+        }
+        Target::Rust => {
+            let doc = if what.is_empty() { format!("The module {} of kaname.", c.module.name.text) } else { format!("The module {} of kaname: {what}", c.module.name.text) };
+            s.push_str(&rs_doc("//!", &doc));
+            s.push('\n');
+            s.push_str(RUST_ALLOW);
+            s.push('\n');
         }
     }
     s
@@ -233,8 +254,70 @@ fn imports(g: &Gen, body: &str) -> String {
             }
             out.push_str(&format!("const _module = {}\n\n", ritsu_emit::lit::go(&g.c.module.name.text)));
         }
+        Target::Rust => {
+            let lines = rust_uses(g, body);
+            if !lines.is_empty() {
+                out.push_str(&lines.join("\n"));
+                out.push_str("\n\n");
+            }
+            out.push_str(&format!("const _MODULE: &str = {};\n\n", ritsu_emit::lit::rust(&g.c.module.name.text)));
+        }
     }
     out
+}
+
+/// Rust's `use` lines of what the code `body` (written by `g`) reads: each import by the name the code
+/// reads it by, and the standard library's collections it names bare.
+pub(super) fn rust_uses(g: &Gen, body: &str) -> Vec<String> {
+    let used = g.used.borrow();
+    let path = |to: String| ritsu_emit::package::rust_path(&to);
+    let mut lines: Vec<String> = Vec::new();
+    for (name, i) in used.iter() {
+        let to = match i {
+            Import::Kaname => path("glue/kaname".into()),
+            Import::Units => path("units".into()),
+            Import::Datetime => continue,
+            Import::Rule(f) => {
+                let m = g.p.rules.get(f).map(|r| r.rust.module.trim_end_matches(".rs").to_string()).unwrap_or_default();
+                path(format!("{}rules/{m}", g.opts.dir_of(f)))
+            }
+            Import::Dates(f) => {
+                let a = g.p.dates.get(f).map(|d| d.alias.clone()).unwrap_or_default();
+                path(format!("{}dates/{a}", g.opts.dir_of(f)))
+            }
+            Import::Module(f) => path(format!("{}glue/{}", g.opts.dir_of(f), g.p.module(f).module.name.ascii())),
+            Import::Book(f) => {
+                let b = g.p.books.get(f).map(|b| b.rust.module.clone()).unwrap_or_default();
+                path(format!("{}glue/books/{b}", g.opts.dir_of(f)))
+            }
+        };
+        let last = to.rsplit("::").next().unwrap_or_default();
+        lines.push(if last == name { format!("use {to};") } else { format!("use {to} as {name};") });
+    }
+    // the standard library's collections, where the code names them bare
+    let colls: Vec<&str> = ["BTreeMap", "BTreeSet"].into_iter().filter(|w| !g.outer.contains(*w) && has_word(body, w)).collect();
+    match colls.as_slice() {
+        [] => {}
+        [one] => lines.push(format!("use std::collections::{one};")),
+        many => lines.push(format!("use std::collections::{{{}}};", many.join(", "))),
+    }
+    lines
+}
+
+/// Whether `w` stands in `text` as a word of its own, not after `::` (a path that names it).
+fn has_word(text: &str, w: &str) -> bool {
+    let mut from = 0;
+    while let Some(i) = text[from..].find(w) {
+        let at = from + i;
+        let before = text[..at].chars().next_back();
+        let after = text[at + w.len()..].chars().next();
+        let word = |c: Option<char>| c.is_some_and(|c| c == '_' || c.is_alphanumeric());
+        if !word(before) && !word(after) && !text[..at].ends_with("::") {
+            return true;
+        }
+        from = at + w.len();
+    }
+    false
 }
 
 /// Python's type variables of the module's generic declarations (DESIGN 26.7), each once: a record, an
@@ -305,6 +388,28 @@ fn enums(g: &Gen) -> String {
                 }
                 out.push_str(")\n\n");
             }
+            Target::Rust => {
+                let vis = if e.private { "" } else { "pub " };
+                let members: Vec<String> = e.values.iter().map(|v| member_name(t, alias, v.name.ascii())).collect();
+                out.push_str(&format!("/// The enum {shown}.\n#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]\n{vis}enum {ty} {{\n"));
+                for m in &members {
+                    out.push_str(&format!("    {m},\n"));
+                }
+                out.push_str("}\n\n");
+                // the names of the values, which a host reads and writes (a private enum is no host's)
+                if !e.private {
+                    out.push_str(&format!("impl {ty} {{\n    /// The value's name, as the module writes it.\n    pub fn as_str(self) -> &'static str {{\n        match self {{\n"));
+                    for (m, v) in members.iter().zip(&e.values) {
+                        out.push_str(&format!("            {ty}::{m} => {},\n", ritsu_emit::lit::rust(&v.name.text)));
+                    }
+                    out.push_str("        }\n    }\n\n    /// The value of a name; None for a name that is no value's.\n    pub fn parse(s: &str) -> Option<");
+                    out.push_str(&format!("{ty}> {{\n        match s {{\n"));
+                    for (m, v) in members.iter().zip(&e.values) {
+                        out.push_str(&format!("            {} => Some({ty}::{m}),\n", ritsu_emit::lit::rust(&v.name.text)));
+                    }
+                    out.push_str("            _ => None,\n        }\n    }\n}\n\n");
+                }
+            }
         }
     }
     out
@@ -356,10 +461,9 @@ fn sum_of(g: &Gen, ei: usize) -> String {
             }
             for (i, f) in fs.iter().enumerate() {
                 let Some(fun) = g.outside_fn(&f.slot, Reach::Call) else { continue };
-                let x = Ex::atom("v").dot(field_name(t, f.name.ascii()));
-                let what = Ex::bin(super::ex::Op::Add, Ex::atom("what"), g.string(&format!(".{}.{}", v.text, f.name.text)));
+                let (x, what) = field_arg(g, &variant_ty(g, e, v), f, &format!(".{}.{}", v.text, f.name.text));
                 let o = Ex::atom(format!("o{}", i + 1));
-                body.extend(g.if_found(&o, Ex::call(fun, vec![x, what]), vec![Node::Line(g.ret(o.clone()))]));
+                body.extend(g.if_found(&o, Ex::call(fun, vec![x, what]), vec![Node::Line(g.ret_found(o.clone()))]));
             }
             body
         })
@@ -375,10 +479,9 @@ fn sum_of(g: &Gen, ei: usize) -> String {
             }
             for (i, f) in fs.iter().enumerate() {
                 let Some(fun) = g.outside_fn(&f.slot, Reach::Entry) else { continue };
-                let x = Ex::atom("v").dot(field_name(t, f.name.ascii()));
-                let what = Ex::bin(super::ex::Op::Add, Ex::atom("what"), g.string(&format!(".{}.{}", v.text, f.name.text)));
+                let (x, what) = field_arg(g, &variant_ty(g, e, v), f, &format!(".{}.{}", v.text, f.name.text));
                 let o = Ex::atom(format!("o{}", i + 1));
-                body.extend(g.if_found(&o, Ex::call(fun, vec![x, what]), vec![Node::Line(g.ret(o.clone()))]));
+                body.extend(g.if_found(&o, Ex::call(fun, vec![x, what]), vec![Node::Line(g.ret_found(o.clone()))]));
             }
             body
         })
@@ -454,6 +557,60 @@ fn sum_of(g: &Gen, ei: usize) -> String {
                 out.push_str(&format!("\ndef _enter_{ty}(v: {ty}, what: str) -> {k}.Outside | None:\n    \"\"\"Where a value of {} a host gives is outside what its fields declare, at every depth.\"\"\"\n", doc_text(shown)));
                 print(&body, t, 1, &mut out);
                 out.push_str("\n\n");
+            }
+        }
+        Target::Rust => {
+            let vis = if e.private { "" } else { "pub " };
+            let members: Vec<String> = e.values.iter().map(|v| member_name(t, alias, v.ascii())).collect();
+            let _ = used;
+            // each value's struct takes the type parameters its fields name (DESIGN 36.2)
+            let own: Vec<Vec<crate::names::TParamInfo>> = e.values.iter().map(|v| super::plan::variant_tparams(e, &v.text).into_iter().map(|i| e.tparams[i].clone()).collect()).collect();
+            let derive = g.derives(&rt);
+            out.push_str(&format!("/// The enum {shown}: a value of one of its values, each with its fields.\n{derive}\n{vis}enum {ty}{decl} {{\n"));
+            for ((m, vt), ps) in members.iter().zip(&vts).zip(&own) {
+                out.push_str(&format!("    {m}({vt}{}),\n", g.tparams_use(ps)));
+            }
+            out.push_str("}\n\n");
+            for (((v, fs), vt), ps) in e.values.iter().zip(&e.fields).zip(&vts).zip(&own) {
+                let holder = variant_ty(g, e, v);
+                let decl = g.tparams_decl(ps);
+                let derive = g.derives(&holder);
+                if fs.is_empty() {
+                    out.push_str(&format!("/// The value {} of the enum {shown}.\n{derive}\n{vis}struct {vt}{decl} {{}}\n\n", v.text));
+                    continue;
+                }
+                out.push_str(&format!("/// The value {} of the enum {shown}.\n{derive}\n{vis}struct {vt}{decl} {{\n", v.text));
+                for f in fs {
+                    out.push_str(&format!("    pub {}: {},\n", field_name(t, f.name.ascii()), g.field_type(&holder, &f.slot.ty)));
+                }
+                out.push_str("}\n\n");
+            }
+            // the checks of the fields: each value's own, as Go's, and the enum's by its value
+            // a `private` enum's checks are the module's alone, which may call them nowhere
+            let dead = if e.private { "    #[allow(dead_code)]\n" } else { "" };
+            let method = |name: &str, doc: &str, bodies: &[Vec<Node>]| -> String {
+                let mut o = String::new();
+                for (((v, vt), m), b) in e.values.iter().zip(&vts).zip(&members).zip(bodies) {
+                    let _ = m;
+                    let mut body = b.clone();
+                    body.push(Node::Line(g.ret(g.null())));
+                    let what = if b.is_empty() { "_what" } else { "what" };
+                    o.push_str(&format!("impl {vt} {{\n    /// Where a value of {shown}.{} {doc}\n{dead}    pub fn {name}(&self, {what}: &str) -> Option<{k}::Outside> {{\n", v.text));
+                    print(&super::ex::tail(body), t, 2, &mut o);
+                    o.push_str("    }\n}\n\n");
+                }
+                o.push_str(&format!("impl {ty} {{\n    /// Where a value of {shown} {doc}\n{dead}    pub fn {name}(&self, what: &str) -> Option<{k}::Outside> {{\n        match self {{\n"));
+                for m in &members {
+                    o.push_str(&format!("            {ty}::{m}(v) => v.{name}(what),\n"));
+                }
+                o.push_str("        }\n    }\n}\n\n");
+                o
+            };
+            if checked {
+                out.push_str(&method("kaname_outside", "a parameter reaches is outside what its fields declare.", &checks));
+            }
+            if entered {
+                out.push_str(&method("kaname_enter", "a host gives is outside what its fields declare, at every depth.", &enters));
             }
         }
         Target::Go => {
@@ -553,6 +710,24 @@ fn records(g: &Gen) -> String {
                 }
                 out.push_str("}\n\n");
             }
+            Target::Rust => {
+                let vis = if r.private { "" } else { "pub " };
+                let holder = Ty::Record(RecId::record(g.c.canon.clone(), r.name.text.clone()));
+                g.enter(&r.tparams, &[]);
+                let fields: Vec<(String, String)> = r.fields.iter().map(|f| (field_name(t, f.name.ascii()), g.field_type(&holder, &f.slot.ty))).collect();
+                g.leave();
+                // ordered field by field, as a key of a dict or of a sort is (`interp.rs`'s `key_cmp`)
+                let derive = g.derives(&holder);
+                if fields.is_empty() {
+                    out.push_str(&format!("/// The record {shown}.\n{derive}\n{vis}struct {ty}{decl} {{}}\n\n"));
+                } else {
+                    out.push_str(&format!("/// The record {shown}.\n{derive}\n{vis}struct {ty}{decl} {{\n"));
+                    for (n, fty) in &fields {
+                        out.push_str(&format!("    pub {n}: {fty},\n"));
+                    }
+                    out.push_str("}\n\n");
+                }
+            }
         }
         // the check of the fields, as a parameter reaches them (DESIGN 4.4)
         let rt = Ty::Record(RecId::record(g.c.canon.clone(), r.name.text.clone()));
@@ -560,10 +735,9 @@ fn records(g: &Gen) -> String {
             let mut body: Vec<Node> = Vec::new();
             for (k, f) in r.fields.iter().enumerate() {
                 let Some(fun) = g.outside_fn(&f.slot, Reach::Call) else { continue };
-                let v = Ex::atom("v").dot(field_name(t, f.name.ascii()));
-                let what = Ex::bin(super::ex::Op::Add, Ex::atom("what"), g.string(&format!(".{}", f.name.text)));
+                let (v, what) = field_arg(g, &rt, f, &format!(".{}", f.name.text));
                 let o = Ex::atom(format!("o{}", k + 1));
-                body.extend(g.if_found(&o, Ex::call(fun, vec![v, what]), vec![Node::Line(g.ret(o.clone()))]));
+                body.extend(g.if_found(&o, Ex::call(fun, vec![v, what]), vec![Node::Line(g.ret_found(o.clone()))]));
             }
             body.push(Node::Line(g.ret(g.null())));
             let k = g.imp(Import::Kaname);
@@ -572,9 +746,15 @@ fn records(g: &Gen) -> String {
                 Target::TypeScript => (format!("/** Where a value of {shown} a parameter reaches is outside what its fields declare. */\n{export}function _outside_{ty}(v: {ty}, what: string): {k}.Outside | null {{\n"), "}\n\n".to_string()),
                 Target::Python => (format!("\ndef _outside_{ty}(v: {ty}, what: str) -> {k}.Outside | None:\n    \"\"\"Where a value of {} a parameter reaches is outside what its fields declare.\"\"\"\n", doc_text(shown)), "\n\n".to_string()),
                 Target::Go => (format!("// KanameOutside is where a value of {shown} a parameter reaches is outside what its fields declare.\nfunc (v {ty}) KanameOutside(what string) *{k}.Outside {{\n"), "}\n\n".to_string()),
+                // a `private` record's check is the module's alone, which may call it nowhere
+                Target::Rust => (format!("impl {ty} {{\n    /// Where a value of {shown} a parameter reaches is outside what its fields declare.\n{}    pub fn kaname_outside(&self, what: &str) -> Option<{k}::Outside> {{\n", if r.private { "    #[allow(dead_code)]\n" } else { "" }), "    }\n}\n\n".to_string()),
             };
             text.push_str(&open);
-            print(&body, t, 1, &mut text);
+            if t == Target::Rust {
+                print(&super::ex::tail(body), t, 2, &mut text);
+            } else {
+                print(&body, t, 1, &mut text);
+            }
             text.push_str(&close);
             out.push_str(&text);
         }
@@ -584,10 +764,9 @@ fn records(g: &Gen) -> String {
             let mut body: Vec<Node> = Vec::new();
             for (k, f) in r.fields.iter().enumerate() {
                 let Some(fun) = g.outside_fn(&f.slot, Reach::Entry) else { continue };
-                let v = Ex::atom("v").dot(field_name(t, f.name.ascii()));
-                let what = Ex::bin(super::ex::Op::Add, Ex::atom("what"), g.string(&format!(".{}", f.name.text)));
+                let (v, what) = field_arg(g, &rt, f, &format!(".{}", f.name.text));
                 let o = Ex::atom(format!("o{}", k + 1));
-                body.extend(g.if_found(&o, Ex::call(fun, vec![v, what]), vec![Node::Line(g.ret(o.clone()))]));
+                body.extend(g.if_found(&o, Ex::call(fun, vec![v, what]), vec![Node::Line(g.ret_found(o.clone()))]));
             }
             body.push(Node::Line(g.ret(g.null())));
             let k = g.imp(Import::Kaname);
@@ -595,13 +774,33 @@ fn records(g: &Gen) -> String {
                 Target::TypeScript => (format!("/** Where a value of {shown} a host gives is outside what its fields declare, at every depth. */\n{export}function _enter_{ty}(v: {ty}, what: string): {k}.Outside | null {{\n"), "}\n\n".to_string()),
                 Target::Python => (format!("\ndef _enter_{ty}(v: {ty}, what: str) -> {k}.Outside | None:\n    \"\"\"Where a value of {} a host gives is outside what its fields declare, at every depth.\"\"\"\n", doc_text(shown)), "\n\n".to_string()),
                 Target::Go => (format!("// KanameEnter is where a value of {shown} a host gives is outside what its fields declare, at every depth.\nfunc (v {ty}) KanameEnter(what string) *{k}.Outside {{\n"), "}\n\n".to_string()),
+                Target::Rust => (format!("impl {ty} {{\n    /// Where a value of {shown} a host gives is outside what its fields declare, at every depth.\n{}    pub fn kaname_enter(&self, what: &str) -> Option<{k}::Outside> {{\n", if r.private { "    #[allow(dead_code)]\n" } else { "" }), "    }\n}\n\n".to_string()),
             };
             out.push_str(&open);
-            print(&body, t, 1, &mut out);
+            if t == Target::Rust {
+                print(&super::ex::tail(body), t, 2, &mut out);
+            } else {
+                print(&body, t, 1, &mut out);
+            }
             out.push_str(&close);
         }
     }
     out
+}
+
+/// The type of the value `v` of the sum `e` of the module, as a holder of fields.
+fn variant_ty(g: &Gen, e: &crate::names::EnumInfo, v: &crate::ast::Name) -> Ty {
+    Ty::Record(RecId::Variant { file: g.c.canon.clone(), name: e.name.text.clone(), value: v.text.clone(), args: Vec::new() })
+}
+
+/// A field `f` of the value a check of `holder` is given, as the check of its place takes it, and its
+/// path: `v.lines` and `what + ".lines"`; Rust's of `self`, lent (`&self.lines`,
+/// `&format!("{what}.lines")`).
+fn field_arg(g: &Gen, holder: &Ty, f: &crate::names::FieldInfo, tail: &str) -> (Ex, Ex) {
+    if g.t == Target::Rust {
+        return (g.lent_field(&Ex::atom("self"), holder, f.name.ascii(), &f.slot.ty), g.field_path(tail));
+    }
+    (Ex::atom("v").dot(field_name(g.t, f.name.ascii())), Ex::bin(super::ex::Op::Add, Ex::atom("what"), g.string(tail)))
 }
 
 /// The kinds of failure a function's effect has, in their order.
@@ -636,19 +835,22 @@ fn functions(g: &Gen) -> String {
             Target::Python => info.params.iter().map(|p| p.name.ascii().to_string()).collect(),
             _ => params.clone(),
         };
-        let ptypes: Vec<String> = info.params.iter().map(|p| g.boundary(&p.slot.ty)).collect();
+        let ptypes: Vec<String> = info.params.iter().map(|p| if t == Target::Rust { g.param_rust(&p.slot.ty) } else { g.boundary(&p.slot.ty) }).collect();
         let ret = g.boundary(&info.ret.ty);
         let body = Fx::new(g, f).body(&params);
-        // the check of what a host gives (DESIGN 4.4)
+        let unread: Vec<String> = g.unread.borrow().clone();
+        // the check of what a host gives (DESIGN 4.4), and the parameters it reads
         let mut entry: Vec<Node> = Vec::new();
+        let mut checked_params: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for (p, name) in info.params.iter().zip(&given) {
             // how deep it nests the values of types that hold themselves, first: the check that
             // follows walks no deeper (DESIGN 28.1)
             if let Some(nf) = g.nest_fn(&p.slot.ty) {
                 let n = Ex::atom(match t {
                     Target::Go => format!("n{}", ritsu_emit::ident::pascal(name)),
-                    _ => format!("n_{name}"),
+                    _ => format!("n_{}", name.trim_start_matches("r#")),
                 });
+                checked_params.insert(name.clone());
                 let fail = g.fail_nested(info.line, &info.name.text, &p.name.text, &n);
                 entry.extend(g.if_nested(&n, Ex::call(nf, vec![Ex::atom(name.clone()), Ex::atom("0")]), fail));
             }
@@ -656,8 +858,9 @@ fn functions(g: &Gen) -> String {
             // where the argument is outside: `o_paid_on`, and in Go `oPaidOn`
             let o = Ex::atom(match t {
                 Target::Go => format!("o{}", ritsu_emit::ident::pascal(name)),
-                _ => format!("o_{name}"),
+                _ => format!("o_{}", name.trim_start_matches("r#")),
             });
+            checked_params.insert(name.clone());
             let fail = g.fail_outside("input", info.line, &Said::Entry { fun: info.name.text.clone() }, &o, &p.slot, Reach::Entry);
             entry.extend(g.if_found(&o, Ex::call(fun, vec![Ex::atom(name.clone()), g.string(&p.name.text)]), fail));
         }
@@ -734,6 +937,36 @@ fn functions(g: &Gen) -> String {
                 out.push_str(&s);
                 out.push_str("}\n\n");
             }
+            Target::Rust => {
+                let k = g.imp(Import::Kaname);
+                let check = check_name(t, c, f);
+                let err = format!("{k}::KanameError");
+                let result = g.std_type("Result");
+                let sig = |names: &dyn Fn(&String) -> String| -> String { params.iter().zip(&ptypes).map(|(n, ty)| format!("{}: {ty}", names(n))).collect::<Vec<_>>().join(", ") };
+                // a parameter the code does not read is `_`
+                let check_sig = sig(&|n| if checked_params.contains(n) { n.clone() } else { "_".into() });
+                out.push_str(&format!("/// Whether the arguments are what `{public}` takes: a `KanameError` of the kind input when one is\n/// outside what its parameter declares.\npub fn {check}({check_sig}) -> {result}<(), {err}> {{\n"));
+                let mut s = String::new();
+                print(&entry, t, 1, &mut s);
+                out.push_str(&s);
+                out.push_str("    Ok(())\n}\n\n");
+                if !description.is_empty() {
+                    out.push_str(&rs_doc("///", &description));
+                    out.push_str("///\n");
+                }
+                let rt = if fails { format!("{result}<{ret}, {err}>") } else { ret.clone() };
+                if fails {
+                    out.push_str(&format!("/// {effect} It returns a `KanameError` of the kind input when an argument is outside what its\n/// parameter declares, and of a kind of its effect.\npub fn {public}({}) -> {rt} {{\n    {check}({args})?;\n    {inner}({args})\n}}\n\n", sig(&|n| n.clone())));
+                } else {
+                    out.push_str(&format!("/// {effect} It panics when an argument is outside what its parameter declares; `{check}` says so\n/// first, with a `KanameError` of the kind input.\npub fn {public}({}) -> {rt} {{\n    if let Err(e) = {check}({args}) {{\n        panic!(\"{{e}}\");\n    }}\n    {inner}({args})\n}}\n\n", sig(&|n| n.clone())));
+                }
+                let inner_sig = sig(&|n| if unread.contains(n) { "_".into() } else { n.clone() });
+                out.push_str(&format!("fn {inner}({inner_sig}) -> {rt} {{\n"));
+                let mut s = String::new();
+                print(&super::ex::tail(body), t, 1, &mut s);
+                out.push_str(&s);
+                out.push_str("}\n\n");
+            }
         }
     }
     out
@@ -765,6 +998,8 @@ fn generic(g: &Gen, f: usize) -> String {
                 Target::TypeScript => format!("order_{n}"),
                 Target::Python => format!("key_{n}"),
                 Target::Go => format!("order{}", ritsu_emit::ident::go_exported(&ritsu_emit::ident::pascal(n))),
+                // a key's order is its type's `Ord` (DESIGN 36.2)
+                Target::Rust => return None,
             };
             let mut o = base.clone();
             let mut i = 2;
@@ -777,7 +1012,7 @@ fn generic(g: &Gen, f: usize) -> String {
         })
         .collect();
     g.enter(&info.tparams, &orders);
-    let ptypes: Vec<String> = info.params.iter().map(|p| g.boundary(&p.slot.ty)).collect();
+    let ptypes: Vec<String> = info.params.iter().map(|p| if t == Target::Rust { g.param_rust(&p.slot.ty) } else { g.boundary(&p.slot.ty) }).collect();
     let ret = g.boundary(&info.ret.ty);
     let hidden: Vec<(String, String)> = orders
         .iter()
@@ -788,13 +1023,16 @@ fn generic(g: &Gen, f: usize) -> String {
                 Target::TypeScript => format!("{}.Order<{n}>", g.imp(Import::Kaname)),
                 Target::Python => format!("Callable[[{n}], Any]"),
                 Target::Go => format!("func(a, b {n}) int"),
+                Target::Rust => String::new(),
             };
             Some((o, ty))
         })
         .collect();
     let hidden_names: Vec<String> = hidden.iter().map(|(n, _)| n.clone()).collect();
     let body = Fx::new(g, f).body_with(&params, &hidden_names);
+    let unread: Vec<String> = g.unread.borrow().clone();
     let tdecl = g.tparams_decl(&info.tparams);
+    let k = if t == Target::Rust && super::plan::rs_fails(&g.c, f) { g.imp(Import::Kaname) } else { String::new() };
     g.leave();
     let effect = effect_text(g, &kinds(g, f), diverges(g, f));
     let what = match g.lang {
@@ -842,6 +1080,18 @@ fn generic(g: &Gen, f: usize) -> String {
             print(&body, t, 1, &mut out);
             out.push_str("}\n\n");
         }
+        Target::Rust => {
+            let sig: Vec<String> = params.iter().zip(&ptypes).map(|(n, ty)| format!("{}: {ty}", if unread.contains(n) { "_" } else { n.as_str() })).collect();
+            if !description.is_empty() {
+                out.push_str(&rs_doc("///", &description));
+                out.push_str("///\n");
+            }
+            let vis = if info.private { "" } else { "pub " };
+            let rt = if k.is_empty() { ret } else { format!("{}<{ret}, {k}::KanameError>", g.std_type("Result")) };
+            out.push_str(&format!("/// {what} {effect}\n{vis}fn {name}{tdecl}({}) -> {rt} {{\n", sig.join(", ")));
+            print(&super::ex::tail(body), t, 1, &mut out);
+            out.push_str("}\n\n");
+        }
     }
     out
 }
@@ -883,9 +1133,11 @@ fn outsides(g: &Gen) -> String {
                 Target::TypeScript => (format!("function {name}{tparams}(v: {ty}, what: string): {k}.Outside | null {{\n"), "}\n\n"),
                 Target::Python => (format!("\ndef {name}(v: {ty}, what: str) -> {k}.Outside | None:\n"), "\n\n"),
                 Target::Go => (format!("func {name}{tparams}(v {ty}, what string) *{k}.Outside {{\n"), "}\n\n"),
+                Target::Rust => (format!("fn {name}{tparams}(v: {ty}, what: &str) -> Option<{k}::Outside> {{\n"), "}\n\n"),
             };
             out.push_str(&open);
             let mut s = String::new();
+            let nodes = if t == Target::Rust { super::ex::tail(nodes) } else { nodes };
             print(&nodes, t, 1, &mut s);
             out.push_str(&s);
             out.push_str(close);
@@ -916,9 +1168,11 @@ fn nests(g: &Gen) -> String {
                 Target::TypeScript => (format!("function {name}{tparams}(v: {ty}, above: number): string | null {{\n"), "}\n\n"),
                 Target::Python => (format!("\ndef {name}(v: {ty}, above: int) -> str | None:\n"), "\n\n"),
                 Target::Go => (format!("func {name}{tparams}(v {ty}, above int) string {{\n"), "}\n\n"),
+                Target::Rust => (format!("fn {name}{tparams}(v: {ty}, above: i64) -> Option<&'static str> {{\n"), "}\n\n"),
             };
             out.push_str(&open);
             let mut s = String::new();
+            let nodes = if t == Target::Rust { super::ex::tail(nodes) } else { nodes };
             print(&nodes, t, 1, &mut s);
             out.push_str(&s);
             out.push_str(close);
@@ -975,6 +1229,13 @@ fn ranks(g: &Gen) -> String {
                     out.push_str(&format!("\tcase {m}:\n\t\treturn {i}\n"));
                 }
                 out.push_str("\t}\n\treturn -1\n}\n\n");
+            }
+            Target::Rust => {
+                out.push_str(&format!("fn {name}(v: {ty}) -> i64 {{\n    match v {{\n"));
+                for (i, m) in members.iter().enumerate() {
+                    out.push_str(&format!("        {m} => {i},\n"));
+                }
+                out.push_str("    }\n}\n\n");
             }
         }
         let _ = Owner::Module;

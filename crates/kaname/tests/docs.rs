@@ -229,7 +229,7 @@ fn the_site_colours_the_words_of_the_language() {
     for (name, ours, from) in [
         ("UNIT_CHARS", chars_of(&lex, "\nfn is_unit_char("), "is_unit_char"),
         ("MULTIPLIERS", multipliers, "number"),
-        ("WORD_CHARS", chars_of(&lex, "\nfn starts_name(").replace('_', ""), "starts_name"),
+        ("WORD_CHARS", chars_of(&lex, "\npub fn starts_name(").replace('_', ""), "starts_name"),
     ] {
         assert!(!ours.is_empty(), "src/lex.rs's {from} names no characters: was it rewritten?");
         assert_eq!(between(&py, &format!("\n{name} = \""), "\""), ours, "website/tools/knlexer.py's {name} must be the characters of src/lex.rs's {from}");

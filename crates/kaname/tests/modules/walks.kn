@@ -21,6 +21,16 @@ record Due
   level    : due.urgency
   said     : string
 
+record Shipped
+  received : stock.receive.do
+  held     : stock.reserve.hold
+  posted   : stock.reserve.post
+
+record Cancelled
+  received : stock.receive.do
+  held     : stock.reserve.hold
+  voided   : stock.reserve.void
+
 fn due_of(today: date range >=2026-01-01 <=2027-12-31, tasks: list[Task] count <=5) -> Due
   let d = due(today: today, week_end: today, tasks: map(tasks, t => due.tasks { due: t.on, done: t.done }))
   Due { earliest: d.earliest, open: d.open_tasks, level: d.level, said: concat(text(d.earliest), " ", text(d.level), " ", text(d.open_tasks > 0)) }
@@ -47,6 +57,12 @@ fn post(order: string, sku: string, qty: number? range >=0 <=10) -> stock.reserv
 
 fn release(order: string, sku: string) -> stock.reserve.void
   stock.reserve.void(order: order, sku: sku)
+
+fn ship(order: string, sku: string, qty: number range >=1 <=10, posted: number? range >=0 <=10) -> Shipped
+  Shipped { received: stock.receive.do(delivery: order, sku: sku, qty: 10), held: stock.reserve.hold(order: order, sku: sku, qty: qty), posted: post(order: order, sku: sku, qty: posted) }
+
+fn cancel(order: string, sku: string, qty: number range >=1 <=10) -> Cancelled
+  Cancelled { received: stock.receive.do(delivery: order, sku: sku, qty: qty), held: stock.reserve.hold(order: order, sku: sku, qty: qty), voided: release(order: order, sku: sku) }
 
 fn parts(total: money[JPY] range >=0JPY <=10_000JPY, a: money[JPY] range >=1JPY <=1000JPY, b: money[JPY] range >=1JPY <=1000JPY) -> money[JPY]
   allocate(total, a, a + b)

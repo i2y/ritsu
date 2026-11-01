@@ -2,7 +2,7 @@
 //! them (DESIGN 10.3). The plan builds the tree once; a target writes its own syntax: its operators
 //! and their precedence, where parentheses go, and for Go the spacing `gofmt` gives a binary
 //! expression (go/printer's `binaryExpr`), so that the Go is what gofmt writes and `gofmt -l` lists
-//! nothing.
+//! nothing. Rust writes no parentheses the compiler calls unused (DESIGN 36.8).
 
 use super::Target;
 
@@ -76,6 +76,14 @@ impl Op {
                 Op::Add | Op::Sub => 5,
                 Op::Mul | Op::Div => 6,
             },
+            // `as` is 6, the unary operators 7
+            Target::Rust => match self {
+                Op::Or => 1,
+                Op::And => 2,
+                Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => 3,
+                Op::Add | Op::Sub => 4,
+                Op::Mul | Op::Div => 5,
+            },
         }
     }
 }
@@ -102,10 +110,15 @@ pub enum Ex {
     Record(String, Vec<(String, Ex)>),
     /// A list written out: TypeScript's and Python's `[a, b]`, Go's `[]T{a, b}` (the type is Go's).
     List(String, Vec<Ex>),
-    /// A conversion of the target: TypeScript's `x as T`, Go's `T(x)`, Python's `T(x)`.
+    /// A conversion of the target: TypeScript's `x as T`, Go's `T(x)`, Python's `T(x)`, Rust's
+    /// `x as T`.
     Cast(Box<Ex>, String),
-    /// `*p` (Go)
+    /// `*p` (Go, Rust)
     Deref(Box<Ex>),
+    /// `&x` (Rust)
+    Ref(Box<Ex>),
+    /// `x?` (Rust): the value, or the function returns the error.
+    Try(Box<Ex>),
 }
 
 impl Ex {
@@ -143,6 +156,37 @@ impl Ex {
             _ => expr(self, t, 0),
         }
     }
+
+    /// `&x`
+    pub fn borrow(self) -> Ex {
+        Ex::Ref(Box::new(self))
+    }
+
+    /// `x?`
+    pub fn tried(self) -> Ex {
+        Ex::Try(Box::new(self))
+    }
+
+    /// `x.f(args)`: a method of the value (Rust).
+    pub fn method(self, f: &str, args: Vec<Ex>) -> Ex {
+        Ex::Call(Box::new(self.dot(f)), args)
+    }
+
+    /// Whether the expression returns from the function where it fails: Rust's `?` in it, which a
+    /// closure cannot hold.
+    pub fn tries(&self) -> bool {
+        match self {
+            Ex::Try(_) => true,
+            Ex::Atom(a) => a.contains(")?") || a.ends_with('?'),
+            Ex::Call(f, xs) => f.tries() || xs.iter().any(Ex::tries),
+            Ex::CallKw(f, xs) => f.tries() || xs.iter().any(|(_, x)| x.tries()),
+            Ex::Bin(_, a, b) | Ex::Index(a, b) => a.tries() || b.tries(),
+            Ex::Neg(x) | Ex::Not(x) | Ex::Dot(x, _) | Ex::Cast(x, _) | Ex::Deref(x) | Ex::Ref(x) => x.tries(),
+            Ex::Cond(c, a, b) => c.tries() || a.tries() || b.tries(),
+            Ex::Record(_, fs) => fs.iter().any(|(_, x)| x.tries()),
+            Ex::List(_, xs) => xs.iter().any(Ex::tries),
+        }
+    }
 }
 
 /// The precedence of what is not a binary expression, as an operand: a unary expression binds
@@ -153,6 +197,7 @@ const PRIMARY: u8 = 9;
 fn own_prec(x: &Ex, t: Target) -> u8 {
     match x {
         Ex::Bin(op, ..) => op.prec(t),
+        Ex::Neg(_) | Ex::Ref(_) | Ex::Deref(_) if t == Target::Rust => UNARY,
         Ex::Neg(_) => UNARY,
         Ex::Not(_) => {
             if t == Target::Python {
@@ -164,6 +209,8 @@ fn own_prec(x: &Ex, t: Target) -> u8 {
         Ex::Cond(..) => 0,
         // `x as T` binds as a relational operator does
         Ex::Cast(..) if t == Target::TypeScript => 4,
+        // and in Rust tighter than `*`
+        Ex::Cast(..) if t == Target::Rust => 6,
         _ => PRIMARY,
     }
 }
@@ -194,7 +241,11 @@ fn expr_bare(x: &Ex, t: Target) -> String {
             // comparison never takes a comparison as an operand bare
             let lmin = if op.is_comparison() { p + 1 } else { p };
             let left = expr(a, t, lmin);
+            // Rust reads `x as T < y` as the start of a type's arguments, and a struct's literal
+            // after `if x ==` as the body of the `if`
+            let left = if t == Target::Rust && matches!(**a, Ex::Cast(..) | Ex::Record(..)) && !left.starts_with('(') { format!("({left})") } else { left };
             let right = expr(b, t, p + 1);
+            let right = if t == Target::Rust && matches!(**b, Ex::Record(..)) { format!("({right})") } else { right };
             format!("{left} {} {right}", op.word(t))
         }
         Ex::Neg(a) => {
@@ -202,6 +253,8 @@ fn expr_bare(x: &Ex, t: Target) -> String {
             // `- -x` would read as a decrement in TypeScript
             if inner.starts_with('-') { format!("-({inner})") } else { format!("-{inner}") }
         }
+        Ex::Ref(a) => format!("&{}", expr(a, t, UNARY)),
+        Ex::Try(a) => format!("{}?", expr(a, t, PRIMARY)),
         Ex::Not(a) => match t {
             Target::Python => format!("not {}", expr(a, t, 3)),
             _ => format!("!{}", expr(a, t, UNARY)),
@@ -210,20 +263,65 @@ fn expr_bare(x: &Ex, t: Target) -> String {
         Ex::Index(a, i) => format!("{}[{}]", expr(a, t, PRIMARY), expr(i, t, 0)),
         Ex::Cond(c, a, b) => match t {
             Target::Python => format!("{} if {} else {}", expr(a, t, 1), expr(c, t, 1), expr(b, t, 0)),
+            Target::Rust => format!("if {} {{ {} }} else {{ {} }}", rust_cond(c), expr(a, t, 0), expr(b, t, 0)),
             _ => format!("{} ? {} : {}", expr(c, t, 1), expr(a, t, 1), expr(b, t, 0)),
         },
         Ex::Record(ty, fields) => match t {
             Target::Python => format!("{ty}({})", fields.iter().map(|(k, v)| format!("{k}={}", expr(v, t, 0))).collect::<Vec<_>>().join(", ")),
+            // the name of a field the value has is written once (`Claim { due }`), and the value
+            // whose fields the others replace after them (`..base`)
+            Target::Rust if fields.is_empty() => format!("{} {{}}", turbofish(ty)),
+            Target::Rust => {
+                let mut parts: Vec<String> = fields
+                    .iter()
+                    .filter(|(k, _)| k != "...")
+                    .map(|(k, v)| match v {
+                        Ex::Atom(a) if a == k => k.clone(),
+                        _ => format!("{k}: {}", expr(v, t, 0)),
+                    })
+                    .collect();
+                if let Some((_, base)) = fields.iter().find(|(k, _)| k == "...") {
+                    parts.push(format!("..{}", expr(base, t, UNARY)));
+                }
+                format!("{} {{ {} }}", turbofish(ty), parts.join(", "))
+            }
             _ if fields.is_empty() => "{}".to_string(),
             // a field named `...` is the spread of a value whose fields the others replace
             _ => format!("{{ {} }}", fields.iter().map(|(k, v)| if k == "..." { format!("...{}", expr(v, t, UNARY)) } else { format!("{k}: {}", expr(v, t, 0)) }).collect::<Vec<_>>().join(", ")),
         },
+        Ex::List(_, xs) if t == Target::Rust => {
+            if xs.is_empty() {
+                "Vec::new()".to_string()
+            } else {
+                format!("vec![{}]", xs.iter().map(|a| expr(a, t, 0)).collect::<Vec<_>>().join(", "))
+            }
+        }
         Ex::List(_, xs) => format!("[{}]", xs.iter().map(|a| expr(a, t, 0)).collect::<Vec<_>>().join(", ")),
         Ex::Cast(a, ty) => match t {
             Target::TypeScript => format!("{} as {ty}", expr(a, t, UNARY)),
+            Target::Rust => format!("{} as {ty}", expr(a, t, UNARY)),
             _ => format!("{ty}({})", expr(a, t, 0)),
         },
+        Ex::Deref(a) if t == Target::Rust => format!("*{}", expr(a, t, UNARY)),
         Ex::Deref(a) => expr(a, t, PRIMARY),
+    }
+}
+
+/// The condition of a Rust `if`: a struct's literal in it goes in parentheses, which the compiler
+/// would read as the body of the `if`.
+/// A type as a struct's literal of Rust names it: its arguments after `::` (`Page::<T> { … }`), which an
+/// expression reads as a comparison otherwise.
+fn turbofish(ty: &str) -> String {
+    match ty.find('<') {
+        Some(i) if !ty[..i].ends_with("::") => format!("{}::{}", &ty[..i], &ty[i..]),
+        _ => ty.to_string(),
+    }
+}
+
+pub fn rust_cond(c: &Ex) -> String {
+    match c {
+        Ex::Record(..) => format!("({})", expr(c, Target::Rust, 0)),
+        _ => expr(c, Target::Rust, 0),
     }
 }
 
@@ -322,6 +420,7 @@ fn go_expr(x: &Ex, prec1: u8, depth: u8) -> String {
             // a conversion is a call of the type
             format!("{ty}({})", go_expr(a, 0, depth))
         }
+        Ex::Ref(_) | Ex::Try(_) => unreachable!("Go has no `&x` or `x?` of a value"),
     }
     .to_string()
 }
@@ -343,7 +442,8 @@ pub enum Node {
     /// A blank line.
     Blank,
     /// Go's `switch x := v.(type) {` (the head, written without the brace), each `case` with its
-    /// types and its body, and the body of `default`.
+    /// types and its body, and the body of `default`; Rust's `match v {` with each arm's pattern
+    /// and its body, and the body of `_` (none where it is empty).
     Switch(String, Vec<(String, Vec<Node>)>, Vec<Node>),
 }
 
@@ -352,7 +452,7 @@ pub fn print(nodes: &[Node], t: Target, depth: usize, out: &mut String) {
     let pad = |d: usize| match t {
         Target::Go => "\t".repeat(d),
         Target::TypeScript => "  ".repeat(d),
-        Target::Python => "    ".repeat(d),
+        Target::Python | Target::Rust => "    ".repeat(d),
     };
     for n in nodes {
         match n {
@@ -364,14 +464,14 @@ pub fn print(nodes: &[Node], t: Target, depth: usize, out: &mut String) {
             Node::Blank => out.push('\n'),
             Node::If(arms, els) => {
                 for (i, (c, body)) in arms.iter().enumerate() {
-                    let cond = c.print(t);
+                    let cond = if t == Target::Rust { rust_cond(c) } else { c.print(t) };
                     let head = match (t, i) {
                         (Target::Python, 0) => format!("if {cond}:"),
                         (Target::Python, _) => format!("elif {cond}:"),
                         (Target::TypeScript, 0) => format!("if ({cond}) {{"),
                         (Target::TypeScript, _) => format!("}} else if ({cond}) {{"),
-                        (Target::Go, 0) => format!("if {cond} {{"),
-                        (Target::Go, _) => format!("}} else if {cond} {{"),
+                        (Target::Go | Target::Rust, 0) => format!("if {cond} {{"),
+                        (Target::Go | Target::Rust, _) => format!("}} else if {cond} {{"),
                     };
                     out.push_str(&pad(depth));
                     out.push_str(&head);
@@ -387,6 +487,31 @@ pub fn print(nodes: &[Node], t: Target, depth: usize, out: &mut String) {
                     out.push_str(&pad(depth));
                     out.push_str("}\n");
                 }
+            }
+            Node::Switch(head, cases, default) if t == Target::Rust => {
+                out.push_str(&pad(depth));
+                out.push_str(head);
+                out.push_str(" {\n");
+                for (pat, body) in cases {
+                    out.push_str(&pad(depth + 1));
+                    if body.is_empty() {
+                        out.push_str(&format!("{pat} => {{}}\n"));
+                        continue;
+                    }
+                    out.push_str(&format!("{pat} => {{\n"));
+                    print(body, t, depth + 2, out);
+                    out.push_str(&pad(depth + 1));
+                    out.push_str("}\n");
+                }
+                if !default.is_empty() {
+                    out.push_str(&pad(depth + 1));
+                    out.push_str("_ => {\n");
+                    print(default, t, depth + 2, out);
+                    out.push_str(&pad(depth + 1));
+                    out.push_str("}\n");
+                }
+                out.push_str(&pad(depth));
+                out.push_str("}\n");
             }
             Node::Switch(head, cases, default) => {
                 out.push_str(&pad(depth));
@@ -422,11 +547,60 @@ pub fn print(nodes: &[Node], t: Target, depth: usize, out: &mut String) {
                 }
                 if t != Target::Python {
                     out.push_str(&pad(depth));
-                    out.push_str("}\n");
+                    // Rust: a closure given a name ends the `let` of it
+                    out.push_str(if t == Target::Rust && head.starts_with("let ") { "};\n" } else { "}\n" });
                 }
             }
         }
     }
+}
+
+/// Whether every way through the statements ends in a `return`: the last a `return`, or an `if`
+/// with an `else`, or a `match`, every branch of which does.
+fn returns(nodes: &[Node]) -> bool {
+    match nodes.last() {
+        Some(Node::Line(s)) => s.starts_with("return ") && s.ends_with(';'),
+        Some(Node::If(arms, els)) => !els.is_empty() && returns(els) && arms.iter().all(|(_, b)| returns(b)),
+        Some(Node::Switch(_, cases, default)) => cases.iter().all(|(_, b)| returns(b)) && (default.is_empty() || returns(default)),
+        _ => false,
+    }
+}
+
+/// Rust: a body that ends in a `return`, as Rust's code ends a body: the value of the last `return`
+/// is the body's value, into every branch of the `if` or the `match` that ends it (clippy's
+/// `needless_return`), and a name given a value just before it is returned is that value
+/// (`let_and_return`).
+pub fn tail(mut nodes: Vec<Node>) -> Vec<Node> {
+    if !returns(&nodes) {
+        return nodes;
+    }
+    match nodes.pop() {
+        Some(Node::Line(s)) => {
+            let x = s["return ".len()..s.len() - 1].to_string();
+            let folded = match nodes.last() {
+                Some(Node::Line(prev)) if prev.starts_with(&format!("let {x}: ")) && prev.ends_with(';') => prev.split_once(" = ").map(|(_, v)| v[..v.len() - 1].to_string()),
+                _ => None,
+            };
+            match folded {
+                Some(v) => {
+                    nodes.pop();
+                    nodes.push(Node::Line(v));
+                }
+                None => nodes.push(Node::Line(x)),
+            }
+        }
+        Some(Node::If(arms, els)) => {
+            let arms = arms.into_iter().map(|(c, b)| (c, tail(b))).collect();
+            nodes.push(Node::If(arms, tail(els)));
+        }
+        Some(Node::Switch(h, cases, default)) => {
+            let cases = cases.into_iter().map(|(p, b)| (p, tail(b))).collect();
+            nodes.push(Node::Switch(h, cases, tail(default)));
+        }
+        Some(n) => nodes.push(n),
+        None => {}
+    }
+    nodes
 }
 
 fn body_of(nodes: &[Node], t: Target, depth: usize, out: &mut String) {

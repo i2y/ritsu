@@ -11,7 +11,8 @@
   "generated": {
     "typescript": "glue/stock_diff.ts",
     "python": "glue/stock_diff.py",
-    "go": "glue/stockdiff/stockdiff.go"
+    "go": "glue/stockdiff/stockdiff.go",
+    "rust": "glue/stock_diff.rs"
   },
   "uses": [],
   "enums": [
@@ -45,7 +46,8 @@
           "generated": {
             "typescript": "ChangeAdded",
             "python": "ChangeAdded",
-            "go": "ChangeAdded"
+            "go": "ChangeAdded",
+            "rust": "ChangeAdded"
           }
         },
         {
@@ -73,7 +75,8 @@
           "generated": {
             "typescript": "ChangeRemoved",
             "python": "ChangeRemoved",
-            "go": "ChangeRemoved"
+            "go": "ChangeRemoved",
+            "rust": "ChangeRemoved"
           }
         },
         {
@@ -109,7 +112,8 @@
           "generated": {
             "typescript": "ChangeChanged",
             "python": "ChangeChanged",
-            "go": "ChangeChanged"
+            "go": "ChangeChanged",
+            "rust": "ChangeChanged"
           }
         }
       ],
@@ -117,7 +121,8 @@
       "generated": {
         "typescript": "Change",
         "python": "Change",
-        "go": "Change"
+        "go": "Change",
+        "rust": "Change"
       }
     }
   ],
@@ -147,7 +152,8 @@
       "generated": {
         "typescript": "Move",
         "python": "Move",
-        "go": "Move"
+        "go": "Move",
+        "rust": "Move"
       }
     }
   ],
@@ -196,7 +202,12 @@
       "generated": {
         "typescript": "change",
         "python": "change",
-        "go": "ChangeFn"
+        "go": "ChangeFn",
+        "rust": "change"
+      },
+      "check": {
+        "go": "CheckChangeFn",
+        "rust": "check_change"
       }
     },
     {
@@ -241,7 +252,12 @@
       "generated": {
         "typescript": "changes",
         "python": "changes",
-        "go": "Changes"
+        "go": "Changes",
+        "rust": "changes"
+      },
+      "check": {
+        "go": "CheckChanges",
+        "rust": "check_changes"
       }
     },
     {
@@ -274,7 +290,12 @@
       "generated": {
         "typescript": "net",
         "python": "net",
-        "go": "Net"
+        "go": "Net",
+        "rust": "net"
+      },
+      "check": {
+        "go": "CheckNet",
+        "rust": "check_net"
       }
     },
     {
@@ -319,7 +340,12 @@
       "generated": {
         "typescript": "moved",
         "python": "moved",
-        "go": "Moved"
+        "go": "Moved",
+        "rust": "moved"
+      },
+      "check": {
+        "go": "CheckMoved",
+        "rust": "check_moved"
       }
     },
     {
@@ -359,7 +385,12 @@
       "generated": {
         "typescript": "to_reorder",
         "python": "to_reorder",
-        "go": "ToReorder"
+        "go": "ToReorder",
+        "rust": "to_reorder"
+      },
+      "check": {
+        "go": "CheckToReorder",
+        "rust": "check_to_reorder"
       }
     },
     {
@@ -392,7 +423,12 @@
       "generated": {
         "typescript": "units",
         "python": "units",
-        "go": "Units"
+        "go": "Units",
+        "rust": "units"
+      },
+      "check": {
+        "go": "CheckUnits",
+        "rust": "check_units"
       }
     }
   ],

@@ -131,7 +131,7 @@ pub fn is_name_char(c: char) -> bool {
 
 /// Whether a character starts a name: a letter or `_` (rulec's reference §2), or ℃ and ℉, which a
 /// type's brackets take as a word (`temperature[℃]`).
-fn starts_name(c: char) -> bool {
+pub fn starts_name(c: char) -> bool {
     c.is_alphabetic() || c == '_' || matches!(c, '℃' | '℉')
 }
 

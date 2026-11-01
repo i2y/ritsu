@@ -10,8 +10,8 @@
 //! shows is not checked (DESIGN 10.4); one it does not show is, as the interpreter checks it.
 //!
 //! A value is held as the interpreter holds it, in the unit of its type: a whole number of its unit
-//! as the target's integer (`bigint`, `int`, `int64`), anything else (a rate, an unrounded value)
-//! as an exact fraction (`kaname.Q`, `Fraction`, `*big.Rat`). What a record holds, and what a
+//! as the target's integer (`bigint`, `int`, `int64`, `i64`), anything else (a rate, an unrounded
+//! value) as an exact fraction (`kaname.Q`, `Fraction`, `*big.Rat`, `kaname::Q`). What a record holds, and what a
 //! function takes and answers, is the value as it travels (DESIGN 9): an amount as the package's
 //! type of its unit (`units`), a rate as the whole number of its step.
 
@@ -38,8 +38,25 @@ pub fn type_name(t: Target, alias: &str) -> String {
     let p = ritsu_emit::ident::pascal(alias);
     match t {
         Target::Go => ritsu_emit::ident::go_exported(&p),
+        Target::Rust => rust_type(&p),
         _ => p,
     }
+}
+
+/// The types of Rust's prelude and standard library the code of a module names by their names alone
+/// (`Option`, `Vec`, `BTreeMap`, the traits of its bounds): a type of the module whose name is one of
+/// them takes `_` after it in Rust (`record option` is `Option_`, DESIGN 36.3), as a word no raw
+/// identifier writes does (`Self_`).
+pub const RUST_STD_TYPES: [&str; 15] = ["Option", "Result", "Vec", "String", "Box", "BTreeMap", "BTreeSet", "Fn", "FnOnce", "Clone", "Ord", "PartialOrd", "PartialEq", "Eq", "From"];
+
+/// The values of Rust's prelude the code of a module names by their names alone: a function of the
+/// module whose name is one of them takes `_` after it in Rust (`fn Ok` is `Ok_`).
+pub const RUST_STD_VALUES: [&str; 4] = ["Some", "None", "Ok", "Err"];
+
+/// A type of a module in Rust, from its name in Pascal case: a raw identifier for a keyword, and `_`
+/// after a word no raw identifier writes or a type of [`RUST_STD_TYPES`].
+fn rust_type(p: &str) -> String {
+    if RUST_STD_TYPES.contains(&p) { format!("{p}_") } else { ritsu_emit::ident::rust_name(p) }
 }
 
 /// A name of the module's code for what is written `private` (DESIGN 28.2): with `_` before it, which
@@ -54,21 +71,26 @@ pub fn variant_name(t: Target, enum_alias: &str, value_alias: &str) -> String {
     let n = crate::names::variant_type_name(enum_alias, value_alias);
     match t {
         Target::Go => ritsu_emit::ident::go_exported(&n),
+        Target::Rust => rust_type(&n),
         _ => n,
     }
 }
 
-/// The member of a module's enum: `Tier.GOLD` (TypeScript, Python), `TierGold` (Go).
+/// The member of a module's enum: `Tier.GOLD` (TypeScript, Python), `TierGold` (Go), `Tier::Gold`
+/// (Rust).
 pub fn member_name(t: Target, enum_alias: &str, value_alias: &str) -> String {
     match t {
         Target::Go => format!("{}{}", type_name(t, enum_alias), ritsu_emit::ident::go_exported(&ritsu_emit::ident::pascal(value_alias))),
+        Target::Rust => ritsu_emit::ident::rust_name(&ritsu_emit::ident::pascal(value_alias)),
         _ => value_alias.to_uppercase(),
     }
 }
 
-/// The function a host calls: its alias (TypeScript, Python), in Pascal case in Go (`total_weight` is
-/// `TotalWeight`). A Go function whose name a type of the module has (`fn claim` and `record Claim`
-/// are both `Claim`) takes `Fn` after it.
+/// The function a host calls: its alias (TypeScript, Python, Rust), in Pascal case in Go
+/// (`total_weight` is `TotalWeight`). A Go function whose name a type of the module has (`fn claim`
+/// and `record Claim` are both `Claim`) takes `Fn` after it; Rust's functions and types are apart,
+/// and a Rust function takes `_` after it where its name is a value of the prelude ([`RUST_STD_VALUES`])
+/// or a word no raw identifier writes.
 pub fn fn_name(t: Target, c: &Checked, f: usize) -> String {
     let alias = c.decls.fns[f].name.ascii().to_string();
     match t {
@@ -81,6 +103,8 @@ pub fn fn_name(t: Target, c: &Checked, f: usize) -> String {
             }
             if types.contains(&g) { format!("{g}Fn") } else { g }
         }
+        Target::Rust if RUST_STD_VALUES.contains(&alias.as_str()) => format!("{alias}_"),
+        Target::Rust => ritsu_emit::ident::rust_name(&alias),
         _ => alias,
     }
 }
@@ -95,8 +119,56 @@ pub fn inner_name(t: Target, c: &Checked, f: usize) -> String {
     }
 }
 
+/// Rust's check of what a host gives a function (DESIGN 36.3): `check_claim`, from the alias; with a
+/// number after it where a function of the module has that name (`check_claim2`).
+pub fn check_name(t: Target, c: &Checked, f: usize) -> String {
+    let base = format!("check_{}", c.decls.fns[f].name.ascii());
+    let taken: BTreeSet<String> = (0..c.decls.fns.len()).flat_map(|g| [fn_name(t, c, g), inner_name(t, c, g)]).collect();
+    let mut name = base.clone();
+    let mut i = 2;
+    while taken.contains(&name) {
+        name = format!("{base}{i}");
+        i += 1;
+    }
+    name
+}
+
 /// The one function of a generic function (DESIGN 21.3, 26.7), which the generated code of every module
 /// calls and no host: `_first_or` in TypeScript (exported) and Python, `FirstOr` in Go.
+/// Whether Rust's function `f` of `c` answers a `Result` (DESIGN 36.4): it can fail, or it takes a
+/// function whose type writes no effect, which may be given one that fails and goes on to the callers
+/// (`through`, DESIGN 27.5).
+/// Rust: the places of the type parameters of the enum `e` that the fields of its value `value` name
+/// (DESIGN 36.2). The value's struct takes those alone: a struct of Rust uses every type parameter it
+/// takes (`FoundMiss { why }` of `Found[T]`).
+pub fn variant_tparams(e: &crate::names::EnumInfo, value: &str) -> Vec<usize> {
+    let Some(fs) = e.values.iter().position(|v| v.text == value).and_then(|i| e.fields.get(i)) else { return Vec::new() };
+    e.tparams.iter().enumerate().filter(|(_, p)| fs.iter().any(|f| names_param(&f.slot.ty, &p.name.text))).map(|(i, _)| i).collect()
+}
+
+/// Whether the type parameter `n` is in the type `t`.
+fn names_param(t: &Ty, n: &str) -> bool {
+    match t {
+        Ty::Param(x) => x == n,
+        Ty::List(x) | Ty::Set(x) | Ty::Opt(x) => names_param(x, n),
+        Ty::Dict(a, b) | Ty::Result(a, b) => names_param(a, n) || names_param(b, n),
+        Ty::Fn(ps, r, _) => ps.iter().any(|p| names_param(p, n)) || names_param(r, n),
+        Ty::Enum(id) => id.args.iter().any(|a| names_param(a, n)),
+        Ty::Record(r) => match r {
+            RecId::Module { args, .. } | RecId::Variant { args, .. } => args.iter().any(|a| names_param(a, n)),
+            RecId::Running(a, b) | RecId::Entry(a, b) => names_param(a, n) || names_param(b, n),
+            RecId::Indexed(x) => names_param(x, n),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+pub fn rs_fails(c: &Checked, f: usize) -> bool {
+    let own = c.analysis.get().and_then(|a| a.fns.get(f)).is_some_and(|x| !x.effect.fails.is_empty());
+    own || c.decls.fns.get(f).is_some_and(|info| !crate::effects::through(info).is_empty())
+}
+
 pub fn generic_name(t: Target, c: &Checked, f: usize) -> String {
     match t {
         // a `private` function is not exported (DESIGN 28.2)
@@ -118,6 +190,31 @@ pub fn go_camel(name: &str) -> String {
         out.push_str(cs.as_str());
     }
     out
+}
+
+/// `QAdd` → `q_add`: a helper's Go name as Rust's helper names it (DESIGN 36.7); a name in snake case
+/// already is as it is.
+pub fn snake(name: &str) -> String {
+    let cs: Vec<char> = name.chars().collect();
+    let mut out = String::new();
+    for (i, &c) in cs.iter().enumerate() {
+        if c.is_ascii_uppercase() && i > 0 {
+            let prev = cs[i - 1];
+            let next_lower = cs.get(i + 1).is_some_and(|n| n.is_ascii_lowercase());
+            if prev.is_ascii_lowercase() || prev.is_ascii_digit() || (prev.is_ascii_uppercase() && next_lower) {
+                out.push('_');
+            }
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
+/// Whether an atom of Rust's code is a name a `format!` string can hold in its braces: a name that is
+/// no raw identifier.
+fn plain_ident(a: &str) -> bool {
+    let mut cs = a.chars();
+    matches!(cs.next(), Some(c) if c == '_' || c.is_alphabetic()) && cs.all(|c| c == '_' || c.is_alphanumeric()) && a != "_"
 }
 
 /// The names of a function's parameters in the code of its body (DESIGN 10.3). TypeScript and
@@ -143,6 +240,10 @@ pub fn param_names(g: &Gen, f: usize) -> Vec<String> {
                     name = if i == 1 { format!("{a}_") } else { format!("{a}_{i}") };
                     i += 1;
                 }
+                // a keyword of Rust's, as a raw identifier (`r#ref`, DESIGN 36.3)
+                if t == Target::Rust && ritsu_emit::words::rust::NAMES.contains(&name) {
+                    name = format!("r#{name}");
+                }
                 locals.taken.insert(name.clone());
                 name
             })
@@ -164,6 +265,7 @@ pub fn go_package(alias: &str) -> String {
 pub fn field_name(t: Target, alias: &str) -> String {
     match t {
         Target::Go => ritsu_emit::ident::go_exported(&ritsu_emit::ident::pascal(alias)),
+        Target::Rust => ritsu_emit::ident::rust_name(alias),
         _ => alias.to_string(),
     }
 }
@@ -180,6 +282,9 @@ fn kept(t: Target, w: &str) -> bool {
                 || ["len", "int", "str", "list", "bool", "range", "min", "max", "abs", "isinstance", "print", "cast", "kaname", "enumerate", "zip", "object", "type", "None", "True", "False"].contains(&w)
         }
         Target::Go => ritsu_emit::words::go::NAMES.contains(w) || ["kaname", "units", "err", "ctx", "fmt", "strings", "big"].contains(&w),
+        // a keyword of Rust is a raw identifier (`r#ref`) but for these; and the values of the
+        // prelude the code names bare (DESIGN 36.3): a path is not hidden by a local
+        Target::Rust => ritsu_emit::ident::RUST_UNRAW.contains(&w) || ["Some", "None", "Ok", "Err", "std", "core", "alloc"].contains(&w),
     }
 }
 
@@ -195,14 +300,26 @@ fn type_kept(t: Target, w: &str) -> bool {
             ]
             .contains(&w),
             Target::Go => ["any", "comparable", "int64", "int", "string", "bool", "error", "map"].contains(&w),
+            Target::Rust => [
+                "Option", "Result", "Vec", "String", "Box", "BTreeMap", "BTreeSet", "Fn", "Clone", "Ord", "PartialEq", "PartialOrd", "Eq", "From", "Debug", "Copy", "i64", "i32", "u32", "usize",
+                "bool", "str", "char", "Self_",
+            ]
+            .contains(&w),
         }
 }
 
-/// Whether a name of the source is a name the target takes as it is.
-fn ident_ok(t: Target, w: &str) -> bool {
-    let mut cs = w.chars();
-    let first_ok = |c: char| c == '_' || c.is_alphabetic();
-    matches!(cs.next(), Some(c) if first_ok(c)) && w.chars().all(|c| c == '_' || c.is_alphanumeric()) && !(t == Target::Go && w == "_")
+/// Whether a name of the source is a name the target takes as it is: its characters are ones the
+/// target's names take (DESIGN 36.3; the tables of ritsu-emit, from the Unicode Character
+/// Database), and `_` alone is no name of Go's or Rust's. A name of the source is a letter or `_`,
+/// then letters, numbers and `_`; `m²` is no name of any target's, nor `कीमत` of Go's.
+pub fn ident_ok(t: Target, w: &str) -> bool {
+    let takes = match t {
+        Target::TypeScript => ritsu_emit::ident::typescript_takes(w),
+        Target::Python => ritsu_emit::ident::python_takes(w),
+        Target::Go => ritsu_emit::ident::go_takes(w),
+        Target::Rust => ritsu_emit::ident::rust_takes(w),
+    };
+    takes && !(matches!(t, Target::Go | Target::Rust) && w == "_")
 }
 
 /// The names of a function's code: each name of the source (a `let`, a parameter of a function given
@@ -223,6 +340,8 @@ impl Locals {
     fn fresh(&mut self, t: Target, base: &str, outer: &BTreeSet<String>) -> String {
         let base = if t == Target::Go { go_camel(base) } else { base.to_string() };
         let base = if ident_ok(t, &base) { base } else { "v".to_string() };
+        // a keyword of Rust's, as a raw identifier (DESIGN 36.3)
+        let base = if t == Target::Rust && ritsu_emit::words::rust::NAMES.contains(&base) && !ritsu_emit::ident::RUST_UNRAW.contains(&base.as_str()) { format!("r#{base}") } else { base };
         let mut name = base.clone();
         let mut i = 2;
         while self.taken.contains(&name) || outer.contains(&name) || kept(t, &name) {
@@ -283,6 +402,31 @@ fn unit_suffix(u: &Unit) -> String {
     }
 }
 
+/// How Rust's code holds a value (DESIGN 36.4): made where it is written (the answer of a call, a
+/// literal), in a place the function owns (a `let`, a field of one), lent as the type a function
+/// takes it as (a parameter: `&str`, `&[T]`, `Option<&T>`, `&T`), or reached through a reference to
+/// where it is owned (`&T`: an element of a list it walks, a value of a dict, what a `match` binds).
+/// The other targets hold every value alike; a value of a type that is `Copy` in Rust is never
+/// lent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Held {
+    Made,
+    Kept,
+    Lent,
+    Ref,
+}
+
+/// How Rust's field of a record or of a value's type holds a value of a type that holds the record
+/// (DESIGN 36.2): not boxed, in a box (`Box<Expr>`), in a box where it is there (`Option<Box<Node>>`),
+/// in a box on the side of a result that holds it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Boxed {
+    No,
+    Whole,
+    InOpt,
+    InResult(bool, bool),
+}
+
 /// A value as the plan holds it: the expression of the target, and its type (the unit it counts in).
 #[derive(Clone, Debug)]
 pub struct Val {
@@ -291,11 +435,16 @@ pub struct Val {
     /// A value of an optional type that is there: one given where one may be absent, held as it is
     /// (TypeScript and Python), so that it travels as the value it is.
     pub present: bool,
+    pub held: Held,
 }
 
 impl Val {
     fn new(ex: Ex, ty: Ty) -> Val {
-        Val { ex, ty, present: false }
+        Val { ex, ty, present: false, held: Held::Made }
+    }
+
+    fn held(ex: Ex, ty: Ty, held: Held) -> Val {
+        Val { ex, ty, present: false, held }
     }
 }
 
@@ -477,6 +626,9 @@ pub struct Gen<'a> {
     pub outer: BTreeSet<String>,
     /// The type parameters of the declaration written now (DESIGN 26.7).
     pub tscope: RefCell<Vec<TScope>>,
+    /// Rust: the parameters of the function written last that its body never reads, which its
+    /// signature names `_` (DESIGN 36.4).
+    pub unread: RefCell<Vec<String>>,
 }
 
 /// A type parameter of the declaration written now, as the code names it (DESIGN 26.7).
@@ -525,6 +677,9 @@ impl<'a> Gen<'a> {
             outer.insert(fn_name(t, c, f));
             outer.insert(inner_name(t, c, f));
             outer.insert(fails_name(c, f));
+            if t == Target::Rust {
+                outer.insert(check_name(t, c, f));
+            }
         }
         for r in &c.decls.records {
             outer.insert(hidden(type_name(t, r.name.ascii()), r.private));
@@ -546,10 +701,12 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        for w in ["_module", "_dt", "_units", "kaname", "units"] {
+        // Rust reads `kaname::…` and `units::…` as paths, which no local hides (DESIGN 36.3)
+        let words: &[&str] = if t == Target::Rust { &["_MODULE"] } else { &["_module", "_dt", "_units", "kaname", "units"] };
+        for w in words {
             outer.insert(w.to_string());
         }
-        let g = Gen { t, lang: opts.lang, p, c: c.clone(), opts, places, used: RefCell::default(), units: RefCell::default(), outsides: RefCell::default(), nests: RefCell::default(), ranks: RefCell::default(), eqs: RefCell::default(), cmps: RefCell::default(), outer, tscope: RefCell::default() };
+        let g = Gen { t, lang: opts.lang, p, c: c.clone(), opts, places, used: RefCell::default(), units: RefCell::default(), outsides: RefCell::default(), nests: RefCell::default(), ranks: RefCell::default(), eqs: RefCell::default(), cmps: RefCell::default(), outer, tscope: RefCell::default(), unread: RefCell::default() };
         // the names the imports are read by
         let mut outer = g.outer.clone();
         for t in g.c.uses.iter() {
@@ -588,7 +745,7 @@ impl<'a> Gen<'a> {
             Import::Rule(f) => {
                 let alias = of(f, self.p.rules.get(f).map(|r| r.alias.clone()).unwrap_or_default());
                 match t {
-                    Target::TypeScript => format!("rule_{alias}"),
+                    Target::TypeScript | Target::Rust => format!("rule_{alias}"),
                     Target::Python => format!("_rule_{alias}"),
                     Target::Go => go_package(&alias),
                 }
@@ -596,7 +753,7 @@ impl<'a> Gen<'a> {
             Import::Dates(f) => {
                 let alias = of(f, self.p.dates.get(f).map(|d| d.alias.clone()).unwrap_or_default());
                 match t {
-                    Target::TypeScript => format!("dates_{alias}"),
+                    Target::TypeScript | Target::Rust => format!("dates_{alias}"),
                     Target::Python => format!("_dates_{alias}"),
                     Target::Go => go_package(&alias),
                 }
@@ -604,7 +761,7 @@ impl<'a> Gen<'a> {
             Import::Module(f) => {
                 let alias = of(f, self.p.module(f).module.name.ascii().to_string());
                 match t {
-                    Target::TypeScript => format!("mod_{alias}"),
+                    Target::TypeScript | Target::Rust => format!("mod_{alias}"),
                     Target::Python => format!("_mod_{alias}"),
                     Target::Go => go_package(&alias),
                 }
@@ -612,7 +769,7 @@ impl<'a> Gen<'a> {
             Import::Book(f) => {
                 let b = of(f, self.p.books.get(f).map(|b| b.name.clone()).unwrap_or_default());
                 match t {
-                    Target::TypeScript => format!("books_{b}"),
+                    Target::TypeScript | Target::Rust => format!("books_{b}"),
                     Target::Python => format!("_books_{b}"),
                     Target::Go => {
                         let p = super::books::go_package_of(&self.p, f);
@@ -666,6 +823,9 @@ impl<'a> Gen<'a> {
     pub fn int(&self, v: i128) -> Ex {
         let s = match self.t {
             Target::TypeScript => format!("{v}n"),
+            // Rust calls the parentheses of `f((-1))` unused: a negative number is a negation, which
+            // the printer puts in parentheses where it must
+            Target::Rust if v < 0 => return Ex::Neg(Box::new(Ex::Atom(v.unsigned_abs().to_string()))),
             _ => v.to_string(),
         };
         if v < 0 { Ex::Atom(format!("({s})")) } else { Ex::Atom(s) }
@@ -677,12 +837,14 @@ impl<'a> Gen<'a> {
             Target::TypeScript => Ex::call(format!("{k}.q"), vec![Ex::atom(format!("{}n", v.num)), Ex::atom(format!("{}n", v.den))]),
             Target::Python => Ex::call(format!("{k}.Q"), vec![Ex::atom(v.num.to_string()), Ex::atom(v.den.to_string())]),
             Target::Go => Ex::call(format!("{k}.Frac"), vec![Ex::atom(v.num.to_string()), Ex::atom(v.den.to_string())]),
+            Target::Rust => Ex::call(format!("{k}::frac"), vec![self.int(v.num), Ex::atom(v.den.to_string())]),
         }
     }
 
     pub fn string(&self, s: &str) -> Ex {
         Ex::Atom(match self.t {
             Target::Go => ritsu_emit::lit::go(s),
+            Target::Rust => ritsu_emit::lit::rust(s),
             _ => ritsu_emit::lit::json(s),
         })
     }
@@ -703,7 +865,7 @@ impl<'a> Gen<'a> {
     pub fn null(&self) -> Ex {
         Ex::Atom(match self.t {
             Target::TypeScript => "null",
-            Target::Python => "None",
+            Target::Python | Target::Rust => "None",
             Target::Go => "nil",
         }
         .into())
@@ -721,12 +883,17 @@ impl<'a> Gen<'a> {
                 let k = self.imp(Import::Kaname);
                 Ex::Record(format!("{k}.Date"), vec![("Year".into(), Ex::atom(y.to_string())), ("Month".into(), Ex::atom(m.to_string())), ("Day".into(), Ex::atom(dd.to_string()))])
             }
+            Target::Rust => {
+                let (y, m, dd) = crate::date::civil(d);
+                let k = self.imp(Import::Kaname);
+                Ex::Record(format!("{k}::Date"), vec![("year".into(), Ex::atom(y.to_string())), ("month".into(), Ex::atom(m.to_string())), ("day".into(), Ex::atom(dd.to_string()))])
+            }
         }
     }
 
     /// The module's name, as the code passes it to an error.
     pub fn module_const(&self) -> Ex {
-        Ex::atom(if self.t == Target::Python { "_MODULE" } else { "_module" })
+        Ex::atom(if matches!(self.t, Target::Python | Target::Rust) { "_MODULE" } else { "_module" })
     }
 
     /// The three arguments of where an operation fails: the module, the line, the message.
@@ -734,19 +901,245 @@ impl<'a> Gen<'a> {
         vec![self.module_const(), Ex::atom(at.line.to_string()), self.string(&at.message)]
     }
 
-    pub fn kcall(&self, f: &str, args: Vec<Ex>) -> Ex {
-        let k = self.imp(Import::Kaname);
-        Ex::call(format!("{k}.{f}"), args)
+    /// Rust: the answer of a rule's or a date's code (`raw`, a `Result`): where the analysis does not
+    /// show the call keeps what it takes (`open`), its refusal is the failure `kind` at `line` with the
+    /// message `said` and the refusal as its cause; else it is not reached (DESIGN 36.4).
+    pub fn answered_rs(&self, raw: Ex, open: bool, kind: &str, line: usize, said: &str) -> Ex {
+        if open {
+            let refused = self.kcall("Refused", vec![self.string(kind), self.module_const(), Ex::atom(line.to_string()), self.string(said), Ex::atom("e")]);
+            raw.method("map_err", vec![Ex::atom(format!("|e| {}", refused.print(Target::Rust)))]).tried()
+        } else {
+            raw.method("unwrap_or_else", vec![Ex::atom("|e| panic!(\"{e}\")")])
+        }
     }
 
-    /// The name of a helper of `kaname` in this target: `heldInt`, `held_int`, `Add`.
+    /// The call of the helper that holds a fraction to int64 (`held`), Rust's with `?`.
+    pub fn held_call(&self, args: Vec<Ex>) -> Ex {
+        let call = self.kcall(&self.helper("held", "held", "Held"), args);
+        if self.t == Target::Rust { call.tried() } else { call }
+    }
+
+    pub fn kcall(&self, f: &str, args: Vec<Ex>) -> Ex {
+        let k = self.imp(Import::Kaname);
+        match self.t {
+            Target::Rust => Ex::call(format!("{k}::{}", ritsu_emit::ident::rust_name(&snake(f))), args),
+            _ => Ex::call(format!("{k}.{f}"), args),
+        }
+    }
+
+    /// The name of a helper of `kaname` in this target: `heldInt`, `held_int`, `Add`, and Rust's the
+    /// Go's in snake case (`add`, DESIGN 36.7).
     fn helper(&self, ts: &str, py: &str, go: &str) -> String {
         match self.t {
-            Target::TypeScript => ts,
-            Target::Python => py,
-            Target::Go => go,
+            Target::TypeScript => ts.to_string(),
+            Target::Python => py.to_string(),
+            Target::Go => go.to_string(),
+            Target::Rust => snake(go),
         }
-        .to_string()
+    }
+
+    /// A member of a module of the target, or of a type: `kaname.Q`, Rust's `kaname::Q`.
+    pub fn path(&self, base: &str, member: &str) -> String {
+        match self.t {
+            Target::Rust => format!("{base}::{member}"),
+            _ => format!("{base}.{member}"),
+        }
+    }
+
+    /// The type of Rust's standard library a module's code names, by the path that reaches it where
+    /// a name of the module's code is its name: a type of the module is not ([`RUST_STD_TYPES`]), but
+    /// a function may be (`fn Vec`), which is a value and hides no type, and a path costs nothing.
+    pub fn std_type(&self, name: &str) -> String {
+        if !self.outer.contains(name) {
+            return name.to_string();
+        }
+        match name {
+            "Option" => "::std::option::Option".into(),
+            "Result" => "::std::result::Result".into(),
+            "Vec" => "::std::vec::Vec".into(),
+            "String" => "::std::string::String".into(),
+            "Box" => "::std::boxed::Box".into(),
+            "BTreeMap" | "BTreeSet" => format!("::std::collections::{name}"),
+            "Fn" | "FnOnce" => format!("::std::ops::{name}"),
+            "Clone" => "::std::clone::Clone".into(),
+            "Ord" | "PartialEq" | "PartialOrd" | "Eq" => format!("::std::cmp::{name}"),
+            "From" => "::std::convert::From".into(),
+            n => n.to_string(),
+        }
+    }
+
+    // ── How Rust holds a value (DESIGN 36.4) ────────────────────────────────
+
+    /// Whether a value of `t` is `Copy` in Rust: given by value, never lent, never cloned.
+    pub fn is_copy(&self, t: &Ty) -> bool {
+        match t {
+            Ty::Num(_) | Ty::Bool | Ty::Date | Ty::Fn(..) | Ty::None | Ty::Error => true,
+            Ty::Enum(id) => !self.p.is_sum(id),
+            Ty::Opt(x) => self.is_copy(x),
+            Ty::Result(a, e) => self.is_copy(a) && self.is_copy(e),
+            _ => false,
+        }
+    }
+
+    /// Rust: whether a value of `t` has the order its type's `Ord` gives (DESIGN 36.2), the order of
+    /// keys (`interp.rs`'s `key_cmp`): a module's record and enum derive it where the types of all
+    /// their fields have it; an operation of a transfer, a function, and a rule's element and outputs
+    /// (rulec's structs) have none.
+    pub fn orderable(&self, t: &Ty) -> bool {
+        self.orderable_in(t, &mut Vec::new())
+    }
+
+    fn orderable_in(&self, t: &Ty, seen: &mut Vec<Ty>) -> bool {
+        match t {
+            Ty::Transfer(_) | Ty::Fn(..) => false,
+            Ty::Record(RecId::Element(..)) => false,
+            Ty::Record(RecId::Outputs(f)) => match self.p.rules.get(f) {
+                Some(facts) if facts.outputs.len() == 1 => true,
+                _ => false,
+            },
+            Ty::Opt(x) | Ty::List(x) | Ty::Set(x) => self.orderable_in(x, seen),
+            Ty::Dict(a, b) | Ty::Result(a, b) => self.orderable_in(a, seen) && self.orderable_in(b, seen),
+            Ty::Record(RecId::Running(a, b) | RecId::Entry(a, b)) => self.orderable_in(a, seen) && self.orderable_in(b, seen),
+            Ty::Record(RecId::Indexed(x)) => self.orderable_in(x, seen),
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) => {
+                if seen.contains(t) {
+                    return true;
+                }
+                seen.push(t.clone());
+                self.p.fields(id).iter().all(|(_, s)| self.orderable_in(&s.ty, seen))
+            }
+            Ty::Enum(id) if self.p.is_sum(id) => {
+                if seen.contains(t) {
+                    return true;
+                }
+                seen.push(t.clone());
+                let Owner::Module(file) = &id.owner else { return true };
+                let values: Vec<String> = self.p.values(id).0.iter().map(|v| v.text.clone()).collect();
+                values.into_iter().all(|v| {
+                    let r = RecId::Variant { file: file.clone(), name: id.name.clone(), value: v, args: id.args.clone() };
+                    self.p.fields(&r).iter().all(|(_, s)| self.orderable_in(&s.ty, seen))
+                })
+            }
+            _ => true,
+        }
+    }
+
+    /// The derives of a record or an enum of the module whose values are of `t` (DESIGN 36.2):
+    /// `PartialOrd` and `Ord` where [`Gen::orderable`] says so.
+    pub fn derives(&self, t: &Ty) -> &'static str {
+        if self.orderable(t) { "#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]" } else { "#[derive(Clone, Debug, PartialEq, Eq)]" }
+    }
+
+    /// The type a value of `t` is lent as (DESIGN 36.4): `&str`, `&[T]`, `Option<&T>`, `&T`; `t` itself
+    /// where it is `Copy`. `boundary` says whether it is the value as it travels or as it is worked on.
+    pub fn lent_type(&self, t: &Ty, boundary: bool) -> String {
+        if self.is_copy(t) {
+            return if boundary { self.boundary(t) } else { self.flight(t) };
+        }
+        let of = |x: &Ty| if boundary { self.boundary(x) } else { self.flight(x) };
+        match t {
+            Ty::Str => "&str".into(),
+            Ty::List(x) => format!("&[{}]", of(x)),
+            Ty::Opt(x) => format!("{}<{}>", self.std_type("Option"), self.lent_type(x, boundary)),
+            t => format!("&{}", of(t)),
+        }
+    }
+
+    /// The type a function takes a parameter of `t` as: by value where it is `Copy`, lent otherwise.
+    pub fn param_rust(&self, t: &Ty) -> String {
+        self.lent_type(t, true)
+    }
+
+    /// A value as Rust's code holds it where it is put (a field, an element, an answer, a `let`): as
+    /// it is where it is made there or is `Copy`, a copy of a place or of what is lent (DESIGN 36.4).
+    pub fn owned(&self, v: &Val) -> Ex {
+        if self.t != Target::Rust || self.is_copy(&v.ty) || v.held == Held::Made || self.absent(&v.ex) {
+            return v.ex.clone();
+        }
+        // `Some` of what is lent, made here: `Some` of its copy (`Some("x".to_string())`)
+        if let (Held::Lent, Ty::Opt(x), Ex::Call(f, args)) = (v.held, &v.ty, &v.ex)
+            && matches!(&**f, Ex::Atom(n) if n == "Some")
+            && args.len() == 1
+        {
+            return Ex::call("Some", vec![self.owned(&Val::held(args[0].clone(), (**x).clone(), Held::Lent))]);
+        }
+        match (v.held, &v.ty) {
+            (Held::Lent, Ty::Str) => v.ex.clone().method("to_string", vec![]),
+            (Held::Lent, Ty::List(_)) => v.ex.clone().method("to_vec", vec![]),
+            (Held::Lent, Ty::Opt(x)) => match &**x {
+                Ty::Str => v.ex.clone().method("map", vec![Ex::atom("str::to_string")]),
+                Ty::List(_) => v.ex.clone().method("map", vec![Ex::atom("<[_]>::to_vec")]),
+                _ => v.ex.clone().method("cloned", vec![]),
+            },
+            _ => v.ex.clone().method("clone", vec![]),
+        }
+    }
+
+    /// A value as Rust's code lends it (a parameter, a helper's argument): as it is where it is lent
+    /// or `Copy`, borrowed otherwise (`x.as_str()`, `&x`, `x.as_deref()`, `x.as_ref()`).
+    pub fn lent(&self, v: &Val) -> Ex {
+        if self.t != Target::Rust || self.is_copy(&v.ty) || v.held == Held::Lent || self.absent(&v.ex) {
+            return v.ex.clone();
+        }
+        match &v.ty {
+            Ty::Str => v.ex.clone().method("as_str", vec![]),
+            Ty::Opt(x) => match &**x {
+                Ty::Str | Ty::List(_) => v.ex.clone().method("as_deref", vec![]),
+                _ => v.ex.clone().method("as_ref", vec![]),
+            },
+            Ty::List(_) if v.held == Held::Ref => v.ex.clone().method("as_slice", vec![]),
+            // a reference already
+            _ if v.held == Held::Ref => v.ex.clone(),
+            _ => v.ex.clone().borrow(),
+        }
+    }
+
+    /// A value lent where a function takes it as a parameter declared `decl` (DESIGN 36.4): as
+    /// [`Gen::lent`] does, but where `decl` is a type parameter (`&T`) or a type parameter that may be
+    /// absent (`Option<&T>`), as a reference to the whole value the type argument names: `&x` of a
+    /// place or of what is `Copy`, a reference as it is, a copy of what is lent (`&x.to_string()`
+    /// for a `&str` where `T` is `String`).
+    pub fn lent_as(&self, v: &Val, decl: &Ty) -> Ex {
+        if self.t != Target::Rust || self.absent(&v.ex) {
+            return self.lent(v);
+        }
+        match decl {
+            Ty::Param(_) => match v.held {
+                Held::Ref if !self.is_copy(&v.ty) => v.ex.clone(),
+                Held::Lent if !self.is_copy(&v.ty) => self.owned(v).borrow(),
+                _ => v.ex.clone().borrow(),
+            },
+            Ty::Opt(x) if matches!(**x, Ty::Param(_)) => match (&v.ty, v.held) {
+                (Ty::Opt(inner), Held::Lent) if !self.is_copy(inner) => self.owned(v).method("as_ref", vec![]),
+                _ => v.ex.clone().method("as_ref", vec![]),
+            },
+            _ => self.lent(v),
+        }
+    }
+
+    /// A value as Rust's code compares it (`==`, `<`): what is lent as a borrowed string or as what
+    /// may be absent, lent (`a.as_str() < b`, `x.as_deref() == y`); anything else as the place it is
+    /// in (`*r == x`), so that neither side is borrowed only to be compared (DESIGN 36.4).
+    pub fn cmp_side(&self, v: &Val) -> Ex {
+        if self.t != Target::Rust || self.is_copy(&v.ty) || self.absent(&v.ex) {
+            return v.ex.clone();
+        }
+        match (&v.ty, v.held) {
+            (Ty::Str | Ty::Opt(_), _) => self.lent(v),
+            (_, Held::Lent | Held::Ref) => Ex::Deref(Box::new(v.ex.clone())),
+            _ => v.ex.clone(),
+        }
+    }
+
+    /// A value Rust's code reaches through a reference `r` to it (an element of a list walked, a value
+    /// of a dict, what a `match` binds), as the plan holds a value: the value where it is `Copy`
+    /// (`*r`), else the place it is in.
+    pub fn through(&self, r: Ex, t: &Ty) -> Val {
+        if self.is_copy(t) {
+            return Val::held(Ex::Deref(Box::new(r)), t.clone(), Held::Made);
+        }
+        // a reference to the place (`r.clone()`, `r.as_str()`, `r`)
+        Val::held(r, t.clone(), Held::Ref)
     }
 
     // ── Types ───────────────────────────────────────────────────────────────
@@ -763,7 +1156,7 @@ impl<'a> Gen<'a> {
                         us.push(plain);
                     }
                 }
-                format!("{}.{name}", self.imp(Import::Units))
+                self.path(&self.imp(Import::Units), &name)
             }
             None => self.int_type().into(),
         }
@@ -774,11 +1167,12 @@ impl<'a> Gen<'a> {
             Target::TypeScript => "bigint",
             Target::Python => "int",
             Target::Go => "int64",
+            Target::Rust => "i64",
         }
     }
 
     fn q_type(&self) -> String {
-        format!("{}.Q", self.imp(Import::Kaname))
+        self.path(&self.imp(Import::Kaname), "Q")
     }
 
     fn date_type(&self) -> String {
@@ -786,6 +1180,7 @@ impl<'a> Gen<'a> {
             Target::TypeScript => "string".into(),
             Target::Python => format!("{}.date", self.imp(Import::Datetime)),
             Target::Go => format!("{}.Date", self.imp(Import::Kaname)),
+            Target::Rust => format!("{}::Date", self.imp(Import::Kaname)),
         }
     }
 
@@ -796,6 +1191,7 @@ impl<'a> Gen<'a> {
             }
             Target::Python => format!("list[{inner}]"),
             Target::Go => format!("[]{inner}"),
+            Target::Rust => format!("{}<{inner}>", self.std_type("Vec")),
         }
     }
 
@@ -806,6 +1202,7 @@ impl<'a> Gen<'a> {
             Target::TypeScript => format!("ReadonlyMap<{k}, {v}>"),
             Target::Python => format!("Mapping[{k}, {v}]"),
             Target::Go => format!("map[{k}]{v}"),
+            Target::Rust => format!("{}<{k}, {v}>", self.std_type("BTreeMap")),
         }
     }
 
@@ -816,6 +1213,7 @@ impl<'a> Gen<'a> {
             Target::TypeScript => format!("ReadonlySet<{x}>"),
             Target::Python => format!("AbstractSet[{x}]"),
             Target::Go => format!("map[{x}]struct{{}}"),
+            Target::Rust => format!("{}<{x}>", self.std_type("BTreeSet")),
         }
     }
 
@@ -824,6 +1222,7 @@ impl<'a> Gen<'a> {
             Target::TypeScript => format!("{inner} | null"),
             Target::Python => format!("{inner} | None"),
             Target::Go => format!("*{inner}"),
+            Target::Rust => format!("{}<{inner}>", self.std_type("Option")),
         }
     }
 
@@ -835,12 +1234,12 @@ impl<'a> Gen<'a> {
                 let m = self.p.module(f);
                 let (alias, private) = m.decls.enums.iter().find(|e| e.name.text == id.name).map(|e| (e.name.ascii().to_string(), e.private)).unwrap_or_default();
                 let n = hidden(type_name(self.t, &alias), private);
-                let n = if *f == self.c.canon { n } else { format!("{}.{n}", self.imp(Import::Module(f.clone()))) };
+                let n = if *f == self.c.canon { n } else { self.path(&self.imp(Import::Module(f.clone())), &n) };
                 format!("{n}{args}")
             }
             Owner::Rule(f) => {
                 let alias = self.rule_enum(f, &id.name).map(|e| e.alias.clone()).unwrap_or_default();
-                format!("{}.{alias}", self.imp(Import::Rule(f.clone())))
+                self.path(&self.imp(Import::Rule(f.clone())), &alias)
             }
         }
     }
@@ -857,6 +1256,7 @@ impl<'a> Gen<'a> {
             Target::TypeScript => &facts.typescript,
             Target::Python => &facts.python,
             Target::Go => &facts.go,
+            Target::Rust => &facts.rust,
         }
     }
 
@@ -870,6 +1270,8 @@ impl<'a> Gen<'a> {
             let ty = self.record_type(&RecId::Variant { file: file.clone(), name: id.name.clone(), value: value.to_string(), args: id.args.clone() });
             return match self.t {
                 Target::TypeScript => Ex::Record(String::new(), vec![("kind".into(), self.string(value))]),
+                // the value of the enum that holds it: `Order::Cancelled(OrderCancelled {})`
+                Target::Rust => Ex::call(self.variant_of(id, value), vec![Ex::Record(ty, Vec::new())]),
                 _ => Ex::Record(ty, Vec::new()),
             };
         }
@@ -887,8 +1289,8 @@ impl<'a> Gen<'a> {
                     }
                     _ => {
                         let ty = hidden(type_name(self.t, &ea), e.private);
-                        let ty = if local { ty } else { format!("{}.{ty}", self.imp(Import::Module(f.clone()))) };
-                        Ex::atom(format!("{ty}.{}", member_name(self.t, &ea, &v)))
+                        let ty = if local { ty } else { self.path(&self.imp(Import::Module(f.clone())), &ty) };
+                        Ex::atom(self.path(&ty, &member_name(self.t, &ea, &v)))
                     }
                 }
             }
@@ -898,10 +1300,23 @@ impl<'a> Gen<'a> {
                 let r = self.imp(Import::Rule(f.clone()));
                 match self.t {
                     Target::Go => Ex::atom(format!("{r}.{member}")),
+                    Target::Rust => Ex::atom(format!("{r}::{}::{member}", e.alias)),
                     _ => Ex::atom(format!("{r}.{}.{member}", e.alias)),
                 }
             }
         }
+    }
+
+    /// Rust's variant of a sum that holds the value `value` (DESIGN 36.2): `Order::Placed`, the enum's
+    /// type with the value's alias in Pascal case.
+    pub fn variant_of(&self, id: &EnumId, value: &str) -> String {
+        let Owner::Module(f) = &id.owner else { return String::new() };
+        let m = self.p.module(f);
+        let Some(e) = m.decls.enums.iter().find(|e| e.name.text == id.name) else { return String::new() };
+        let v = e.values.iter().find(|v| v.text == value).map(|v| v.ascii().to_string()).unwrap_or_else(|| value.to_string());
+        let ty = hidden(type_name(self.t, e.name.ascii()), e.private);
+        let ty = if *f == self.c.canon { ty } else { self.path(&self.imp(Import::Module(f.clone())), &ty) };
+        format!("{ty}::{}", member_name(self.t, e.name.ascii(), &v))
     }
 
     /// The values of an enum, in order, by their names.
@@ -913,6 +1328,13 @@ impl<'a> Gen<'a> {
     /// with its type arguments (`Page<Invoice>`, `Page[Invoice]`).
     pub fn record_type(&self, id: &RecId) -> String {
         match id {
+            // Rust: a value's struct takes the type parameters its fields name, and no other
+            RecId::Variant { file, name, value, args } if self.t == Target::Rust => {
+                let m = self.p.module(file);
+                let used = m.decls.enums.iter().find(|e| e.name.text == *name).map(|e| variant_tparams(e, value)).unwrap_or_default();
+                let args: Vec<Ty> = used.iter().filter_map(|i| args.get(*i).cloned()).collect();
+                format!("{}{}", self.record_type_bare(id), self.targs_text(&args))
+            }
             RecId::Module { args, .. } | RecId::Variant { args, .. } => format!("{}{}", self.record_type_bare(id), self.targs_text(args)),
             _ => self.record_type_bare(id),
         }
@@ -925,23 +1347,23 @@ impl<'a> Gen<'a> {
                 let m = self.p.module(file);
                 let (alias, private) = m.decls.records.iter().find(|r| r.name.text == *name).map(|r| (r.name.ascii().to_string(), r.private)).unwrap_or_default();
                 let n = hidden(type_name(self.t, &alias), private);
-                if *file == self.c.canon { n } else { format!("{}.{n}", self.imp(Import::Module(file.clone()))) }
+                if *file == self.c.canon { n } else { self.path(&self.imp(Import::Module(file.clone())), &n) }
             }
             RecId::Variant { file, name, value, .. } => {
                 let m = self.p.module(file);
                 let Some(e) = m.decls.enums.iter().find(|e| e.name.text == *name) else { return String::new() };
                 let va = e.values.iter().find(|v| v.text == *value).map(|v| v.ascii().to_string()).unwrap_or_default();
                 let n = hidden(variant_name(self.t, e.name.ascii(), &va), e.private);
-                if *file == self.c.canon { n } else { format!("{}.{n}", self.imp(Import::Module(file.clone()))) }
+                if *file == self.c.canon { n } else { self.path(&self.imp(Import::Module(file.clone())), &n) }
             }
             RecId::Outputs(f) => {
                 let facts = self.p.rules.get(f).cloned();
                 match facts {
                     Some(facts) if facts.outputs.len() == 1 => self.rule_col_type(f, &facts.outputs[0]),
-                    _ => format!("{}.Output", self.imp(Import::Rule(f.clone()))),
+                    _ => self.path(&self.imp(Import::Rule(f.clone())), "Output"),
                 }
             }
-            RecId::Element(f, seq) => format!("{}.{}", self.imp(Import::Rule(f.clone())), self.element_type(f, seq)),
+            RecId::Element(f, seq) => self.path(&self.imp(Import::Rule(f.clone())), &self.element_type(f, seq)),
             RecId::Running(item, w) => {
                 let k = self.imp(Import::Kaname);
                 let (i, w) = (self.boundary(item), self.boundary(w));
@@ -949,6 +1371,7 @@ impl<'a> Gen<'a> {
                     Target::TypeScript => format!("{k}.Running<{i}, {w}>"),
                     Target::Python => format!("{k}.Running[{i}, {w}]"),
                     Target::Go => format!("{k}.Running[{i}, {w}]"),
+                    Target::Rust => format!("{k}::Running<{i}, {w}>"),
                 }
             }
             // the elements of what `d.entries()` and `xs.indexed()` answer (DESIGN 24.6)
@@ -957,6 +1380,7 @@ impl<'a> Gen<'a> {
                 let (a, b) = (self.boundary(kt), self.boundary(vt));
                 match self.t {
                     Target::TypeScript => format!("{k}.Entry<{a}, {b}>"),
+                    Target::Rust => format!("{k}::Entry<{a}, {b}>"),
                     _ => format!("{k}.Entry[{a}, {b}]"),
                 }
             }
@@ -965,6 +1389,7 @@ impl<'a> Gen<'a> {
                 let a = self.boundary(x);
                 match self.t {
                     Target::TypeScript => format!("{k}.Indexed<{a}>"),
+                    Target::Rust => format!("{k}::Indexed<{a}>"),
                     _ => format!("{k}.Indexed[{a}]"),
                 }
             }
@@ -979,7 +1404,13 @@ impl<'a> Gen<'a> {
         let ty = call.params.iter().find(|p| p.name == seq).map(|p| p.ty.clone()).unwrap_or_default();
         let s = ty.trim();
         let s = s.strip_prefix("readonly ").unwrap_or(s);
-        s.strip_prefix("list[").and_then(|x| x.strip_suffix(']')).or_else(|| s.strip_prefix("[]")).or_else(|| s.strip_suffix("[]")).unwrap_or(s).to_string()
+        s.strip_prefix("list[")
+            .and_then(|x| x.strip_suffix(']'))
+            .or_else(|| s.strip_prefix("&[").and_then(|x| x.strip_suffix(']')))
+            .or_else(|| s.strip_prefix("[]"))
+            .or_else(|| s.strip_suffix("[]"))
+            .unwrap_or(s)
+            .to_string()
     }
 
     /// The type a rule's code gives one of its columns (an input, an output, a field of an element).
@@ -993,10 +1424,10 @@ impl<'a> Gen<'a> {
             ColumnType::Str => self.str_type().into(),
             ColumnType::Date => self.int_type().into(),
             ColumnType::Enum { name: n, .. } => match self.rule_enum(f, n) {
-                Some(e) => format!("{}.{}", self.imp(Import::Rule(f.to_path_buf())), e.alias),
+                Some(e) => self.path(&self.imp(Import::Rule(f.to_path_buf())), &e.alias),
                 None => self.str_type().into(),
             },
-            ColumnType::Num { unit: Some(u), .. } if u.dim == Dim::Rate => format!("{}.Rate", self.imp(Import::Rule(f.to_path_buf()))),
+            ColumnType::Num { unit: Some(u), .. } if u.dim == Dim::Rate => self.path(&self.imp(Import::Rule(f.to_path_buf())), "Rate"),
             ColumnType::Num { unit: Some(u), .. } => self.unit_type(u),
             ColumnType::Num { unit: None, .. } => self.int_type().into(),
             ColumnType::Opt(x) => self.opt_type(self.rule_type(f, x)),
@@ -1013,6 +1444,7 @@ impl<'a> Gen<'a> {
     fn str_type(&self) -> &'static str {
         match self.t {
             Target::Python => "str",
+            Target::Rust => "String",
             _ => "string",
         }
     }
@@ -1037,11 +1469,12 @@ impl<'a> Gen<'a> {
             Ty::Transfer(id) => self.transfer_type(id),
             Ty::Param(n) => self.param_type(n),
             Ty::Result(a, e) => self.result_type(a, e),
-            Ty::Fn(ps, r, _) => self.fn_type(ps, r),
+            Ty::Fn(ps, r, eff) => self.fn_type(ps, r, eff),
             Ty::None | Ty::Empty | Ty::EmptyDict | Ty::Error => match self.t {
                 Target::TypeScript => "null".into(),
                 Target::Python => "None".into(),
                 Target::Go => "any".into(),
+                Target::Rust => "_".into(),
             },
         }
     }
@@ -1061,7 +1494,7 @@ impl<'a> Gen<'a> {
     /// A function type in the target (DESIGN 27.6): its parameters and its answer as they travel, as a
     /// function's do: TypeScript's `(x: T) => U`, Python's `Callable[[T], U]`, Go's `func(T) U` (a
     /// failure is a panic, as in every function the generated code calls inside).
-    pub fn fn_type(&self, ps: &[Ty], r: &Ty) -> String {
+    pub fn fn_type(&self, ps: &[Ty], r: &Ty, eff: &Option<crate::ty::FnEffect>) -> String {
         let pts: Vec<String> = ps.iter().map(|p| self.boundary(p)).collect();
         let rt = self.boundary(r);
         match self.t {
@@ -1074,6 +1507,15 @@ impl<'a> Gen<'a> {
             }
             Target::Python => format!("Callable[[{}], {rt}]", pts.join(", ")),
             Target::Go => format!("func({}) {rt}", pts.join(", ")),
+            // lent, as a parameter is (DESIGN 36.2): what has no effect written may be given one
+            // that fails, so it answers a `Result`; `total` answers the value
+            Target::Rust => {
+                let pts: Vec<String> = ps.iter().map(|p| self.param_rust(p)).collect();
+                let total = matches!(eff, Some(e) if e.fails.is_empty());
+                let k = self.imp(Import::Kaname);
+                let rt = if total { rt } else { format!("{}<{rt}, {k}::KanameError>", self.std_type("Result")) };
+                format!("&dyn {}({}) -> {rt}", self.std_type("Fn"), pts.join(", "))
+            }
         }
     }
 
@@ -1147,7 +1589,13 @@ impl<'a> Gen<'a> {
             Target::TypeScript => format!("<{}>", names.join(", ")),
             Target::Python => names.join(", "),
             Target::Go => format!("[{}]", ps.iter().zip(&names).map(|(p, n)| format!("{n} {}", if p.key { "comparable" } else { "any" })).collect::<Vec<_>>().join(", ")),
+            Target::Rust => format!("<{}>", ps.iter().zip(&names).map(|(p, n)| format!("{n}: {}", self.bounds(p.key))).collect::<Vec<_>>().join(", ")),
         }
+    }
+
+    /// The bounds of a type parameter in Rust (DESIGN 36.2): a key's `Ord` is the order of keys.
+    pub fn bounds(&self, key: bool) -> String {
+        if key { format!("{} + {}", self.std_type("Ord"), self.std_type("Clone")) } else { format!("{} + {}", self.std_type("Clone"), self.std_type("PartialEq")) }
     }
 
     /// A declaration's type parameters as the target writes them where the type is used: TypeScript's
@@ -1158,7 +1606,7 @@ impl<'a> Gen<'a> {
         }
         let names = self.tparam_names(ps);
         match self.t {
-            Target::TypeScript => format!("<{}>", names.join(", ")),
+            Target::TypeScript | Target::Rust => format!("<{}>", names.join(", ")),
             _ => format!("[{}]", names.join(", ")),
         }
     }
@@ -1180,12 +1628,13 @@ impl<'a> Gen<'a> {
                 let ty = p.map(|p| p.ty.clone()).unwrap_or_else(|| n.clone());
                 match self.t {
                     Target::Go => format!("{ty} {}", if p.is_some_and(|p| p.key) { "comparable" } else { "any" }),
+                    Target::Rust => format!("{ty}: {}", self.bounds(p.is_some_and(|p| p.key))),
                     _ => ty,
                 }
             })
             .collect();
         match self.t {
-            Target::TypeScript => format!("<{}>", parts.join(", ")),
+            Target::TypeScript | Target::Rust => format!("<{}>", parts.join(", ")),
             _ => format!("[{}]", parts.join(", ")),
         }
     }
@@ -1198,7 +1647,7 @@ impl<'a> Gen<'a> {
         }
         let xs: Vec<String> = args.iter().map(|a| self.boundary(a)).collect();
         match self.t {
-            Target::TypeScript => format!("<{}>", xs.join(", ")),
+            Target::TypeScript | Target::Rust => format!("<{}>", xs.join(", ")),
             _ => format!("[{}]", xs.join(", ")),
         }
     }
@@ -1209,6 +1658,8 @@ impl<'a> Gen<'a> {
         let (x, y) = (self.boundary(a), self.boundary(e));
         match self.t {
             Target::TypeScript => format!("{k}.Result<{x}, {y}>"),
+            // the standard library's (DESIGN 36.2)
+            Target::Rust => format!("{}<{x}, {y}>", self.std_type("Result")),
             _ => format!("{k}.Result[{x}, {y}]"),
         }
     }
@@ -1223,12 +1674,13 @@ impl<'a> Gen<'a> {
             Target::TypeScript => Ex::Record(String::new(), vec![("kind".into(), self.string(if ok { "ok" } else { "err" })), (field.into(), x)]),
             Target::Python => Ex::Record(format!("{k}.{ty}[{}]", self.boundary(if ok { a } else { e })), vec![(field.into(), x)]),
             Target::Go => Ex::Record(format!("{k}.{ty}[{}, {}]", self.boundary(a), self.boundary(e)), vec![(if ok { "Value" } else { "Error" }.into(), x)]),
+            Target::Rust => Ex::call(ty, vec![x]),
         }
     }
 
     /// The type of a transfer's operation, from the types of its book (`glue/books/<book>`).
     pub fn transfer_type(&self, id: &TransferId) -> String {
-        format!("{}.{}", self.imp(Import::Book(id.book.clone())), super::books::op_type(self.t, &id.transfer, &id.op))
+        self.path(&self.imp(Import::Book(id.book.clone())), &super::books::op_type(self.t, &id.transfer, &id.op))
     }
 
     /// Whether a value of `t` as it is worked on is taken where it travels (a parameter, a field, an
@@ -1250,13 +1702,143 @@ impl<'a> Gen<'a> {
     fn same_in(&self, t: &Ty) -> bool {
         match t {
             Ty::Num(n) if n.is_rate() => false,
-            Ty::Num(n) => n.unit.type_name().is_none() || self.t != Target::Go,
+            Ty::Num(n) => n.unit.type_name().is_none() || !matches!(self.t, Target::Go | Target::Rust),
             Ty::List(x) => match &**x {
                 Ty::Num(n) if !n.is_rate() && n.unit.type_name().is_some() => self.t == Target::TypeScript,
                 x => self.same_in(x),
             },
             Ty::Opt(x) => self.same_in(x),
             _ => true,
+        }
+    }
+
+    // ── What Rust holds in a box (DESIGN 36.2) ──────────────────────────────
+
+    /// A record, a sum or the type of one of its values as it is declared, with no type arguments:
+    /// what the boxes are worked out on.
+    fn bare(t: &Ty) -> Ty {
+        match t {
+            Ty::Record(RecId::Module { file, name, .. }) => Ty::Record(RecId::Module { file: file.clone(), name: name.clone(), args: Vec::new() }),
+            Ty::Record(RecId::Variant { file, name, value, .. }) => Ty::Record(RecId::Variant { file: file.clone(), name: name.clone(), value: value.clone(), args: Vec::new() }),
+            Ty::Enum(id) => Ty::Enum(EnumId { owner: id.owner.clone(), name: id.name.clone(), args: Vec::new() }),
+            t => t.clone(),
+        }
+    }
+
+    /// The records, sums and values' types a value of `t` holds in itself, not behind a list, a dict
+    /// or a set: what would make a type of Rust's that holds itself of no size.
+    fn held_in(&self, t: &Ty) -> Vec<Ty> {
+        match t {
+            Ty::Opt(x) => self.held_in(x),
+            Ty::Result(a, e) => {
+                let mut v = self.held_in(a);
+                v.extend(self.held_in(e));
+                v
+            }
+            Ty::Record(RecId::Module { .. } | RecId::Variant { .. }) => vec![Gen::bare(t)],
+            Ty::Enum(id) if self.p.is_sum(id) => vec![Gen::bare(t)],
+            _ => Vec::new(),
+        }
+    }
+
+    /// What a value of a declared type holds in itself, one step down: a record's and a value's fields,
+    /// a sum's values.
+    fn holds(&self, t: &Ty) -> Vec<Ty> {
+        match t {
+            Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) => self.p.fields(id).iter().flat_map(|(_, s)| self.held_in(&s.ty)).collect(),
+            Ty::Enum(id) if self.p.is_sum(id) => {
+                let Owner::Module(file) = &id.owner else { return Vec::new() };
+                self.p.values(id).0.iter().map(|v| Ty::Record(RecId::Variant { file: file.clone(), name: id.name.clone(), value: v.text.clone(), args: Vec::new() })).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether a value of `from` holds in itself, at some depth, a value of `to`.
+    fn holds_deep(&self, from: &Ty, to: &Ty) -> bool {
+        let mut seen: Vec<Ty> = Vec::new();
+        let mut todo = vec![from.clone()];
+        while let Some(x) = todo.pop() {
+            for y in self.holds(&x) {
+                if y == *to {
+                    return true;
+                }
+                if !seen.contains(&y) {
+                    seen.push(y.clone());
+                    todo.push(y);
+                }
+            }
+        }
+        false
+    }
+
+    /// How a field of type `t` of the record or value's type `holder` is boxed in Rust (DESIGN 36.2):
+    /// a field that holds, not behind a list, a dict or a set, a type that holds `holder`.
+    pub fn boxed(&self, holder: &Ty, t: &Ty) -> Boxed {
+        let cyc = |x: &Ty| matches!(x, Ty::Record(RecId::Module { .. } | RecId::Variant { .. })) || matches!(x, Ty::Enum(id) if self.p.is_sum(id));
+        let boxes = |x: &Ty| cyc(x) && self.t == Target::Rust && { let (b, h) = (Gen::bare(x), Gen::bare(holder)); b == h || self.holds_deep(&b, &h) };
+        match t {
+            x if cyc(x) => if boxes(x) { Boxed::Whole } else { Boxed::No },
+            Ty::Opt(x) if boxes(x) => Boxed::InOpt,
+            Ty::Result(a, e) if boxes(a) || boxes(e) => Boxed::InResult(boxes(a), boxes(e)),
+            _ => Boxed::No,
+        }
+    }
+
+    /// The type of a field of `holder` as it travels: Rust's boxed where [`Gen::boxed`] says so
+    /// (`Box<Expr>`, `Option<Box<Node>>`).
+    pub fn field_type(&self, holder: &Ty, t: &Ty) -> String {
+        let b = |x: &Ty| format!("{}<{}>", self.std_type("Box"), self.boundary(x));
+        match (self.boxed(holder, t), t) {
+            (Boxed::Whole, _) => b(t),
+            (Boxed::InOpt, Ty::Opt(x)) => self.opt_type(b(x)),
+            (Boxed::InResult(o, e), Ty::Result(a, er)) => {
+                format!("{}<{}, {}>", self.std_type("Result"), if o { b(a) } else { self.boundary(a) }, if e { b(er) } else { self.boundary(er) })
+            }
+            _ => self.boundary(t),
+        }
+    }
+
+    /// A value `x` of a field of type `t` of `holder` as the field holds it: Rust's in its box
+    /// (`Box::new(x)`, `Some(Box::new(x))`, `x.map(Box::new)`).
+    pub fn boxed_value(&self, holder: &Ty, t: &Ty, x: Ex) -> Ex {
+        let new = format!("{}::new", self.std_type("Box"));
+        let wrap = |x: Ex| Ex::call(new.clone(), vec![x]);
+        let inside = |x: Ex, ctor: &str, m: &str| -> Ex {
+            match x {
+                Ex::Call(f, mut a) if matches!(&*f, Ex::Atom(n) if n == ctor) && a.len() == 1 => Ex::call(ctor, vec![wrap(a.remove(0))]),
+                x => x.method(m, vec![Ex::atom(new.clone())]),
+            }
+        };
+        match self.boxed(holder, t) {
+            Boxed::No => x,
+            Boxed::Whole => wrap(x),
+            Boxed::InOpt if self.absent(&x) => x,
+            Boxed::InOpt => inside(x, "Some", "map"),
+            Boxed::InResult(o, e) => {
+                let x = if o { inside(x, "Ok", "map") } else { x };
+                if e { inside(x, "Err", "map_err") } else { x }
+            }
+        }
+    }
+
+    /// The field `raw` of `holder`, of type `t`, out of its box: the place of the value (`*x.left`),
+    /// a value that may be absent lent (`x.next.as_deref()`), a result copied; and how it is held.
+    pub fn unboxed(&self, holder: &Ty, t: &Ty, raw: Ex, held: Held) -> (Ex, Held) {
+        match self.boxed(holder, t) {
+            Boxed::No => (raw, held),
+            Boxed::Whole => (Ex::Deref(Box::new(raw)), held),
+            Boxed::InOpt => (raw.method("as_deref", vec![]), Held::Lent),
+            Boxed::InResult(o, e) => {
+                let mut x = raw.method("clone", vec![]);
+                if o {
+                    x = x.method("map", vec![Ex::atom("|b| *b")]);
+                }
+                if e {
+                    x = x.method("map_err", vec![Ex::atom("|b| *b")]);
+                }
+                (x, Held::Made)
+            }
         }
     }
 
@@ -1283,7 +1865,8 @@ impl<'a> Gen<'a> {
         let v = Ex::atom("v");
         let what = Ex::atom("what");
         let body = self.outside_body(&v, &slot.ty, slot.range.as_ref(), slot.count.as_ref(), what, reach, 0);
-        let ty = self.boundary(&slot.ty);
+        // Rust's check takes the value lent, as a parameter is (DESIGN 36.4)
+        let ty = if self.t == Target::Rust { self.lent_type(&slot.ty, true) } else { self.boundary(&slot.ty) };
         if let Some(o) = self.outsides.borrow_mut().iter_mut().find(|o| o.key == key) {
             o.body = body;
             o.ty = ty;
@@ -1306,10 +1889,11 @@ impl<'a> Gen<'a> {
             // where a parameter reaches it, a number whose range is not written is held to int64 in
             // TypeScript and Python (Go's int64 holds nothing else), and a date to the days of
             // 0001-01-01 to 9999-12-31 in TypeScript and Go (Python's date is one) (DESIGN 22.5)
-            Ty::Num(n) => declared || (reached && n.is_rate() && n.step.is_some()) || (reached && !n.is_rate() && self.t != Target::Go),
+            Ty::Num(n) => declared || (reached && n.is_rate() && n.step.is_some()) || (reached && !n.is_rate() && !matches!(self.t, Target::Go | Target::Rust)),
             Ty::Date => declared || (reached && self.t != Target::Python),
-            // a string, to its count, and where a parameter reaches it to be well formed (DESIGN 25.1)
-            Ty::Str => declared || reached,
+            // a string, to its count, and where a parameter reaches it to be well formed (DESIGN 25.1):
+            // a string of Rust's is always (DESIGN 36.5)
+            Ty::Str => declared || (reached && self.t != Target::Rust),
             Ty::Record(RecId::Module { .. } | RecId::Variant { .. }) if reached => self.record_checkable(t, depth, reach),
             Ty::Enum(id) if reached && self.p.is_sum(id) => self.record_checkable(t, depth, reach),
             // a result, by the value it holds (DESIGN 26.3)
@@ -1339,7 +1923,7 @@ impl<'a> Gen<'a> {
         let or = |a: (bool, bool), b: (bool, bool)| (a.0 || b.0, a.1 || b.1);
         match t {
             Ty::Opt(x) => self.strings_in(x, counted, reach, depth),
-            Ty::Str => (counted, reached),
+            Ty::Str => (counted, reached && self.t != Target::Rust),
             Ty::List(x) | Ty::Set(x) => self.strings_in(x, false, reach, depth + 1),
             Ty::Dict(k, x) => or(self.strings_in(k, false, reach, depth + 1), self.strings_in(x, false, reach, depth + 1)),
             Ty::Record(id @ (RecId::Module { .. } | RecId::Variant { .. })) if inside => {
@@ -1402,6 +1986,14 @@ impl<'a> Gen<'a> {
         let mut out = Vec::new();
         let reached = reach.reached();
         match t {
+            // Rust's value that is there, by `if let` (an `Option` of a `Copy` type, or of a reference)
+            Ty::Opt(x) if self.t == Target::Rust => {
+                let inner = Ex::atom(format!("x{depth}"));
+                let body = self.outside_body(&inner, x, range, count, what, reach, depth);
+                if !body.is_empty() {
+                    out.push(Node::If(vec![(Ex::atom(format!("let Some({}) = {}", inner.print(self.t), v.print(self.t))), body)], Vec::new()));
+                }
+            }
             Ty::Opt(x) => {
                 let (inner, deref) = match self.t {
                     Target::Go => (Ex::Deref(Box::new(v.clone())), true),
@@ -1417,15 +2009,18 @@ impl<'a> Gen<'a> {
                 let len = self.len_of(v);
                 if let Some(c) = count {
                     let mut tests = Vec::new();
-                    if let Some(lo) = c.min {
-                        tests.push(Ex::bin(Op::Lt, len.clone(), Ex::atom(lo.num.to_string())));
+                    // Rust's length is a `usize`, never below 0; below 1 is `is_empty`
+                    if let Some(lo) = c.min
+                        && (self.t != Target::Rust || lo.num > 0)
+                    {
+                        tests.push(if self.t == Target::Rust && lo.num == 1 { v.clone().method("is_empty", vec![]) } else { Ex::bin(Op::Lt, len.clone(), Ex::atom(lo.num.to_string())) });
                     }
                     if let Some(hi) = c.max {
                         tests.push(Ex::bin(Op::Gt, len.clone(), Ex::atom(hi.num.to_string())));
                     }
                     if let Some(test) = tests.into_iter().reduce(|a, b| Ex::bin(Op::Or, a, b)) {
                         let shown = crate::value::range_text(c, &Ty::Num(NumTy::number()));
-                        out.push(Node::If(vec![(test, vec![Node::Line(self.ret(self.outside_value(what.clone(), self.string(""), self.string(&shown), Some(len.clone()))))])], Vec::new()));
+                        out.push(Node::If(vec![(test, vec![Node::Line(self.ret_found(self.outside_value(what.clone(), self.string(""), self.string(&shown), Some(len.clone()))))])], Vec::new()));
                     }
                 }
                 let elem = match &**x {
@@ -1439,11 +2034,18 @@ impl<'a> Gen<'a> {
                     Target::TypeScript => Ex::bin(Op::Add, Ex::bin(Op::Add, Ex::bin(Op::Add, what.clone(), self.string("[")), i.clone()), self.string("]")),
                     Target::Python => Ex::bin(Op::Add, Ex::bin(Op::Add, Ex::bin(Op::Add, what.clone(), self.string("[")), Ex::call("str", vec![i.clone()])), self.string("]")),
                     Target::Go => self.kcall("Elem", vec![what.clone(), i.clone()]),
+                    Target::Rust => self.kcall("elem", vec![self.what_arg(&what), i.clone()]),
                 };
                 let inner = if opt {
-                    let deref = if self.t == Target::Go { Ex::Deref(Box::new(el.clone())) } else { el.clone() };
-                    let b = self.outside_body(&deref, &elem, range, None, path, reach, depth + 1);
-                    if b.is_empty() { b } else { vec![Node::If(vec![(Ex::bin(Op::Ne, el.clone(), self.null()), b)], Vec::new())] }
+                    if self.t == Target::Rust {
+                        let x = Ex::atom(format!("x{}", depth + 1));
+                        let b = self.outside_body(&x, &elem, range, None, path, reach, depth + 1);
+                        if b.is_empty() { b } else { vec![Node::If(vec![(Ex::atom(format!("let Some({}) = {}", x.print(self.t), el.print(self.t))), b)], Vec::new())] }
+                    } else {
+                        let deref = if self.t == Target::Go { Ex::Deref(Box::new(el.clone())) } else { el.clone() };
+                        let b = self.outside_body(&deref, &elem, range, None, path, reach, depth + 1);
+                        if b.is_empty() { b } else { vec![Node::If(vec![(Ex::bin(Op::Ne, el.clone(), self.null()), b)], Vec::new())] }
+                    }
                 } else {
                     self.outside_body(&el, &elem, range, None, path, reach, depth + 1)
                 };
@@ -1452,6 +2054,8 @@ impl<'a> Gen<'a> {
                         Target::TypeScript => format!("for (let {} = 0; {} < {}.length; {}++)", i.print(self.t), i.print(self.t), v.print(self.t), i.print(self.t)),
                         Target::Python => format!("for {}, {} in enumerate({})", i.print(self.t), el.print(self.t), v.print(self.t)),
                         Target::Go => format!("for {}, {} := range {}", i.print(self.t), el.print(self.t), v.print(self.t)),
+                        // an element of a `Copy` type by value, any other lent
+                        Target::Rust => format!("for ({}, {}{}) in {}.iter().enumerate()", i.print(self.t), if self.is_copy(x) { "&" } else { "" }, el.print(self.t), v.print(self.t)),
                     };
                     let mut body = Vec::new();
                     if self.t == Target::TypeScript {
@@ -1474,18 +2078,22 @@ impl<'a> Gen<'a> {
                     Target::TypeScript => Ex::call("BigInt", vec![v.clone().dot("size")]),
                     Target::Python => Ex::call("len", vec![v.clone()]),
                     Target::Go => Ex::call("len", vec![v.clone()]),
+                    Target::Rust => v.clone().method("len", vec![]),
                 };
                 if let Some(c) = count {
                     let mut tests = Vec::new();
-                    if let Some(lo) = c.min {
-                        tests.push(Ex::bin(Op::Lt, len.clone(), self.count_lit(lo.num)));
+                    // Rust's length is a `usize`, never below 0; below 1 is `is_empty`
+                    if let Some(lo) = c.min
+                        && (self.t != Target::Rust || lo.num > 0)
+                    {
+                        tests.push(if self.t == Target::Rust && lo.num == 1 { v.clone().method("is_empty", vec![]) } else { Ex::bin(Op::Lt, len.clone(), self.count_lit(lo.num)) });
                     }
                     if let Some(hi) = c.max {
                         tests.push(Ex::bin(Op::Gt, len.clone(), self.count_lit(hi.num)));
                     }
                     if let Some(test) = tests.into_iter().reduce(|a, b| Ex::bin(Op::Or, a, b)) {
                         let shown = crate::value::range_text(c, &Ty::Num(NumTy::number()));
-                        out.push(Node::If(vec![(test, vec![Node::Line(self.ret(self.outside_value(what.clone(), self.string(""), self.string(&shown), Some(len.clone()))))])], Vec::new()));
+                        out.push(Node::If(vec![(test, vec![Node::Line(self.ret_found(self.outside_value(what.clone(), self.string(""), self.string(&shown), Some(len.clone()))))])], Vec::new()));
                     }
                 }
                 let i = Ex::atom(format!("i{depth}"));
@@ -1496,30 +2104,45 @@ impl<'a> Gen<'a> {
                         Target::TypeScript => Ex::bin(Op::Add, Ex::bin(Op::Add, Ex::bin(Op::Add, what.clone(), self.string("[")), i.clone()), self.string("]")),
                         Target::Python => Ex::bin(Op::Add, Ex::bin(Op::Add, Ex::bin(Op::Add, what.clone(), self.string("[")), Ex::call("str", vec![i.clone()])), self.string("]")),
                         Target::Go => self.kcall("Elem", vec![what.clone(), i.clone()]),
+                        Target::Rust => self.kcall("elem", vec![self.what_arg(&what), i.clone()]),
                     };
                     match (idx, self.t) {
                         (None, _) => base,
                         (Some(n), Target::Go) => self.kcall("Elem", vec![base, Ex::atom(n.to_string())]),
+                        (Some(n), Target::Rust) => self.kcall("elem", vec![base.borrow(), Ex::atom(n.to_string())]),
                         (Some(n), _) => Ex::bin(Op::Add, base, self.string(&format!("[{n}]"))),
                     }
                 };
                 let mut inner = Vec::new();
                 // the value of a pair is read where it is checked (a string key may be checked alone)
                 let mut valued = false;
+                let mut keyed = true;
                 match &vt {
                     Some(x) => {
-                        inner.extend(self.outside_body(&key, &kt, None, None, at(Some(0)), reach, depth + 1));
+                        let of_key = self.outside_body(&key, &kt, None, None, at(Some(0)), reach, depth + 1);
+                        keyed = !of_key.is_empty();
+                        inner.extend(of_key);
                         let of_value = self.elem_body(&val, x, range, at(Some(1)), reach, depth);
                         valued = !of_value.is_empty();
                         inner.extend(of_value);
                     }
                     None => inner.extend(self.elem_body(&key, &kt, range, at(None), reach, depth)),
                 }
-                if !inner.is_empty() {
+                // Rust walks a `BTreeMap` and a `BTreeSet` in the order of their keys, each key and value
+                // of a `Copy` type by value, any other lent
+                if !inner.is_empty() && self.t == Target::Rust {
+                    let pat = |used: bool, x: &Ex, ty: &Ty| if !used { "_".to_string() } else if self.is_copy(ty) { format!("&{}", x.print(self.t)) } else { x.print(self.t) };
+                    let head = match &vt {
+                        Some(x) => format!("for ({}, ({}, {})) in {}.iter().enumerate()", i.print(self.t), pat(keyed, &key, &kt), pat(valued, &val, x), v.print(self.t)),
+                        None => format!("for ({}, {}) in {}.iter().enumerate()", i.print(self.t), pat(true, &key, &kt), v.print(self.t)),
+                    };
+                    out.push(Node::Block(head, inner, Vec::new()));
+                } else if !inner.is_empty() {
                     let keys = match self.t {
                         Target::TypeScript => self.kcall("sortedKeys", vec![v.clone(), self.order_fn(&kt, false)]),
                         Target::Python => self.kcall("keys_of", vec![v.clone(), self.py_key_fn(&kt)]),
                         Target::Go => self.kcall("SortedKeys", vec![v.clone(), self.order_fn(&kt, false)]),
+                        Target::Rust => unreachable!("Rust walks its maps and sets above"),
                     };
                     let ks = Ex::atom(format!("ks{depth}"));
                     let mut body = Vec::new();
@@ -1544,6 +2167,7 @@ impl<'a> Gen<'a> {
                             }
                             format!("for {}, {} := range {}", i.print(self.t), key.print(self.t), keys.print(self.t))
                         }
+                        Target::Rust => unreachable!("Rust walks its maps and sets above"),
                     };
                     body.extend(inner);
                     out.push(Node::Block(head, body, Vec::new()));
@@ -1552,9 +2176,9 @@ impl<'a> Gen<'a> {
             // a string: well formed where a parameter reaches it, then its code points to its count
             // (DESIGN 25.1, `interp.rs`'s `outside`)
             Ty::Str => {
-                if reached {
+                if reached && self.t != Target::Rust {
                     let test = Ex::Not(Box::new(self.kcall(&self.helper("isText", "is_text", "IsText"), vec![v.clone()])));
-                    out.push(Node::If(vec![(test, vec![Node::Line(self.ret(self.outside_flagged(what.clone(), "bad", None, "")))])], Vec::new()));
+                    out.push(Node::If(vec![(test, vec![Node::Line(self.ret_found(self.outside_flagged(what.clone(), "bad", None, "")))])], Vec::new()));
                 }
                 if let Some(c) = count {
                     let len = match self.t {
@@ -1570,7 +2194,7 @@ impl<'a> Gen<'a> {
                     }
                     if let Some(test) = tests.into_iter().reduce(|a, b| Ex::bin(Op::Or, a, b)) {
                         let shown = crate::value::range_text(c, &Ty::Num(NumTy::number()));
-                        out.push(Node::If(vec![(test, vec![Node::Line(self.ret(self.outside_flagged(what.clone(), "chars", Some(len.clone()), &shown)))])], Vec::new()));
+                        out.push(Node::If(vec![(test, vec![Node::Line(self.ret_found(self.outside_flagged(what.clone(), "chars", Some(len.clone()), &shown)))])], Vec::new()));
                     }
                 }
             }
@@ -1579,7 +2203,10 @@ impl<'a> Gen<'a> {
                 if !reached {
                     return out;
                 }
-                let at = |tag: &str| Ex::bin(Op::Add, what.clone(), self.string(&format!(".{tag}")));
+                let at = |tag: &str| match self.t {
+                    Target::Rust => self.rs_format(vec![Err(what.clone()), Ok(format!(".{tag}"))]),
+                    _ => Ex::bin(Op::Add, what.clone(), self.string(&format!(".{tag}"))),
+                };
                 match self.t {
                     Target::Go => {
                         let k = self.imp(Import::Kaname);
@@ -1594,6 +2221,21 @@ impl<'a> Gen<'a> {
                         }
                         if !cases.is_empty() {
                             out.push(Node::Switch(format!("switch {} := {}.(type)", x.print(self.t), v.print(self.t)), cases, Vec::new()));
+                        }
+                    }
+                    // Rust's lent `Result`: what it holds, by `if let`
+                    Target::Rust => {
+                        let x = Ex::atom(format!("r{depth}"));
+                        let mut arms = Vec::new();
+                        for (tag, ctor, inner) in [("ok", "Ok", &**a), ("err", "Err", &**er)] {
+                            let body = self.outside_body(&x, inner, None, None, at(tag), reach, depth + 1);
+                            if !body.is_empty() {
+                                let pat = if self.is_copy(inner) { format!("&{}", x.print(self.t)) } else { x.print(self.t) };
+                                arms.push((Ex::atom(format!("let {ctor}({pat}) = {}", v.print(self.t))), body));
+                            }
+                        }
+                        if !arms.is_empty() {
+                            out.push(Node::If(arms, Vec::new()));
                         }
                     }
                     _ => {
@@ -1631,7 +2273,7 @@ impl<'a> Gen<'a> {
                 {
                     let shown = self.shown(v, t);
                     let rt = crate::value::range_text(r, t);
-                    out.push(Node::If(vec![(test, vec![Node::Line(self.ret(self.outside_value(what.clone(), shown, self.string(&rt), None)))])], Vec::new()));
+                    out.push(Node::If(vec![(test, vec![Node::Line(self.ret_found(self.outside_value(what.clone(), shown, self.string(&rt), None)))])], Vec::new()));
                 }
                 if reached && self.record_checkable(t, depth, reach) {
                     let o = Ex::atom(format!("o{depth}"));
@@ -1647,7 +2289,7 @@ impl<'a> Gen<'a> {
                         (Ty::Record(id), None) => self.record_check_call(id, v.clone(), what, deep),
                         _ => return out,
                     };
-                    out.extend(self.if_found(&o, call, vec![Node::Line(self.ret(o.clone()))]));
+                    out.extend(self.if_found(&o, call, vec![Node::Line(self.ret_found(o.clone()))]));
                 }
             }
         }
@@ -1658,6 +2300,11 @@ impl<'a> Gen<'a> {
     /// is checked where it is there.
     fn elem_body(&self, el: &Ex, x: &Ty, range: Option<&Range>, path: Ex, reach: Reach, depth: usize) -> Vec<Node> {
         match x {
+            Ty::Opt(y) if self.t == Target::Rust => {
+                let inner = Ex::atom(format!("x{}", depth + 1));
+                let b = self.outside_body(&inner, y, range, None, path, reach, depth + 1);
+                if b.is_empty() { b } else { vec![Node::If(vec![(Ex::atom(format!("let Some({}) = {}", inner.print(self.t), el.print(self.t))), b)], Vec::new())] }
+            }
             Ty::Opt(y) => {
                 let deref = if self.t == Target::Go { Ex::Deref(Box::new(el.clone())) } else { el.clone() };
                 let b = self.outside_body(&deref, y, range, None, path, reach, depth + 1);
@@ -1681,7 +2328,57 @@ impl<'a> Gen<'a> {
             Target::Go => vec![Node::If(vec![(Ex::atom(format!("{} := {}; {} != nil", o.print(self.t), call.print(self.t), o.print(self.t))), then)], Vec::new())],
             Target::TypeScript => vec![Node::Line(format!("const {} = {};", o.print(self.t), call.print(self.t))), Node::If(vec![(Ex::bin(Op::Ne, o.clone(), self.null()), then)], Vec::new())],
             Target::Python => vec![Node::Line(format!("{} = {}", o.print(self.t), call.print(self.t))), Node::If(vec![(Ex::atom(format!("{} is not None", o.print(self.t))), then)], Vec::new())],
+            Target::Rust => vec![Node::If(vec![(Ex::atom(format!("let Some({}) = {}", o.print(self.t), call.print(self.t))), then)], Vec::new())],
         }
+    }
+
+    /// The path of a place as Rust's check passes it on (`what`, lent; a path made here, borrowed).
+    pub fn what_arg(&self, what: &Ex) -> Ex {
+        match what {
+            Ex::Atom(a) if a == "what" => what.clone(),
+            _ if self.t == Target::Rust => what.clone().borrow(),
+            _ => what.clone(),
+        }
+    }
+
+    /// `return o`, of what a check found: Rust's in `Some`.
+    pub fn ret_found(&self, e: Ex) -> String {
+        match self.t {
+            Target::Rust => self.ret(Ex::call("Some", vec![e])),
+            _ => self.ret(e),
+        }
+    }
+
+    /// Rust's `format!` of the parts (DESIGN 36.8): a text as it is, a name inside the braces (as clippy
+    /// asks), any other value by `{}`. A text alone is its literal.
+    pub fn rs_format(&self, parts: Vec<Result<String, Ex>>) -> Ex {
+        let mut fmt = String::new();
+        let mut plain = String::new();
+        let mut args = Vec::new();
+        let mut filled = false;
+        for p in parts {
+            match p {
+                Ok(s) => {
+                    fmt.push_str(&s.replace('{', "{{").replace('}', "}}"));
+                    plain.push_str(&s);
+                }
+                Err(Ex::Atom(a)) if plain_ident(&a) => {
+                    fmt.push_str(&format!("{{{a}}}"));
+                    filled = true;
+                }
+                Err(x) => {
+                    fmt.push_str("{}");
+                    args.push(x);
+                    filled = true;
+                }
+            }
+        }
+        if !filled {
+            return self.string(&plain);
+        }
+        let mut all = vec![Ex::Atom(ritsu_emit::lit::rust(&fmt))];
+        all.extend(args);
+        Ex::call("format!", all)
     }
 
     /// The check of a value of a generic record or sum with its type arguments (`Page[Invoice]`),
@@ -1697,7 +2394,7 @@ impl<'a> Gen<'a> {
                 let n = format!("_outside{}", self.outsides.borrow().len() + 1);
                 self.outsides.borrow_mut().push(Outside { key: key.clone(), name: n.clone(), body: Vec::new(), ty: String::new(), tparams: String::new() });
                 let body = self.inst_body(t, if deep { Reach::Entry } else { Reach::Call });
-                let ty = self.boundary(t);
+                let ty = if self.t == Target::Rust { self.lent_type(t, true) } else { self.boundary(t) };
                 if let Some(o) = self.outsides.borrow_mut().iter_mut().find(|o| o.key == key) {
                     o.body = body;
                     o.ty = ty;
@@ -1705,25 +2402,28 @@ impl<'a> Gen<'a> {
                 n
             }
         };
-        Ex::call(name, vec![v, what])
+        Ex::call(name, vec![v, self.what_arg(&what)])
     }
 
     /// The body of the check of a value `v` of a generic record or sum with its type arguments: each
     /// field, by the check of its place with the type arguments put in (`what.items`, `what.done.value`).
     fn inst_body(&self, t: &Ty, reach: Reach) -> Vec<Node> {
         let v = Ex::atom("v");
-        let field_checks = |x: &Ex, fields: &[(crate::ast::Name, Slot)], prefix: &str, n0: usize| -> Vec<Node> {
+        let field_checks = |x: &Ex, holder: &Ty, fields: &[(crate::ast::Name, Slot)], prefix: &str, n0: usize| -> Vec<Node> {
             let mut out = Vec::new();
             for (k, (f, slot)) in fields.iter().enumerate() {
                 let Some(fun) = self.outside_fn(slot, reach) else { continue };
-                let what = Ex::bin(Op::Add, Ex::atom("what"), self.string(&format!("{prefix}.{}", f.text)));
+                let what = self.field_path(&format!("{prefix}.{}", f.text));
                 let o = Ex::atom(format!("o{}", n0 + k + 1));
-                out.extend(self.if_found(&o, Ex::call(fun, vec![x.clone().dot(field_name(self.t, f.ascii())), what]), vec![Node::Line(self.ret(o.clone()))]));
+                out.extend(self.if_found(&o, Ex::call(fun, vec![self.lent_field(x, holder, f.ascii(), &slot.ty), what]), vec![Node::Line(self.ret_found(o.clone()))]));
             }
             out
         };
         match t {
-            Ty::Record(id) => field_checks(&v, &self.p.fields(id), "", 0),
+            Ty::Record(id) => {
+                let holder = t;
+                field_checks(&v, holder, &self.p.fields(id), "", 0)
+            }
             Ty::Enum(id) => {
                 let Owner::Module(file) = &id.owner else { return Vec::new() };
                 let mut arms: Vec<(String, Ex, Vec<Node>)> = Vec::new();
@@ -1731,12 +2431,14 @@ impl<'a> Gen<'a> {
                 for value in self.p.values(id).0.iter() {
                     let fields = self.p.value_fields(id, &value.text);
                     let r = RecId::Variant { file: file.clone(), name: id.name.clone(), value: value.text.clone(), args: id.args.clone() };
-                    let x = if self.t == Target::Go { Ex::atom("x") } else { v.clone() };
-                    let body = field_checks(&x, &fields, &format!(".{}", value.text), n0);
+                    let x = if matches!(self.t, Target::Go | Target::Rust) { Ex::atom("x") } else { v.clone() };
+                    let holder = Ty::Record(r.clone());
+                    let body = field_checks(&x, &holder, &fields, &format!(".{}", value.text), n0);
                     n0 += fields.len();
                     if !body.is_empty() {
                         let test = match self.t {
                             Target::TypeScript => Ex::bin(Op::Eq, v.clone().dot("kind"), self.string(&value.text)),
+                            Target::Rust => Ex::atom(format!("let {}(x) = v", self.variant_of(id, &value.text))),
                             _ => Ex::call("isinstance", vec![v.clone(), Ex::atom(self.record_type_bare(&r))]),
                         };
                         arms.push((self.record_type(&r), test, body));
@@ -1774,12 +2476,32 @@ impl<'a> Gen<'a> {
         // made first, so that the function of a type that holds itself can call itself
         self.nests.borrow_mut().push(Outside { key: key.clone(), name: name.clone(), body: Vec::new(), ty: String::new(), tparams });
         let body = self.nest_body(t);
-        let ty = self.boundary(t);
+        let ty = if self.t == Target::Rust { self.lent_type(t, true) } else { self.boundary(t) };
         if let Some(o) = self.nests.borrow_mut().iter_mut().find(|o| o.key == key) {
             o.body = body;
             o.ty = ty;
         }
         Some(name)
+    }
+
+    /// The path of a field of the value a check is given: `what + ".lines"`, Rust's borrowed
+    /// `&format!("{what}.lines")`.
+    pub fn field_path(&self, tail: &str) -> Ex {
+        match self.t {
+            Target::Rust => self.rs_format(vec![Err(Ex::atom("what")), Ok(tail.to_string())]).borrow(),
+            _ => Ex::bin(Op::Add, Ex::atom("what"), self.string(tail)),
+        }
+    }
+
+    /// A field of a value of `holder` as a check or a call takes it: Rust's lent (`&x.lines`,
+    /// `x.memo.as_deref()`), out of its box (`&*x.left`, `x.next.as_deref()`).
+    pub fn lent_field(&self, x: &Ex, holder: &Ty, alias: &str, ty: &Ty) -> Ex {
+        let f = x.clone().dot(field_name(self.t, alias));
+        if self.t != Target::Rust {
+            return f;
+        }
+        let (f, held) = self.unboxed(holder, ty, f, Held::Kept);
+        self.lent(&Val::held(f, ty.clone(), held))
     }
 
     /// `o = call`, and `then` where it found a value nested too deep.
@@ -1796,9 +2518,13 @@ impl<'a> Gen<'a> {
         let v = Ex::atom("v");
         let above = Ex::atom("above");
         let o = Ex::atom("o");
-        let back = |call: Ex| self.if_nested(&o, call, vec![Node::Line(self.ret(o.clone()))]);
+        let back = |call: Ex| self.if_nested(&o, call, vec![Node::Line(self.ret_found(o.clone()))]);
         let mut out = Vec::new();
         match t {
+            Ty::Opt(x) if self.t == Target::Rust => {
+                let Some(f) = self.nest_fn(x) else { return out };
+                out.push(Node::If(vec![(Ex::atom("let Some(x) = v"), back(Ex::call(f, vec![Ex::atom("x"), above])))], Vec::new()));
+            }
             Ty::Opt(x) => {
                 let Some(f) = self.nest_fn(x) else { return out };
                 let inner = if self.t == Target::Go { Ex::Deref(Box::new(v.clone())) } else { v.clone() };
@@ -1810,8 +2536,14 @@ impl<'a> Gen<'a> {
                     Target::TypeScript => "for (const e of v)".to_string(),
                     Target::Python => "for e in v".to_string(),
                     Target::Go => "for _, e := range v".to_string(),
+                    Target::Rust => "for e in v".to_string(),
                 };
                 out.push(Node::Block(head, back(Ex::call(f, vec![Ex::atom("e"), above])), Vec::new()));
+            }
+            // Rust's `BTreeMap` walks its values in the order of its keys
+            Ty::Dict(_, x) if self.t == Target::Rust => {
+                let Some(f) = self.nest_fn(x) else { return out };
+                out.push(Node::Block("for e in v.values()".to_string(), back(Ex::call(f, vec![Ex::atom("e"), above])), Vec::new()));
             }
             // a dict's values, in the order of its keys, as the interpreter holds its pairs
             Ty::Dict(k, x) => {
@@ -1820,11 +2552,13 @@ impl<'a> Gen<'a> {
                     Target::TypeScript => self.kcall("sortedKeys", vec![v.clone(), self.order_fn(k, false)]),
                     Target::Python => self.kcall("keys_of", vec![v.clone(), self.py_key_fn(k)]),
                     Target::Go => self.kcall("SortedKeys", vec![v.clone(), self.order_fn(k, false)]),
+                    Target::Rust => unreachable!("Rust walks a map's values above"),
                 };
                 let (head, value) = match self.t {
                     Target::TypeScript => (format!("for (const k of {})", keys.print(self.t)), Ex::atom(format!("v.get(k) as {}", self.boundary(x)))),
                     Target::Python => (format!("for k in {}", keys.print(self.t)), Ex::atom("v[k]")),
                     Target::Go => (format!("for _, k := range {}", keys.print(self.t)), Ex::atom("v[k]")),
+                    Target::Rust => unreachable!("Rust walks a map's values above"),
                 };
                 out.push(Node::Block(head, back(Ex::call(f, vec![value, above])), Vec::new()));
             }
@@ -1842,6 +2576,16 @@ impl<'a> Gen<'a> {
                             }
                         }
                         out.push(Node::Switch("switch r := v.(type)".into(), cases, Vec::new()));
+                    }
+                    Target::Rust => {
+                        let mut arms = Vec::new();
+                        if let Some(f) = fa {
+                            arms.push((Ex::atom("let Ok(r) = v"), back(Ex::call(f, vec![Ex::atom("r"), above.clone()]))));
+                        }
+                        if let Some(f) = fe {
+                            arms.push((Ex::atom("let Err(r) = v"), back(Ex::call(f, vec![Ex::atom("r"), above.clone()]))));
+                        }
+                        out.push(Node::If(arms, Vec::new()));
                     }
                     _ => {
                         let is = |ok: bool| match self.t {
@@ -1871,39 +2615,41 @@ impl<'a> Gen<'a> {
                         Target::TypeScript => "const here = above + 1;".to_string(),
                         Target::Python => "here = above + 1".to_string(),
                         Target::Go => "here := above + 1".to_string(),
+                        Target::Rust => "let here = above + 1;".to_string(),
                     };
                     out.push(Node::Line(decl));
-                    out.push(Node::If(vec![(Ex::bin(Op::Gt, Ex::atom("here"), Ex::atom(crate::interp::NESTED.to_string())), vec![Node::Line(self.ret(self.string(&name)))])], Vec::new()));
+                    out.push(Node::If(vec![(Ex::bin(Op::Gt, Ex::atom("here"), Ex::atom(crate::interp::NESTED.to_string())), vec![Node::Line(self.ret_found(self.string(&name)))])], Vec::new()));
                     Ex::atom("here")
                 } else {
                     above.clone()
                 };
                 // the fields that can hold such a value: each by its own function
-                let fields_of = |x: &Ex, fields: &[(crate::ast::Name, Slot)]| -> Vec<Node> {
+                let fields_of = |x: &Ex, holder: &Ty, fields: &[(crate::ast::Name, Slot)]| -> Vec<Node> {
                     let mut body = Vec::new();
                     for (k, (f, s)) in fields.iter().enumerate() {
                         if let Some(nf) = self.nest_fn(&s.ty) {
                             let o = Ex::atom(format!("o{}", k + 1));
-                            body.extend(self.if_nested(&o, Ex::call(nf, vec![x.clone().dot(field_name(self.t, f.ascii())), here.clone()]), vec![Node::Line(self.ret(o.clone()))]));
+                            body.extend(self.if_nested(&o, Ex::call(nf, vec![self.lent_field(x, holder, f.ascii(), &s.ty), here.clone()]), vec![Node::Line(self.ret_found(o.clone()))]));
                         }
                     }
                     body
                 };
                 match (t, Self::sum_of(t)) {
-                    (Ty::Record(id @ RecId::Module { .. }), _) => out.extend(fields_of(&v, &self.p.fields(id))),
-                    (Ty::Record(id @ RecId::Variant { .. }), _) => out.extend(fields_of(&v, &self.p.fields(id))),
+                    (Ty::Record(id @ RecId::Module { .. }), _) => out.extend(fields_of(&v, t, &self.p.fields(id))),
+                    (Ty::Record(id @ RecId::Variant { .. }), _) => out.extend(fields_of(&v, t, &self.p.fields(id))),
                     (Ty::Enum(_), Some(id)) => {
                         let Owner::Module(file) = &id.owner else { return out };
                         let mut arms: Vec<(String, Ex, Vec<Node>)> = Vec::new();
                         for value in self.p.values(&id).0.iter() {
                             let r = RecId::Variant { file: file.clone(), name: id.name.clone(), value: value.text.clone(), args: id.args.clone() };
-                            let x = if self.t == Target::Go { Ex::atom("x") } else { v.clone() };
-                            let body = fields_of(&x, &self.p.value_fields(&id, &value.text));
+                            let x = if matches!(self.t, Target::Go | Target::Rust) { Ex::atom("x") } else { v.clone() };
+                            let body = fields_of(&x, &Ty::Record(r.clone()), &self.p.value_fields(&id, &value.text));
                             if body.is_empty() {
                                 continue;
                             }
                             let test = match self.t {
                                 Target::TypeScript => Ex::bin(Op::Eq, v.clone().dot("kind"), self.string(&value.text)),
+                                Target::Rust => Ex::atom(format!("let {}(x) = v", self.variant_of(&id, &value.text))),
                                 _ => Ex::call("isinstance", vec![v.clone(), Ex::atom(self.record_type_bare(&r))]),
                             };
                             arms.push((self.record_type(&r), test, body));
@@ -1928,6 +2674,10 @@ impl<'a> Gen<'a> {
     pub fn fail_nested(&self, line: usize, fun: &str, param: &str, n: &Ex) -> Vec<Node> {
         let most = crate::interp::NESTED;
         let text = tr!("関数 `{fun}` の引数 `{param}` は、`{P}` の入れ子が {most} 段を超えています", "The argument `{param}` of `{fun}` nests `{P}` more than {most} deep");
+        if self.t == Target::Rust {
+            let msg = self.rs_format(template(&text, self.lang).into_iter().map(|p| p.map_err(|_| n.clone())).collect());
+            return vec![self.fail_line("input", line, msg)];
+        }
         let msg = template(&text, self.lang)
             .into_iter()
             .map(|p| match p {
@@ -1936,7 +2686,7 @@ impl<'a> Gen<'a> {
             })
             .reduce(|a, b| Ex::bin(Op::Add, a, b))
             .unwrap_or(self.string(""));
-        vec![Node::Line(self.stmt(self.kcall(&self.helper("fail", "fail", "Fail"), vec![self.string("input"), self.module_const(), Ex::atom(line.to_string()), msg])))]
+        vec![self.fail_line("input", line, msg)]
     }
 
     /// The check of a record of a module, reached from a parameter: `deep` the check of a host's
@@ -1948,6 +2698,8 @@ impl<'a> Gen<'a> {
         let (alias, private) = m.decls.records.iter().find(|r| r.name.text == *name).map(|r| (r.name.ascii().to_string(), r.private)).unwrap_or_default();
         match self.t {
             Target::Go => Ex::Call(Box::new(v.dot(if deep { "KanameEnter" } else { "KanameOutside" })), vec![what]),
+            // the method of the type, as Go's (DESIGN 36.5)
+            Target::Rust => v.method(if deep { "kaname_enter" } else { "kaname_outside" }, vec![self.what_arg(&what)]),
             _ => {
                 let f = format!("{}{}", if deep { "_enter_" } else { "_outside_" }, hidden(type_name(self.t, &alias), private));
                 let f = if *file == self.c.canon { f } else { format!("{}.{f}", self.imp(Import::Module(file.clone()))) };
@@ -1962,6 +2714,7 @@ impl<'a> Gen<'a> {
         let Owner::Module(file) = &id.owner else { return self.null() };
         match self.t {
             Target::Go => Ex::Call(Box::new(v.dot(if deep { "KanameEnter" } else { "KanameOutside" })), vec![what]),
+            Target::Rust => v.method(if deep { "kaname_enter" } else { "kaname_outside" }, vec![self.what_arg(&what)]),
             _ => {
                 let m = self.p.module(file);
                 let (alias, private) = m.decls.enums.iter().find(|e| e.name.text == id.name).map(|e| (e.name.ascii().to_string(), e.private)).unwrap_or_default();
@@ -1987,6 +2740,8 @@ impl<'a> Gen<'a> {
                     Ex::Record(format!("{k}.Outside"), vec![("Path".into(), path), ("Shown".into(), shown), ("Range".into(), range), ("Count".into(), count.map(|c| Ex::call("int", vec![c])).unwrap_or(Ex::atom("-1"))), (f.into(), Ex::atom("true"))]).print(self.t)
                 ))
             }
+            // a string of Rust's is well formed: only its count is outside
+            Target::Rust => Ex::call(format!("{k}::outside_chars"), vec![path, count.unwrap_or(Ex::atom("0")), range]),
         }
     }
 
@@ -2000,13 +2755,37 @@ impl<'a> Gen<'a> {
                 "&{}",
                 Ex::Record(format!("{k}.Outside"), vec![("Path".into(), path), ("Shown".into(), shown), ("Range".into(), range), ("Count".into(), count.map(|c| Ex::call("int", vec![c])).unwrap_or(Ex::atom("-1")))]).print(self.t)
             )),
+            Target::Rust => match count {
+                Some(c) => Ex::call(format!("{k}::outside_count"), vec![path, c, range]),
+                None => Ex::call(format!("{k}::outside"), vec![path, shown, range]),
+            },
         }
     }
 
     pub fn ret(&self, e: Ex) -> String {
         match self.t {
-            Target::TypeScript => format!("return {};", e.print(self.t)),
+            Target::TypeScript | Target::Rust => format!("return {};", e.print(self.t)),
             _ => format!("return {}", e.print(self.t)),
+        }
+    }
+
+    /// Rust: the return of the answer `e` of a function or a closure, in `Ok` where it can fail; an
+    /// answer that is itself the value of a call that can fail (`f(x)?`) is that call's `Result`
+    /// (clippy's `needless_question_mark`).
+    pub fn ret_rs(&self, e: Ex, fallible: bool) -> String {
+        match e {
+            Ex::Try(inner) if fallible => self.ret(*inner),
+            e if fallible => self.ret(Ex::call("Ok", vec![e])),
+            e => self.ret(e),
+        }
+    }
+
+    /// Rust: the walk of a list's elements by reference: an array where the list is written out
+    /// (clippy's `useless_vec`), else `x.iter()`.
+    pub fn iter_rs(&self, x: &Ex) -> String {
+        match x {
+            Ex::List(_, xs) if !xs.is_empty() => format!("[{}].iter()", xs.iter().map(|a| a.print(Target::Rust)).collect::<Vec<_>>().join(", ")),
+            _ => x.clone().method("iter", vec![]).print(Target::Rust),
         }
     }
 
@@ -2016,6 +2795,7 @@ impl<'a> Gen<'a> {
             Target::TypeScript => v.clone().dot("length"),
             Target::Python => Ex::call("len", vec![v.clone()]),
             Target::Go => Ex::call("len", vec![v.clone()]),
+            Target::Rust => v.clone().method("len", vec![]),
         }
     }
 
@@ -2026,7 +2806,7 @@ impl<'a> Gen<'a> {
     /// TypeScript (a string) and Go (a `Date` of any year, month and day); Python's date is one.
     fn range_test(&self, v: &Ex, t: &Ty, written: Option<&Range>, whole: &Range) -> Option<Ex> {
         match t {
-            Ty::Num(n) if !n.is_rate() && self.t == Target::Go => written.and_then(|r| self.out_of(v, t, r)),
+            Ty::Num(n) if !n.is_rate() && matches!(self.t, Target::Go | Target::Rust) => written.and_then(|r| self.out_of(v, t, r)),
             Ty::Num(_) => self.out_of(v, t, whole),
             Ty::Date => {
                 let compared = written.and_then(|r| self.out_of(v, t, r));
@@ -2034,6 +2814,7 @@ impl<'a> Gen<'a> {
                 let day = match self.t {
                     Target::TypeScript if open => Some(Ex::Not(Box::new(self.kcall("isDate", vec![v.clone()])))),
                     Target::Go if open => Some(Ex::Not(Box::new(Ex::Call(Box::new(v.clone().dot("Valid")), vec![])))),
+                    Target::Rust if open => Some(Ex::Not(Box::new(v.clone().method("valid", vec![])))),
                     _ => None,
                 };
                 match (day, compared) {
@@ -2060,8 +2841,15 @@ impl<'a> Gen<'a> {
                 };
                 let x = match self.t {
                     Target::Go if n.unit.type_name().is_some() && !n.is_rate() => Ex::call("int64", vec![v.clone()]),
+                    Target::Rust if n.unit.type_name().is_some() && !n.is_rate() => v.clone().dot("0"),
                     _ => v.clone(),
                 };
+                // Rust: a range of one value, as one comparison (clippy's `double_comparisons`)
+                if let (Target::Rust, Some(lo), Some(hi)) = (self.t, lo, hi)
+                    && lo == hi
+                {
+                    return Some(Ex::bin(Op::Ne, x, self.int(lo)));
+                }
                 if let Some(lo) = lo {
                     tests.push(Ex::bin(Op::Lt, x.clone(), self.int(lo)));
                 }
@@ -2072,10 +2860,11 @@ impl<'a> Gen<'a> {
             Ty::Date => {
                 let x = match self.t {
                     Target::Go => Ex::Call(Box::new(v.clone().dot("Days")), vec![]),
+                    Target::Rust => v.clone().method("days", vec![]),
                     _ => v.clone(),
                 };
                 let end = |d: Rat| match self.t {
-                    Target::Go => Ex::atom(d.num.to_string()),
+                    Target::Go | Target::Rust => self.int(d.num),
                     _ => self.date(d.num as i64),
                 };
                 if let Some(lo) = r.min {
@@ -2100,14 +2889,16 @@ impl<'a> Gen<'a> {
             Ty::Num(n) => {
                 let x = match self.t {
                     Target::Go => Ex::call("int64", vec![v.clone()]),
+                    Target::Rust if n.unit.type_name().is_some() => v.clone().dot("0"),
                     _ => v.clone(),
                 };
-                self.kcall(&self.helper("numText", "num_text", "IntText"), vec![if self.t == Target::Go { x } else { self.to_q_ex(x) }, self.string(&unit_suffix(&n.unit))])
+                self.kcall(&self.helper("numText", "num_text", "IntText"), vec![if matches!(self.t, Target::Go | Target::Rust) { x } else { self.to_q_ex(x) }, self.string(&unit_suffix(&n.unit))])
             }
             Ty::Date => match self.t {
                 Target::TypeScript => v.clone(),
                 Target::Python => self.kcall("date_text", vec![v.clone()]),
                 Target::Go => Ex::Call(Box::new(v.clone().dot("String")), vec![]),
+                Target::Rust => v.clone().method("to_string", vec![]),
             },
             _ => self.string(""),
         }
@@ -2118,7 +2909,7 @@ impl<'a> Gen<'a> {
         match self.t {
             Target::TypeScript => self.kcall("q", vec![x]),
             Target::Python => self.kcall("Q", vec![x]),
-            Target::Go => self.kcall("Of", vec![x]),
+            Target::Go | Target::Rust => self.kcall("Of", vec![x]),
         }
     }
 
@@ -2147,10 +2938,14 @@ impl<'a> Gen<'a> {
                 // the helper's, not `str`, which a parameter of the function a host calls may hide
                 (Target::Python, "count") => self.kcall("itoa", vec![x]),
                 (Target::Go, "count") => self.kcall("Itoa", vec![x]),
+                (Target::Rust, "count") => self.kcall("itoa", vec![x]),
                 _ => x,
             }
         };
         let build = |tmpl: &Text| -> Ex {
+            if self.t == Target::Rust {
+                return self.rs_format(template(tmpl, self.lang).into_iter().map(|p| p.map_err(&part)).collect());
+            }
             template(tmpl, self.lang).into_iter().map(|p| match p {
                 Ok(s) => self.string(&s),
                 Err(k) => part(k),
@@ -2158,17 +2953,18 @@ impl<'a> Gen<'a> {
             .reduce(|a, b| Ex::bin(Op::Add, a, b))
             .unwrap_or(self.string(""))
         };
-        let fail = |msg: Ex| -> Node { Node::Line(self.stmt(self.kcall(&self.helper("fail", "fail", "Fail"), vec![self.string(kind), self.module_const(), Ex::atom(line.to_string()), msg]))) };
+        let fail = |msg: Ex| -> Node { self.fail_line(kind, line, msg) };
         let is_count = match self.t {
             Target::TypeScript => Ex::bin(Op::Ne, o.clone().dot("count"), self.null()),
             Target::Python => Ex::atom(format!("{}.count is not None", o.print(self.t))),
             Target::Go => Ex::bin(Op::Ge, o.clone().dot("Count"), Ex::atom("0")),
+            Target::Rust => o.clone().dot("count").method("is_some", vec![]),
         };
         // a flag of a string's `Outside`: `chars`, `bad`
         let flagged = |f: &str| -> Ex {
             match self.t {
                 Target::TypeScript => Ex::bin(Op::Eq, o.clone().dot(f), Ex::atom("true")),
-                Target::Python => o.clone().dot(f),
+                Target::Python | Target::Rust => o.clone().dot(f),
                 Target::Go => o.clone().dot(if f == "bad" { "Bad" } else { "Chars" }),
             }
         };
@@ -2202,8 +2998,18 @@ impl<'a> Gen<'a> {
     /// An expression as a statement of the target.
     pub fn stmt(&self, e: Ex) -> String {
         match self.t {
-            Target::TypeScript => format!("{};", e.print(self.t)),
+            Target::TypeScript | Target::Rust => format!("{};", e.print(self.t)),
             _ => e.print(self.t),
+        }
+    }
+
+    /// The statement that fails with `kind` at `line` of the module and the message `msg`: a call of
+    /// the helper's `fail` (a throw, a raise, a panic), and Rust's return of the error (DESIGN 36.5).
+    pub fn fail_line(&self, kind: &str, line: usize, msg: Ex) -> Node {
+        let call = self.kcall(&self.helper("fail", "fail", "Fail"), vec![self.string(kind), self.module_const(), Ex::atom(line.to_string()), msg]);
+        match self.t {
+            Target::Rust => Node::Line(format!("return Err({});", call.print(self.t))),
+            _ => Node::Line(self.stmt(call)),
         }
     }
 
@@ -2256,6 +3062,8 @@ impl<'a> Gen<'a> {
             Target::TypeScript if self.ts_primitive(t) => Ex::bin(Op::Eq, a, b),
             Target::TypeScript => self.kcall("eq", vec![a, b]),
             Target::Go => self.go_eq(a, b, t, false),
+            // derived `PartialEq`, by value; the two sides held alike (`compare`, DESIGN 36.4)
+            Target::Rust => Ex::bin(Op::Eq, a, b),
         }
     }
 
@@ -2420,6 +3228,10 @@ impl<'a> Gen<'a> {
     /// record): below 0, 0 or above 0.
     pub fn order_fn(&self, t: &Ty, flight: bool) -> Ex {
         let k = self.imp(Import::Kaname);
+        // Rust: every type that can be a key orders by its `Ord`, the order of keys (DESIGN 36.3)
+        if self.t == Target::Rust {
+            return Ex::atom(format!("{}::cmp", self.std_type("Ord")));
+        }
         match (self.t, t) {
             (Target::TypeScript, Ty::Num(n)) if flight && rep(n) == Rep::Q => Ex::atom(format!("{k}.cmp")),
             (Target::TypeScript, Ty::Num(_)) => Ex::atom(format!("{k}.cmpInt")),
@@ -2452,6 +3264,9 @@ impl<'a> Gen<'a> {
     /// TypeScript's and Go's comparison of two values of `t`, as an expression: below 0, 0 or above 0.
     pub fn order_ex(&self, t: &Ty, a: Ex, b: Ex, flight: bool) -> Ex {
         let k = self.imp(Import::Kaname);
+        if self.t == Target::Rust {
+            return a.method("cmp", vec![b.borrow()]);
+        }
         match (self.t, t) {
             // a whole number: the comparison of the language's; the order of an enum, its places
             (Target::Go, Ty::Num(n)) if !(flight && rep(n) == Rep::Q) => Ex::call(format!("{k}.CmpInt"), vec![a, b]),
@@ -2538,6 +3353,7 @@ def {n}(r: {ty}) -> tuple[Any, ...]:
 {body}}}
 ")
             }
+            Target::Rust => unreachable!("Rust orders a record by its derived Ord"),
         };
         if let Some(x) = self.cmps.borrow_mut().iter_mut().find(|(k, _, _)| *k == key) {
             x.2 = def;
@@ -2564,6 +3380,7 @@ impl Gen<'_> {
                 Ex::atom(format!("(lambda r: ({},))", parts.join(", ")))
             }
             Target::Go => self.record_order_go(id, &ty, &fields),
+            Target::Rust => unreachable!("Rust orders a record by its derived Ord"),
         }
     }
 
@@ -2653,11 +3470,25 @@ pub struct Fx<'g, 'a> {
     /// The names in scope: the source's name, its value, and whether the code reads it.
     scope: Vec<(String, Val, Rc<Cell<bool>>)>,
     locals: Locals,
+    /// Rust: whether the function or the closure being written answers a `Result`, so that a call
+    /// that can fail carries the failure with `?` (DESIGN 36.4).
+    tries: bool,
+    /// Rust: the function type, as the callee declares it (its type parameters not put in), of the
+    /// parameter each lambda given as an argument goes to, by the lambda's expression: the closure
+    /// takes its parameters as `&dyn Fn` of that type does (`&T` for `T`, DESIGN 36.4).
+    fn_place: std::collections::HashMap<usize, Ty>,
 }
 
 impl<'g, 'a> Fx<'g, 'a> {
     pub fn new(g: &'g Gen<'a>, f: usize) -> Fx<'g, 'a> {
-        Fx { g, f, out: Vec::new(), scope: Vec::new(), locals: Locals::default() }
+        Fx { g, f, out: Vec::new(), scope: Vec::new(), locals: Locals::default(), tries: rs_fails(&g.c, f), fn_place: std::collections::HashMap::new() }
+    }
+
+    /// Rust: the call `call` of what answers a `Result` (DESIGN 36.4): with `?` where the code being
+    /// written answers one; else the analysis showed the call does not fail (a function given only
+    /// functions that are `total`), and an error it answered anyway is a panic.
+    fn carried(&self, call: Ex) -> Ex {
+        if self.tries { call.tried() } else { call.method("unwrap_or_else", vec![Ex::atom("|e| panic!(\"{e}\")")]) }
     }
 
     fn t(&self) -> Target {
@@ -2704,6 +3535,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("const {name}: {ty} = {};", value.print(t)),
             Target::Python => format!("{name}: {ty} = {}", value.print(t)),
             Target::Go => format!("var {name} {ty} = {}", value.print(t)),
+            Target::Rust => format!("let {name}: {ty} = {};", value.print(t)),
         };
         self.emit(Node::Line(line));
     }
@@ -2715,14 +3547,26 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("let {name}: {ty};"),
             Target::Python => format!("{name}: {ty}"),
             Target::Go => format!("var {name} {ty}"),
+            Target::Rust => format!("let {name}: {ty};"),
         };
         self.emit(Node::Line(line));
     }
 
     fn assign_line(&self, name: &str, value: Ex) -> Node {
         let t = self.t();
+        if t == Target::Rust
+            && let Ex::Bin(op @ (Op::Add | Op::Sub | Op::Mul), a, b) = &value
+            && matches!(&**a, Ex::Atom(x) if x == name)
+        {
+            let o = match op {
+                Op::Add => "+=",
+                Op::Sub => "-=",
+                _ => "*=",
+            };
+            return Node::Line(format!("{name} {o} {};", b.print(t)));
+        }
         Node::Line(match t {
-            Target::TypeScript => format!("{name} = {};", value.print(t)),
+            Target::TypeScript | Target::Rust => format!("{name} = {};", value.print(t)),
             _ => format!("{name} = {}", value.print(t)),
         })
     }
@@ -2730,12 +3574,23 @@ impl<'g, 'a> Fx<'g, 'a> {
     /// A value made a name, where it is read more than once or later code must not evaluate it again.
     fn spill(&mut self, v: Val) -> Val {
         if v.ex.is_simple() {
+            // Rust: a name made is read again as the place it is
+            if self.t() == Target::Rust && v.held == Held::Made && !self.g.is_copy(&v.ty) && !self.g.absent(&v.ex) {
+                return Val { held: Held::Kept, ..v };
+            }
             return v;
         }
         let n = self.temp();
+        // Rust: a value made is kept in the name; a place or what is lent, lent to it (DESIGN 36.4)
+        if self.t() == Target::Rust && v.held != Held::Made && !self.g.is_copy(&v.ty) {
+            let ty = self.g.lent_type(&v.ty, false);
+            let ex = self.g.lent(&v);
+            self.bind(&n, &ty, ex);
+            return Val { ex: Ex::atom(n), ty: v.ty, present: v.present, held: Held::Lent };
+        }
         let ty = self.g.flight(&v.ty);
         self.bind(&n, &ty, v.ex);
-        Val { ex: Ex::atom(n), ty: v.ty, present: v.present }
+        Val { ex: Ex::atom(n), ty: v.ty, present: v.present, held: Held::Kept }
     }
 
     /// The statements `f` writes, apart: what it returns, and them.
@@ -2814,7 +3669,11 @@ impl<'g, 'a> Fx<'g, 'a> {
         match (&from, to) {
             (Ty::Opt(f), Ty::Opt(t)) => {
                 if self.adapt_is_identity(f, t) {
-                    return Val::new(v.ex, to.clone());
+                    return Val { held: v.held, ..Val::new(v.ex, to.clone()) };
+                }
+                if self.t() == Target::Rust {
+                    let v = self.spill(v);
+                    return self.opt_map_rs(&v, f, to, |s, x| s.adapt(x, t, at));
                 }
                 let v = self.spill(v);
                 let inner = match self.t() {
@@ -2828,12 +3687,13 @@ impl<'g, 'a> Fx<'g, 'a> {
                 // a value that may be absent, read where one is there: only a branch that has split it
                 let inner = match self.t() {
                     Target::Go => Ex::Deref(Box::new(v.ex)),
+                    Target::Rust => v.ex.method("unwrap", vec![]),
                     _ => v.ex,
                 };
                 self.adapt(Val::new(inner, (**f).clone()), t, at)
             }
             (f, Ty::Opt(t)) => {
-                let x = self.adapt(Val::new(v.ex, f.clone()), t, at);
+                let x = self.adapt(Val { held: v.held, ..Val::new(v.ex, f.clone()) }, t, at);
                 match self.t() {
                     // a whole number written out is Go's untyped constant: `kaname.Some(int64(2))`
                     Target::Go => {
@@ -2847,18 +3707,35 @@ impl<'g, 'a> Fx<'g, 'a> {
                         };
                         Val::new(self.g.kcall(&some, vec![inner]), to.clone())
                     }
-                    _ => Val { ex: x.ex, ty: to.clone(), present: true },
+                    // Rust: `Some`, lending what is not made here (`Some(x.as_str())`, DESIGN 36.4)
+                    Target::Rust => {
+                        if self.g.is_copy(t) || x.held == Held::Made {
+                            Val::new(Ex::call("Some", vec![x.ex]), to.clone())
+                        } else {
+                            Val::held(Ex::call("Some", vec![self.g.lent(&x)]), to.clone(), Held::Lent)
+                        }
+                    }
+                    _ => Val { ex: x.ex, ty: to.clone(), present: true, held: x.held },
                 }
             }
             (Ty::Num(a), Ty::Num(b)) => {
                 let konst = a.konst;
                 Val::new(self.convert(v.ex, a, b, at, konst), to.clone())
             }
+            // Rust: a value of one of a sum's values, as the sum (`Order::Placed(x)`)
+            (Ty::Record(RecId::Variant { value, .. }), Ty::Enum(id)) if self.t() == Target::Rust && self.g.p.is_sum(id) => {
+                let w = self.g.variant_of(id, value);
+                Val::new(Ex::call(w, vec![self.g.owned(&v)]), to.clone())
+            }
             (Ty::List(a), Ty::List(b)) => {
                 if self.adapt_is_identity(a, b) {
-                    return Val::new(v.ex, to.clone());
+                    return Val { held: v.held, ..Val::new(v.ex, to.clone()) };
                 }
                 let v = self.spill(v);
+                if self.t() == Target::Rust {
+                    let to_el = self.g.flight(b);
+                    return self.list_map_rs(&v, a, &to_el, to, |s, x| s.adapt(x, b, at));
+                }
                 let el = self.temp();
                 let x = self.adapt(Val::new(Ex::atom(el.clone()), (**a).clone()), b, at);
                 Val::new(self.list_map(v.ex, &el, &self.g.flight(a), x.ex, &self.g.flight(b)), to.clone())
@@ -2867,25 +3744,25 @@ impl<'g, 'a> Fx<'g, 'a> {
             // travel otherwise (a rate on another step), each is read anew
             (Ty::Dict(ak, av), Ty::Dict(bk, bv)) => {
                 if self.same_rep(ak, bk) && self.same_rep(av, bv) {
-                    return Val::new(v.ex, to.clone());
+                    return Val { held: v.held, ..Val::new(v.ex, to.clone()) };
                 }
                 let v = self.spill(v);
                 let (k, x) = (self.temp(), self.temp());
                 let (kx, mut body) = self.apart(|s| s.reread(Ex::atom(k.clone()), ak, bk, at));
                 let (vx, more) = self.apart(|s| s.reread(Ex::atom(x.clone()), av, bv, at));
                 body.extend(more);
-                self.rebuilt(v.ex, Some((k, kx)), (x, vx), body, to)
+                self.rebuilt(v.ex, &from, Some((k, kx)), (x, vx), body, to)
             }
             (Ty::Set(a), Ty::Set(b)) => {
                 if self.same_rep(a, b) {
-                    return Val::new(v.ex, to.clone());
+                    return Val { held: v.held, ..Val::new(v.ex, to.clone()) };
                 }
                 let v = self.spill(v);
                 let x = self.temp();
                 let (xx, body) = self.apart(|s| s.reread(Ex::atom(x.clone()), a, b, at));
-                self.rebuilt(v.ex, None, (x, xx), body, to)
+                self.rebuilt(v.ex, &from, None, (x, xx), body, to)
             }
-            _ => Val::new(v.ex, to.clone()),
+            _ => Val { held: v.held, ..Val::new(v.ex, to.clone()) },
         }
     }
 
@@ -2908,7 +3785,7 @@ impl<'g, 'a> Fx<'g, 'a> {
     }
 
     /// A dict (with `key`) or a set, each pair or member read anew: the loop that makes it.
-    fn rebuilt(&mut self, src: Ex, key: Option<(String, Ex)>, val: (String, Ex), mut body: Vec<Node>, to: &Ty) -> Val {
+    fn rebuilt(&mut self, src: Ex, from: &Ty, key: Option<(String, Ex)>, val: (String, Ex), mut body: Vec<Node>, to: &Ty) -> Val {
         let t = self.t();
         let out = self.temp();
         let (x, vx) = val;
@@ -2930,6 +3807,14 @@ impl<'g, 'a> Fx<'g, 'a> {
                         self.emit(Node::Line(format!("var {out} = map[{kb}]{vb}{{}}")));
                         body.push(Node::Line(format!("{out}[{}] = {}", kx.print(t), vx.print(t))));
                         format!("for {k}, {x} := range {}", src.print(t))
+                    }
+                    Target::Rust => {
+                        let (map, (ak, av)) = (self.g.dict_type(kb, vb), dict_tys(from));
+                        self.emit(Node::Line(format!("let mut {out}: {map} = {}::new();", self.g.std_type("BTreeMap"))));
+                        body.push(Node::Line(format!("{out}.insert({}, {});", kx.print(t), vx.print(t))));
+                        let pk = if self.g.is_copy(&ak) { format!("&{k}") } else { k.clone() };
+                        let px = if self.g.is_copy(&av) { format!("&{x}") } else { x.clone() };
+                        format!("for ({pk}, {px}) in {}.iter()", src.print(t))
                     }
                 }
             }
@@ -2953,6 +3838,17 @@ impl<'g, 'a> Fx<'g, 'a> {
                         self.emit(Node::Line(format!("var {out} = map[{xb}]struct{{}}{{}}")));
                         body.push(Node::Line(format!("{out}[{}] = struct{{}}{{}}", vx.print(t))));
                         format!("for {x} := range {}", src.print(t))
+                    }
+                    Target::Rust => {
+                        let set = self.g.set_type(xb.clone());
+                        self.emit(Node::Line(format!("let mut {out}: {set} = {}::new();", self.g.std_type("BTreeSet"))));
+                        body.push(Node::Line(format!("{out}.insert({});", vx.print(t))));
+                        let from_el = match from {
+                            Ty::Set(a) => (**a).clone(),
+                            _ => Ty::Error,
+                        };
+                        let px = if self.g.is_copy(&from_el) { format!("&{x}") } else { x.clone() };
+                        format!("for {px} in {}.iter()", src.print(t))
                     }
                 }
             }
@@ -2988,6 +3884,51 @@ impl<'g, 'a> Fx<'g, 'a> {
         }
     }
 
+    /// Rust: a value that may be absent (`v`, of `T?` with `T` the type `inner`), mapped where it is
+    /// there by `f` (given the value inside, as Rust holds it): `x.map(|y| …)` where the mapping
+    /// writes no statement and cannot fail, else a `match` that gives a name the answer.
+    fn opt_map_rs(&mut self, v: &Val, inner: &Ty, to: &Ty, f: impl FnOnce(&mut Self, Val) -> Val) -> Val {
+        let y = self.temp();
+        let copy = self.g.is_copy(inner);
+        let src = if copy { v.ex.clone() } else { self.g.lent(v) };
+        let held = if copy { Held::Made } else { Held::Lent };
+        let (m, body) = self.apart(|s| f(s, Val::held(Ex::atom(y.clone()), inner.clone(), held)));
+        let mapped = self.g.owned(&m);
+        if body.is_empty() && !mapped.tries() {
+            // a function of the value alone is given as it is (`.map(units::USDc)`, clippy's
+            // `redundant_closure`)
+            let f = match &mapped {
+                Ex::Call(f, xs) if matches!(&**f, Ex::Atom(_)) && matches!(xs.as_slice(), [Ex::Atom(a)] if *a == y) => f.print(Target::Rust),
+                _ => format!("|{y}| {}", mapped.print(Target::Rust)),
+            };
+            let ex = src.method("map", vec![Ex::atom(f)]);
+            return Val::new(ex, to.clone());
+        }
+        let n = self.temp();
+        let ty = self.g.flight(to);
+        self.declare(&n, &ty);
+        let mut some = body;
+        some.push(self.assign_line(&n, Ex::call("Some", vec![mapped])));
+        let none = vec![self.assign_line(&n, Ex::atom("None"))];
+        self.emit(Node::Switch(format!("match {}", src.print(Target::Rust)), vec![(format!("Some({y})"), some), ("None".to_string(), none)], Vec::new()));
+        Val::held(Ex::atom(n), to.clone(), Held::Kept)
+    }
+
+    /// Rust: a list (`v`, of elements of `el`) with each element mapped by `f` into a new list of
+    /// `to_el`: a loop that pushes each, the element given by value where it is `Copy`.
+    fn list_map_rs(&mut self, v: &Val, el: &Ty, to_el: &str, to: &Ty, f: impl FnOnce(&mut Self, Val) -> Val) -> Val {
+        let y = self.temp();
+        let copy = self.g.is_copy(el);
+        let held = if copy { Held::Made } else { Held::Ref };
+        let (m, mut body) = self.apart(|s| f(s, Val::held(Ex::atom(y.clone()), el.clone(), held)));
+        let n = self.temp();
+        self.emit(Node::Line(format!("let mut {n}: Vec<{to_el}> = Vec::with_capacity({});", v.ex.clone().method("len", vec![]).print(Target::Rust))));
+        body.push(self.push(&n, self.g.owned(&m)));
+        let pat = if copy { format!("&{y}") } else { y };
+        self.emit(Node::Block(format!("for {pat} in {}", v.ex.clone().method("iter", vec![]).print(Target::Rust)), body, Vec::new()));
+        Val::held(Ex::atom(n), to.clone(), Held::Kept)
+    }
+
     /// `x` of a value that may be absent, mapped where it is there.
     fn opt_map(&mut self, v: Ex, mapped: Ex, to: &Ty) -> Val {
         match self.t() {
@@ -3001,6 +3942,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 self.emit(Node::If(vec![(Ex::bin(Op::Ne, v, self.g.null()), then)], Vec::new()));
                 Val::new(Ex::atom(n), to.clone())
             }
+            Target::Rust => unreachable!("Rust maps an optional with opt_map_rs"),
         }
     }
 
@@ -3017,6 +3959,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 self.emit(Node::Block(format!("for _, {el} := range {}", xs.print(t)), vec![push], Vec::new()));
                 Ex::atom(n)
             }
+            Target::Rust => unreachable!("Rust maps a list with list_map_rs"),
         }
     }
 
@@ -3072,7 +4015,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let g = self.g;
         match (check, self.t()) {
             (None, _) => Ex::bin(op, a, b),
-            (Some(at), Target::Go) => {
+            (Some(at), Target::Go | Target::Rust) => {
                 let f = match op {
                     Op::Add => "Add",
                     Op::Sub => "Sub",
@@ -3080,7 +4023,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                 };
                 let mut args = vec![a, b];
                 args.extend(g.at_args(at));
-                g.kcall(f, args)
+                let call = g.kcall(f, args);
+                if self.t() == Target::Rust { call.tried() } else { call }
             }
             (Some(at), _) => {
                 let mut args = vec![Ex::bin(op, a, b)];
@@ -3114,7 +4058,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Some(at) => {
                 let mut args = vec![raw];
                 args.extend(g.at_args(at));
-                g.kcall(&g.helper("held", "held", "Held"), args)
+                g.held_call(args)
             }
         }
     }
@@ -3136,12 +4080,20 @@ impl<'g, 'a> Fx<'g, 'a> {
                 {
                     // a literal past int64: the interpreter fails when it reads it
                     let mut args = vec![self.g.string("overflow"), self.g.module_const(), Ex::atom(at.line.to_string()), self.g.string(&at.message)];
-                    let fail = self.g.kcall(&self.g.helper("fail", "fail", "Fail"), std::mem::take(&mut args));
-                    self.emit(Node::Line(self.g.stmt(fail)));
+                    if self.t() == Target::Rust {
+                        // Rust: the error returned with `?`, so that the code after it is not unreachable
+                        let fail = self.g.kcall("fails", std::mem::take(&mut args));
+                        self.emit(Node::Line(format!("{};", fail.tried().print(Target::Rust))));
+                    } else {
+                        let fail = self.g.kcall(&self.g.helper("fail", "fail", "Fail"), std::mem::take(&mut args));
+                        self.emit(Node::Line(self.g.stmt(fail)));
+                    }
                 }
                 Val::new(ex, ty)
             }
             ExprKind::Date(d) => Val::new(self.g.date(*d), ty),
+            // Rust: a literal is a `&'static str`, lent
+            ExprKind::Str(s) if self.t() == Target::Rust => Val::held(self.g.string(s), ty, Held::Lent),
             ExprKind::Str(s) => Val::new(self.g.string(s), ty),
             ExprKind::Bool(b) => Val::new(self.g.boolean(*b), ty),
             ExprKind::None => Val::new(self.g.null(), ty),
@@ -3176,7 +4128,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let mut items = Vec::new();
                 for (i, (v, stmts)) in parts.into_iter().enumerate() {
                     self.out.extend(stmts);
-                    items.push(if later[i] { self.spill(v).ex } else { v.ex });
+                    let v = if later[i] { self.spill(v) } else { v };
+                    items.push(self.g.owned(&v));
                 }
                 let lt = match self.t() {
                     Target::Go => format!("[]{}", self.g.flight(&elem)),
@@ -3196,6 +4149,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                             args.extend(self.g.at_args(&at));
                             self.g.kcall("Neg", args)
                         }
+                        (Some(at), Target::Rust) => {
+                            let mut args = vec![v.ex];
+                            args.extend(self.g.at_args(&at));
+                            self.g.kcall("Neg", args).tried()
+                        }
                         (Some(at), _) => {
                             let mut args = vec![Ex::Neg(Box::new(v.ex))];
                             args.extend(self.g.at_args(&at));
@@ -3212,7 +4170,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Some(at) => {
                                 let mut args = vec![raw];
                                 args.extend(self.g.at_args(&at));
-                                self.g.kcall(&self.g.helper("held", "held", "Held"), args)
+                                self.g.held_call(args)
                             }
                         }
                     }
@@ -3248,6 +4206,10 @@ impl<'g, 'a> Fx<'g, 'a> {
         let name = self.temp();
         let names: Vec<String> = ps.iter().map(|(p, _)| self.local(p)).collect();
         let mark = self.scope.len();
+        if t == Target::Rust {
+            let decl = self.fn_place.get(&e.id).cloned();
+            return self.closure_rs(&ty, decl.as_ref(), ps, &names, &pts, &rt, body, name, mark);
+        }
         let (answer, mut stmts) = self.apart(|s| {
             for (((p, _), n), pt) in ps.iter().zip(&names).zip(&pts) {
                 let v = s.from_boundary(Ex::atom(n.clone()), pt, pt);
@@ -3266,9 +4228,69 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("const {name} = ({}): {ret} =>", sig.iter().map(|(n, ty)| format!("{n}: {ty}")).collect::<Vec<_>>().join(", ")),
             Target::Python => format!("def {name}({}) -> {ret}", sig.iter().map(|(n, ty)| format!("{n}: {ty}")).collect::<Vec<_>>().join(", ")),
             Target::Go => format!("{name} := func({}) {ret}", sig.iter().map(|(n, ty)| format!("{n} {ty}")).collect::<Vec<_>>().join(", ")),
+            Target::Rust => unreachable!("Rust's closure is written by closure_rs"),
         };
         self.emit(Node::Block(head, stmts, Vec::new()));
         Val::new(Ex::atom(name), ty)
+    }
+
+    /// Rust: a lambda made a value (DESIGN 36.4): a closure that takes its parameters as a function
+    /// takes them (lent where they are not `Copy`) and answers as they travel, in a `Result` unless
+    /// its type is `total`; the name is a reference to it, which a parameter `&dyn Fn` takes.
+    #[allow(clippy::too_many_arguments)]
+    fn closure_rs(&mut self, ty: &Ty, decl: Option<&Ty>, ps: &[(String, Span)], names: &[String], pts: &[Ty], rt: &Ty, body: &Expr, name: String, mark: usize) -> Val {
+        // the type of the parameter it is given to says what it answers and how it takes its
+        // parameters: `total` answers the value; a type parameter is taken as `&T`, a `Copy` one
+        // read by its pattern (`&x: &i64`)
+        let total = match decl {
+            Some(Ty::Fn(_, _, eff)) => matches!(eff, Some(e) if e.fails.is_empty()),
+            _ => matches!(ty, Ty::Fn(_, _, Some(e)) if e.fails.is_empty()),
+        };
+        let by_ref: Vec<bool> = match decl {
+            Some(Ty::Fn(dps, _, _)) => (0..pts.len()).map(|i| matches!(dps.get(i), Some(Ty::Param(_)))).collect(),
+            _ => vec![false; pts.len()],
+        };
+        let used: Vec<Rc<Cell<bool>>> = names.iter().map(|_| Rc::new(Cell::new(false))).collect();
+        let outer = std::mem::replace(&mut self.tries, !total);
+        let (answer, mut stmts) = self.apart(|s| {
+            for (((((p, _), n), pt), u), r) in ps.iter().zip(names).zip(pts).zip(&used).zip(&by_ref) {
+                let held = match (s.g.is_copy(pt), r) {
+                    (true, _) => Held::Made,
+                    (false, true) => Held::Ref,
+                    (false, false) => Held::Lent,
+                };
+                let v = s.from_boundary_as(Ex::atom(n.clone()), pt, pt, held);
+                let v = if v.ex.is_simple() { v } else { s.spill(v) };
+                s.scope.push((p.clone(), v, u.clone()));
+            }
+            let v = s.expr(body);
+            let v = s.adapt(v, rt, body);
+            s.to_boundary(v, rt)
+        });
+        self.tries = outer;
+        self.scope.truncate(mark);
+        stmts.push(Node::Line(self.g.ret_rs(answer, !total)));
+        let k = self.g.imp(Import::Kaname);
+        let rb = self.g.boundary(rt);
+        let ret = if total { rb } else { format!("{}<{rb}, {k}::KanameError>", self.g.std_type("Result")) };
+        let sig: Vec<String> = names
+            .iter()
+            .zip(pts)
+            .zip(&used)
+            .zip(&by_ref)
+            .map(|(((n, p), u), r)| {
+                let pat = match (u.get(), *r && self.g.is_copy(p)) {
+                    (false, _) => "_".to_string(),
+                    (true, true) => format!("&{n}"),
+                    (true, false) => n.clone(),
+                };
+                let ty = if *r { format!("&{}", self.g.boundary(p)) } else { self.g.param_rust(p) };
+                format!("{pat}: {ty}")
+            })
+            .collect();
+        let stmts = super::ex::tail(stmts);
+        self.emit(Node::Block(format!("let {name} = &|{}| -> {ret}", sig.join(", ")), stmts, Vec::new()));
+        Val::new(Ex::atom(name), ty.clone())
     }
 
     /// A function value called (DESIGN 27.6): what it is, its arguments from the left, each read in its
@@ -3283,9 +4305,11 @@ impl<'g, 'a> Fx<'g, 'a> {
         let mut xs = Vec::new();
         for ((v, a), pt) in vals.zip(args).zip(pts.iter()) {
             let v = self.adapt(v, pt, a.expr());
-            xs.push(self.to_boundary(v, pt));
+            xs.push(if self.t() == Target::Rust { self.arg_rs(v, pt) } else { self.to_boundary(v, pt) });
         }
         let raw = Ex::Call(Box::new(f.ex), xs);
+        let total = matches!(self.ty(callee), Ty::Fn(_, _, Some(ref e)) if e.fails.is_empty());
+        let raw = if self.t() == Target::Rust && !total { self.carried(raw) } else { raw };
         let raw = self.spill_as(raw, &self.g.boundary(&rt));
         let v = self.from_boundary(raw, &rt, &ty);
         Val::new(v.ex, ty)
@@ -3306,7 +4330,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let fields = self.g.p.fields(&id);
                 let Some((f, slot)) = fields.iter().find(|(f, _)| f.text == name) else { return Val::new(self.g.null(), ty.clone()) };
                 let raw = b.ex.dot(field_name(self.t(), f.ascii()));
-                self.from_boundary(raw, &slot.ty, ty)
+                // Rust: a field of a value made here is made; of a place, a place (DESIGN 36.4); out of
+                // its box (DESIGN 36.2)
+                let held = if b.held == Held::Made { Held::Made } else { Held::Kept };
+                let (raw, held) = self.g.unboxed(&Ty::Record(id.clone()), &slot.ty, raw, held);
+                self.from_boundary_as(raw, &slot.ty, ty, held)
             }
             RecId::Outputs(file) => {
                 let Some(facts) = self.g.p.rules.get(file).cloned() else { return Val::new(self.g.null(), ty.clone()) };
@@ -3318,7 +4346,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let alias = call.outputs.iter().find(|p| p.name == name).map(|p| p.alias.clone()).unwrap_or_else(|| col.alias.clone());
                     b.ex.dot(alias)
                 };
-                self.rule_out(raw, &col.ty, ty)
+                let mut v = self.rule_out(raw, &col.ty, ty);
+                if self.t() == Target::Rust && b.held != Held::Made && v.held == Held::Made && !self.g.is_copy(ty) {
+                    v.held = Held::Kept;
+                }
+                v
             }
             RecId::Element(file, seq) => {
                 let Some(facts) = self.g.p.rules.get(file).cloned() else { return Val::new(self.g.null(), ty.clone()) };
@@ -3326,6 +4358,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let Some(col) = cols.iter().find(|c| c.name == name) else { return Val::new(self.g.null(), ty.clone()) };
                 let alias = match self.t() {
                     Target::Go => ritsu_emit::ident::pascal(&col.alias),
+                    Target::Rust => ritsu_emit::ident::rust_name(&col.alias),
                     _ => col.alias.clone(),
                 };
                 self.rule_out(b.ex.dot(alias), &col.ty, ty)
@@ -3339,7 +4372,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                     }
                     _ => name.to_string(),
                 };
-                self.from_boundary(b.ex.dot(f), &slot_ty, ty)
+                let held = if b.held == Held::Made { Held::Made } else { Held::Kept };
+                self.from_boundary_as(b.ex.dot(f), &slot_ty, ty, held)
             }
             RecId::Running(item, w) => {
                 let (fname, slot_ty) = match name {
@@ -3353,7 +4387,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                     }
                     _ => fname.to_string(),
                 };
-                self.from_boundary(b.ex.dot(f), &slot_ty, ty)
+                let held = if b.held == Held::Made { Held::Made } else { Held::Kept };
+                self.from_boundary_as(b.ex.dot(f), &slot_ty, ty, held)
             }
         }
     }
@@ -3361,6 +4396,12 @@ impl<'g, 'a> Fx<'g, 'a> {
     /// A value as it travels (in a record, given to a function, answered by one), as it is worked
     /// on: an amount as a plain number, a rate as the fraction it is.
     pub fn from_boundary(&mut self, x: Ex, slot: &Ty, ty: &Ty) -> Val {
+        self.from_boundary_as(x, slot, ty, Held::Kept)
+    }
+
+    /// [`Fx::from_boundary`] of a value Rust's code holds as `held` (a place, by default): what is
+    /// read as it is keeps it; what is read anew is made.
+    pub fn from_boundary_as(&mut self, x: Ex, slot: &Ty, ty: &Ty, held: Held) -> Val {
         let t = self.t();
         match slot {
             Ty::Num(n) if n.is_rate() => {
@@ -3370,9 +4411,28 @@ impl<'g, 'a> Fx<'g, 'a> {
                 Val::new(self.rep_to(q, Rep::Q, r), ty.clone())
             }
             Ty::Num(n) => {
-                let ex = if t == Target::Go && n.unit.type_name().is_some() { Ex::call("int64", vec![x]) } else { x };
+                let ex = match t {
+                    Target::Go if n.unit.type_name().is_some() => Ex::call("int64", vec![x]),
+                    // the package's type of the unit, `units::USDc(pub i64)`
+                    Target::Rust if n.unit.type_name().is_some() => x.dot("0"),
+                    _ => x,
+                };
                 let r = rep(ty.num().unwrap_or(n));
                 Val::new(self.rep_to(ex, Rep::Int, r), ty.clone())
+            }
+            Ty::Opt(s) | Ty::List(s) if !self.g.same_in(slot) && t == Target::Rust => {
+                let inner_ty = match ty {
+                    Ty::Opt(x) | Ty::List(x) => (**x).clone(),
+                    x => x.clone(),
+                };
+                let v = self.spill(Val::held(x, slot.clone(), held));
+                let s = (**s).clone();
+                if matches!(slot, Ty::List(_)) {
+                    let to_el = self.g.flight(&inner_ty);
+                    self.list_map_rs(&v, &s, &to_el, ty, |f, el| f.from_boundary_as(el.ex.clone(), &s, &inner_ty, el.held))
+                } else {
+                    self.opt_map_rs(&v, &s, ty, |f, el| f.from_boundary_as(el.ex.clone(), &s, &inner_ty, el.held))
+                }
             }
             Ty::Opt(s) | Ty::List(s) if !self.g.same_in(slot) => {
                 let inner_ty = match ty {
@@ -3406,8 +4466,21 @@ impl<'g, 'a> Fx<'g, 'a> {
                     r
                 }
             }
-            _ => Val::new(x, ty.clone()),
+            _ => Val::held(x, ty.clone(), held),
         }
+    }
+
+    /// Rust: a value as a function, a closure or a helper takes it in a parameter of `slot`: as it
+    /// travels, lent where it is not `Copy` (DESIGN 36.4).
+    pub fn arg_rs(&mut self, v: Val, slot: &Ty) -> Ex {
+        if self.g.same_out(slot) && !matches!(slot, Ty::Num(_)) {
+            return self.g.lent(&v);
+        }
+        let b = self.to_boundary(v, slot);
+        if self.g.is_copy(slot) {
+            return b;
+        }
+        self.g.lent(&Val::new(b, slot.clone()))
     }
 
     /// A value as it is worked on, as it travels in a place of `slot`.
@@ -3424,7 +4497,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Some(_) => {
                         let ut = self.g.unit_type(&n.unit);
                         match t {
-                            Target::TypeScript => Ex::Cast(Box::new(x), ut),
+                            Target::Rust => Ex::call(ut, vec![x]),
                             _ => Ex::Cast(Box::new(x), ut),
                         }
                     }
@@ -3432,6 +4505,28 @@ impl<'g, 'a> Fx<'g, 'a> {
                 }
             }
             Ty::Opt(_) if self.g.absent(&v.ex) => v.ex,
+            Ty::Opt(s) | Ty::List(s) if !self.g.same_out(slot) && t == Target::Rust => {
+                let inner_ty = match &v.ty {
+                    Ty::Opt(x) | Ty::List(x) => (**x).clone(),
+                    x => x.clone(),
+                };
+                let s = (**s).clone();
+                let v = self.spill(v);
+                if matches!(slot, Ty::List(_)) {
+                    let to_el = self.g.boundary(&s);
+                    self.list_map_rs(&v, &inner_ty, &to_el, slot, |f, el| {
+                        let ex = f.to_boundary(el, &s);
+                        Val::new(ex, s.clone())
+                    })
+                    .ex
+                } else {
+                    self.opt_map_rs(&v, &inner_ty, slot, |f, el| {
+                        let ex = f.to_boundary(el, &s);
+                        Val::new(ex, s.clone())
+                    })
+                    .ex
+                }
+            }
             Ty::Opt(s) | Ty::List(s) if !self.g.same_out(slot) => {
                 let inner_ty = match &v.ty {
                     Ty::Opt(x) | Ty::List(x) => (**x).clone(),
@@ -3466,6 +4561,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                     self.opt_map(v.ex, inner, slot).ex
                 }
             }
+            // Rust: what is put where a value travels is owned there (DESIGN 36.4)
+            _ if t == Target::Rust => self.g.owned(&v),
             _ => v.ex,
         }
     }
@@ -3474,6 +4571,17 @@ impl<'g, 'a> Fx<'g, 'a> {
     fn rule_out(&mut self, x: Ex, col: &ColumnType, ty: &Ty) -> Val {
         let t = self.t();
         match col {
+            // Rust: the rule's `Option`, its value read where it is there
+            ColumnType::Opt(inner) if t == Target::Rust => {
+                let v = self.spill(Val::held(x, ty.clone(), Held::Kept));
+                if matches!(**inner, ColumnType::Bool | ColumnType::Str | ColumnType::Enum { .. }) {
+                    return Val::held(v.ex, ty.clone(), v.held);
+                }
+                let inner_ty = ty.present().clone();
+                let target = if matches!(ty, Ty::Opt(_)) { ty.clone() } else { Ty::Opt(Box::new(ty.clone())) };
+                let inner = (**inner).clone();
+                self.opt_map_rs(&v, &inner_ty, &target, |f, el| f.rule_out(el.ex, &inner, &inner_ty))
+            }
             ColumnType::Opt(inner) => {
                 let inner_ty = ty.present().clone();
                 if matches!(**inner, ColumnType::Num { unit: Some(ref u), .. } if u.dim != Dim::Rate) && t != Target::Go {
@@ -3492,23 +4600,33 @@ impl<'g, 'a> Fx<'g, 'a> {
                 match t {
                     Target::TypeScript => self.g.kcall("dateOf", vec![Ex::call("Number", vec![x])]),
                     Target::Python => self.g.kcall("date_of", vec![x]),
-                    Target::Go => self.g.kcall("DateOf", vec![x]),
+                    Target::Go | Target::Rust => self.g.kcall("DateOf", vec![x]),
                 },
                 ty.clone(),
             ),
             ColumnType::Num { unit: Some(u), .. } if u.dim == Dim::Rate => {
                 let step = u.step.unwrap_or(Rat::new(1, 100));
-                let k = if t == Target::Go { Ex::call("int64", vec![x]) } else { x };
+                let k = match t {
+                    Target::Go => Ex::call("int64", vec![x]),
+                    // the rule's `Rate(pub i64)`
+                    Target::Rust => x.dot("0"),
+                    _ => x,
+                };
                 let q = self.g.kcall(&self.g.helper("rate", "rate", "Rate"), vec![k, self.g.frac(step)]);
                 let r = ty.num().map(rep).unwrap_or(Rep::Q);
                 Val::new(self.rep_to(q, Rep::Q, r), ty.clone())
             }
-            ColumnType::Num { .. } => {
-                let k = if t == Target::Go { Ex::call("int64", vec![x]) } else { x };
+            ColumnType::Num { unit, .. } => {
+                let k = match t {
+                    Target::Go => Ex::call("int64", vec![x]),
+                    // the package's type of the unit (rulec's Rust in a package, DESIGN 36.6)
+                    Target::Rust if unit.as_ref().is_some_and(|u| u.type_name().is_some()) => x.dot("0"),
+                    _ => x,
+                };
                 let r = ty.num().map(rep).unwrap_or(Rep::Int);
                 Val::new(self.rep_to(k, Rep::Int, r), ty.clone())
             }
-            _ => Val::new(x, ty.clone()),
+            _ => Val::held(x, ty.clone(), Held::Kept),
         }
     }
 
@@ -3516,6 +4634,27 @@ impl<'g, 'a> Fx<'g, 'a> {
     fn rule_in(&mut self, v: Val, file: &Path, col: &ColumnType) -> Ex {
         let t = self.t();
         match col {
+            ColumnType::Opt(inner) if t == Target::Rust => {
+                if self.g.absent(&v.ex) {
+                    return self.g.null();
+                }
+                let present = v.ty.present().clone();
+                if !matches!(v.ty, Ty::Opt(_)) {
+                    let x = self.rule_in(Val { ty: present, ..v }, file, inner);
+                    return Ex::call("Some", vec![x]);
+                }
+                if matches!(**inner, ColumnType::Bool | ColumnType::Str | ColumnType::Enum { .. }) {
+                    return self.g.owned(&v);
+                }
+                let v = self.spill(v);
+                let (inner, file) = ((**inner).clone(), file.to_path_buf());
+                let to = v.ty.clone();
+                self.opt_map_rs(&v, &present, &to, |f, el| {
+                    let x = f.rule_in(el, &file, &inner);
+                    Val::new(x, Ty::Error)
+                })
+                .ex
+            }
             ColumnType::Opt(inner) => {
                 if matches!(v.ex, Ex::Atom(ref s) if s == "null" || s == "None" || s == "nil") {
                     return self.g.null();
@@ -3540,25 +4679,33 @@ impl<'g, 'a> Fx<'g, 'a> {
                         self.emit(Node::If(vec![(Ex::bin(Op::Ne, v.ex, self.g.null()), then)], Vec::new()));
                         Ex::atom(n)
                     }
+                    Target::Rust => unreachable!("Rust reads an optional column above"),
                 }
             }
             ColumnType::Date => match t {
                 Target::TypeScript => Ex::call("BigInt", vec![self.g.kcall("dayOf", vec![v.ex])]),
                 Target::Python => self.g.kcall("day_of", vec![v.ex]),
                 Target::Go => Ex::Call(Box::new(v.ex.dot("Days")), vec![]),
+                Target::Rust => v.ex.method("days", vec![]),
             },
             ColumnType::Num { unit: Some(u), .. } if u.dim == Dim::Rate => {
                 let step = u.step.unwrap_or(Rat::new(1, 100));
                 let q = self.rep_to(v.ex, v.ty.num().map(rep).unwrap_or(Rep::Q), Rep::Q);
                 let k = self.g.kcall(&self.g.helper("steps", "steps", "Steps"), vec![q, self.g.frac(step)]);
-                let rate = format!("{}.Rate", self.g.imp(Import::Rule(file.to_path_buf())));
-                Ex::Cast(Box::new(k), rate)
+                let rate = self.g.path(&self.g.imp(Import::Rule(file.to_path_buf())), "Rate");
+                if t == Target::Rust { Ex::call(rate, vec![k]) } else { Ex::Cast(Box::new(k), rate) }
             }
             ColumnType::Num { unit: Some(u), .. } => {
                 let x = self.rep_to(v.ex, v.ty.num().map(rep).unwrap_or(Rep::Int), Rep::Int);
-                if u.type_name().is_some() { Ex::Cast(Box::new(x), self.g.unit_type(u)) } else { x }
+                match (u.type_name().is_some(), t) {
+                    (true, Target::Rust) => Ex::call(self.g.unit_type(u), vec![x]),
+                    (true, _) => Ex::Cast(Box::new(x), self.g.unit_type(u)),
+                    _ => x,
+                }
             }
             ColumnType::Num { unit: None, .. } => self.rep_to(v.ex, v.ty.num().map(rep).unwrap_or(Rep::Int), Rep::Int),
+            // Rust: rulec's code takes its strings owned
+            _ if t == Target::Rust => self.g.owned(&v),
             _ => v.ex,
         }
     }
@@ -3580,7 +4727,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             let ex = match self.t() {
                 Target::TypeScript => self.g.kcall("between", vec![x.ex, y.ex]),
                 Target::Python => self.g.kcall("between", vec![x.ex, y.ex]),
-                Target::Go => self.g.kcall("Between", vec![x.ex, y.ex]),
+                Target::Go | Target::Rust => self.g.kcall("Between", vec![x.ex, y.ex]),
             };
             let r = ty.num().map(rep).unwrap_or(Rep::Int);
             return Val::new(self.rep_to(ex, Rep::Int, r), ty);
@@ -3623,7 +4770,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Some(at) => {
                         let mut args = vec![p, q];
                         args.extend(self.g.at_args(&at));
-                        self.g.kcall(&self.g.helper("over", "over", "Over"), args)
+                        let call = self.g.kcall(&self.g.helper("over", "over", "Over"), args);
+                        if self.t() == Target::Rust { call.tried() } else { call }
                     }
                     None => match self.t() {
                         Target::Python => Ex::bin(Op::Div, p, q),
@@ -3634,7 +4782,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Some(at) => {
                         let mut args = vec![quotient];
                         args.extend(self.g.at_args(&at));
-                        self.g.kcall(&self.g.helper("held", "held", "Held"), args)
+                        self.g.held_call(args)
                     }
                     None => quotient,
                 };
@@ -3659,6 +4807,8 @@ impl<'g, 'a> Fx<'g, 'a> {
             self.emit(Node::Line(format!("{n}: {bt} = {}", left.ex.print(self.t()))));
         } else if self.t() == Target::TypeScript {
             self.emit(Node::Line(format!("let {n}: {bt} = {};", left.ex.print(self.t()))));
+        } else if self.t() == Target::Rust {
+            self.emit(Node::Line(format!("let mut {n}: {bt} = {};", left.ex.print(self.t()))));
         } else {
             self.emit(Node::Line(format!("var {n} {bt} = {}", left.ex.print(self.t()))));
         }
@@ -3684,6 +4834,9 @@ impl<'g, 'a> Fx<'g, 'a> {
         if let (Ty::Param(_), Ty::Param(_)) = (ta, tb)
             && !matches!(o, Op::Eq | Op::Ne)
         {
+            if t == Target::Rust {
+                return Ex::bin(o, self.g.cmp_side(&x), self.g.cmp_side(&y));
+            }
             return self.order(ta, x.ex, y.ex, o);
         }
         // two values compared whole: a value that may be none, a list, a record, a value of a sum, a
@@ -3702,7 +4855,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let p = self.convert(x.ex, na, &NumTy { step: if both_int { Some(Rat::int(1)) } else { None }, ..target.clone() }, a, na.konst);
                 let q = self.convert(y.ex, nb, &NumTy { step: if both_int { Some(Rat::int(1)) } else { None }, ..target.clone() }, b, nb.konst);
                 match (r, t) {
-                    (Rep::Int, _) | (Rep::Q, Target::Python) => Ex::bin(o, p, q),
+                    // Rust's `kaname::Q` orders by its value
+                    (Rep::Int, _) | (Rep::Q, Target::Python | Target::Rust) => Ex::bin(o, p, q),
                     (Rep::Q, Target::TypeScript) => Ex::bin(o, self.g.kcall("cmp", vec![p, q]), Ex::atom("0")),
                     (Rep::Q, Target::Go) => Ex::bin(o, self.g.kcall("Cmp", vec![p, q]), Ex::atom("0")),
                 }
@@ -3712,12 +4866,22 @@ impl<'g, 'a> Fx<'g, 'a> {
                 (Target::Go, _) => Ex::bin(o, self.g.kcall("Compare", vec![x.ex, y.ex]), Ex::atom("0")),
                 _ => Ex::bin(o, x.ex, y.ex),
             },
+            // Rust: an enum's derived `Ord` is the order of its values
+            (Ty::Enum(_), Ty::Enum(_)) if t == Target::Rust => Ex::bin(o, x.ex, y.ex),
             (Ty::Enum(id), Ty::Enum(_)) if !matches!(o, Op::Eq | Op::Ne) => {
                 let rank = self.g.rank_of(id);
                 Ex::bin(o, Ex::call(rank.clone(), vec![x.ex]), Ex::call(rank, vec![y.ex]))
             }
             // two strings by their code points: JavaScript's `<` compares UTF-16 units (DESIGN 25.7)
             (Ty::Str, Ty::Str) if t == Target::TypeScript && !matches!(o, Op::Eq | Op::Ne) => Ex::bin(o, self.g.kcall("cmpStr", vec![x.ex, y.ex]), Ex::atom("0")),
+            // Rust: a string that is empty by `is_empty`; else the two as Rust compares them
+            // (`a.as_str() < b`, DESIGN 36.4)
+            (Ty::Str, Ty::Str) if t == Target::Rust && matches!(o, Op::Eq | Op::Ne) && (empty_str(&x.ex) || empty_str(&y.ex)) => {
+                let other = if empty_str(&x.ex) { &y } else { &x };
+                let e = other.ex.clone().method("is_empty", vec![]);
+                if o == Op::Ne { Ex::Not(Box::new(e)) } else { e }
+            }
+            _ if t == Target::Rust => Ex::bin(o, self.g.cmp_side(&x), self.g.cmp_side(&y)),
             _ => Ex::bin(o, x.ex, y.ex),
         }
     }
@@ -3741,6 +4905,24 @@ impl<'g, 'a> Fx<'g, 'a> {
         };
         let p = self.adapt(x, &t, a);
         let q = self.adapt(y, &t, b);
+        if self.t() == Target::Rust {
+            // Rust: a value that may be none against none by `is_none`, a list against `[]` by
+            // `is_empty`; else the two as Rust compares them (DESIGN 36.4)
+            let (pa, qa) = (self.g.absent(&p.ex) || matches!(ta, Ty::None), self.g.absent(&q.ex) || matches!(tb, Ty::None));
+            let (pe, qe) = (matches!(ta, Ty::Empty) || empty_list(&p.ex), matches!(tb, Ty::Empty) || empty_list(&q.ex));
+            if pa != qa {
+                let other = if pa { &q } else { &p };
+                let f = if o == Op::Ne { "is_some" } else { "is_none" };
+                return other.ex.clone().method(f, vec![]);
+            }
+            if pe != qe {
+                let other = if pe { &q } else { &p };
+                let e = other.ex.clone().method("is_empty", vec![]);
+                return if o == Op::Ne { Ex::Not(Box::new(e)) } else { e };
+            }
+            let same = self.g.eq_ex(self.g.cmp_side(&p), self.g.cmp_side(&q), &t);
+            return if o == Op::Ne { Ex::Not(Box::new(same)) } else { same };
+        }
         let same = self.g.eq_ex(p.ex, q.ex, &t);
         if o == Op::Ne { Ex::Not(Box::new(same)) } else { same }
     }
@@ -3758,12 +4940,31 @@ impl<'g, 'a> Fx<'g, 'a> {
             let v = self.adapt(v, &bound, &l.value);
             let name = self.local(&l.name);
             let ty = self.g.flight(&bound);
-            self.bind(&name, &ty, v.ex);
+            let held = if self.t() == Target::Rust && v.held != Held::Made && !self.g.is_copy(&bound) {
+                let lt = self.g.lent_type(&bound, false);
+                let lx = self.g.lent(&v);
+                self.bind(&name, &lt, lx);
+                Held::Lent
+            } else {
+                self.bind(&name, &ty, v.ex);
+                Held::Kept
+            };
             let used = Rc::new(Cell::new(false));
             declared.push((self.out.len(), name.clone(), used.clone()));
-            self.scope.push((l.name.clone(), Val::new(Ex::atom(name), bound), used));
+            self.scope.push((l.name.clone(), Val::held(Ex::atom(name), bound, held), used));
         }
         let out = self.answer(&b.answer, sink);
+        // Rust: a name never read is not given one (`let _: T = …;`)
+        if self.t() == Target::Rust {
+            for (at, name, used) in &declared {
+                if !used.get()
+                    && let Some(Node::Line(s)) = self.out.get_mut(at - 1)
+                    && let Some(rest) = s.strip_prefix(&format!("let {name}: "))
+                {
+                    *s = format!("let _: {rest}");
+                }
+            }
+        }
         // Go asks a name that is never read to be read once
         if self.t() == Target::Go {
             for (at, name, used) in declared.into_iter().rev() {
@@ -3796,6 +4997,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let v = s.expr(&b.answer);
                 s.adapt(v, &ty, &b.answer)
             });
+            let (x, y) = if self.t() == Target::Rust { (Val::new(self.g.owned(&x), x.ty), Val::new(self.g.owned(&y), y.ty)) } else { (x, y) };
             if sx.is_empty() && sy.is_empty() {
                 return Val::new(Ex::Cond(Box::new(cond.ex), Box::new(x.ex), Box::new(y.ex)), ty);
             }
@@ -3808,13 +5010,13 @@ impl<'g, 'a> Fx<'g, 'a> {
             let mut els = sy;
             els.push(self.assign_line(&n, y.ex));
             self.emit(Node::If(vec![(cond.ex, then)], els));
-            return Val::new(Ex::atom(n), ty);
+            return Val::held(Ex::atom(n), ty, Held::Kept);
         }
         let n = self.temp();
         let fty = self.g.flight(&ty);
         self.declare(&n, &fty);
         self.answer(e, &Sink::Assign(n.clone(), ty.clone()));
-        Val::new(Ex::atom(n), ty)
+        Val::held(Ex::atom(n), ty, Held::Kept)
     }
 
     /// The answer of a block, where the sink says: an `if`, a `match` or a block takes the sink into
@@ -3863,7 +5065,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             }
             Sink::Assign(n, to) => {
                 let v = self.adapt(v, to, &Expr { id: usize::MAX, span: Span::default(), kind: ExprKind::None });
-                let line = self.assign_line(n, v.ex);
+                let line = self.assign_line(n, self.g.owned(&v));
                 self.emit(line);
                 None
             }
@@ -3896,8 +5098,13 @@ impl<'g, 'a> Fx<'g, 'a> {
                 }
             }
         }
-        let line = g.ret(b);
+        let line = if self.t() == Target::Rust { g.ret_rs(b, self.fallible()) } else { g.ret(b) };
         self.emit(Node::Line(line));
+    }
+
+    /// Whether the function can fail (its effect, DESIGN 21.4): Rust's answers a `Result`.
+    fn fallible(&self) -> bool {
+        rs_fails(&self.g.c, self.f)
     }
 
     fn matching(&mut self, e: &Expr, s: &Expr, arms: &[Arm], sink: &Sink) {
@@ -3910,6 +5117,10 @@ impl<'g, 'a> Fx<'g, 'a> {
             _ => None,
         };
         let result = matches!(st, Ty::Result(..));
+        if self.t() == Target::Rust {
+            let v = self.spill(v);
+            return self.match_rs(&ty, &st, &v, arms, sink);
+        }
         let v = if (sum.is_some() || result) && !matches!(v.ex, Ex::Atom(_)) {
             let n = self.temp();
             let fty = self.g.flight(&st);
@@ -4020,6 +5231,130 @@ impl<'g, 'a> Fx<'g, 'a> {
         }
     }
 
+    /// Rust: a `match` as Rust's `match` (DESIGN 36.4) of the value `v` of `st`, lent where it is not
+    /// `Copy`: each arm its patterns (`None`, `Some(x)`, `Order::Placed(p)`, `Ok(x)`, `Size::Small`,
+    /// a literal), the value an arm names bound by the pattern; a literal Rust cannot write as a
+    /// pattern (a fraction) a guard; the last arm `_` unless it names a value.
+    fn match_rs(&mut self, ty: &Ty, st: &Ty, v: &Val, arms: &[Arm], sink: &Sink) {
+        let copy = self.g.is_copy(st);
+        let src = if copy { v.ex.clone() } else { self.g.lent(v) };
+        let opt = matches!(st, Ty::Opt(_));
+        let inner = st.present().clone();
+        let wrap = |p: String| if opt { format!("Some({p})") } else { p };
+        let mut cases: Vec<(String, Vec<Node>)> = Vec::new();
+        let n = arms.len();
+        for (k, arm) in arms.iter().enumerate() {
+            let next = Sink::Then(ty.clone(), Box::new(arm.body.answer.clone()), Box::new(sink.clone()));
+            // each pattern: Ok(the pattern, with `{}` where the name goes), or Err(the test a guard makes)
+            let mut pats: Vec<Result<String, Ex>> = Vec::new();
+            // the name an arm binds: its name in the source, its type, and how the value is reached
+            let mut bind: Option<(String, Ty, bool)> = None;
+            let mut all = false;
+            for p in &arm.patterns {
+                match p {
+                    Pattern::None(_) => pats.push(Ok("None".into())),
+                    Pattern::Some(x, _) => {
+                        bind = Some((x.clone(), inner.clone(), false));
+                        pats.push(Ok("Some({})".into()));
+                    }
+                    Pattern::Bool(b, _) => pats.push(Ok(wrap(b.to_string()))),
+                    Pattern::Else(_) => all = true,
+                    Pattern::Value(path, named, _) if matches!(inner, Ty::Result(..)) => {
+                        let Ty::Result(a, er) = &inner else { continue };
+                        let ok = path[path.len() - 1].0 == "ok";
+                        let word = if ok { "Ok" } else { "Err" };
+                        match named {
+                            Some((x, _)) => {
+                                bind = Some((x.clone(), if ok { (**a).clone() } else { (**er).clone() }, true));
+                                pats.push(Ok(wrap(format!("{word}({{}})"))));
+                            }
+                            None => pats.push(Ok(wrap(format!("{word}(_)")))),
+                        }
+                    }
+                    Pattern::Value(path, named, _) => {
+                        let word = &path[path.len() - 1].0;
+                        let Ty::Enum(id) = &inner else { continue };
+                        let name = self.g.p.values(id).0.iter().find(|n| n.is(word)).map(|n| n.text.clone()).unwrap_or_else(|| word.clone());
+                        if self.g.p.is_sum(id) {
+                            let Owner::Module(file) = &id.owner else { continue };
+                            let w = self.g.variant_of(id, &name);
+                            match named {
+                                Some((x, _)) => {
+                                    let r = RecId::Variant { file: file.clone(), name: id.name.clone(), value: name.clone(), args: id.args.clone() };
+                                    bind = Some((x.clone(), Ty::Record(r), false));
+                                    pats.push(Ok(wrap(format!("{w}({{}})"))));
+                                }
+                                None => pats.push(Ok(wrap(format!("{w}(_)")))),
+                            }
+                        } else {
+                            pats.push(Ok(wrap(self.g.member(id, &name).print(Target::Rust))));
+                        }
+                    }
+                    Pattern::Lit(x) => pats.push(self.literal_pattern(v, st, x).map(wrap)),
+                }
+            }
+            let bound = bind.as_ref().map(|(x, _, _)| self.local(x));
+            let used = Rc::new(Cell::new(false));
+            let (_, body) = self.apart(|f| {
+                let mark = f.scope.len();
+                if let (Some((x, t, payload)), Some(name)) = (&bind, &bound) {
+                    // what the pattern binds: the value where the matched value is `Copy`, else what
+                    // it lends (`Some(x)` of `as_deref`, a value of a sum) or a reference into it (a
+                    // result's)
+                    let val = if copy {
+                        Val::held(Ex::atom(name.clone()), t.clone(), Held::Made)
+                    } else if *payload {
+                        f.g.through(Ex::atom(name.clone()), t)
+                    } else if f.g.is_copy(t) {
+                        Val::held(Ex::atom(name.clone()), t.clone(), Held::Made)
+                    } else {
+                        Val::held(Ex::atom(name.clone()), t.clone(), Held::Lent)
+                    };
+                    let val = if *payload { f.from_boundary_as(val.ex.clone(), t, t, val.held) } else { val };
+                    f.scope.push((x.clone(), val, used.clone()));
+                }
+                f.block(&arm.body, &next);
+                f.scope.truncate(mark);
+            });
+            let name = match &bound {
+                Some(n) if used.get() => n.clone(),
+                _ => "_".to_string(),
+            };
+            let guards: Vec<Ex> = pats.iter().filter_map(|p| p.clone().err()).collect();
+            let pattern = if all || (k + 1 == n && bind.is_none()) {
+                "_".to_string()
+            } else if !guards.is_empty() {
+                // a test Rust writes as no pattern: the arm's every test, in a guard
+                let tests: Vec<Ex> = pats
+                    .into_iter()
+                    .map(|p| match p {
+                        Ok(p) => Ex::atom(format!("matches!({}, {})", super::ex::rust_cond(&src), p.replace("{}", "_"))),
+                        Err(g) => g,
+                    })
+                    .collect();
+                let e = tests.into_iter().reduce(|a, b| Ex::bin(Op::Or, a, b)).unwrap_or(self.g.boolean(true));
+                format!("_ if {}", e.print(Target::Rust))
+            } else {
+                pats.into_iter().filter_map(Result::ok).map(|p| p.replace("{}", &name)).collect::<Vec<_>>().join(" | ")
+            };
+            cases.push((pattern, body));
+        }
+        self.emit(Node::Switch(format!("match {}", super::ex::rust_cond(&src)), cases, Vec::new()));
+    }
+
+    /// Rust: a literal of an arm as a pattern (`5`, `-3`, `"a"`, `kaname::Date { … }`), read in the
+    /// matched value's type; Err with the test of the guard where Rust writes it as no pattern.
+    fn literal_pattern(&self, v: &Val, st: &Ty, x: &Expr) -> Result<String, Ex> {
+        let g = self.g;
+        let present = st.present().clone();
+        match crate::interp::literal(&g.c, x, &present) {
+            Some(crate::value::Value::Num(r)) if r.is_int() && present.num().map(rep) == Some(Rep::Int) => Ok(g.int(r.num).print(Target::Rust)),
+            Some(crate::value::Value::Date(d)) => Ok(g.date(d).print(Target::Rust)),
+            Some(crate::value::Value::Str(t)) => Ok(g.string(&t).print(Target::Rust)),
+            _ => Err(self.literal_test(v, st, x)),
+        }
+    }
+
     /// Whether the value a `match` splits is a literal of an arm, read in the value's type (`interp.rs`'s
     /// `literal`): a number in the value's unit and representation, a date, a string.
     fn literal_test(&self, v: &Val, st: &Ty, x: &Expr) -> Ex {
@@ -4033,6 +5368,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                 (_, Target::TypeScript) => Ex::bin(Op::Eq, g.kcall("cmp", vec![v.ex.clone(), g.frac(r)]), Ex::atom("0")),
                 (Rep::Int, Target::Go) => Ex::bin(Op::Eq, g.kcall("Cmp", vec![g.to_q_ex(v.ex.clone()), g.frac(r)]), Ex::atom("0")),
                 (_, Target::Go) => Ex::bin(Op::Eq, g.kcall("Cmp", vec![v.ex.clone(), g.frac(r)]), Ex::atom("0")),
+                (Rep::Int, Target::Rust) => Ex::bin(Op::Eq, g.to_q_ex(v.ex.clone()), g.frac(r)),
+                (_, Target::Rust) => Ex::bin(Op::Eq, v.ex.clone(), g.frac(r)),
             },
             (Some(crate::value::Value::Date(d)), _) => Ex::bin(Op::Eq, v.ex.clone(), go_bare(g.date(d), self.t())),
             (Some(crate::value::Value::Str(t)), _) => Ex::bin(Op::Eq, v.ex.clone(), g.string(&t)),
@@ -4169,6 +5506,7 @@ impl<'g, 'a> Fx<'g, 'a> {
     fn is_null(&self, v: &Ex) -> Ex {
         match self.t() {
             Target::Python => Ex::atom(format!("{} is None", v.print(Target::Python))),
+            Target::Rust => v.clone().method("is_none", vec![]),
             _ => Ex::bin(Op::Eq, v.clone(), self.g.null()),
         }
     }
@@ -4222,6 +5560,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let alias = self.g.p.rules.get(file).and_then(|r| r.elements.iter().find(|(n, _, _)| n == seq)).and_then(|(_, _, cols)| cols.iter().find(|c| c.name == f.text)).map(|c| c.alias.clone()).unwrap_or_else(|| f.text.clone());
                     match self.t() {
                         Target::Go => ritsu_emit::ident::pascal(&alias),
+                        Target::Rust => ritsu_emit::ident::rust_name(&alias),
                         _ => alias,
                     }
                 }
@@ -4246,7 +5585,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let o = Ex::atom(self.temp());
                     let rec = self.g.p.show_ty(&self.g.c, &Ty::Record(id.clone()));
                     let fail = self.g.fail_outside("range", b.span.line, &Said::Field { rec }, &o, slot, Reach::Place);
-                    let stmts = self.g.if_found(&o, Ex::call(fun, vec![fv.ex.clone().dot(key.clone()), self.g.string(&f.text)]), fail);
+                    let x = self.g.lent_field(&fv.ex, &Ty::Record(id.clone()), f.ascii(), &slot.ty);
+                    let stmts = self.g.if_found(&o, Ex::call(fun, vec![x, self.g.string(&f.text)]), fail);
                     for s in stmts {
                         self.emit(s);
                     }
@@ -4274,7 +5614,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let o = Ex::atom(self.temp());
                         let rec = self.g.p.show_ty(&self.g.c, &Ty::Record(id.clone()));
                         let fail = self.g.fail_outside("range", line, &Said::Field { rec }, &o, slot, Reach::Place);
-                        let stmts = self.g.if_found(&o, Ex::call(fun, vec![b.clone(), self.g.string(&f.text)]), fail);
+                        let x = self.g.lent(&Val::held(b.clone(), slot.ty.clone(), Held::Kept));
+                        let stmts = self.g.if_found(&o, Ex::call(fun, vec![x, self.g.string(&f.text)]), fail);
                         for s in stmts {
                             self.emit(s);
                         }
@@ -4286,6 +5627,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             } else {
                 b
             };
+            let b = if module { self.g.boxed_value(&Ty::Record(id.clone()), &slot.ty, b) } else { b };
             parts.push((key, b));
         }
         let tyname = match self.t() {
@@ -4314,7 +5656,23 @@ impl<'g, 'a> Fx<'g, 'a> {
                 }
                 Ex::atom(n)
             }
+            // Rust: `T { a: x, ..base }`, with no base where every field is written (clippy's
+            // `needless_update`)
+            (Some(fv), Target::Rust) => {
+                if parts.len() < fields.len() {
+                    parts.push(("...".into(), self.g.owned(&fv)));
+                }
+                Ex::Record(tyname, parts)
+            }
         };
+        // Rust: a value of one of a sum's values, typed as the sum where the place says so, is the
+        // sum's variant that holds the record (`Order::Cart(OrderCart { … })`, DESIGN 36.2)
+        if let (Target::Rust, RecId::Variant { value, .. }, Ty::Enum(sum)) = (self.t(), &id, ty.present())
+            && self.g.p.is_sum(sum)
+        {
+            let ctor = self.g.variant_of(sum, value);
+            return Val::new(Ex::call(ctor, vec![ex]), ty);
+        }
         Val::new(ex, ty)
     }
 
@@ -4369,7 +5727,19 @@ impl<'g, 'a> Fx<'g, 'a> {
             })
             .collect();
         let checked = args.iter().zip(&to).any(|(a, t)| t.as_ref().is_some_and(|(pi, _)| g.open(a.expr().id, |w| matches!(w, What::Param { .. })) && g.outside_fn(&slots[*pi], Reach::Call).is_some()));
+        if self.t() == Target::Rust {
+            for (a, t) in args.iter().zip(&to) {
+                if let Some((pi, _)) = t
+                    && matches!(info.params[*pi].slot.ty, Ty::Fn(..))
+                {
+                    self.fn_place.insert(a.expr().id, info.params[*pi].slot.ty.clone());
+                }
+            }
+        }
         let (vals, keep) = self.arg_values(&es, &to, checked);
+        if self.t() == Target::Rust {
+            return self.call_fn_rs(e, canon, &callee, fi, args, vals, keep, &to, &slots, &targs, &ret_ty);
+        }
         let mut given: Vec<Option<Ex>> = vec![None; info.params.len()];
         let mut at_of: Vec<Option<usize>> = vec![None; info.params.len()];
         for ((a, v), t) in args.iter().zip(vals).zip(&to) {
@@ -4412,6 +5782,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let names = g.callee_params(&callee, fi);
                     Ex::CallKw(Box::new(Ex::atom(f)), lead.into_iter().map(|x| (String::new(), x)).chain(names.into_iter().zip(args)).collect())
                 }
+                Target::Rust => unreachable!("Rust calls with call_fn_rs"),
             }
         } else if *canon == g.c.canon {
             let f = inner_name(self.t(), &callee, fi);
@@ -4435,6 +5806,60 @@ impl<'g, 'a> Fx<'g, 'a> {
         let raw = self.spill_as(raw, &g.boundary(&ret_ty));
         let v = self.from_boundary(raw, &ret_ty, &ret_ty);
         Val::new(v.ex, ret_ty)
+    }
+
+    /// Rust: [`Fx::call_fn`]'s call (DESIGN 36.4): each argument as it travels, lent where it is not
+    /// `Copy`; the module's function past its check (`_claim`), a generic one with its type arguments
+    /// (`_first_or::<T>`), another module's as a host calls it; `?` where it can fail.
+    #[allow(clippy::too_many_arguments)]
+    fn call_fn_rs(&mut self, e: &Expr, canon: &Path, callee: &Rc<Checked>, fi: usize, args: &[Arg], vals: Vec<Val>, keep: bool, to: &[Option<(usize, Ty)>], slots: &[Slot], targs: &[Ty], ret_ty: &Ty) -> Val {
+        let g = self.g;
+        let info = callee.decls.fns[fi].clone();
+        let mut given: Vec<Option<Val>> = vec![None; info.params.len()];
+        let mut at_of: Vec<Option<usize>> = vec![None; info.params.len()];
+        for ((a, v), t) in args.iter().zip(vals).zip(to) {
+            let (Arg::Named(_, _, x), Some((pi, pt))) = (a, t) else { continue };
+            let v = self.adapt(v, pt, x);
+            let v = if keep { self.spill(v) } else { v };
+            // as it travels: read anew where it travels otherwise, else as it is
+            let b = if g.same_out(pt) && !matches!(pt, Ty::Num(_)) { v } else { Val::new(self.to_boundary(v, pt), pt.clone()) };
+            given[*pi] = Some(b);
+            at_of[*pi] = Some(x.id);
+        }
+        for (pi, p) in info.params.iter().enumerate() {
+            let Some(x) = at_of[pi] else { continue };
+            if !g.open(x, |w| matches!(w, What::Param { .. })) {
+                continue;
+            }
+            let Some(fun) = g.outside_fn(&slots[pi], Reach::Call) else { continue };
+            let Some(b) = given[pi].take() else { continue };
+            let b = self.spill(b);
+            let o = Ex::atom(self.temp());
+            let fail = g.fail_outside("range", e.span.line, &Said::Given { fun: info.name.text.clone() }, &o, &slots[pi], Reach::Call);
+            let stmts = g.if_found(&o, Ex::call(fun, vec![g.lent(&b), g.string(&p.name.text)]), fail);
+            for s in stmts {
+                self.emit(s);
+            }
+            given[pi] = Some(b);
+        }
+        let args: Vec<Ex> = given.into_iter().zip(&info.params).map(|(x, p)| x.map(|v| g.lent_as(&v, &p.slot.ty)).unwrap_or(g.null())).collect();
+        let fails = rs_fails(callee, fi);
+        let here = *canon == g.c.canon;
+        let m = || g.imp(Import::Module(canon.to_path_buf()));
+        let raw = if info.inner() {
+            let f = generic_name(Target::Rust, callee, fi);
+            let f = if here { f } else { g.path(&m(), &f) };
+            let written: Vec<String> = targs.iter().map(|a| g.boundary(a)).collect();
+            if written.is_empty() { Ex::call(f, args) } else { Ex::call(format!("{f}::<{}>", written.join(", ")), args) }
+        } else if here {
+            Ex::call(inner_name(Target::Rust, callee, fi), args)
+        } else {
+            Ex::call(g.path(&m(), &fn_name(Target::Rust, callee, fi)), args)
+        };
+        let raw = if fails { self.carried(raw) } else { raw };
+        let raw = self.spill_as(raw, &g.boundary(ret_ty));
+        let v = self.from_boundary(raw, ret_ty, ret_ty);
+        Val::held(v.ex, ret_ty.clone(), v.held)
     }
 
     /// A rule, through its code in the package (DESIGN 10.5): the arguments from the left, read in
@@ -4474,6 +5899,8 @@ impl<'g, 'a> Fx<'g, 'a> {
             let v = if keep { self.spill(v) } else { v };
             let ex = match &places[*k].2 {
                 Some(col) => self.rule_in(v, canon, &col.clone()),
+                // Rust: a list of the rule's elements, lent (`&[Element]`)
+                None if self.t() == Target::Rust => g.lent(&v),
                 None => v.ex,
             };
             given[*k] = Some(ex);
@@ -4491,11 +5918,16 @@ impl<'g, 'a> Fx<'g, 'a> {
         let rt = g.record_type(&RecId::Outputs(canon.to_path_buf()));
         let raw = match self.t() {
             Target::Go => Ex::call(format!("{r}.{}", call.function), vec![Ex::Record(format!("{r}.{}", if call.input_type.is_empty() { "Input" } else { &call.input_type }), fields)]),
-            _ => Ex::call(format!("{r}.{}", call.function), ordered),
+            _ => Ex::call(g.path(&r, &call.function), ordered),
         };
         let out = self.temp();
         let said = g.say(&tr!("規則 `{name}` が入力を受け付けません", "The rule `{name}` refuses its inputs"));
         let line = e.span.line;
+        if self.t() == Target::Rust {
+            let ex = g.answered_rs(raw, open, "rule", line, &said);
+            self.bind(&out, &rt, ex);
+            return Val::held(Ex::atom(out), ty, Held::Kept);
+        }
         match self.t() {
             Target::TypeScript => {
                 if open {
@@ -4536,6 +5968,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 };
                 self.emit(Node::If(vec![(Ex::bin(Op::Ne, Ex::atom(err.clone()), g.null()), vec![Node::Line(fail)])], Vec::new()));
             }
+            Target::Rust => unreachable!("Rust's call of a rule is written above"),
         }
         Val::new(Ex::atom(out), ty)
     }
@@ -4573,6 +6006,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                 (ritsu_ports::DateKind::Int, Target::TypeScript) => Ex::call("Number", vec![v.ex]),
                 (ritsu_ports::DateKind::Int, Target::Go) => Ex::call("int", vec![v.ex]),
                 (ritsu_ports::DateKind::Date, Target::Go) => Ex::Cast(Box::new(v.ex), format!("{d}.Date")),
+                // Rust: koyomi's `Date`, field by field
+                (ritsu_ports::DateKind::Date, Target::Rust) => {
+                    let x = self.spill(v);
+                    Ex::Record(format!("{d}::Date"), ["year", "month", "day"].iter().map(|f| (f.to_string(), x.ex.clone().dot(*f))).collect())
+                }
                 _ => v.ex,
             };
             given.insert(input.name.clone(), ex);
@@ -4583,11 +6021,20 @@ impl<'g, 'a> Fx<'g, 'a> {
             _ => func.alias.clone(),
         };
         let argv: Vec<Ex> = func.params.iter().map(|p| given.get(p).cloned().unwrap_or(g.null())).collect();
-        let raw = Ex::call(format!("{d}.{fname}"), argv);
+        let raw = Ex::call(g.path(&d, &fname), argv);
         let out = self.temp();
         let said = g.say(&tr!("日付 `{name}` が求まりません", "The date `{name}` cannot be worked out"));
         let line = e.span.line;
         let dt = g.flight(&Ty::Date);
+        if self.t() == Target::Rust {
+            let ex = g.answered_rs(raw, open, "date", line, &said);
+            let day = self.temp();
+            self.bind(&day, &format!("{d}::Date"), ex);
+            let k = g.imp(Import::Kaname);
+            let fields = ["year", "month", "day"].iter().map(|f| (f.to_string(), Ex::atom(day.clone()).dot(*f))).collect();
+            self.bind(&out, &dt, Ex::Record(format!("{k}::Date"), fields));
+            return Val::new(Ex::atom(out), ty);
+        }
         match self.t() {
             Target::TypeScript => {
                 if open {
@@ -4629,6 +6076,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let k = g.imp(Import::Kaname);
                 Val::new(Ex::Cast(Box::new(Ex::atom(out)), format!("{k}.Date")), ty)
             }
+            Target::Rust => unreachable!("Rust's call of a date is written above"),
         }
     }
 
@@ -4657,16 +6105,25 @@ impl<'g, 'a> Fx<'g, 'a> {
             let v = if let (Ty::Num(nt), true) = (&pt, g.open(x.id, |w| matches!(w, What::Amount { .. }))) {
                 let v = self.spill(v);
                 let t = format!("{}.{}", id.transfer, id.op);
-                let shown = g.kcall(&g.helper("numText", "num_text", "IntText"), vec![if self.t() == Target::Go { v.ex.clone() } else { g.to_q_ex(v.ex.clone()) }, g.string(&unit_suffix(&nt.unit))]);
-                let msg = template(&tr!("振替 `{t}` の額 `{n}` に、負の値 \u{1}shown\u{1} を渡しています", "The amount `{n}` of the transfer `{t}` is given \u{1}shown\u{1}, which is below 0"), g.lang)
-                    .into_iter()
-                    .map(|p| match p {
-                        Ok(s) => g.string(&s),
-                        Err(_) => shown.clone(),
-                    })
-                    .reduce(|a, b| Ex::bin(Op::Add, a, b))
-                    .unwrap_or(g.string(""));
-                let fail = Node::Line(g.stmt(g.kcall(&g.helper("fail", "fail", "Fail"), vec![g.string("range"), g.module_const(), Ex::atom(x.span.line.to_string()), msg])));
+                let shown = g.kcall(&g.helper("numText", "num_text", "IntText"), vec![if matches!(self.t(), Target::Go | Target::Rust) { v.ex.clone() } else { g.to_q_ex(v.ex.clone()) }, g.string(&unit_suffix(&nt.unit))]);
+                let parts = template(&tr!("振替 `{t}` の額 `{n}` に、負の値 \u{1}shown\u{1} を渡しています", "The amount `{n}` of the transfer `{t}` is given \u{1}shown\u{1}, which is below 0"), g.lang);
+                let msg = if self.t() == Target::Rust {
+                    g.rs_format(parts.into_iter().map(|p| p.map_err(|_| shown.clone())).collect())
+                } else {
+                    parts
+                        .into_iter()
+                        .map(|p| match p {
+                            Ok(s) => g.string(&s),
+                            Err(_) => shown.clone(),
+                        })
+                        .reduce(|a, b| Ex::bin(Op::Add, a, b))
+                        .unwrap_or(g.string(""))
+                };
+                let fail = if self.t() == Target::Rust {
+                    g.fail_line("range", x.span.line, msg)
+                } else {
+                    Node::Line(g.stmt(g.kcall(&g.helper("fail", "fail", "Fail"), vec![g.string("range"), g.module_const(), Ex::atom(x.span.line.to_string()), msg])))
+                };
                 self.emit(Node::If(vec![(Ex::bin(Op::Lt, v.ex.clone(), g.int(0)), vec![fail])], Vec::new()));
                 v
             } else if keep {
@@ -4698,6 +6155,19 @@ impl<'g, 'a> Fx<'g, 'a> {
                     // a post's amounts that may be left out are pointers
                     let amounts = super::books::optional_amounts(&book, &id.transfer, &id.op);
                     args.into_iter().map(|(n, v)| if amounts.contains(&n) { (n, g.kcall("Some", vec![v])) } else { (n, v) }).collect()
+                } else if self.t() == Target::Rust {
+                    // a post's amounts that may be left out are `Option`s, `None` where not given; the
+                    // fields in the struct's order
+                    let amounts = super::books::optional_amounts_in(Target::Rust, &book, &id.transfer, &id.op);
+                    let mut args: Vec<(String, Ex)> = args.into_iter().map(|(n, v)| if amounts.contains(&n) { (n, Ex::call("Some", vec![v])) } else { (n, v) }).collect();
+                    for a in &amounts {
+                        if !args.iter().any(|(n, _)| n == a) {
+                            args.push((a.clone(), g.null()));
+                        }
+                    }
+                    let order: Vec<String> = super::books::op_params(&book, &id.transfer, &id.op).iter().filter_map(|(i, _)| names.get(*i).cloned()).collect();
+                    args.sort_by_key(|(n, _)| order.iter().position(|o| o == n));
+                    args
                 } else {
                     args
                 };
@@ -4744,7 +6214,8 @@ impl<'g, 'a> Fx<'g, 'a> {
         for (p, v) in ps.iter().zip(params) {
             self.scope.push((p.0.clone(), v, Rc::new(Cell::new(true))));
         }
-        self.scope.push((ps.last().map(|(p, _)| p.clone()).unwrap_or_default(), Val::new(Ex::atom(el_name.clone()), elem_ty.clone()), used.clone()));
+        let el_held = if self.t() == Target::Rust && !self.g.is_copy(&elem_ty) { Held::Ref } else { Held::Made };
+        self.scope.push((ps.last().map(|(p, _)| p.clone()).unwrap_or_default(), Val::held(Ex::atom(el_name.clone()), elem_ty.clone(), el_held), used.clone()));
         let (answer, mut stmts) = self.apart(|s| s.expr(lbody));
         let tail = {
             let saved = std::mem::take(&mut self.out);
@@ -4767,6 +6238,14 @@ impl<'g, 'a> Fx<'g, 'a> {
                     format!("for range {}", xs.ex.print(t))
                 }
             }
+            Target::Rust => {
+                let pat = match (used.get(), self.g.is_copy(&elem_ty)) {
+                    (false, _) => "_".to_string(),
+                    (true, true) => format!("&{el_name}"),
+                    (true, false) => el_name.clone(),
+                };
+                format!("for {pat} in {}", self.g.iter_rs(&xs.ex))
+            }
         };
         Node::Block(head, stmts, Vec::new())
     }
@@ -4782,6 +6261,22 @@ impl<'g, 'a> Fx<'g, 'a> {
         let out = self.apart(|s| s.expr(lbody));
         self.scope.truncate(mark);
         out
+    }
+
+    /// [`Fx::apply`], with whether the function reads each of its parameters (Rust names one it does
+    /// not read `_`).
+    fn apply_seen(&mut self, lam: &Expr, args: Vec<Val>) -> (Val, Vec<Node>, Vec<bool>) {
+        let ExprKind::Lambda(ps, lbody) = &lam.kind else { return (Val::new(self.g.null(), Ty::Error), Vec::new(), Vec::new()) };
+        let mark = self.scope.len();
+        let mut cells = Vec::new();
+        for ((p, _), v) in ps.iter().zip(args) {
+            let c = Rc::new(Cell::new(false));
+            cells.push(c.clone());
+            self.scope.push((p.clone(), v, c));
+        }
+        let (v, stmts) = self.apart(|s| s.expr(lbody));
+        self.scope.truncate(mark);
+        (v, stmts, cells.iter().map(|c| c.get()).collect())
     }
 
     /// The type the answers of the function given to a builtin are read in (`interp.rs`'s
@@ -4823,6 +6318,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let xs = if name == "last" {
             let r = match self.t() {
                 Target::Python => Ex::Index(Box::new(xs.ex.clone()), Box::new(Ex::atom("::-1"))),
+                Target::Rust => self.g.kcall("Reverse", vec![self.g.lent(&xs)]),
                 _ => self.g.kcall(&self.g.helper("reverse", "", "Reverse"), vec![xs.ex.clone()]),
             };
             self.spill(Val::new(r, xs.ty.clone()))
@@ -4835,7 +6331,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let t = self.t();
         let g = self.g;
         let acc = self.temp();
-        let brk = Node::Line(if t == Target::TypeScript { "break;".into() } else { "break".into() });
+        let brk = Node::Line(if matches!(t, Target::TypeScript | Target::Rust) { "break;".into() } else { "break".into() });
         let truth = |v: &Val| v.ex.clone();
         let el_of = |lam: &Expr| match &lam.kind {
             ExprKind::Lambda(ps, _) => ps.last().map(|(p, _)| p.clone()).unwrap_or_default(),
@@ -4875,10 +6371,12 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let a2 = acc.clone();
                 let el = el_of(lam);
                 let node = self.each(xs, lam, vec![], |s, v| {
-                    let x = s.lookup(&el).map(|x| x.ex).unwrap_or(s.g.null());
+                    let xv = s.lookup(&el);
+                    let x = xv.as_ref().map(|x| if s.t() == Target::Rust { s.g.owned(x) } else { x.ex.clone() }).unwrap_or(s.g.null());
                     let x = match (s.t(), &ty) {
                         // an element that is there, where one may be absent
                         (Target::Go, Ty::Opt(_)) if !matches!(s.lookup(&el).map(|x| x.ty), Some(Ty::Opt(_))) => s.g.kcall("Some", vec![x]),
+                        (Target::Rust, Ty::Opt(_)) if !matches!(s.lookup(&el).map(|x| x.ty), Some(Ty::Opt(_))) => Ex::call("Some", vec![x]),
                         _ => x,
                     };
                     vec![Node::If(vec![(truth(&v), vec![s.assign_line(&a2, x), brk.clone()])], Vec::new())]
@@ -4892,7 +6390,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 self.new_list(&acc, &fty);
                 let el = el_of(lam);
                 let node = self.each(xs, lam, vec![], |s, v| {
-                    let x = s.lookup(&el).map(|x| x.ex).unwrap_or(s.g.null());
+                    let x = s.lookup(&el).map(|x| s.g.owned(&x)).unwrap_or(s.g.null());
                     vec![Node::If(vec![(truth(&v), vec![s.push(&a2, x)])], Vec::new())]
                 });
                 self.emit(node);
@@ -4905,7 +6403,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let to = to.unwrap_or(lam_ty.clone());
                 let node = self.each(xs, lam, vec![], |s, v| {
                     let v = s.adapt(v, &to, lam);
-                    vec![s.push(&a2, v.ex)]
+                    vec![s.push(&a2, s.g.owned(&v))]
                 });
                 self.emit(node);
                 Val::new(Ex::atom(acc), ty)
@@ -4946,7 +6444,14 @@ impl<'g, 'a> Fx<'g, 'a> {
                         Target::Go => Ex::Deref(Box::new(Ex::atom(a2.clone()))),
                         _ => Ex::atom(a2.clone()),
                     };
-                    let better = s.order(&present, v.ex.clone(), best, if max { Op::Gt } else { Op::Lt });
+                    let o = if max { Op::Gt } else { Op::Lt };
+                    if s.t() == Target::Rust {
+                        // the best so far, none or below (above) this one
+                        let best = s.g.lent(&Val::held(Ex::atom(a2.clone()), ty.clone(), Held::Kept));
+                        let test = best.method("is_none_or", vec![Ex::atom(format!("|b| {}", Ex::bin(o, s.g.lent(&v), Ex::atom("b")).print(Target::Rust)))]);
+                        return vec![Node::If(vec![(test, vec![s.assign_line(&a2, Ex::call("Some", vec![s.g.owned(&v)]))])], Vec::new())];
+                    }
+                    let better = s.order(&present, v.ex.clone(), best, o);
                     let none = s.is_null(&Ex::atom(a2.clone()));
                     let store = match s.t() {
                         Target::Go => s.g.kcall("Some", vec![v.ex.clone()]),
@@ -4968,22 +6473,28 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Target::TypeScript => format!("[{kf}, {ef}][]"),
                     Target::Python => format!("list[tuple[{kf}, {ef}]]"),
                     Target::Go => format!("[]{k}.Pair[{kf}, {ef}]"),
+                    Target::Rust => format!("Vec<({kf}, {ef})>"),
                 };
                 self.new_list(&acc, &lt);
                 let a2 = acc.clone();
                 let el = el_of(lam);
                 let node = self.each(xs, lam, vec![], |s, v| {
                     let v = s.adapt(v, &kt, lam);
-                    let x = s.lookup(&el).map(|x| x.ex).unwrap_or(s.g.null());
+                    let x = s.lookup(&el).map(|x| if s.t() == Target::Rust { s.g.owned(&x) } else { x.ex }).unwrap_or(s.g.null());
                     let pair = match s.t() {
                         Target::TypeScript => Ex::List(String::new(), vec![v.ex, x]),
                         Target::Python => Ex::atom(format!("({}, {})", v.ex.print(Target::Python), x.print(Target::Python))),
                         Target::Go => Ex::Record(format!("{k}.Pair[{kf}, {ef}]"), vec![("Key".into(), v.ex), ("Item".into(), x)]),
+                        Target::Rust => Ex::atom(format!("({}, {})", s.g.owned(&v).print(Target::Rust), x.print(Target::Rust))),
                     };
                     vec![s.push(&a2, pair)]
                 });
                 self.emit(node);
                 let desc = g.boolean(name == "sort_by_desc");
+                // Rust: the keys' `Ord`
+                if t == Target::Rust {
+                    return Val::new(g.kcall("ByKey", vec![Ex::atom(acc), desc]), ty);
+                }
                 let order = match t {
                     Target::Python => g.py_key_fn(&kt),
                     _ => g.order_fn(&kt, true),
@@ -5016,6 +6527,15 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let v = s.adapt(v, &kt, lam);
                     let v = s.spill(v);
                     let x = s.lookup(&el).map(|x| x).unwrap_or(Val::new(s.g.null(), Ty::Error));
+                    if s.t() == Target::Rust {
+                        // the greatest (least) key so far, none or below (above) this one
+                        let o = if max { Op::Gt } else { Op::Lt };
+                        let best = s.g.lent(&Val::held(Ex::atom(b2.clone()), Ty::Opt(Box::new(kt.clone())), Held::Kept));
+                        let test = best.method("is_none_or", vec![Ex::atom(format!("|b| {}", Ex::bin(o, s.g.lent(&v), Ex::atom("b")).print(Target::Rust)))]);
+                        let store = if matches!(x.ty, Ty::Opt(_)) { s.g.owned(&x) } else { Ex::call("Some", vec![s.g.owned(&x)]) };
+                        let then = vec![s.assign_line(&a2, store), s.assign_line(&b2, Ex::call("Some", vec![s.g.owned(&v)]))];
+                        return vec![Node::If(vec![(test, then)], Vec::new())];
+                    }
                     let cmp = |s: &Self| -> Ex {
                         let o = if max { Op::Gt } else { Op::Lt };
                         match s.t() {
@@ -5053,6 +6573,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                         Target::TypeScript => format!("{a2}.push(...{});", v.ex.print(t)),
                         Target::Python => format!("{a2}.extend({})", v.ex.print(t)),
                         Target::Go => format!("{a2} = append({a2}, {}...)", v.ex.print(t)),
+                        Target::Rust if v.held == Held::Made => format!("{a2}.extend({});", v.ex.print(t)),
+                        Target::Rust => format!("{a2}.extend_from_slice({});", s.g.lent(&v).print(t)),
                     })]
                 });
                 self.emit(node);
@@ -5066,6 +6588,16 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let to = to.unwrap_or(ty.clone());
                 let node = self.each(xs, lam, vec![], |s, v| {
                     let v = s.adapt(v, &to, lam);
+                    if s.t() == Target::Rust {
+                        // the value there, taken where it is made, else copied from where it is lent
+                        let inner = v.ty.present().clone();
+                        let y = s.temp();
+                        let by_value = s.g.is_copy(&inner) || v.held == Held::Made;
+                        let src = if by_value { v.ex.clone() } else { s.g.lent(&v) };
+                        let yv = Val::held(Ex::atom(y.clone()), inner, if by_value { Held::Made } else { Held::Lent });
+                        let push = s.push(&a2, s.g.owned(&yv));
+                        return vec![Node::Block(format!("if let Some({y}) = {}", super::ex::rust_cond(&src)), vec![push], Vec::new())];
+                    }
                     let v = s.spill(v);
                     let there = match s.t() {
                         Target::Python => Ex::atom(format!("{} is not None", v.ex.print(Target::Python))),
@@ -5090,6 +6622,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Target::TypeScript => self.emit(Node::Line(format!("const {acc} = new Map<{kb}, {eb}[]>();"))),
                     Target::Python => self.emit(Node::Line(format!("{acc}: dict[{kb}, list[{eb}]] = {{}}"))),
                     Target::Go => self.emit(Node::Line(format!("var {acc} = map[{kb}][]{eb}{{}}"))),
+                    Target::Rust => self.emit(Node::Line(format!("let mut {acc}: {} = {}::new();", g.dict_type(kb.clone(), format!("Vec<{eb}>")), g.std_type("BTreeMap")))),
                 }
                 let a2 = acc.clone();
                 let el = el_of(lam);
@@ -5099,21 +6632,22 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let kv = s.to_boundary(v, &kt);
                     let kv = s.spill_as(kv, &kb);
                     let x = s.lookup(&el).unwrap_or(Val::new(s.g.null(), Ty::Error));
-                    let xb = s.to_boundary(Val::new(x.ex, et.clone()), &et);
+                    let xb = s.to_boundary(Val::held(x.ex, et.clone(), x.held), &et);
                     let t = s.t();
                     vec![Node::Line(match t {
                         Target::TypeScript => format!("{k}.groupPush({a2}, {}, {});", kv.print(t), xb.print(t)),
                         Target::Python => format!("{a2}.setdefault({}, []).append({})", kv.print(t), xb.print(t)),
                         Target::Go => format!("{a2}[{0}] = append({a2}[{0}], {1})", kv.print(t), xb.print(t)),
+                        Target::Rust => format!("{a2}.entry({}).or_default().push({});", kv.print(t), xb.print(t)),
                     })]
                 });
                 self.emit(node);
                 let out = match t {
                     Target::TypeScript => g.kcall("mapOf", vec![Ex::atom(acc), g.order_fn(&kt, false)]),
                     Target::Python => g.kcall("dict_of", vec![Ex::Call(Box::new(Ex::atom(acc).dot("items")), vec![]), g.py_key_fn(&kt)]),
-                    Target::Go => Ex::atom(acc),
+                    Target::Go | Target::Rust => Ex::atom(acc),
                 };
-                Val::new(out, ty)
+                Val::held(out, ty, Held::Kept)
             }
             _ => Val::new(g.null(), ty),
         }
@@ -5132,6 +6666,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => g.kcall("entriesOf", vec![d.ex.clone(), g.order_fn(&kt, false)]),
             Target::Python => g.kcall("entries_of", vec![d.ex.clone(), g.py_key_fn(&kt)]),
             Target::Go => g.kcall("EntriesOf", vec![d.ex.clone(), g.order_fn(&kt, false)]),
+            Target::Rust => g.kcall("EntriesOf", vec![g.lent(&d)]),
         };
         let entries = self.spill(Val::new(entries, Ty::List(Box::new(Ty::Record(RecId::Entry(Box::new(kt.clone()), Box::new(vt.clone())))))));
         let out = self.temp();
@@ -5140,6 +6675,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>();"))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {vb}] = {{}}"))),
             Target::Go => self.emit(Node::Line(format!("var {out} = map[{kb}]{vb}{{}}"))),
+            Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {}::new();", g.dict_type(kb.clone(), vb.clone()), g.std_type("BTreeMap")))),
         }
         let el = match &lam.kind {
             ExprKind::Lambda(ps, _) => ps.last().map(|(p, _)| p.clone()).unwrap_or_default(),
@@ -5155,12 +6691,18 @@ impl<'g, 'a> Fx<'g, 'a> {
             let t = s.t();
             let put = Node::Line(match t {
                 Target::TypeScript => format!("{o2}.set({}, {});", k.print(t), val.print(t)),
+                // Rust: the pair copied out of the entry
+                Target::Rust => {
+                    let kx = s.g.owned(&Val::held(k, kt.clone(), Held::Kept));
+                    let vx = s.g.owned(&Val::held(val, vt.clone(), Held::Kept));
+                    format!("{o2}.insert({}, {});", kx.print(t), vx.print(t))
+                }
                 _ => format!("{o2}[{}] = {}", k.print(t), val.print(t)),
             });
             vec![Node::If(vec![(v.ex, vec![put])], Vec::new())]
         });
         self.emit(node);
-        Val::new(Ex::atom(out), ty)
+        Val::held(Ex::atom(out), ty, if t == Target::Rust { Held::Kept } else { Held::Made })
     }
 
     /// `xs.to_dict(x => key, x => value)`: for each element its key, then its value, each as it
@@ -5182,8 +6724,37 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>();"))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {vb}] = {{}}"))),
             Target::Go => self.emit(Node::Line(format!("var {out} = map[{kb}]{vb}{{}}"))),
+            Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {}::new();", g.dict_type(kb.clone(), vb.clone()), g.std_type("BTreeMap")))),
         }
         let el = self.temp();
+        if t == Target::Rust {
+            // Rust: each element reached through the list, by value where it is `Copy`
+            let copy = g.is_copy(&elem_ty);
+            let x = Val::held(Ex::atom(el.clone()), elem_ty.clone(), if copy { Held::Made } else { Held::Ref });
+            let (k, mut body, ks) = self.apply_seen(kf, vec![x.clone()]);
+            let (kx, pre) = self.apart(|s| {
+                let k = s.adapt(k, &kt, kf);
+                let k = s.to_boundary(k, &kt);
+                s.spill_as(k, &kb)
+            });
+            body.extend(pre);
+            let (v, more, vs) = self.apply_seen(vf, vec![x]);
+            body.extend(more);
+            let (vx, pre) = self.apart(|s| {
+                let v = s.adapt(v, &vt, vf);
+                s.to_boundary(v, &vt)
+            });
+            body.extend(pre);
+            body.push(Node::Line(format!("{out}.insert({}, {});", kx.print(t), vx.print(t))));
+            let read = ks.iter().chain(&vs).any(|b| *b);
+            let pat = match (read, copy) {
+                (false, _) => "_".to_string(),
+                (true, true) => format!("&{el}"),
+                (true, false) => el.clone(),
+            };
+            self.emit(Node::Block(format!("for {pat} in {}", self.g.iter_rs(&xs.ex)), body, Vec::new()));
+            return Val::held(Ex::atom(out), ty, Held::Kept);
+        }
         let x = Val::new(Ex::atom(el.clone()), elem_ty);
         let (k, mut body) = self.apply(kf, vec![x.clone()]);
         // Go: the element is used, whether the functions read it or not
@@ -5210,13 +6781,13 @@ impl<'g, 'a> Fx<'g, 'a> {
         let head = match t {
             Target::TypeScript => format!("for (const {el} of {})", xs.ex.print(t)),
             Target::Python => format!("for {el} in {}", xs.ex.print(t)),
-            Target::Go => format!("for _, {el} := range {}", xs.ex.print(t)),
+            Target::Go | Target::Rust => format!("for _, {el} := range {}", xs.ex.print(t)),
         };
         self.emit(Node::Block(head, body, Vec::new()));
         let ex = match t {
             Target::TypeScript => g.kcall("mapOf", vec![Ex::atom(out), g.order_fn(&kt, false)]),
             Target::Python => g.kcall("dict_of", vec![Ex::Call(Box::new(Ex::atom(out).dot("items")), vec![]), g.py_key_fn(&kt)]),
-            Target::Go => Ex::atom(out),
+            Target::Go | Target::Rust => Ex::atom(out),
         };
         Val::new(ex, ty)
     }
@@ -5236,6 +6807,25 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {ub}>();"))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {ub}] = {{}}"))),
             Target::Go => self.emit(Node::Line(format!("var {out} = map[{kb}]{ub}{{}}"))),
+            Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {}::new();", g.dict_type(kb.clone(), ub.clone()), g.std_type("BTreeMap")))),
+        }
+        // Rust: the pairs in the order of the keys, each reached through the dict
+        if t == Target::Rust {
+            let (kn, vn) = (self.temp(), self.temp());
+            let r = g.through(Ex::atom(vn.clone()), &vt);
+            let (v, mut body) = self.apart(|s| s.from_boundary_as(r.ex, &vt, &vt, r.held));
+            let (u, more, seen) = self.apply_seen(lam, vec![v]);
+            body.extend(more);
+            let (ux, pre) = self.apart(|s| {
+                let u = s.adapt(u, &ut, lam);
+                s.to_boundary(u, &ut)
+            });
+            body.extend(pre);
+            let kx = g.owned(&g.through(Ex::atom(kn.clone()), &kt));
+            body.push(Node::Line(format!("{out}.insert({}, {});", kx.print(t), ux.print(t))));
+            let vp = if seen.first().copied().unwrap_or(false) { vn } else { "_".to_string() };
+            self.emit(Node::Block(format!("for ({kn}, {vp}) in {}.iter()", d.ex.print(t)), body, Vec::new()));
+            return Val::held(Ex::atom(out), ty, Held::Kept);
         }
         let k = self.temp();
         let keys = self.sorted_keys(&d.ex, &kt);
@@ -5258,7 +6848,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let head = match t {
             Target::TypeScript => format!("for (const {k} of {})", keys.print(t)),
             Target::Python => format!("for {k} in {}", keys.print(t)),
-            Target::Go => format!("for _, {k} := range {}", keys.print(t)),
+            Target::Go | Target::Rust => format!("for _, {k} := range {}", keys.print(t)),
         };
         self.emit(Node::Block(head, body, Vec::new()));
         Val::new(Ex::atom(out), ty)
@@ -5282,6 +6872,35 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => self.emit(Node::Line(format!("const {out} = new Map<{kb}, {vb}>({});", a.ex.print(t)))),
             Target::Python => self.emit(Node::Line(format!("{out}: dict[{kb}, {vb}] = dict({})", a.ex.print(t)))),
             Target::Go => self.emit(Node::Line(format!("var {out} = {}", g.kcall("Merge", vec![a.ex.clone(), Ex::atom(format!("map[{kb}]{vb}{{}}"))]).print(t)))),
+            Target::Rust => self.emit(Node::Line(format!("let mut {out}: {} = {};", g.dict_type(kb.clone(), vb.clone()), g.owned(&a).print(t)))),
+        }
+        // Rust: the pairs of `o` in the order of its keys, each reached through the dict, and the
+        // value of `d` where it has the key
+        if t == Target::Rust {
+            let (kn, bn, an) = (self.temp(), self.temp(), self.temp());
+            let (ra, rb) = (g.through(Ex::atom(an.clone()), &vt), g.through(Ex::atom(bn.clone()), &vt));
+            let (args, mut both) = self.apart(|s| {
+                let p = s.from_boundary_as(ra.ex.clone(), &vt, &vt, ra.held);
+                let q = s.from_boundary_as(rb.ex.clone(), &vt, &vt, rb.held);
+                vec![p, q]
+            });
+            let (r, more, seen) = self.apply_seen(lam, args);
+            both.extend(more);
+            let (rx, pre) = self.apart(|s| {
+                let r = s.adapt(r, &vt, lam);
+                s.to_boundary(r, &vt)
+            });
+            both.extend(pre);
+            let kx = g.owned(&g.through(Ex::atom(kn.clone()), &kt));
+            both.push(Node::Line(format!("{out}.insert({}, {});", kx.print(t), rx.print(t))));
+            let only = vec![Node::Line(format!("{out}.insert({}, {});", kx.print(t), g.owned(&rb).print(t)))];
+            let node = if seen.first().copied().unwrap_or(false) {
+                Node::Block(format!("if let Some({an}) = {}.get({kn})", a.ex.print(t)), both, vec![("else".to_string(), only)])
+            } else {
+                Node::If(vec![(Ex::Call(Box::new(a.ex.clone().dot("contains_key")), vec![Ex::atom(kn.clone())]), both)], only)
+            };
+            self.emit(Node::Block(format!("for ({kn}, {bn}) in {}.iter()", b.ex.print(t)), vec![node], Vec::new()));
+            return Val::held(Ex::atom(out), ty, Held::Kept);
         }
         let k = self.temp();
         let keys = self.sorted_keys(&b.ex, &kt);
@@ -5311,13 +6930,13 @@ impl<'g, 'a> Fx<'g, 'a> {
         let head = match t {
             Target::TypeScript => format!("for (const {k} of {})", keys.print(t)),
             Target::Python => format!("for {k} in {}", keys.print(t)),
-            Target::Go => format!("for _, {k} := range {}", keys.print(t)),
+            Target::Go | Target::Rust => format!("for _, {k} := range {}", keys.print(t)),
         };
         self.emit(Node::Block(head, body, Vec::new()));
         let ex = match t {
             Target::TypeScript => g.kcall("mapOf", vec![Ex::atom(out), g.order_fn(&kt, false)]),
             Target::Python => g.kcall("dict_of", vec![Ex::Call(Box::new(Ex::atom(out).dot("items")), vec![]), g.py_key_fn(&kt)]),
-            Target::Go => Ex::atom(out),
+            Target::Go | Target::Rust => Ex::atom(out),
         };
         Val::new(ex, ty)
     }
@@ -5337,6 +6956,8 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => g.kcall("sortedKeys", vec![d.clone(), g.order_fn(kt, false)]),
             Target::Python => g.kcall("keys_of", vec![d.clone(), g.py_key_fn(kt)]),
             Target::Go => g.kcall("SortedKeys", vec![d.clone(), g.order_fn(kt, false)]),
+            // a `BTreeMap`'s keys and a `BTreeSet`'s members are in their order
+            Target::Rust => g.kcall("KeysOf", vec![d.clone()]),
         }
     }
 
@@ -5354,6 +6975,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => Ex::Call(Box::new(d.clone().dot("has")), vec![k.clone()]),
             Target::Python => Ex::atom(format!("({} in {})", k.print(Target::Python), d.print(Target::Python))),
             Target::Go => self.g.kcall("Has", vec![d.clone(), k.clone()]),
+            Target::Rust => self.g.kcall("Has", vec![d.clone(), k.clone()]),
         }
     }
 
@@ -5415,6 +7037,19 @@ impl<'g, 'a> Fx<'g, 'a> {
                 }
                 Val::new(Ex::atom(n), ty)
             }
+            // Rust: each pair put in from the left, so the later of one key is kept
+            Target::Rust => {
+                let m = g.std_type("BTreeMap");
+                if pairs.is_empty() {
+                    return Val::new(Ex::atom(format!("{m}::new()")), ty);
+                }
+                let n = self.temp();
+                self.emit(Node::Line(format!("let mut {n}: {} = {m}::new();", g.dict_type(kb, vb))));
+                for (a, b) in pairs {
+                    self.emit(Node::Line(format!("{n}.insert({}, {});", a.print(t), b.print(t))));
+                }
+                Val::held(Ex::atom(n), ty, Held::Kept)
+            }
         }
     }
 
@@ -5428,6 +7063,17 @@ impl<'g, 'a> Fx<'g, 'a> {
         let k = g.imp(Import::Kaname);
         // the i-th argument after the first, read in `to`, as it is worked on
         let arg = |s: &mut Self, i: usize, to: &Ty| -> Val { s.adapt(vals[i + 1].clone(), to, xs[i + 1]) };
+        // Rust: the collection lent to a helper, and a key or a member it looks for lent too
+        // (`d.get("a")`, `s.contains(&3)`)
+        let lent0 = g.lent(&vals[0]);
+        let sought = |s: &mut Self, to: &Ty| -> Ex {
+            let a = arg(s, 0, to);
+            if s.g.is_copy(to) || !s.g.same_out(to) {
+                s.to_boundary(a, to).borrow()
+            } else {
+                s.g.lent(&a)
+            }
+        };
         match t0.present().clone() {
             Ty::Dict(kt, vt) => {
                 let d = vals[0].ex.clone();
@@ -5436,13 +7082,33 @@ impl<'g, 'a> Fx<'g, 'a> {
                     s.to_boundary(a, &kt)
                 };
                 match name {
+                    "get" if t == Target::Rust => {
+                        let kx = sought(self, &kt);
+                        let mut raw = Ex::Call(Box::new(d.dot("get")), vec![kx]).method("cloned", vec![]);
+                        if matches!(*vt, Ty::Opt(_)) {
+                            raw = raw.method("flatten", vec![]);
+                        }
+                        let slot = match &*vt {
+                            Ty::Opt(_) => (*vt).clone(),
+                            v => Ty::Opt(Box::new(v.clone())),
+                        };
+                        self.from_raw(raw, &slot, &me)
+                    }
+                    "has" if t == Target::Rust => {
+                        let kx = sought(self, &kt);
+                        Val::new(Ex::Call(Box::new(d.dot("contains_key")), vec![kx]), me)
+                    }
+                    "remove" if t == Target::Rust => {
+                        let kx = sought(self, &kt);
+                        Val::new(g.kcall("Remove", vec![lent0, kx]), me)
+                    }
                     "get" => {
                         let kx = key(self);
                         let raw = match t {
                             Target::TypeScript => g.kcall("get", vec![d, kx]),
                             Target::Python => Ex::Call(Box::new(d.dot("get")), vec![kx]),
                             Target::Go if matches!(*vt, Ty::Opt(_)) => g.kcall("GetOpt", vec![d, kx]),
-                            Target::Go => g.kcall("Get", vec![d, kx]),
+                            Target::Go | Target::Rust => g.kcall("Get", vec![d, kx]),
                         };
                         let slot = match &*vt {
                             Ty::Opt(_) => (*vt).clone(),
@@ -5463,6 +7129,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::TypeScript => g.kcall("put", vec![d, kx, vx, g.order_fn(&kt, false)]),
                             Target::Python => g.kcall("put", vec![d, kx, vx, g.py_key_fn(&kt)]),
                             Target::Go => g.kcall("Put", vec![d, kx, vx]),
+                            Target::Rust => g.kcall("Put", vec![lent0, kx, vx]),
                         };
                         Val::new(ex, me)
                     }
@@ -5471,12 +7138,12 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let ex = match t {
                             Target::TypeScript => g.kcall("remove", vec![d, kx, g.order_fn(&kt, false)]),
                             Target::Python => g.kcall("remove", vec![d, kx]),
-                            Target::Go => g.kcall("Remove", vec![d, kx]),
+                            Target::Go | Target::Rust => g.kcall("Remove", vec![d, kx]),
                         };
                         Val::new(ex, me)
                     }
                     "keys" => {
-                        let raw = self.sorted_keys(&d, &kt);
+                        let raw = self.sorted_keys(if t == Target::Rust { &lent0 } else { &d }, &kt);
                         self.from_raw(raw, &Ty::List(kt.clone()), &me)
                     }
                     "values" => {
@@ -5484,6 +7151,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::TypeScript => g.kcall("valuesOf", vec![d, g.order_fn(&kt, false)]),
                             Target::Python => g.kcall("values_of", vec![d, g.py_key_fn(&kt)]),
                             Target::Go => g.kcall("ValuesOf", vec![d, g.order_fn(&kt, false)]),
+                            Target::Rust => g.kcall("ValuesOf", vec![lent0]),
                         };
                         self.from_raw(raw, &Ty::List(vt.clone()), &me)
                     }
@@ -5492,6 +7160,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::TypeScript => g.kcall("entriesOf", vec![d, g.order_fn(&kt, false)]),
                             Target::Python => g.kcall("entries_of", vec![d, g.py_key_fn(&kt)]),
                             Target::Go => g.kcall("EntriesOf", vec![d, g.order_fn(&kt, false)]),
+                            Target::Rust => g.kcall("EntriesOf", vec![lent0]),
                         };
                         Val::new(ex, me)
                     }
@@ -5501,6 +7170,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::TypeScript => g.kcall("merge", vec![d, o.ex, g.order_fn(&kt, false)]),
                             Target::Python => g.kcall("merge", vec![d, o.ex, g.py_key_fn(&kt)]),
                             Target::Go => g.kcall("Merge", vec![d, o.ex]),
+                            Target::Rust => g.kcall("Merge", vec![lent0, g.lent(&o)]),
                         };
                         Val::new(ex, me)
                     }
@@ -5518,6 +7188,14 @@ impl<'g, 'a> Fx<'g, 'a> {
                     _ => f.to_string(),
                 };
                 match name {
+                    "has" if t == Target::Rust => {
+                        let x = sought(self, &et);
+                        Val::new(Ex::Call(Box::new(s0.dot("contains")), vec![x]), me)
+                    }
+                    "remove" if t == Target::Rust => {
+                        let x = sought(self, &et);
+                        Val::new(g.kcall("Without", vec![lent0, x]), me)
+                    }
                     "has" => {
                         let x = member(self);
                         Val::new(self.has_key(&s0, &x), me)
@@ -5531,6 +7209,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             (Target::Python, _) => Ex::atom(format!("({} - {{{}}})", s0.print(t), x.print(t))),
                             (Target::Go, "add") => g.kcall("Insert", vec![s0, x]),
                             (Target::Go, _) => g.kcall("Remove", vec![s0, x]),
+                            (Target::Rust, _) => g.kcall("Insert", vec![lent0, x]),
                         };
                         Val::new(ex, me)
                     }
@@ -5546,19 +7225,19 @@ impl<'g, 'a> Fx<'g, 'a> {
                                 };
                                 Ex::atom(format!("({} {op} {})", s0.print(t), o.ex.print(t)))
                             }
-                            Target::Go => {
+                            Target::Go | Target::Rust => {
                                 let f = match name {
                                     "union" => "Union",
                                     "intersect" => "Intersect",
                                     _ => "Difference",
                                 };
-                                g.kcall(f, vec![s0, o.ex])
+                                if t == Target::Rust { g.kcall(f, vec![lent0, g.lent(&o)]) } else { g.kcall(f, vec![s0, o.ex]) }
                             }
                         };
                         Val::new(ex, me)
                     }
                     "to_list" => {
-                        let raw = self.sorted_keys(&s0, &et);
+                        let raw = self.sorted_keys(if t == Target::Rust { &lent0 } else { &s0 }, &et);
                         self.from_raw(raw, &Ty::List(et.clone()), &me)
                     }
                     _ => Val::new(self.size_of(&s0), me),
@@ -5568,6 +7247,14 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let xs0 = vals[0].ex.clone();
                 let opt_elem = matches!(*et, Ty::Opt(_));
                 match name {
+                    // Rust: a copy of the element there, an element that may be none flattened
+                    "first" | "last" if t == Target::Rust => {
+                        let mut ex = Ex::Call(Box::new(xs0.dot(name)), vec![]).method("cloned", vec![]);
+                        if opt_elem {
+                            ex = ex.method("flatten", vec![]);
+                        }
+                        Val::new(ex, me)
+                    }
                     "first" | "last" => {
                         let f = match (t, name, opt_elem) {
                             (Target::Go, "first", true) => "FirstOpt",
@@ -5582,10 +7269,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                     "at" => {
                         let i = self.int_arg(&vals[1]);
                         let f = match (t, opt_elem) {
-                            (Target::Go, true) => "ElemAtOpt",
-                            (Target::Go, false) => "ElemAt",
+                            (Target::Go | Target::Rust, true) => "ElemAtOpt",
+                            (Target::Go | Target::Rust, false) => "ElemAt",
                             _ => "at",
                         };
+                        let xs0 = if t == Target::Rust { lent0.clone() } else { xs0 };
                         Val::new(g.kcall(f, vec![xs0, i]), me)
                     }
                     "append" => {
@@ -5594,19 +7282,20 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::Python => Ex::atom(format!("[*{}, {}]", xs0.print(t), x.ex.print(t))),
                             Target::TypeScript => g.kcall("append", vec![xs0, x.ex]),
                             Target::Go => g.kcall("Append", vec![xs0, x.ex]),
+                            Target::Rust => g.kcall("Append", vec![lent0, g.owned(&x)]),
                         };
                         Val::new(ex, me)
                     }
                     "slice" | "take" | "drop" => {
-                        let mut args = vec![xs0];
+                        let mut args = vec![if t == Target::Rust { lent0 } else { xs0 }];
                         for v in &vals[1..] {
                             args.push(self.int_arg(v));
                         }
                         let f = match (t, name) {
                             (Target::Python, "slice") => "slice_of",
-                            (Target::Go, "slice") => "Slice",
-                            (Target::Go, "take") => "Take",
-                            (Target::Go, _) => "Drop",
+                            (Target::Go | Target::Rust, "slice") => "Slice",
+                            (Target::Go | Target::Rust, "take") => "Take",
+                            (Target::Go | Target::Rust, _) => "Drop",
                             (_, n) => n,
                         };
                         Val::new(g.kcall(f, args), me)
@@ -5616,6 +7305,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::Python => Ex::Index(Box::new(xs0), Box::new(Ex::atom("::-1"))),
                             Target::TypeScript => g.kcall("reverse", vec![xs0]),
                             Target::Go => g.kcall("Reverse", vec![xs0]),
+                            Target::Rust => g.kcall("Reverse", vec![lent0]),
                         };
                         Val::new(ex, me)
                     }
@@ -5627,6 +7317,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                             },
                             Target::TypeScript => g.kcall("sorted", vec![xs0, g.order_fn(&et, true)]),
                             Target::Go => g.kcall("Sorted", vec![xs0, g.order_fn(&et, true)]),
+                            // the elements' `Ord`
+                            Target::Rust => g.kcall("Sorted", vec![lent0]),
                         };
                         Val::new(ex, me)
                     }
@@ -5639,6 +7331,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                                 let key = if q { format!("{k}.QKey") } else { format!("{k}.Same[{}]", g.flight(&et)) };
                                 g.kcall("Distinct", vec![xs0, Ex::atom(key)])
                             }
+                            // the elements' `PartialEq` (a fraction is held in its lowest terms)
+                            Target::Rust => g.kcall("Distinct", vec![lent0]),
                         };
                         Val::new(ex, me)
                     }
@@ -5648,27 +7342,41 @@ impl<'g, 'a> Fx<'g, 'a> {
                         let found = self.temp();
                         self.mutable(&found, &g.flight(&Ty::Bool), g.boolean(false));
                         let y = self.temp();
-                        let test = g.eq_ex(Ex::atom(y.clone()), x.ex.clone(), &et);
-                        let brk = Node::Line(if t == Target::TypeScript { "break;".into() } else { "break".into() });
+                        let test = match t {
+                            // Rust: the element reached through the list, compared as the value sought is
+                            Target::Rust => {
+                                let yv = g.through(Ex::atom(y.clone()), &et);
+                                g.eq_ex(g.cmp_side(&yv), g.cmp_side(&x), &et)
+                            }
+                            _ => g.eq_ex(Ex::atom(y.clone()), x.ex.clone(), &et),
+                        };
+                        let brk = Node::Line(if matches!(t, Target::TypeScript | Target::Rust) { "break;".into() } else { "break".into() });
                         let body = vec![Node::If(vec![(test, vec![self.assign_line(&found, g.boolean(true)), brk])], Vec::new())];
                         let head = match t {
                             Target::TypeScript => format!("for (const {y} of {})", xs0.print(t)),
                             Target::Python => format!("for {y} in {}", xs0.print(t)),
                             Target::Go => format!("for _, {y} := range {}", xs0.print(t)),
+                            Target::Rust => format!("for {y} in {}", g.iter_rs(&xs0)),
                         };
                         self.emit(Node::Block(head, body, Vec::new()));
                         Val::new(Ex::atom(found), me)
                     }
-                    "flatten" => Val::new(g.kcall(&g.helper("flatten", "flatten", "Flatten"), vec![xs0]), me),
+                    "flatten" => Val::new(g.kcall(&g.helper("flatten", "flatten", "Flatten"), vec![if t == Target::Rust { lent0 } else { xs0 }]), me),
                     "indexed" => {
                         let out = self.temp();
                         self.new_list(&out, &g.flight(&me));
                         let (i, x) = (self.temp(), self.temp());
-                        let (item, mut body) = self.apart(|s| s.to_boundary(Val::new(Ex::atom(x.clone()), (*et).clone()), &et));
+                        let copy = g.is_copy(&et);
+                        let xv = match t {
+                            Target::Rust => Val::held(Ex::atom(x.clone()), (*et).clone(), if copy { Held::Made } else { Held::Ref }),
+                            _ => Val::new(Ex::atom(x.clone()), (*et).clone()),
+                        };
+                        let (item, mut body) = self.apart(|s| s.to_boundary(xv, &et));
                         let rec = match t {
                             Target::TypeScript => Ex::Record(String::new(), vec![("index".into(), Ex::call("BigInt", vec![Ex::atom(i.clone())])), ("item".into(), item)]),
                             Target::Python => Ex::Record(format!("{k}.Indexed"), vec![("index".into(), Ex::atom(i.clone())), ("item".into(), item)]),
                             Target::Go => Ex::Record(format!("{k}.Indexed[{}]", g.boundary(&et)), vec![("Index".into(), Ex::call("int64", vec![Ex::atom(i.clone())])), ("Item".into(), item)]),
+                            Target::Rust => Ex::Record(format!("{k}::Indexed"), vec![("index".into(), Ex::Cast(Box::new(Ex::atom(i.clone())), "i64".into())), ("item".into(), item)]),
                         };
                         body.push(self.push(&out, rec));
                         let head = match t {
@@ -5678,16 +7386,23 @@ impl<'g, 'a> Fx<'g, 'a> {
                             }
                             Target::Python => format!("for {i}, {x} in enumerate({})", xs0.print(t)),
                             Target::Go => format!("for {i}, {x} := range {}", xs0.print(t)),
+                            Target::Rust => format!("for ({i}, {}) in {}.iter().enumerate()", if copy { format!("&{x}") } else { x.clone() }, xs0.print(t)),
                         };
                         self.emit(Node::Block(head, body, Vec::new()));
                         Val::new(Ex::atom(out), me)
+                    }
+                    // Rust: the elements as they travel, copied into the set
+                    "to_set" if t == Target::Rust => {
+                        let lt = Ty::List(et.clone());
+                        let lb = if g.same_out(&lt) { lent0 } else { self.to_boundary(vals[0].clone(), &lt).borrow() };
+                        Val::new(g.kcall("SetOf", vec![lb]), me)
                     }
                     "to_set" => {
                         let lb = self.to_boundary(Val::new(xs0, t0.clone()), &Ty::List(et.clone()));
                         let ex = match t {
                             Target::TypeScript => g.kcall("setOf", vec![lb, g.order_fn(&et, false)]),
                             Target::Python => Ex::call("frozenset", vec![lb]),
-                            Target::Go => g.kcall("SetOf", vec![lb]),
+                            Target::Go | Target::Rust => g.kcall("SetOf", vec![lb]),
                         };
                         Val::new(ex, me)
                     }
@@ -5697,6 +7412,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                             Target::TypeScript => Ex::Call(Box::new(xs0.dot("join")), vec![sep]),
                             Target::Python => Ex::Call(Box::new(sep.dot("join")), vec![xs0]),
                             Target::Go => g.kcall("Join", vec![xs0, sep]),
+                            Target::Rust => Ex::Call(Box::new(xs0.dot("join")), vec![g.lent(&vals[1])]),
                         };
                         Val::new(ex, me)
                     }
@@ -5713,6 +7429,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => Ex::call("BigInt", vec![x.clone().dot("size")]),
             Target::Python => Ex::call("len", vec![x.clone()]),
             Target::Go => Ex::call("int64", vec![Ex::call("len", vec![x.clone()])]),
+            Target::Rust => Ex::Cast(Box::new(Ex::Call(Box::new(x.clone().dot("len")), vec![])), "i64".into()),
         }
     }
 
@@ -5725,6 +7442,8 @@ impl<'g, 'a> Fx<'g, 'a> {
     fn order(&self, t: &Ty, a: Ex, b: Ex, op: Op) -> Ex {
         let g = self.g;
         match (t, self.t()) {
+            // Rust: the derived `Ord` of each type, and `kaname::Q`'s by its value
+            (_, Target::Rust) => Ex::bin(op, a, b),
             (Ty::Num(n), _) if rep(n) == Rep::Int => Ex::bin(op, a, b),
             (Ty::Num(_), Target::Python) => Ex::bin(op, a, b),
             (Ty::Num(_), Target::TypeScript) => Ex::bin(op, g.kcall("cmp", vec![a, b]), Ex::atom("0")),
@@ -5758,7 +7477,7 @@ impl<'g, 'a> Fx<'g, 'a> {
         let w2 = weights.clone();
         let node = self.each(xs.clone(), lam, vec![], |s, v| {
             let v = s.adapt(v, &w_ty, lam);
-            vec![s.push(&w2, v.ex)]
+            vec![s.push(&w2, s.g.owned(&v))]
         });
         self.emit(node);
         let zero = match r {
@@ -5777,6 +7496,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("for (const {w} of {weights})"),
             Target::Python => format!("for {w} in {weights}"),
             Target::Go => format!("for _, {w} := range {weights}"),
+            Target::Rust => format!("for &{w} in {weights}.iter()"),
         };
         self.emit(Node::Block(head, vec![self.assign_line(&total, next)], Vec::new()));
         let out = self.temp();
@@ -5786,15 +7506,24 @@ impl<'g, 'a> Fx<'g, 'a> {
         self.mutable(&before, &wf, zero);
         let i = self.temp();
         let upto = self.temp();
+        let rust = self.t() == Target::Rust;
+        // Rust: each element beside its weight (`xs.iter().zip(weights.iter())`), reached through
+        // the list
         let item = match self.t() {
             Target::TypeScript | Target::Python => Ex::Index(Box::new(xs.ex.clone()), Box::new(Ex::atom(i.clone()))),
             Target::Go => Ex::Index(Box::new(xs.ex.clone()), Box::new(Ex::atom(i.clone()))),
+            Target::Rust => Ex::atom(i.clone()),
         };
-        let wi = Ex::Index(Box::new(Ex::atom(weights.clone())), Box::new(Ex::atom(i.clone())));
+        // Rust: the weight beside the element; the other targets index the weights, and the
+        // temporaries after it keep their numbers there
+        let wv = if rust { self.temp() } else { String::new() };
+        let wi = if rust { Ex::atom(wv.clone()) } else { Ex::Index(Box::new(Ex::atom(weights.clone())), Box::new(Ex::atom(i.clone()))) };
+        let item_copy = g.is_copy(item_ty);
+        let item_held = if rust && !item_copy { Held::Ref } else { Held::Made };
         let up = add(self, Ex::atom(before.clone()), wi);
         let mut body = Vec::new();
         let (bv, mut pre) = self.apart(|s| {
-            let item_b = s.to_boundary(Val::new(item.clone(), (**item_ty).clone()), item_ty);
+            let item_b = s.to_boundary(Val::held(item.clone(), (**item_ty).clone(), item_held), item_ty);
             let bb = s.to_boundary(Val::new(Ex::atom(before.clone()), w_ty.clone()), &w_ty);
             let ub = s.to_boundary(Val::new(Ex::atom(upto.clone()), w_ty.clone()), &w_ty);
             let tb = s.to_boundary(Val::new(Ex::atom(total.clone()), w_ty.clone()), &w_ty);
@@ -5804,6 +7533,8 @@ impl<'g, 'a> Fx<'g, 'a> {
             };
             let tyname = match s.t() {
                 Target::TypeScript => String::new(),
+                // Rust: the struct's literal names it without its type arguments
+                Target::Rust => format!("{}::Running", s.g.imp(Import::Kaname)),
                 _ => s.g.record_type(&RecId::Running(item_ty.clone(), Box::new(w_ty.clone()))),
             };
             Ex::Record(tyname, vec![(ki.into(), item_b), (kb.into(), bb), (ku.into(), ub), (kt.into(), tb)])
@@ -5812,6 +7543,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => body.push(Node::Line(format!("const {upto}: {wf} = {};", up.print(self.t())))),
             Target::Python => body.push(Node::Line(format!("{upto}: {wf} = {}", up.print(self.t())))),
             Target::Go => body.push(Node::Line(format!("var {upto} {wf} = {}", up.print(self.t())))),
+            Target::Rust => body.push(Node::Line(format!("let {upto}: {wf} = {};", up.print(self.t())))),
         }
         body.append(&mut pre);
         body.push(self.push(&out, bv));
@@ -5820,6 +7552,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("for (let {i} = 0; {i} < {}.length; {i}++)", xs.ex.print(self.t())),
             Target::Python => format!("for {i} in range(len({}))", xs.ex.print(self.t())),
             Target::Go => format!("for {i} := range {}", xs.ex.print(self.t())),
+            Target::Rust => format!("for ({}, &{wv}) in {}.iter().zip({weights}.iter())", if item_copy { format!("&{i}") } else { i.clone() }, xs.ex.print(self.t())),
         };
         self.emit(Node::Block(head, body, Vec::new()));
         Val::new(Ex::atom(out), ty.clone())
@@ -5838,14 +7571,18 @@ impl<'g, 'a> Fx<'g, 'a> {
         };
         let acc = self.temp();
         let at = self.g.flight(&first_ty);
-        self.mutable(&acc, &at, vs[1].ex.clone());
+        let start = self.g.owned(&vs[1]);
+        self.mutable(&acc, &at, start);
         let a2 = acc.clone();
-        let accv = Val::new(Ex::atom(acc.clone()), first_ty.clone());
+        let rust = self.t() == Target::Rust;
+        let held = if rust && !self.g.is_copy(&first_ty) { Held::Kept } else { Held::Made };
+        let accv = Val::held(Ex::atom(acc.clone()), first_ty.clone(), held);
         let node = self.each(xs, lam, vec![accv], |s, v| {
             let v = s.adapt(v, &first_ty, lam);
-            vec![s.assign_line(&a2, v.ex)]
+            vec![s.assign_line(&a2, s.g.owned(&v))]
         });
         self.emit(node);
+        // the running value read for the last time: Rust's code takes it as it is
         let v = Val::new(Ex::atom(acc), first_ty);
         self.adapt(v, &ty, first)
     }
@@ -5857,6 +7594,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("let {name}: {ty} = {};", value.print(t)),
             Target::Python => format!("{name}: {ty} = {}", value.print(t)),
             Target::Go => format!("var {name} {ty} = {}", value.print(t)),
+            Target::Rust => format!("let mut {name}: {ty} = {};", value.print(t)),
         };
         self.emit(Node::Line(line));
     }
@@ -5872,6 +7610,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("const {name}: {ty} = [];"),
             Target::Python => format!("{name}: {ty} = []"),
             Target::Go => format!("var {name} {ty} = {ty}{{}}"),
+            Target::Rust => format!("let mut {name}: {ty} = Vec::new();"),
         };
         self.emit(Node::Line(line));
     }
@@ -5882,6 +7621,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             Target::TypeScript => format!("{list}.push({});", v.print(t)),
             Target::Python => format!("{list}.append({})", v.print(t)),
             Target::Go => format!("{list} = {}", Ex::call("append", vec![Ex::atom(list), v]).print(t)),
+            Target::Rust => format!("{list}.push({});", v.print(t)),
         })
     }
 
@@ -5904,6 +7644,11 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let b = self.adapt(vals[1].clone(), &me, xs[1]);
                 let (a, b) = (self.spill(a), self.spill(b));
                 let op = if name == "min" { Op::Le } else { Op::Ge };
+                // Rust: the two compared as Rust compares them, the one taken copied where it is not made
+                if t == Target::Rust {
+                    let test = self.order(me.present(), g.cmp_side(&a), g.cmp_side(&b), op);
+                    return Val::new(Ex::Cond(Box::new(test), Box::new(g.owned(&a)), Box::new(g.owned(&b))), me);
+                }
                 let test = self.order(me.present(), a.ex.clone(), b.ex.clone(), op);
                 match t {
                     Target::Go => {
@@ -5928,6 +7673,18 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Some(d) if d > 0 => g.kcall(&g.helper("mod", "mod", "Mod"), vec![x, g.int(d)]),
                     // a divisor that is a value (DESIGN 24.3): Euclid's remainder, the error `zero`
                     // where the analysis does not show the divisor is never 0
+                    // Rust: the form that cannot fail, else the one that fails with `zero`
+                    _ if t == Target::Rust => {
+                        let n = self.int_arg(&vals[1]);
+                        match g.zero_at(e) {
+                            None => g.kcall("ModOf", vec![x, n]),
+                            Some(at) => {
+                                let mut args = vec![x, n];
+                                args.extend(g.at_args(&at));
+                                g.kcall("ModOfAt", args).tried()
+                            }
+                        }
+                    }
                     _ => {
                         let n = self.int_arg(&vals[1]);
                         let zero = match (g.zero_at(e), t) {
@@ -5942,6 +7699,18 @@ impl<'g, 'a> Fx<'g, 'a> {
                 Val::new(self.rep_to(ex, Rep::Int, me.num().map(rep).unwrap_or(Rep::Int)), me)
             }
             // `numbers(a, b)`: the count held to int64 where the analysis does not show it is (DESIGN 24.3)
+            "numbers" if t == Target::Rust => {
+                let (a, b) = (self.int_arg(&vals[0]), self.int_arg(&vals[1]));
+                let ex = match g.overflow_at(e) {
+                    None => g.kcall("Numbers", vec![a, b]),
+                    Some(at) => {
+                        let mut args = vec![a, b];
+                        args.extend(g.at_args(&at));
+                        g.kcall("NumbersAt", args).tried()
+                    }
+                };
+                Val::new(ex, me)
+            }
             "numbers" => {
                 let (a, b) = (self.int_arg(&vals[0]), self.int_arg(&vals[1]));
                 let over = match (g.overflow_at(e), t) {
@@ -5960,7 +7729,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                     let ex = match t {
                         Target::TypeScript => Ex::atom(format!("{}!", g.kcall("isqrt", vec![x]).print(t))),
                         Target::Python => g.kcall("root", vec![x]),
-                        Target::Go => g.kcall("Root", vec![x]),
+                        Target::Go | Target::Rust => g.kcall("Root", vec![x]),
                     };
                     return Val::new(self.rep_to(ex, Rep::Int, r), me);
                 }
@@ -5975,6 +7744,19 @@ impl<'g, 'a> Fx<'g, 'a> {
                     })
                     .reduce(|a, b| Ex::bin(Op::Add, a, b))
                     .unwrap_or(g.string(""));
+                // Rust: the message made where it fails, and the error returned
+                if t == Target::Rust {
+                    let parts = template(&tr!("`isqrt` に負の値 \u{1}shown\u{1} を渡しています", "`isqrt` is given \u{1}shown\u{1}, which is below 0"), g.lang)
+                        .into_iter()
+                        .map(|p| match p {
+                            Ok(s) => Ok(s),
+                            Err(_) => Err(shown.clone()),
+                        })
+                        .collect();
+                    let fail = g.fail_line("range", e.span.line, g.rs_format(parts));
+                    self.emit(Node::Block(format!("let Some({n}) = {} else", g.kcall("Isqrt", vec![xv.ex.clone()]).print(t)), vec![fail], Vec::new()));
+                    return Val::new(self.rep_to(Ex::atom(n), Rep::Int, r), me);
+                }
                 let fail = Node::Line(g.stmt(g.kcall(&g.helper("fail", "fail", "Fail"), vec![g.string("range"), g.module_const(), Ex::atom(e.span.line.to_string()), msg])));
                 match t {
                     Target::TypeScript => {
@@ -5990,6 +7772,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                         self.emit(Node::Line(format!("{n}, {ok} := {}", g.kcall("Isqrt", vec![xv.ex.clone()]).print(t))));
                         self.emit(Node::If(vec![(Ex::Not(Box::new(Ex::atom(ok))), vec![fail])], Vec::new()));
                     }
+                    Target::Rust => unreachable!("Rust's `isqrt` is written above"),
                 }
                 Val::new(self.rep_to(Ex::atom(n), Rep::Int, r), me)
             }
@@ -6009,10 +7792,20 @@ impl<'g, 'a> Fx<'g, 'a> {
                         (None, Target::Go) => Ex::atom("nil"),
                         (None, _) => g.null(),
                         (Some(at), Target::Go) => Ex::atom(format!("&{}", Ex::Record(format!("{}.At", g.imp(Import::Kaname)), vec![("Module".into(), g.module_const()), ("Line".into(), Ex::atom(at.line.to_string())), ("Message".into(), g.string(&at.message))]).print(t))),
+                        (Some(at), Target::Rust) => Ex::call(
+                            "Some",
+                            vec![Ex::Record(format!("{}::At", g.imp(Import::Kaname)), vec![("module".into(), g.module_const()), ("line".into(), Ex::atom(at.line.to_string())), ("message".into(), g.string(&at.message))])],
+                        ),
                         (Some(at), _) => Ex::List(String::new(), g.at_args(&at)),
                     }
                 };
-                let v = g.kcall(&g.helper("allocate", "allocate", "Allocate"), vec![tq, c, s, over(g.overflow_at(e)), over(g.zero_at(e))]);
+                let (oa, za) = (g.overflow_at(e), g.zero_at(e));
+                let v = match t {
+                    // Rust: the form that cannot fail, else the one that fails with `overflow` or `zero`
+                    Target::Rust if oa.is_none() && za.is_none() => g.kcall("Allocate", vec![tq, c, s]),
+                    Target::Rust => g.kcall("AllocateAt", vec![tq, c, s, over(oa), over(za)]).tried(),
+                    _ => g.kcall(&g.helper("allocate", "allocate", "Allocate"), vec![tq, c, s, over(oa), over(za)]),
+                };
                 // read in the unit of the answer
                 let nm = me.num().cloned().unwrap_or_else(NumTy::number);
                 let from = NumTy { step: None, konst: None, ..n0 };
@@ -6032,7 +7825,7 @@ impl<'g, 'a> Fx<'g, 'a> {
                 if let Some(at) = &check {
                     let mut args = vec![v];
                     args.extend(g.at_args(at));
-                    v = g.kcall(&g.helper("held", "held", "Held"), args);
+                    v = g.held_call(args);
                 }
                 let nm = me.num().cloned().unwrap_or_else(NumTy::number);
                 let v = self.convert(v, &NumTy { step: None, konst: None, ..nx }, &NumTy { step: None, ..nm.clone() }, e, None);
@@ -6042,6 +7835,8 @@ impl<'g, 'a> Fx<'g, 'a> {
                 let n = match t {
                     // a string's code points (DESIGN 25.7)
                     Target::TypeScript | Target::Go if matches!(vals[0].ty.present(), Ty::Str) => g.kcall(&g.helper("cpCount", "", "CpCount"), vec![vals[0].ex.clone()]),
+                    Target::Rust if matches!(vals[0].ty.present(), Ty::Str) => g.kcall("CpCount", vec![g.lent(&vals[0])]),
+                    Target::Rust => self.size_of(&vals[0].ex),
                     // a dict's pairs and a set's members (DESIGN 24.3)
                     Target::TypeScript if matches!(vals[0].ty.present(), Ty::Dict(..) | Ty::Set(_)) => self.size_of(&vals[0].ex),
                     Target::TypeScript => Ex::call("BigInt", vec![vals[0].ex.clone().dot("length")]),
@@ -6055,18 +7850,31 @@ impl<'g, 'a> Fx<'g, 'a> {
                     Target::TypeScript => Ex::Call(Box::new(vals[0].ex.clone().dot("startsWith")), vec![vals[1].ex.clone()]),
                     Target::Python => Ex::Call(Box::new(vals[0].ex.clone().dot("startswith")), vec![vals[1].ex.clone()]),
                     Target::Go => g.kcall("StartsWith", vec![vals[0].ex.clone(), vals[1].ex.clone()]),
+                    Target::Rust => Ex::Call(Box::new(vals[0].ex.clone().dot("starts_with")), vec![g.lent(&vals[1])]),
                 };
                 Val::new(ex, me)
             }
             // lists one after another, each read in the type of the answer (DESIGN 24.3)
             "concat" if matches!(me, Ty::List(_) | Ty::Empty) => {
+                // Rust: each list as a slice of one array, joined (`[a.as_slice(), b].concat()`)
+                if t == Target::Rust {
+                    let parts: Vec<Val> = vals.iter().zip(xs).map(|(v, x)| self.adapt(v.clone(), &me, x)).collect();
+                    let slices: Vec<String> = parts.iter().map(|v| if v.held == Held::Lent { v.ex.print(t) } else { v.ex.clone().method("as_slice", vec![]).print(t) }).collect();
+                    return Val::new(Ex::atom(format!("[{}].concat()", slices.join(", "))), me);
+                }
                 let lists: Vec<Ex> = vals.iter().zip(xs).map(|(v, x)| self.adapt(v.clone(), &me, x).ex).collect();
                 let ex = match t {
                     Target::Python => Ex::atom(format!("[{}]", lists.iter().map(|l| format!("*{}", l.print(t))).collect::<Vec<_>>().join(", "))),
                     Target::TypeScript => g.kcall("concat", lists),
                     Target::Go => g.kcall("Concat", lists),
+                    Target::Rust => unreachable!("Rust joins its lists above"),
                 };
                 Val::new(ex, me)
+            }
+            // Rust: the strings lent to one array, joined
+            "concat" if t == Target::Rust => {
+                let parts: Vec<String> = vals.iter().map(|v| g.lent(v).print(t)).collect();
+                Val::new(Ex::atom(format!("[{}].concat()", parts.join(", "))), me)
             }
             "concat" => {
                 let ex = vals.iter().map(|v| v.ex.clone()).reduce(|a, b| Ex::bin(Op::Add, a, b)).unwrap_or(g.string(""));
@@ -6083,18 +7891,24 @@ impl<'g, 'a> Fx<'g, 'a> {
                         Target::TypeScript => v.ex.clone(),
                         Target::Python => g.kcall("date_text", vec![v.ex.clone()]),
                         Target::Go => Ex::Call(Box::new(v.ex.clone().dot("String")), vec![]),
+                        Target::Rust => v.ex.clone().method("to_string", vec![]),
                     },
                     Ty::Bool => match t {
                         Target::TypeScript => Ex::call("String", vec![v.ex.clone()]),
                         Target::Python => Ex::Cond(Box::new(v.ex.clone()), Box::new(g.string("true")), Box::new(g.string("false"))),
                         Target::Go => g.kcall("BoolText", vec![v.ex.clone()]),
+                        Target::Rust => v.ex.clone().method("to_string", vec![]),
                     },
                     Ty::Enum(id) => match (t, &id.owner) {
                         (Target::TypeScript, _) => v.ex.clone(),
                         (Target::Python, _) => v.ex.clone().dot("value"),
                         (Target::Go, Owner::Module(_)) => Ex::call("string", vec![v.ex.clone()]),
                         (Target::Go, Owner::Rule(_)) => Ex::Call(Box::new(v.ex.clone().dot("String")), vec![]),
+                        // the value's name, as both kaname's and rulec's enums give it
+                        (Target::Rust, _) => v.ex.clone().method("as_str", vec![]).method("to_string", vec![]),
                     },
+                    // Rust: a string as it is held
+                    _ if t == Target::Rust => return Val { ty: me, ..v.clone() },
                     _ => v.ex.clone(),
                 };
                 Val::new(ex, me)
@@ -6102,7 +7916,7 @@ impl<'g, 'a> Fx<'g, 'a> {
             // `char(n)`: the string of one code point, a constant (DESIGN 25.2)
             "char" => {
                 let c = self.ty(xs[0]).num().and_then(|n| n.konst).and_then(|k| u32::try_from(k.num).ok()).and_then(char::from_u32).unwrap_or('?');
-                Val::new(g.string(&c.to_string()), me)
+                Val::held(g.string(&c.to_string()), me, if t == Target::Rust { Held::Lent } else { Held::Made })
             }
             _ if matches!(vals[0].ty.present(), Ty::Str) || name == "to_text" => self.string(name, vals, me),
             _ => self.collection(e, name, xs, vals),
@@ -6115,8 +7929,9 @@ impl<'g, 'a> Fx<'g, 'a> {
     fn string(&mut self, name: &str, vals: Vec<Val>, me: Ty) -> Val {
         let g = self.g;
         let t = self.t();
-        let s0 = vals[0].ex.clone();
-        let arg = |i: usize| -> Ex { vals[i].ex.clone() };
+        // Rust: the string and the strings it is given lent (`&str`)
+        let s0 = if t == Target::Rust { g.lent(&vals[0]) } else { vals[0].ex.clone() };
+        let arg = |i: usize| -> Ex { if t == Target::Rust { g.lent(&vals[i]) } else { vals[i].ex.clone() } };
         let int = |s: &Self, i: usize| -> Ex { s.int_arg(&vals[i]) };
         let py_method = |m: &str, args: Vec<Ex>| -> Ex { Ex::Call(Box::new(s0.clone().dot(m)), args) };
         let ex = match (name, t) {
@@ -6132,9 +7947,11 @@ impl<'g, 'a> Fx<'g, 'a> {
             ("contains", Target::TypeScript) => Ex::Call(Box::new(s0.dot("includes")), vec![arg(1)]),
             ("contains", Target::Python) => Ex::atom(format!("({} in {})", arg(1).print(t), s0.print(t))),
             ("contains", Target::Go) => g.kcall("TextContains", vec![s0, arg(1)]),
+            ("contains", Target::Rust) => Ex::Call(Box::new(vals[0].ex.clone().dot("contains")), vec![arg(1)]),
             ("ends_with", Target::TypeScript) => Ex::Call(Box::new(s0.dot("endsWith")), vec![arg(1)]),
             ("ends_with", Target::Python) => py_method("endswith", vec![arg(1)]),
             ("ends_with", Target::Go) => g.kcall("EndsWith", vec![s0, arg(1)]),
+            ("ends_with", Target::Rust) => Ex::Call(Box::new(vals[0].ex.clone().dot("ends_with")), vec![arg(1)]),
             ("split", _) => g.kcall(&g.helper("split", "split", "Split"), vec![s0, arg(1)]),
             ("words", _) => g.kcall(&g.helper("words", "words", "Words"), vec![s0]),
             ("replace", _) => g.kcall(&g.helper("replace", "replace", "Replace"), vec![s0, arg(1), arg(2)]),
@@ -6168,14 +7985,29 @@ impl<'g, 'a> Fx<'g, 'a> {
         }
         let g = self.g;
         let info = g.c.decls.fns[self.f].clone();
+        let mut cells = Vec::new();
         for (p, name) in info.params.iter().zip(params) {
             self.locals.taken.insert(name.clone());
-            let v = self.from_boundary(Ex::atom(name.clone()), &p.slot.ty, &p.slot.ty);
+            let held = if self.t() == Target::Rust && !g.is_copy(&p.slot.ty) { Held::Lent } else { Held::Made };
+            let v = self.from_boundary_as(Ex::atom(name.clone()), &p.slot.ty, &p.slot.ty, held);
+            let start = self.out.len();
             let v = if v.ex.is_simple() { v } else { self.spill(v) };
-            self.scope.push((p.name.text.clone(), v, Rc::new(Cell::new(true))));
+            // Rust names a parameter the body never reads `_` (DESIGN 36.4)
+            let used = Rc::new(Cell::new(self.t() != Target::Rust));
+            cells.push((name.clone(), used.clone(), start..self.out.len()));
+            self.scope.push((p.name.text.clone(), v, used));
         }
         let decl = &g.c.module.fns[self.f];
         self.block(&decl.body, &Sink::Return);
+        if self.t() == Target::Rust {
+            // a parameter never read: nor is it read in its type first
+            for (_, used, at) in cells.iter().rev() {
+                if !used.get() {
+                    self.out.drain(at.clone());
+                }
+            }
+            *g.unread.borrow_mut() = cells.iter().filter(|(_, c, _)| !c.get()).map(|(n, ..)| n.clone()).collect();
+        }
         self.out
     }
 }
@@ -6204,6 +8036,20 @@ fn params_in(t: &Ty, out: &mut Vec<String>) {
             RecId::Outputs(_) | RecId::Element(..) => {}
         },
         _ => {}
+    }
+}
+
+/// Rust: whether an expression is the string `""` (compared by `is_empty`).
+fn empty_str(x: &Ex) -> bool {
+    matches!(x, Ex::Atom(s) if s == "\"\"")
+}
+
+/// Rust: whether an expression is a list with nothing in it (`vec![]`, `Vec::new()`).
+fn empty_list(x: &Ex) -> bool {
+    match x {
+        Ex::List(_, xs) => xs.is_empty(),
+        Ex::Atom(s) => s == "vec![]" || s == "Vec::new()",
+        _ => false,
     }
 }
 

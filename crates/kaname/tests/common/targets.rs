@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-/// The Python package's name and Go's module and import path of the package's directory, as the tests
-/// lay a package out.
+/// The Python package's name (and Rust's crate's) and Go's module and import path of the package's
+/// directory, as the tests lay a package out.
 pub const PY_NAME: &str = "pkg";
 pub const GO_MODULE: &str = "kanametest";
 pub const GO_PACKAGE: &str = "kanametest/pkg";
@@ -94,7 +94,7 @@ fn write(path: &Path, text: &str) {
 }
 
 /// The directory of the package of `t` under `root`: `root` itself for TypeScript, `root/pkg` for
-/// Python and Go.
+/// Python, Go and Rust (whose crate it is).
 pub fn package_dir(root: &Path, t: Target) -> PathBuf {
     match t {
         Target::TypeScript => root.to_path_buf(),
@@ -106,9 +106,21 @@ pub fn package_dir(root: &Path, t: Target) -> PathBuf {
 /// dates' and the books' code (the books' clients on PostgreSQL), the package's `units`, and
 /// kaname's `glue/`. The paths written.
 pub fn write_package(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>, String)]) -> Vec<String> {
+    write_package_for(root, t, lang, modules, chobo::target::Backend::Postgres)
+}
+
+/// [`write_package`] for a package that keeps its books in `backend`: Rust's clients of the books are
+/// chobo's of the backend, and its functions that make the transfers take the book by the trait of
+/// the backend's clients (DESIGN 36.6); the other targets read none of it. A package of Rust is a
+/// crate (ritsu's DESIGN 9.3): its `lib.rs` and the files that declare the modules of `rules/`,
+/// `dates/` and `books/`, which `ritsu gen` writes, are written here as it writes them, and the
+/// crate's Cargo.toml is the test's.
+pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>, String)], backend: chobo::target::Backend) -> Vec<String> {
+    use chobo::target::Backend;
+    let store = if backend == Backend::TigerBeetle { kaname::r#gen::Store::TigerBeetle } else { kaname::r#gen::Store::Sql };
     let dir = package_dir(root, t);
     let mut written: BTreeMap<String, String> = BTreeMap::new();
-    let mut put = |rel: String, text: String| {
+    let put = |written: &mut BTreeMap<String, String>, rel: String, text: String| {
         if let Some(prev) = written.get(&rel) {
             assert_eq!(prev, &text, "two files of the package at {rel}");
             return;
@@ -139,7 +151,7 @@ pub fn write_package(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>
         let src = std::fs::read_to_string(file).unwrap();
         let (rel, body, used) = rulec::codegen::package_parts(&src, &path, &path, key, GO_PACKAGE).unwrap_or_else(|e| panic!("{path}: {e}"));
         units.extend(used);
-        put(format!("rules/{rel}"), body);
+        put(&mut written, format!("rules/{rel}"), body);
     }
     // the dates files, as koyomi writes each
     let mut loader = koyomi::calendar::Loader::default();
@@ -152,46 +164,95 @@ pub fn write_package(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>
             Target::TypeScript => (koyomi::naming::Target::TypeScript, koyomi::codegen::typescript::module(&u)),
             Target::Python => (koyomi::naming::Target::Python, koyomi::codegen::python::module(&u)),
             Target::Go => (koyomi::naming::Target::Go, koyomi::codegen::go::module(&u)),
+            Target::Rust => (koyomi::naming::Target::Rust, koyomi::codegen::rust::module(&u)),
         };
         let rel = kt.file(&u.alias).split_once('/').map(|(_, r)| r.to_string()).unwrap();
-        put(format!("dates/{rel}"), body);
+        put(&mut written, format!("dates/{rel}"), body);
     }
-    // the books' clients, on PostgreSQL
+    // the books' clients, on PostgreSQL (Rust's on the backend)
     for file in books.values() {
         let (src, c) = chobo::check::check_file(file).unwrap();
         let book = c.book.as_ref().expect("the book passes chobo's check");
         let stem = file.file_name().unwrap().to_string_lossy().trim_end_matches(".book").to_string();
         let origin = ritsu_emit::header::Origin::at(&file.to_string_lossy(), src.as_bytes());
         units.extend(chobo::client::package_units(book));
-        let ct = match t {
-            Target::TypeScript => chobo::target::Target::PostgresTypeScript,
-            Target::Python => chobo::target::Target::PostgresPython,
-            Target::Go => chobo::target::Target::PostgresGo,
+        let ct = match (t, backend) {
+            (Target::TypeScript, _) => chobo::target::Target::PostgresTypeScript,
+            (Target::Python, _) => chobo::target::Target::PostgresPython,
+            (Target::Go, _) => chobo::target::Target::PostgresGo,
+            (Target::Rust, Backend::Postgres) => chobo::target::Target::PostgresRust,
+            (Target::Rust, Backend::TigerBeetle) => chobo::target::Target::TigerBeetleRust,
+            (Target::Rust, Backend::MySql) => chobo::target::Target::MySqlRust,
         };
         let built = chobo::target::build_in(book, &stem, ct, &origin, Some(&chobo::client::InPackage { module: GO_PACKAGE.to_string(), ..Default::default() })).unwrap_or_else(|_| panic!("{}", file.display()));
         for (rel, body) in built {
-            put(format!("books/{rel}"), body);
+            put(&mut written, format!("books/{rel}"), body);
         }
     }
     // kaname's
-    let made = kaname::r#gen::package(modules, t, lang, GO_PACKAGE);
+    let placed: Vec<_> = modules.iter().map(|(c, s)| (c.clone(), s.clone(), ritsu_emit::package::Place::here())).collect();
+    let made = kaname::r#gen::package_for(&placed, t, lang, GO_PACKAGE, store);
     units.extend(made.units.clone());
     for (rel, body, _) in &made.files {
-        put(rel.clone(), body.clone());
+        put(&mut written, rel.clone(), body.clone());
     }
     if let Some((rel, body)) = rulec::codegen::units_module(key, &units) {
-        put(rel, body);
+        put(&mut written, rel, body);
     }
     match t {
         Target::Python => {
             for sub in ["", "rules/", "dates/", "books/"] {
-                put(format!("{sub}__init__.py"), String::new());
+                put(&mut written, format!("{sub}__init__.py"), String::new());
             }
-            put("py.typed".into(), String::new());
+            put(&mut written, "py.typed".into(), String::new());
+        }
+        Target::Rust => {
+            // the crate's tree: each directory's modules declared in the file of its name, Rust 2018's
+            // way (`rules.rs` and `rules/`), a name that is no ASCII identifier with its file's path
+            let mut tree: BTreeMap<String, Vec<String>> = BTreeMap::new();
+            for rel in written.keys().cloned().collect::<Vec<_>>() {
+                let Some((dir, file)) = rel.split_once('/') else {
+                    if let Some(stem) = rel.strip_suffix(".rs") {
+                        tree.entry(String::new()).or_default().push(mod_line("", stem));
+                    }
+                    continue;
+                };
+                if ["rules", "dates", "books"].contains(&dir)
+                    && let Some(stem) = file.strip_suffix(".rs")
+                    && !stem.contains('/')
+                {
+                    tree.entry(dir.to_string()).or_default().push(mod_line(&format!("{dir}/"), stem));
+                }
+            }
+            for dir in ["rules", "dates", "books"] {
+                if let Some(lines) = tree.get(dir) {
+                    // the rules' and the dates' modules are their languages' code, which clippy is
+                    // not held to here (chobo's clients are, in chobo's tests)
+                    let lines: Vec<String> = if dir == "books" { lines.clone() } else { lines.iter().map(|l| format!("#[allow(clippy::all)]\n{l}")).collect() };
+                    put(&mut written, format!("{dir}.rs"), format!("//! The package's {dir}, a module each.\n\n{}", lines.join("")));
+                    tree.entry(String::new()).or_default().push(mod_line("", dir));
+                }
+            }
+            let mut lib = String::from("//! The package of kaname's tests: the rules', the dates' and the books' code, the units, and kaname's.\n#![allow(confusable_idents, mixed_script_confusables, uncommon_codepoints)]\n\n");
+            let mut top = tree.remove("").unwrap_or_default();
+            top.sort();
+            top.dedup();
+            for l in top {
+                lib.push_str(&l);
+            }
+            put(&mut written, "lib.rs".into(), lib);
         }
         Target::Go | Target::TypeScript => {}
     }
     written.into_keys().collect()
+}
+
+/// The declaration of the module of the file `<dir><stem>.rs` in its directory's file: `pub mod stem;`
+/// (a keyword of Rust as a raw identifier), with its path where the name is no ASCII identifier, which
+/// Rust finds no file by.
+fn mod_line(dir: &str, stem: &str) -> String {
+    let name = ritsu_emit::ident::rust_name(stem);
+    if ritsu_emit::ident::is_ascii_ident(stem) && ritsu_emit::ident::rust_raw(stem).is_some() { format!("pub mod {name};\n") } else { format!("#[path = \"{dir}{stem}.rs\"]\npub mod {name};\n") }
 }
 
 /// How many cases of each kind a target runs, and how many of them it does not, for they do not stop.
@@ -264,7 +325,17 @@ pub fn tools() -> PathBuf {
 /// None, and the test writes them in a directory that goes with it.
 pub fn keep_in() -> Option<PathBuf> {
     let d = std::env::var_os("KANAME_KEEP").filter(|v| !v.is_empty())?;
-    let d = PathBuf::from(d);
+    emptied(PathBuf::from(d))
+}
+
+/// [`keep_in`] for one of the tests of a file that has more than one: a directory of its own under
+/// `KANAME_KEEP`, so that the tests, which run at once, do not write over each other's packages.
+pub fn keep_in_for(test: &str) -> Option<PathBuf> {
+    let d = std::env::var_os("KANAME_KEEP").filter(|v| !v.is_empty())?;
+    emptied(PathBuf::from(d).join(test))
+}
+
+fn emptied(d: PathBuf) -> Option<PathBuf> {
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).ok()?;
     Some(d)
