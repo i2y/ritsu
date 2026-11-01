@@ -41,7 +41,13 @@ fn what_the_api_says_and_what_stops_it() {
     let v = ritsu_base::json::parse(&json).unwrap();
     let ritsu_base::json::Json::Obj(top) = &v else { panic!("{json}") };
     let keys: Vec<&str> = top.iter().map(|(k, _)| k.as_str()).collect();
-    assert_eq!(keys, ["kaname", "file", "module", "generated", "uses", "enums", "records", "functions", "transfers"]);
+    assert_eq!(keys, ["kaname", "file", "module", "generated", "wasm", "uses", "enums", "records", "functions", "transfers"]);
+    // the package's Wasm (DESIGN 36.11): the exports of the canonical ABI, the call that names this
+    // module and its function, and what comes back
+    let wasm = v.get("wasm").unwrap();
+    assert_eq!(wasm.get("call_signature").map(|s| s.compact()).as_deref(), Some(r#""call: func(input: string) -> string""#));
+    assert_eq!(wasm.get("input").map(|i| i.compact()).as_deref(), Some(r#"{"keys":["module","function","in"],"module":"late_payment"}"#));
+    assert_eq!(wasm.get("functions").map(|f| f.compact()).as_deref(), Some(r#"["claim"]"#));
     assert!(json.contains("\"check\": \"koyomi_date_input\""), "{json}");
     assert!(json.contains("\"outcome\": \"waiting\""), "{json}");
     assert!(json.contains("\"go\": \"Claim\""), "{json}");

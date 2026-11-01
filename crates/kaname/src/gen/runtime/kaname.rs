@@ -415,8 +415,9 @@ pub fn root(x: Q) -> i64 {
 
 // ── Dates (kaname's DESIGN 3.4) ──────────────────────────────────────────────
 
-/// A day of the calendar, with no time zone. A host may give a day of no calendar (2026-13-01),
-/// which the entry finds outside the days 0001-01-01 to 9999-12-31 (kaname's DESIGN 22.5).
+/// A day of the calendar, with no time zone. A host may give a day of no calendar (2026-02-30,
+/// 2026-13-01), which the entry finds outside the range of the parameter: the days 0001-01-01 to
+/// 9999-12-31 where the range leaves an end to the type (kaname's DESIGN 22.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Date {
     pub year: i32,
@@ -442,7 +443,12 @@ impl Date {
     /// Whether the date is a day of the calendar from 0001-01-01 to 9999-12-31: what a date whose
     /// range is not written takes (kaname's DESIGN 22.5).
     pub fn valid(self) -> bool {
-        (1..=9999).contains(&self.year) && (1..=12).contains(&self.month) && self.day >= 1 && date_of(self.days()) == self
+        (1..=9999).contains(&self.year) && self.on_calendar()
+    }
+
+    /// Whether the date is a day of the calendar, of any year: 2026-02-30 and 2026-13-01 are none.
+    pub fn on_calendar(self) -> bool {
+        (1..=12).contains(&self.month) && self.day >= 1 && date_of(self.days()) == self
     }
 }
 

@@ -1191,6 +1191,8 @@ Rust のパッケージは一つのクレートで、kaname はその `glue/` �
   glue/books/<帳簿>_apply.rs   振替を当てる関数（帳簿ごと。wasm32 では外す）
 ```
 
+パッケージの Wasm には、クレートの根に二つのファイルが要る。canonical ABI の三つの関数の `wasm.rs`（根は wasm32 のときだけ読む）と、パッケージの `.wit` である。中身は kaname の `kaname::r#gen::wasm` が作り、クレートを組み立てる側が置く（36.10）。
+
 - **補助のモジュール**（`glue/kaname.*`）：丸めていない値（有理数）、確かめつきの算術、丸めの五つ、`allocate` と `isqrt`、日付と日の番号の換算、`KanameError`、入口と渡す先の確かめの答えの型、`text` の書き方。パッケージに一つだけ書き、kaname のどのモジュールもそれを読む。rulec と koyomi は、補助の関数を生成物ごとに書く（依存の無い一つのファイルにするため）。kaname は、モジュールどうしが互いのレコードと振替の型を読むので、補助の型（`KanameError` など）を一つにしなければ、モジュールをまたいで値を渡せない。Python と Go の型は名前で比べるからである。パッケージの中の生成物で、パッケージの外に依存しないことは変わらない（rulec の P5）。
 - **インデックス**：`glue/` と `glue/books/` のインデックス（TypeScript の `index.ts`、Python の `__init__.py`）は kaname が書き、モジュール、補助のモジュール `kaname`、`books` を名前で並べる。パッケージの頭のインデックス（`index.ts`、`<name>/__init__.py`）は ritsu が書き、そこに `glue` を足す。Go にはインデックスが無い。Rust では `glue.rs` と `glue/books.rs` を kaname が書き、クレートの根（`lib.rs`）が `glue` を宣言する。
 - **振替の値の型**（`glue/books/<帳簿>.*`）：帳簿ごとに一度だけ書く。同じ帳簿の振替の値を作る二つのモジュールが、同じ型を使うためである（6.3）。chobo のクライアントを読まない。
@@ -1482,7 +1484,7 @@ fails: input (line 18): The argument `invoice.amount` of `claim` is 0GBPc, outsi
 失敗: input（18 行目）: 関数 `遅れの請求` の引数 `請求書.金額` の 0GBPc は、範囲 >=1GBPc <=100000000GBPc の外です
 ```
 - `vectors`：9 章。`doc`：13 章。`explain`：kaname の台帳（12 章）。
-- `api`：外のツールのための一つの JSON で、`{"kaname", "file", "module", "generated", "uses", "enums", "records", "functions", "transfers"}` の順に書く。`module` は名前と別名と版と説明と SHA-256、`generated` はモジュールの生成物のファイル（10.1）、`uses` は読むファイル（種類、名前、書いたパス、ルートからのパス、行）、`enums` と `records` は宣言（型と範囲と要素の数は kaname の書き方で、生成するコードの型の名前を添える。直和型の値は、フィールドの宣言と、生成するコードの値の型の名前も持つ）、`functions` は関数ごとの引数と結果、推論したエフェクトと書いたエフェクト、ほかの言語の呼び出し（`crossings`。呼び出しごとに、言語をまたぐ判定の場所の判定、何についてか、結果、ritsu のコード）、kaname 自身の示せない場所（`places`。`outcome` は 4.5 と同じ語）、呼んだ関数、生成するコードの名前（TypeScript と Python は別名、Go はパスカルケースで、型と同じ名前になれば `Fn` を足したもの。10.3）、`transfers` は組み立てる振替の操作ごとの、拒否されうる理由（`do` と `hold` だけ。決められない場所があれば `null`）である。総称の宣言には型の引数（`type_params`。名前、別名、鍵に限ったか）を、中の関数には `"inner": true` を、`private` の関数・レコード・列挙には `"private": true` を足し、関数の型の引数を持つ関数のエフェクトには `"through"` を足す（27.5）。中の関数の生成するコードの名前は、その一つの関数の名前（TypeScript と Python の `_first_or`、Go の `FirstOr`。`private` の関数は Go も `_placeOf`）を言う（26.7、28.2）。関数の型の引数の型は `(T) -> money[USDc]` と書く。ほかの宣言の形は変えない。名前と型が検査を通るモジュールには、範囲の解析やエフェクトがエラーを言っても答える（どこがなぜ失敗しうるかを見せるため。4.2）。`examples/payout` で `ritsu kaname api payout.kn --root .` を走らせた答えの一部（実物）：
+- `api`：外のツールのための一つの JSON で、`{"kaname", "file", "module", "generated", "wasm", "uses", "enums", "records", "functions", "transfers"}` の順に書く。`module` は名前と別名と版と説明と SHA-256、`generated` はモジュールの生成物のファイル（10.1）、`wasm` はパッケージの Wasm でこのモジュールを呼ぶ形（export の名前、呼び出しのキーとこのモジュールを選ぶ `module` の値、呼べる関数、答えの形。ホストが呼ぶ関数が無ければ `null`。36.11）、`uses` は読むファイル（種類、名前、書いたパス、ルートからのパス、行）、`enums` と `records` は宣言（型と範囲と要素の数は kaname の書き方で、生成するコードの型の名前を添える。直和型の値は、フィールドの宣言と、生成するコードの値の型の名前も持つ）、`functions` は関数ごとの引数と結果、推論したエフェクトと書いたエフェクト、ほかの言語の呼び出し（`crossings`。呼び出しごとに、言語をまたぐ判定の場所の判定、何についてか、結果、ritsu のコード）、kaname 自身の示せない場所（`places`。`outcome` は 4.5 と同じ語）、呼んだ関数、生成するコードの名前（TypeScript と Python は別名、Go はパスカルケースで、型と同じ名前になれば `Fn` を足したもの。10.3）、`transfers` は組み立てる振替の操作ごとの、拒否されうる理由（`do` と `hold` だけ。決められない場所があれば `null`）である。総称の宣言には型の引数（`type_params`。名前、別名、鍵に限ったか）を、中の関数には `"inner": true` を、`private` の関数・レコード・列挙には `"private": true` を足し、関数の型の引数を持つ関数のエフェクトには `"through"` を足す（27.5）。中の関数の生成するコードの名前は、その一つの関数の名前（TypeScript と Python の `_first_or`、Go の `FirstOr`。`private` の関数は Go も `_placeOf`）を言う（26.7、28.2）。関数の型の引数の型は `(T) -> money[USDc]` と書く。ほかの宣言の形は変えない。名前と型が検査を通るモジュールには、範囲の解析やエフェクトがエラーを言っても答える（どこがなぜ失敗しうるかを見せるため。4.2）。`examples/payout` で `ritsu kaname api payout.kn --root .` を走らせた答えの一部（実物）：
 
 ```json
 "crossings": [
@@ -1967,6 +1969,7 @@ kaname の呼び出しでの X2 は、`crates/ritsu-model/tests/cross.rs` が確
 | ベクタ、run、doc、api | `tests/vectors.rs`、`tests/run.rs`、`tests/cli.rs`、`tests/doc.rs`、`tests/api.rs` | golden（`tests/golden/vectors/`、`tests/golden/run/`、`tests/golden/doc/`、`tests/golden/api/`）。英語と日本語の版のベクタ（16.6）。ページが中に置く規則と日付のページが、rulec と koyomi の `doc` が描くものと一字も違わないこと、HTML が外から何も読まないこと、Chrome でページが描け、中のページがボタンと `#page=<n>` で開くこと（13 章）。コマンドと終了コード |
 | 口 | `tests/ports.rs` | `Programs` の答え（区間、出どころ、関係、並びの長さ、見た値）、`Items`、`References` |
 | 出力先の突き合わせ | `tests/typescript.rs`、`tests/python.rs`、`tests/go.rs`、`tests/rust.rs` | 16.4 |
+| パッケージの Wasm | `tests/wasm.rs` | Rust の突き合わせと同じケースに、wasm32 に組んだモジュールが同じ行で答えること、契約の外の入力の表、component にして wasmtime で呼べること、WIT の名前（36.9） |
 | 名前の字 | `tests/idents.rs` | 生成したコードの名前にする字の表（ritsu-emit の `xid.rs`）が通す名前を、rustc、Python、Node と tsc、Go が名前に取り、表が外す名前を取らないこと（36.3、36.9） |
 | 文書とスキル | `tests/docs.rs`、`tests/skill.rs`、`tests/design.rs` | README と `docs/reference.md` とスキルの `kn` の行が、例かテストの `.kn` の行であること、見せるコマンドが kaname のコマンドであること（出力を添えたものは ritsu の `tests/kaname.rs` が走らせる）、リファレンスが全部のキーワードを挙げること、リンクの先があること、サイトで `kn` に色を付ける字句の定義（`website/tools/knlexer.py`）の語の一覧と数の文字が `kw.rs` と `lex.rs` のものと同じであること（31 章）。スキルのコピーが `skills/sync.sh` の作るものと同じで、スキルの外へのリンクが無いこと。この文書の `kn` の塊が構文として通ること |
 | 言語をまたぐ判定 | `crates/ritsu-cross/tests/programs.rs` | 14.3 の判定（関係、見た値での確かめ、日付の区間、どこから来た額も）。16.5 |
@@ -2031,7 +2034,7 @@ Ja: 16874 of 16874 cases agree with the reference: 14096 vectors (5 that do not 
 
 - **呼び出しの深さ**：生成した Python で、kaname の呼び出しの一段は Python の一段である。`tests/python.rs` は、`tests/modules/rec.kn` の `countdown` が答える最小の再帰の上限を二分探索で求め（100 段で 103、200 段で 203）、200 段の呼び出しが、CPython の既定の上限 1,000 のまま答えることを確かめる（8 章）。関数の値の呼び出しも一段で、`tests/modules/hof.kn` の `steps_down`（一段下りるごとに、`steps_down`、`via`、`steps_down` を呼ぶラムダの三つを呼ぶ）は、100 段で 103、199 段で 202 の上限で答える（27.3）。自分を含む型の値は、入れ子の一段が、入口の確かめと比べで Python の二段になる。`tests/modules/trees.kn` の `same` は、200 段の分類の連なりを二つ受け取り、上限 405 で答える（100 段なら 205。28.1）。
 - **Rust の帳簿**：`tests/rust.rs` の `the_generated_rust_makes_the_transfers_in_the_books` は、振替を作る四つのモジュール（`payout` の英日と、`tests/modules/` の `inner.kn` と `walks.kn`）のベクタの答えにある振替（30 件のベクタの 57 件）を、`glue/books/` の当てる関数と chobo の Rust のクライアントで、PostgreSQL（使い捨てのクラスタ）と TigerBeetle に当てる。クライアントの答えと、帳簿の残高と保留が、chobo の参照インタプリタの言うとおりになる。MySQL の系統のクライアントでは、クレートを組んで clippy を通し、走らせない（36.9）。
-- **Rust の呼び出しの深さ**：生成した Rust は段を数えず、200 段の呼び出しと値をスタックで受ける。デバッグのビルドのハーネスは、16,770 件に、メインのスレッドのスタックが 1.5 MiB でも答え、1 MiB では `trees.kn` の `leaf_sum` に渡す 200 段の値であふれた（36.15）。
+- **Rust の呼び出しの深さ**：生成した Rust は段を数えず、200 段の呼び出しと値をスタックで受ける。デバッグのビルドのハーネスは、16,770 件に、メインのスレッドのスタックが 1.5 MiB でも答え、1 MiB では `trees.kn` の `leaf_sum` に渡す 200 段の値であふれた（36.15）。リリースのビルドの Wasm は、スタックが 64 KiB でも 16,770 件に同じ行で答えた（既定は 1 MiB。36.15）。
 - **`ritsu gen` の生成物**：kaname のクレートのテストは、言語をまたぐ判定の答えを渡さずに生成するので、答えを待つ場所に確かめを書く（10.4）。`ritsu gen` の生成物は、`crates/ritsu/tests/gen.rs` が同じハーネスで確かめる。`tests/projects/settlement` を `ritsu gen` で書き、三つの型の検査を通し、ベクタと宣言の外の入力を流す（自分を含む型は無い）。答えを渡すと、言語をまたぐ判定の場所の確かめが無くなる：
 
 ```
@@ -2376,8 +2379,7 @@ ok rules/値引きの配分.rule
 - **帳簿の口からページを読むこと**（`Books` に `doc` を足して、chobo のページを埋め込む）：いまは振替の操作と理由を kaname のページに並べるだけである。
 - **逃げ道の警告を、意図を書いて消す書き方**：7 章。
 - **`fmt` と LSP**：ritsu の LSP と同じく作らない（ritsu の DESIGN 15 章）。
-- **`ritsu gen` の Rust**（`--target rust`）：kaname の Rust の生成物は、kaname の生成の関数が書き、kaname のテストが規則・日付・帳簿の Rust と一つのクレートにして確かめる（36.9）。`ritsu gen` は、まだ Rust のパッケージを書かない。書くのは、モジュールの木をつなぐファイル（`lib.rs`、`rules.rs`、`dates.rs`、`books.rs`）と、`Cargo.toml`（帳簿の置き場所ごとの依存の行）と、`--check` と `--format json` で、形はテストのクレート（36.8、36.9）と同じにする。
-- **パッケージの Wasm**：形は 36.10〜36.12 に決めた。生成器が `.wit` と組む行を書き、テストがパッケージのクレートを wasm32 に組んで、ネイティブのハーネスと同じケースに同じ答えを返すことを確かめる。Wasm のスタックは 1 MiB なので、リリースのビルドで、200 段の呼び出しと値がその中に収まることも確かめる（36.15）。
+- **`ritsu gen` の Rust とパッケージの Wasm**（`--target rust`）：kaname の Rust の生成物は、kaname の生成の関数が書き、Wasm の二つのファイル（`wasm.rs` と `.wit`）の中身は `kaname::r#gen::wasm` が作る（36.10）。kaname のテストが、規則・日付・帳簿の Rust と一つのクレートにし、ネイティブと wasm32 に組んで確かめる（36.9）。`ritsu gen` は、まだ Rust のパッケージを書かない。書くのは、モジュールの木をつなぐファイル（`lib.rs`、`rules.rs`、`dates.rs`、`books.rs`）、Wasm の二つのファイル、`Cargo.toml`（帳簿の置き場所ごとの依存の行。帳簿のクレートは wasm32 のほかでだけ読む）と、`--check` と `--format json` で、形はテストのクレート（36.8〜36.10）と同じにする。`.wit` の版は `ritsu.mod` の `version` から取る（36.11）。
 - **モジュールを Rust のライブラリにすること**（`ritsu gen --library --target rust`）：ライブラリの形（ritsu の DESIGN 17.8）は npm・PyPI・Go のモジュールで書き、Rust では exit 2 で止まる。足すには三つを決める。一つ目は crates.io のクレートの名前で、モジュールの正規の書き方の連なりと別名から、crates.io が受け付ける名前を作る決まりである。二つ目は依存の版の書き方で、Cargo の版の範囲（`^`）と、ritsu の DESIGN 17.16 の「ちょうどの版」で書く決まりをどう合わせるかである。三つ目はライブラリの単位の型で、`units` をライブラリごとに持つか、共通のクレートから読むかである。単位の型が別のクレートで別の型になると、ライブラリの額とパッケージの額を同じ型で受け渡せない。
 - **TypeScript・Python・Go・Rust のほかの出力先**（rulec の 12 の出力先のような）。
 - **前提を破る入力を解いて、見た値に足すこと**：見た値の入力は、ベクタと、振替の額と日を渡す先の範囲の一つ外にする入力だけである（14.2）。二つの入力の関係（`before <= upto`）を破る入力は解かないので、区間の端で破る前提は、ベクタに破る実行が無ければ決められない（W201）になる。
@@ -2858,6 +2860,17 @@ pub fn check_next_id(_: i64) -> Result<(), kaname::KanameError> {
 fn _outside1(v: kaname::Date, what: &str) -> Option<kaname::Outside> {
     if !v.valid() {
         return Some(kaname::outside(what, v.to_string(), ">=0001-01-01 <=9999-12-31"));
+    }
+    None
+}
+```
+
+範囲の両端を書いた日付も、Rust では暦にある日かを確かめる（`on_calendar()`）。日の番号だけを両端と比べると、2026-02-30 は 2026-03-02 の番号なので、両端のあいだに入るからである。TypeScript と Go は、両端を書いた日付を比べるだけである（36.16）。`tests/modules/calc.kn` の `days` の確かめ（実物）：
+
+```rust
+fn _outside11(v: kaname::Date, what: &str) -> Option<kaname::Outside> {
+    if !v.on_calendar() || (v.days() < 20454 || v.days() > 20818) {
+        return Some(kaname::outside(what, v.to_string(), ">=2026-01-01 <=2026-12-31"));
     }
     None
 }
@@ -4383,7 +4396,7 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 
 **原因**（Go の形をなぞるだけでは足りない理由）：Go の生成物は、中の関数の失敗を panic で運び、入口の `kaname.Recover` で `error` に直す（10.4）。wasm32 の Rust は `panic=abort` で組む（rulec と koyomi の組み方と同じ）ので、panic はトラップになり、「どの入力にもトラップせずに答える」という Wasm の約束が守れない。そこで Rust では、失敗を `Result` で運ぶ（36.4）。もう一つは値の持ち方で、Rust の値には持ち主があるので、借りるかコピーするかを生成物が決める（36.4）。
 
-いまの範囲：Rust の生成物は kaname の生成の関数（`kaname::r#gen::package_in` に `Target::Rust`）が書き、kaname のテスト（`tests/rust.rs`）が、規則・日付・帳簿の Rust と一つのクレートにして確かめる（36.9）。`ritsu gen --target rust`（パッケージの残りと `Cargo.toml` を書くこと）と、パッケージの Wasm を書くことは、まだ無い（19 章）。
+いまの範囲：Rust の生成物は kaname の生成の関数（`kaname::r#gen::package_in` に `Target::Rust`）が書き、パッケージの Wasm に要る二つのファイル（クレートの根の `wasm.rs` とパッケージの `.wit`）の中身は `kaname::r#gen::wasm` が作る（36.10）。kaname のテスト（`tests/rust.rs`、`tests/wasm.rs`）が、規則・日付・帳簿の Rust と一つのクレートにし、ネイティブと wasm32 に組んで確かめる（36.9）。`ritsu gen --target rust`（パッケージの残りと `Cargo.toml` を書き、Wasm の二つのファイルを置くこと）は、まだ無い（19 章）。
 
 ### 36.2 型と値（10.2 の表の Rust の列）
 
@@ -4616,38 +4629,51 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - **型の検査**：英語と日本語のパッケージのそれぞれで、`cargo clippy --all-targets -- -D warnings` を、エディション 2024 と 2021（`Cargo.toml` の `edition` を書き換えて二度）で走らせる。警告が一つでも出れば落とす。
 - **帳簿**：`the_generated_rust_makes_the_transfers_in_the_books` が、振替を作る四つのモジュールのベクタから振替を作り、`glue/books/` の当てる関数と chobo のクライアントで、PostgreSQL（使い捨てのクラスタ）と TigerBeetle に当てる。クライアントの答え（`done`、`done_before`、`refused` と理由）と、帳簿の残高と保留が、chobo の参照インタプリタの言うとおりであることを見る。MySQL の系統のクライアントでは、クレートを組んで clippy を通し、走らせない（手元にも CI にも MySQL の系統のサーバーを置かないため）。
 - **名前の字**：`tests/idents.rs` が、kaname の名前が取れる字の全部を、名前の一字目（`ä`）と二字目より後（`aä`）に置いた 296,529 の名前にし、rustc（`cargo check`）、Python の `str.isidentifier`、Node（`new Function`）と tsc、Go の `go/token.IsIdentifier` に通す。どのツールも、ritsu-emit の表が通す名前を取り、外す名前を取らない。ツールの Unicode が表より古いところ（36.3）は分けて数える。
+- **暦に無い日**：`a_day_of_no_calendar_is_outside_every_range` が、ホストの作る `kaname::Date { year: 2026, month: 2, day: 30 }` などを入口の確かめ（`check_days`）に渡し、範囲の両端を書いた引数でも型の範囲の引数でも、範囲の外の `input` で失敗することを確かめる（36.11）。
+- **ターゲットのディレクトリ**：`tests/rust.rs` の三つの試験は、帳簿のクレートを一度だけ組むために、ターゲットのディレクトリを共有する。cargo は、名前と版の同じクレートを、ディレクトリが違っても一つのライブラリとして扱う。前に組んだときに読んだファイルを手元のディレクトリで探し、それより新しいものが無ければ組み直さない。そこで、試験ごとのクレートの版を、バイナリの名前から作る（`0.0.<n>`。`Cargo.lock` の根の行も合わせる）。版が同じだったときは、ほかの試験が後から組んだライブラリでハーネスが組まれ、全部のケースが「There is no module `order_flow`」になった。
+- **`tests/wasm.rs`**：同じ形のパッケージを、使う人と同じ `ritsu_emit::wasm::CARGO_LINE` で wasm32 に組み（36.10）、次の四つを確かめる。帳簿のクレートは wasm32 では読まないので、試験ごとに自分のターゲットのディレクトリで組む。
+  - `the_wasm_answers_as_the_reference_does`：英語と日本語のパッケージを、組む前に二つのエディションで `cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings` にかける。組んだモジュールを自前のホスト（Node。import が空であることを確かめ、canonical ABI の三つの関数で呼ぶ）に渡し、ネイティブのハーネスと同じ 16,770 件を一行ずつ呼ぶ。答えは参照インタプリタの答えと比べ、ベクタは行の全体を一字一句比べる。
+  - `an_input_outside_the_contract_is_answered`：契約の外の入力の表（英語の三つのモジュールに 35、日本語の一つのモジュールに 11）を、どれもトラップせずに表の行と一字一句同じに答えること。UTF-8 でないバイト列、空の入力、オブジェクトでない JSON、後ろの `,`、後ろに続く値、文字列の中の制御文字、2,000 段の入れ子、キーの `\u` のエスケープ、二度書いたキー、整数のいろいろな書き方、int64 の外の数、孤立したサロゲート、中の関数、無いモジュールと関数、暦に無い日、数字の形でない日付である。最初の呼び出しを 2 万回くり返して、メモリが増えないこと（答えを解放していること）も見る。
+  - `the_world_makes_the_package_a_component_wasmtime_calls`：`.wit` でモジュールを component にし（`ritsu_emit::wasm::component_line`）、`wasm-tools validate` と `wasm-tools component wit` を通す。wasmtime の `run --invoke` で呼んだ答えが、ホストの答えと同じであること。パッケージは三つで、日本語の一つのモジュール、英語の二つのモジュール、帳簿を使う英語のモジュール（振替を値で答える）である。
+  - `every_package_name_gives_a_world_wit_reads`：`ritsu gen` の `--name` が取る名前のうち、WIT の予約語の全部と、`_` が二つ続く名前、`_` で終わる名前、数字で始まる語のある名前から作った `.wit` を、版のあるものと無いもの、英語と日本語のドキュメントで、wasm-tools が読むこと。
 - 道具が無ければ SKIP の行を出して通す。CI の tools の段は SKIP を許さない（`ci/skips/tools.txt` に足す行は無い）。CI は tools の段で `tools/rust` の依存を先に取ってくる（`cargo fetch --locked`）。
 
-### 36.10 Wasm：どの関数を入れるか
-
-ここから 36.12 までは、決めた形である。生成器はまだパッケージの Wasm を書かない（19 章）。
+### 36.10 Wasm：どの関数を入れ、どう組むか
 
 - パッケージの Wasm には、パッケージの kaname の全部のモジュールの、ホストが呼ぶ関数（21.3。型の引数も関数の型の引数も持たず、`private` でない）を入れる。ベクタを持つ関数と同じ集まりで、`glue::door::answer` が答える関数である。中の関数は入れない（ベクタも入口も無い）。
-- 帳簿を使うモジュールも入る。振替の値はデータで、vectors と同じ `{"book","transfer","op","args"}` で答える。当てる関数と chobo のクライアントは入れない（async で、データベースのドライバに依る）。Rust のクレートでは `#[cfg(not(target_arch = "wasm32"))]` で外し、`Cargo.toml` は帳簿のクレートを `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` に書く。
+- 帳簿を使うモジュールも入る。振替の値はデータで、vectors と同じ `{"book","transfer","op","args"}` で答える。当てる関数と chobo のクライアントは入れない（async で、データベースのドライバに依る）。クレートの根は帳簿のクライアントを `#[cfg(not(target_arch = "wasm32"))]` を付けて宣言し（`kaname::r#gen::wasm::BOOKS`）、`glue/books.rs` は当てる関数を同じく外す。`Cargo.toml` は帳簿のクレートを `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` に書く（テストの `tools/rust/Cargo.toml`。`Cargo.lock` は変わらず、`--locked` で組める）。
 - **決定（パッケージに一つの Wasm）**：Wasm はパッケージに一つで、呼ぶモジュールを入力の `module` で選ぶ。
   **捨てたもの**：Wasm をモジュールごとに一つ組む形（rulec と koyomi のファイルごとと同じ）。vectors の行を `module` 無しで渡せるが、パッケージのクレートをモジュールの数だけ組むことになり、テストのパッケージ（52 のモジュール）では組むだけで数分かかる。一つのクレートを組んだものがネイティブのハーネスと同じコードになる、という利点も無くなる。
-- 何も止めないので、診断は無い。入る関数と「振替は値で答え、当てる関数は入らない」は、`.wit` のドキュメントのコメントと、kaname のサイトのページに書く。
+- **ファイル**：Wasm のための二つのファイルの中身は `kaname::r#gen::wasm` が作り、クレートを組み立てる側（いまはテスト。`ritsu gen` は 19 章）が置く。
+  - `abi(lang)`：クレートの根の `wasm.rs`（`FILE`）。canonical ABI の三つの関数で、`call` は入力が UTF-8 であることを確かめてから `crate::glue::door::answer` に渡し、UTF-8 でなければ `crate::glue::door::not_utf8()` の拒否の行を返す。三つの関数の本体と doc コメントは `ritsu_emit::wasm::abi` が書き、koyomi の Wasm と同じである（36.12）。
+  - `DECLARE`：根がこのファイルを読む行 `#[cfg(target_arch = "wasm32")] mod wasm;`。wasm32 のほかに組めば三つの関数は無い。パッケージのクレートを依存に読んで自分の Wasm を組むクレートとも、export の名前がぶつからない。三つの関数が根でないモジュールにあっても export されることは、36.15 で確かめた。
+  - `wit(modules, name, version, lang)`：パッケージの `.wit`（`wit_file(name)`）。名前は 36.11 のとおりで、ドキュメントのコメントに、呼び方と答えの形、範囲と失敗は `kaname api` が言うこと、振替の扱い（帳簿を使うモジュールがあるときだけ）、止まらない入力のこと、呼べるモジュールと関数の型（`kaname api` の型の書き方）を書く。実物は 36.15 にある。
+- **組む行**：`ritsu_emit::wasm::CARGO_LINE`（`cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib` に、リリースのプロファイルの四つを `--config` で渡す。36.15）。モジュールは `<ターゲット>/wasm32-unknown-unknown/release/<クレート>.wasm` に出る。テストのパッケージ（52 のモジュール）では、英語が 1,760,771 バイト、日本語が 1,779,314 バイトで、`examples/late_payment` の日本語の版だけのパッケージは 66,360 バイトだった。どれも import は無い。
+- **スタック**：リンカーの既定の 1 MiB のままにする。テストのパッケージの全部のケースは、64 KiB でも 1 MiB と同じに答えた（36.15）。
+- 何も止めないので、診断は無い。入る関数と「振替は値で答え、当てる関数は入らない」は、`.wit` のドキュメントのコメントに書く。
 
 ### 36.11 Wasm：受け渡し
 
-- **形**：rulec と koyomi と同じ `call: func(input: string) -> string`、`cabi_realloc`、`cabi_post_call`、`memory`。import は無い。
+- **形**：rulec と koyomi と同じ `call: func(input: string) -> string`、`cabi_realloc`、`cabi_post_call`、`memory`。import は無い。モジュールごとの呼び方は、`kaname api` の `wasm` の項が機械に言う（この節の終わり）。
 - **入力**：`{"module": <モジュール>, "function": <関数>, "in": {<引数の名前>: <値>, …}}`。関数と引数とフィールドと列挙の値は、vectors の行と同じく書いたとおりの名前で書く（別名ではない。日本語の名前もある）。モジュールは、手元のモジュールなら書いたとおりの名前（`支払いの遅れ`）、依存のモジュールなら正規の書き方の連なりを前に付けたもの（`@pricing/fees`。ritsu の DESIGN 17.8）。ほかのキーは読まない。ホストが呼ぶ関数を持つモジュールがパッケージに一つなら、`module` を省ける。そうすれば vectors の行をそのまま渡せる（`out` と `why` は読まない）。二つ以上なら `module` が要る。
 - **読み方**：どの JSON のエンコーダーが書いたものも読む（koyomi の 13.2 と同じ）。キーの `\u` のエスケープ（Python の `json.dumps` は既定で日本語の名前をそう書く）、空白、整数の値のいろいろな書き方（`20`、`20.0`、`2e1`。rulec の §15.205 と同じ）を読む。同じキーが二度あれば、後の値を読む（JavaScript の `JSON.parse` と同じ）。
-- **値**：vectors の値の形（9 章）。お金は宣言した単位の整数、率は刻みの数、日付は `YYYY-MM-DD`、列挙は値の名前、フィールドを持つ値は `{"<値の名前>": {フィールド}}`、`result` は `{"ok": 値}` か `{"err": 値}`、レコードはフィールドの名前のオブジェクト、リストは配列、辞書は組の配列、集合は配列、`none` は `null`、振替の値は `{"book", "transfer", "op", "args"}`。日付は「4 桁以上の年-2 桁の月-2 桁の日」の数字の形なら `kaname::Date` に読み、暦に無い日（2026-02-30、2026-13-01）も 9999 年より後の日（10000-01-01）も年 0 の日も、入口が確かめる（Go のハーネスの読み方と同じ）。
+- **値**：vectors の値の形（9 章）。お金は宣言した単位の整数、率は刻みの数、日付は `YYYY-MM-DD`、列挙は値の名前、フィールドを持つ値は `{"<値の名前>": {フィールド}}`、`result` は `{"ok": 値}` か `{"err": 値}`、レコードはフィールドの名前のオブジェクト、リストは配列、辞書は組の配列、集合は配列、`none` は `null`、振替の値は `{"book", "transfer", "op", "args"}`。日付は「4 桁以上の年-2 桁の月-2 桁の日」の数字の形なら `kaname::Date` に読み、暦に無い日（2026-02-30、2026-13-01）も 9999 年より後の日（10000-01-01）も年 0 の日も、入口が確かめて `input` の失敗で答える（Go のハーネスの読み方と同じ）。Rust の入口は、範囲の両端を書いた日付でも暦にある日かを確かめる（`on_calendar()`。22.5）。2026-02-30 の日の番号は 2026-03-02 のもので、両端のあいだに入るからである。
 - **答え**：その入力の vectors の行から `why` を除いたもの（`{"function":…,"in":…,"out":…}`、失敗なら `"fails": {"kind","module","line","message"}`）で、文字も同じにする。`in` は、読んだ値を出力と同じ書き方で書き直したもの（辞書と集合は鍵の順、レコードは宣言の順）。文字列の書き方は ritsu-base の JSON（serde_json と同じ。`\n`・`\t` などは名前で、ほかの制御文字は 16 進の 4 桁のエスケープ、日本語はそのまま）に合わせる。
-- **`KanameError` と拒否の行**：関数の失敗（`input` を含む六つの種類）は、拒否ではなく、vectors と同じ `fails` の行で答える。入口の外れも、先に `check_<関数>` を呼んで `fails` で答え、panic しない。拒否の行 `{"refused":"input","error":"<文>"}` は、入力を呼び出しとして読めないときだけに使い、種類はいつも `input` である（rulec と koyomi の Wasm の、自分で拒む入力と同じ）。JSON でない、オブジェクトでない、そのモジュールか関数が無い（中の関数も）、`in` が無いかオブジェクトでない、引数が無いか JSON の種類が違う、整数でない数、int64 の外の数、日付の数字の形でない文字列、列挙の値でない名前、深すぎる入れ子、がそれにあたる（「The input is not a JSON object」「There is no module `…`」「The module `…` has no function `…` a host calls」「The argument `…` of `…` is outside int64」など）。文は生成の言語（`--lang`）で書く。
+- **`KanameError` と拒否の行**：関数の失敗（`input` を含む六つの種類）は、拒否ではなく、vectors と同じ `fails` の行で答える。入口の外れも、先に `check_<関数>` を呼んで `fails` で答え、panic しない。拒否の行 `{"refused":"input","error":"<文>"}` は、入力を呼び出しとして読めないときだけに使い、種類はいつも `input` である（rulec と koyomi の Wasm の、自分で拒む入力と同じ）。UTF-8 でないバイト列、JSON でない、オブジェクトでない、そのモジュールか関数が無い（中の関数も）、`in` が無いかオブジェクトでない、引数が無いか JSON の種類が違う、整数でない数、int64 の外の数、日付の数字の形でない文字列、列挙の値でない名前、深すぎる入れ子、がそれにあたる（「The input is not UTF-8」「The input is not a JSON object」「There is no module `…`」「The module `…` has no function `…` a host calls」「The argument `…` of `…` is outside int64」など）。文は生成の言語（`--lang`）で書く。
 - **深すぎる入れ子**：読む JSON の深さの上限（`DEPTH`）は、引数の型の 201 段の入れ子が JSON でとる深さ（生成のときに型から求める）と 1,024 の大きいほうにする。201 段の入力は読んで入口が `input` で答え、それより深いものは読まずに拒否する（「The input nests deeper than 1024」）。スタックを守るためである。
 - **正しくない文字列**：JSON の `"\ud800"` のような、Unicode のスカラー値にならないエスケープは、入口の失敗「The argument `<パス>` of `<関数>` is no well-formed string of Unicode」（25.8）の `fails` の行で答える。TypeScript と Python の入口が答えるのと同じである。Rust の値はその文字列を持てないので、入口は引数を読むあいだに、確かめる順（宣言の順、フィールドの宣言の順、要素の順）で最初の正しくない文字列の場所を覚え、範囲の確かめより先に言う。ほかの出力先の入口は範囲の外れと同じ順で確かめるので、一つの入力に正しくない文字列と範囲の外れの両方があると、答える失敗が違いうる（宣言の外の入力のケースは、どれも一か所だけを外す）。int64 の外の数は持てないので拒否する（その入力は Rust では流さない。Go と同じ）。
 - **止まらない入力**：参照インタプリタが止まらないと言う入力（200 段を超える再帰）では、生成物が段を数えないので、Wasm のスタックを使い切ってトラップすることがある。`call` がトラップしないと言えるのは、参照インタプリタが止まる入力までである。そう `.wit` と文書に書く。
-- **`.wit` の名前**：`package kaname:<world>@<版>; world <world> { export call: func(input: string) -> string; }`。`<world>` はパッケージの名前（`ritsu gen` の `--name`）を、koyomi と同じ `world()` で直したもの（`_` を `-` にし、続く `-` と端の `-` をまとめ、WIT の予約語なら前に `%` を付ける）。版は、`ritsu.mod` があればその `version` を semver にし、無ければ書かない。
+- **`.wit` の名前**：`package kaname:<world>@<版>; world <world> { export call: func(input: string) -> string; }`。`<world>` はパッケージの名前（`ritsu gen` の `--name`）を、koyomi と同じ `world()` で直したもの（`_` を `-` にし、続く `-` と端の `-` をまとめ、WIT の予約語なら前に `%` を付ける）。版は `wit` が受け取ったもの（semver）で、無ければ書かない。`ritsu gen` は `ritsu.mod` の `version` を渡す（19 章）。`--name` が取る名前のうち、Python の予約語でもある WIT の予約語（`as`、`async`、`from`、`import`、`with`）は、`ritsu gen` が先に止める。
+- **`kaname api` の `wasm` の項**（11.1）：ホストが呼ぶ関数を持つモジュールでは、`call`、`call_signature`、`post_return`、`realloc`、`memory`（rulec と koyomi の `api` の `wasm` と同じ名前）、`input`（呼び出しのキー `["module", "function", "in"]` と、このモジュールを選ぶ `module` の値）、`functions`（呼べる関数の名前）、`answers`（答えの三つの形。`answer` は `function`・`in`・`out`、`failure` は `function`・`in`・`fails` と `fails` のキー、`refusal` は `refused`・`error` と `refused` の値 `input`）を持つ。振替を作るモジュールでは、振替の値のキー（`transfers`）も持つ。ホストが呼ぶ関数を持たないモジュールは Wasm に入らないので、項は `null` である。`input.module` は、モジュールが書いた名前である。依存のモジュールとしてパッケージに入れば、呼び出しは依存の名前の連なりを前に付けて書く（`@pricing/fees`）が、一つのモジュールの `api` はそれを知らない。
 
 ### 36.12 Wasm の書き出しを共通にする（`ritsu-emit` の `wasm`）
 
-**決定**：koyomi の Wasm の書き出しのうち、一字も変えずに分けられる部分を `ritsu_emit::wasm` に置き、koyomi と kaname がそれを使う。
+**決定**：koyomi の Wasm の書き出しのうち、koyomi の生成物を一字も変えずに分けられる部分を `ritsu_emit::wasm` に置き、koyomi と kaname がそれを使う。
 
-- 置くもの：`RUSTC_FLAGS`（`-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib`）と、同じ設定を cargo で書いた組む行（36.15。`-- -C lto` は cargo では組めず、`--config profile.release.*` で渡す）、`CALL_SIGNATURE`、WIT の予約語の表、`world`、`semver`、`package`、ABI の三つの関数（`cabi_realloc`、`call`、`cabi_post_call`）の文。
-- koyomi に残すもの：JSON を読む部品と書く部品。koyomi の `call` は配列と真偽を読み捨てて 64 段まで読み、正しくないエスケープを U+FFFD にし、制御文字を全部 16 進のエスケープで書く。kaname の入口（`glue/door.rs`）は、配列と真偽を持ち 36.11 の深さまで読み、正しくない文字列を印にし、serde_json の書き方で書く。同じ役の部品で中身が違うので、共通にはしない。
-- 確かめ方：koyomi の Wasm の生成物（木の全部の `.cal` とカレンダーの、`wasm/` の四つのファイル）が、替える前（0.40.0 の公式のバイナリ）と一字も同じであること。
+- `ritsu_emit::wasm` にあるもの：`RUSTC_FLAGS`（`-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib`）と、同じ設定を cargo で書いた `CARGO_LINE`（36.15。`-- -C lto` は cargo では組めず、`--config profile.release.*` で渡す）、`CALL_SIGNATURE`、WIT の予約語の表（`WIT_KEYWORDS`）、`world`、`semver`、`package`（`<言語>:<world>@<版>`）、component を作る二つのコマンド（`component_line`）、ABI の三つの関数（`abi`。`REALLOC`、`call`、`POST_CALL`）とそれが読む `use`（`ALLOC_USE`）、JavaScript のホストが `call` を呼ぶ関数（`NODE_CALL`）。
+- `call` は、答えを作る式と、UTF-8 でない入力に答える式を受け取る。koyomi は `_answer(text)` と `_refusal("input", …)` を、kaname は `crate::glue::door::answer(text)` と `crate::glue::door::not_utf8()` を渡す。どちらも、入力を `std::str::from_utf8` で確かめてから読む。
+- koyomi に残すもの：JSON を読む部品（`_space`、`_word`、`_number`、`_value`、`_string`）、整数を読む `_whole`、拒否の行を作る `_refusal`、答えを書く部品。kaname の入口（`glue/door.rs`）には同じ役の部品があるが、中身が違うので共通にしない。koyomi の `call` は配列と真偽を読み捨てて 64 段まで読み、正しくないエスケープを U+FFFD にし、制御文字を全部 16 進のエスケープで書く。kaname の入口は、配列と真偽を持ち、36.11 の深さまで読み、正しくない文字列に印を付け、serde_json の書き方で書く。整数も、koyomi の `_whole` は「整数でない」と「int64 の外」を分けずに `None` を返すが、kaname は二つを別の文で拒否する（36.11）。拒否の行も、koyomi は種類（`input`、`range`）を持ち、kaname はいつも `input` である。部品を一つにすれば、0.36.0 で出た koyomi の生成物の文字が、kaname の読み方の直しにつれて変わることになる。
+- 確かめ方：koyomi の生成物（木の全部の `.cal` の `gen` の英日と `api`）が、替える前（0.40.0 の公式のバイナリ）と一字も同じであること（36.15）。
 - **rulec は替えない**。替えると、rulec の生成物で次のことが変わる。export が `#[no_mangle]` から `#[unsafe(no_mangle)]` になり、エディション 2024 でも組める。`call` が UTF-8 でない入力を確かめずに `String::from_raw_parts` で `String` にしている（未定義の動作）ところが、拒否の行になる。`.wit` の `package` と `world` の名前が `world()` で作られ、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名でも、wasm-tools が WIT を読めるようになる（いまは読めない。36.15）。使う人の `rulec gen --check` が落ちるので、替えるかは別に決める（36.16）。
 
 ### 36.13 捨てたもの
@@ -4670,6 +4696,8 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - **E007**：モジュールの名前か別名が `crate`、`self`、`Self`、`mod`、`door` のとき、どの出力先で生成するかによらず E007 になる（36.3）。前は通っていたモジュールが止まりうる変更である。例とテストのモジュールと、ritsu のテストのプロジェクトには、この名前のモジュールは無い。
 - **関数の中の名前の字**：TypeScript・Python・Go の生成物で、出力先が名前に取らない字を持つ関数の中の名前が `v` になる（36.3）。変わるのは、前の生成物を各言語が読めなかった行だけで、木の全部の `.kn` では `names.kn` の `letters` の行だけである（36.15）。
 - 口の `RuleFacts` に `rust` を足した（36.6）。
+- `kaname api` に `wasm` の項を足した（36.11。`generated` の後に入る）。ほかのキーは変わらない。`api` の golden は `KANAME_BLESS=1` で取り直し、16 本とも差は `wasm` の項だけだった。
+- `ritsu_emit::wasm` を足し、koyomi の Wasm の書き出しはそれを使う（36.12）。koyomi の生成物は変わらない（36.15）。
 
 ### 36.15 確かめたこと
 
@@ -4806,9 +4834,115 @@ exit 0
 
 二つ目は、rustc で組んだものと同じ 15,551 バイトで、同じ六つを export した。
 
+**koyomi の Wasm の書き出しを替える前と後**。木の全部の `.cal`（347）の `gen`（英語と日本語）と `api` を、0.40.0 の公式のバイナリと手元のビルドで走らせ、上と同じく比べた。1,041 回のうち 973 回が同じだった（書いたファイルは 4,928）。違った 68 回は 34 のファイルの `gen` の英日で、0.40.0 の後に入った E016（koyomi の DESIGN 15 章）で、新しい側が何も書かずに 1 で終わる。その 34 のファイルを `--target wasm` だけで書くと、26 のファイルの英日の 52 回は同じものを書き（208 のファイル）、残りの 8 のファイルは、W001 が Wasm を挙げるので E016 で止まった。
+
+**パッケージの Wasm**（`tests/wasm.rs` の出力）：
+
+```text
+cargo clippy -- -D warnings passes the crate built for wasm32 on the 2021 and the 2024 editions in English and in Japanese, and Node v24.21.0 calls the module
+En: 16770 of 16770 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2584 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules (the module, 1760771 bytes, imports nothing)
+Ja: 16770 of 16770 cases agree with the reference: 14096 vectors (5 that do not stop are not run), 2584 inputs outside what the parameters declare and 90 values of types that hold themselves nested 200 and 201 deep (14 that do not stop are not run), in 52 modules (the module, 1779314 bytes, imports nothing)
+en: 35 inputs answered as the table says, and the memory the same after 20,000 calls
+ja: 11 inputs answered as the table says, and the memory the same after 20,000 calls
+wasmtime called the component of the package late_payment
+wasmtime called the component of the package fees
+wasmtime called the component of the package payout
+names ritsu gen does not take (words Python keeps): as async from import with
+```
+
+契約の外の表から、入力と答えをいくつか挙げる（試験はどれも一字一句比べる）：
+
+```text
+{"module":"calc","function":"fee","in":{"a":10.00E2}}
+  => {"function":"fee","in":{"a":1000},"out":84}
+{"module":"calc","function":"fee","in":{"a":99999999999999999999}}
+  => {"refused":"input","error":"The argument `a` of `fee` is outside int64"}
+{"module":"calc","function":"days","in":{"a":"2026-02-30","b":"2026-03-01"}}
+  => {"function":"days","in":{"a":"2026-02-30","b":"2026-03-01"},"fails":{"kind":"input","module":"calc","line":29,"message":"The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31"}}
+{"module":"generic","function":"first_or","in":{"xs":[],"fallback":1}}
+  => {"refused":"input","error":"The module `generic` has no function `first_or` a host calls"}
+（[ が 2,000 個と ] が 2,000 個）
+  => {"refused":"input","error":"The input nests deeper than 1024"}
+（バイト列 7B 22 FF 22 7D）
+  => {"refused":"input","error":"The input is not UTF-8"}
+{"function":"遅れの請求","in":{"請求書":{"番号":"inv_1","請求日":"2026-03-02","金額":100000},"支払日":"2026-5-20","基準金利":50}}
+  => {"refused":"input","error":"関数 `遅れの請求` の引数 `支払日` が YYYY-MM-DD と書いた日付ではありません"}
+```
+
+`examples/late_payment` の日本語の版だけのパッケージの `.wit`（`wit` の出力。名前は `late_payment`、版は 1.0.0）：
+
+```wit
+// Code generated by kaname 0.40.0. DO NOT EDIT.
+
+package kaname:late-payment@1.0.0;
+
+/// パッケージ late_payment の kaname のモジュールにある、ホストが呼ぶ関数
+world late-payment {
+    /// 一回の呼び出し。input は JSON のオブジェクト {"module": <モジュール>, "function": <関数>, "in": {<引数>: <値>, …}} で、名前はどれもモジュールが書いたとおり、値は kaname vectors の書き方で書く。kaname vectors の行も同じに読む。
+    /// モジュールは一つなので、"module" は省ける。
+    /// 返すのは、kaname vectors がその入力に書く行から why を除いたもの {"function":…,"in":…,"out":…} で、関数が失敗すれば out の代わりに "fails": {"kind","module","line","message"} を持つ。入力が、ホストが呼ぶ関数の呼び出しとして読めなければ、拒否の行 {"refused":"input","error":"<文>"} を返す。
+    /// 引数の範囲と要素の数、関数がどう失敗しうるかは、モジュールごとの kaname api が言う。
+    /// 参照インタプリタが止まらないと言う呼び出し（深すぎる再帰）では、モジュールのスタックが尽きてトラップすることがある。
+    ///
+    /// モジュールと関数:
+    ///   支払いの遅れ
+    ///     遅れの請求(請求書: 請求書, 支払日: date, 基準金利: rate[step 0.01%]) -> 請求?
+    export call: func(input: string) -> string;
+}
+```
+
+その component（66,688 バイト）を wasm-tools と wasmtime 44.0.0 で読んで呼んだ：
+
+```text
+$ wasm-tools component wit late_payment.component.wasm
+package root:component;
+
+world root {
+  export call: func(input: string) -> string;
+}
+
+$ wasmtime run --invoke 'call("{\"function\":\"遅れの請求\",\"in\":{\"請求書\":{\"番号\":\"inv_1\",\"請求日\":\"2026-03-02\",\"金額\":100000},\"支払日\":\"2026-05-20\",\"基準金利\":50}}")' late_payment.component.wasm
+"{\"function\":\"遅れの請求\",\"in\":{\"請求書\":{\"番号\":\"inv_1\",\"請求日\":\"2026-03-02\",\"金額\":100000},\"支払日\":\"2026-05-20\",\"基準金利\":50},\"out\":{\"期日\":\"2026-03-31\",\"遅れた日数\":50,\"定額の補償\":70,\"利息\":1150}}"
+```
+
+**パッケージの Wasm のスタック**。上の英語と日本語のモジュールを `CARGO_LINE` で組み直し、スタックの頭（`(global (;0;) (mut i32) i32.const 1048576)`）を小さくして、試験の 16,770 件を同じホストで呼んだ：
+
+```text
+en 1024 KiB: 16770 calls, 0 trapped
+en 64 KiB: 16770 calls, 0 trapped
+en 48 KiB: 16770 calls, 18 trapped
+en 32 KiB: 16770 calls, 36 trapped
+en 16 KiB: 16770 calls, 86 trapped
+en 8 KiB: 16770 calls, 90 trapped
+```
+
+日本語も同じ数だった。64 KiB の答えは 1 MiB の答えと一字も違わない。48 KiB でトラップしたのは、`catalog.kn` とその日本語の版に 200 段と 201 段の値を渡す 18 件（JSON の深さ 403〜405）で、32 KiB では `trees.kn` とその日本語の版の 18 件が加わる。要るスタックは 48 KiB と 64 KiB のあいだで、既定の 1 MiB はその 16 倍より大きい。データはスタックの上（`(data (;0;) (i32.const 1048576)`）から始まるので、スタックがあふれれば 0 番地の下を指し、データを書きつぶさずに「memory access out of bounds」でトラップする。
+
+**暦に無い日**（`a_day_of_no_calendar_is_outside_every_range` の出力。Rust の入口に `on_calendar()` を足す前は、一行目が `calc 2026-02-30: ok` だった）：
+
+```text
+calc 2026-02-30: The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31
+calc 2026-13-01: The argument `a` of `days` is 2026-13-01, outside its range >=2026-01-01 <=2026-12-31
+calc 2026-03-02: ok
+open 2026-02-30: The argument `first` of `days` is 2026-02-30, outside its range >=0001-01-01 <=9999-12-31
+open 10000-01-01: The argument `first` of `days` is 10000-01-01, outside its range >=0001-01-01 <=9999-12-31
+open 2026-03-02: ok
+```
+
 ### 36.16 見つけて直していないもの
 
 - rulec と koyomi の Rust のモジュールは、clippy に当たる形を持つ（36.8）。どちらも単独の生成物と同じ形で、変えると使う人の `--check` が落ちる。
 - 表のほうがツールの Unicode より新しいとき、表が通す字をツールが名前に取らない（36.3）。`tests/idents.rs` で、Python 3.13.11（Unicode 15.1.0）は 18,040、Go 1.26.10（Unicode 15.0.0）は 19,226、tsc 7.0.2 は 18,040 の名前がそれにあたる。kaname の字句（`starts_name`、`is_name_char`）は Rust の `char` の Unicode（17.0.0）で読むので、その字を名前に取る。ツールの Unicode に合わせて表を分けることはしていない。
 - Rust は識別子を NFC にしてから比べる（36.3）。NFC で同じになる二つの関数の中の名前は、Rust で同じ名前になる。Python の NFKC と同じ形の穴で、確かめていない（chobo の DESIGN 14.6 と同じ）。
-- rulec の Wasm の `call` は、UTF-8 でない入力を確かめずに `String` にする。rulec の `wit_name` は、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名を、wasm-tools が読めない WIT の名前にする（36.15）。
+- rulec の Wasm の `call` は、UTF-8 でない入力を確かめずに `String` にする。送料の規則（rulec の `tests/corpus/送料.rule`）のモジュールに三バイト `7b ff 7d` を渡すと、答えずにトラップする（Node で `RuntimeError: unreachable`）。rulec の `wit_name` は、`__` を持つ別名、`_` で終わる別名、WIT の予約語の別名を、wasm-tools が読めない WIT の名前にする（36.15）。rulec を `ritsu_emit::wasm` に替えると、どちらも直る。替えるかは別に決める（36.12）。
+- 範囲の両端を書いた日付の引数では、TypeScript と Go の入口は、日の番号（TypeScript は文字列）を両端と比べるだけで、暦にある日かを確かめない（22.5）。ホストが 2026-02-30 を渡すと 2026-03-02 として答え、TypeScript の文字列が日付の形でもなければ、入口を通って中の計算が JavaScript の例外で止まる。範囲 `>=2026-01-01 <=2026-12-31` の二つの日付の差を返す関数を `ritsu gen` で書いて呼んだ：
+
+```text
+(Go。CheckDays(a, 2026-03-01) と Days(a, 2026-03-01))
+go 2026-02-30: <nil> 1
+(TypeScript。days(a, "2026-03-01"))
+ts 2026-02-30: 1
+ts 2026-0x-yy: The number NaN cannot be converted to a BigInt because it is not an integer
+```
+
+  Rust の入口は確かめる（36.11）。TypeScript と Go に同じ確かめを足すと、両端を書いた日付の範囲を持つモジュールの生成物が変わり、使う人の `ritsu gen --check` が落ちる。

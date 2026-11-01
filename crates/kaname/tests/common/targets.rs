@@ -113,8 +113,9 @@ pub fn write_package(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>
 /// chobo's of the backend, and its functions that make the transfers take the book by the trait of
 /// the backend's clients (DESIGN 36.6); the other targets read none of it. A package of Rust is a
 /// crate (ritsu's DESIGN 9.3): its `lib.rs` and the files that declare the modules of `rules/`,
-/// `dates/` and `books/`, which `ritsu gen` writes, are written here as it writes them, and the
-/// crate's Cargo.toml is the test's.
+/// `dates/` and `books/`, which `ritsu gen` writes, are written here as it writes them, with the
+/// package's Wasm (DESIGN 36.11: the functions of the ABI, declared for wasm32 alone, and the books'
+/// clients left out there), and the crate's Cargo.toml is the test's.
 pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>, String)], backend: chobo::target::Backend) -> Vec<String> {
     use chobo::target::Backend;
     let store = if backend == Backend::TigerBeetle { kaname::r#gen::Store::TigerBeetle } else { kaname::r#gen::Store::Sql };
@@ -230,11 +231,14 @@ pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Chec
                     // not held to here (chobo's clients are, in chobo's tests)
                     let lines: Vec<String> = if dir == "books" { lines.clone() } else { lines.iter().map(|l| format!("#[allow(clippy::all)]\n{l}")).collect() };
                     put(&mut written, format!("{dir}.rs"), format!("//! The package's {dir}, a module each.\n\n{}", lines.join("")));
-                    tree.entry(String::new()).or_default().push(mod_line("", dir));
+                    // the books' clients wait on a database's driver, which the Wasm has none of
+                    tree.entry(String::new()).or_default().push(if dir == "books" { kaname::r#gen::wasm::BOOKS.to_string() } else { mod_line("", dir) });
                 }
             }
+            put(&mut written, kaname::r#gen::wasm::FILE.into(), kaname::r#gen::wasm::abi(lang));
             let mut lib = String::from("//! The package of kaname's tests: the rules', the dates' and the books' code, the units, and kaname's.\n#![allow(confusable_idents, mixed_script_confusables, uncommon_codepoints)]\n\n");
             let mut top = tree.remove("").unwrap_or_default();
+            top.push(kaname::r#gen::wasm::DECLARE.to_string());
             top.sort();
             top.dedup();
             for l in top {
@@ -319,6 +323,46 @@ pub fn said(o: &std::process::Output) -> String {
 /// The crate's directory, where the tools are.
 pub fn tools() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tools")
+}
+
+/// The cargo that runs the tests (cargo gives the test process `CARGO`), run in `dir` with the target
+/// directory every build of the generated crates shares (tests/rust.rs's and tests/wasm.rs's): the tests' own temporary directory in the
+/// target directory (`CARGO_TARGET_TMPDIR`), so that the crates the books' clients need are built
+/// once.
+pub fn cargo_in(dir: &Path) -> std::process::Command {
+    let mut c = std::process::Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+    c.current_dir(dir).env("CARGO_TARGET_DIR", rust_target()).env_remove("RUSTFLAGS").env_remove("CARGO_ENCODED_RUSTFLAGS");
+    c
+}
+
+pub fn rust_target() -> PathBuf {
+    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kaname-rust")
+}
+
+/// The crate's Cargo.toml (tools/rust's, at `edition`, its binary named `bin`) and Cargo.lock in
+/// `dir`. The builds share a target directory, where a binary is the file of its name: each test
+/// names its own. The library takes a version of its own too, `0.0.<n>` from the binary's name: to
+/// cargo, crates of one name and version are one library whatever their directory, whose build is
+/// fresh while the files it read, looked for in the directory at hand, are older than it. A crate
+/// another test built after this one's files were written would be fresh, and the binary would answer
+/// with the other's modules.
+pub fn crate_files(dir: &Path, edition: &str, bin: &str) {
+    let toml = std::fs::read_to_string(tools().join("rust/Cargo.toml")).unwrap();
+    let lock = std::fs::read_to_string(tools().join("rust/Cargo.lock")).unwrap();
+    assert!(toml.contains("edition = \"2024\""), "tools/rust/Cargo.toml names the 2024 edition");
+    let named = "name = \"harness\"\npath = \"harness/main.rs\"";
+    assert!(toml.contains(named), "tools/rust/Cargo.toml names the binary harness");
+    let package = "name = \"pkg\"\nversion = \"0.0.0\"\n";
+    assert!(toml.contains(package) && lock.contains(package), "tools/rust's crate is pkg 0.0.0");
+    let own = format!("name = \"pkg\"\nversion = \"0.0.{}\"\n", bin.bytes().fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b))));
+    let toml = toml.replacen(package, &own, 1).replace("edition = \"2024\"", &format!("edition = \"{edition}\"")).replace(named, &format!("name = \"{bin}\"\npath = \"harness/main.rs\""));
+    std::fs::write(dir.join("Cargo.toml"), toml).unwrap();
+    std::fs::write(dir.join("Cargo.lock"), lock.replacen(package, &own, 1)).unwrap();
+}
+
+/// Whether cargo's clippy is here.
+pub fn clippy() -> bool {
+    ritsu_testkit::tools::runs(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()), &["clippy", "--version"])
 }
 
 /// Where a test writes its packages when `KANAME_KEEP` names a directory, to be read after it; else

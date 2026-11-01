@@ -10,7 +10,9 @@
 //!   that makes them through chobo's client of the book (DESIGN 10.6).
 //! - The helper every module reads, `glue/kaname.*` (DESIGN 10.1): written from `runtime/`.
 //! - [`door`]: Rust's `glue::door::answer`, which answers a call written as a line of JSON (the input
-//!   of the package's Wasm, DESIGN 36.11), and which the native harness calls too.
+//!   of the package's Wasm, DESIGN 36.11), and which the native harness calls too; [`wasm`], the
+//!   functions of the canonical ABI the package's Wasm exports, which hand a call to it, and the
+//!   package's world.
 //! - [`harness`]: a program that runs the generated code on the vectors, for the tests that hold it to
 //!   the reference interpreter (DESIGN 16.4).
 
@@ -20,6 +22,7 @@ pub mod ex;
 pub mod harness;
 pub mod module;
 pub mod plan;
+pub mod wasm;
 
 use crate::check::Checked;
 use ritsu_base::text::Lang;

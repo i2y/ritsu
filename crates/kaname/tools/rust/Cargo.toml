@@ -1,8 +1,9 @@
-# The crate of the tests of the Rust kaname generates (tests/rust.rs): a package of Rust is a crate
-# (ritsu's DESIGN 9.3), whose files the tests write beside a copy of this, with the harness that
-# answers through its door. The crates are those the books' clients name (chobo's
+# The crate of the tests of the Rust kaname generates (tests/rust.rs, tests/wasm.rs): a package of
+# Rust is a crate (ritsu's DESIGN 9.3), whose files the tests write beside a copy of this, with the
+# harness that answers through its door. The crates are those the books' clients name (chobo's
 # `client::rust::crates`), at the versions of chobo's runner of the Rust clients, pinned here and
-# in Cargo.lock; the tests build the crate --locked.
+# in Cargo.lock; the tests build the crate --locked. The package's Wasm leaves the books' clients
+# out (DESIGN 36.10), and the crates they name with them.
 [package]
 name = "pkg"
 version = "0.0.0"
@@ -19,7 +20,7 @@ path = "lib.rs"
 name = "harness"
 path = "harness/main.rs"
 
-[dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "mysql"] }
 tigerbeetle = "=0.17.9"
 tokio = { version = "=1.54.1", features = ["rt-multi-thread", "sync", "time"] }

@@ -14,6 +14,66 @@
     "go": "glue/payoutja/payoutja.go",
     "rust": "glue/payout_ja.rs"
   },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "売り手への支払い"
+    },
+    "functions": [
+      "精算する"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ],
+    "transfers": {
+      "keys": [
+        "book",
+        "transfer",
+        "op",
+        "args"
+      ]
+    }
+  },
   "uses": [
     {
       "kind": "rule",

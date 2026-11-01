@@ -102,8 +102,9 @@ jobs:
       - name: Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # rulec writes Rust for the browser and for WASI, and koyomi a Wasm module for any host;
-          # geas reads coverage with llvm-tools, and chobo holds its Rust clients to clippy's lints
+          # rulec writes Rust for the browser and for WASI, koyomi a Wasm module for any host, and
+          # kaname a package of Rust that builds into one; geas reads coverage with llvm-tools, and
+          # chobo and kaname hold their Rust to clippy's lints
           targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || matrix.group == 'the others' && 'wasm32-unknown-unknown' || '' }}
           components: ${{ matrix.group == 'the others' && 'llvm-tools, clippy' || '' }}
 
@@ -180,16 +181,17 @@ jobs:
           swift-version: "6.1"
 
       # wasmtime runs rulec's runners built for WASI, and calls the components of rulec's and
-      # koyomi's Wasm targets (koyomi's in the group of the others).
-      - name: "rulec and koyomi: wasmtime, for the WASI pass and the components of the Wasm targets"
+      # koyomi's Wasm targets and of kaname's package's Wasm (koyomi's and kaname's in the group of
+      # the others).
+      - name: "rulec, koyomi and kaname: wasmtime, for the WASI pass and the components of the Wasm targets"
         if: matrix.group == 'rulec' || matrix.group == 'the others'
         uses: bytecodealliance/actions/wasmtime/setup@v1
 
       # The Wasm target's module and .wit are made into a component, which wasmtime then calls
-      # (rulec's tests/wasm_target.rs, koyomi's tests/wasm.rs). The release's archive, at the
+      # (rulec's tests/wasm_target.rs, koyomi's and kaname's tests/wasm.rs). The release's archive, at the
       # version the tests were written with, held to the checksum it had when this was written; a
       # download of a few megabytes, so it is not cached.
-      - name: "rulec and koyomi: wasm-tools 1.245.1, for the components of the Wasm targets"
+      - name: "rulec, koyomi and kaname: wasm-tools 1.245.1, for the components of the Wasm targets"
         if: matrix.group == 'rulec' || matrix.group == 'the others'
         run: |
           set -eu
@@ -359,7 +361,8 @@ jobs:
 
       # kaname's tests/rust.rs builds the Rust it generates, with the Rust of the rules, the dates and
       # the books, into one crate of tools/rust's Cargo.toml and Cargo.lock (the crates chobo's
-      # clients name), in the target directory's tmp, held to the lock (--locked).
+      # clients name), in the target directory's tmp, held to the lock (--locked); tests/wasm.rs
+      # builds the same crate for wasm32, which reads none of those crates.
       - name: "kaname: the crates of the Rust crate"
         if: matrix.group == 'the others'
         run: cargo fetch --locked --manifest-path crates/kaname/tools/rust/Cargo.toml

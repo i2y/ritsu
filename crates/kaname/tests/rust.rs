@@ -16,7 +16,9 @@
 //!   reference interpreter says (`the_generated_rust_makes_the_transfers_in_the_books`); with chobo's
 //!   clients of the MySQL family the crate is built, and not run;
 //! - the crates `tools/rust` pins are those chobo's clients name, at their versions
-//!   (`the_crates_are_those_the_clients_name`).
+//!   (`the_crates_are_those_the_clients_name`);
+//! - a `kaname::Date` of no calendar a host makes (2026-02-30) is outside the range of every
+//!   parameter, the ends written or not (`a_day_of_no_calendar_is_outside_every_range`).
 //!
 //! Without cargo's clippy, the crate is held to rustc's lints alone and a SKIP line says so; without
 //! PostgreSQL or TigerBeetle, the transfers are not made there, and a SKIP line says so.
@@ -30,44 +32,12 @@ use kaname::r#gen::Target;
 use ritsu_base::json::Json;
 use ritsu_base::text::Lang;
 use ritsu_testkit::{Need, TempDir};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 use std::time::Duration;
 
 const LIMIT: Duration = Duration::from_secs(1800);
-
-/// The cargo that runs the tests (cargo gives the test process `CARGO`), run in `dir` with the target
-/// directory every build of the generated crates shares: the tests' own temporary directory in the
-/// target directory (`CARGO_TARGET_TMPDIR`), so that the crates the books' clients need are built
-/// once.
-fn cargo_in(dir: &Path) -> Command {
-    let mut c = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-    c.current_dir(dir).env("CARGO_TARGET_DIR", rust_target()).env_remove("RUSTFLAGS").env_remove("CARGO_ENCODED_RUSTFLAGS");
-    c
-}
-
-fn rust_target() -> PathBuf {
-    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kaname-rust")
-}
-
-/// The crate's Cargo.toml (tools/rust's, at `edition`, its binary named `bin`) and Cargo.lock in
-/// `dir`. The builds share a target directory, where a binary is the file of its name: each test
-/// names its own.
-fn crate_files(dir: &Path, edition: &str, bin: &str) {
-    let toml = std::fs::read_to_string(tools().join("rust/Cargo.toml")).unwrap();
-    assert!(toml.contains("edition = \"2024\""), "tools/rust/Cargo.toml names the 2024 edition");
-    let named = "name = \"harness\"\npath = \"harness/main.rs\"";
-    assert!(toml.contains(named), "tools/rust/Cargo.toml names the binary harness");
-    let toml = toml.replace("edition = \"2024\"", &format!("edition = \"{edition}\"")).replace(named, &format!("name = \"{bin}\"\npath = \"harness/main.rs\""));
-    std::fs::write(dir.join("Cargo.toml"), toml).unwrap();
-    std::fs::copy(tools().join("rust/Cargo.lock"), dir.join("Cargo.lock")).unwrap();
-}
-
-/// Whether cargo's clippy is here.
-fn clippy() -> bool {
-    ritsu_testkit::tools::runs(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()), &["clippy", "--version"])
-}
 
 #[test]
 fn the_generated_rust_answers_as_the_reference_does() {
@@ -585,4 +555,57 @@ fn main() {{
 }}
 "#
     )
+}
+
+/// The program of [`a_day_of_no_calendar_is_outside_every_range`]: the checks of the entry called as a
+/// host calls them, with dates a host can make, each answer a line.
+const CALENDAR: &str = r#"//! Dates of no calendar given to the checks of the entry.
+
+use pkg::glue::kaname::Date;
+
+fn main() {
+    let d = |year, month, day| Date { year, month, day };
+    let said = |r: Result<(), pkg::glue::kaname::KanameError>| r.map_or_else(|e| e.to_string(), |()| "ok".into());
+    for a in [d(2026, 2, 30), d(2026, 13, 1), d(2026, 3, 2)] {
+        println!("calc {a}: {}", said(pkg::glue::calc::check_days(a, d(2026, 3, 1))));
+    }
+    for a in [d(2026, 2, 30), d(10000, 1, 1), d(2026, 3, 2)] {
+        println!("open {a}: {}", said(pkg::glue::open::check_days(a, d(2026, 3, 1))));
+    }
+}
+"#;
+
+/// A host of Rust can make a `kaname::Date` of no calendar: the entry finds it outside the range of
+/// the parameter, where the range writes both ends (calc's `days`: the day number of 2026-02-30 is
+/// that of 2026-03-02, between the ends) and where it leaves them to the type (open's `days`). The
+/// door, which reads JSON, refuses such a day before the entry (DESIGN 36.11).
+#[test]
+fn a_day_of_no_calendar_is_outside_every_range() {
+    if !ritsu_testkit::need(Need::Rustc) {
+        return;
+    }
+    let t = TempDir::new("kaname-rust-calendar");
+    let root = t.path().to_path_buf();
+    let said = deep(move || {
+        let modules: Vec<_> = modules().into_iter().filter(|(_, s)| s == "tests/modules/calc.kn" || s == "tests/modules/open.kn").collect();
+        assert_eq!(modules.len(), 2);
+        write_package(&root, Target::Rust, Lang::En, &modules);
+        let dir = package_dir(&root, Target::Rust);
+        std::fs::create_dir_all(dir.join("harness")).unwrap();
+        std::fs::write(dir.join("harness/main.rs"), CALENDAR).unwrap();
+        crate_files(&dir, "2024", "calendar");
+        let r = ritsu_testkit::run(cargo_in(&dir).args(["run", "--locked", "--quiet", "--bin", "calendar"]), LIMIT);
+        assert!(r.ok, "{}", r.both());
+        r.stdout
+    });
+    assert_eq!(
+        said,
+        "calc 2026-02-30: The argument `a` of `days` is 2026-02-30, outside its range >=2026-01-01 <=2026-12-31\n\
+         calc 2026-13-01: The argument `a` of `days` is 2026-13-01, outside its range >=2026-01-01 <=2026-12-31\n\
+         calc 2026-03-02: ok\n\
+         open 2026-02-30: The argument `first` of `days` is 2026-02-30, outside its range >=0001-01-01 <=9999-12-31\n\
+         open 10000-01-01: The argument `first` of `days` is 10000-01-01, outside its range >=0001-01-01 <=9999-12-31\n\
+         open 2026-03-02: ok\n"
+    );
+    print!("{said}");
 }

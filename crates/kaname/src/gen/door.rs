@@ -2,8 +2,9 @@
 //! JSON (`{"module": …, "function": …, "in": {…}}`, each name as the module writes it), answered with
 //! the line `kaname vectors` writes for that input without its `why` (`{"function":…,"in":…,"out":…}`,
 //! or `"fails"` for a `KanameError`), or a refusal (`{"refused":"input","error":…}`) where the input is
-//! no such call. The package's Wasm answers its `call` through it, and the native harness of the
-//! tests calls it as it is (DESIGN 36.9), so that both go through one reading and one writing.
+//! no such call. The package's Wasm answers its `call` through it (`answer`, and `not_utf8` for bytes
+//! that are not UTF-8; DESIGN 36.11), and the native harness of the tests calls it as it is (DESIGN
+//! 36.9), so that both go through one reading and one writing.
 //!
 //! The values on the wire are those of `vectors` (DESIGN 9). The door reads them as any encoder of
 //! JSON writes them (escapes, white space, `20.0` and `2e1` for 20, the later of two keys) and writes
@@ -631,6 +632,7 @@ fn indent(s: &str, n: usize) -> String {
 /// of a string that is not well formed (`{path}`, `{fun}`, `{kind}`, `{name}` and `{module}` stand
 /// for what each says).
 struct Said {
+    not_utf8: &'static str,
     not_object: &'static str,
     deep: &'static str,
     missing_key: &'static str,
@@ -650,6 +652,7 @@ struct Said {
 fn said(lang: Lang) -> Said {
     match lang {
         Lang::En => Said {
+            not_utf8: "The input is not UTF-8",
             not_object: "The input is not a JSON object",
             deep: "The input nests deeper than {depth}",
             missing_key: "The input has no `{name}`",
@@ -666,6 +669,7 @@ fn said(lang: Lang) -> Said {
             kinds: ["a string", "an integer", "a boolean", "an array", "a JSON object", "a date written YYYY-MM-DD", "a pair [key, value]", "a result, {\"ok\": …} or {\"err\": …}"],
         },
         Lang::Ja => Said {
+            not_utf8: "入力が UTF-8 ではありません",
             not_object: "入力が JSON のオブジェクトではありません",
             deep: "入力の入れ子が {depth} 段より深くなっています",
             missing_key: "入力に `{name}` がありません",
@@ -679,7 +683,8 @@ fn said(lang: Lang) -> Said {
             no_value: "関数 `{fun}` の引数 `{path}` は `{name}` の値ではありません",
             not_taken: "関数 `{fun}` の引数 `{path}` は、ホストが渡さない型です",
             bad: "関数 `{fun}` の引数 `{path}` は、Unicode の文字列として正しくありません",
-            kinds: ["文字列", "整数", "真偽値", "配列", "JSON のオブジェクト", "YYYY-MM-DD と書いた日付", "[キー, 値] の組", "{\"ok\": …} か {\"err\": …} の result"],
+            // a word of ASCII first has a space before it, after the が of the sentence
+            kinds: ["文字列", "整数", "真偽値", "配列", " JSON のオブジェクト", " YYYY-MM-DD と書いた日付", " [キー, 値] の組", " {\"ok\": …} か {\"err\": …} の result"],
         },
     }
 }
@@ -697,6 +702,10 @@ fn sentences(s: &Said) -> String {
     let lit = ritsu_emit::lit::rust;
     let mut o = String::new();
     o.push_str(&format!("const NOT_OBJECT: &str = {};\n\n", lit(s.not_object)));
+    o.push_str(&format!(
+        "/// The refusal of bytes that are not UTF-8, which the package's Wasm answers before it reads a call.\npub fn not_utf8() -> ::std::string::String {{\n    refusal({})\n}}\n\n",
+        lit(s.not_utf8)
+    ));
     o.push_str(&format!("fn too_deep() -> ::std::string::String {{\n    let depth = DEPTH;\n    format!({})\n}}\n\n", f(s.deep)));
     o.push_str(&format!("fn missing_key(name: &str) -> ::std::string::String {{\n    format!({})\n}}\n\n", f(s.missing_key)));
     o.push_str(&format!("fn not_string_key(name: &str) -> ::std::string::String {{\n    format!({})\n}}\n\n", f(s.not_string_key)));

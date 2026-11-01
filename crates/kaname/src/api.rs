@@ -16,7 +16,7 @@ use ritsu_base::json::Json;
 use std::path::Path;
 
 /// A type as the module writes it, a rate with its step: `rate[step 0.01%]`, `list[Line]`.
-fn type_text(p: &Program, c: &Checked, t: &Ty) -> String {
+pub(crate) fn type_text(p: &Program, c: &Checked, t: &Ty) -> String {
     match t {
         Ty::Num(n) if n.is_rate() => match n.step {
             Some(s) => format!("rate[step {}]", crate::names::step_text(s, &n.unit)),
@@ -262,6 +262,7 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
             }
         }
     }
+    let builds = !ops.is_empty();
     let transfers = ops.into_iter().map(|(op, book, written, kind, reasons)| {
         let book_file = ritsu_base::paths::from_root(root, &book).unwrap_or_else(|| book.to_string_lossy().to_string());
         let refusable = kind == "do" || kind == "hold";
@@ -279,12 +280,47 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         ("file", Json::str(file)),
         ("module", Json::Obj(module)),
         ("generated", Json::obj([("typescript", Json::str(format!("glue/{a}.ts"))), ("python", Json::str(format!("glue/{a}.py"))), ("go", Json::str(format!("glue/{pkg}/{pkg}.go"))), ("rust", Json::str(format!("glue/{a}.rs")))])),
+        ("wasm", wasm_json(c, builds)),
         ("uses", Json::arr(uses)),
         ("enums", Json::arr(enums)),
         ("records", Json::arr(records)),
         ("functions", Json::arr(functions)),
         ("transfers", Json::arr(transfers)),
     ])
+}
+
+/// How a call of the package's Wasm reaches the module's functions (DESIGN 36.11): the exports of the
+/// canonical ABI a host calls, as koyomi's and rulec's `api` name them, the keys of a call and the
+/// value of its `module` that names this module, the functions a call reaches, what `call` answers,
+/// and for a module that builds transfers, the keys of the value a transfer is answered as. Null for a
+/// module with no function a host calls, which is not in the Wasm.
+fn wasm_json(c: &Checked, builds: bool) -> Json {
+    let functions: Vec<Json> = c.decls.fns.iter().filter(|f| !f.inner()).map(|f| Json::str(f.name.text.clone())).collect();
+    if functions.is_empty() {
+        return Json::Null;
+    }
+    let strs = |xs: &[&str]| Json::arr(xs.iter().map(|x| Json::str(*x)));
+    let mut o: Vec<(String, Json)> = vec![
+        ("call".into(), Json::str("call")),
+        ("call_signature".into(), Json::str(ritsu_emit::wasm::CALL_SIGNATURE)),
+        ("post_return".into(), Json::str("cabi_post_call")),
+        ("realloc".into(), Json::str("cabi_realloc")),
+        ("memory".into(), Json::str("memory")),
+        ("input".into(), Json::obj([("keys", strs(&["module", "function", "in"])), ("module", Json::str(c.module.name.text.clone()))])),
+        ("functions".into(), Json::arr(functions)),
+        (
+            "answers".into(),
+            Json::arr([
+                Json::obj([("kind", Json::str("answer")), ("keys", strs(&["function", "in", "out"]))]),
+                Json::obj([("kind", Json::str("failure")), ("keys", strs(&["function", "in", "fails"])), ("fails", strs(&["kind", "module", "line", "message"]))]),
+                Json::obj([("kind", Json::str("refusal")), ("keys", strs(&["refused", "error"])), ("refused", strs(&["input"]))]),
+            ]),
+        ),
+    ];
+    if builds {
+        o.push(("transfers".into(), Json::obj([("keys", strs(&["book", "transfer", "op", "args"]))])));
+    }
+    Json::Obj(o)
 }
 
 /// An operation of a transfer a module builds: as the book names it, the book on the disk, as the

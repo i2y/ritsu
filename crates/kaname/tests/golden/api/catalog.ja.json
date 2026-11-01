@@ -14,6 +14,64 @@
     "go": "glue/catalogja/catalogja.go",
     "rust": "glue/catalog_ja.rs"
   },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "カタログ"
+    },
+    "functions": [
+      "パス",
+      "下のパス",
+      "空を除く",
+      "スラッグにする",
+      "品物の一覧",
+      "名前の一覧",
+      "いちばん安い品物"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ]
+  },
   "uses": [],
   "enums": [],
   "records": [

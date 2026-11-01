@@ -2803,7 +2803,9 @@ impl<'a> Gen<'a> {
     /// ends the place writes (the others are the type's, DESIGN 22.5): a number to every end in
     /// TypeScript and Python, to the ends written in Go (its int64 holds no other); a date to the ends
     /// written, and, where an end is not written, to be a day of 0001-01-01 to 9999-12-31 in
-    /// TypeScript (a string) and Go (a `Date` of any year, month and day); Python's date is one.
+    /// TypeScript (a string) and Go and Rust (a `Date` of any year, month and day); Python's date is
+    /// one. Rust's date is held to be a day of the calendar where both ends are written too: the day
+    /// number of 2026-02-30 is that of 2026-03-02, and falls between the ends.
     fn range_test(&self, v: &Ex, t: &Ty, written: Option<&Range>, whole: &Range) -> Option<Ex> {
         match t {
             Ty::Num(n) if !n.is_rate() && matches!(self.t, Target::Go | Target::Rust) => written.and_then(|r| self.out_of(v, t, r)),
@@ -2815,6 +2817,7 @@ impl<'a> Gen<'a> {
                     Target::TypeScript if open => Some(Ex::Not(Box::new(self.kcall("isDate", vec![v.clone()])))),
                     Target::Go if open => Some(Ex::Not(Box::new(Ex::Call(Box::new(v.clone().dot("Valid")), vec![])))),
                     Target::Rust if open => Some(Ex::Not(Box::new(v.clone().method("valid", vec![])))),
+                    Target::Rust => Some(Ex::Not(Box::new(v.clone().method("on_calendar", vec![])))),
                     _ => None,
                 };
                 match (day, compared) {

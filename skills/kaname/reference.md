@@ -946,8 +946,11 @@ transfer as `{"book", "transfer", "op", "args"}`. A failure is `"fails": {"kind"
 "message"}` in place of `out`, and a recursion cut short `"diverged"`. `why` says why the input was
 chosen.
 
-`api` prints `{"kaname", "file", "module", "generated", "uses", "enums", "records", "functions",
-"transfers"}`: the module with its SHA-256, the files of its code, the files it reads, its
+`api` prints `{"kaname", "file", "module", "generated", "wasm", "uses", "enums", "records",
+"functions", "transfers"}`: the module with its SHA-256, the files of its code, how the package's
+Wasm calls it (the exports, the keys of a call and the `module` that picks this module, the
+functions a call reaches and the shapes of what comes back; `null` for a module with no function a
+host calls), the files it reads, its
 declarations with their types, ranges and counts (and, for a sum, each value's fields and the name
 the code gives its type), each function with its effect inferred and
 written, the calls it makes into the other languages with what each check across them came to,
