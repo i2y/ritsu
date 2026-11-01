@@ -132,7 +132,10 @@ pub fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("生成した、または --check で全部が同じだった", "generated, or --check found every file the same")),
-                (1, tr!("検査を通らないファイルがある、または --check で違う・無いファイルがある", "a file does not pass check, or --check found a file that differs or is missing")),
+                (1, tr!(
+                    "検査を通らないファイルがある、書く出力先を W001 が挙げる（E016。どのファイルも書かない）、または --check で違う・無いファイルがある",
+                    "a file does not pass check, a W001 names a target to write (E016: no file is written), or --check found a file that differs or is missing"
+                )),
                 (2, tr!("引数の誤り、読めないファイル、書けないファイル", "bad arguments, or a file that cannot be read or written")),
             ],
             examples: vec![

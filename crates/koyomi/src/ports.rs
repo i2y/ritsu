@@ -206,7 +206,7 @@ impl Engine {
             .map(|f| match check::check_file(f, &Options::default(), &mut loader) {
                 Ok(o) => {
                     let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, Path::new(&d.file)), lang))).collect();
-                    let tail = check::render(&check::Outcome { path: o.path.clone(), diags: vec![], checked: None, ok: o.ok.clone() }, lang);
+                    let tail = check::render(&check::Outcome { path: o.path.clone(), diags: vec![], checked: None, ok: o.ok.clone(), spelled: Vec::new() }, lang);
                     if !tail.is_empty() {
                         parts.push(Part::Text(tail));
                     }

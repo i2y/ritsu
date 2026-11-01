@@ -706,6 +706,7 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 | E013 | 範囲の誤り（両端が無い、空、`>` や `<` で書いた、足す数に負の数が入りうる、日が 1〜31 の外） |
 | E014 | 日付どうしが循環している |
 | E015 | `use calendar` の先が使えない（読めない、calendar のファイルでない、循環、オフセットが食い違う） |
+| E016 | `gen` が書く出力先を W001 が挙げる。`gen` は何も書かずに 1 で終わる（15 章） |
 | W001 | 二つの別名が、ある出力先の綴りで一つの識別子になる。または、別名が、ある出力先では使えない名前になる（15 章） |
 | E101 | 出典のコピーが無い |
 | E102 | 出典が固定されていない（`sha256:` が無い） |
@@ -916,7 +917,7 @@ $ koyomi check tests/mutants/E201_無い日の扱いが無い.cal --lang ja
 | `koyomi check <file.cal>... [--format json] [--budget <n>]` | 検査（3 章）。ディレクトリを渡すと、下の `.cal` を全部（パスの順に） |
 | `koyomi eval <file.cal> <名前>=<値>... [--format json]` | 一つの入力ですべての日付を計算し、計算の段を見せる。入力は名前でも別名でも渡せる。条件も、その入力で成り立つかを一つずつ言う。calendar のファイルなら `koyomi eval <file.cal> <日付>` で、営業日か休みか（休みの理由つき） |
 | `koyomi diff <旧> <新> [--format text\|markdown\|json] [--budget <n>]` | 二つの版の答えを比べる。カレンダーは両方が知っている日の全部で、日付のファイルは両方が受け取る入力の全部で比べる。それぞれの側は、パス、`<パス>@<git の版>`、`@<名前>/<パス>`、`@<名前>@<版>/<パス>` のどれか（ritsu の DESIGN 17.9.3）。違いがあれば 1、比べられなければ 2 |
-| `koyomi gen <file.cal>... [--target typescript\|python\|go\|rust\|sql\|wasm] [--out <dir>] [--check]` | コードとランナーを生成する（6 章）。検査を通らないファイルからは生成しない。`--target` が無ければ全部の出力先。`--out` の既定は `generated`。`--check` は、書き出す代わりに、いまの生成物が最新かを確かめる |
+| `koyomi gen <file.cal>... [--target typescript\|python\|go\|rust\|sql\|wasm] [--out <dir>] [--check]` | コードとランナーを生成する（6 章）。検査を通らないファイルからは生成しない。書く出力先を W001 が挙げるファイルがあれば、何も書かずに 1 で終わる（E016、15 章）。`--target` が無ければ全部の出力先。`--out` の既定は `generated`。`--check` は、書き出す代わりに、いまの生成物が最新かを確かめる |
 | `koyomi vectors <file.cal>` | 範囲のすべての入力の結果を JSON Lines で出す（6.3） |
 | `koyomi doc <file.cal> [--format markdown\|html] [--months <YYYY-MM>..<YYYY-MM>]` | 人が読むページ（7 章）を標準出力に。既定は Markdown。条件が成り立たなくてもページを出して 0、ページを作れないエラーなら診断を標準エラーに出して 1 |
 | `koyomi api <file.cal>` | 関数・引数・カレンダー・データの範囲・出典のハッシュを JSON で出す（8 章） |
@@ -977,7 +978,7 @@ $ koyomi eval examples/calendars/東京の営業日.cal 2026-05-04 --lang ja
 
 ### 6.1 共通の形
 
-**決定**：`koyomi gen` は、検査を通ったファイルから、出力先ごとに依存の無いファイルを一つ（Go は一つのパッケージ）と、そのランナーを書く。検査を通らないファイルからは書かない（診断を出し、ほかのファイルは書いて、exit 1）。
+**決定**：`koyomi gen` は、検査を通ったファイルから、出力先ごとに依存の無いファイルを一つ（Go は一つのパッケージ）と、そのランナーを書く。検査を通らないファイルからは書かない（診断を出し、ほかのファイルは書いて、exit 1）。書く出力先を W001 が挙げるファイルがあれば、E016 を出し、どのファイルも書かずに exit 1 にする（15 章）。
 
 | 出力先 | 生成物 | ランナー |
 |---|---|---|
@@ -1079,7 +1080,7 @@ export function payment_at(received: string): string {
 
 検査を通ったファイルでは、範囲の中のどの入力でも `data`・`reject`・`date` は起きない。検査がすべての入力で確かめたからである。したがって公開する関数から実際に出るのは、範囲の外の入力の `range`、`is_open` にデータの範囲の外の日を渡したときの `data`、読めない日付の `date` の三つで、ほかは起きないはずのことへの備えである。Wasm のモジュールは、このほかに、渡された JSON が入力を持たないとき（入力が無い、日付が文字列でない、整数が整数の数でない、一つの JSON のオブジェクトでない）に種類 `input` で拒否する（13 章）。
 
-**生成物が使う名前**：生成物とぶつかる別名は、生成する前に E009 でエラーにする（`src/naming.rs` の `GENERATED` と `src/reserved.rs`。予約語の表そのものは C.10 から ritsu-emit のもの。11.1）。生成物が置く `is_open`、Go の生成物が置く `Date`・`KoyomiError`・`ParseDate` を PascalCase の綴りに持つ `date`・`koyomi_error`・`parse_date`、Python が読み込む `date`・`datetime`・`timedelta`、Go の関数が使う `err`、Python の生成物が呼ぶ組み込みの関数（`range`・`str`・`int`・`bool`・`tuple`・`isinstance`・`frozenset`・`super`）、PostgreSQL の予約語と PL/pgSQL の予約語（`begin`・`declare`・`execute`・`foreach` など）である。ファイルの別名は Python と Rust のモジュール、PostgreSQL のスキーマの名前になるので、生成物が読み込むモジュール（Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`）と PostgreSQL のスキーマ（`pg_catalog` など）の名前もエラーにする（`src/naming.rs` の `MODULES`）。`err`、Python の組み込みの関数、PL/pgSQL の予約語、モジュールとスキーマの名前は、C の段階で足した。生成物を書いてみて、引数や関数がその名前だとコードが動かなくなることが分かったからである（Python で日付の別名を `range` にすると、`_close_day` の中の `range(...)` がその関数を呼ぶ）。Wasm の出力先で増える名前は無い。crate root が置く名前は、canonical ABI の三つ（`cabi_realloc`、`call`、`cabi_post_call`）とモジュールの `k` のほかは `_` で始まり、別名はモジュールの中の名前（`k::payment`）にしかならない。world の名前は別名から作り、WIT が読めない形にならないようにする（13.2）。E009 は書いたままの別名を表と比べる。出力先が別名を綴り直してから同じになる名前（Go の PascalCase とパッケージの名前、PostgreSQL の 63 バイト）と、rustc のリントが警告する名前（`_` が二つ続く別名）は、その出力先だけが動かなくなるので、W001 の警告にした（15 章）。
+**生成物が使う名前**：生成物とぶつかる別名は、生成する前に E009 でエラーにする（`src/naming.rs` の `GENERATED` と `src/reserved.rs`。予約語の表そのものは C.10 から ritsu-emit のもの。11.1）。生成物が置く `is_open`、Go の生成物が置く `Date`・`KoyomiError`・`ParseDate` を PascalCase の綴りに持つ `date`・`koyomi_error`・`parse_date`、Python が読み込む `date`・`datetime`・`timedelta`、Go の関数が使う `err`、Python の生成物が呼ぶ組み込みの関数（`range`・`str`・`int`・`bool`・`tuple`・`isinstance`・`frozenset`・`super`）、PostgreSQL の予約語と PL/pgSQL の予約語（`begin`・`declare`・`execute`・`foreach` など）である。ファイルの別名は Python と Rust のモジュール、PostgreSQL のスキーマの名前になるので、生成物が読み込むモジュール（Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`）と PostgreSQL のスキーマ（`pg_catalog` など）の名前もエラーにする（`src/naming.rs` の `MODULES`）。`err`、Python の組み込みの関数、PL/pgSQL の予約語、モジュールとスキーマの名前は、C の段階で足した。生成物を書いてみて、引数や関数がその名前だとコードが動かなくなることが分かったからである（Python で日付の別名を `range` にすると、`_close_day` の中の `range(...)` がその関数を呼ぶ）。Wasm の出力先で増える名前は無い。crate root が置く名前は、canonical ABI の三つ（`cabi_realloc`、`call`、`cabi_post_call`）とモジュールの `k` のほかは `_` で始まり、別名はモジュールの中の名前（`k::payment`）にしかならない。world の名前は別名から作り、WIT が読めない形にならないようにする（13.2）。E009 は書いたままの別名を表と比べる。出力先が別名を綴り直してから同じになる名前（Go の PascalCase とパッケージの名前、PostgreSQL の 63 バイト）と、rustc のリントが警告する名前（`_` が二つ続く別名）と、Python の標準ライブラリのモジュールの名前になるファイルの別名は、その出力先だけが動かなくなるので、`check` では W001 の警告にし、その出力先を書く `gen` を E016 で止める（15 章）。
 
 `--lang ja` を付けると、頭の二行目から下、関数の説明、エラーのメッセージが日本語になる。
 
@@ -1683,66 +1684,80 @@ ritsu の生成物に、Rust と Wasm の出力先をそろえる。koyomi、kan
 
 **きっかけ**：rulec は、書いた人の名前どうしが生成先の綴りで一つの識別子になるときと、生成先が使えない識別子になるときを、`check` で言う（rulec の DESIGN 15.263、15.265）。koyomi の出力先でも同じことが起きるかを、出力先ごとに名前の綴りを表にして確かめた。koyomi は、書いたままの別名を予約語と生成物が使う名前の表と比べるだけで（E009、6.1）、出力先が綴り直したあとの名前は比べていなかった。`date net_30 = …` と `date net30 = …` を書いたファイルは `check` を通り、`gen` が書いた Go のコードは `Net30 redeclared in this block` で組めなかった。先頭の 63 バイトが同じ二つの長い別名の日付は、PostgreSQL で一つの関数になり、前の日付を呼ぶと後の日付の答えが返った。
 
-**原因**：別名は、どの出力先でも書いたままの識別子になる、という前提で E009 を作った。別名は ASCII の小文字と数字と `_` だけなので（`ast::is_alias`）、別名をそのまま書く出力先では、別名が違えば識別子も違い、PascalCase で宣言する生成物の名前（`Date`、`KoyomiError`）ともぶつからない。別名を綴り直すのは Go と PostgreSQL だけである。Rust は綴り直さないが、rustc のリント `non_snake_case` が、`_` が二つ続く名前を警告する。koyomi は Rust と Wasm のコードを `rustc -D warnings` で組めるように書いているので（6.2 の表）、そうした名前の関数、引数、モジュールは、警告をエラーにする組み立てで止まる。これは、出力先の道具に新しい材料を通したときに見つけた。
+**原因**：別名は、どの出力先でも書いたままの識別子になる、という前提で E009 を作った。別名は ASCII の小文字と数字と `_` だけなので（`ast::is_alias`）、別名をそのまま書く出力先では、別名が違えば識別子も違い、PascalCase で宣言する生成物の名前（`Date`、`KoyomiError`）ともぶつからない。別名を綴り直すのは Go と PostgreSQL だけである。Rust は綴り直さないが、rustc のリント `non_snake_case` が、`_` が二つ続く名前を警告する。koyomi は Rust と Wasm のコードを `rustc -D warnings` で組めるように書いているので（6.2 の表）、そうした名前の関数、引数、モジュールは、警告をエラーにする組み立てで止まる。Python も綴り直さないが、ファイルの別名はモジュールの名前になり、Python は同じ名前のモジュールを一つしか読み込まない。標準ライブラリに同じ名前のモジュールがあれば、どちらかがもう一方の代わりに読み込まれる。
 
 | 出力先 | 日付の関数（`at` のある日付は、時刻の関数 `<別名>_at` も） | 入力の引数 | ファイルの別名 | 生成物が宣言する名前 |
 |---|---|---|---|---|
 | TypeScript | 別名のまま | 別名のまま | ファイル `<別名>.ts` | `KoyomiError`、`KoyomiErrorKind`、カレンダーを読むなら `is_open` |
-| Python | 別名のまま | 別名のまま | モジュール `<別名>.py` | `KoyomiError`、`is_open`。読み込む `date`・`datetime`・`timedelta` |
+| Python | 別名のまま | 別名のまま | モジュール `<別名>.py`。標準ライブラリの同じ名前のモジュールとは、先に読み込んだほうだけが残る | `KoyomiError`、`is_open`。読み込む `date`・`datetime`・`timedelta` |
 | Go | PascalCase（`net_30` は `Net30`、`cutoff_at` は `CutoffAt`） | 別名のまま | パッケージ。別名から `_` を除く（`payment_terms` は `paymentterms`） | `Date`、`ParseDate`、`KoyomiError`、カレンダーを読むなら `IsOpen`。ランナーの `TestMain` |
 | Rust | 別名のまま。`_` が二つ続くと、rustc のリント `non_snake_case` が警告する | 別名のまま。同じリント | モジュール `<別名>.rs`。`mod <別名>;` で宣言し、同じリント | `Date`、`KoyomiError`、`is_open` |
 | Wasm | Rust のコードの関数（`k::<別名>`）。同じリント。export は `call` だけ | Rust のコードの引数（同じリント）。JSON のキーは入力の名前 | world。`_` を `-` にする。Rust のコードは `mod k` で宣言する | `cabi_realloc`、`call`、`cabi_post_call`、`k` |
 | SQL | スキーマの中の関数。PostgreSQL は名前の先頭の 63 バイトだけを残す | 同じく先頭の 63 バイト | スキーマ | `_` で始まる関数 |
 
-そのため、次の名前が一部の出力先を壊す。0.40.0 の `check` はどれにも何も言わず、`gen` はそのまま書いた（`tests/spellings/` の 28 本で、0.40.0 の `gen` が書くものは、いまの `gen` と同じバイト列である）。
+そのため、次の名前が一部の出力先を壊す。0.40.0 の `check` はどれにも何も言わず、`gen` はそのまま書いた。
 
 - Go で、`_` の位置だけが違う二つの別名（`net_30` と `net30`）。時刻の関数と、`_at` に `_` が付いた日付の別名も同じで、日付 `cutoff` の時刻の関数 `cutoff_at` と日付 `cutoff_at_` は、どちらも `CutoffAt` になる。一つのパッケージが同じ名前を二度宣言するので、組めない。
 - Go で、PascalCase にすると生成物が宣言する名前になる別名。`date_` は `Date`、`test_main` はランナーの `TestMain`、`parse_date_` は `ParseDate`、`koyomi_error_` は `KoyomiError`、カレンダーを読むファイルの `is_open_` は `IsOpen` になる。
 - Go で、パッケージの名前が Go のキーワードか `main` になるファイルの別名。`go_to_` は `goto` になり、組めない。`main_` は `main` になり、Go はプログラムとして組むので、ほかのパッケージから読み込めない。カレンダーのファイルの別名も同じである。
 - PostgreSQL で、先頭の 63 バイトが同じ二つの別名。二つの日付の関数が同じ引数を取るなら、`CREATE OR REPLACE FUNCTION` が前の関数を後の関数で置き換え、残った関数が両方に答える。返す型が違えば（日付の関数と時刻の関数）`cannot change return type of existing function` で、引数の型が同じで名前が違えば `cannot change name of input parameter` で、SQL のファイルの読み込みが止まる。一つの関数が取る二つの入力の引数なら、`parameter name used more than once` で止まる。
 - Rust と Wasm で、`_` が二つ続く別名（端の `_` は数えない。`ship__by`）。rustc のリント `non_snake_case` が、その名前の関数と引数を警告するので、`-D warnings` で組むと止まる。警告をエラーにしなければ、警告が出て組める。`_` で終わる別名の日付に時刻があると、時刻の関数が `cutoff__at` のように `_` が二つ続く名前になる。ファイルの別名は、Rust ではモジュールを宣言する `mod <別名>;`（`gen` が横に書くランナーと、コードを使うクレート）で警告される。Wasm はコードを `mod k` で宣言するので、ファイルの別名では止まらない。
+- Python で、標準ライブラリのモジュールと同じ名前のファイルの別名（`abc`、`site`、`secrets`）。`abc` と `site` は Python が起動するときに読み込むので、`import abc` は標準ライブラリのモジュールを返し、生成した関数は呼べない（ランナーは `has no attribute` で止まる）。起動のときに読み込まない `secrets` では、生成したモジュールを先に読み込むと、プログラムのどの `import secrets` も生成したモジュールを返し、標準ライブラリの関数（`secrets.token_hex`）が無くなる。`ritsu gen` のパッケージは、日付のモジュールを `<パッケージ>.dates.<別名>` として持つので、この形では壊れない。
 
 **決定**：
 
-1. **出力先が綴り直したあとの名前を、生成したコードで同じ名前空間に入るものどうしで比べる**（`src/spellings.rs`）。Go では、パッケージの中の日付の関数と時刻の関数と、生成物が宣言する名前を比べ、パッケージの名前も見る。PostgreSQL では、スキーマの中で同じ型の引数を取る関数どうしと、一つの関数の引数どうしを比べる。綴りは生成器と同じ関数（ritsu-emit の `pascal` と `go_package`）で作る。Rust と Wasm では、関数と引数とモジュールの名前になる別名を、rustc の `non_snake_case` と同じ決まりで見る（`spellings::rust_snake`：端の `_` を除いて、`_` が二つ続かない。別名に大文字は無いので、ほかの決まりは当たらない）。
-2. ★ **どれも W001 の警告にする。** 壊れるのはいつも一部の出力先（一つ、または Rust と、同じ Rust のコードから組む Wasm）で、ほかの出力先は組めて答えも合う。rulec の W121 と同じく（rulec の DESIGN 15.263 の分け方）、`check` は通り、`gen` はどの出力先も書き、名前は付け替えない。どの出力先でも壊れる名前は、これまでどおり E009 で止める。番号は名前の段の警告として W001 にした。警告の番台も、エラーと同じく検査の段に合わせる（4.2）。
-3. **見出しは二つの名前（一つなら、その名前）と出力先を言い、注は出力先の綴りと壊れ方と直し方を言う。** 見出しは「`net_30`（7 行目）と `net30` は、生成した Go のコードで同じ識別子になります」。一つめの注は「Go: 関数の名前は PascalCase で書くので、日付「受領から30日」の関数 `net_30` と日付「月末から30日」の関数 `net30` は、どちらも `Net30` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。」のように、何という識別子になり、なぜそうなり、どう壊れるかを言う。最後の注は、使わない出力先ならそのままでよいことと、別名の付け方（`月末から30日(<別名>)`）である。
-4. **カレンダーのファイルも、パッケージとモジュールの名前を見る。** カレンダーのファイルも Go のパッケージと Rust のモジュールになるからである（`calendar for_ v1` は `for`、`calendar cal__x v1` は `mod cal__x;`）。日付の関数は無いので、見るのはファイルの別名だけである。
-5. **生成器は変えない。** 前から名前を付け替えておらず、書いたままの別名で書いている。
-6. ★ **rustc のリントの警告も、出力先が使えない名前に数える。** `-D warnings` を付けなければ組めるが、koyomi は Rust と Wasm のコードを `rustc -D warnings` で組めるように書くと決めていて（6.2）、`tests/targets.rs` もそれで確かめる。警告をエラーにする組み立てで止まるので、そう組む人には壊れたのと同じである。Rust の注は、警告であることと、`-D warnings` で止まることの両方を言う。
-7. **Rust と Wasm では、一つの日付を一度だけ言う。** 別名に `_` が二つ続けば、日付の関数も時刻の関数も警告されるが、直すのは別名の一つなので、日付の関数を一度言う。別名が `_` で終わり、時刻の関数だけが `_` の二つ続く名前になるときは、時刻の関数を言い、注は `_` で終わらない別名を勧める。入力は、取る関数がいくつあっても一度だけ言う。
+1. **出力先が綴り直したあとの名前を、生成したコードで同じ名前空間に入るものどうしで比べる**（`src/spellings.rs`）。Go では、パッケージの中の日付の関数と時刻の関数と、生成物が宣言する名前を比べ、パッケージの名前も見る。PostgreSQL では、スキーマの中で同じ型の引数を取る関数どうしと、一つの関数の引数どうしを比べる。綴りは生成器と同じ関数（ritsu-emit の `pascal` と `go_package`）で作る。Rust と Wasm では、関数と引数とモジュールの名前になる別名を、rustc の `non_snake_case` と同じ決まりで見る（`spellings::rust_snake`：端の `_` を除いて、`_` が二つ続かない。別名に大文字は無いので、ほかの決まりは当たらない）。Python では、ファイルの別名を標準ライブラリのモジュールの名前と比べる。名前の表は、rulec が規則のモジュールの名前に使う ritsu-emit の `copies::rulec::PY_STDLIB` である（3.14 の `sys.stdlib_module_names` から内部のモジュールを除き、3.12 と 3.13 で消えたモジュールを足した 219 の名前）。生成したコードとランナーが自分で読み込む `datetime`、`json`、`sys`、`typing` は、前から E009 で止めている（`naming::MODULES`）。
+2. ★ **`check` は W001 の警告にし、`gen` は W001 が挙げる出力先を書くときに E016 で止まる。** chobo の W108 と E064 と同じ分け方である（chobo の DESIGN 16 章）。壊れるのはいつも一部の出力先（一つ、または Rust と、同じ Rust のコードから組む Wasm）で、ほかの出力先は組めて答えも合う。そのため `check` は通し、`ritsu check` も止めない。けれども、W001 が挙げる出力先のコードをそのまま書くと、組めないか、読み込めないか、黙って別の日付の答えを返すので、`gen` はその出力先を書かない。名前は付け替えない。どの出力先でも壊れる名前は、これまでどおり E009 で止める。番号は、W001 を名前の段の警告に、E016 を名前の段のエラーの続きにした（4.2）。
+3. **E016 は、W001 をエラーにしたものである。** 場所、見出し、注は W001 と同じで、最後の注だけが違う。W001 の最後の注は、使わない出力先ならそのままでよいことと、別名の付け方（`月末から30日(<別名>)`）を言う。E016 の最後の注は、別名の付け方と、使わない出力先なら `--target` で使う出力先を挙げることを言う。台帳の再現は、W001 の再現と同じファイルを置いたディレクトリで `gen t.cal --target go` を回す。
+4. ★ **止めるのは、`koyomi gen` と `ritsu gen` の両方が通る、出力先ごとの生成の入口である。** `codegen::build`（`koyomi gen` が出力先ごとに呼ぶ）と `codegen::package_module`（`ritsu gen` がパッケージの日付のモジュールごとに呼ぶ）が、コードを作る前に `spellings::stops` を見て、E016 を返す。chobo の `target::build_in` が `check_in` を呼ぶのと同じ形である。
+   - `koyomi gen` は、書く出力先のどれか一つでも E016 になれば、E016 を標準出力に、止まった出力先を標準エラーに一行で言い（`` error: `t.cal` cannot be made into the code of `rust`, `wasm`, so nothing is generated ``）、どのファイルも書かずに 1 で終わる。一つの指摘が Rust と Wasm の両方を壊しても、E016 は一度だけ言う。`--target` を付けたときは、その出力先を W001 が挙げるときだけ止まる。`--check` も同じく止まる。
+   - E016 は、二つのファイルが同じ場所に書こうとするとき（6.1。こちらは exit 2）と同じく、実行の全体を止め、一緒に渡したほかのファイルも書かない。検査を通らないファイルは、これまでどおりそのファイルだけを書かず、ほかのファイルは書く。
+   - `ritsu gen` は、E016 を受けて、パッケージを書かずに 1 で終わる（ritsu の DESIGN 9.3）。ritsu の側で変えたのは、止まった診断を受けて止まるところだけである。
+5. ★ **Python の標準ライブラリと同じ名前のモジュールでは、`ritsu gen` は止まらない。** パッケージは日付のモジュールを `<パッケージ>.dates.<別名>` として持つので、標準ライブラリのモジュールとぶつからない。ほかの形は、パッケージの中でも同じところで壊れるので止まる（`spellings::Found::in_package`）。W001 と E016 の注も、このことを言う。
+6. **見出しは二つの名前（一つなら、その名前）と出力先を言い、注は出力先の綴りと壊れ方を言う。** 見出しは「`net_30`（7 行目）と `net30` は、生成した Go のコードで同じ識別子になります」。一つめの注は「Go: 関数の名前は PascalCase で書くので、日付「受領から30日」の関数 `net_30` と日付「月末から30日」の関数 `net30` は、どちらも `Net30` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。」のように、何という識別子になり、なぜそうなり、どう壊れるかを言う。
+7. **カレンダーのファイルも、パッケージとモジュールの名前を見る。** カレンダーのファイルも Go のパッケージと、Rust と Python のモジュールになるからである（`calendar for_ v1` は `for`、`calendar cal__x v1` は `mod cal__x;`、`calendar secrets v1` は `secrets.py`）。日付の関数は無いので、見るのはファイルの別名だけである。
+8. **生成器は変えない。** 前から名前を付け替えておらず、書いたままの別名で書いている。書く出力先のコードは、0.40.0 と同じバイト列である。
+9. ★ **rustc のリントの警告も、出力先が使えない名前に数える。** `-D warnings` を付けなければ組めるが、koyomi は Rust と Wasm のコードを `rustc -D warnings` で組めるように書くと決めていて（6.2）、`tests/targets.rs` もそれで確かめる。警告をエラーにする組み立てで止まるので、そう組む人には壊れたのと同じである。Rust の注は、警告であることと、`-D warnings` で止まることの両方を言う。
+10. **Rust と Wasm では、一つの日付を一度だけ言う。** 別名に `_` が二つ続けば、日付の関数も時刻の関数も警告されるが、直すのは別名の一つなので、日付の関数を一度言う。別名が `_` で終わり、時刻の関数だけが `_` の二つ続く名前になるときは、時刻の関数を言い、注は `_` で終わらない別名を勧める。入力は、取る関数がいくつあっても一度だけ言う。
 
 **捨てたもの**：
 
 - **壊れる出力先でだけ、別名を付け替えること**（Go で二つ目を `Net30_2` にする、PostgreSQL で長い名前を縮める、など）。呼ぶ側の名前が出力先で違い、`koyomi api` が一つの名前で言えなくなる。rulec の DESIGN 15.263 と同じ理由である。
-- **W001 をエラーにすること。** 使わない出力先のために、通っていたファイルが止まる。
-- **`gen` が、W001 の挙げる出力先を書かないこと。** `gen` は出力先を挙げなければ六つを書くので、一つを黙って書かないと、使う人が気づかない。rulec の W121 と同じく全部を書き、何が壊れるかは `check` の注が言う。
-- **Rust と Wasm のコードに `#![allow(non_snake_case)]` を書くこと**（rulec と chobo の Rust のコードはそうしている）。どの `.cal` の Rust と Wasm のコードもバイト列が変わり、生成器を変えないという決定（5）に反する。それに、モジュールの名前の警告は、コードを使うクレートの `mod <別名>;` に出るので、生成したファイルの中に書いた `allow` では消えない。
+- **W001 をエラーにすること。** `check` と `ritsu check` が、使わない出力先のために、通っていたファイルを止める。止めるのは、その出力先を書くときだけで足りる。
+- **`gen` が、W001 の挙げる出力先もそのまま書くこと**（rulec の W121 の扱い）。組めないか、読み込めないか、PostgreSQL では黙って別の日付の答えを返すコードが書かれる。`check` の注が言っても、`gen` だけを回す CI では気づかれないまま使われる。
+- **`gen` が、W001 の挙げる出力先を黙って飛ばすこと。** `gen` は出力先を挙げなければ六つを書くので、一つが黙って無いと、使う人が気づかない。止めて、`--target` を案内する。
+- **Rust と Wasm のコードに `#![allow(non_snake_case)]` を書くこと**（rulec と chobo の Rust のコードはそうしている）。生成したファイルの中に書く内側の `allow` は、モジュールの名前の警告も消す。モジュールの先頭に `#![allow(non_snake_case)]` を足すと、ランナーの `mod rust__module;` は `-D warnings` で通る（rustc 1.94.1 で確かめた。chobo のクライアントの `mod my__shop;` も同じである）。けれども、どの `.cal` の Rust と Wasm のコードもバイト列が変わり、生成器を変えないという決定（8）に反する。
 
 **変わること**：
 
 - `check` が、新しい W001 を言う。警告なので、終了コードは変わらない。警告でも止める使い方（`--format json` の `severity` を見る CI など）では、新しい W001 で止まるファイルがありうる。`ritsu check` は koyomi の診断をそのまま言うので、W001 も言う。
-- 生成するコードは変わらない。
-- 木の `.cal`（`tests/spellings/` と W001 の変異を除く 283 本）では、`check`（英語、日本語、JSON）の出力も `gen` が書くものも、0.40.0 と同じである（下の突き合わせ）。
-- 台帳の W001（`koyomi explain W001`、再現は `tests/mutants/W001_one_function_in_go.cal` と日本語の版）、`docs/codes.md` と `docs/codes.ja.md`、reference の名前と検査の節、生成したコードのページの名前の段落、スキルのコピーと `SKILL.md` のコードの表。
+- `koyomi gen` は、書く出力先を W001 が挙げるファイルがあると、E016 を言い、何も書かずに 1 で終わる。0.40.0 は全部の出力先を書いて 0 で終わった。W001 の挙げない出力先を `--target` で挙げれば、0.40.0 と同じものを書く。
+- `ritsu gen` は、パッケージの出力先を W001 が挙げる日付のファイルがあると、E016 を言い、パッケージを書かずに 1 で終わる（Python の標準ライブラリと同じ名前のモジュールを除く）。
+- 書く出力先のコードは変わらない。
+- 木の `.cal` のうち、W001 のある 34 本を除く 313 本では、`check`（英語、日本語、JSON）の出力も `gen` が書くものも、0.40.0 と同じである（下の突き合わせ）。
+- 台帳の W001 と E016（`koyomi explain`）、`docs/codes.md` と `docs/codes.ja.md`、reference の名前の節とコマンドの表、生成したコードのページの名前と書き方の段落、スキルのコピーと `SKILL.md` の生成の手順とコードの表、`koyomi gen --help` の終了コード 1 の文。
 
 **確かめたこと**：
 
-- `tests/spellings.rs`（新しい、七つ）と、材料の `tests/spellings/`（14 の形。英語を先に、日本語の版を横に置いて 28 本）。
-  - どの形も W001 を一つだけ言い、`spellings::find` が挙げる出力先はファイルの名前が言う出力先（`go_` は Go、`postgresql_` は PostgreSQL、`rust_` は Rust と Wasm、`rust_module` は Rust だけ）で、英日の文は `tests/golden/spellings/` の golden と同じである。
-  - `gen` は、どの形でも六つの出力先を書き、別名は書いたまま、TypeScript に `export function <別名>(` として入る。
-  - 注のとおりに別名を付けた版（`tests/spellings/renamed/`、28 本）は、何も言われない。
-  - `tests/spellings/` に形の無い名前（`ParseDate`、`KoyomiError`、カレンダーを読むときだけの `IsOpen`、カレンダーのファイルの別名 `for_` と `cal__x`）は、試験の中に書いたファイルで、W001 を一つ言うことを確かめる。`rust_snake` が端の `_` を数えないこと、時刻のある日付が一度だけ言われること（別名 `cut__off` なら日付の関数、`cutoff_` なら時刻の関数 `cutoff__at`）も確かめる。
+- `tests/spellings.rs`（九つ）と、材料の `tests/spellings/`（15 の形。英語を先に、日本語の版を横に置いて 30 本）。
+  - どの形も W001 を一つだけ言い、挙げる出力先はファイルの名前が言う出力先（`go_` は Go、`postgresql_` は PostgreSQL、`python_` は Python、`rust_` は Rust と Wasm、`rust_module` は Rust だけ）で、英日の文は `tests/golden/spellings/` の golden と同じである。
+  - `codegen::build` は、W001 が挙げる出力先でだけ E016 を一つ返す。場所、見出し、最後を除く注は W001 と同じで、最後の注は `--target` を言う。挙げない出力先では書き、別名は書いたまま TypeScript に `export function <別名>(` として入る。`codegen::package_module` は、Python の形を除いて、挙げる出力先（パッケージの TypeScript、Python、Go のうち）で止まる。
+  - `koyomi gen` は、どの形でも E016 を一度だけ言い、止まった出力先を標準エラーに言って、何も書かずに 1 で終わる。`--check` も同じである。W001 の挙げない出力先を `--target` で挙げると書き、挙げる出力先を挙げると止まる。止まるファイルと一緒に渡した、注のとおりに別名を付けたファイルも書かない。日本語の文も確かめる。
+  - 注のとおりに別名を付けた版（`tests/spellings/renamed/`、30 本）は、何も言われない。
+  - `tests/spellings/` に形の無い名前は、試験の中に書いたファイルで確かめる。`ParseDate`、`KoyomiError`、カレンダーを読むときだけの `IsOpen`、カレンダーのファイルの別名 `for_`・`cal__x`・`secrets`、標準ライブラリの `collections`・`random`・`queue`・`secrets` は、W001 を一つ言う。`datetime`・`json`・`sys`・`typing` は E009 のままで、`collections_`・`my_site`・`secret` は何も言われない。`rust_snake` が端の `_` を数えないこと、時刻のある日付が一度だけ言われること（別名 `cut__off` なら日付の関数、`cutoff_` なら時刻の関数 `cutoff__at`）も確かめる。
   - JSON の W001 は `severity` が `warning` で、ファイルの `ok` は `true` である。
 - `tests/targets.rs` で、形ごとに出力先の道具に通した。
-  - W001 が挙げない出力先（Go の形なら TypeScript・Python・Rust・SQL・Wasm、PostgreSQL の形ならほかの五つ、Rust の形なら TypeScript・Python・Go・SQL と、モジュールの名前の形では Wasm も）では、どの形も組めて、範囲の全部の入力で参照の評価器と同じ答えを返す。
-  - 挙げる出力先では、Go の形は `go vet` が `common::SPELLING_FILES` の言う行で止まる（`Net30 redeclared in this block`、`expected 'IDENT', found 'goto'`、`main` のパッケージは、読み込むパッケージを足すと `is a program, not an importable package`）。PostgreSQL の形は、読み込みが止まるか（`cannot change return type of existing function` など）、読み込めて、置き換えられた関数の 31 行が参照の評価器と違う（`postgresql_functions.cal`）。Rust の形は、ランナー（モジュールを別名で宣言する）を `-D warnings` なしで組むと警告が出て通り、`-D warnings` で組むと `should have a snake case name` で止まる。Wasm の形（モジュールの名前の形を除く 6 本）は、crate root をエディション 2024 で `-D warnings` で検査すると、同じところで止まる。
-  - 注のとおりに別名を付けた 28 本は、六つの出力先のどれでも組めて、参照の評価器と同じ答えを返す。
-- 0.40.0 のバイナリで 28 本を `check` すると、どれも `ok —` の一行だけを言い、`gen` はいまの `gen` と同じバイト列を書く。
-- 木の 341 本の `.cal` を、0.40.0 といまのバイナリで `check`（英語、日本語、JSON）し、`gen` で全部の出力先を書いて比べた。違うのは新しい材料の 30 本（`tests/spellings/` の 28 本と W001 の変異 2 本）の `check` だけで、そのほか（注のとおりに別名を付けた 28 本を含む）は一字も変わらない。
+  - W001 が挙げない出力先では、どの形も組めて、範囲の全部の入力で参照の評価器と同じ答えを返す。
+  - 挙げる出力先では、Go の形は `go vet` が `common::SPELLING_FILES` の言う行で止まる（`Net30 redeclared in this block`、`expected 'IDENT', found 'goto'`、`main` のパッケージは、読み込むパッケージを足すと `is a program, not an importable package`）。PostgreSQL の形は、読み込みが止まるか（`cannot change return type of existing function` など）、読み込めて、置き換えられた関数の 31 行が参照の評価器と違う（`postgresql_functions.cal`）。Rust の形は、ランナー（モジュールを別名で宣言する）を `-D warnings` なしで組むと警告が出て通り、`-D warnings` で組むと `should have a snake case name` で止まる。Wasm の形（モジュールの名前の形を除く 6 本）は、crate root をエディション 2024 で `-D warnings` で検査すると、同じところで止まる。Python の形は、ランナーが `has no attribute` で止まる。
+  - 注のとおりに別名を付けた 30 本は、六つの出力先のどれでも組めて、参照の評価器と同じ答えを返す。
+- 台帳（`tests/codes.rs`）の E016 の再現は E016 を言う。台帳のコードは 42 である。変異の `tests/mutants/E016_rust_and_wasm.cal` と日本語の版は、`gen` の見出しが E016 を言う（`tests/mutants.rs`）。
+- ritsu の `tests/gen.rs` の `a_dates_file_whose_names_break_the_target_stops_the_package`。Go の形の日付のファイルがあるプロジェクトの `ritsu gen --target go` は、E016 を言い、何も書かずに 1 で終わる（JSON では、診断の `tool` が `koyomi`、`code` が `E016`）。同じプロジェクトの `--target typescript` と `--target python` は書く。Python の形（別名 `abc`）のモジュールは、パッケージの中で `import abc` のあとでも答える。
+- 木の 347 本の `.cal` を、0.40.0 といまのバイナリで `check`（英語、日本語、JSON）し、`gen` で全部の出力先を書いて比べた。違うのは、W001 のある 34 本（`tests/spellings/` の 30 本と、W001 と E016 の変異の 4 本）の `check`（W001 を言う）と `gen`（E016 で止まり、何も書かない）だけで、ほかの 313 本は一字も変わらない。34 本で W001 の挙げない出力先を `--target` で一つずつ書くと、0.40.0 の `gen` が書くものと同じバイト列である。
 
 **見つけて直していないもの**：
 
-- E009 は、別名 `koyomi_error` と `parse_date` を、どの出力先でも止める。生成物がその名前を宣言するのは Go の PascalCase（`KoyomiError`、`ParseDate`）だけで、ほかの出力先では組める。この節の分け方なら W001 である。カレンダーを読まないファイルの `is_open` も、どの出力先も宣言しないのに E009 になる。エラーを警告に緩めることになるので、変えていない。
+- E009 は、別名 `koyomi_error` と `parse_date` を、どの出力先でも止める。生成物がその名前を宣言するのは Go の PascalCase（`KoyomiError`、`ParseDate`）だけで、ほかの出力先では組める。この節の分け方なら W001 と E016 である。カレンダーを読まないファイルの `is_open` も、どの出力先も宣言しないのに E009 になる。ファイルの別名の `datetime`、`json`、`sys`、`typing`（`naming::MODULES`）も E009 で止めるが、ぶつかるのは Python のモジュールの名前である。エラーを警告に緩めることになるので、変えていない。
 - WIT の world と package の名前は、別名の語を `-` でつなぐので（13 章）、`_` の数だけが違う別名の二つのファイル（`pay__days` と `pay_days`）は、どちらも `koyomi:pay-days` になる。一つのファイルでは困らない。二つを一緒に使うときにどうなるかは確かめていない。
 - 先頭の 63 バイトが同じ別名を持つ二つのファイルは、PostgreSQL で一つのスキーマになる。二つを一つのデータベースに読み込むと、後のファイルの関数が前のファイルの同じ名前の関数を置き換える（確かめた：日付 `pay` が 30 日後のファイルと 60 日後のファイルで、前のファイルの `pay` が 60 日後を返した）。`check` は一つのファイルを読み、`gen` は二つのファイルが同じパスに書くとき（Go のパッケージ `pay_days` と `paydays`、ファイル `x` と `x_runner` のランナー）だけを止めるので、どちらも言わない。
+- 入力の名前が `__proto__` のとき（別名を付けた `__proto__(received)`。別名には `_` で始まる名前を付けられない）、Wasm のモジュールが受け取る JSON のキーは `__proto__` になる。JavaScript のホストがオブジェクトのリテラルで JSON を作ると（`JSON.stringify({ __proto__: "2026-01-05" })`）、リテラルの `__proto__` はプロトタイプを決める書き方なのでキーが落ち、モジュールは `{"refused":"input","error":"__proto__ is missing"}` を返す（確かめた。計算したキーの `{ ["__proto__"]: … }` と JSON の文字列なら答える）。生成したコードとランナーは壊れない（ランナーは `koyomi vectors` の行をそのまま渡す）ので、W001 にしていない。
+- ritsu の playground（ritsu-wasm）は、`koyomi::codegen::files` でコードを作るので、E016 で止まらず、W001 の挙げる出力先のコードも見せる。ritsu-wasm は、この章の変更では触っていない。

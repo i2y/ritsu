@@ -298,13 +298,39 @@ inputs
   d : date  range >=2026-01-01 <=2026-01-31
 ```
 
+<a id="e016"></a>
+
+## E016 — An identifier collides, or cannot be used, in a target language gen is to write
+
+**When**: `gen` is to write a target a W001 names. The code of that target would break as it is, so `gen` writes no file and exits 1. With `--target`, it stops only when a W001 names the target given. `ritsu gen` stops too when a W001 names the package's target, but not for a module named like one of Python's standard library: a package holds it as `<package>.dates.<alias>`, which does not meet the standard library's. The place, the headline and the notes are the W001's, but for the last note.
+
+**Fix**: Change the alias the notes give; for a target you do not use, pick the one you use with `--target`.
+
+**Example**: put the files below in one directory, and run `koyomi gen t.cal --target go` there.
+
+`t.cal`:
+
+```cal
+dates t v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date payment = received
+  + 30 days
+date payment_ = received
+  + 60 days
+```
+
+See also: [W001](#w001), [E009](#e009)
+
 <a id="w001"></a>
 
 ## W001 — An identifier collides, or cannot be used, in a target language
 
-**When**: Two aliases are one identifier as a target spells them. Go names a date's function in PascalCase, so `payment` and `payment_` are both `Payment`. PostgreSQL keeps the first 63 bytes of a name, so two aliases that share them are one function when the functions take the same types, or one parameter of a function that takes both. Or an alias is, as Go spells it, a name the generated code uses itself (`Date`, `ParseDate`, `KoyomiError`, `IsOpen`, and the runner's `TestMain`). Or the Go package a file's alias makes (the alias without its `_`) is a keyword of Go, or `main`. Or an alias has two `_` in a row (not counting those at its ends): the Rust and Wasm code is written to build with `rustc -D warnings`, and rustc's lint `non_snake_case` warns of such a function, parameter or module. It is a warning: `check` passes, `gen` writes every target, and no name is changed.
+**When**: Two aliases are one identifier as a target spells them. Go names a date's function in PascalCase, so `payment` and `payment_` are both `Payment`. PostgreSQL keeps the first 63 bytes of a name, so two aliases that share them are one function when the functions take the same types, or one parameter of a function that takes both. Or an alias is, as Go spells it, a name the generated code uses itself (`Date`, `ParseDate`, `KoyomiError`, `IsOpen`, and the runner's `TestMain`). Or the Go package a file's alias makes (the alias without its `_`) is a keyword of Go, or `main`. Or an alias has two `_` in a row (not counting those at its ends): the Rust and Wasm code is written to build with `rustc -D warnings`, and rustc's lint `non_snake_case` warns of such a function, parameter or module. Or a file's alias is the name of a module of Python's standard library (`abc`, for one): the alias names the generated Python module, and Python keeps one module per name. It is a warning: `check` passes, `gen` stops with E016 when it is to write a target the warning names, and no name is changed.
 
-**Fix**: For a target you do not generate, leave it. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module.
+**Fix**: For a target you do not generate, leave it, and pick the one you generate with `gen --target`. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module.
 
 **Example**:
 
@@ -320,7 +346,7 @@ date payment_ = received
   + 60 days
 ```
 
-See also: [E007](#e007), [E009](#e009)
+See also: [E007](#e007), [E009](#e009), [E016](#e016)
 
 <a id="e101"></a>
 

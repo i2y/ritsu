@@ -1,0 +1,8 @@
+dates 出荷(shipping) v1
+description "注文から 3 日後に出荷する。日付の別名に _ が二つ続くので、rustc のリント non_snake_case がその関数を警告し、Rust のコードと Wasm のモジュールは -D warnings で組めない（W001）。どの出力先も書く gen は、ファイルを書く前に止まる（E016）"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 出荷期限(ship__by) = 注文日
+  + 3 days

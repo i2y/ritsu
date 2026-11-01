@@ -1,0 +1,5 @@
+エラー[E016]: tests/mutants/E016_rust_and_wasm.cal:7:6: 生成した Rust と Wasm のコードでは、`ship__by` は rustc が警告する名前になります
+     7 | date ship__by = ordered
+  = Rust: rustc のリント `non_snake_case` は `_` が二つ続く名前を警告するので、`-D warnings`（警告をエラーにする）でコンパイルすると、日付「ship__by」の関数で止まります。
+  = Wasm: モジュールは同じ Rust のコードから組むので、同じところで止まります。
+  = 別の別名を付けてください（`ship__by(<別名>)`）。使わない出力先なら、`--target` で使う出力先を挙げてください。

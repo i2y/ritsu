@@ -1,9 +1,27 @@
 //! The mutants (PLAN B.9): every `tests/mutants/<CODE>_<what>.cal` gives its code, and what
 //! `koyomi check` prints for it, in English and in Japanese, is its golden file in
-//! `tests/golden/`. `KOYOMI_BLESS=1 cargo test` writes the golden files again; read the diff.
+//! `tests/golden/`. A mutant of E016, which `gen` gives, is what `koyomi gen` prints of it.
+//! `KOYOMI_BLESS=1 cargo test` writes the golden files again; read the diff.
 
 use koyomi::check::{check, render};
 use ritsu_base::text::Lang;
+
+/// What `koyomi gen` prints of a mutant of E016 (DESIGN 15): the run is to write every target into
+/// a directory, and writes nothing there.
+fn gen_says(path: &str, lang: Lang) -> String {
+    let out = ritsu_testkit::TempDir::new("mutant-gen");
+    let tag = if lang == Lang::Ja { "ja" } else { "en" };
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_koyomi"))
+        .args(["gen", path, "--lang", tag, "--out"])
+        .arg(out.path())
+        .env_remove("KOYOMI_LANG")
+        .env_remove("RITSU_LANG")
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(1), "{path}: gen stops");
+    assert!(std::fs::read_dir(out.path()).unwrap().next().is_none(), "{path}: gen writes nothing");
+    String::from_utf8(o.stdout).unwrap()
+}
 
 fn mutants() -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir("tests/mutants")
@@ -24,12 +42,19 @@ fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
         let path = format!("tests/mutants/{name}");
         let code = name.split('_').next().unwrap();
         let o = check(&path).unwrap();
-        if !o.diags.iter().any(|d| d.code == code) {
-            failures.push(format!("{path} does not give {code}: {:?}", o.diags.iter().map(|d| d.code).collect::<Vec<_>>()));
+        let said = |lang: Lang| if code == "E016" { gen_says(&path, lang) } else { render(&o, lang) };
+        let codes: Vec<String> = if code == "E016" {
+            // the codes of the headlines gen prints: `error[E016]: …`
+            said(Lang::En).lines().filter(|l| !l.starts_with(' ')).filter_map(|l| l.split_once('[').and_then(|(_, r)| r.split_once(']')).map(|(c, _)| c.to_string())).collect()
+        } else {
+            o.diags.iter().map(|d| d.code.to_string()).collect()
+        };
+        if !codes.iter().any(|c| c == code) {
+            failures.push(format!("{path} does not give {code}: {codes:?}"));
         }
         let stem = name.trim_end_matches(".cal");
         for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
-            let text = render(&o, lang);
+            let text = said(lang);
             let golden = format!("tests/golden/{stem}.{tag}.txt");
             if let Err(e) = ritsu_testkit::golden::check(std::path::Path::new(&golden), &text) {
                 failures.push(format!("{path} ({tag}): {e}"));

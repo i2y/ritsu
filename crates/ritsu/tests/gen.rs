@@ -1151,6 +1151,47 @@ fn what_cannot_be_a_package_is_refused() {
     assert_eq!(err, "error: `--name Stock-Room` cannot name a package: it starts with a lowercase letter and has only lowercase letters, digits and `_` (and is not a word Python keeps)\n");
 }
 
+/// A dates file whose names break the package's target (koyomi's E016, its DESIGN 15): `ritsu gen` of
+/// that target says koyomi's diagnostics and writes nothing, in the text and in the JSON, and every
+/// other target is written. A module named like one of Python's standard library does not stop the
+/// Python package, which holds it as `<package>.dates.<alias>`, beside the standard library's.
+#[test]
+fn a_dates_file_whose_names_break_the_target_stops_the_package() {
+    let t = TempDir::new("gen-spellings");
+    let project = t.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let spellings = here().join("../koyomi/tests/spellings");
+    std::fs::copy(spellings.join("go_functions.cal"), project.join("terms.cal")).unwrap();
+    std::fs::copy(spellings.join("python_library_module.cal"), project.join("abc.cal")).unwrap();
+    let out = t.path().join("out");
+    let (code, stdout, err) = generate(&project, &out, &["--target", "go"]);
+    assert_eq!((code, stdout.as_str()), (1, ""));
+    assert!(err.starts_with("error[E016]: terms.cal:10:6: `net_30` (line 7) and `net30` are one identifier in the code generated for Go\n"), "{err}");
+    assert!(err.ends_with(". For a target you do not use, pick the one you use with `--target`.\n"), "{err}");
+    assert!(!out.exists(), "nothing is written");
+    let (code, stdout, err) = generate(&project, &out, &["--target", "go", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (1, ""));
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    let d = &v["diagnostics"][0];
+    assert_eq!((&d["tool"], &d["code"], &d["severity"], &d["file"], &d["line"]), (&serde_json::json!("koyomi"), &serde_json::json!("E016"), &serde_json::json!("error"), &serde_json::json!("terms.cal"), &serde_json::json!(10)));
+    assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`terms.cal` cannot be made into the go package"}));
+    assert!(!out.exists());
+    for target in ["typescript", "python"] {
+        let (code, _, err) = generate(&project, &out, &["--target", target]);
+        assert_eq!(code, 0, "{target}: {err}");
+    }
+    assert!(out.join("python/generated/dates/abc.py").is_file());
+    if ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not installed; the package's abc is not imported") {
+        let o = Command::new("python3")
+            .args(["-c", "import abc, datetime\nfrom generated.dates import abc as dates\nprint(dates.due(datetime.date(2026, 1, 5)), abc.ABC.__name__)"])
+            .current_dir(out.join("python"))
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(String::from_utf8_lossy(&o.stdout), "2026-02-04 ABC\n", "the package's module and the standard library's, side by side");
+    }
+}
+
 /// The package of a project whose rules are added to by contributions (rulec's §15.231): each rule's
 /// module is the rule merged with the project's contributions that reach it, its header names them,
 /// and a contribution has no module of its own. The new kind is a member of the enum's module, and

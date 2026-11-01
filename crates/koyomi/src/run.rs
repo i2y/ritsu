@@ -347,6 +347,8 @@ fn gen_cmd(a: &Args, lang: Lang) -> ExitCode {
     // Every file the run writes, and the .cal it comes from: two files with one alias would
     // write over each other.
     let mut planned: Vec<(String, String, String)> = Vec::new();
+    // Whether a file's names break a target the run writes (E016, DESIGN 15): then it writes nothing.
+    let mut stopped = false;
     for arg in &a.pos {
         for f in expand(arg, "gen", lang) {
             let o = match check::check_file(&f, &Options::default(), &mut loader) {
@@ -359,8 +361,23 @@ fn gen_cmd(a: &Args, lang: Lang) -> ExitCode {
                 continue;
             };
             let u = crate::codegen::unit_of(checked, lang);
+            // what stops the targets, each finding once (one names Rust and Wasm alike)
+            let mut stops: Vec<crate::diag::Diag> = Vec::new();
+            let mut broken: Vec<&str> = Vec::new();
             for t in &targets {
-                for (rel, body) in crate::codegen::files(&u, *t) {
+                let files = match crate::codegen::build(&o, &u, *t) {
+                    Ok(files) => files,
+                    Err(ds) => {
+                        broken.push(t.key());
+                        for d in ds {
+                            if !stops.iter().any(|s| s.place() == d.place() && s.message.en == d.message.en) {
+                                stops.push(d);
+                            }
+                        }
+                        continue;
+                    }
+                };
+                for (rel, body) in files {
                     if let Some((_, _, from)) = planned.iter().find(|(p, _, _)| *p == rel) {
                         return refuse(
                             tr!(
@@ -373,7 +390,18 @@ fn gen_cmd(a: &Args, lang: Lang) -> ExitCode {
                     planned.push((rel, body, f.clone()));
                 }
             }
+            if !stops.is_empty() {
+                print!("{}", stops.iter().map(|d| d.render(lang)).collect::<String>());
+                let named: Vec<String> = broken.iter().map(|k| format!("`{k}`")).collect();
+                let (list_ja, list_en) = (named.join("、"), named.join(", "));
+                let why = tr!("`{f}` からは {list_ja} のコードを生成できないので、何も生成しません", "`{f}` cannot be made into the code of {list_en}, so nothing is generated");
+                eprintln!("{}: {}", if lang == Lang::Ja { "エラー" } else { "error" }, why.get(lang));
+                stopped = true;
+            }
         }
+    }
+    if stopped {
+        return ExitCode::from(1);
     }
     let mut dirty = false;
     for (rel, body, _) in &planned {

@@ -41,9 +41,10 @@ pub const TARGET_FILES: &[&str] = &[
 
 /// The files of `tests/spellings/` (DESIGN 15): each writes names some targets spell as one
 /// identifier, or cannot take, and `check` warns about it once (W001), in English and in Japanese.
-/// Beside each is what the tool of the targets it names says of the code: the line it stops at, or
-/// nothing when the code loads and answers for one function with another. tests/targets.rs runs
-/// each file through the targets W001 does not name, and the named ones with this line.
+/// Beside each is what the tool of the targets it names says of the code: the line it stops at
+/// (for Python, what the runner stops with), or nothing when the code loads and answers for one
+/// function with another. tests/targets.rs runs each file through the targets W001 does not name,
+/// and the named ones with this line.
 pub const SPELLING_FILES: &[(&str, &str)] = &[
     ("tests/spellings/go_functions.cal", "Net30 redeclared in this block"),
     ("tests/spellings/go_time_function.cal", "CutoffAt redeclared in this block"),
@@ -59,6 +60,7 @@ pub const SPELLING_FILES: &[(&str, &str)] = &[
     ("tests/spellings/rust_time_function.cal", "should have a snake case name"),
     ("tests/spellings/rust_parameter.cal", "should have a snake case name"),
     ("tests/spellings/rust_module.cal", "should have a snake case name"),
+    ("tests/spellings/python_library_module.cal", "has no attribute"),
     ("tests/spellings/Goの関数.cal", "Net30 redeclared in this block"),
     ("tests/spellings/Goの時刻の関数.cal", "CutoffAt redeclared in this block"),
     ("tests/spellings/Goの日付の型.cal", "Date redeclared in this block"),
@@ -73,6 +75,7 @@ pub const SPELLING_FILES: &[(&str, &str)] = &[
     ("tests/spellings/Rustの時刻の関数.cal", "should have a snake case name"),
     ("tests/spellings/Rustの引数.cal", "should have a snake case name"),
     ("tests/spellings/Rustのモジュール.cal", "should have a snake case name"),
+    ("tests/spellings/Pythonの標準ライブラリのモジュール.cal", "has no attribute"),
 ];
 
 /// The same files with the alias their W001's note gives (`tests/spellings/renamed/`): `check`

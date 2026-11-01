@@ -1,9 +1,10 @@
-//! The names a target spells as one identifier, or cannot take (W001, DESIGN 15). Every file of
-//! `tests/spellings/` gives W001 once, naming the targets its name says, and what `check` prints
-//! of it, in English and in Japanese, is its golden file in `tests/golden/spellings/`
-//! (`KOYOMI_BLESS=1 cargo test` writes them again; read the diff). The same file with the alias
-//! the note gives (`tests/spellings/renamed/`) gives nothing. That the named target stops, and
-//! that the others take both files, is tests/targets.rs's.
+//! The names a target spells as one identifier, or cannot take (W001 and E016, DESIGN 15). Every
+//! file of `tests/spellings/` gives W001 once, naming the targets its name says, and what `check`
+//! prints of it, in English and in Japanese, is its golden file in `tests/golden/spellings/`
+//! (`KOYOMI_BLESS=1 cargo test` writes them again; read the diff). `gen` stops at the targets it
+//! names (E016) and writes the others. The same file with the alias the note gives
+//! (`tests/spellings/renamed/`) gives nothing. That the named target breaks, and that the others
+//! take both files, is tests/targets.rs's.
 
 mod common;
 
@@ -12,15 +13,19 @@ use koyomi::codegen;
 use koyomi::naming::{TARGETS, Target};
 use ritsu_base::text::Lang;
 use std::path::Path;
+use std::process::{Command, Output};
 
-/// The targets a file of tests/spellings is about, by its name: Go, PostgreSQL, or Rust with the
-/// Wasm module built from the same code (but for the module's own name, which only Rust declares).
+/// The targets a file of tests/spellings is about, by its name: Go, PostgreSQL, Python, or Rust
+/// with the Wasm module built from the same code (but for the module's own name, which only Rust
+/// declares).
 fn targets_of(path: &str) -> Vec<Target> {
     let name = path.rsplit('/').next().unwrap();
     if name.starts_with("go_") || name.starts_with("Go") {
         vec![Target::Go]
     } else if name.starts_with("postgresql_") || name.starts_with("PostgreSQL") {
         vec![Target::Sql]
+    } else if name.starts_with("python_") || name.starts_with("Python") {
+        vec![Target::Python]
     } else if name.starts_with("rust_module") || name.starts_with("Rustのモジュール") {
         vec![Target::Rust]
     } else if name.starts_with("rust_") || name.starts_with("Rust") {
@@ -28,6 +33,17 @@ fn targets_of(path: &str) -> Vec<Target> {
     } else {
         panic!("{path}: a file of tests/spellings starts with the target it is about")
     }
+}
+
+/// Whether a package of ritsu's breaks where the file's W001 says: every form but the Python
+/// module named like one of the standard library's, which a package holds as
+/// `<package>.dates.<alias>`.
+fn breaks_in_a_package(path: &str) -> bool {
+    !targets_of(path).contains(&Target::Python)
+}
+
+fn koyomi(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap()
 }
 
 #[test]
@@ -61,23 +77,104 @@ fn every_file_gives_w001_once_for_its_target_and_says_what_its_golden_files_say(
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// W001 is a warning: `gen` writes every target of a file it warns about, and renames nothing.
+/// E016: the build of each target a file's W001 names stops, with the warning made an error at the
+/// same place, with the same headline and reasons, and in place of the last note what to do; every
+/// other target builds, with the names as they are written. A package of ritsu's stops alike, but
+/// for the Python module named like one of the standard library's.
 #[test]
-fn every_target_is_written_with_the_names_as_they_are() {
+fn the_targets_w001_names_stop_and_the_others_build() {
+    let mut failures = Vec::new();
     for (path, _) in common::SPELLING_FILES {
-        let mut o = check(path).unwrap();
-        let c = o.checked.take().unwrap();
-        let u = codegen::unit_of(&c, Lang::En);
+        let o = check(path).unwrap();
+        let w = &o.diags[0];
+        let u = codegen::unit_of(o.checked.as_ref().unwrap(), Lang::En);
+        let named = targets_of(path);
         for t in TARGETS {
-            let files = codegen::files(&u, t);
-            assert!(!files.is_empty(), "{path}: gen writes nothing for {}", t.key());
+            match codegen::build(&o, &u, t) {
+                Err(ds) if named.contains(&t) => {
+                    let [e] = ds.as_slice() else {
+                        failures.push(format!("{path} {}: {} diagnostics, not E016 once", t.key(), ds.len()));
+                        continue;
+                    };
+                    let reasons = |n: &[ritsu_base::text::Text]| n[..n.len() - 1].to_vec();
+                    if e.code != "E016" || !e.is_error() || e.place() != w.place() || e.message != w.message || e.notes.len() != w.notes.len() || reasons(&e.notes) != reasons(&w.notes) {
+                        failures.push(format!("{path} {}: E016 says otherwise than W001:\n{}{}", t.key(), e.render(Lang::En), w.render(Lang::En)));
+                    }
+                    let last = &e.notes[e.notes.len() - 1];
+                    if !last.en.ends_with(". For a target you do not use, pick the one you use with `--target`.") || !last.ja.ends_with("。使わない出力先なら、`--target` で使う出力先を挙げてください。") {
+                        failures.push(format!("{path} {}: the last note of E016 is {last:?}", t.key()));
+                    }
+                }
+                Ok(files) if !named.contains(&t) => {
+                    if files.is_empty() {
+                        failures.push(format!("{path}: gen writes nothing for {}", t.key()));
+                    }
+                }
+                Ok(_) => failures.push(format!("{path}: {} builds, though W001 names it", t.key())),
+                Err(ds) => failures.push(format!("{path}: {} stops, though W001 does not name it:\n{}", t.key(), ds[0].render(Lang::En))),
+            }
         }
         // The aliases are in the code as they are written: every target but Go has each.
-        let ts = codegen::files(&u, Target::TypeScript);
+        let ts = codegen::build(&o, &u, Target::TypeScript).unwrap();
         for d in &u.dates {
-            assert!(ts.iter().any(|(_, body)| body.contains(&format!("export function {}(", d.alias))), "{path}: {} is not in the TypeScript", d.alias);
+            if !ts.iter().any(|(_, body)| body.contains(&format!("export function {}(", d.alias))) {
+                failures.push(format!("{path}: {} is not in the TypeScript", d.alias));
+            }
+        }
+        // The targets a package of ritsu's is made in.
+        for t in [Target::TypeScript, Target::Python, Target::Go] {
+            let stops = codegen::package_module(&o, &u, t).is_err();
+            if stops != (named.contains(&t) && breaks_in_a_package(path)) {
+                failures.push(format!("{path}: the package's {} {}", t.key(), if stops { "stops" } else { "builds" }));
+            }
         }
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// `koyomi gen` writes no file when a target it is to write stops (E016): it prints each E016 once
+/// (one finding names Rust and Wasm alike), says on the standard error which targets stop, and
+/// exits 1, and `--check` stops the same way. With `--target` naming another target, it writes
+/// that one.
+#[test]
+fn gen_writes_nothing_when_a_target_it_writes_stops() {
+    let out = ritsu_testkit::TempDir::new("spellings-gen");
+    let dir = out.path().to_str().unwrap();
+    for (path, _) in common::SPELLING_FILES {
+        let named = targets_of(path);
+        for check in [false, true] {
+            let mut args = vec!["gen", path, "--out", dir];
+            if check {
+                args.push("--check");
+            }
+            let o = koyomi(&args);
+            let (stdout, stderr) = (String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+            assert_eq!(o.status.code(), Some(1), "{path}: {stdout}{stderr}");
+            assert_eq!(stdout.matches("error[E016]: ").count(), 1, "{path}: {stdout}");
+            let keys: Vec<String> = named.iter().map(|t| format!("`{}`", t.key())).collect();
+            assert_eq!(stderr, format!("error: `{path}` cannot be made into the code of {}, so nothing is generated\n", keys.join(", ")), "{path}");
+            assert!(std::fs::read_dir(dir).unwrap().next().is_none(), "{path}: gen wrote a file");
+        }
+        let other = TARGETS.iter().find(|t| !named.contains(t)).unwrap();
+        let o = koyomi(&["gen", path, "--out", dir, "--target", other.key()]);
+        assert_eq!(o.status.code(), Some(0), "{path} --target {}: {}", other.key(), String::from_utf8_lossy(&o.stderr));
+        std::fs::remove_dir_all(dir).unwrap();
+        std::fs::create_dir(dir).unwrap();
+        let o = koyomi(&["gen", path, "--out", dir, "--target", named[0].key()]);
+        assert_eq!(o.status.code(), Some(1), "{path} --target {}", named[0].key());
+        assert!(std::fs::read_dir(dir).unwrap().next().is_none(), "{path} --target {}: gen wrote a file", named[0].key());
+    }
+    // Japanese
+    let o = koyomi(&["gen", "tests/spellings/Rustの関数.cal", "--out", dir, "--lang", "ja"]);
+    assert_eq!(o.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&o.stdout).starts_with("エラー[E016]: tests/spellings/Rustの関数.cal:"));
+    assert_eq!(String::from_utf8_lossy(&o.stderr), "エラー: `tests/spellings/Rustの関数.cal` からは `rust`、`wasm` のコードを生成できないので、何も生成しません\n");
+    // A file that stops a target stops the run, the files beside it included.
+    let o = koyomi(&["gen", "tests/spellings/renamed/go_functions.cal", "tests/spellings/go_functions.cal", "--out", dir]);
+    assert_eq!(o.status.code(), Some(1));
+    assert!(std::fs::read_dir(dir).unwrap().next().is_none(), "gen wrote the renamed file");
+    let o = koyomi(&["gen", "tests/spellings/renamed/go_functions.cal", "--out", dir]);
+    assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
 }
 
 #[test]
@@ -168,6 +265,27 @@ fn the_names_rustc_warns_of() {
     let codes: Vec<&str> = o.diags.iter().map(|d| d.code).collect();
     assert_eq!(codes, ["W001"], "a calendar named cal__x is the Rust module cal__x");
     assert!(o.diags[0].render(Lang::En).contains("is the module's name, which rustc warns of"));
+}
+
+/// A file's alias that is a module of Python's standard library, as `sys.stdlib_module_names` lists
+/// it: a calendar's too, since a calendar is a Python module as well. The four the generated code
+/// imports itself are E009, and a name that only starts like one is not told.
+#[test]
+fn the_modules_of_pythons_standard_library() {
+    let codes = |body: &str| -> Vec<&'static str> { check_text("tests/spellings/inline.cal", body, &Options::default()).diags.iter().map(|d| d.code).collect() };
+    let dates = |alias: &str| format!("dates {alias} v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate due = received\n  + 30 days\n");
+    for alias in ["collections", "site", "random", "queue", "secrets"] {
+        assert_eq!(codes(&dates(alias)), ["W001"], "{alias}");
+    }
+    for alias in ["datetime", "json", "sys", "typing"] {
+        assert_eq!(codes(&dates(alias)), ["E009"], "{alias}");
+    }
+    for alias in ["collections_", "my_site", "secret"] {
+        assert!(codes(&dates(alias)).is_empty(), "{alias}");
+    }
+    let o = check_text("tests/spellings/inline.cal", "calendar secrets v1\n\nclosed weekly sat, sun\n", &Options::default());
+    let w: Vec<String> = o.diags.iter().map(|d| d.render(Lang::En)).collect();
+    assert!(w.len() == 1 && w[0].contains("the file's alias `secrets` is the module's name, which a module of Python's standard library has"), "{w:?}");
 }
 
 /// The JSON of W001: a warning, with the keys every diagnostic has.

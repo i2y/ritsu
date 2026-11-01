@@ -1,0 +1,8 @@
+dates abc v1
+description "A file whose alias is the name of a module of Python's standard library. The Python code is the module abc, and Python keeps one module per name: the standard library's abc is imported as Python starts, so the import of the generated module gives that one, which has no function due (W001). A package of ritsu gen holds the module under its own name, and every other target takes the alias as it is"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date due = received
+  + 30 days

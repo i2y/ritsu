@@ -1,0 +1,6 @@
+warning[W001]: tests/spellings/Pythonの標準ライブラリのモジュール.cal:1:28: In the code generated for Python, the file's alias `site` is the module's name, which a module of Python's standard library has
+     1 | dates Pythonの標準ライブラリのモジュール(site) v1
+  = Python: Python keeps one module per name, and `import site` gives the one imported first. Once the standard library's `site` is imported, the generated functions cannot be called; imported before it, the generated module is what every `import site` in the program gets in place of the standard library's.
+  = A package of `ritsu gen` holds the module as `<package>.dates.site`, which does not meet the standard library's.
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates Pythonの標準ライブラリのモジュール(<alias>) v1`).
+tests/spellings/Pythonの標準ライブラリのモジュール.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

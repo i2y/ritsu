@@ -60,7 +60,8 @@ have to read koyomi's source.
    least room, the edge cases, the months with the holidays named and the failing input days
    marked. A file whose claims fail still gets its page; the failing days are the point of it.
 7. **Generate the code:** `ritsu koyomi gen <file.cal> --out generated` writes TypeScript, Python, Go,
-   Rust, SQL and Wasm, each with a runner. `ritsu koyomi gen --check` in CI says when the code is stale.
+   Rust, SQL and Wasm, each with a runner, and `--target` picks one; a target a W001 names stops it with
+   nothing written (E016). `ritsu koyomi gen --check` in CI says when the code is stale.
    `ritsu koyomi api <file.cal>` gives the functions, their inputs and ranges, and the signatures in each
    language, without reading the code. [generated-code.md](generated-code.md) says how to call it.
 8. **In a project with rules or workflows**, `ritsu check` checks the `.cal` files with the rest,
@@ -184,7 +185,8 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 | E001 to E006 | words, lines, the order of sections, indentation, dates that do not exist | what the message says |
 | E007 to E014 | names twice or undeclared, aliases, types, the one date input, ranges, dates that start from each other | what the message says |
 | E015 | a `use calendar` that cannot be used | the path is from the `.cal`'s directory |
-| W001 | two aliases one target spells as one identifier (Go's PascalCase, PostgreSQL's 63 bytes), an alias that is a name the Go code declares, a file's alias whose Go package is a keyword or `main`, or an alias with two `_` in a row, which rustc warns of (`non_snake_case`) in the Rust and Wasm code | leave it for a target you do not generate; for one you do, another alias for the one the note names |
+| E016 | `gen` is to write a target a W001 names, and writes nothing | another alias for the one the note names; for a target you do not use, pick the one you use with `--target` |
+| W001 | two aliases one target spells as one identifier (Go's PascalCase, PostgreSQL's 63 bytes), an alias that is a name the Go code declares, a file's alias whose Go package is a keyword or `main`, an alias with two `_` in a row, which rustc warns of (`non_snake_case`) in the Rust and Wasm code, or a file's alias that is a module of Python's standard library | leave it for a target you do not generate, and pick the one you do with `gen --target`; for one you do, another alias for the one the note names |
 | E101 to E106 | a table's copy missing, unpinned, changed, unreadable, or outside its `covers` | `ritsu koyomi source fetch`, read what changed, `ritsu koyomi source pin` |
 | E107 | a time zone's name as the offset | write `+09:00`; for a zone with daylight saving time, give dates only |
 | E108 to E111 | no business day; an operation needs a calendar; `at` needs an offset; a citation | what the message says |

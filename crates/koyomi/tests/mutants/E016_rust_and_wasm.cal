@@ -1,0 +1,8 @@
+dates shipping v1
+description "Ships three days after the order. The date's alias has two underscores in a row: rustc's lint non_snake_case warns of its function, so the Rust code and the Wasm module do not build with -D warnings (W001), and gen, which is to write every target, stops before it writes a file (E016)"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2026-01-31
+
+date ship__by = ordered
+  + 3 days

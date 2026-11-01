@@ -32,16 +32,20 @@ function for each date, and `is_open` too when it reads a calendar.
 
 Every name is written as the `.cal` writes it, and none is changed to make room for another. Go's
 PascalCase and package name and PostgreSQL's 63 bytes can make two aliases one identifier, or an
-alias a name that target cannot take, and rustc warns of an alias with two `_` in a row
-(`non_snake_case`); `koyomi check` warns about it and names the targets (W001), and the code of
-those targets, written as it is, does not build (for Rust and Wasm, with `-D warnings`) or answers
-for one date with another.
+alias a name that target cannot take; rustc warns of an alias with two `_` in a row
+(`non_snake_case`); and a file's alias can be the name of a module of Python's standard library,
+which then stands in for the generated module, or the generated module for it. `koyomi check`
+warns about each and names the targets (W001). Written as it is, the code of those targets would
+not build (for Rust and Wasm, with `-D warnings`), would answer for one date with another, or
+could not be imported, so `gen` writes nothing when it is to write one of them (E016);
+`--target` writes one of the others.
 
 `--out <dir>` says where (`generated` unless given), `--target` picks one target, and `--lang ja`
 writes the comments and the error messages in Japanese. A file that does not pass check writes
-nothing and makes the run exit 1, while the files that pass are still written; two files with one
-alias stop the run before anything is written. `koyomi gen --check` writes nothing and exits 1
-when a file on disk is not what gen would write, for CI.
+nothing and makes the run exit 1, while the files that pass are still written; a W001 that names a
+target to write (E016) and two files with one alias stop the run before anything is written.
+`koyomi gen --check` writes nothing and exits 1 when a file on disk is not what gen would write,
+for CI.
 
 ## The head
 

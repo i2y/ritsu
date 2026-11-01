@@ -9,7 +9,8 @@
 //! The files of `tests/spellings/` (DESIGN 15) go through the targets too: each through the
 //! targets its W001 does not name, its renamed one (the alias the note gives) through all six, and
 //! each through the ones it names, which have to stop where `common::SPELLING_FILES` says, or load
-//! and answer wrongly (`breaks_go`, `breaks_sql`, `breaks_rust`, `breaks_wasm`).
+//! and answer wrongly (`breaks_python`, `breaks_go`, `breaks_sql`, `breaks_rust`, `breaks_wasm`).
+//! These are the files `gen` does not write (E016), made as `gen` made them before it stopped.
 //!
 //! The vectors are made in this process and piped to the runner as they are made; nothing as
 //! large as them is written to disk. A tool that is missing prints `SKIP:` and the test passes
@@ -303,6 +304,26 @@ fn python() {
     };
     compare_all("python", &ss, |s| runner(&dir, s));
     compare_ja("python", &ss, |s| runner(&ja, s));
+    breaks_python();
+}
+
+/// Each file of tests/spellings whose W001 names Python, generated alone, its runner run from
+/// beside the module as every runner is: `import <alias>` gives the standard library's module of
+/// that name, read before it, and the runner stops where `common::SPELLING_FILES` says.
+fn breaks_python() {
+    let bs = broken(Target::Python);
+    for (s, says) in &bs {
+        let d = TempDir::new("py-breaks");
+        generate(d.path(), Target::Python, std::slice::from_ref(s), Lang::En);
+        let mut c = Command::new("python3");
+        c.arg(d.path().join(format!("python/{}_runner.py", s.alias)));
+        match compare(s, c) {
+            Ok(n) => panic!("{}: the runner was to stop with {says:?}, and answered its {n} lines", s.path),
+            Err(e) => assert!(e.contains(says), "{}: the runner was to stop with {says:?}, and said:\n{e}", s.path),
+        }
+        println!("python: {} stops its runner ({says})", s.path);
+    }
+    assert!(bs.len() >= 2, "{} files of tests/spellings name Python", bs.len());
 }
 
 #[test]

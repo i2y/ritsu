@@ -476,11 +476,17 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             continue;
         }
         let u = koyomi::codegen::unit_in(checked, lang, Some(&f.rel), place.module.as_ref());
-        let (t, body) = match target {
-            Target::TypeScript => (koyomi::naming::Target::TypeScript, koyomi::codegen::typescript::module(&u)),
-            Target::Python => (koyomi::naming::Target::Python, koyomi::codegen::python::module(&u)),
-            Target::Go => (koyomi::naming::Target::Go, koyomi::codegen::go::module(&u)),
+        let t = match target {
+            Target::TypeScript => koyomi::naming::Target::TypeScript,
+            Target::Python => koyomi::naming::Target::Python,
+            Target::Go => koyomi::naming::Target::Go,
         };
+        let body = koyomi::codegen::package_module(&outcome, &u, t).map_err(|ds| {
+            let text: String = ds.iter().map(|d| d.render(lang)).collect();
+            let json = ds.iter().map(|d| diagnostic("koyomi", Some(f.rel.clone()), d.to_json(lang))).collect();
+            let (shown, to) = (&f.shown, target.key());
+            stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang)
+        })?;
         // koyomi gen's own path, under its target's directory
         let rel = t.file(&u.alias).split_once('/').map(|(_, r)| r.to_string()).unwrap_or_default();
         named.push(("dates", module_of(&rel), f.rel.clone()));

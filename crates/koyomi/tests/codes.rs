@@ -1,14 +1,21 @@
 //! Every code of the ledger (src/codes.rs) has an example that, checked with what is beside
-//! it, gives that code (DESIGN 4.2), and every code has at least one mutant in tests/mutants.
+//! it, gives that code (DESIGN 4.2), and every code has at least one mutant in tests/mutants. An
+//! example of a command (E016, of `gen`) is that command, run in the example's directory.
 
 use koyomi::check::{Options, check_text};
-use ritsu_base::ledger;
+use ritsu_base::ledger::{self, Repro};
 use ritsu_base::text::Lang;
 
 #[test]
 fn every_example_gives_its_code() {
     let scratch = ritsu_testkit::TempDir::new("codes");
     let failures = ledger::check_every(&koyomi::codes::ledger(), scratch.path(), |e, dir| {
+        if let Repro::Dir { command, .. } = &e.repro {
+            let o = std::process::Command::new(env!("CARGO_BIN_EXE_koyomi")).args(command).current_dir(dir).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap();
+            let out = String::from_utf8_lossy(&o.stdout);
+            // the codes of the headlines: `error[E016]: …`
+            return out.lines().filter(|l| !l.starts_with(' ')).filter_map(|l| l.split_once('[').and_then(|(_, r)| r.split_once(']')).map(|(c, _)| c.to_string())).collect();
+        }
         let path = dir.join("example.cal");
         let body = std::fs::read_to_string(&path).unwrap();
         let o = check_text(path.to_str().unwrap(), &body, &Options::default());
@@ -36,5 +43,5 @@ fn the_ledger_has_each_code_once_and_in_order() {
     for c in &codes {
         assert!(seen.insert(*c), "{c} is in the ledger twice");
     }
-    assert_eq!(codes.len(), 41, "DESIGN 4.2 has 41 codes");
+    assert_eq!(codes.len(), 42, "DESIGN 4.2 has 42 codes");
 }

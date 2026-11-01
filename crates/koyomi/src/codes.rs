@@ -38,6 +38,10 @@ const TABLE_2026_EN: (&str, &[u8]) = ("closed_days.cal", "calendar closed_days v
 
 const RANGE_JAN: &str = "range >=2026-01-01 <=2026-01-31";
 
+/// Two dates that are one function in Go (W001), and what E016 stops `gen --target go` at.
+const W001_JA: &str = "dates t v1\n\ninputs\n  受領日(received) : date  range >=2026-01-01 <=2026-01-31\n\ndate 支払日(payment) = 受領日\n  + 30 days\ndate 遅れた支払日(payment_) = 受領日\n  + 60 days\n";
+const W001_EN: &str = "dates t v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate payment = received\n  + 30 days\ndate payment_ = received\n  + 60 days\n";
+
 /// The one fake key the reproductions of W901 hold (ritsu's DESIGN 16.10): a Google API key that
 /// reads as a fake. It is put together from two pieces, so that no file of the source holds a key
 /// in one run; the pages of codes that `explain` writes hold it whole.
@@ -226,21 +230,36 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"nowhere.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n",
             &[],
         ),
+        Entry::new(
+            "E016",
+            tr!("生成する出力先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language gen is to write"),
+            tr!(
+                "`gen` が書く出力先を W001 が挙げるとき。そのまま書くとその出力先のコードが壊れるので、`gen` はどのファイルも書かずに 1 で終わります。`--target` で出力先を挙げたときは、その出力先を W001 が挙げるときだけ止まります。`ritsu gen` も、パッケージの出力先を W001 が挙げると止まります。ただし、Python の標準ライブラリと同じ名前のモジュールでは止まりません。パッケージはそのモジュールを `<パッケージ>.dates.<別名>` として持つので、標準ライブラリのものとぶつからないからです。場所、見出し、注は W001 と同じで、最後の注だけが違います。",
+                "`gen` is to write a target a W001 names. The code of that target would break as it is, so `gen` writes no file and exits 1. With `--target`, it stops only when a W001 names the target given. `ritsu gen` stops too when a W001 names the package's target, but not for a module named like one of Python's standard library: a package holds it as `<package>.dates.<alias>`, which does not meet the standard library's. The place, the headline and the notes are the W001's, but for the last note."
+            ),
+            tr!(
+                "注が挙げる別名を変えてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "Change the alias the notes give; for a target you do not use, pick the one you use with `--target`."
+            ),
+            Repro::Dir { files: vec![("t.cal", W001_JA)], command: vec!["gen", "t.cal", "--target", "go"] },
+            &["W001", "E009"],
+        )
+        .english(Repro::Dir { files: vec![("t.cal", W001_EN)], command: vec!["gen", "t.cal", "--target", "go"] }),
         e(
             "W001",
             tr!("出力先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language"),
             tr!(
-                "二つの別名が、ある出力先の綴りで同じ識別子になるとき。Go は日付の関数を PascalCase で書くので、`payment` と `payment_` はどちらも `Payment` です。PostgreSQL は名前の先頭の 63 バイトしか残さないので、先頭の 63 バイトが同じ二つの別名は、引数の型が同じなら一つの関数に、同じ関数が取るなら一つの引数になります。別名が、Go の綴りで、生成したコードが自分で使う名前（`Date`、`ParseDate`、`KoyomiError`、`IsOpen`、ランナーの `TestMain`）と同じになるときも。ファイルの別名から作る Go のパッケージの名前（別名から `_` を除いたもの）が、Go のキーワードか `main` になるときも。別名に `_` が二つ続くときも（端の `_` は数えません）。Rust と Wasm のコードは `rustc -D warnings` で組めるように書きますが、rustc のリント `non_snake_case` がその関数、引数、モジュールを警告します。警告なので `check` は通り、`gen` はどの出力先も書きます。名前は付け替えません。",
-                "Two aliases are one identifier as a target spells them. Go names a date's function in PascalCase, so `payment` and `payment_` are both `Payment`. PostgreSQL keeps the first 63 bytes of a name, so two aliases that share them are one function when the functions take the same types, or one parameter of a function that takes both. Or an alias is, as Go spells it, a name the generated code uses itself (`Date`, `ParseDate`, `KoyomiError`, `IsOpen`, and the runner's `TestMain`). Or the Go package a file's alias makes (the alias without its `_`) is a keyword of Go, or `main`. Or an alias has two `_` in a row (not counting those at its ends): the Rust and Wasm code is written to build with `rustc -D warnings`, and rustc's lint `non_snake_case` warns of such a function, parameter or module. It is a warning: `check` passes, `gen` writes every target, and no name is changed."
+                "二つの別名が、ある出力先の綴りで同じ識別子になるとき。Go は日付の関数を PascalCase で書くので、`payment` と `payment_` はどちらも `Payment` です。PostgreSQL は名前の先頭の 63 バイトしか残さないので、先頭の 63 バイトが同じ二つの別名は、引数の型が同じなら一つの関数に、同じ関数が取るなら一つの引数になります。別名が、Go の綴りで、生成したコードが自分で使う名前（`Date`、`ParseDate`、`KoyomiError`、`IsOpen`、ランナーの `TestMain`）と同じになるときも。ファイルの別名から作る Go のパッケージの名前（別名から `_` を除いたもの）が、Go のキーワードか `main` になるときも。別名に `_` が二つ続くときも（端の `_` は数えません）。Rust と Wasm のコードは `rustc -D warnings` で組めるように書きますが、rustc のリント `non_snake_case` がその関数、引数、モジュールを警告します。ファイルの別名が Python の標準ライブラリのモジュールの名前（`abc` など）と同じになるときも。別名は生成した Python のモジュールの名前になり、Python は同じ名前のモジュールを一つしか読み込みません。警告なので `check` は通ります。`gen` は、警告が挙げる出力先を書くときに E016 で止まります。名前は付け替えません。",
+                "Two aliases are one identifier as a target spells them. Go names a date's function in PascalCase, so `payment` and `payment_` are both `Payment`. PostgreSQL keeps the first 63 bytes of a name, so two aliases that share them are one function when the functions take the same types, or one parameter of a function that takes both. Or an alias is, as Go spells it, a name the generated code uses itself (`Date`, `ParseDate`, `KoyomiError`, `IsOpen`, and the runner's `TestMain`). Or the Go package a file's alias makes (the alias without its `_`) is a keyword of Go, or `main`. Or an alias has two `_` in a row (not counting those at its ends): the Rust and Wasm code is written to build with `rustc -D warnings`, and rustc's lint `non_snake_case` warns of such a function, parameter or module. Or a file's alias is the name of a module of Python's standard library (`abc`, for one): the alias names the generated Python module, and Python keeps one module per name. It is a warning: `check` passes, `gen` stops with E016 when it is to write a target the warning names, and no name is changed."
             ),
             tr!(
-                "使わない出力先なら、このままで構いません。使うなら、注が挙げる別名を変えてください。二つの別名が一つになるときは、どちらか一つを変えれば足ります（`遅れた支払日(late_payment)` のように）。パッケージとモジュールの名前のときは、ファイルの別名を変えてください。",
-                "For a target you do not generate, leave it. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module."
+                "使わない出力先なら、このままで構いません。`gen` には、`--target` で使う出力先を挙げてください。使うなら、注が挙げる別名を変えてください。二つの別名が一つになるときは、どちらか一つを変えれば足ります（`遅れた支払日(late_payment)` のように）。パッケージとモジュールの名前のときは、ファイルの別名を変えてください。",
+                "For a target you do not generate, leave it, and pick the one you generate with `gen --target`. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module."
             ),
-            "dates t v1\n\ninputs\n  受領日(received) : date  range >=2026-01-01 <=2026-01-31\n\ndate 支払日(payment) = 受領日\n  + 30 days\ndate 遅れた支払日(payment_) = 受領日\n  + 60 days\n",
-            &["E007", "E009"],
+            W001_JA,
+            &["E007", "E009", "E016"],
         )
-        .english(Repro::File { body: "dates t v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate payment = received\n  + 30 days\ndate payment_ = received\n  + 60 days\n", beside: &[] }),
+        .english(Repro::File { body: W001_EN, beside: &[] }),
         // ── The calendar and the sources ──
         e(
             "E101",

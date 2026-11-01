@@ -94,17 +94,20 @@ Claims and sources are not in the generated code and need no alias. A name or an
 a keyword, a reserved word of a target language, or a name the generated code uses itself
 (`is_open`, `Date`, `KoyomiError`, `<alias>_at`, …): E009.
 
-Go and PostgreSQL spell an alias their own way, and rustc warns of some aliases as they are. Go
-names a date's function in PascalCase and the package by the file's alias without its `_`;
-PostgreSQL keeps the first 63 bytes of a name; rustc's lint `non_snake_case` warns of a name with
-two `_` in a row, and the Rust and Wasm code is written to build with `-D warnings`. So `net_30` and
-`net30` are both `Net30` in Go, an alias can be in Go a name the generated code declares (`date_` is
-`Date`), a file's alias can make a package Go cannot take (`go_to_` is `goto`, `main_` is `main`),
-two long aliases that share their first 63 bytes are one function, or one parameter, in PostgreSQL,
-and `ship__by` is a function rustc warns of (so is `cutoff__at`, the function of the time of a date
-`cutoff_`). `check` warns about each (W001) and names the targets; the file passes, `gen` writes
-every target, and no name is changed. If you generate one of those targets, give the name the note
-points to another alias.
+Go and PostgreSQL spell an alias their own way, rustc warns of some aliases as they are, and Python
+keeps one module per name. Go names a date's function in PascalCase and the package by the file's
+alias without its `_`; PostgreSQL keeps the first 63 bytes of a name; rustc's lint `non_snake_case`
+warns of a name with two `_` in a row, and the Rust and Wasm code is written to build with
+`-D warnings`; the Python module is named by the file's alias. So `net_30` and `net30` are both
+`Net30` in Go, an alias can be in Go a name the generated code declares (`date_` is `Date`), a
+file's alias can make a package Go cannot take (`go_to_` is `goto`, `main_` is `main`), two long
+aliases that share their first 63 bytes are one function, or one parameter, in PostgreSQL,
+`ship__by` is a function rustc warns of (so is `cutoff__at`, the function of the time of a date
+`cutoff_`), and a file's alias can be the name of a module of Python's standard library (`abc`),
+so that whichever of the two is imported first is what every `import abc` gives. `check` warns
+about each (W001) and names the targets, and the file passes. `gen` writes nothing when it is to
+write a target the warning names (E016), and no name is changed: give the name the note points to
+another alias, or, for a target you do not use, generate the one you use with `--target`.
 
 ### Keywords
 
@@ -396,7 +399,7 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 | `koyomi check <file.cal>...` | `--format json`, `--budget <n>`; a directory stands for every `.cal` under it |
 | `koyomi eval <file.cal> <name>=<value>...` | `--format json`; a name or its alias; for a calendar, one date (`koyomi eval examples/calendars/england_and_wales.cal 2026-04-03`) |
 | `koyomi diff <old> <new>` | `--format markdown\|json`, `--budget <n>`; two calendars or two dates files, each a path, `<path>@<git revision>`, `@<name>/<path>` or `@<name>@<version>/<path>` |
-| `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm` (every target without it), `--out <dir>` (`generated`), `--check` |
+| `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm` (every target without it), `--out <dir>` (`generated`), `--check`; a target a W001 names stops the run (E016) |
 | `koyomi vectors <file.cal>` | |
 | `koyomi doc <file.cal>` | `--format markdown\|html`, `--months <YYYY-MM>..<YYYY-MM>` |
 | `koyomi api <file.cal>` | |

@@ -552,6 +552,39 @@ pub fn files(u: &Unit, t: Target) -> Vec<(String, String)> {
     vec![(t.file(&u.alias), module), (runner_file(t, &u.alias), runner)]
 }
 
+/// What stops target `t` of a checked file (E016, DESIGN 15): each W001 that names `t`; for the code
+/// a package of ritsu's holds (`in_package`, ritsu's DESIGN 9.3), only the ones that break it there.
+pub fn check(o: &crate::check::Outcome, t: Target, in_package: bool) -> Vec<crate::diag::Diag> {
+    crate::spellings::stops(&o.spelled, t, in_package)
+}
+
+/// The files of target `t` for a checked file, as `koyomi gen` writes them ([`files`]), or what stops
+/// it ([`check`]). `u` is the unit of the outcome's file.
+pub fn build(o: &crate::check::Outcome, u: &Unit, t: Target) -> Result<Vec<(String, String)>, Vec<crate::diag::Diag>> {
+    let d = check(o, t, false);
+    if !d.is_empty() {
+        return Err(d);
+    }
+    Ok(files(u, t))
+}
+
+/// [`build`], for the module alone, as a package of ritsu's holds it (ritsu's DESIGN 9.3): the file
+/// `api` names first, without the runner (for Wasm, the crate root).
+pub fn package_module(o: &crate::check::Outcome, u: &Unit, t: Target) -> Result<String, Vec<crate::diag::Diag>> {
+    let d = check(o, t, true);
+    if !d.is_empty() {
+        return Err(d);
+    }
+    Ok(match t {
+        Target::TypeScript => typescript::module(u),
+        Target::Python => python::module(u),
+        Target::Go => go::module(u),
+        Target::Rust => rust::module(u),
+        Target::Sql => sql::module(u),
+        Target::Wasm => wasm::root(u),
+    })
+}
+
 /// Where a target's runner goes (DESIGN 6.4). Go's is a test file of the package, so that it
 /// needs no import path: `go test -c` builds it into a program that reads the vectors.
 pub fn runner_file(t: Target, alias: &str) -> String {

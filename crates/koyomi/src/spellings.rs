@@ -1,35 +1,91 @@
 //! The names a file writes that a target spells as one identifier, and the ones a target cannot
-//! take (W001, DESIGN 15). Every alias is an identifier in each target as it is written, but for
-//! three spellings: Go names a date's function in PascalCase (`payment_terms` is `PaymentTerms`)
-//! and a package by the file's alias without its `_` (`paymentterms`), PostgreSQL keeps the first
-//! 63 bytes of a name, and rustc's lint `non_snake_case` warns of a name with two `_` in a row,
-//! which the Rust and Wasm code is built to pass with `-D warnings`. So two aliases that differ
-//! only in their `_` are one function in Go, two long aliases that share their first 63 bytes are
-//! one function or one parameter in PostgreSQL, an alias can be in Go a name the generated code
-//! declares itself (`Date`, `TestMain`), a file's alias can make a package Go cannot take (`goto`,
-//! `main`), and `a__b` is a function, a parameter or a module rustc warns of.
+//! take (W001 when the file is checked, E016 when `gen` is to write a target one breaks; DESIGN 15).
+//! Every alias is an identifier in each target as it is written, but for three spellings: Go names a
+//! date's function in PascalCase (`payment_terms` is `PaymentTerms`) and a package by the file's
+//! alias without its `_` (`paymentterms`), PostgreSQL keeps the first 63 bytes of a name, and
+//! rustc's lint `non_snake_case` warns of a name with two `_` in a row, which the Rust and Wasm code
+//! is built to pass with `-D warnings`. So two aliases that differ only in their `_` are one
+//! function in Go, two long aliases that share their first 63 bytes are one function or one
+//! parameter in PostgreSQL, an alias can be in Go a name the generated code declares itself
+//! (`Date`, `TestMain`), a file's alias can make a package Go cannot take (`goto`, `main`), and
+//! `a__b` is a function, a parameter or a module rustc warns of. A file's alias also names the
+//! Python module, and Python's standard library can have a module of that name (`collections`):
+//! Python keeps one module per name.
 //!
-//! Each of them breaks some of the targets, so it is a warning, as rulec's W121 is (rulec's DESIGN
-//! 15.263): `check` passes, `gen` writes every target, and nothing is renamed. A name the
-//! generated code uses in every target is E009 (`naming::GENERATED`), which stops the file before
-//! this is looked at.
+//! Each of them breaks some of the targets, so `check` warns (W001), as rulec's W121 does (rulec's
+//! DESIGN 15.263), and `gen` stops when it is to write a target one breaks (E016), as chobo's build
+//! does (chobo's DESIGN 16). Nothing is renamed. A name the generated code uses in every target is
+//! E009 (`naming::GENERATED`), which stops the file before this is looked at.
 
 use crate::ast::{File, Kind, Name, Span, Ty};
-use crate::diag::Diag;
+use crate::diag::{Diag, Severity};
 use crate::naming::{self, Target, go_package, pascal};
 use crate::resolve::Model;
-use ritsu_base::text::Text;
+use ritsu_base::text::{Text, capitalize};
+use ritsu_emit::copies::rulec::PY_STDLIB;
 use ritsu_emit::words::go::KEYWORDS as GO_KEYWORDS;
 
 /// PostgreSQL keeps the first 63 bytes of a name (NAMEDATALEN − 1) and cuts a longer one short
 /// with only a notice.
 pub const PG_NAME_MAX: usize = 63;
 
-/// One W001: the targets it breaks, and the diagnostic.
+/// One W001: the targets it breaks, the diagnostic, and what fixes it.
 #[derive(Clone, Debug)]
 pub struct Found {
     pub targets: Vec<Target>,
+    /// The warning. Its last note is [`leave_or`] of `rename`.
     pub diag: Diag,
+    /// What to change, as the words after "For one you do, " say it (`give it another alias
+    /// (\`payment(<alias>)\`)`): what E016 asks for.
+    pub rename: Text,
+    /// Whether the code breaks as well where a package of ritsu's holds it (ritsu's DESIGN 9.3):
+    /// every finding but a module named like one of Python's standard library, which a package
+    /// holds under its own name (`<package>.dates.collections`).
+    pub in_package: bool,
+}
+
+/// A finding of `targets`: the warning at `s` of `f`, its reasons, and its last note, [`leave_or`]
+/// of `rename`.
+fn found(targets: Vec<Target>, f: &File, s: Span, msg: Text, reasons: Vec<Text>, rename: Text) -> Found {
+    let mut diag = warning(f, s, msg);
+    for r in reasons {
+        diag = diag.note(r);
+    }
+    let diag = diag.note(leave_or(&rename));
+    Found { targets, diag, rename, in_package: true }
+}
+
+/// The last note of a W001: leave it for a target you do not generate, else `rename`.
+fn leave_or(rename: &Text) -> Text {
+    tr!(
+        "使わない出力先なら、このままで構いません。使うなら、{}。",
+        "For a target you do not generate, leave it. For one you do, {}.",
+        rename.ja;
+        rename.en
+    )
+}
+
+/// E016: the findings that break target `t`, which `gen` does not write (DESIGN 15); of them, the
+/// ones that break a package of ritsu's as well, when `in_package`. Each is its warning made an
+/// error, at the same place, with the same headline and reasons, and in place of the last note,
+/// what to do: `rename`, or `--target` with the target used.
+pub fn stops(found: &[Found], t: Target, in_package: bool) -> Vec<Diag> {
+    found
+        .iter()
+        .filter(|f| f.targets.contains(&t) && (f.in_package || !in_package))
+        .map(|f| {
+            let mut d = f.diag.clone();
+            d.code = "E016";
+            d.severity = Severity::Error;
+            d.notes.pop();
+            d.note(tr!(
+                "{}。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "{}. For a target you do not use, pick the one you use with `--target`.",
+                f.rename.ja;
+                capitalize(&f.rename.en)
+            ))
+        })
+        .collect()
 }
 
 /// The diagnostics of [`find`].
@@ -51,16 +107,12 @@ pub fn find(m: &Model) -> Vec<Found> {
     out
 }
 
-/// The diagnostics of [`file_alias`]: what a calendar file is told.
-pub fn check_file_alias(f: &File) -> Vec<Diag> {
-    file_alias(f).into_iter().map(|f| f.diag).collect()
-}
-
-/// What a file's alias names where a target cannot take it: the Go package ([`package`]) and the
-/// Rust module ([`rust_module`]).
+/// What a file's alias names where a target cannot take it: the Go package ([`package`]), the Rust
+/// module ([`rust_module`]) and the Python module ([`python_module`]).
 pub fn file_alias(f: &File) -> Vec<Found> {
     let mut v = package(f);
     v.extend(rust_module(f));
+    v.extend(python_module(f));
     v
 }
 
@@ -70,6 +122,13 @@ fn heading_word(f: &File) -> &'static str {
         Kind::Dates => "dates",
         Kind::Calendar => "calendar",
     }
+}
+
+/// What to change when the file's alias is what breaks: the alias, in the heading.
+fn rename_file(f: &File) -> Text {
+    let what = heading_word(f);
+    let (n, v) = (&f.name.text, &f.version);
+    tr!("ファイルに別の別名を付けてください（`{what} {n}(<別名>) v{v}`）", "give the file another alias (`{what} {n}(<alias>) v{v}`)")
 }
 
 /// The package Go names a file's code by, when Go cannot take it: a keyword (`go_to` is `goto`), or
@@ -92,29 +151,18 @@ pub fn package(f: &File) -> Vec<Found> {
     } else {
         return Vec::new();
     };
-    let what = heading_word(f);
-    let (n, v) = (&f.name.text, &f.version);
-    let d = warning(
-        f,
-        span(&f.name),
-        if keyword {
-            tr!(
-                "生成した Go のコードでは、ファイルの別名 `{alias}` がパッケージの名前 `{pkg}` になり、Go はその名前を使えません",
-                "In the code generated for Go, the file's alias `{alias}` is the package `{pkg}`, a name Go cannot take"
-            )
-        } else {
-            tr!(
-                "生成した Go のコードでは、ファイルの別名 `{alias}` がパッケージの名前 `{pkg}` になり、ほかのパッケージから読み込めません",
-                "In the code generated for Go, the file's alias `{alias}` is the package `{pkg}`, which no other package can import"
-            )
-        },
-    )
-    .note(note)
-    .note(tr!(
-        "使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`{what} {n}(<別名>) v{v}`）。",
-        "For a target you do not generate, leave it. For one you do, give the file another alias (`{what} {n}(<alias>) v{v}`)."
-    ));
-    vec![Found { targets: vec![Target::Go], diag: d }]
+    let msg = if keyword {
+        tr!(
+            "生成した Go のコードでは、ファイルの別名 `{alias}` がパッケージの名前 `{pkg}` になり、Go はその名前を使えません",
+            "In the code generated for Go, the file's alias `{alias}` is the package `{pkg}`, a name Go cannot take"
+        )
+    } else {
+        tr!(
+            "生成した Go のコードでは、ファイルの別名 `{alias}` がパッケージの名前 `{pkg}` になり、ほかのパッケージから読み込めません",
+            "In the code generated for Go, the file's alias `{alias}` is the package `{pkg}`, which no other package can import"
+        )
+    };
+    vec![found(vec![Target::Go], f, span(&f.name), msg, vec![note], rename_file(f))]
 }
 
 /// Whether rustc's lint `non_snake_case` takes an alias as it is. An alias has no upper case
@@ -151,26 +199,43 @@ fn rust_module(f: &File) -> Vec<Found> {
     if rust_snake(alias) {
         return Vec::new();
     }
-    let what = heading_word(f);
-    let (n, v) = (&f.name.text, &f.version);
     let at = tr!(
         "モジュールを宣言する `mod {alias};`（`gen` がコードの横に書くランナーと、コードを使うクレートのもの）",
         "the `mod {alias};` that declares the module (in the runner `gen` writes beside the code, and in a crate that uses it)"
     );
-    let d = warning(
-        f,
-        span(&f.name),
-        tr!(
-            "生成した Rust のコードでは、ファイルの別名 `{alias}` がモジュールの名前になり、rustc が警告します",
-            "In the code generated for Rust, the file's alias `{alias}` is the module's name, which rustc warns of"
-        ),
-    )
-    .note(rust_lint(&at))
-    .note(tr!(
-        "使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`{what} {n}(<別名>) v{v}`）。",
-        "For a target you do not generate, leave it. For one you do, give the file another alias (`{what} {n}(<alias>) v{v}`)."
-    ));
-    vec![Found { targets: vec![Target::Rust], diag: d }]
+    let msg = tr!(
+        "生成した Rust のコードでは、ファイルの別名 `{alias}` がモジュールの名前になり、rustc が警告します",
+        "In the code generated for Rust, the file's alias `{alias}` is the module's name, which rustc warns of"
+    );
+    vec![found(vec![Target::Rust], f, span(&f.name), msg, vec![rust_lint(&at)], rename_file(f))]
+}
+
+/// Python: the module a file's code is, by the file's alias, when Python's standard library has a
+/// module of that name (`collections`, `site`). Python imports one module of a name, so either the
+/// generated functions cannot be called, or the generated module is what the program gets in place
+/// of the standard library's. The four the generated code imports itself are E009
+/// (`naming::MODULES`). A package of ritsu's holds the module under the package's name
+/// (`<package>.dates.collections`), where it breaks nothing, so only `gen`'s code is named.
+fn python_module(f: &File) -> Vec<Found> {
+    let Some(alias) = f.name.ascii().filter(|a| crate::ast::is_alias(a)) else { return Vec::new() };
+    if !PY_STDLIB.contains(&alias) {
+        return Vec::new();
+    }
+    let msg = tr!(
+        "生成した Python のコードでは、ファイルの別名 `{alias}` がモジュールの名前になり、Python の標準ライブラリに同じ名前のモジュールがあります",
+        "In the code generated for Python, the file's alias `{alias}` is the module's name, which a module of Python's standard library has"
+    );
+    let why = tr!(
+        "Python: Python は同じ名前のモジュールを一つしか読み込まず、`import {alias}` は先に読み込んだほうを返します。標準ライブラリの `{alias}` を読み込んだあとでは、生成した関数を呼べません。先に生成したモジュールを読み込むと、プログラムのどの `import {alias}` も、標準ライブラリのものの代わりに生成したモジュールを返します。",
+        "Python: Python keeps one module per name, and `import {alias}` gives the one imported first. Once the standard library's `{alias}` is imported, the generated functions cannot be called; imported before it, the generated module is what every `import {alias}` in the program gets in place of the standard library's."
+    );
+    let package = tr!(
+        "`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.dates.{alias}` として持つので、標準ライブラリのものとぶつかりません。",
+        "A package of `ritsu gen` holds the module as `<package>.dates.{alias}`, which does not meet the standard library's."
+    );
+    let mut v = found(vec![Target::Python], f, span(&f.name), msg, vec![why, package], rename_file(f));
+    v.in_package = false;
+    vec![v]
 }
 
 /// Rust and Wasm: a date whose function rustc warns of ([`rust_snake`]): its own (the alias), or
@@ -190,26 +255,16 @@ fn rust_functions(m: &Model) -> Vec<Found> {
         };
         let w = function_of(&name.text, &id, is_at);
         let t = &name.text;
-        let fix = if is_at {
-            tr!(
-                "使わない出力先なら、このままで構いません。使うなら、`_` で終わらない別名を付けてください（`{t}(<別名>)`）。",
-                "For a target you do not generate, leave it. For one you do, give the date an alias that does not end with `_` (`{t}(<alias>)`)."
-            )
+        let rename = if is_at {
+            tr!("`_` で終わらない別名を付けてください（`{t}(<別名>)`）", "give the date an alias that does not end with `_` (`{t}(<alias>)`)")
         } else {
-            fix_it(name)
+            rename_it(name)
         };
-        let d = warning(
-            &m.file,
-            span(name),
-            tr!(
-                "生成した Rust と Wasm のコードでは、`{id}` は rustc が警告する名前になります",
-                "In the code generated for Rust and Wasm, `{id}` is a name rustc warns of"
-            ),
-        )
-        .note(rust_lint(&w))
-        .note(wasm_too())
-        .note(fix);
-        out.push(Found { targets: vec![Target::Rust, Target::Wasm], diag: d });
+        let msg = tr!(
+            "生成した Rust と Wasm のコードでは、`{id}` は rustc が警告する名前になります",
+            "In the code generated for Rust and Wasm, `{id}` is a name rustc warns of"
+        );
+        out.push(found(vec![Target::Rust, Target::Wasm], &m.file, span(name), msg, vec![rust_lint(&w), wasm_too()], rename));
     }
     out
 }
@@ -234,18 +289,11 @@ fn rust_parameters(m: &Model) -> Vec<Found> {
             n.text,
             taker.en
         );
-        let d = warning(
-            &m.file,
-            span(n),
-            tr!(
-                "生成した Rust と Wasm のコードでは、`{id}` は rustc が警告する名前になります",
-                "In the code generated for Rust and Wasm, `{id}` is a name rustc warns of"
-            ),
-        )
-        .note(rust_lint(&what))
-        .note(wasm_too())
-        .note(fix_it(n));
-        out.push(Found { targets: vec![Target::Rust, Target::Wasm], diag: d });
+        let msg = tr!(
+            "生成した Rust と Wasm のコードでは、`{id}` は rustc が警告する名前になります",
+            "In the code generated for Rust and Wasm, `{id}` is a name rustc warns of"
+        );
+        out.push(found(vec![Target::Rust, Target::Wasm], &m.file, span(n), msg, vec![rust_lint(&what), wasm_too()], rename_it(n)));
     }
     out
 }
@@ -316,36 +364,27 @@ fn go_functions(m: &Model, fs: &[Function]) -> Vec<Found> {
             // One date's own two functions are never one: `<alias>_at` has an `At` the other lacks.
             let (x, y) = (first.what(), f.what());
             let l = span(first.name).line;
-            let d = warning(
-                &m.file,
-                span(f.name),
-                tr!(
-                    "`{}`（{l} 行目）と `{}` は、生成した Go のコードで同じ識別子になります",
-                    "`{}` (line {l}) and `{}` are one identifier in the code generated for Go",
-                    first.ident,
-                    f.ident
-                ),
-            )
-            .note(tr!(
+            let msg = tr!(
+                "`{}`（{l} 行目）と `{}` は、生成した Go のコードで同じ識別子になります",
+                "`{}` (line {l}) and `{}` are one identifier in the code generated for Go",
+                first.ident,
+                f.ident
+            );
+            let why = tr!(
                 "Go: 関数の名前は PascalCase で書くので、{}{}は、どちらも `{id}` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。",
                 "Go: a function is named in PascalCase, so {} and {} are both `{id}`: one package declares the name twice, which does not compile.",
                 then(&x.ja, "と"),
                 then(&y.ja, "");
                 x.en,
                 y.en
-            ))
-            .note(fix_one_of_two(f.name));
-            out.push(Found { targets: vec![Target::Go], diag: d });
+            );
+            out.push(found(vec![Target::Go], &m.file, span(f.name), msg, vec![why], rename_one_of_two(f.name)));
             continue;
         }
         if let Some((_, own)) = go_own(m).into_iter().find(|(n, _)| *n == id) {
             let w = f.what();
-            let d = warning(
-                &m.file,
-                span(f.name),
-                tr!("`{}` は、生成した Go のコードが自分で使う名前と同じになります", "`{}` takes a name the code generated for Go uses itself", f.ident),
-            )
-            .note(tr!(
+            let msg = tr!("`{}` は、生成した Go のコードが自分で使う名前と同じになります", "`{}` takes a name the code generated for Go uses itself", f.ident);
+            let why = tr!(
                 "Go: {}{}も、PascalCase で書くと `{id}` です。同じ名前を一つのパッケージに二度宣言することになり、{}",
                 "Go: {}, and in PascalCase {} is `{id}` as well: one package declares the name twice, {}",
                 own.ja,
@@ -354,9 +393,8 @@ fn go_functions(m: &Model, fs: &[Function]) -> Vec<Found> {
                 own.en,
                 w.en,
                 if id == "TestMain" { "so `go test` and `go vet` do not compile it." } else { "which does not compile." }
-            ))
-            .note(fix_it(f.name));
-            out.push(Found { targets: vec![Target::Go], diag: d });
+            );
+            out.push(found(vec![Target::Go], &m.file, span(f.name), msg, vec![why], rename_it(f.name)));
         }
     }
     out
@@ -413,27 +451,22 @@ fn pg_functions(m: &Model, fs: &[Function]) -> Vec<Found> {
             )
         };
         let t = &f.name.text;
-        let fix = if one_date {
-            tr!(
-                "使わない出力先なら、このままで構いません。使うなら、62 バイトまでの別名を付けてください（`{t}(<別名>)`）。",
-                "For a target you do not generate, leave it. For one you do, give the date an alias of 62 bytes or fewer (`{t}(<alias>)`)."
-            )
+        let rename = if one_date {
+            tr!("62 バイトまでの別名を付けてください（`{t}(<別名>)`）", "give the date an alias of 62 bytes or fewer (`{t}(<alias>)`)")
         } else {
-            fix_one_of_two(f.name)
+            rename_one_of_two(f.name)
         };
-        let d = warning(&m.file, span(f.name), heading)
-            .note(tr!(
-                "PostgreSQL: 名前は先頭の 63 バイトしか残らないので、{}{}は、どちらも `{cut}` です。引数の型も同じなので、{}",
-                "PostgreSQL: a name keeps its first 63 bytes, so {} and {} are both `{cut}`, and they take the same types: {}",
-                then(&x.ja, "と"),
-                then(&y.ja, ""),
-                how.ja;
-                x.en,
-                y.en,
-                how.en
-            ))
-            .note(fix);
-        out.push(Found { targets: vec![Target::Sql], diag: d });
+        let why = tr!(
+            "PostgreSQL: 名前は先頭の 63 バイトしか残らないので、{}{}は、どちらも `{cut}` です。引数の型も同じなので、{}",
+            "PostgreSQL: a name keeps its first 63 bytes, so {} and {} are both `{cut}`, and they take the same types: {}",
+            then(&x.ja, "と"),
+            then(&y.ja, ""),
+            how.ja;
+            x.en,
+            y.en,
+            how.en
+        );
+        out.push(found(vec![Target::Sql], &m.file, span(f.name), heading, vec![why], rename));
     }
     out
 }
@@ -451,17 +484,13 @@ fn pg_parameters(m: &Model) -> Vec<Found> {
             let cut = pg(&b.alias);
             let taker = function_of(&m.dates[k].name, &m.dates[k].alias, false);
             let l = span(an).line;
-            let d = warning(
-                &m.file,
-                span(bn),
-                tr!(
-                    "`{}`（{l} 行目）と `{}` は、生成した PostgreSQL のコードで同じ識別子になります",
-                    "`{}` (line {l}) and `{}` are one identifier in the code generated for PostgreSQL",
-                    a.alias,
-                    b.alias
-                ),
-            )
-            .note(tr!(
+            let msg = tr!(
+                "`{}`（{l} 行目）と `{}` は、生成した PostgreSQL のコードで同じ識別子になります",
+                "`{}` (line {l}) and `{}` are one identifier in the code generated for PostgreSQL",
+                a.alias,
+                b.alias
+            );
+            let why = tr!(
                 "PostgreSQL: 名前は先頭の 63 バイトしか残らないので、入力「{}」と入力「{}」の引数は、どちらも `{cut}` です。{}両方を取るので、その関数を作るところで PostgreSQL が止まり（`parameter name used more than once`）、SQL のファイルを読み込めません。",
                 "PostgreSQL: a name keeps its first 63 bytes, so the parameters of the inputs {} and {} are both `{cut}`, and {} takes both: PostgreSQL stops at it (`parameter name used more than once`), and the SQL file does not load.",
                 an.text,
@@ -470,9 +499,8 @@ fn pg_parameters(m: &Model) -> Vec<Found> {
                 an.text,
                 bn.text,
                 taker.en
-            ))
-            .note(fix_one_of_two(bn));
-            out.push(Found { targets: vec![Target::Sql], diag: d });
+            );
+            out.push(found(vec![Target::Sql], &m.file, span(bn), msg, vec![why], rename_one_of_two(bn)));
         }
     }
     out
@@ -493,20 +521,14 @@ fn warning(f: &File, s: Span, msg: Text) -> Diag {
     Diag::warning("W001", &f.path, s.line, s.col, msg).source(&f.src)
 }
 
-/// The last note of two names that are one: leave it, or give one another alias.
-fn fix_one_of_two(n: &Name) -> Text {
+/// What to change when two names are one: one of them.
+fn rename_one_of_two(n: &Name) -> Text {
     let t = &n.text;
-    tr!(
-        "使わない出力先なら、このままで構いません。使うなら、どちらかに別の別名を付けてください（`{t}(<別名>)`）。",
-        "For a target you do not generate, leave it. For one you do, give one of the two another alias (`{t}(<alias>)`)."
-    )
+    tr!("どちらかに別の別名を付けてください（`{t}(<別名>)`）", "give one of the two another alias (`{t}(<alias>)`)")
 }
 
-/// The last note of a name a target cannot take: leave it, or give it another alias.
-fn fix_it(n: &Name) -> Text {
+/// What to change when a target cannot take a name: the name's alias.
+fn rename_it(n: &Name) -> Text {
     let t = &n.text;
-    tr!(
-        "使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`{t}(<別名>)`）。",
-        "For a target you do not generate, leave it. For one you do, give it another alias (`{t}(<alias>)`)."
-    )
+    tr!("別の別名を付けてください（`{t}(<別名>)`）", "give it another alias (`{t}(<alias>)`)")
 }

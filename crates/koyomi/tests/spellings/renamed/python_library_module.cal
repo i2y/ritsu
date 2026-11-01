@@ -1,0 +1,8 @@
+dates abc(abc_dates) v1
+description "The same file as ../python_library_module.cal, with the alias the note of its W001 gives; check says nothing, and every target takes it"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date due = received
+  + 30 days

@@ -1,0 +1,5 @@
+error[E016]: tests/mutants/E016_RustとWasm.cal:7:11: In the code generated for Rust and Wasm, `ship__by` is a name rustc warns of
+     7 | date 出荷期限(ship__by) = 注文日
+  = Rust: rustc's lint `non_snake_case` warns of a name with two `_` in a row, so a build with `-D warnings` (warnings as errors) stops at the function of 出荷期限 (`ship__by`).
+  = Wasm: the module is built from the same Rust code, and stops at the same place.
+  = Give it another alias (`出荷期限(<alias>)`). For a target you do not use, pick the one you use with `--target`.
