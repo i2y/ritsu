@@ -1,0 +1,10 @@
+dates PostgreSQLの時刻の関数(postgresql_time_function_ja) v1
+description "時刻があり、別名が 72 バイトの日付。PostgreSQL では、その関数と時刻の関数が同じ 63 バイトになり、引数の型も同じなので、後の関数を作るところで止まる（W001）。ほかの出力先は、そのままで使える"
+use calendar "../fixtures/calendars/土日.cal"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 春の催しの注文を取り消せる最後の時(the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026) = 注文日
+  + 2 business days
+  at 12:00

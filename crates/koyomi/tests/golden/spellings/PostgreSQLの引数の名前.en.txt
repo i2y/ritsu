@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/PostgreSQLの引数の名前.cal:12:21: `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_online` (line 9) and `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone` are one identifier in the code generated for PostgreSQL
+    12 | date 春の催しの電話の注文を送る日(the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone) = 受領日
+  = PostgreSQL: a name keeps its first 63 bytes, so the function of 春の催しのネットの注文を送る日 (`the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_online`) and the function of 春の催しの電話の注文を送る日 (`the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone`) are both `the_day_an_order_placed_during_the_spring_campaign_of_2026_ship`, and they take the same types: PostgreSQL stops at the second (`cannot change name of input parameter`), and the SQL file does not load.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`春の催しの電話の注文を送る日(<alias>)`).
+tests/spellings/PostgreSQLの引数の名前.cal: ok — every date computes on all 496 combinations of 受領日 (2026-01-01..2026-01-31), ネットの日数 (0..3) and 電話の日数 (0..3)

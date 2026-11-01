@@ -1,0 +1,5 @@
+warning[W001]: tests/mutants/W001_one_function_in_go.cal:11:6: `closing` (line 8) and `closing_` are one identifier in the code generated for Go
+    11 | date closing_ = received
+  = Go: a function is named in PascalCase, so the function of the date closing and the function of the date closing_ are both `Closing`: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`closing_(<alias>)`).
+tests/mutants/W001_one_function_in_go.cal: ok — 3 claims hold on all 1,055 days of received (2026-01-01..2028-11-20); 2 examples match

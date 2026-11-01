@@ -1,0 +1,12 @@
+dates go_functions v1
+description "Two dates whose aliases differ only in an underscore. Go names a function in PascalCase, so both are Net30 there, and the Go code does not compile (W001). Every other target takes them as they are"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date net_30 = received
+  + 30 days
+
+date net30 = received
+  close end of month
+  + 30 days

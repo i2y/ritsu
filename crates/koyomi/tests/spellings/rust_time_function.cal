@@ -1,0 +1,10 @@
+dates rust_time_function v1
+description "A date with a time, whose alias ends with an underscore. The function of its time is cutoff__at, with two underscores in a row, which rustc's lint non_snake_case warns of, so the Rust code and the Wasm module do not build with -D warnings (W001). Every other target takes it as it is"
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2026-01-31
+
+date cutoff_ = ordered
+  roll following
+  at 17:00

@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_date_type.cal:7:6: `date_` takes a name the code generated for Go uses itself
+     7 | date date_ = received
+  = Go: the generated code declares `Date`, the type of a date, and in PascalCase the function of the date date_ is `Date` as well: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`date_(<alias>)`).
+tests/spellings/go_date_type.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

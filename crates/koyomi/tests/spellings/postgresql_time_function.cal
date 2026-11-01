@@ -1,0 +1,10 @@
+dates postgresql_time_function v1
+description "A date with a time and an alias of 72 bytes. In PostgreSQL its function and the function of its time keep the same 63 bytes and take the same types, so PostgreSQL stops at the second (W001). Every other target takes them as they are"
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2026-01-31
+
+date the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026 = ordered
+  + 2 business days
+  at 12:00

@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_functions.cal:10:6: `net_30` (line 7) and `net30` are one identifier in the code generated for Go
+    10 | date net30 = received
+  = Go: a function is named in PascalCase, so the function of the date net_30 and the function of the date net30 are both `Net30`: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`net30(<alias>)`).
+tests/spellings/go_functions.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

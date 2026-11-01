@@ -34,4 +34,6 @@ pub mod run;
 pub mod sjis;
 pub mod sjis_table;
 pub mod sources;
+/// The names a file writes that a target spells as one identifier, or cannot take (W001).
+pub mod spellings;
 pub mod vectors;

@@ -1,0 +1,6 @@
+warning[W001]: tests/spellings/Rustの時刻の関数.cal:8:11: In the code generated for Rust and Wasm, `cutoff__at` is a name rustc warns of
+     8 | date 締め切り(cutoff_) = 注文日
+  = Rust: rustc's lint `non_snake_case` warns of a name with two `_` in a row, so a build with `-D warnings` (warnings as errors) stops at the function of the time of 締め切り (`cutoff__at`).
+  = Wasm: the module is built from the same Rust code, and stops at the same place.
+  = For a target you do not generate, leave it. For one you do, give the date an alias that does not end with `_` (`締め切り(<alias>)`).
+tests/spellings/Rustの時刻の関数.cal: ok — every date computes on all 31 days of 注文日 (2026-01-01..2026-01-31)

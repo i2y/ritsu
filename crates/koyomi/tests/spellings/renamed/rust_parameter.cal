@@ -1,0 +1,8 @@
+dates rust_parameter_renamed v1
+description "The same file as ../rust_parameter.cal, with the alias the note of its W001 gives; check says nothing, and every target takes it. Its own alias differs from the other file's only so that the two go through the targets side by side"
+
+inputs
+  ordered__on(ordered_on) : date  range >=2026-01-01 <=2026-01-31
+
+date ship_by = ordered__on
+  + 3 days

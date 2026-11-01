@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/GoのTestMain.cal:7:12: `test_main` は、生成した Go のコードが自分で使う名前と同じになります
+     7 | date 本試験の日(test_main) = 受領日
+  = Go: ランナー（`<パッケージ名>_runner_test.go`）は `TestMain` を宣言します。日付「本試験の日」の関数 `test_main` も、PascalCase で書くと `TestMain` です。同じ名前を一つのパッケージに二度宣言することになり、`go test` と `go vet` が通りません。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`本試験の日(<別名>)`）。
+tests/spellings/GoのTestMain.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

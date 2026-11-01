@@ -1,0 +1,12 @@
+dates Goの関数(go_functions_ja_renamed) v1
+description "../Goの関数.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える。ファイルの別名は、二つのファイルを同じ出力先に並べて通すためだけに変えてある"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 受領から30日(net_30) = 受領日
+  + 30 days
+
+date 月末から30日(net30_eom) = 受領日
+  close end of month
+  + 30 days

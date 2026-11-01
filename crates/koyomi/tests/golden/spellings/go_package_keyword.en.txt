@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_package_keyword.cal:1:7: In the code generated for Go, the file's alias `go_to` is the package `goto`, a name Go cannot take
+     1 | dates go_to v1
+  = Go: a package is named by the file's alias without its `_`, so it is `goto`, a keyword of Go, which cannot name a package: the code does not compile.
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates go_to(<alias>) v1`).
+tests/spellings/go_package_keyword.cal: ok — every date computes on all 31 days of booked (2026-01-01..2026-01-31)

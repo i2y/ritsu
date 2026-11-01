@@ -1,0 +1,8 @@
+dates Rustの引数(rust_parameter_ja_renamed) v1
+description "../Rustの引数.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える。ファイルの別名は、二つのファイルを同じ出力先に並べて通すためだけに変えてある"
+
+inputs
+  注文日(ordered_on) : date  range >=2026-01-01 <=2026-01-31
+
+date 出荷期限(ship_by) = 注文日
+  + 3 days

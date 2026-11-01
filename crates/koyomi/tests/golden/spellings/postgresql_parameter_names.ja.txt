@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/postgresql_parameter_names.cal:12:6: `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_online`（9 行目）と `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone` は、生成した PostgreSQL のコードで同じ識別子になります
+    12 | date the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone = received
+  = PostgreSQL: 名前は先頭の 63 バイトしか残らないので、日付「the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_online」の関数と日付「the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone」の関数は、どちらも `the_day_an_order_placed_during_the_spring_campaign_of_2026_ship` です。引数の型も同じなので、後の関数を作るところで PostgreSQL が止まり（`cannot change name of input parameter`）、SQL のファイルを読み込めません。
+  = 使わない出力先なら、このままで構いません。使うなら、どちらかに別の別名を付けてください（`the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_phone(<別名>)`）。
+tests/spellings/postgresql_parameter_names.cal: ok — received 2026-01-01〜2026-01-31、days_online 0〜3、days_by_phone 0〜3 の 496 通りのすべてで、どの日付も計算できます

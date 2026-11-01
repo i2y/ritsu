@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/Goの関数.cal:10:14: `net_30` (line 7) and `net30` are one identifier in the code generated for Go
+    10 | date 月末から30日(net30) = 受領日
+  = Go: a function is named in PascalCase, so the function of 受領から30日 (`net_30`) and the function of 月末から30日 (`net30`) are both `Net30`: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`月末から30日(<alias>)`).
+tests/spellings/Goの関数.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

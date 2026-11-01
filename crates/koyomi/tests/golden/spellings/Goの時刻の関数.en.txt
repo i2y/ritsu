@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/Goの時刻の関数.cal:12:13: `cutoff_at` (line 8) and `cutoff_at_` are one identifier in the code generated for Go
+    12 | date 次の締め切り(cutoff_at_) = 注文日
+  = Go: a function is named in PascalCase, so the function of the time of 締め切り (`cutoff_at`) and the function of 次の締め切り (`cutoff_at_`) are both `CutoffAt`: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`次の締め切り(<alias>)`).
+tests/spellings/Goの時刻の関数.cal: ok — every date computes on all 31 days of 注文日 (2026-01-01..2026-01-31)

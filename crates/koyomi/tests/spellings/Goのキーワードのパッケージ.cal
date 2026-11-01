@@ -1,0 +1,8 @@
+dates 訪問(go_to_) v1
+description "別名から _ を除くと goto になるファイル。Go のパッケージの名前が Go のキーワードになるので、Go のコードはコンパイルできない（W001）。ほかの出力先は、別名をそのままで使える"
+
+inputs
+  予約日(booked) : date  range >=2026-01-01 <=2026-01-31
+
+date 訪問日(visit) = 予約日
+  + 14 days

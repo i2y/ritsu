@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/GoのTestMain.cal:7:12: `test_main` takes a name the code generated for Go uses itself
+     7 | date 本試験の日(test_main) = 受領日
+  = Go: the runner (`<package>_runner_test.go`) declares `TestMain`, and in PascalCase the function of 本試験の日 (`test_main`) is `TestMain` as well: one package declares the name twice, so `go test` and `go vet` do not compile it.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`本試験の日(<alias>)`).
+tests/spellings/GoのTestMain.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

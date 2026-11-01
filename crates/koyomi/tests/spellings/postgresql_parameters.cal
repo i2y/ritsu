@@ -1,0 +1,11 @@
+dates postgresql_parameters v1
+description "Two inputs whose aliases share their first 63 bytes, both taken by one date. In PostgreSQL the function would have two parameters of one name, so PostgreSQL stops at it (W001). Every other target takes them as they are"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+  days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_online   : int  range >=0 <=3
+  days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone : int  range >=0 <=3
+
+date ships = received
+  + days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_online days
+  + days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone days

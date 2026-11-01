@@ -4,7 +4,8 @@
 //! 0. The keys written in the file, in its strings and its comments alike (W901, ritsu's
 //!    DESIGN 16.3). They stop nothing.
 //! 1. Words and lines (E001–E006).
-//! 2. Names and types, with the calendar a file uses (E007–E015, E304).
+//! 2. Names and types, with the calendar a file uses (E007–E015, E304), and the names a target
+//!    spells as one identifier or cannot take (W001).
 //! 3. The calendar and the sources (E101–E111, W101, W102).
 //! 4. What is decided by what is written (E201, W201, W202).
 //! 5. Every input of the range, one by one: the computations (E202–E204), then the claims
@@ -139,6 +140,9 @@ pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader
             let p = PathBuf::from(path);
             let (cal, mut ds) = loader.build(&f, &p, bytes);
             diags.append(&mut ds);
+            if !diags.iter().any(|d| d.is_error()) {
+                diags.extend(crate::spellings::check_file_alias(&f));
+            }
             let ok = cal.as_ref().filter(|_| !diags.iter().any(|d| d.is_error())).map(calendar_summary);
             Outcome { path: path.into(), diags, checked: cal.map(|c| Checked::Calendar(Box::new(c))), ok }
         }
@@ -208,6 +212,9 @@ fn prepare_file(f: File, path: &str, bytes: &[u8], loader: &mut Loader, opts: &O
     if diags.iter().any(|d| d.is_error()) {
         return Err(diags);
     }
+    // Still stage 2: the names as the targets spell them, once the calendar says whether the code
+    // has `is_open` (W001).
+    diags.extend(crate::spellings::check(&m));
     // Stage 3: the file's own laws, and what needs the calendar.
     let origin = Origin { file: &m.file, dir: &dir };
     let (laws, mut ds) = sources::check_laws(&origin);

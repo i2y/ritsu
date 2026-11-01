@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/postgresql_parameters.cal:7:3: `days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_online`（6 行目）と `days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone` は、生成した PostgreSQL のコードで同じ識別子になります
+     7 |   days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone : int  range >=0 <=3
+  = PostgreSQL: 名前は先頭の 63 バイトしか残らないので、入力「days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_online」と入力「days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone」の引数は、どちらも `days_to_wait_for_an_order_placed_during_the_spring_campaign_of_` です。日付「ships」の関数が両方を取るので、その関数を作るところで PostgreSQL が止まり（`parameter name used more than once`）、SQL のファイルを読み込めません。
+  = 使わない出力先なら、このままで構いません。使うなら、どちらかに別の別名を付けてください（`days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone(<別名>)`）。
+tests/spellings/postgresql_parameters.cal: ok — received 2026-01-01〜2026-01-31、days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_online 0〜3、days_to_wait_for_an_order_placed_during_the_spring_campaign_of_2026_by_phone 0〜3 の 496 通りのすべてで、どの日付も計算できます

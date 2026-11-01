@@ -1,0 +1,14 @@
+dates go_time_function v1
+description "A date with a time, and a date whose alias is the time's function with an underscore at its end. Go spells cutoff_at and cutoff_at_ alike, CutoffAt, so the Go code does not compile (W001). Every other target takes them as they are"
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2026-01-31
+
+date cutoff = ordered
+  roll following
+  at 17:00
+
+date cutoff_at_ = ordered
+  + 1 day
+  roll following

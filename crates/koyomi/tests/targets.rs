@@ -6,6 +6,11 @@
 //! interpreter gives. What the Wasm module answers as JSON, and the component the `.wit` makes
 //! of it, are tests/wasm.rs's.
 //!
+//! The files of `tests/spellings/` (DESIGN 15) go through the targets too: each through the
+//! targets its W001 does not name, its renamed one (the alias the note gives) through all six, and
+//! each through the ones it names, which have to stop where `common::SPELLING_FILES` says, or load
+//! and answer wrongly (`breaks_go`, `breaks_sql`, `breaks_rust`, `breaks_wasm`).
+//!
 //! The vectors are made in this process and piped to the runner as they are made; nothing as
 //! large as them is written to disk. A tool that is missing prints `SKIP:` and the test passes
 //! (ritsu-testkit's: the tools are found, the runners run and PostgreSQL is started by it).
@@ -37,22 +42,46 @@ const LIMIT: Duration = Duration::from_secs(900);
 const AT_ONCE: usize = 4;
 
 struct Subject {
-    path: &'static str,
+    path: String,
     checked: Checked,
     alias: String,
 }
 
-fn subjects() -> Vec<Subject> {
-    FILES
-        .iter()
-        .map(|p| {
-            let mut o = check(p).unwrap();
-            assert!(!o.has_errors(), "{p} passes check");
-            let checked = o.checked.take().unwrap();
-            let alias = codegen::unit_of(&checked, Lang::En).alias;
-            Subject { path: p, checked, alias }
-        })
-        .collect()
+fn subject(p: &str) -> Subject {
+    let mut o = check(p).unwrap();
+    assert!(!o.has_errors(), "{p} passes check");
+    let checked = o.checked.take().unwrap();
+    let alias = codegen::unit_of(&checked, Lang::En).alias;
+    Subject { path: p.to_string(), checked, alias }
+}
+
+/// The targets a subject's W001 names (DESIGN 15).
+fn named(s: &Subject) -> Vec<Target> {
+    match &s.checked {
+        Checked::Dates(m, _) => koyomi::spellings::find(m).into_iter().flat_map(|f| f.targets).collect(),
+        Checked::Calendar(_) => Vec::new(),
+    }
+}
+
+/// What `t` is held to: every file of `FILES`, the files of tests/spellings whose W001 does not
+/// name `t`, and every renamed one.
+fn subjects(t: Target) -> Vec<Subject> {
+    let mut v: Vec<Subject> = FILES.iter().map(|p| subject(p)).collect();
+    for (p, _) in common::SPELLING_FILES {
+        let s = subject(p);
+        let n = named(&s);
+        assert!(!n.is_empty(), "{p} gives W001");
+        if !n.contains(&t) {
+            v.push(s);
+        }
+        v.push(subject(&common::renamed(p)));
+    }
+    v
+}
+
+/// The files of tests/spellings whose W001 names `t`, with what its tool says of each.
+fn broken(t: Target) -> Vec<(Subject, &'static str)> {
+    common::SPELLING_FILES.iter().map(|(p, says)| (subject(p), *says)).filter(|(s, _)| named(s).contains(&t)).collect()
 }
 
 /// Write each subject's code for `t` under `dir`, its comments and messages in `lang`.
@@ -156,7 +185,7 @@ const JA_FILES: &[&str] = &[
 
 /// Run the `--lang ja` runners of `JA_FILES` and fail if one disagrees.
 fn compare_ja(target: &str, ss: &[Subject], job: impl Fn(&Subject) -> Command + Sync) {
-    for s in ss.iter().filter(|s| JA_FILES.contains(&s.path)) {
+    for s in ss.iter().filter(|s| JA_FILES.contains(&s.path.as_str())) {
         match compare(s, job(s)) {
             Ok(n) => println!("{target} --lang ja: {} agrees on its {n} lines", s.path),
             Err(e) => panic!("{target}'s --lang ja code disagrees with the reference interpreter:\n{e}"),
@@ -203,7 +232,7 @@ fn typescript() {
         skip("node is not on the PATH; the TypeScript target is not run");
         return;
     }
-    let ss = subjects();
+    let ss = subjects(Target::TypeScript);
     let (dir, ja) = (TempDir::new("ts"), TempDir::new("ts-ja"));
     for (d, lang) in [(&dir, Lang::En), (&ja, Lang::Ja)] {
         generate(d.path(), Target::TypeScript, &ss, lang);
@@ -248,7 +277,7 @@ fn python() {
         skip("python3 is not on the PATH; the Python target is not run");
         return;
     }
-    let ss = subjects();
+    let ss = subjects(Target::Python);
     let (dir, ja) = (TempDir::new("py"), TempDir::new("py-ja"));
     generate(dir.path(), Target::Python, &ss, Lang::En);
     generate(ja.path(), Target::Python, &ss, Lang::Ja);
@@ -285,7 +314,7 @@ fn go() {
         skip("go or gofmt is not on the PATH; the Go target is not run");
         return;
     }
-    let ss = subjects();
+    let ss = subjects(Target::Go);
     let (dir, ja) = (TempDir::new("go"), TempDir::new("go-ja"));
     println!("go: {}", version("go", "version"));
     for (d, lang) in [(&dir, Lang::En), (&ja, Lang::Ja)] {
@@ -311,6 +340,31 @@ fn go() {
     };
     compare_all("go", &ss, |s| runner(&dir, s));
     compare_ja("go", &ss, |s| runner(&ja, s));
+    breaks_go();
+}
+
+/// Each file of tests/spellings whose W001 names Go, generated alone: `go vet` stops where
+/// `common::SPELLING_FILES` says. A package named `main` is vetted with a package that imports
+/// it, since a program is what Go makes of it.
+fn breaks_go() {
+    let bs = broken(Target::Go);
+    for (s, says) in &bs {
+        let d = TempDir::new("go-breaks");
+        generate(d.path(), Target::Go, std::slice::from_ref(s), Lang::En);
+        std::fs::write(d.path().join("go.mod"), "module koyomigenerated\n\ngo 1.21\n").unwrap();
+        let pkg = go_package(&s.alias);
+        if pkg == "main" {
+            std::fs::create_dir_all(d.path().join("uses")).unwrap();
+            let f = codegen::unit_of(&s.checked, Lang::En);
+            let first = koyomi::naming::pascal(&f.dates[0].alias);
+            std::fs::write(d.path().join("uses/uses.go"), format!("package uses\n\nimport k \"koyomigenerated/go/main\"\n\nvar _ = k.{first}\n")).unwrap();
+        }
+        let r = run(Command::new("go").args(["vet", "-trimpath", "./..."]).current_dir(d.path()).env("GOTOOLCHAIN", "local").env("GOPROXY", "off").env("GOFLAGS", "-mod=mod"), LIMIT);
+        let said = format!("{}{}", r.stdout, r.stderr);
+        assert!(!r.ok && said.contains(says), "{}: go vet was to stop with {says:?}, and said:\n{said}", s.path);
+        println!("go: {} stops go vet ({says})", s.path);
+    }
+    assert!(bs.len() >= 12, "{} files of tests/spellings name Go", bs.len());
 }
 
 #[test]
@@ -322,7 +376,7 @@ fn rust() {
         skip("rustc is not on the PATH; the Rust target is not run");
         return;
     }
-    let ss = subjects();
+    let ss = subjects(Target::Rust);
     let (dir, ja) = (TempDir::new("rs"), TempDir::new("rs-ja"));
     println!("rust: {}", version("rustc", "--version"));
     for (d, lang) in [(&dir, Lang::En), (&ja, Lang::Ja)] {
@@ -340,7 +394,7 @@ fn rust() {
                         let r = run(Command::new("rustc").args(["--edition", e, "--crate-type", "lib", "-D", "warnings", "--emit=metadata", "--out-dir"]).arg(out.join(e)).arg(&src), LIMIT);
                         ok_or_fail(&format!("rustc --edition {e} {}", s.path), &r);
                     }
-                    if lang == Lang::Ja && !JA_FILES.contains(&s.path) {
+                    if lang == Lang::Ja && !JA_FILES.contains(&s.path.as_str()) {
                         return;
                     }
                     let r = run(
@@ -358,6 +412,27 @@ fn rust() {
     println!("rust: every module builds on the 2021 and 2024 editions with -D warnings, in English and in Japanese");
     compare_all("rust", &ss, |s| Command::new(dir.path().join(format!("rust/out/{}_runner", s.alias))));
     compare_ja("rust", &ss, |s| Command::new(ja.path().join(format!("rust/out/{}_runner", s.alias))));
+    breaks_rust();
+}
+
+/// Each file of tests/spellings whose W001 names Rust, generated alone, its runner (which declares
+/// the module by the file's alias) checked with the module: rustc warns where
+/// `common::SPELLING_FILES` says, and with `-D warnings` stops there.
+fn breaks_rust() {
+    let bs = broken(Target::Rust);
+    for (s, says) in &bs {
+        let d = TempDir::new("rs-breaks");
+        generate(d.path(), Target::Rust, std::slice::from_ref(s), Lang::En);
+        let runner = d.path().join(format!("rust/{}_runner.rs", s.alias));
+        let out = d.path().join("rust/out");
+        let warns = run(Command::new("rustc").args(["--edition", "2021", "--emit=metadata", "--out-dir"]).arg(&out).arg(&runner), LIMIT);
+        assert!(warns.ok && warns.stderr.contains(says), "{}: rustc was to warn with {says:?}, and said:\n{}", s.path, warns.stderr);
+        let r = run(Command::new("rustc").args(["--edition", "2021", "-D", "warnings", "--emit=metadata", "--out-dir"]).arg(&out).arg(&runner), LIMIT);
+        let said = format!("{}{}", r.stdout, r.stderr);
+        assert!(!r.ok && said.contains(says), "{}: rustc -D warnings was to stop with {says:?}, and said:\n{said}", s.path);
+        println!("rust: {} builds with a warning, and stops rustc -D warnings ({says})", s.path);
+    }
+    assert!(bs.len() >= 8, "{} files of tests/spellings name Rust", bs.len());
 }
 
 #[test]
@@ -369,7 +444,7 @@ fn sql() {
         skip(&format!("{why}; the SQL target is not run"));
         return;
     }
-    let ss = subjects();
+    let ss = subjects(Target::Sql);
     let (dir, ja) = (TempDir::new("sql"), TempDir::new("sql-ja"));
     generate(dir.path(), Target::Sql, &ss, Lang::En);
     generate(ja.path(), Target::Sql, &ss, Lang::Ja);
@@ -394,6 +469,35 @@ fn sql() {
     };
     compare_all("sql", &ss, |s| runner(&dir, "postgres", s));
     compare_ja("sql", &ss, |s| runner(&ja, "ja", s));
+    breaks_sql(&cluster);
+}
+
+/// Each file of tests/spellings whose W001 names PostgreSQL, generated alone and loaded into a
+/// database of its own: PostgreSQL stops where `common::SPELLING_FILES` says, or, when it says
+/// nothing, the file loads and its runner disagrees with the reference interpreter.
+fn breaks_sql(cluster: &Postgres) {
+    let bs = broken(Target::Sql);
+    for (k, (s, says)) in bs.iter().enumerate() {
+        let d = TempDir::new("sql-breaks");
+        generate(d.path(), Target::Sql, std::slice::from_ref(s), Lang::En);
+        let db = format!("breaks{k}");
+        ok_or_fail(&format!("CREATE DATABASE {db}"), &run(cluster.psql("postgres").args(["-c", &format!("CREATE DATABASE {db}")]), LIMIT));
+        let r = run(cluster.psql(&db).arg("-f").arg(d.path().join(format!("sql/{}.sql", s.alias))), LIMIT);
+        if says.is_empty() {
+            ok_or_fail(&format!("psql -f {}.sql", s.alias), &r);
+            let mut c = cluster.psql(&db);
+            c.arg("-f").arg(d.path().join(format!("sql/{}_runner.sql", s.alias)));
+            let e = compare(s, c).expect_err(&format!("{}: the runner was to disagree with the reference interpreter", s.path));
+            let head = e.lines().next().unwrap_or("");
+            assert!(head.contains("(exit ok: true)") && !head.contains(": 0 lines differ"), "{}: the runner was to answer wrongly, not fail:\n{e}", s.path);
+            println!("sql: {} loads, and its runner disagrees ({head})", s.path);
+        } else {
+            let said = format!("{}{}", r.stdout, r.stderr);
+            assert!(!r.ok && said.contains(says), "{}: PostgreSQL was to stop with {says:?}, and said:\n{said}", s.path);
+            println!("sql: {} stops PostgreSQL ({says})", s.path);
+        }
+    }
+    assert!(bs.len() >= 8, "{} files of tests/spellings name PostgreSQL", bs.len());
 }
 
 #[test]
@@ -409,7 +513,7 @@ fn wasm() {
         skip("node is not on the PATH; the Wasm target is not run");
         return;
     }
-    let ss = subjects();
+    let ss = subjects(Target::Wasm);
     let (dir, ja) = (TempDir::new("wasm"), TempDir::new("wasm-ja"));
     println!("wasm: {}, node {}", version("rustc", "--version"), version("node", "--version"));
     for (d, lang) in [(&dir, Lang::En), (&ja, Lang::Ja)] {
@@ -428,7 +532,7 @@ fn wasm() {
                         let mut c = Command::new("rustc");
                         c.current_dir(&w).args(["--edition", "2024", "-D", "warnings", "--target", "wasm32-unknown-unknown", "--crate-type", "cdylib", "--emit=metadata", "--out-dir", "meta"]).arg(&root);
                         ok_or_fail(&format!("rustc --edition 2024 {root}"), &run(&mut c, LIMIT));
-                        if lang == Lang::Ja && !JA_FILES.contains(&s.path) {
+                        if lang == Lang::Ja && !JA_FILES.contains(&s.path.as_str()) {
                             continue;
                         }
                         let line = wasm::build_line(&s.alias);
@@ -449,4 +553,24 @@ fn wasm() {
     };
     compare_all("wasm", &ss, |s| runner(&dir, s));
     compare_ja("wasm", &ss, |s| runner(&ja, s));
+    breaks_wasm();
+}
+
+/// Each file of tests/spellings whose W001 names Wasm, generated alone: checking its crate root on
+/// the 2024 edition with `-D warnings` stops where `common::SPELLING_FILES` says.
+fn breaks_wasm() {
+    let bs = broken(Target::Wasm);
+    for (s, says) in &bs {
+        let d = TempDir::new("wasm-breaks");
+        generate(d.path(), Target::Wasm, std::slice::from_ref(s), Lang::En);
+        let mut c = Command::new("rustc");
+        c.current_dir(d.path().join("wasm"))
+            .args(["--edition", "2024", "-D", "warnings", "--target", "wasm32-unknown-unknown", "--crate-type", "cdylib", "--emit=metadata", "--out-dir", "meta"])
+            .arg(format!("{}_wasm.rs", s.alias));
+        let r = run(&mut c, LIMIT);
+        let said = format!("{}{}", r.stdout, r.stderr);
+        assert!(!r.ok && said.contains(says), "{}: rustc -D warnings was to stop with {says:?}, and said:\n{said}", s.path);
+        println!("wasm: {} stops rustc -D warnings ({says})", s.path);
+    }
+    assert!(bs.len() >= 6, "{} files of tests/spellings name Wasm", bs.len());
 }

@@ -226,6 +226,21 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"nowhere.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n",
             &[],
         ),
+        e(
+            "W001",
+            tr!("出力先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language"),
+            tr!(
+                "二つの別名が、ある出力先の綴りで同じ識別子になるとき。Go は日付の関数を PascalCase で書くので、`payment` と `payment_` はどちらも `Payment` です。PostgreSQL は名前の先頭の 63 バイトしか残さないので、先頭の 63 バイトが同じ二つの別名は、引数の型が同じなら一つの関数に、同じ関数が取るなら一つの引数になります。別名が、Go の綴りで、生成したコードが自分で使う名前（`Date`、`ParseDate`、`KoyomiError`、`IsOpen`、ランナーの `TestMain`）と同じになるときも。ファイルの別名から作る Go のパッケージの名前（別名から `_` を除いたもの）が、Go のキーワードか `main` になるときも。別名に `_` が二つ続くときも（端の `_` は数えません）。Rust と Wasm のコードは `rustc -D warnings` で組めるように書きますが、rustc のリント `non_snake_case` がその関数、引数、モジュールを警告します。警告なので `check` は通り、`gen` はどの出力先も書きます。名前は付け替えません。",
+                "Two aliases are one identifier as a target spells them. Go names a date's function in PascalCase, so `payment` and `payment_` are both `Payment`. PostgreSQL keeps the first 63 bytes of a name, so two aliases that share them are one function when the functions take the same types, or one parameter of a function that takes both. Or an alias is, as Go spells it, a name the generated code uses itself (`Date`, `ParseDate`, `KoyomiError`, `IsOpen`, and the runner's `TestMain`). Or the Go package a file's alias makes (the alias without its `_`) is a keyword of Go, or `main`. Or an alias has two `_` in a row (not counting those at its ends): the Rust and Wasm code is written to build with `rustc -D warnings`, and rustc's lint `non_snake_case` warns of such a function, parameter or module. It is a warning: `check` passes, `gen` writes every target, and no name is changed."
+            ),
+            tr!(
+                "使わない出力先なら、このままで構いません。使うなら、注が挙げる別名を変えてください。二つの別名が一つになるときは、どちらか一つを変えれば足ります（`遅れた支払日(late_payment)` のように）。パッケージとモジュールの名前のときは、ファイルの別名を変えてください。",
+                "For a target you do not generate, leave it. For one you do, change the alias the notes give: one of the two, when two are one identifier (like `payment_(late_payment)`), and the file's, for a package or a module."
+            ),
+            "dates t v1\n\ninputs\n  受領日(received) : date  range >=2026-01-01 <=2026-01-31\n\ndate 支払日(payment) = 受領日\n  + 30 days\ndate 遅れた支払日(payment_) = 受領日\n  + 60 days\n",
+            &["E007", "E009"],
+        )
+        .english(Repro::File { body: "dates t v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate payment = received\n  + 30 days\ndate payment_ = received\n  + 60 days\n", beside: &[] }),
         // ── The calendar and the sources ──
         e(
             "E101",

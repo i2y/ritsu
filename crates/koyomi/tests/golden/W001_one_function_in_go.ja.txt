@@ -1,0 +1,5 @@
+警告[W001]: tests/mutants/W001_one_function_in_go.cal:11:6: `closing`（8 行目）と `closing_` は、生成した Go のコードで同じ識別子になります
+    11 | date closing_ = received
+  = Go: 関数の名前は PascalCase で書くので、日付「closing」の関数と日付「closing_」の関数は、どちらも `Closing` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。
+  = 使わない出力先なら、このままで構いません。使うなら、どちらかに別の別名を付けてください（`closing_(<別名>)`）。
+tests/mutants/W001_one_function_in_go.cal: ok — 3 つの条件が、received 2026-01-01〜2028-11-20 の 1,055 日のすべてで成り立ちます。例 2 行も合っています

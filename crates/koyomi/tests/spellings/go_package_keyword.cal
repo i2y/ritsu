@@ -1,0 +1,8 @@
+dates go_to v1
+description "A file whose alias, without its underscore, is goto: the Go package would be named by a keyword of Go, so the Go code does not compile (W001). Every other target takes the alias as it is"
+
+inputs
+  booked : date  range >=2026-01-01 <=2026-01-31
+
+date visit = booked
+  + 14 days

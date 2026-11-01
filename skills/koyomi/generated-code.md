@@ -30,6 +30,13 @@ The alias is the file's (`dates net30 v1` writes `net30.ts`, and the Japanese ve
 without `_`. A calendar file writes `is_open` alone; a dates file writes a
 function for each date, and `is_open` too when it reads a calendar.
 
+Every name is written as the `.cal` writes it, and none is changed to make room for another. Go's
+PascalCase and package name and PostgreSQL's 63 bytes can make two aliases one identifier, or an
+alias a name that target cannot take, and rustc warns of an alias with two `_` in a row
+(`non_snake_case`); `koyomi check` warns about it and names the targets (W001), and the code of
+those targets, written as it is, does not build (for Rust and Wasm, with `-D warnings`) or answers
+for one date with another.
+
 `--out <dir>` says where (`generated` unless given), `--target` picks one target, and `--lang ja`
 writes the comments and the error messages in Japanese. A file that does not pass check writes
 nothing and makes the run exit 1, while the files that pass are still written; two files with one

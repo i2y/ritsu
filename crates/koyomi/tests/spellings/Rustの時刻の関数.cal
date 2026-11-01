@@ -1,0 +1,10 @@
+dates Rustの時刻の関数(rust_time_function_ja) v1
+description "別名が _ で終わる、時刻のある日付。その時刻の関数は cutoff__at で _ が二つ続き、rustc のリント non_snake_case が警告するので、Rust のコードと Wasm のモジュールは -D warnings で組めない（W001）。ほかの出力先は、そのままで使える"
+use calendar "../fixtures/calendars/土日.cal"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 締め切り(cutoff_) = 注文日
+  roll following
+  at 17:00

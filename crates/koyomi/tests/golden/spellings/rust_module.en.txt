@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/rust_module.cal:1:7: In the code generated for Rust, the file's alias `rust__module` is the module's name, which rustc warns of
+     1 | dates rust__module v1
+  = Rust: rustc's lint `non_snake_case` warns of a name with two `_` in a row, so a build with `-D warnings` (warnings as errors) stops at the `mod rust__module;` that declares the module (in the runner `gen` writes beside the code, and in a crate that uses it).
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates rust__module(<alias>) v1`).
+tests/spellings/rust_module.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

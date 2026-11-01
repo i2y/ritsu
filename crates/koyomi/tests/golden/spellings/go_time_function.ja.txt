@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/go_time_function.cal:12:6: `cutoff_at`（8 行目）と `cutoff_at_` は、生成した Go のコードで同じ識別子になります
+    12 | date cutoff_at_ = ordered
+  = Go: 関数の名前は PascalCase で書くので、日付「cutoff」の時刻の関数 `cutoff_at` と日付「cutoff_at_」の関数は、どちらも `CutoffAt` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。
+  = 使わない出力先なら、このままで構いません。使うなら、どちらかに別の別名を付けてください（`cutoff_at_(<別名>)`）。
+tests/spellings/go_time_function.cal: ok — ordered 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_test_main.cal:7:6: `test_main` takes a name the code generated for Go uses itself
+     7 | date test_main = received
+  = Go: the runner (`<package>_runner_test.go`) declares `TestMain`, and in PascalCase the function of the date test_main is `TestMain` as well: one package declares the name twice, so `go test` and `go vet` do not compile it.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`test_main(<alias>)`).
+tests/spellings/go_test_main.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

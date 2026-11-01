@@ -1,0 +1,8 @@
+dates Rustの引数(rust_parameter_ja) v1
+description "別名に _ が二つ続く入力。日付の関数の引数になり、rustc のリント non_snake_case が警告するので、Rust のコードと Wasm のモジュールは -D warnings で組めない（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  注文日(ordered__on) : date  range >=2026-01-01 <=2026-01-31
+
+date 出荷期限(ship_by) = 注文日
+  + 3 days

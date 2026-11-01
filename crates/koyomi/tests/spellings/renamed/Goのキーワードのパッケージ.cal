@@ -1,0 +1,8 @@
+dates 訪問(site_visit_ja) v1
+description "../Goのキーワードのパッケージ.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える"
+
+inputs
+  予約日(booked) : date  range >=2026-01-01 <=2026-01-31
+
+date 訪問日(visit) = 予約日
+  + 14 days

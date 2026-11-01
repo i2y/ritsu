@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/postgresql_functions.cal:10:6: `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_post` (line 7) and `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier` are one identifier in the code generated for PostgreSQL
+    10 | date the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier = received
+  = PostgreSQL: a name keeps its first 63 bytes, so the function of the date the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_post and the function of the date the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier are both `the_day_an_order_placed_during_the_spring_campaign_of_2026_ship`, and they take the same types: `CREATE OR REPLACE FUNCTION` replaces the first with the second, and the one left answers for both.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier(<alias>)`).
+tests/spellings/postgresql_functions.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

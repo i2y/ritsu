@@ -39,6 +39,48 @@ pub const TARGET_FILES: &[&str] = &[
     "tests/fixtures/helpers_日付が一つも無い.cal",
 ];
 
+/// The files of `tests/spellings/` (DESIGN 15): each writes names some targets spell as one
+/// identifier, or cannot take, and `check` warns about it once (W001), in English and in Japanese.
+/// Beside each is what the tool of the targets it names says of the code: the line it stops at, or
+/// nothing when the code loads and answers for one function with another. tests/targets.rs runs
+/// each file through the targets W001 does not name, and the named ones with this line.
+pub const SPELLING_FILES: &[(&str, &str)] = &[
+    ("tests/spellings/go_functions.cal", "Net30 redeclared in this block"),
+    ("tests/spellings/go_time_function.cal", "CutoffAt redeclared in this block"),
+    ("tests/spellings/go_date_type.cal", "Date redeclared in this block"),
+    ("tests/spellings/go_test_main.cal", "TestMain redeclared in this block"),
+    ("tests/spellings/go_package_keyword.cal", "expected 'IDENT', found 'goto'"),
+    ("tests/spellings/go_package_main.cal", "is a program, not an importable package"),
+    ("tests/spellings/postgresql_functions.cal", ""),
+    ("tests/spellings/postgresql_time_function.cal", "cannot change return type of existing function"),
+    ("tests/spellings/postgresql_parameters.cal", "used more than once"),
+    ("tests/spellings/postgresql_parameter_names.cal", "cannot change name of input parameter"),
+    ("tests/spellings/rust_function.cal", "should have a snake case name"),
+    ("tests/spellings/rust_time_function.cal", "should have a snake case name"),
+    ("tests/spellings/rust_parameter.cal", "should have a snake case name"),
+    ("tests/spellings/rust_module.cal", "should have a snake case name"),
+    ("tests/spellings/Goの関数.cal", "Net30 redeclared in this block"),
+    ("tests/spellings/Goの時刻の関数.cal", "CutoffAt redeclared in this block"),
+    ("tests/spellings/Goの日付の型.cal", "Date redeclared in this block"),
+    ("tests/spellings/GoのTestMain.cal", "TestMain redeclared in this block"),
+    ("tests/spellings/Goのキーワードのパッケージ.cal", "expected 'IDENT', found 'goto'"),
+    ("tests/spellings/Goのmainのパッケージ.cal", "is a program, not an importable package"),
+    ("tests/spellings/PostgreSQLの関数.cal", ""),
+    ("tests/spellings/PostgreSQLの時刻の関数.cal", "cannot change return type of existing function"),
+    ("tests/spellings/PostgreSQLの引数.cal", "used more than once"),
+    ("tests/spellings/PostgreSQLの引数の名前.cal", "cannot change name of input parameter"),
+    ("tests/spellings/Rustの関数.cal", "should have a snake case name"),
+    ("tests/spellings/Rustの時刻の関数.cal", "should have a snake case name"),
+    ("tests/spellings/Rustの引数.cal", "should have a snake case name"),
+    ("tests/spellings/Rustのモジュール.cal", "should have a snake case name"),
+];
+
+/// The same files with the alias their W001's note gives (`tests/spellings/renamed/`): `check`
+/// says nothing of them, and tests/targets.rs runs every one through all six targets.
+pub fn renamed(path: &str) -> String {
+    path.replacen("tests/spellings/", "tests/spellings/renamed/", 1)
+}
+
 /// Whether rustc has the standard library of `target` installed (`rustup target add <target>`).
 pub fn rust_target(target: &str) -> bool {
     let Ok(o) = std::process::Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };

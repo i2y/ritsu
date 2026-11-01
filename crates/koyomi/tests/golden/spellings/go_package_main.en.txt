@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_package_main.cal:1:7: In the code generated for Go, the file's alias `main` is the package `main`, which no other package can import
+     1 | dates main v1
+  = Go: a package is named by the file's alias without its `_`, so it is `main`, which Go builds as a program and no other package can import: the generated functions cannot be called.
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates main(<alias>) v1`).
+tests/spellings/go_package_main.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

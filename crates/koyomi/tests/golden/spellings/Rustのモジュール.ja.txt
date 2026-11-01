@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/Rustのモジュール.cal:1:18: 生成した Rust のコードでは、ファイルの別名 `rust__module_ja` がモジュールの名前になり、rustc が警告します
+     1 | dates Rustのモジュール(rust__module_ja) v1
+  = Rust: rustc のリント `non_snake_case` は `_` が二つ続く名前を警告するので、`-D warnings`（警告をエラーにする）でコンパイルすると、モジュールを宣言する `mod rust__module_ja;`（`gen` がコードの横に書くランナーと、コードを使うクレートのもの）で止まります。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates Rustのモジュール(<別名>) v1`）。
+tests/spellings/Rustのモジュール.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

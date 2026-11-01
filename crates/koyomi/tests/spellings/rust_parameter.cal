@@ -1,0 +1,8 @@
+dates rust_parameter v1
+description "An input whose alias has two underscores in a row. It is the parameter of the date's function, which rustc's lint non_snake_case warns of, so the Rust code and the Wasm module do not build with -D warnings (W001). Every other target takes it as it is"
+
+inputs
+  ordered__on : date  range >=2026-01-01 <=2026-01-31
+
+date ship_by = ordered__on
+  + 3 days

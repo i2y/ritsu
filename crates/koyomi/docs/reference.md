@@ -94,6 +94,18 @@ Claims and sources are not in the generated code and need no alias. A name or an
 a keyword, a reserved word of a target language, or a name the generated code uses itself
 (`is_open`, `Date`, `KoyomiError`, `<alias>_at`, …): E009.
 
+Go and PostgreSQL spell an alias their own way, and rustc warns of some aliases as they are. Go
+names a date's function in PascalCase and the package by the file's alias without its `_`;
+PostgreSQL keeps the first 63 bytes of a name; rustc's lint `non_snake_case` warns of a name with
+two `_` in a row, and the Rust and Wasm code is written to build with `-D warnings`. So `net_30` and
+`net30` are both `Net30` in Go, an alias can be in Go a name the generated code declares (`date_` is
+`Date`), a file's alias can make a package Go cannot take (`go_to_` is `goto`, `main_` is `main`),
+two long aliases that share their first 63 bytes are one function, or one parameter, in PostgreSQL,
+and `ship__by` is a function rustc warns of (so is `cutoff__at`, the function of the time of a date
+`cutoff_`). `check` warns about each (W001) and names the targets; the file passes, `gen` writes
+every target, and no name is changed. If you generate one of those targets, give the name the note
+points to another alias.
+
 ### Keywords
 
 The keywords are English, one spelling each. `day` and `days`, `month` and `months`, `year` and
@@ -334,9 +346,9 @@ interpreter and the generated code would share.
 ## Checking
 
 `koyomi check` goes through five stages, each only when the one before found no error: words and
-lines (E001–E006); names and types, and the calendar the file reads (E007–E015, E304); the calendar
-and the sources (E101–E111, W101, W102); what follows from what is written (E201, W201, W202); and
-every input of the range (E202–E204, E301–E303, E305).
+lines (E001–E006); names and types, and the calendar the file reads (E007–E015, E304, W001); the
+calendar and the sources (E101–E111, W101, W102); what follows from what is written (E201, W201,
+W202); and every input of the range (E202–E204, E301–E303, E305).
 
 The last stage computes every date of every input combination: the days of the date's range times
 the values of each integer input. Over the budget, 10⁸ combinations unless `--budget` says

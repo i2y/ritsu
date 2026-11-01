@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/PostgreSQLの時刻の関数.cal:8:24: `the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026` and `the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026_at` are one identifier in the code generated for PostgreSQL
+     8 | date 春の催しの注文を取り消せる最後の時(the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026) = 注文日
+  = PostgreSQL: a name keeps its first 63 bytes, so the function of 春の催しの注文を取り消せる最後の時 (`the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026`) and the function of the time of 春の催しの注文を取り消せる最後の時 (`the_last_moment_to_cancel_an_order_placed_in_the_spring_campaign_of_2026_at`) are both `the_last_moment_to_cancel_an_order_placed_in_the_spring_campaig`, and they take the same types: PostgreSQL stops at the second (`cannot change return type of existing function`), and the SQL file does not load.
+  = For a target you do not generate, leave it. For one you do, give the date an alias of 62 bytes or fewer (`春の催しの注文を取り消せる最後の時(<alias>)`).
+tests/spellings/PostgreSQLの時刻の関数.cal: ok — every date computes on all 31 days of 注文日 (2026-01-01..2026-01-31)

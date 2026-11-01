@@ -1,0 +1,8 @@
+dates Rustのモジュール(rust__module_ja) v1
+description "別名に _ が二つ続くファイル。Rust のコードはモジュール rust__module_ja になり、それを宣言する mod の行を rustc のリント non_snake_case が警告するので、コードの横のランナーとコードを使うクレートは -D warnings で組めない（W001）。Wasm のモジュールは自分の名前でコードを宣言し、ほかの出力先は別名をそのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 期日(due) = 受領日
+  + 30 days

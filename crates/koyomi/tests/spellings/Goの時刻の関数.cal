@@ -1,0 +1,14 @@
+dates Goの時刻の関数(go_time_function_ja) v1
+description "時刻のある日付と、その時刻の関数の名前の後ろに _ を足した別名の日付。Go は cutoff_at と cutoff_at_ を同じ CutoffAt と書くので、Go のコードはコンパイルできない（W001）。ほかの出力先は、そのままで使える"
+use calendar "../fixtures/calendars/土日.cal"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 締め切り(cutoff) = 注文日
+  roll following
+  at 17:00
+
+date 次の締め切り(cutoff_at_) = 注文日
+  + 1 day
+  roll following

@@ -1,0 +1,6 @@
+警告[W001]: tests/spellings/rust_time_function.cal:8:6: 生成した Rust と Wasm のコードでは、`cutoff__at` は rustc が警告する名前になります
+     8 | date cutoff_ = ordered
+  = Rust: rustc のリント `non_snake_case` は `_` が二つ続く名前を警告するので、`-D warnings`（警告をエラーにする）でコンパイルすると、日付「cutoff_」の時刻の関数 `cutoff__at` で止まります。
+  = Wasm: モジュールは同じ Rust のコードから組むので、同じところで止まります。
+  = 使わない出力先なら、このままで構いません。使うなら、`_` で終わらない別名を付けてください（`cutoff_(<別名>)`）。
+tests/spellings/rust_time_function.cal: ok — ordered 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

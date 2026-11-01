@@ -1,0 +1,8 @@
+dates rust_function v1
+description "A date whose alias has two underscores in a row. rustc's lint non_snake_case warns of its function, so the Rust code and the Wasm module do not build with -D warnings (W001). Every other target takes it as it is"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2026-01-31
+
+date ship__by = ordered
+  + 3 days

@@ -1,0 +1,8 @@
+dates GoのTestMain(go_test_main_ja) v1
+description "別名が test_main の日付。Go のランナーは TestMain を宣言し、この日付の関数も TestMain になるので、go test と go vet がパッケージをコンパイルできない（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 本試験の日(test_main) = 受領日
+  + 7 days

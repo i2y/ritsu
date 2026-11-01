@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/postgresql_functions.cal:10:6: `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_post`（7 行目）と `the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier` は、生成した PostgreSQL のコードで同じ識別子になります
+    10 | date the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier = received
+  = PostgreSQL: 名前は先頭の 63 バイトしか残らないので、日付「the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_post」の関数と日付「the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier」の関数は、どちらも `the_day_an_order_placed_during_the_spring_campaign_of_2026_ship` です。引数の型も同じなので、`CREATE OR REPLACE FUNCTION` で後の関数が前の関数を置き換え、残った関数が両方に答えます。
+  = 使わない出力先なら、このままで構いません。使うなら、どちらかに別の別名を付けてください（`the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier(<別名>)`）。
+tests/spellings/postgresql_functions.cal: ok — received 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

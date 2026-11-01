@@ -1,0 +1,11 @@
+dates PostgreSQLの関数(postgresql_functions_ja) v1
+description "別名の先頭の 63 バイトが同じ二つの日付。PostgreSQL は名前を 63 バイトまでしか残さず、二つの関数は引数の型も同じなので、後の関数が前の関数を置き換え、両方に答える（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 春の催しの注文を郵便で送る日(the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_post) = 受領日
+  + 3 days
+
+date 春の催しの注文を宅配便で送る日(the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_by_courier) = 受領日
+  + 1 day

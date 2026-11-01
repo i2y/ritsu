@@ -1,0 +1,13 @@
+dates PostgreSQLの引数の名前(postgresql_parameter_names_ja_renamed) v1
+description "../PostgreSQLの引数の名前.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える。ファイルの別名は、二つのファイルを同じ出力先に並べて通すためだけに変えてある"
+
+inputs
+  受領日(received)             : date  range >=2026-01-01 <=2026-01-31
+  ネットの日数(days_online)     : int   range >=0 <=3
+  電話の日数(days_by_phone)     : int   range >=0 <=3
+
+date 春の催しのネットの注文を送る日(the_day_an_order_placed_during_the_spring_campaign_of_2026_ships_online) = 受領日
+  + ネットの日数 days
+
+date 春の催しの電話の注文を送る日(spring_2026_phone_ship_day) = 受領日
+  + 電話の日数 days

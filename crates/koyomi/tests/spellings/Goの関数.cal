@@ -1,0 +1,12 @@
+dates Goの関数(go_functions_ja) v1
+description "別名の違いが _ 一つだけの二つの日付。Go は関数の名前を PascalCase で書くので、どちらも Net30 になり、Go のコードはコンパイルできない（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 受領から30日(net_30) = 受領日
+  + 30 days
+
+date 月末から30日(net30) = 受領日
+  close end of month
+  + 30 days

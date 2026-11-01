@@ -1,0 +1,8 @@
+dates GoのTestMain(go_test_main_ja_renamed) v1
+description "../GoのTestMain.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える。ファイルの別名は、二つのファイルを同じ出力先に並べて通すためだけに変えてある"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 本試験の日(trial_day) = 受領日
+  + 7 days

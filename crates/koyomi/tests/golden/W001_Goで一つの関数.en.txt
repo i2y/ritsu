@@ -1,0 +1,5 @@
+warning[W001]: tests/mutants/W001_Goで一つの関数.cal:11:14: `closing` (line 8) and `closing_` are one identifier in the code generated for Go
+    11 | date 25日の締め日(closing_) = 受領日
+  = Go: a function is named in PascalCase, so the function of 締め日 (`closing`) and the function of 25日の締め日 (`closing_`) are both `Closing`: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give one of the two another alias (`25日の締め日(<alias>)`).
+tests/mutants/W001_Goで一つの関数.cal: ok — 3 claims hold on all 689 days of 受領日 (2026-01-01..2027-11-20); 2 examples match

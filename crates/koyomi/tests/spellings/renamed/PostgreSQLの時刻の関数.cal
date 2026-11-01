@@ -1,0 +1,10 @@
+dates PostgreSQLの時刻の関数(postgresql_time_function_ja_renamed) v1
+description "../PostgreSQLの時刻の関数.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える。ファイルの別名は、二つのファイルを同じ出力先に並べて通すためだけに変えてある"
+use calendar "../../fixtures/calendars/土日.cal"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 春の催しの注文を取り消せる最後の時(spring_2026_cancel_by) = 注文日
+  + 2 business days
+  at 12:00

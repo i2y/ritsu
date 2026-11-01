@@ -1,0 +1,8 @@
+dates go_test_main v1
+description "A date with the alias test_main. The runner of the Go code declares TestMain, and the date's function is TestMain too, so go test and go vet do not compile the package (W001). Every other target takes it as it is"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date test_main = received
+  + 7 days

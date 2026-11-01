@@ -1,0 +1,8 @@
+dates go_date_type v1
+description "A date with the alias date_. The Go code declares Date, the type of a date, and the date's function is Date too, so the Go code does not compile (W001). Every other target takes it as it is"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date date_ = received
+  + 30 days

@@ -1,6 +1,6 @@
 ---
 name: koyomi
-description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust, PostgreSQL and Wasm. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202, W901) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
+description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust, PostgreSQL and Wasm. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W001-W202, W901) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run koyomi as `ritsu koyomi <command>`, or as `koyomi <command>` through a link to ritsu named for it. `ritsu koyomi source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
@@ -184,6 +184,7 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 | E001 to E006 | words, lines, the order of sections, indentation, dates that do not exist | what the message says |
 | E007 to E014 | names twice or undeclared, aliases, types, the one date input, ranges, dates that start from each other | what the message says |
 | E015 | a `use calendar` that cannot be used | the path is from the `.cal`'s directory |
+| W001 | two aliases one target spells as one identifier (Go's PascalCase, PostgreSQL's 63 bytes), an alias that is a name the Go code declares, a file's alias whose Go package is a keyword or `main`, or an alias with two `_` in a row, which rustc warns of (`non_snake_case`) in the Rust and Wasm code | leave it for a target you do not generate; for one you do, another alias for the one the note names |
 | E101 to E106 | a table's copy missing, unpinned, changed, unreadable, or outside its `covers` | `ritsu koyomi source fetch`, read what changed, `ritsu koyomi source pin` |
 | E107 | a time zone's name as the offset | write `+09:00`; for a zone with daylight saving time, give dates only |
 | E108 to E111 | no business day; an operation needs a calendar; `at` needs an offset; a citation | what the message says |

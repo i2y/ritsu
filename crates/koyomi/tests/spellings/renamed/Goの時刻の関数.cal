@@ -1,0 +1,14 @@
+dates Goの時刻の関数(go_time_function_ja_renamed) v1
+description "../Goの時刻の関数.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える。ファイルの別名は、二つのファイルを同じ出力先に並べて通すためだけに変えてある"
+use calendar "../../fixtures/calendars/土日.cal"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 締め切り(cutoff) = 注文日
+  roll following
+  at 17:00
+
+date 次の締め切り(next_cutoff) = 注文日
+  + 1 day
+  roll following

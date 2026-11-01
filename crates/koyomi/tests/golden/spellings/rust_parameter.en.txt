@@ -1,0 +1,6 @@
+warning[W001]: tests/spellings/rust_parameter.cal:5:3: In the code generated for Rust and Wasm, `ordered__on` is a name rustc warns of
+     5 |   ordered__on : date  range >=2026-01-01 <=2026-01-31
+  = Rust: rustc's lint `non_snake_case` warns of a name with two `_` in a row, so a build with `-D warnings` (warnings as errors) stops at the parameter `ordered__on` of the input ordered__on (of the function of the date ship_by, and of every other function that takes the input).
+  = Wasm: the module is built from the same Rust code, and stops at the same place.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`ordered__on(<alias>)`).
+tests/spellings/rust_parameter.cal: ok — every date computes on all 31 days of ordered__on (2026-01-01..2026-01-31)
