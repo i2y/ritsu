@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/PythonのLiteral.gate:5:1: 列挙 `literal` は、Python のコードで `Literal` と書かれ、コードが自分で使う名前と同じです
+     5 | enum 水準(literal) = 低い(low) | 高い(high)
+  = Python（`--target python`）: 列挙 `literal` を `Literal` と書きますが、`Literal` は Python の語か、モジュールが読み込む名前です。モジュールを読み込めないか、宣言がそれを隠すので、`mypy --strict` を通らず、呼び出しが止まります。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/PythonのLiteral.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

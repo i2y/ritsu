@@ -174,22 +174,12 @@ impl<'a> Plan<'a> {
     /// The types with what the code reads of them from the store (DESIGN 3.6): an attribute or a
     /// role, or a group it is a member of. A type with none is known by its id alone.
     pub fn reads(&self, t: usize) -> bool {
-        let ty = &self.g.types[t];
-        ty.kind != Kind::Workflow && (!ty.attrs.is_empty() || !ty.roles.is_empty() || !self.shape.types[t].member_of.is_empty())
+        reads(self.g, &self.shape, t)
     }
 
     /// The types the code names: every principal type and resource type an action takes.
     pub fn types_used(&self) -> Vec<usize> {
-        let mut out: Vec<usize> = Vec::new();
-        for a in &self.g.actions {
-            for &t in a.principals.iter().chain(&a.resources) {
-                if !out.contains(&t) {
-                    out.push(t);
-                }
-            }
-        }
-        out.sort_unstable();
-        out
+        types_used(self.g)
     }
 
     /// The Cedar name of a type: `Shop::Order`.
@@ -328,6 +318,26 @@ pub fn ymd(d: Day) -> (i64, i64, i64) {
     let t = ritsu_ports::day_text(d);
     let mut it = t.split('-').map(|x| x.parse::<i64>().unwrap_or(0));
     (it.next().unwrap_or(1970), it.next().unwrap_or(1), it.next().unwrap_or(1))
+}
+
+/// [`Plan::reads`], of a gate.
+pub fn reads(g: &Gate, shape: &Shape, t: usize) -> bool {
+    let ty = &g.types[t];
+    ty.kind != Kind::Workflow && (!ty.attrs.is_empty() || !ty.roles.is_empty() || !shape.types[t].member_of.is_empty())
+}
+
+/// [`Plan::types_used`], of a gate.
+pub fn types_used(g: &Gate) -> Vec<usize> {
+    let mut out: Vec<usize> = Vec::new();
+    for a in &g.actions {
+        for &t in a.principals.iter().chain(&a.resources) {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    }
+    out.sort_unstable();
+    out
 }
 
 /// `refund_order` as `RefundOrder`; `RefundRecord` as it is.

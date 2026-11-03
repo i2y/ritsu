@@ -1,0 +1,32 @@
+gate enum_and_type_renamed v1
+description "enum_and_type.gate with the type renamed Order, as its note says"
+namespace Shop
+
+enum order_state = low | high
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource Order
+  description "What is asked about"
+  attributes
+    state : order_state
+
+action reply
+  description "Reply to a request"
+  principal User
+  resource Order
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when principal.open
+

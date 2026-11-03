@@ -1,0 +1,7 @@
+warning[W402]: tests/spellings/二つのaction.gate:25:1: The input of the action `refund_order` and the input of the action `refund__order` are one name, `RefundOrderInput`, in the code of TypeScript, Python and Go
+    25 | action 再返金(refund__order)
+  = TypeScript (`--target typescript`): the input of the action `refund_order` and the input of the action `refund__order` are both written `RefundOrderInput`: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`), and two interfaces become one.
+  = Python (`--target python`): the input of the action `refund_order` and the input of the action `refund__order` are both written `RefundOrderInput`: the later declaration takes the place of the earlier, so what reads the earlier reads the later, and the module does not pass `mypy --strict` (`already defined`).
+  = Go (`--target go`): the input of the action `refund_order` and the input of the action `refund__order` are both written `RefundOrderInput`: the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change the alias of one of the two. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/二つのaction.gate: ok — 2 actions, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations

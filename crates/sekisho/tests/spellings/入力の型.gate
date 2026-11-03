@@ -1,0 +1,30 @@
+gate 入力の型(input_type_ja) v1
+description "どの言語のコードでも action の入力と同じ名前の型"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 職員(User)
+  description "尋ねる人"
+  roles 係
+  attributes
+    開店(open) : bool
+
+resource 問い合わせ(ReplyInput)
+  description "尋ねられるもの"
+  attributes
+    閉じた(closed) : bool
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 職員
+  resource 問い合わせ
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when resource.閉じた
+

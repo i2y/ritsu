@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/Goのフィールド.gate:15:1: The attribute `order_id` of the type `User` and the attribute `order__id` of the type `User` are one name, `OrderId`, in the code of Go
+    15 |     注文の番号(order__id) : bool
+  = Go (`--target go`): in the record of the type `User`, the attribute `order_id` of the type `User` and the attribute `order__id` of the type `User` are both written `OrderId`: the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change the alias of one of the two. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/Goのフィールド.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

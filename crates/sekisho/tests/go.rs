@@ -94,7 +94,7 @@ fn module_path(runner: &Path) -> String {
 fn package(gate: &str, dir: &Path, module: &str, name: &str, authorizer: Authorizer, lang: ritsu_base::text::Lang) -> Option<(sekisho::check::Outcome, String)> {
     let suite = common::joined();
     let o = sekisho::check::check_file(gate, &suite, &sekisho::check::Options::default()).unwrap();
-    if o.has_errors() {
+    if o.has_errors() || !sekisho::spellings::stops(&o, "go").is_empty() {
         return None;
     }
     let base = dir.join(name);

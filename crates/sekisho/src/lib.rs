@@ -52,6 +52,7 @@ pub mod repros;
 /// The `sekisho` command, as a function: the binary runs it, and so does `ritsu sekisho`.
 pub mod run;
 pub mod security;
+pub mod spellings;
 pub mod suite;
 pub mod table;
 pub mod types;

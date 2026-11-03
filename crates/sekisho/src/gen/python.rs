@@ -16,6 +16,7 @@
 use super::plan::{self, ActionPlan, Authorizer, Call, Import, Options, Plan, ValuePlan};
 use crate::ast::Op;
 use crate::model::*;
+use crate::spellings::{Declared, From};
 use ritsu_base::text::Lang;
 use ritsu_emit::header::Comment;
 use ritsu_emit::lit;
@@ -53,26 +54,27 @@ struct Names {
     inputs: BTreeMap<usize, String>,
 }
 
+/// What the module declares at its top level, in the order [`names`] reads them: the records of the
+/// types it reads, the enums' `Literal`s, its own, then the inputs. Two of them that are one name
+/// are W402 and E401 (`crate::spellings`), and so is one that [`global`] holds.
+pub fn declared(g: &Gate, shape: &crate::cedar::Shape) -> Vec<Declared> {
+    let mut d: Vec<Declared> = plan::types_used(g).into_iter().filter(|&t| plan::reads(g, shape, t)).map(|t| Declared::new(g.types[t].named.alias.clone(), From::Type(t))).collect();
+    d.extend(g.enums.iter().enumerate().map(|(i, e)| Declared::new(plan::pascal(&e.named.alias), From::Enum(i))));
+    d.extend(["Principal", "Store", "SekishoError", "Request", "Answer", "Role", "VerifiedPermissions"].iter().map(|w| Declared::new(w.to_string(), From::Own)));
+    d.extend(g.actions.iter().enumerate().map(|(i, a)| Declared::new(format!("{}Input", plan::pascal(&a.named.alias)), From::Input(i))));
+    d
+}
+
+/// Whether `id` is a word of Python, or a name the module imports.
+pub fn global(id: &str) -> bool {
+    ritsu_emit::words::python::KEYWORDS.contains(&id) || ["Literal", "Protocol", "TypedDict", "NotRequired", "dataclass", "date", "datetime", "timedelta", "timezone", "cedarpy", "json"].contains(&id)
+}
+
 fn names(p: &Plan) -> Names {
     let g = p.g;
-    let mut wanted: Vec<String> = Vec::new();
     let types = p.types_used();
     let recorded: Vec<usize> = types.iter().copied().filter(|&t| p.reads(t)).collect();
-    for &t in &recorded {
-        wanted.push(g.types[t].named.alias.clone());
-    }
-    for e in &g.enums {
-        wanted.push(plan::pascal(&e.named.alias));
-    }
-    for w in ["Principal", "Store", "SekishoError", "Request", "Answer", "Role", "VerifiedPermissions"] {
-        wanted.push(w.to_string());
-    }
-    for a in &g.actions {
-        wanted.push(format!("{}Input", plan::pascal(&a.named.alias)));
-    }
-    let taken: Vec<&str> = ritsu_emit::words::python::KEYWORDS.iter().chain(["Literal", "Protocol", "TypedDict", "NotRequired", "dataclass", "date", "datetime", "timedelta", "timezone", "cedarpy", "json"].iter()).copied().collect();
-    let got = ritsu_emit::ident::unique(wanted, &taken);
-    let mut it = got.into_iter();
+    let mut it = declared(g, &p.shape).into_iter().map(|d| d.id);
     let mut records = BTreeMap::new();
     for &t in &recorded {
         records.insert(t, it.next().unwrap_or_default());

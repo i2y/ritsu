@@ -1,0 +1,30 @@
+gate goのフィールドの直し(go_fields_ja_renamed) v1
+description "Goのフィールド.gate の二つ目の別名を、注のとおりに order_no にしたもの"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 職員(User)
+  description "尋ねる人"
+  roles 係
+  attributes
+    開店(open) : bool
+    注文番号(order_id) : bool
+    注文の番号(order_no) : bool
+
+resource 問い合わせ(Ticket)
+  description "尋ねられるもの"
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 職員
+  resource 問い合わせ
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when principal.開店
+

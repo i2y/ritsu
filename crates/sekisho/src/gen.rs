@@ -169,10 +169,15 @@ pub fn cedar_names(o: &check::Outcome) -> Vec<(String, String)> {
 
 /// What `gen` writes for one file that passes, for any target: each file's path under the
 /// directory written to, and its text. The code of the requests reads the facts of the rules, the
-/// dates and the calendars the gate computes with through `suite`. Err with what went wrong (a bug
-/// of sekisho's: the file passed its check).
+/// dates and the calendars the gate computes with through `suite`. Err with what went wrong: E401
+/// as `check` prints it, when the target writes two of the names as one ([`crate::spellings::stops`]
+/// says which, for a caller that tells it apart), else a bug of sekisho's: the file passed its check.
 pub fn generate(o: &check::Outcome, target: &Target, shown: &str, lang: Lang, suite: &Suite) -> Result<Vec<(String, String)>, String> {
     let (Some(scope), Some(checked)) = (o.scope.as_ref(), o.walked.as_ref()) else { return Ok(Vec::new()) };
+    let stopped = crate::spellings::stops(o, target.name);
+    if !stopped.is_empty() {
+        return Err(stopped.iter().map(|d| d.render(lang)).collect());
+    }
     let cedar_error = |e: ritsu_base::cedar::Error| format!("{}:{}: {}", e.line, e.col, e.message.en);
     match target.name {
         "cedar" => match &target.place.module {
@@ -232,6 +237,7 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     // every file the run writes, and the .gate it comes from: two files of one alias would write
     // over each other
     let mut planned: Vec<(String, String, String)> = Vec::new();
+    let mut stopped = false;
     for f in &a.pos {
         let o = match check::check_file(f, suite, &opts) {
             Ok(o) => o,
@@ -256,6 +262,16 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
             }
         }
         for target in &targets {
+            // what the code of the target writes as one name stops it (E401), and the run writes nothing
+            let names = crate::spellings::stops(&o, target);
+            if !names.is_empty() {
+                for d in &names {
+                    let _ = write!(out, "{}", d.render(lang));
+                }
+                stopped = true;
+                worst = worst.max(1);
+                continue;
+            }
             let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone(), place: ritsu_emit::package::Place::here() }, &shown, lang, suite) {
                 Ok(m) => m,
                 Err(e) => {
@@ -269,6 +285,10 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
                 planned.push((rel, body, f.clone()));
             }
         }
+    }
+    if stopped {
+        let _ = writeln!(err, "{}", tr!("生成するコードの名前を直すまで、何も書きません（E401）", "Nothing is written until the names of the code are put right (E401)").get(lang));
+        return worst;
     }
     let mut dirty = false;
     for (rel, body, _) in &planned {

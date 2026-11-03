@@ -14,6 +14,7 @@
 use super::plan::{self, ActionPlan, Authorizer, Call, Import, Options, Plan, ValuePlan};
 use crate::ast::Op;
 use crate::model::*;
+use crate::spellings::{Declared, From};
 use ritsu_base::text::Lang;
 use ritsu_emit::header::Comment;
 use ritsu_emit::lit;
@@ -42,7 +43,7 @@ pub fn exported(name: &str) -> String {
     if p.is_empty() || p.starts_with(|c: char| c.is_ascii_digit()) { format!("X{p}") } else { p }
 }
 
-/// The names the package declares, kept apart from one another.
+/// The names the package declares, which `check` holds apart.
 struct Names {
     principal: String,
     store: String,
@@ -57,21 +58,31 @@ struct Names {
     inputs: BTreeMap<usize, String>,
 }
 
+/// What the package declares, in the order [`names`] reads them: the records of the types it reads,
+/// its own, then the inputs. Two of them that are one name are W402 and E401 (`crate::spellings`).
+pub fn declared(g: &Gate, shape: &crate::cedar::Shape) -> Vec<Declared> {
+    let mut d: Vec<Declared> = plan::types_used(g).into_iter().filter(|&t| plan::reads(g, shape, t)).map(|t| Declared::new(g.types[t].named.alias.clone(), From::Type(t))).collect();
+    d.extend(["Principal", "Store", "Error", "Request", "Answer", "Entity", "EntityRef", "Date", "VerifiedPermissions"].iter().map(|w| Declared::new(w.to_string(), From::Own)));
+    d.extend(g.actions.iter().enumerate().map(|(i, a)| Declared::new(format!("{}Input", exported(&a.named.alias)), From::Input(i))));
+    d
+}
+
+/// The fields of the record of type `t`, in the order [`record`] reads them: the attributes, the
+/// roles, the groups. Two of them that are one name are W402 and E401.
+pub fn declared_fields(g: &Gate, shape: &crate::cedar::Shape, t: usize) -> Vec<Declared> {
+    let ty = &g.types[t];
+    let mut d: Vec<Declared> = ty.attrs.iter().enumerate().map(|(i, f)| Declared::new(exported(&f.named.alias), From::Attr(t, i))).collect();
+    if !ty.roles.is_empty() {
+        d.push(Declared::new("Roles".to_string(), From::Own));
+    }
+    d.extend(shape.types[t].member_of.iter().map(|&gt| Declared::new(format!("MemberOf{}", g.types[gt].named.alias), From::Own)));
+    d
+}
+
 fn names(p: &Plan) -> Names {
     let g = p.g;
-    let mut wanted: Vec<String> = Vec::new();
     let recorded: Vec<usize> = p.types_used().into_iter().filter(|&t| p.reads(t)).collect();
-    for &t in &recorded {
-        wanted.push(g.types[t].named.alias.clone());
-    }
-    for w in ["Principal", "Store", "Error", "Request", "Answer", "Entity", "EntityRef", "Date", "VerifiedPermissions"] {
-        wanted.push(w.to_string());
-    }
-    for a in &g.actions {
-        wanted.push(format!("{}Input", exported(&a.named.alias)));
-    }
-    let got = ritsu_emit::ident::unique(wanted, &[]);
-    let mut it = got.into_iter();
+    let mut it = declared(g, &p.shape).into_iter().map(|d| d.id);
     let mut records = BTreeMap::new();
     for &t in &recorded {
         records.insert(t, it.next().unwrap_or_default());
@@ -103,17 +114,7 @@ struct Record {
 
 fn record(p: &Plan, t: usize) -> Record {
     let ty = &p.g.types[t];
-    let mut wanted: Vec<String> = Vec::new();
-    for f in &ty.attrs {
-        wanted.push(exported(&f.named.alias));
-    }
-    if !ty.roles.is_empty() {
-        wanted.push("Roles".to_string());
-    }
-    for &gt in p.groups(t) {
-        wanted.push(format!("MemberOf{}", p.g.types[gt].named.alias));
-    }
-    let got = ritsu_emit::ident::unique(wanted, &[]);
+    let got: Vec<String> = declared_fields(p.g, &p.shape, t).into_iter().map(|d| d.id).collect();
     let attrs: Vec<String> = got[..ty.attrs.len()].to_vec();
     let mut rest = got[ty.attrs.len()..].iter();
     let roles = (!ty.roles.is_empty()).then(|| rest.next().cloned().unwrap_or_default());

@@ -1,0 +1,32 @@
+gate own_value_renamed v1
+description "own_value.gate with the enum renamed level, as its note says"
+namespace Shop
+
+enum level = low | high
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource Ticket
+  description "What is asked about"
+  attributes
+    priority : level
+
+action reply
+  description "Reply to a request"
+  principal User
+  resource Ticket
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when principal.open
+

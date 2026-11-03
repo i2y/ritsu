@@ -16,9 +16,7 @@
 //!   evaluation's of the same data.
 //!
 //!
-//! A gate whose types and enum are named as the module's own types (`Store`, `Request`, `Value`)
-//! and as a global (`Date`) is held to the same, with the names the module gives them: the gate's
-//! keep theirs, and the module's own take `_2`, as in the Python and the Go (DESIGN 5.3).
+//! A gate W402 names for TypeScript (tests/spellings.rs) is left out: `gen` stops at it.
 //!
 //! Without Node or the runner (`npm ci --prefix tools/runner-ts`), the tests say SKIP and pass.
 
@@ -197,7 +195,7 @@ struct Made {
 
 fn make(root: &Path, n: usize, gate: &str, suite: &sekisho::suite::Suite) -> Option<Made> {
     let o = common::check(gate);
-    if o.has_errors() {
+    if o.has_errors() || !sekisho::spellings::stops(&o, "typescript").is_empty() {
         return None;
     }
     let (scope, checked) = (o.scope.as_ref()?, o.walked.as_ref()?);
@@ -277,85 +275,4 @@ fn the_generated_typescript_answers_as_the_reference_does() {
     assert!(made.len() >= 15, "{} gates made", made.len());
     let cases = type_check_and_run(root, &made, &tsc);
     println!("the TypeScript of {} gates answers {cases} cases as the reference does, through cedar-wasm", made.len());
-}
-
-/// A gate whose types and enum take the names of the module's own types, and of a global of
-/// JavaScript the module calls (`Date`).
-const CLASH: &str = r#"gate clash v1
-description "Types and an enum named as the generated code's own types: the gate's keep their names"
-namespace Clash
-
-enum value = low | high
-
-role clerk
-  description "Answers requests"
-  can reply
-
-principal Store
-  description "A shop, signed in as itself"
-  roles clerk
-  attributes
-    open : bool
-
-principal Date
-  description "A date of the calendar of events, signed in as itself"
-  attributes
-    kept : bool
-
-resource Request
-  description "A request to the shop"
-  attributes
-    priority : value
-
-action reply
-  description "Reply to a request"
-  principal Store, Date
-  resource Request
-
-permit clerks_reply
-  description "A clerk replies to a request"
-  principal in clerk
-  action reply
-
-forbid closed_stores_do_nothing
-  description "A shop that is closed does nothing"
-  principal is Store
-  action any
-  unless principal.open
-
-permit kept_dates_reply_to_high
-  description "A kept date replies to a request of high priority"
-  principal is Date
-  action reply
-  when principal.kept
-  when resource.priority is high
-"#;
-
-#[test]
-fn the_gates_names_are_kept_and_the_modules_own_take_2() {
-    let Some(tsc) = tools() else { return };
-    let t = TempDir::new("typescript-names");
-    let root = t.path();
-    let gate = root.join("clash.gate");
-    std::fs::write(&gate, CLASH).unwrap();
-    let suite = common::joined();
-    let m = make(root, 0, &gate.to_string_lossy(), &suite).expect("clash.gate passes its check and has an action");
-    let text = std::fs::read_to_string(root.join("g0/authz/clash.ts")).unwrap();
-    for line in [
-        // the gate's types and enum, by their own names (Date is a global the module calls)
-        "export interface Store {",
-        "export interface Request {",
-        "export interface Date_2 {",
-        "export type Value = \"low\" | \"high\";",
-        // the module's own
-        "export interface Store_2 {",
-        "export interface Request_2 {",
-        "export type Value_2 = boolean | number | string | { __entity: Uid };",
-        "export async function replyRequest(store: Store_2, principal: Principal, input: ReplyInput, now: Date = new Date()): Promise<Request_2> {",
-        "export async function authorizeReply(store: Store_2, principal: Principal, input: ReplyInput, now: Date = new Date()): Promise<Answer> {",
-    ] {
-        assert!(text.lines().any(|l| l == line), "the module has no line {line}:\n{text}");
-    }
-    let cases = type_check_and_run(root, &[m], &tsc);
-    println!("the TypeScript of clash.gate, its names moved aside, answers {cases} cases as the reference does");
 }

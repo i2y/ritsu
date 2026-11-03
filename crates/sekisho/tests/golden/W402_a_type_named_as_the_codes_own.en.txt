@@ -1,0 +1,7 @@
+warning[W402]: tests/mutants/W402_a_type_named_as_the_codes_own.gate:9:1: The type `Store` is written `Store` in the code of TypeScript, Python and Go, a name the code uses itself
+     9 | principal Store
+  = TypeScript (`--target typescript`): the type `Store` is written `Store`, and the code declares that name itself: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`), and two interfaces become one.
+  = Python (`--target python`): the type `Store` is written `Store`, and the code declares that name itself: the later declaration takes the place of the earlier, so what reads the earlier reads the later, and the module does not pass `mypy --strict` (`already defined`).
+  = Go (`--target go`): the type `Store` is written `Store`, and the code declares that name itself: the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/mutants/W402_a_type_named_as_the_codes_own.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

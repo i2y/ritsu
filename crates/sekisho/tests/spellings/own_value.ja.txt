@@ -1,0 +1,5 @@
+警告[W402]: tests/spellings/own_value.gate:5:1: 列挙 `value` は、TypeScript のコードで `Value` と書かれ、コードが自分で使う名前と同じです
+     5 | enum value = low | high
+  = TypeScript（`--target typescript`）: 列挙 `value` を `Value` と書きますが、コードは同じ名前を自分でも宣言します。同じ名前の型は宣言できないので型の検査を通らず（`Duplicate identifier`）、二つの interface なら一つに混ざります。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/own_value.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

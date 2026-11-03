@@ -1,0 +1,28 @@
+gate 自分のstoreの直し(own_store_ja_renamed) v1
+description "自分のStore.gate の型の別名を、注のとおりに Shopkeeper にしたもの"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 店(Shopkeeper)
+  description "尋ねる人"
+  roles 係
+  attributes
+    開店(open) : bool
+
+resource 問い合わせ(Ticket)
+  description "尋ねられるもの"
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 店
+  resource 問い合わせ
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when principal.開店
+

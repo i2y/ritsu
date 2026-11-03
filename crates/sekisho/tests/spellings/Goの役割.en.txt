@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/Goの役割.gate:14:1: The attribute `roles` of the type `User` is written `Roles` in the code of Go, a name the code uses itself
+    14 |     役割(roles) : bool
+  = Go (`--target go`): the attribute `roles` of the type `User` is written `Roles`, and the record has a field of that name the code uses (for the roles, or a group): the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/Goの役割.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

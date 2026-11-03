@@ -1,0 +1,7 @@
+警告[W402]: tests/spellings/入力の型.gate:20:1: 型 `ReplyInput` と action `reply` の入力 は、TypeScript、Python、Go のコードで同じ `ReplyInput` になります
+    20 | action 返信(reply)
+  = TypeScript（`--target typescript`）: 型 `ReplyInput` と action `reply` の入力 を、どちらも `ReplyInput` と書きます。同じ名前の型は宣言できないので型の検査を通らず（`Duplicate identifier`）、二つの interface なら一つに混ざります。
+  = Python（`--target python`）: 型 `ReplyInput` と action `reply` の入力 を、どちらも `ReplyInput` と書きます。後の宣言が前の宣言を置き換えるので、前の宣言を読むコードが後の宣言を読み、`mypy --strict` を通りません（`already defined`）。
+  = Go（`--target go`）: 型 `ReplyInput` と action `reply` の入力 を、どちらも `ReplyInput` と書きます。パッケージをコンパイルできません（`redeclared in this block`）。
+  = 使わない出力先なら、このままで構いません。使うなら、どちらかの別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/入力の型.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

@@ -1,0 +1,41 @@
+gate two_actions v1
+description "Two actions whose inputs every language writes as one type"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can refund_order, refund__order
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource Ticket
+  description "What is asked about"
+  attributes
+    closed : bool
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Ticket
+
+action refund__order
+  description "Refund an order again"
+  principal User
+  resource Ticket
+
+permit clerks_refund_order
+  description "A clerk can: Refund an order"
+  principal in clerk
+  action refund_order
+  when principal.open
+
+permit clerks_refund__order
+  description "A clerk can: Refund an order again"
+  principal in clerk
+  action refund__order
+  when principal.open
+

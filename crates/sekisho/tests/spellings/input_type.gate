@@ -1,0 +1,30 @@
+gate input_type v1
+description "A type named as the input of an action in every language's code"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource ReplyInput
+  description "What is asked about"
+  attributes
+    closed : bool
+
+action reply
+  description "Reply to a request"
+  principal User
+  resource ReplyInput
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when resource.closed
+

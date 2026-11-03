@@ -1,0 +1,28 @@
+gate global_date_renamed v1
+description "global_date.gate with the type renamed Agenda, as its note says"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal Agenda
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource Ticket
+  description "What is asked about"
+
+action reply
+  description "Reply to a request"
+  principal Agenda
+  resource Ticket
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when principal.open
+

@@ -1,0 +1,32 @@
+gate 自分のvalueの直し(own_value_ja_renamed) v1
+description "自分のValue.gate の列挙の別名を、注のとおりに level にしたもの"
+namespace Shop
+
+enum 水準(level) = 低い(low) | 高い(high)
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 職員(User)
+  description "尋ねる人"
+  roles 係
+  attributes
+    開店(open) : bool
+
+resource 問い合わせ(Ticket)
+  description "尋ねられるもの"
+  attributes
+    優先度(priority) : 水準
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 職員
+  resource 問い合わせ
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when principal.開店
+

@@ -1659,6 +1659,74 @@ permit everyone_reads
   action read
 ```
 
+<a id="e401"></a>
+
+## E401 — Names that are one identifier in the code of the target
+
+**When**: With `--target typescript`, `python` or `go` of `sekisho gen`: W402 says of that target. Written as it is, the code does not compile or type-check, or one declaration takes the place of another, so nothing is written. A generator renames nothing: a call is written with the names `check` read.
+
+**Fix**: Change the alias the notes give. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+
+**Example**: put the files below in one directory, and run `ritsu sekisho gen example.gate --target go` there.
+
+`example.gate`:
+
+```
+gate shop v1
+namespace Shop
+
+role clerk
+  can reply
+
+principal Store
+  roles clerk
+
+resource Ticket
+
+action reply
+  principal Store
+  resource Ticket
+
+permit clerks_reply
+  principal in clerk
+  action reply
+```
+
+See also: [W402](#w402)
+
+<a id="w402"></a>
+
+## W402 — Names that are one identifier in the generated code
+
+**When**: In the code of `--target typescript`, `python` or `go`, two names of the gate are one identifier, or a name is one the code uses itself. A module declares the records of the types it reads, the enums, its own types (`Store`, `Request`, …) and the input of each action (`<Action>Input`) at its top level, each name in its language's spelling (the enum `order_state` is `OrderState`, the input of the action `refund` is `RefundInput`, the attribute `order_id` is the field `OrderId` in Go). So are the globals of TypeScript (`Date`, …), and Python's words and what its module imports (`Literal`, …). In a record of Go, so are the attributes and the fields of the roles and the groups (`Roles`, `MemberOf<type>`). It breaks the code of some of the languages, and the others and Cedar stay as they are, so it is a warning, and `sekisho gen` of a target it breaks stops with E401.
+
+**Fix**: For a target you do not build, leave it as it is. For one you do, change the alias the notes give. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+
+**Example**:
+
+```gate
+gate shop v1
+namespace Shop
+
+role clerk
+  can reply
+
+principal Store
+  roles clerk
+
+resource Ticket
+
+action reply
+  principal Store
+  resource Ticket
+
+permit clerks_reply
+  principal in clerk
+  action reply
+```
+
+See also: [E401](#e401)
+
 <a id="w901"></a>
 
 ## W901 — A value in the shape of a key is written

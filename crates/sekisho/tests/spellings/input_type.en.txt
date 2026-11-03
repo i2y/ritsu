@@ -1,0 +1,7 @@
+warning[W402]: tests/spellings/input_type.gate:20:1: The type `ReplyInput` and the input of the action `reply` are one name, `ReplyInput`, in the code of TypeScript, Python and Go
+    20 | action reply
+  = TypeScript (`--target typescript`): the type `ReplyInput` and the input of the action `reply` are both written `ReplyInput`: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`), and two interfaces become one.
+  = Python (`--target python`): the type `ReplyInput` and the input of the action `reply` are both written `ReplyInput`: the later declaration takes the place of the earlier, so what reads the earlier reads the later, and the module does not pass `mypy --strict` (`already defined`).
+  = Go (`--target go`): the type `ReplyInput` and the input of the action `reply` are both written `ReplyInput`: the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change the alias of one of the two. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/input_type.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

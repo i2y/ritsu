@@ -1,0 +1,6 @@
+warning[W402]: tests/spellings/global_date.gate:9:1: The type `Date` is written `Date` in the code of TypeScript and Go, a name the code uses itself
+     9 | principal Date
+  = TypeScript (`--target typescript`): the type `Date` is written `Date`, and the module uses the global `Date`, or what it imports of that name: the declaration hides it, and the module does not type-check.
+  = Go (`--target go`): the type `Date` is written `Date`, and the code declares that name itself: the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/global_date.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

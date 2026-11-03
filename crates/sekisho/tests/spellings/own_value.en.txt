@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/own_value.gate:5:1: The enum `value` is written `Value` in the code of TypeScript, a name the code uses itself
+     5 | enum value = low | high
+  = TypeScript (`--target typescript`): the enum `value` is written `Value`, and the code declares that name itself: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`), and two interfaces become one.
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/own_value.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

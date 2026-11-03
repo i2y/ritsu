@@ -1,0 +1,6 @@
+warning[W402]: tests/spellings/列挙と型.gate:17:1: The type `OrderState` and the enum `order_state` are one name, `OrderState`, in the code of TypeScript and Python
+    17 | resource 注文(OrderState)
+  = TypeScript (`--target typescript`): the type `OrderState` and the enum `order_state` are both written `OrderState`: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`), and two interfaces become one.
+  = Python (`--target python`): the type `OrderState` and the enum `order_state` are both written `OrderState`: the later declaration takes the place of the earlier, so what reads the earlier reads the later, and the module does not pass `mypy --strict` (`already defined`).
+  = For a target you do not build, leave it as it is. For one you do, change the alias of one of the two. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/列挙と型.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

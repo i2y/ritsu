@@ -12,6 +12,7 @@
 use crate::cedar::{self, Shape};
 use crate::checks::Checked;
 use crate::model::*;
+use crate::spellings::{Declared, From};
 use crate::names::Scope;
 use crate::r#gen::Authorizer;
 use crate::raw;
@@ -35,14 +36,14 @@ pub fn path(alias: &str) -> String {
 }
 
 /// The names the module uses and does not declare: the globals of JavaScript it calls, and the names
-/// it imports. A name of the gate's that is one of them gets `_2` after it.
+/// it imports. A name of the gate's that is one of them is W402, and `gen` stops (E401).
 const GLOBALS: &[&str] = &[
     "Date", "Promise", "Error", "Number", "String", "Boolean", "BigInt", "JSON", "Array", "Object", "Record", "Set", "Map", "Math", "Symbol", "Function", "RegExp",
     "Readonly", "VerifiedPermissionsClient", "IsAuthorizedCommand",
 ];
 
-/// The types the module declares for itself. When a name of the gate's is one of them, the gate's
-/// keeps its name and the module's gets `_2` after it, as in the Python and the Go (DESIGN 5.3).
+/// The types the module declares for itself. A name of the gate's that is one of them is W402, and
+/// `gen` stops (E401), as in the Python and the Go (DESIGN 24).
 const OWN: [&str; 11] = ["Store", "Principal", "Role", "Uid", "Value", "Entity", "Request", "Answer", "SekishoError", "SekishoErrorKind", "VerifiedPermissions"];
 
 /// `refund_order` → `refundOrder`.
@@ -100,16 +101,26 @@ pub struct Names {
     pub inputs: Vec<String>,
 }
 
-/// The names, made as the Python and the Go make theirs: the gate's types and enums first, then the
-/// module's own, then the inputs, each that comes out the same as one before it (or as a global)
-/// with `_2` after it.
+/// What the module declares at its top level, in the order [`names`] reads them: the gate's types
+/// and enums, the module's own, then the inputs. Two of them that are one name are W402 and E401
+/// (`crate::spellings`), and so is one that is a global.
+pub fn declared(g: &Gate, shape: &Shape) -> Vec<Declared> {
+    let mut d: Vec<Declared> = (0..g.types.len()).filter(|&t| raw::reads(g, shape, t)).map(|t| Declared::new(g.types[t].named.alias.clone(), From::Type(t))).collect();
+    d.extend(g.enums.iter().enumerate().map(|(i, e)| Declared::new(pascal(&e.named.alias), From::Enum(i))));
+    d.extend(OWN.iter().map(|s| Declared::new(s.to_string(), From::Own)));
+    d.extend(g.actions.iter().enumerate().map(|(i, a)| Declared::new(input_type(&a.named.alias), From::Input(i))));
+    d
+}
+
+/// Whether the module reads `id` as a global.
+pub fn global(id: &str) -> bool {
+    GLOBALS.contains(&id)
+}
+
+/// The names the module declares ([`declared`]), which `check` holds apart.
 pub fn names(g: &Gate, shape: &Shape) -> Names {
     let read: Vec<usize> = (0..g.types.len()).filter(|&t| raw::reads(g, shape, t)).collect();
-    let mut wanted: Vec<String> = read.iter().map(|&t| g.types[t].named.alias.clone()).collect();
-    wanted.extend(g.enums.iter().map(|e| pascal(&e.named.alias)));
-    wanted.extend(OWN.iter().map(|s| s.to_string()));
-    wanted.extend(g.actions.iter().map(|a| input_type(&a.named.alias)));
-    let mut got = ritsu_emit::ident::unique(wanted, GLOBALS).into_iter();
+    let mut got = declared(g, shape).into_iter().map(|d| d.id);
     let mut next = || got.next().unwrap_or_default();
     let mut types = vec![String::new(); g.types.len()];
     for &t in &read {

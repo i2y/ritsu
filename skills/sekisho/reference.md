@@ -483,6 +483,15 @@ a refusal of that action refuses this one, of the same kind, and with `--authori
 request function of such an action takes `avp` too. `ritsu gen` writes the same into the packages
 of a project, and with `--target cedar` the Cedar once in `<out>/cedar/`.
 
+The code writes each name as its language spells it, and changes none to make room for another.
+Where two names are one identifier in a language (the actions `refund_order` and `refund__order`
+are both `RefundOrder`, the attributes `order_id` and `order__id` both `OrderId` in Go), or a name
+is one the code uses itself (`Store`, `Date` in TypeScript, `Literal` in Python, `ReplyInput` for an
+action `reply`), `sekisho check` warns about it and names the languages, with how each one's code
+would break (W402), and `sekisho gen` writes nothing when it is to write one of them (E401). For a
+language you do not build, leave it as it is. For one you do, change the alias; an alias is also
+the name in Cedar, so if the gate is in use, compare with the version in use with `sekisho diff`.
+
 ## Across the languages
 
 `ritsu check` reads the gates of a project with the other languages, and adds two checks across

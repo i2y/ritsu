@@ -1,0 +1,5 @@
+warning[W402]: tests/spellings/python_literal.gate:5:1: The enum `literal` is written `Literal` in the code of Python, a name the code uses itself
+     5 | enum literal = low | high
+  = Python (`--target python`): the enum `literal` is written `Literal`, and `Literal` is a word of Python, or what the module imports: the module does not load, or the declaration hides it, and the module does not pass `mypy --strict` and a call stops.
+  = For a target you do not build, leave it as it is. For one you do, change its alias. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`.
+tests/spellings/python_literal.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations

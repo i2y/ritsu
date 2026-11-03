@@ -1,0 +1,32 @@
+gate enum_and_type v1
+description "An enum and a type that TypeScript and Python write as one name"
+namespace Shop
+
+enum order_state = low | high
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource OrderState
+  description "What is asked about"
+  attributes
+    state : order_state
+
+action reply
+  description "Reply to a request"
+  principal User
+  resource OrderState
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when resource.state is high
+

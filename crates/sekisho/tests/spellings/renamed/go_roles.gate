@@ -1,0 +1,29 @@
+gate go_roles_renamed v1
+description "go_roles.gate with the attribute renamed duties, as its note says"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can reply
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+    duties : bool
+
+resource Ticket
+  description "What is asked about"
+
+action reply
+  description "Reply to a request"
+  principal User
+  resource Ticket
+
+permit clerks_reply
+  description "A clerk can: Reply to a request"
+  principal in clerk
+  action reply
+  when principal.open
+

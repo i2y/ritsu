@@ -73,7 +73,7 @@ fn write(p: &Path, text: &str) {
 fn package(gate: &str, dir: &Path, name: &str, authorizer: Authorizer, lang: ritsu_base::text::Lang) -> Option<sekisho::check::Outcome> {
     let suite = common::joined();
     let o = sekisho::check::check_file(gate, &suite, &sekisho::check::Options::default()).unwrap();
-    if o.has_errors() {
+    if o.has_errors() || !sekisho::spellings::stops(&o, "python").is_empty() {
         return None;
     }
     let base = dir.join(name);
@@ -199,9 +199,10 @@ def record(e):
     kinds = types[e["type"]]["attrs"]
     args = {}
     for f in dataclasses.fields(cls):
-        if f.name == "roles":
+        # the fields of the roles and the groups, moved aside from an attribute of their name
+        if f.name not in kinds and f.name.rstrip("_") == "roles":
             args[f.name] = list(e["roles"])
-        elif f.name.startswith("member_of_"):
+        elif f.name not in kinds and f.name.startswith("member_of_"):
             args[f.name] = [x["id"] for x in e["member_of"] if "member_of_" + snake(x["type"]) == f.name]
         else:
             args[f.name] = value(kinds.get(f.name), e["attrs"].get(f.name))

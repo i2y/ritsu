@@ -97,6 +97,12 @@ pub fn check_text(path: &str, src: &str, suite: &Suite, opts: &Options) -> Outco
         diags.extend(more);
         walked
     });
+    // what the code of a target writes as one name, or cannot write (W402)
+    if let (Some(s), Some(w)) = (&scope, &walked)
+        && !diag::has_errors(&diags)
+    {
+        diags.extend(crate::spellings::warnings(s, w));
+    }
     diag::sort(&mut diags);
     let ok = match (&scope, diag::has_errors(&diags)) {
         (Some(s), false) => Some(summary(s)),

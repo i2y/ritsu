@@ -1,0 +1,29 @@
+gate goの役割(go_roles_ja) v1
+description "Go が構造体の役割のフィールドと同じ名前で書く属性"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 職員(User)
+  description "尋ねる人"
+  roles 係
+  attributes
+    開店(open) : bool
+    役割(roles) : bool
+
+resource 問い合わせ(Ticket)
+  description "尋ねられるもの"
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 職員
+  resource 問い合わせ
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when principal.開店
+

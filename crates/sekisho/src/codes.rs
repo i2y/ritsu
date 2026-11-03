@@ -7,7 +7,8 @@
 //!
 //! The codes of the checks of every combination and of the contracts (E202–E208, W201, E301–E307,
 //! W301–W303) are in the ledger with no example yet ([`Repro::Later`]) until those checks print
-//! them. W401 is `gen`'s (`--authorizer avp`): its example is the command, not a file `check` reads.
+//! them. W401 (`--authorizer avp`) and E401 are `gen`'s: an example of them is the command, not a file
+//! `check` reads.
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
 use ritsu_base::text::Text;
@@ -39,6 +40,10 @@ fn deep_roles(ja: bool) -> Repro {
     let body: &'static str = Box::leak(body.into_boxed_str());
     Repro::Dir { files: vec![("example.gate", body)], command: vec!["ritsu", "sekisho", "gen", "example.gate", "--target", "cedar", "--authorizer", "avp"] }
 }
+
+/// The example of W402 and E401: a type named as the type of what reads the entities.
+const X_W402: &str = "gate shop v1\nnamespace Shop\n\nrole clerk\n  can reply\n\nprincipal Store\n  roles clerk\n\nresource Ticket\n\naction reply\n  principal Store\n  resource Ticket\n\npermit clerks_reply\n  principal in clerk\n  action reply\n";
+const X_W402_JA: &str = "gate 店(shop) v1\nnamespace Shop\n\nrole 係(clerk)\n  can 返信\n\nprincipal 店主(Store)\n  roles 係\n\nresource 問い合わせ(Ticket)\n\naction 返信(reply)\n  principal 店主\n  resource 問い合わせ\n\npermit 係は返信する(clerks_reply)\n  principal in 係\n  action 返信\n";
 
 /// An entry whose example is written in a later stage.
 fn later(code: &'static str, title: Text, when: Text, fix: Text, related: &'static [&'static str]) -> Entry {
@@ -570,6 +575,38 @@ pub fn ledger() -> Ledger {
             x.repro_ja = Some(deep_roles(true));
             x
         },
+        with_ja(
+            Entry::new(
+                "E401",
+                tr!("名前がこの出力先のコードで同じ識別子になります", "Names that are one identifier in the code of the target"),
+                tr!(
+                    "`sekisho gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがあるときに出ます。そのまま書くと、コードをコンパイルできないか型の検査を通らないか、宣言が別の宣言を置き換えるので、何も書きません。生成器は名前を書き換えません。呼び出しは、検査した名前で書きます。",
+                    "With `--target typescript`, `python` or `go` of `sekisho gen`: W402 says of that target. Written as it is, the code does not compile or type-check, or one declaration takes the place of another, so nothing is written. A generator renames nothing: a call is written with the names `check` read."
+                ),
+                tr!(
+                    "注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。",
+                    "Change the alias the notes give. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`."
+                ),
+                Repro::Dir { files: vec![("example.gate", X_W402)], command: vec!["ritsu", "sekisho", "gen", "example.gate", "--target", "go"] },
+                &["W402"],
+            ),
+            Repro::Dir { files: vec![("example.gate", X_W402_JA)], command: vec!["ritsu", "sekisho", "gen", "example.gate", "--target", "go"] },
+        ),
+        e(
+            "W402",
+            tr!("生成するコードで同じ識別子になる名前", "Names that are one identifier in the generated code"),
+            tr!(
+                "`--target typescript`・`python`・`go` のコードで、ゲートの二つの名前が同じ識別子になるとき、または名前がコードが自分で使う名前と同じになるときに出ます。モジュールは、読む型のレコード、列挙、自分の型（`Store`、`Request` など）、各 action の入力（`<Action>Input`）を一番上の階層で宣言します。名前は言語ごとの綴りになります（列挙 `order_state` は `OrderState`、action `refund` の入力は `RefundInput`、Go の属性 `order_id` はフィールド `OrderId`）。TypeScript のグローバル（`Date` など）と、Python の語と読み込む名前（`Literal` など）も同じです。Go のレコードでは、属性と、役割とグループのフィールド（`Roles`、`MemberOf<型>`）も同じです。壊れるのは一部の言語のコードで、ほかの言語と Cedar はそのままなので、警告です。壊れる出力先の `sekisho gen` は E401 で止まります。",
+                "In the code of `--target typescript`, `python` or `go`, two names of the gate are one identifier, or a name is one the code uses itself. A module declares the records of the types it reads, the enums, its own types (`Store`, `Request`, …) and the input of each action (`<Action>Input`) at its top level, each name in its language's spelling (the enum `order_state` is `OrderState`, the input of the action `refund` is `RefundInput`, the attribute `order_id` is the field `OrderId` in Go). So are the globals of TypeScript (`Date`, …), and Python's words and what its module imports (`Literal`, …). In a record of Go, so are the attributes and the fields of the roles and the groups (`Roles`, `MemberOf<type>`). It breaks the code of some of the languages, and the others and Cedar stay as they are, so it is a warning, and `sekisho gen` of a target it breaks stops with E401."
+            ),
+            tr!(
+                "使わない出力先なら、このままで構いません。使うなら、注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。",
+                "For a target you do not build, leave it as it is. For one you do, change the alias the notes give. An alias is also the name in Cedar, so if the gate is in use, compare the changed file with the version in use with `sekisho diff`."
+            ),
+            X_W402,
+            X_W402_JA,
+            &["E401"],
+        ),
         // ── Security (ritsu's DESIGN 16) ──
         e(
             "W901",

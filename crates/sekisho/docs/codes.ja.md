@@ -1660,6 +1660,74 @@ permit だれでも読む(everyone_reads)
   action 読む
 ```
 
+<a id="e401"></a>
+
+## E401 — 名前がこの出力先のコードで同じ識別子になります
+
+**いつ出るか**: `sekisho gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがあるときに出ます。そのまま書くと、コードをコンパイルできないか型の検査を通らないか、宣言が別の宣言を置き換えるので、何も書きません。生成器は名前を書き換えません。呼び出しは、検査した名前で書きます。
+
+**直し方**: 注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu sekisho gen example.gate --target go` を走らせます。
+
+`example.gate`:
+
+```
+gate 店(shop) v1
+namespace Shop
+
+role 係(clerk)
+  can 返信
+
+principal 店主(Store)
+  roles 係
+
+resource 問い合わせ(Ticket)
+
+action 返信(reply)
+  principal 店主
+  resource 問い合わせ
+
+permit 係は返信する(clerks_reply)
+  principal in 係
+  action 返信
+```
+
+関連: [W402](#w402)
+
+<a id="w402"></a>
+
+## W402 — 生成するコードで同じ識別子になる名前
+
+**いつ出るか**: `--target typescript`・`python`・`go` のコードで、ゲートの二つの名前が同じ識別子になるとき、または名前がコードが自分で使う名前と同じになるときに出ます。モジュールは、読む型のレコード、列挙、自分の型（`Store`、`Request` など）、各 action の入力（`<Action>Input`）を一番上の階層で宣言します。名前は言語ごとの綴りになります（列挙 `order_state` は `OrderState`、action `refund` の入力は `RefundInput`、Go の属性 `order_id` はフィールド `OrderId`）。TypeScript のグローバル（`Date` など）と、Python の語と読み込む名前（`Literal` など）も同じです。Go のレコードでは、属性と、役割とグループのフィールド（`Roles`、`MemberOf<型>`）も同じです。壊れるのは一部の言語のコードで、ほかの言語と Cedar はそのままなので、警告です。壊れる出力先の `sekisho gen` は E401 で止まります。
+
+**直し方**: 使わない出力先なら、このままで構いません。使うなら、注が挙げる別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+
+**再現**:
+
+```gate
+gate 店(shop) v1
+namespace Shop
+
+role 係(clerk)
+  can 返信
+
+principal 店主(Store)
+  roles 係
+
+resource 問い合わせ(Ticket)
+
+action 返信(reply)
+  principal 店主
+  resource 問い合わせ
+
+permit 係は返信する(clerks_reply)
+  principal in 係
+  action 返信
+```
+
+関連: [E401](#e401)
+
 <a id="w901"></a>
 
 ## W901 — 鍵の形の値が書かれています

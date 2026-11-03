@@ -843,7 +843,7 @@ export async function refundOrderRequest(store: Store, principal: Principal, inp
   …
 ```
 
-規則と日付の生成物の呼び方は、口から取る。rulec の関数の名前と引数の型は `RuleFacts::typescript`・`python`・`go`（ritsu の DESIGN 3.2）、koyomi の関数の名前と引数の順は `DateFacts` の日付の別名と入力、カレンダーの関数は `is_open` で、モジュールはカレンダーの別名（`Dates::calendar`）である。どちらのモジュールも名前空間ごと別名で読み（TypeScript は `import * as rule_refund_limit`、`dates_refund_terms`、Python は `from ..rules import refund_limit as _rules_refund_limit`、Go は `rulesrefundlimit "<module>/rules/refundlimit"`）、ゲートの型や列挙の名前とぶつからないようにする。生成するコードが自分で使う名前（`Principal`、`Store`、`Request`、`Answer` など）とゲートの型や列挙の名前がぶつかれば、どの言語でも、ゲートの名前はそのまま使い、生成するコードの名前に `_2` を付ける（`Store_2`）。ゲートの名前が、生成するコードが呼ぶ組み込みの名前や読み込む名前（TypeScript の `Date`、Python の `Protocol` など）と同じなら、ゲートの名前のほうに `_2` を付ける。
+規則と日付の生成物の呼び方は、口から取る。rulec の関数の名前と引数の型は `RuleFacts::typescript`・`python`・`go`（ritsu の DESIGN 3.2）、koyomi の関数の名前と引数の順は `DateFacts` の日付の別名と入力、カレンダーの関数は `is_open` で、モジュールはカレンダーの別名（`Dates::calendar`）である。どちらのモジュールも名前空間ごと別名で読み（TypeScript は `import * as rule_refund_limit`、`dates_refund_terms`、Python は `from ..rules import refund_limit as _rules_refund_limit`、Go は `rulesrefundlimit "<module>/rules/refundlimit"`）、ゲートの型や列挙の名前とぶつからないようにする。ゲートの型や列挙の名前が、生成するコードが自分で使う名前（`Principal`、`Store`、`Request`、`Answer` など）や、呼ぶ組み込みの名前、読み込む名前（TypeScript の `Date`、Python の `Protocol` など）とぶつかるときは、名前を付け替えず、`check` が W402 で言い、その出力先の `gen` を E401 で止める（24 章）。
 
 - 規則の列挙の出力は、生成物の値をそのまま Cedar に渡さない。rulec の生成物の値は `.rule` に書いた名前で、日本語の版では `上限まで` になるからである。生成物のメンバーから公開名（`EnumValue::public`。`within_limit`）を引く表を書き、それで引いて渡す（16.1 の 14）。設計の段階の見本は値をそのまま渡していて、英語の版でしか合わなかった。ゲートの列挙の値を規則の列挙の入力に渡すときも、値ごとの表で規則のメンバーを引く。
 - 数は、宣言した単位で数えた整数として受け取る（TypeScript は `bigint`、Python は `int`、Go は `int64`）。規則に渡すときに、規則の単位の型（`GBPInclTax`）にする。二つの規則が同じ単位の型をそれぞれ持てば、Python の `NewType` も Go の名前付きの型も別の型になり、どちらかの型で受け取ると、もう一方に渡せないからである。
@@ -1018,7 +1018,7 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
 - 参照の答えは、組み合わせの答えをそのまま使わず、生の値から求め直す（`raw::Model::evaluate`）。rulec と koyomi の参照の評価器を口で呼んで計算した値を求め、組み合わせの場所に当てはめて、検査と同じ形にしたポリシーで決める（`eval`）。拒む順と種類も 5.3 のとおりに言う。生成するコードが従う決まりは、この関数が一か所に書く。テストは、組み合わせから作った生の値の答えが、その組み合わせの答えとどれも同じであることも確かめる。
 - 生成したコードは、言語ごとのハーネスが生の値（JSON）を読み、ケースごとに `Store` を作って `authorize<Action>` を呼び、答えを一件一行の JSON で出す。比べるのは、許すか、決めたポリシーの集合（並べ替えて比べる）、拒んだ種類、Cedar に渡した context（尋ねたとき）である。
 - 例の英語の版は、1,078 通りから区間の両端で 2,134 件、拒むはずの 28 件、範囲の外の日に答える 2 件（`view_order` と `export_refunds`）の 2,164 件になる。検査を通る 35 のファイル（action の無い 7 つには件が無い）では 27,579 件である（段階 C を取り込んだときは、27 のファイルで 27,531 件だった）。生の値が見つからない組み合わせは、W303 の材料の 2 通り（整数では届かない値）だけである。2026-10-11 に `allowed` の例と材料（2.11）を足し、cedar-wasm、cedarpy、cedar-go のどれでも、30,204 件が参照の評価と一致した（足す前は 27,611 件）。足した分は、承認の例の二つの版が 132 通りから 154 件ずつ、文書の例の二つの版が 34 通りから 46 件ずつ、`tests/gen/asked.gate` が 1,376 通りから 2,193 件である。mypy の strict と go vet は 126 のパッケージに通り、pyright 1.1.414 の strict は、`allowed` のために書く行に誤りを言わない（6 のパッケージで 55 の誤りは、どれも前からある形で、使わない関数、要らない比べ、cedarpy の型）。
-- TypeScript（`tests/typescript.rs`）：action のある 28 の `.gate` で、英語と日本語（`--lang ja`）と `--authorizer avp` のモジュールの全部が `tsc --strict`（5.9.3）を通り、Node 23.11.0 と cedar-wasm 4.13.0 で、27,579 件の全部が参照の評価と一致した（テストは 55 秒ほど）。名前がぶつかるゲート（型 `Store`・`Request`・`Date` と列挙 `value`）もテストの中で書き、ゲートの型と列挙が名前を保ち、生成するコードの名前が `Store_2` などになること、`tsc --strict` を通ること、16 件が参照の評価と一致することを確かめる。テストが誤りを見つけることも試した。生成するコードの日付の比べ方 `<=` を `<` にすると、例の英語の版の 2,164 件のうち 528 件が食い違った（期間の最後の日を使っているため）。
+- TypeScript（`tests/typescript.rs`）：action のある 28 の `.gate` で、英語と日本語（`--lang ja`）と `--authorizer avp` のモジュールの全部が `tsc --strict`（5.9.3）を通り、Node 23.11.0 と cedar-wasm 4.13.0 で、27,579 件の全部が参照の評価と一致した（テストは 55 秒ほど）。名前がぶつかるゲートは `gen` が止める（24 章）。テストが誤りを見つけることも試した。生成するコードの日付の比べ方 `<=` を `<` にすると、例の英語の版の 2,164 件のうち 528 件が食い違った（期間の最後の日を使っているため）。
 - Python と Go（`tests/python.rs`、`tests/go.rs`）：同じ 27,579 件で、cedarpy 4.12.1 と cedar-go v1.8.0 の答えが参照の評価と一致した（どちらも 50 秒ほど）。型の検査は、35 の `.gate` を `--authorizer cedar`、`--authorizer avp`、`--lang ja` の三通りで生成した 105 のパッケージで、Python は `mypy --strict`（2.4.0）、Go は gofmt と `go vet`（Go 1.25.5）を通した。Go のハーネスは、反射で生の値をレコードと入力の構造体に入れ、ゲートごとに `Store` のメソッドを書く。
 - 規則と日付の生成物は、テストの中で rulec と koyomi の生成の関数（`rulec::codegen::package_module`、koyomi の言語ごとの `module`）で作り、`ritsu gen` のパッケージと同じ形に並べる。ランナーは `tools/runner-ts/`（`package-lock.json`）、`tools/runner-py/`（依存までハッシュつきで固定した `requirements.txt`。`install.sh` が uv で `.venv` を作る）、`tools/runner-go/`（`go.mod` と `go.sum`。`install.sh` が `go mod download`）で、Go のテストはモジュールのキャッシュだけでビルドする（`GOPROXY=off`）。CI は `tools.yml` の「the others」の組で三つを入れる。
 - `--authorizer avp` のコードは、型の検査だけをする（ネットワークを使わない。本物の Verified Permissions で走らせて確かめることは、まだしていない。15 章）。
@@ -1491,7 +1491,9 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | W302 | `can` に書いた action を、その役割だけでは一度も許されない |
 | W303 | 決められない（多めに数えた組み合わせから出た例を、具体的な入力で起こせなかった。読んだ Cedar に有限でない式がある） |
 | W304 | 期待が、どの組み合わせも選ばない（成り立つが、何も確かめていない。`principal` の行が当てはまる数と、それぞれの行が満たされる数を注に） |
+| E401 | `gen` の `--target typescript`・`python`・`go` で、W402 がその出力先について言うものがある。何も書かない |
 | W401 | 生成したポリシーかスキーマが Verified Permissions の上限を超える（`--authorizer avp`） |
+| W402 | ゲートの二つの名前が生成するコードで一つの識別子になるか、名前がコードの自分で使う名前と同じ（`gen` はその出力先で E401） |
 | W901 | 鍵の形の値（ritsu の DESIGN 16.3 の九つの種類）を、文字列かコメントに書いた。同じ行に `ritsu: test secret` と書いた値は言わない |
 | W910 | ポリシーが読む `input` が、守る操作の契約が秘密と印を付けた引数かフィールドである（その値は、Cedar に尋ねるリクエストと判断の記録に残る） |
 
@@ -2102,3 +2104,60 @@ ritsu の生成のコマンドは、どれも `--target` を何度でも書き�
 - 付属物は無い。三つの言語のコードはポリシーとスキーマを中に持ち（`POLICIES` と `SCHEMA`）、`cedar/` のファイルを読まない。
 
 確かめたこと：`tests/cli.rs` の `gen_writes_every_target_named_in_one_run` で、例の `refunds.gate` について、`--target go --target python --target typescript --target cedar` の一度の実行が書くファイルの全部と出力の行が、四つを一つずつ書いたものを cedar、typescript、python、go の順につないだものと同じであること（`--target go --target cedar` も同じ）。同じ名前を二度書いたとき（英日）、`--target` が無いとき（英日）、知らない名前のときに、標準エラーに一行を出し、何も書かずに exit 2 で終わること。
+
+## 24. 生成するコードの名前を付け替えない（2026-11-04）
+
+### 24.1 きっかけ
+
+rulec、koyomi、chobo は、書いた名前が生成先で一つの識別子になるときと、生成先がその名前を持てないときに `check` で言い、`gen` がその出力先で止まる（rulec の DESIGN 15.263、15.265）。sekisho の三つの言語の生成器だけが、二つ目の名前に `_2` を足して、黙って別の名前を書いていた。
+
+### 24.2 原因
+
+生成器は `ritsu_emit::ident::unique` で、宣言する名前を順に受け付け、すでにある名前には `_2` を足していた（5 章）。ゲートの型 `Store` は、生成するコードの `Store` が `Store_2` になり、型 `Date` は、ゲートの名前のほうが `Date_2` になる。呼ぶ側が実装し読む型の名前が、ゲートのほかの名前の有無と言語で変わるのに、`check` は何も言わなかった。
+
+この章の前のバイナリで次の九つの形を書くと、どれも `gen` が通り、書いていない名前が生成物に現れた（`Store_2`、`Date_2`、`Value_2`、`Literal_2`、`OrderState_2`、`ReplyInput_2`、`RefundOrderInput_2`、`OrderId_2`、`Roles_2`）。
+
+### 24.3 決定
+
+1. **`typescript.rs`、`go.rs`（二か所）、`python.rs` の `ident::unique` を外す。** 生成器は名前を書き換えない。`names()` と `record()` は、どの名前も書いたとおりの綴りのまま読む。
+2. **`check` は W402 で言い、`gen` は E401 で止まる。** 番号は台帳の決まりのとおり、生成の帯（W401 と同じ 4xx）に置く。W402 はゲートの検査が通ったときに言い、出力先を挙げ、ゲートは通る。`sekisho gen` は、書く出力先のどれかを W402 が挙げていれば E401 を言い、その実行では何も書かずに 1 で終わる。W402 の挙げない出力先だけの実行は書く。
+3. **何を宣言するかは生成器が持つ。** `typescript::declared`・`global`、`python::declared`・`global`、`go::declared`・`declared_fields` が、書く名前と出どころ（`spellings::From`）を返し、`spellings::find` がそれを比べる。W402 と生成するコードが食い違わないように、表を一つにした。
+
+   | 形 | 例 | 挙げる出力先 |
+   |---|---|---|
+   | 読む型が、コードが自分で宣言する名前 | 型 `Store` | TypeScript、Python、Go |
+   | 型が、グローバルかパッケージの型の名前 | 型 `Date` | TypeScript、Go |
+   | 列挙が、モジュールが宣言する名前 | 列挙 `value` | TypeScript |
+   | 列挙が、モジュールが読み込む名前 | 列挙 `literal` | Python |
+   | 列挙と型が一つの名前 | 列挙 `order_state` と型 `OrderState` | TypeScript、Python |
+   | 型が、action の入力の型の名前 | 型 `ReplyInput` | TypeScript、Python、Go |
+   | 二つの action の入力の型が一つの名前 | `refund_order` と `refund__order` | TypeScript、Python、Go |
+   | 二つの属性が Go の一つのフィールド | `order_id` と `order__id` | Go |
+   | 属性が Go の役割のフィールド | 属性 `roles` | Go |
+
+   TypeScript は読む型だけを宣言するので（`raw::reads`）、属性を読まない型は当たらない。Cedar の出力先はどの形でも止まらない。
+
+### 24.4 捨てたもの
+
+- 警告だけを足して、付け替えを残すこと。呼ぶ側が読む名前が言語で違うままで、警告を読まない人は `Store_2` を実装することになる。
+- 生成するコードの自分の名前を変えて、ぶつかりにくくすること（`Store` を別の名前に）。ぶつからないゲートの生成物のバイト列まで変わる。
+- `ident::unique` を ritsu-emit から消すこと。生成器は読まなくなったが、ritsu-emit の試験が読んでいるので、この章では残した。
+
+### 24.5 変わること
+
+- 上の形のゲートは、挙げる出力先の `gen` が止まる。前は `_2` の名前で書いて通っていた。その名前を読むコードがあるなら、別名を変えて読み替える。別名は Cedar の名前でもあるので、使っているゲートなら `sekisho diff` で比べる。
+- 形に当たらないゲートの生成物は一字も変わらない。
+
+### 24.6 確かめたこと
+
+- `tests/spellings.rs`（6）と、材料の `tests/spellings/`（九つの形。英語を先に、日本語の版を横に置いて 18 本、どれも英日の golden を持つ）。どのゲートも W402 を一つだけ言い、挙げる出力先は形ごとに決めたとおりである。挙げる出力先の `sekisho gen` は E401 で何も書かず、挙げない出力先は書く。注のとおりに別名を変えた 18 本（`tests/spellings/renamed/`）は何も言われず、四つの出力先のどれでも書く。
+- ツールの段で、W402 の挙げる出力先も含めて、36 本を言語の道具に通した。`go vet` は 12 本、`tsc --strict` は 12 本、`mypy --strict` は 10 本が止まり、止まったのは W402 の挙げるものだけで、止まり方は注のとおりである。TypeScript の二つの `interface` は黙って一つになるので、同じ名前の宣言があることも壊れたと数える。
+- 名前を変えた版は、`tests/typescript.rs`、`tests/python.rs`、`tests/go.rs` のほかのゲートと同じく、生成したコードの答えを参照の評価と比べる。W402 の挙げる出力先は、そこから外す。
+- W402 の変異（`tests/mutants/W402_*.gate`）と、E401 の台帳の例（`sekisho gen` のコマンドの形）。
+- この章の前のバイナリといまのバイナリで、木の `.gate`（252 本）の `check`（英語、日本語、JSON）と四つの出力先の生成物を比べた。違うのは 20 本で、材料の 18 本と変異の 2 本である。ほかは一字も変わらない。
+
+### 24.7 見つけて直していないもの
+
+- `ritsu gen` は止まるが、文が違う。`crates/ritsu/src/package.rs` は `generate` のエラーを sekisho の不具合として包んで exit 2 にするので、E401 の文がそのまま届かない。koyomi のように、先に `sekisho::spellings::stops` を読む形にするのは ritsu の側の直しである。
+- `ident::unique` のほかにも、名前をよける所が二つ残っている。TypeScript の `entity_field` は属性を `roles` と `member_of` からよけ（`ident::aside`）、Python の `record` は自分のフィールドをよける（属性 `roles` は `roles_`）。どちらもエンティティのデータの中のキーか、クラスの中の名前で、組めて答えも同じなので、今回は外していない。
+- `GLOBALS` は表ごと見るので、モジュールがそのグローバルを読まないゲートでも、その名前の型は W402 になる。読むかどうかはゲートで変わり、多めに止める側に倒した。

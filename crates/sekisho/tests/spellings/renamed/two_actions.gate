@@ -1,0 +1,41 @@
+gate two_actions_renamed v1
+description "two_actions.gate with the second action renamed refund_again, as its note says"
+namespace Shop
+
+role clerk
+  description "Answers requests"
+  can refund_order, refund_again
+
+principal User
+  description "The one who asks"
+  roles clerk
+  attributes
+    open : bool
+
+resource Ticket
+  description "What is asked about"
+  attributes
+    closed : bool
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Ticket
+
+action refund_again
+  description "Refund an order again"
+  principal User
+  resource Ticket
+
+permit clerks_refund_order
+  description "A clerk can: Refund an order"
+  principal in clerk
+  action refund_order
+  when principal.open
+
+permit clerks_refund_again
+  description "A clerk can: Refund an order again"
+  principal in clerk
+  action refund_again
+  when principal.open
+

@@ -1,0 +1,28 @@
+gate 自分のstore(own_store_ja) v1
+description "どの言語のコードでも、エンティティを読むものの型と同じ名前の型"
+namespace Shop
+
+role 係(clerk)
+  description "問い合わせに答える"
+  can 返信
+
+principal 店(Store)
+  description "尋ねる人"
+  roles 係
+  attributes
+    開店(open) : bool
+
+resource 問い合わせ(Ticket)
+  description "尋ねられるもの"
+
+action 返信(reply)
+  description "問い合わせに返信する"
+  principal 店
+  resource 問い合わせ
+
+permit 係は返信できる(clerks_reply)
+  description "係は次のことができる: 問い合わせに返信する"
+  principal in 係
+  action 返信
+  when principal.開店
+

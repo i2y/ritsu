@@ -1,0 +1,7 @@
+警告[W402]: tests/spellings/自分のStore.gate:9:1: 型 `Store` は、TypeScript、Python、Go のコードで `Store` と書かれ、コードが自分で使う名前と同じです
+     9 | principal 店(Store)
+  = TypeScript（`--target typescript`）: 型 `Store` を `Store` と書きますが、コードは同じ名前を自分でも宣言します。同じ名前の型は宣言できないので型の検査を通らず（`Duplicate identifier`）、二つの interface なら一つに混ざります。
+  = Python（`--target python`）: 型 `Store` を `Store` と書きますが、コードは同じ名前を自分でも宣言します。後の宣言が前の宣言を置き換えるので、前の宣言を読むコードが後の宣言を読み、`mypy --strict` を通りません（`already defined`）。
+  = Go（`--target go`）: 型 `Store` を `Store` と書きますが、コードは同じ名前を自分でも宣言します。パッケージをコンパイルできません（`redeclared in this block`）。
+  = 使わない出力先なら、このままで構いません。使うなら、その別名を変えてください。別名は Cedar の名前でもあるので、すでに使っているゲートなら、変えたあと、使っている版と `sekisho diff` で比べてください。
+tests/spellings/自分のStore.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
