@@ -74,10 +74,13 @@ impl Engine {
     pub fn checked(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
         use crate::diag::Show;
         use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
+        // the books as they come, as the command compares them (W108, spellings.rs)
+        let mut earlier = Vec::new();
         files
             .iter()
             .map(|f| match check::check_file(Path::new(f)) {
-                Ok((src, c)) => {
+                Ok((src, mut c)) => {
+                    check::compare_across(f, &mut c, &mut earlier);
                     let file = ritsu_base::paths::from_root(root, Path::new(f));
                     let mut parts: Vec<Part> = c
                         .diags

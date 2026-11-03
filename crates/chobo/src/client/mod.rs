@@ -12,14 +12,16 @@ pub mod go;
 pub mod python;
 pub mod rust;
 pub mod typescript;
-/// The tables of the characters of Rust's names that E063 and the Rust clients read: ritsu-emit's,
-/// made from the Unicode Character Database, which kaname reads too.
+/// The tables of the characters of Rust's names that the Rust clients read: ritsu-emit's, made
+/// from the Unicode Character Database, which E063 (through `ritsu_emit::ident`) and kaname read too.
 pub use ritsu_emit::xid;
 
 use crate::diag::{self, DiagExt, Diag, OpLine};
 use crate::ids;
 use crate::model::*;
+use crate::target::Lang;
 use crate::witness::Builder;
+use ritsu_base::text::Text;
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -296,3 +298,65 @@ pub fn head(book: &Book, origin: &Origin, c: Comment) -> String {
 
 pub use ritsu_emit::header::{Comment, Origin, generated};
 
+// ── E063 ──────────────────────────────────────────────────────────────────
+
+/// The names `lang`'s client cannot take as identifiers (E063): one with a character an identifier
+/// of the language does not have where the name has it. A name of chobo is a letter or `_`, then
+/// letters, digits and `_`, as Unicode counts them (syntax.rs). A Rust and a Python identifier is
+/// XID_Start or `_`, then XID_Continue, a TypeScript one ID_Start or `_`, then ID_Continue, and a Go
+/// one a letter or `_`, then letters, decimal digits and `_` (ritsu-emit's `ident` and `xid`): each
+/// leaves out digits that are not decimal (`²`, `½`), and marks are out of Go's altogether and of the
+/// first place in the others'. Every name the client writes as an identifier is held to it: the
+/// transfers', the accounts' and the parameters', and in Rust the bounds' reasons (the variants of
+/// `Reason`, which the other clients write as strings). A language's SQL has no such limit.
+pub fn check_names(book: &Book, lang: Lang) -> Vec<Diag> {
+    let (takes, title): (fn(&str) -> bool, &str) = match lang {
+        Lang::TypeScript => (ritsu_emit::ident::typescript_takes, "TypeScript"),
+        Lang::Python => (ritsu_emit::ident::python_takes, "Python"),
+        Lang::Go => (ritsu_emit::ident::go_takes, "Go"),
+        Lang::Rust => (ritsu_emit::ident::rust_takes, "Rust"),
+        Lang::Sql => return Vec::new(),
+    };
+    let not_an_ident = |name: &str, what: Text, line: usize, col: usize| not_an_ident(name, what, line, col, title, takes);
+    let mut d = Vec::new();
+    for t in &book.transfers {
+        d.extend(not_an_ident(&t.name, tr!("振替の名前", "The transfer's name"), t.line, t.col));
+        for p in &t.params {
+            d.extend(not_an_ident(&p.name, tr!("引数の名前", "The parameter's name"), p.line, p.col));
+        }
+    }
+    for a in &book.accounts {
+        d.extend(not_an_ident(&a.name, tr!("勘定の名前", "The account's name"), a.line, a.col));
+        for p in &a.params {
+            d.extend(not_an_ident(p, tr!("勘定の引数の名前", "The name of the account's parameter"), a.line, a.col));
+        }
+        if lang == Lang::Rust {
+            for b in [&a.lower, &a.upper].into_iter().flatten() {
+                d.extend(not_an_ident(&b.refusal, tr!("拒否の理由", "The reason"), b.line, b.col));
+            }
+        }
+    }
+    crate::model::sort(&mut d);
+    d.dedup_by(|a, b| a.line == b.line && a.col == b.col && a.message == b.message);
+    d
+}
+
+/// E063 for `name`, when it has a character the language `l` takes in no identifier where the name
+/// has it.
+fn not_an_ident(name: &str, what: Text, line: usize, col: usize, l: &str, takes: fn(&str) -> bool) -> Option<Diag> {
+    let (at, c) = name.chars().enumerate().find(|(i, c)| if *i == 0 { !takes(&c.to_string()) } else { !takes(&format!("_{c}")) })?;
+    let cp = format!("U+{:04X}", c as u32);
+    let msg = if at == 0 {
+        tr!(
+            "{{what}} `{name}` は {c}（{cp}）で始まります。{l} の識別子の先頭には、この字を使えません",
+            "{{what}} `{name}` begins with {c} ({cp}), which no {l} identifier begins with"
+        )
+    } else {
+        tr!("{{what}} `{name}` に {c}（{cp}）があります。{l} の識別子には、この字を使えません", "{{what}} `{name}` has {c} ({cp}), which no {l} identifier holds")
+    }
+    .sub("what", &what);
+    Some(diag::error("E063", line, col, msg).hint(tr!(
+        "名前からその字を外すか、ほかの字に替えてください。{l} の識別子は、文字か `_` で始まり、そのあとに文字と十進の数字と `_` が続きます（たとえば `²` は `2` にしてください）",
+        "Take the character out of the name, or write another in its place: a {l} identifier is a letter or `_`, then letters, decimal digits and `_` (write `²` as `2`, for one)"
+    )))
+}

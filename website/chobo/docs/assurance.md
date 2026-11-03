@@ -71,8 +71,8 @@ when it is late and differs again.
   go through under the `sql_mode`s `ANSI_QUOTES` and `NO_BACKSLASH_ESCAPES` (Vitess lets no session
   set them: there they go through under the mode it keeps).
 - A book too large for one TigerBeetle request does not build (E060), nor one with a name too long
-  for PostgreSQL (E061), nor one whose name MySQL cannot hold (E062), nor, for a Rust target, one
-  with a name Rust cannot write (E063), nor, for a target whose code would spell two of its names
+  for PostgreSQL (E061), nor one whose name MySQL cannot hold (E062), nor, for a target whose
+  language has no identifier of it, one with such a name (E063), nor, for a target whose code would spell two of its names
   as one identifier, one as a name its client uses itself, or one its client cannot take as it
   is, that book (E064). For each case of E064 there is a book under `tests/spellings`: the code
   chobo would write for the targets W108 names stops in that language's own tool (`tsc` and
@@ -85,8 +85,8 @@ The generated TypeScript passes `tsc --strict`, with `erasableSyntaxOnly` and `n
 Python `py_compile`, and ritsu's tests put it through `mypy --strict`; the Go `gofmt` and `go vet`.
 The Rust builds on the 2021 and the 2024 editions with no warning, clippy's lints among them, and
 in a package of ritsu's too, where it takes the types of its units; the crates its head names are
-the versions the tests lock, and each character E063 keeps out of a name is one rustc keeps out,
-of every character a name of chobo's can hold. The tests run them with Node.js 23.11, Python 3.13,
+the versions the tests lock, and each character E063 keeps out of a Rust name is one rustc keeps
+out, of every character a name of chobo's can hold. The tests run them with Node.js 23.11, Python 3.13,
 Go 1.26 and Rust 1.94, on PostgreSQL 18.0, TigerBeetle 0.17.9, MySQL 8.4.11, TiDB 8.5.8 and
 Vitess 24.0.5.
 

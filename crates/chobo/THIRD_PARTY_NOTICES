@@ -1,0 +1,14 @@
+Third-party notices for chobo
+=============================
+
+chobo's tables of Unicode's normalization (src/normal_table.rs), which the check reads to compare
+names as Rust (NFC) and Python (NFKC) read them, are made from two files of the Unicode Character
+Database:
+
+  Unicode Character Database 17.0.0, https://www.unicode.org/Public/17.0.0/ucd/
+    UnicodeData.txt                  the decompositions and the canonical combining classes
+    DerivedNormalizationProps.txt    the property Full_Composition_Exclusion
+
+tools/normal/make_table.py writes the tables from the two files, and the head of the tables gives
+their version. They are under the Unicode License V3, the same as ritsu-emit's (see
+../ritsu-emit/THIRD_PARTY_NOTICES, which has its text).

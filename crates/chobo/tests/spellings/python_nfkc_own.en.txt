@@ -1,0 +1,9 @@
+warning[W108]: python_nfkc_own.book:11:10: The transfer `ｂａｌａｎｃｅ` is a name the Python client uses itself
+    11 | transfer ｂａｌａｎｃｅ(delivery: string, sku: string, qty: pcs)
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): Python compares identifiers in NFKC, so `ｂａｌａｎｃｅ` and `balance` are one identifier (their characters U+FF42 and U+0062 differ): the client writes the transfer `ｂａｌａｎｃｅ` as the attribute `ｂａｌａｎｃｅ` of `Book`, and `Book` has `balance`, which reads the balances: the attribute is set to the transfer first and then to what reads the balances, so no call reaches the transfer.
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+python_nfkc_own.book: ok, 1 warning(s)
+  ｂａｌａｎｃｅ.do  may be refused: key_conflict
+  ship.do            may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: ｂａｌａｎｃｅ once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

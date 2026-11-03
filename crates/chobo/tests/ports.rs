@@ -22,6 +22,20 @@ fn books() -> Vec<String> {
     out
 }
 
+/// The port compares the books it is given, as `chobo check` does (`spellings::across`).
+#[test]
+fn the_port_compares_the_books_it_is_given() {
+    use ritsu_ports::Part;
+    let dir = root().join("tests/spellings/across");
+    let files = [dir.join("shop.book").display().to_string(), dir.join("shop_upper.book").display().to_string()];
+    let got = Engine.checked(Path::new("."), &files, ritsu_base::text::Lang::En);
+    assert_eq!(got.len(), 2);
+    let findings = |k: usize| got[k].parts.iter().filter(|p| matches!(p, Part::Finding(_))).count();
+    assert_eq!(findings(0), 0);
+    assert_eq!(findings(1), 1);
+    assert_eq!(got[1].json.to_string().matches("\"W108\"").count(), 1, "{}", got[1].json.to_string());
+}
+
 #[test]
 fn the_facts_are_what_chobo_api_says() {
     for path in books() {

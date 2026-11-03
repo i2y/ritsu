@@ -1,0 +1,9 @@
+警告[W108]: postgresql_schema.book:1:6: 帳簿 `pg_stock` は、 のクライアントでそのままでは使えません
+     1 | book pg_stock v1
+  = PostgreSQL（`--target sql|typescript|python|go|rust --books postgres`）: SQL はスキーマ `pg_stock` を作りますが、`pg_` で始まる名前は PostgreSQL がシステムのスキーマのために取っておく名前なので、`create schema` が止まり（`unacceptable schema name`）、読み込めません。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+postgresql_schema.book: ok、警告 1 件
+  receive.do  拒否されうる理由: key_conflict
+  ship.do     拒否されうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: ship は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。

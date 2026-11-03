@@ -1,0 +1,9 @@
+警告[W108]: PythonのNFKCのself.book:11:25: 振替 `入荷` の引数 `ｓｅｌｆ` は、Python のクライアントが自分で使う名前と同じになります
+    11 | transfer 入荷(納品: string, ｓｅｌｆ: string, 品番: string, 数: 個)
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: Python は識別子を NFKC にしてから比べるので、`ｓｅｌｆ` と `self` は同じ識別子です（U+FF53 と U+0073 の字が違います）。クライアントは、振替 `入荷` の引数 `ｓｅｌｆ` を `_入荷Transfer` のメソッドの引数 `ｓｅｌｆ` にしますが、`_入荷Transfer` のメソッドは、自分で `self` を使います。同じ名前の引数がそれを隠すか二つになるので、モジュールを読み込めないか、呼び出しが止まります（`SyntaxError`、`TypeError`）。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+PythonのNFKCのself.book: ok、警告 1 件
+  入荷.do  拒否されうる理由: key_conflict
+  出荷.do  拒否されうる理由: 在庫切れ（在庫(品番) at least 0）、key_conflict、already_refused
+  キー: 入荷 は、納品 と ｓｅｌｆ の組ごとに一度だけ動きます。キーが同じで 品番、数 のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: 出荷 は、注文 と 品番 の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。

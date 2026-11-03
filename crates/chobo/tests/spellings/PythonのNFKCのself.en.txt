@@ -1,0 +1,9 @@
+warning[W108]: PythonのNFKCのself.book:11:25: The parameter `ｓｅｌｆ` of the transfer `入荷` is a name the Python client uses itself
+    11 | transfer 入荷(納品: string, ｓｅｌｆ: string, 品番: string, 数: 個)
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): Python compares identifiers in NFKC, so `ｓｅｌｆ` and `self` are one identifier (their characters U+FF53 and U+0073 differ): the client writes the parameter `ｓｅｌｆ` of the transfer `入荷` as the parameter `ｓｅｌｆ` of the methods of `_入荷Transfer`, and the methods of `_入荷Transfer` use `self` themselves: the parameter of that name hides it or is a second one, so the module does not load, or a call stops (`SyntaxError`, `TypeError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+PythonのNFKCのself.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, ｓｅｌｆ; a second call that differs only in 品番 or 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

@@ -180,7 +180,7 @@ impl Target {
 
 /// What a target needs of the book before it writes anything: the names PostgreSQL would cut
 /// short (E061), an operation that does not fit one TigerBeetle request (E060), the names MySQL
-/// cannot hold as written (E062), for a client in Rust, the names Rust takes as no identifier
+/// cannot hold as written (E062), for a client, the names its language takes as no identifier
 /// (E063), and the names the target spells as one identifier or cannot take as they are (E064,
 /// what `check` warns of with W108).
 pub fn check(book: &Book, target: Target) -> Vec<Diag> {
@@ -195,11 +195,10 @@ pub fn check_in(book: &Book, target: Target, in_package: bool) -> Vec<Diag> {
         Backend::TigerBeetle => client::check_requests(book),
         Backend::MySql => mysql::check_names(book),
     };
+    let idents = client::check_names(book, target.lang());
     let names = crate::spellings::check_target(book, target, in_package);
-    if target.lang() == Lang::Rust || !names.is_empty() {
-        if target.lang() == Lang::Rust {
-            d.extend(client::rust::check_names(book));
-        }
+    if !idents.is_empty() || !names.is_empty() {
+        d.extend(idents);
         d.extend(names);
         crate::model::sort(&mut d);
     }

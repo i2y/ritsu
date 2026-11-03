@@ -1,0 +1,9 @@
+warning[W108]: PythonのNFKCの引数.book:11:38: The parameters `ﾛｯﾄ` and `ロット` of the transfer `入荷` are one identifier in the Python client
+    11 | transfer 入荷(納品: string, ﾛｯﾄ: string, ロット: string, 品番: string, 数: 個)
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): Python compares identifiers in NFKC, so `ﾛｯﾄ` and `ロット` are one identifier (their characters U+FF9B and U+30ED differ): a method of `_入荷Transfer` would have two parameters `ロット`, and the module does not load (`SyntaxError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+PythonのNFKCの引数.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, ﾛｯﾄ, ロット; a second call that differs only in 品番 or 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

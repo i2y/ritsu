@@ -164,9 +164,9 @@ Five errors belong to a target, and `chobo gen` gives them: a chain of transfers
 one TigerBeetle request (E060, at 253); a name longer than PostgreSQL's 63 bytes (E061), which
 PostgreSQL would cut short without a word; a book's name the MySQL family's tables and checks
 cannot be named after (E062), longer than 51 characters or with a character beyond the Basic
-Multilingual Plane, which MySQL would write as `?` with only a warning; and, for `--target rust`,
-a name with a character no Rust identifier holds where the name has it (E063), such as a digit that
-is not decimal, which the Rust client would write as it is, as a field of a struct; and two names
+Multilingual Plane, which MySQL would write as `?` with only a warning; and
+a name with a character no identifier of the target's language holds where the name has it (E063),
+such as `²` or, in Rust, a digit that is not decimal, which the client would write as it is; and two names
 that are one identifier in the target's code, a name its client uses itself, or one its client
 cannot take as it is (E064):
 

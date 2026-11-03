@@ -1,0 +1,9 @@
+警告[W108]: shop_upper.book:1:6: 帳簿 `Shop` と、`shop.book` の帳簿 `shop` は、Go のクライアントで同じパッケージ `shop` になります
+     1 | book Shop v1
+  = Go（`--target go --books postgres|tigerbeetle|mysql`）: パッケージは、帳簿の名前（ASCII の識別子のとき、小文字にしたもの）か、ファイルの名前か、`book` です。どちらも `shop` なので、同じ `go/shop/` に書くことになり、後の帳簿のクライアントが前の帳簿のものを置き換えます（`ritsu gen` のパッケージでは、`books/shop/` に二つ書くことになり、止まります）。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの帳簿の名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+shop_upper.book: ok、警告 1 件
+  receive.do  拒否されうる理由: key_conflict
+  ship.do     拒否されうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: ship は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。

@@ -50,6 +50,20 @@ pub struct Report {
     pub keys: Vec<KeyNote>,
 }
 
+/// Compare a checked book with the books given before it in one run ([`crate::spellings::across`]):
+/// what it finds joins the book's own diagnostics, and the book joins `earlier`, unless it has
+/// errors, which are said first and of which nothing is generated.
+pub fn compare_across(path: &str, c: &mut Checked, earlier: &mut Vec<crate::spellings::Earlier>) {
+    let Some(book) = c.book.as_ref().filter(|_| !diag::has_errors(&c.diags)) else { return };
+    let name = Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let stem = name.strip_suffix(".book").unwrap_or(&name).to_string();
+    let found = crate::spellings::across(earlier, book, &stem);
+    let book = book.clone();
+    c.diags.extend(found);
+    crate::model::sort(&mut c.diags);
+    earlier.push(crate::spellings::Earlier { path: path.to_string(), book, stem });
+}
+
 pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
     let src = ritsu_base::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let c = check_source(&src);

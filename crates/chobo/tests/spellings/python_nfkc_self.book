@@ -1,0 +1,17 @@
+book python_nfkc_self v1
+description "A parameter in fullwidth letters that NFKC makes self, which every method of the Python client has"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, ｓｅｌｆ: string, sku: string, qty: pcs)
+  key delivery, ｓｅｌｆ
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

@@ -478,6 +478,8 @@ fn cmd_check(a: &Args) -> u8 {
     let rev = a.flags.get("--diff-base").cloned().flatten();
     let mut worst = 0u8;
     let mut files = Vec::new();
+    // The books given before each, for what makes them one in a target (W108, DESIGN 18).
+    let mut earlier = Vec::new();
     for f in &a.positional {
         let path = Path::new(f);
         let (src, mut c) = match check::check_file(path) {
@@ -488,6 +490,7 @@ fn cmd_check(a: &Args) -> u8 {
                 continue;
             }
         };
+        check::compare_across(f, &mut c, &mut earlier);
         let mut note = None;
         if let (Some(rev), Some(book)) = (&rev, &c.book) {
             match crate::diffbase::read_at(path, rev) {

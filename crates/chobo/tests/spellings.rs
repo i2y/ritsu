@@ -33,6 +33,7 @@ const GO_AND_RUST: &[&str] = &["postgres-go", "postgres-rust", "tigerbeetle-go",
 const RUST: &[&str] = &["postgres-rust", "tigerbeetle-rust", "mysql-rust"];
 const PYTHON: &[&str] = &["postgres-python", "tigerbeetle-python", "mysql-python"];
 const TYPESCRIPT: &[&str] = &["postgres-typescript", "tigerbeetle-typescript", "mysql-typescript"];
+const PYTHON_AND_RUST: &[&str] = &["postgres-python", "postgres-rust", "tigerbeetle-python", "tigerbeetle-rust", "mysql-python", "mysql-rust"];
 /// every client: the `Book` of each has `balance`
 const CLIENTS: &[&str] = &[
     "postgres-typescript",
@@ -104,6 +105,30 @@ const FORMS: &[(&str, &[&str])] = &[
     // the same, of other types: a call that sends no types reaches the account's
     ("postgresql_calls", POSTGRES),
     ("PostgreSQLの呼び出し", POSTGRES),
+    // the schema of a book named with `pg_` in front, which PostgreSQL does not create
+    ("postgresql_schema", POSTGRES),
+    ("PostgreSQLのスキーマ", POSTGRES),
+    // two parameters that Python, which compares identifiers in NFKC, takes for one
+    ("python_nfkc_parameters", PYTHON),
+    ("PythonのNFKCの引数", PYTHON),
+    // two parameters that Rust, which compares them in NFC, takes for one, and so Python
+    ("rust_nfc_parameters", PYTHON_AND_RUST),
+    ("RustのNFCの引数", PYTHON_AND_RUST),
+    // a transfer that NFKC makes the attribute that reads the balances
+    ("python_nfkc_own", PYTHON),
+    ("PythonのNFKCの自分の名前", PYTHON),
+    // a parameter that NFKC makes `self`
+    ("python_nfkc_self", PYTHON),
+    ("PythonのNFKCのself", PYTHON),
+    // a book named like the library the TigerBeetle client imports
+    ("python_tigerbeetle", &["tigerbeetle-python"]),
+    ("Pythonのtigerbeetle", &["tigerbeetle-python"]),
+    // a book whose name Python reads as another
+    ("python_nfkc_module", PYTHON),
+    ("PythonのNFKCのモジュール", PYTHON),
+    // a book whose name is no identifier of Python's
+    ("python_identifier_module", PYTHON),
+    ("Pythonの識別子にならないモジュール", PYTHON),
 ];
 
 /// A book of tests/spellings, or of its renamed copies, as the tests take it.
@@ -323,6 +348,17 @@ fn the_other_names() {
     let ts = TYPESCRIPT.join(" ");
     let both: Vec<&str> = Target::ALL.iter().map(|t| t.name()).filter(|n| PYTHON.contains(n) || RUST.contains(n)).collect();
     let cases: &[(&str, String)] = &[
+        // two parameters that are one in NFC: the syllable of Hangul and its letters
+        (
+            &format!(
+                "transfer adjust(note: string, {0}: string, {1}: string, sku: string, qty: pcs)\n  key note, {0}, {1}\n  move qty from suppliers to stock(sku)\n",
+                ['\u{D55C}'].iter().collect::<String>(),
+                ['\u{1112}', '\u{1161}', '\u{11AB}'].iter().collect::<String>()
+            ),
+            both.join(" "),
+        ),
+        // what a method uses beside its parameters, written in a way NFKC makes it
+        ("transfer adjust(note: string, _ｓｔｒ: string, sku: string, qty: pcs)\n  key note, _ｓｔｒ\n  move qty from suppliers to stock(sku)\n", python.clone()),
         // `__init__` makes `_Balances`, and an account of that name takes its place
         ("account __init__ : pcs outside\ntransfer count(note: string, qty: pcs)\n  key note\n  move qty from __init__ to customers\n", python.clone()),
         // Python changes a name that begins with `__` inside a class: a parameter's, an account's
@@ -376,7 +412,19 @@ fn the_other_names() {
 #[test]
 fn a_package_stops_at_what_breaks_the_clients_own_code() {
     for f in forms() {
-        let module = matches!(f.stem, "python_keyword_module" | "Pythonのキーワードのモジュール" | "python_library_module" | "Pythonの標準ライブラリのモジュール");
+        let module = matches!(
+            f.stem,
+            "python_keyword_module"
+                | "Pythonのキーワードのモジュール"
+                | "python_library_module"
+                | "Pythonの標準ライブラリのモジュール"
+                | "python_tigerbeetle"
+                | "Pythonのtigerbeetle"
+                | "python_nfkc_module"
+                | "PythonのNFKCのモジュール"
+                | "python_identifier_module"
+                | "Pythonの識別子にならないモジュール"
+        );
         for t in Target::ALL {
             let alone: Vec<&str> = target::check(&f.book, t).iter().map(|d| d.code).collect();
             let in_package: Vec<&str> = target::check_in(&f.book, t, true).iter().map(|d| d.code).collect();
@@ -387,6 +435,155 @@ fn a_package_stops_at_what_breaks_the_clients_own_code() {
             }
         }
     }
+}
+
+/// E063, by the language of each client (ritsu-emit's tables): `²` is no identifier's in any of
+/// them, the vowel sign of `कीमत` and the number `Ⅻ` only Go's are without, `ͺ` begins no identifier
+/// of Rust's or Python's, and the SQL quotes every name. A reason is an identifier only in Rust.
+#[test]
+fn a_name_a_language_takes_as_no_identifier_stops_its_clients() {
+    use target::Lang as L;
+    let book = |param: &str, reason: &str| {
+        let src = format!(
+            "book rooms v1\nunit sqm\naccount floor(site: string) : sqm\n  at least 0 refused as {reason}\naccount builders : sqm outside\naccount tenants : sqm outside\n\
+             transfer build(permit: string, site: string, {param}: sqm)\n  key permit, site\n  move {param} from builders to floor(site)\n\
+             transfer lease(contract: string, site: string, {param}: sqm)\n  key contract, site\n  move {param} from floor(site) to tenants\n"
+        );
+        let c = check::check_source(&src);
+        // `check` leaves these to the build, as the other limits of a target (E060 to E063)
+        assert!(c.diags.is_empty(), "{src}: {:?}", c.diags.iter().map(|d| d.code).collect::<Vec<_>>());
+        c.book.unwrap()
+    };
+    let clients = [L::TypeScript, L::Python, L::Go, L::Rust];
+    for (param, reason, stopped, said) in [
+        ("area_m²", "no_room", &clients[..], "has ² (U+00B2)"),
+        ("कीमत", "no_room", &[L::Go][..], "has ी (U+0940)"),
+        ("Ⅻ", "no_room", &[L::Go][..], "begins with Ⅻ (U+216B)"),
+        ("ͺarea", "no_room", &[L::Python, L::Rust][..], "begins with ͺ (U+037A)"),
+        ("area", "no_room²", &[L::Rust][..], "has ² (U+00B2)"),
+        ("area", "no_room", &[][..], ""),
+    ] {
+        let b = book(param, reason);
+        for t in Target::ALL {
+            let d = target::check(&b, t);
+            let got: Vec<&str> = d.iter().map(|x| x.code).collect();
+            if stopped.contains(&t.lang()) {
+                assert!(got.contains(&"E063"), "{param} {reason} {}: {got:?}", t.name());
+                let e = d.iter().find(|x| x.code == "E063").unwrap();
+                assert!(e.message.en.contains(said), "{param} {reason} {}: {}", t.name(), e.message.en);
+                let lang = match t.lang() {
+                    L::TypeScript => "TypeScript",
+                    L::Python => "Python",
+                    L::Go => "Go",
+                    _ => "Rust",
+                };
+                assert!(e.message.en.contains(&format!("no {lang} identifier")), "{}: {}", t.name(), e.message.en);
+            } else {
+                assert!(!got.contains(&"E063"), "{param} {reason} {}: {got:?}", t.name());
+            }
+        }
+    }
+}
+
+/// Two books that are one package of the Go client, given together: the later book's W108 names
+/// the earlier one, and what it says is the golden file beside it. `gen` writes each into the same
+/// package of one directory, so the later client takes the place of the earlier's; each with the
+/// book or the file renamed as the note says gives nothing, and has a package of its own.
+#[test]
+fn two_books_given_together_that_are_one_go_package() {
+    let dir = root().join("tests/spellings/across");
+    let read = |rel: String| std::fs::read_to_string(dir.join(rel)).unwrap();
+    let gen_go = |rel: String, out: &Path| {
+        let r = chobo().arg("gen").arg(dir.join(rel)).args(["--target", "go", "--books", "postgres", "--out"]).arg(out).output().unwrap();
+        assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    };
+    for (first, later, renamed, package, apart) in [("shop", "shop_upper", "renamed/shop_upper", "shop", "shop2"), ("本店", "支店", "renamed/shiten", "book", "shiten")] {
+        let (a, b) = (read(format!("{first}.book")), read(format!("{later}.book")));
+        let mut earlier = Vec::new();
+        let mut c = check::check_source(&a);
+        check::compare_across(&format!("{first}.book"), &mut c, &mut earlier);
+        assert!(c.diags.is_empty(), "{first}: {:?}", c.diags.iter().map(|d| d.code).collect::<Vec<_>>());
+        let mut c = check::check_source(&b);
+        check::compare_across(&format!("{later}.book"), &mut c, &mut earlier);
+        assert_eq!(c.diags.iter().map(|d| d.code).collect::<Vec<_>>(), ["W108"], "{later}");
+        let file = format!("{later}.book");
+        for (lang, ext) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
+            golden(&dir.join(format!("{later}.{ext}.txt")), &check::render(&file, &b, &c, lang));
+        }
+        // the first of the two, as `chobo check` given them the other way round says it
+        let mut earlier = Vec::new();
+        let mut c = check::check_source(&b);
+        check::compare_across(&format!("{later}.book"), &mut c, &mut earlier);
+        assert!(c.diags.is_empty());
+        let mut c = check::check_source(&a);
+        check::compare_across(&format!("{first}.book"), &mut c, &mut earlier);
+        assert_eq!(c.diags.iter().map(|d| d.code).collect::<Vec<_>>(), ["W108"], "{first}");
+        // the note's way out
+        let fixed = read(format!("{renamed}.book"));
+        let mut earlier = Vec::new();
+        let mut c = check::check_source(&a);
+        check::compare_across(&format!("{first}.book"), &mut c, &mut earlier);
+        let mut c = check::check_source(&fixed);
+        let name = Path::new(renamed).file_name().unwrap().to_string_lossy().to_string();
+        check::compare_across(&format!("{name}.book"), &mut c, &mut earlier);
+        assert!(c.diags.is_empty(), "{renamed}: {:?}", c.diags.iter().map(|d| d.code).collect::<Vec<_>>());
+        // what the two write: one directory, and the later client alone in it
+        let work = TempDir::new("spellings-across");
+        let (both, alone, two) = (work.path().join("both"), work.path().join("alone"), work.path().join("two"));
+        gen_go(format!("{first}.book"), &both);
+        gen_go(format!("{later}.book"), &both);
+        gen_go(format!("{later}.book"), &alone);
+        let client = |d: &Path, p: &str| std::fs::read_to_string(d.join("go").join(p).join("book.go")).unwrap();
+        assert_eq!(client(&both, package), client(&alone, package), "{first} and {later}");
+        gen_go(format!("{first}.book"), &two);
+        gen_go(format!("{renamed}.book"), &two);
+        for p in [package, apart] {
+            assert!(two.join("go").join(p).join("book.go").is_file(), "{renamed}: {p}");
+        }
+    }
+    // the command, given the two
+    let r = chobo().arg("check").arg(dir.join("shop.book")).arg(dir.join("shop_upper.book")).output().unwrap();
+    assert!(r.status.success());
+    let said = String::from_utf8_lossy(&r.stdout).to_string() + &String::from_utf8_lossy(&r.stderr);
+    assert_eq!(said.matches("W108").count(), 1, "{said}");
+    assert!(said.contains("are one package, `shop`, in the Go client"), "{said}");
+    // one book's versions are not compared
+    let r = chobo().arg("check").arg(dir.join("shop.book")).arg(dir.join("renamed/shiten.book")).arg(dir.join("shop.book")).output().unwrap();
+    assert!(!String::from_utf8_lossy(&r.stdout).contains("W108") && !String::from_utf8_lossy(&r.stderr).contains("W108"));
+}
+
+/// `information_schema` is a schema every database has: a superuser makes the book's functions in
+/// it, and any other role stops. The renamed book loads as either.
+#[test]
+fn the_schema_postgresql_has_itself_stops_a_role_that_is_no_superuser() {
+    if !need(Need::Postgres) {
+        return;
+    }
+    let pg = match Postgres::start() {
+        Ok(pg) => pg,
+        Err(why) => {
+            skip(&format!("{why}; the book named information_schema is not loaded"));
+            return;
+        }
+    };
+    let src = std::fs::read_to_string(root().join("tests/spellings/postgresql_schema.book")).unwrap().replace("book pg_stock v1", "book information_schema v1");
+    let c = check::check_source(&src);
+    assert_eq!(c.diags.iter().map(|d| d.code).collect::<Vec<_>>(), ["W108"]);
+    let b = c.book.unwrap();
+    let origin = target::Origin::named("information_schema.book", src.as_bytes());
+    assert_eq!(target::check(&b, Target::Postgres).iter().map(|d| d.code).collect::<Vec<_>>(), ["E064"]);
+    let work = TempDir::new("spellings-information-schema");
+    let (_, sql) = target::unchecked(&b, "information_schema", Target::Postgres, &origin, None).unwrap().remove(0);
+    let file = work.path().join("information_schema.sql");
+    std::fs::write(&file, sql).unwrap();
+    // a role that may create in the database, so that only the schema is what stops it
+    let _ = pg.db().args(["-c", "create role chobo_application nosuperuser"]).output();
+    let grant = pg.db().args(["-c", "do $$ begin execute format('grant all on database %I to chobo_application', current_database()); end $$"]).output().unwrap();
+    assert!(grant.status.success(), "{}", String::from_utf8_lossy(&grant.stderr));
+    let out = pg.db().args(["-c", "set role chobo_application"]).arg("-f").arg(&file).output().unwrap();
+    let said = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(said.contains("permission denied for schema information_schema"), "{said}");
+    eprintln!("compared: the schema information_schema stops PostgreSQL, as a role that is no superuser");
 }
 
 // ── the tools of each language ────────────────────────────────────────────
@@ -504,7 +701,7 @@ fn typescript_breaks_where_w108_says() {
 const PROBE: &str = r#"# The Book of each client, as a caller reaches it: one line of JSON a file, with what is wrong
 # ("broken"), or null when every transfer, every account's balance and expire() are where their
 # names say.
-import importlib.util, inspect, json, sys
+import importlib.util, inspect, json, sys, unicodedata
 
 class Nothing:
     """What a client is given in place of a connection: making a Book calls nothing on it."""
@@ -523,14 +720,16 @@ def broken(spec):
         book = getattr(m, spec["make"])(Nothing())
     except BaseException as e:
         return f"Book cannot be made: {type(e).__name__}: {e}"
+    # what a caller writes as book.<name>, which Python reads in NFKC
+    read = lambda name: unicodedata.normalize("NFKC", name)
     for attr, cls in spec["transfers"]:
-        got = getattr(book, attr, None)
+        got = getattr(book, read(attr), None)
         if type(got).__name__ != cls:
             return f"book.{attr} is a {type(got).__name__}, not {cls}"
     balances = getattr(book, "balance", None)
     if type(balances).__name__ != "_Balances":
         return f"book.balance is a {type(balances).__name__}, not _Balances"
-    for n in spec["accounts"]:
+    for n in map(read, spec["accounts"]):
         got = getattr(balances, n, None)
         if not inspect.ismethod(got) or got.__func__ is not vars(type(balances)).get(n):
             return f"book.balance.{n} is a {type(got).__name__}, not the account's method"
@@ -559,6 +758,8 @@ def broken(spec):
     except SyntaxError as e:
         return f"import {name}: SyntaxError: {e.msg}"
     sys.path.insert(0, beside)
+    # a client that imported the library of its name before this one is another program's
+    sys.modules.pop(name, None)
     ns = {}
     try:
         exec(code, ns)
@@ -689,7 +890,7 @@ fn cargo_check(dir: &Path, name: &str, modules: &[(String, String)]) -> Result<(
     std::fs::create_dir_all(dir.join("src/books")).unwrap();
     std::fs::write(dir.join("Cargo.toml"), toml).unwrap();
     std::fs::copy(runner_dir().join("rust/Cargo.lock"), dir.join("Cargo.lock")).unwrap();
-    let mut main = String::from("//! The Rust clients of the books of tests/spellings, each a module.\n#![deny(warnings)]\n\n");
+    let mut main = String::from("//! The Rust clients of the books of tests/spellings, each a module.\n#![deny(warnings)]\n// A name NFKC changes is uncommon_codepoints, which only a crate's root turns off (DESIGN 14.6).\n#![allow(uncommon_codepoints)]\n\n");
     for (key, text) in modules {
         std::fs::write(dir.join("src/books").join(format!("{key}.rs")), text).unwrap();
         main.push_str(&format!("#[path = \"books/{key}.rs\"]\npub mod {key};\n"));

@@ -1,0 +1,17 @@
+book ｓｈｏｐ v1
+description "A book in fullwidth letters: Python reads the name of an import in NFKC, so import ｓｈｏｐ looks for shop"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

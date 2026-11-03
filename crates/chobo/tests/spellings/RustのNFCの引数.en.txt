@@ -1,0 +1,10 @@
+warning[W108]: RustのNFCの引数.book:11:37: The parameters `神札` and `神札` of the transfer `入荷` are one identifier in the Python and Rust clients
+    11 | transfer 入荷(納品: string, 神札: string, 神札: string, 品番: string, 数: 個)
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): Python compares identifiers in NFKC, so `神札` and `神札` are one identifier (their characters U+FA19 and U+795E differ): a method of `_入荷Transfer` would have two parameters `神札`, and the module does not load (`SyntaxError`).
+  = Rust (`--target rust --books postgres|tigerbeetle|mysql`): Rust compares identifiers in NFC, so `神札` and `神札` are one identifier (their characters U+FA19 and U+795E differ): the field `神札` of `入荷Args` would be declared twice, and the module does not compile.
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+RustのNFCの引数.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, 神札, 神札; a second call that differs only in 品番 or 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

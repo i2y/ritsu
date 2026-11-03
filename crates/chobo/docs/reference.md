@@ -269,13 +269,22 @@ make room for another. Go writes a name with its first letter in upper case (`St
 `X在庫` for `在庫`), Rust the names of types and reasons in PascalCase (`TakeBack` for
 `take_back`), Python a `_` after a keyword (`class_`), and PostgreSQL's SQL the functions
 `<transfer>_<operation>` and `balance_<account>`; the Python client is the module of the book's
-name (`<name>.py`). Where that makes two names one identifier, or a name one the client uses itself
-(`balance`, and `expire` on PostgreSQL and the MySQL family), and where a client cannot take a name
-as it is (a name Python mangles, such as `__note`; a parameter `__proto__`, which an object literal
-in TypeScript takes as the prototype; a book named like a keyword of Python or a module of its
-standard library), `chobo check` warns about it and names the targets, with how each one's code
-would break (W108), and `chobo gen` of those targets stops (E064). For a target you do not build,
-leave it as it is.
+name (`<name>.py`). Rust reads a name in NFC and Python in NFKC, so two names can be one there and
+two everywhere else (`K` and the Kelvin sign `K`, in Python). Where that makes two names one
+identifier, or a name one the client uses itself (`balance`, and `expire` on PostgreSQL and the
+MySQL family), and where a client cannot take a name as it is (a name Python mangles, such as
+`__note`; a parameter `__proto__`, which an object literal in TypeScript takes as the prototype; a
+book named like a keyword of Python or a module of its standard library, one that is no identifier
+of Python or that NFKC changes, and `tigerbeetle`, whose Python client imports TigerBeetle's library
+of that name; a book named like PostgreSQL's own schemas, `pg_…` and `information_schema`),
+`chobo check` warns about it and names the targets, with how each one's code would break (W108),
+and `chobo gen` of those targets stops (E064). Books checked together whose names are one Go
+package (`shop`, `Shop`) are warned of on the later book. For a target you do not build, leave it as
+it is.
+
+A name with a character the language of a client takes in no identifier (`²`, in all four; a
+non-decimal digit in Rust; a Devanagari vowel sign in Go) stops `chobo gen` for that language
+(E063).
 
 ## Diagnostics
 

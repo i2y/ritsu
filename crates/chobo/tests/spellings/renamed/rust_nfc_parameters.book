@@ -1,0 +1,17 @@
+book rust_nfc_parameters_renamed v1
+description "rust_nfc_parameters.book with the name with the Kelvin sign renamed batch, as its note says"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, batch: string, lot_K: string, sku: string, qty: pcs)
+  key delivery, batch, lot_K
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

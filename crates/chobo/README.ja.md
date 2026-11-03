@@ -183,4 +183,4 @@ PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch
 
 ## ライセンス
 
-[Apache License, Version 2.0](LICENSE-APACHE) と [MIT License](LICENSE-MIT) のどちらかを選んで使えます。E063 が読む、Rust の名前に使えない字の表は ritsu-emit のもの（`crates/ritsu-emit/src/xid.rs`）です。表は Unicode Character Database から作ったもので、Unicode License V3 に従います（ritsu-emit の [THIRD_PARTY_NOTICES](../ritsu-emit/THIRD_PARTY_NOTICES)）。
+[Apache License, Version 2.0](LICENSE-APACHE) と [MIT License](LICENSE-MIT) のどちらかを選んで使えます。E063 が読む、各言語の名前に使えない字の表は ritsu-emit のもの（`crates/ritsu-emit/src/xid.rs`）で、W108 が読む NFC と NFKC の表は `src/normal_table.rs` です。どちらも Unicode Character Database から作ったもので、Unicode License V3 に従います（[ritsu-emit](../ritsu-emit/THIRD_PARTY_NOTICES) と[このクレート](THIRD_PARTY_NOTICES)の THIRD_PARTY_NOTICES）。

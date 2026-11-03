@@ -1,0 +1,17 @@
+book python_nfkc_own v1
+description "A transfer in fullwidth letters that NFKC makes balance, the attribute of the Python client's Book that reads the balances"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer ｂａｌａｎｃｅ(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

@@ -1,0 +1,9 @@
+warning[W108]: PostgreSQLのスキーマ.book:1:6: The book `pg_在庫` cannot be used as it is in the  clients
+     1 | book pg_在庫 v1
+  = PostgreSQL (`--target sql|typescript|python|go|rust --books postgres`): the SQL makes the schema `pg_在庫`, and a name that starts with `pg_` is one PostgreSQL keeps for the schemas of the system: `create schema` stops (`unacceptable schema name`), and the SQL does not load.
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+PostgreSQLのスキーマ.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, 品番; a second call that differs only in 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

@@ -11,10 +11,13 @@ const MY_RUNTIME: &str = include_str!("runtime/mysql.py");
 
 use ritsu_emit::words::python::KEYWORDS;
 
+/// What a method's body uses itself beside its parameters.
+pub const METHOD_OWN: [&str; 4] = ["self", "_str", "_amt", "_amounts"];
+
 /// A name of the book as Python can take it: a keyword, or a name the method's body uses itself,
 /// gets `_` after it.
 pub fn name(s: &str) -> String {
-    ritsu_emit::ident::aside(s, |w| KEYWORDS.contains(&w) || ["self", "_str", "_amt", "_amounts"].contains(&w))
+    ritsu_emit::ident::aside(s, |w| KEYWORDS.contains(&w) || METHOD_OWN.contains(&w))
 }
 
 /// A string as a Python literal, in single quotes.

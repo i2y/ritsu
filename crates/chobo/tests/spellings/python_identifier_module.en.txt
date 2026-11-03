@@ -1,0 +1,9 @@
+warning[W108]: python_identifier_module.book:1:6: The book `rooms²` cannot be used as it is in the Python client
+     1 | book rooms² v1
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client is the module `rooms².py`, and `rooms²` is no identifier of Python, so `import rooms²` is no Python (`SyntaxError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+python_identifier_module.book: ok, 1 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

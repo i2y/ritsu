@@ -1,0 +1,9 @@
+warning[W108]: 支店.book:1:6: The book `支店` and the book `本店` of `本店.book` are one package, `book`, in the Go client
+     1 | book 支店 v1
+  = Go (`--target go --books postgres|tigerbeetle|mysql`): A package is the book's name (in lower case, when it is an ASCII identifier), or the file's name, or `book`. Both are `book`, so both write `go/book/`, and the later book's client takes the place of the earlier's (in a package of `ritsu gen`, both write `books/book/`, and it stops).
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two books; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+支店.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, 品番; a second call that differs only in 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

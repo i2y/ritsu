@@ -1,0 +1,9 @@
+warning[W108]: python_nfkc_self.book:11:36: The parameter `ｓｅｌｆ` of the transfer `receive` is a name the Python client uses itself
+    11 | transfer receive(delivery: string, ｓｅｌｆ: string, sku: string, qty: pcs)
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): Python compares identifiers in NFKC, so `ｓｅｌｆ` and `self` are one identifier (their characters U+FF53 and U+0073 differ): the client writes the parameter `ｓｅｌｆ` of the transfer `receive` as the parameter `ｓｅｌｆ` of the methods of `_receiveTransfer`, and the methods of `_receiveTransfer` use `self` themselves: the parameter of that name hides it or is a second one, so the module does not load, or a call stops (`SyntaxError`, `TypeError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+python_nfkc_self.book: ok, 1 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per delivery, ｓｅｌｆ; a second call that differs only in sku or qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

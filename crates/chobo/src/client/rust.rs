@@ -172,55 +172,6 @@ pub fn reason_variants(book: &Book) -> Vec<(String, String)> {
     out
 }
 
-// ── E063 ──────────────────────────────────────────────────────────────────
-
-/// The names Rust cannot take as identifiers (E063): one with a character an identifier does not
-/// have where the name has it. A name of chobo is a letter or `_`, then letters, digits and `_`, as
-/// Unicode counts them (syntax.rs); a Rust identifier is XID_Start or `_`, then XID_Continue, which
-/// leave out digits that are not decimal (`²`, `½`), and letters and marks that only follow another
-/// (`ْ`). Every name the client writes as an identifier is held to it: the transfers', the
-/// accounts', the parameters', and the bounds' reasons (the variants of `Reason`).
-pub fn check_names(book: &Book) -> Vec<Diag> {
-    let mut d = Vec::new();
-    for t in &book.transfers {
-        d.extend(not_an_ident(&t.name, tr!("振替の名前", "The transfer's name"), t.line, t.col));
-        for p in &t.params {
-            d.extend(not_an_ident(&p.name, tr!("引数の名前", "The parameter's name"), p.line, p.col));
-        }
-    }
-    for a in &book.accounts {
-        d.extend(not_an_ident(&a.name, tr!("勘定の名前", "The account's name"), a.line, a.col));
-        for p in &a.params {
-            d.extend(not_an_ident(p, tr!("勘定の引数の名前", "The name of the account's parameter"), a.line, a.col));
-        }
-        for b in [&a.lower, &a.upper].into_iter().flatten() {
-            d.extend(not_an_ident(&b.refusal, tr!("拒否の理由", "The reason"), b.line, b.col));
-        }
-    }
-    crate::model::sort(&mut d);
-    d.dedup_by(|a, b| a.line == b.line && a.col == b.col && a.message == b.message);
-    d
-}
-
-/// E063 for `name`, when it has a character Rust takes in no identifier where the name has it.
-fn not_an_ident(name: &str, what: ritsu_base::text::Text, line: usize, col: usize) -> Option<Diag> {
-    let (at, c) = name.chars().enumerate().find(|(i, c)| !(if *i == 0 { begins(*c) } else { holds(*c) }))?;
-    let cp = format!("U+{:04X}", c as u32);
-    let msg = if at == 0 {
-        tr!(
-            "{{what}} `{name}` は {c}（{cp}）で始まります。Rust の識別子の先頭には、この字を使えません",
-            "{{what}} `{name}` begins with {c} ({cp}), which no Rust identifier begins with"
-        )
-    } else {
-        tr!("{{what}} `{name}` に {c}（{cp}）があります。Rust の識別子には、この字を使えません", "{{what}} `{name}` has {c} ({cp}), which no Rust identifier holds")
-    }
-    .sub("what", &what);
-    Some(diag::error("E063", line, col, msg).hint(tr!(
-        "名前からその字を外すか、ほかの字に替えてください。Rust の識別子は、文字か `_` で始まり、そのあとに文字と十進の数字と `_` が続きます（たとえば `²` は `2` にしてください）",
-        "Take the character out of the name, or write another in its place: a Rust identifier is a letter or `_`, then letters, decimal digits and `_` (write `²` as `2`, for one)"
-    )))
-}
-
 // ── the book's part ───────────────────────────────────────────────────────
 
 /// A string as a Rust literal: JSON's escapes, which Rust reads as the same string.

@@ -1,0 +1,9 @@
+warning[W108]: Pythonの識別子にならないモジュール.book:1:6: The book `部屋²` cannot be used as it is in the Python client
+     1 | book 部屋² v1
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): the client is the module `部屋².py`, and `部屋²` is no identifier of Python, so `import 部屋²` is no Python (`SyntaxError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename it; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+Pythonの識別子にならないモジュール.book: ok, 1 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(品番) at least 0), key_conflict, already_refused
+  key: 入荷 once per 納品, 品番; a second call that differs only in 数 is refused with key_conflict
+  key: 出荷 once per 注文, 品番; a second call that differs only in 数 is refused with key_conflict

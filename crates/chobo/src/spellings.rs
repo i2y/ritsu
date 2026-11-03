@@ -11,8 +11,13 @@
 //! as they are: Python changes a name that begins with `__` inside a class, and the class of a
 //! transfer whose name begins with `_`; a TypeScript object literal takes `__proto__` for the
 //! object's prototype, not for a parameter; and the Python module the book is (`<name>.py`) cannot
-//! be imported by a name Python keeps (`class`), or by the name of a module of Python's standard
-//! library, which Python keeps one module of.
+//! be imported by a name Python keeps (`class`), by the name of a module of Python's standard
+//! library, which Python keeps one module of, by the name of the library its TigerBeetle client
+//! imports (`tigerbeetle`, which imports itself), or by a name Python reads as another (`ｓｈｏｐ`) or
+//! as none (`rooms²`). The schema of the PostgreSQL SQL cannot be one of PostgreSQL's own (`pg_…`,
+//! `information_schema`). Rust compares identifiers in NFC, and Python in NFKC (src/normal.rs), so
+//! two names can be one identifier though they are written differently, and a name can be one the
+//! client uses itself. And two books checked together can be one Go package ([`across`]).
 //!
 //! None of it is renamed (rulec's DESIGN 15.263): a call is written with the book's names in
 //! every language. Each form breaks some of the targets (the clients of a language, the clients
@@ -177,6 +182,32 @@ enum Rule {
 }
 
 impl Rule {
+    /// An identifier as the language compares it: Rust in NFC (The Rust Reference, Identifiers),
+    /// Python in NFKC (The Python Language Reference, 2.3); Go and TypeScript by its code points.
+    fn compared(self, id: &str) -> String {
+        match self.lang() {
+            Lang::Rust => crate::normal::nfc(id),
+            Lang::Python => crate::normal::nfkc(id),
+            _ => id.to_string(),
+        }
+    }
+
+    /// How the language makes two identifiers one that are written differently: the first character
+    /// where they differ, by its code point, as the two can look alike.
+    fn why_compared(self, x: &str, y: &str) -> Text {
+        let at = x.chars().zip(y.chars()).position(|(a, b)| a != b).unwrap_or(0);
+        let cp = |s: &str| s.chars().nth(at).map_or(String::new(), |c| format!("U+{:04X}", c as u32));
+        let (a, b) = (cp(x), cp(y));
+        let (l, form) = if self.lang() == Lang::Rust { ("Rust", "NFC") } else { ("Python", "NFKC") };
+        let (ja, en) = if a.is_empty() || b.is_empty() { (String::new(), String::new()) } else { (format!("（{a} と {b} の字が違います）"), format!(" (their characters {a} and {b} differ)")) };
+        tr!(
+            "{l} は識別子を {form} にしてから比べるので、`{x}` と `{y}` は同じ識別子です{}",
+            "{l} compares identifiers in {form}, so `{x}` and `{y}` are one identifier{}",
+            ja;
+            en
+        )
+    }
+
     fn lang(self) -> Lang {
         match self {
             Rule::GoExported => Lang::Go,
@@ -242,6 +273,9 @@ enum Own {
     Conn,
     /// Python's `__init__` of `_Balances`
     Init,
+    /// what a Python method uses itself beside its parameters: `self`, and the module's `_str`, `_amt`
+    /// and `_amounts`
+    Local,
     /// a variant of Rust's `Reason` for a reason chobo gives itself
     Reason(&'static str),
 }
@@ -257,6 +291,7 @@ impl Own {
             ),
             Own::Conn => tr!("`{owner}` には、メソッドが呼び出しに使うものを持つ属性 `{id}` があります", "`{owner}` has the attribute `{id}`, which holds what its methods call through"),
             Own::Init => tr!("`{owner}` には、それを作るメソッド `{id}` があります", "`{owner}` has the method `{id}`, which makes it"),
+            Own::Local => tr!("`{owner}` のメソッドは、自分で `{id}` を使います", "the methods of `{owner}` use `{id}` themselves"),
             Own::Reason(r) => tr!(
                 "`{owner}` には、chobo が自分で返す理由 `{r}` の値 `{id}` があります",
                 "`{owner}` has the variant `{id}`, of `{r}`, a reason chobo gives itself"
@@ -282,14 +317,17 @@ struct Decl {
     scope: String,
     role: Role,
     on: &'static [Backend],
+    /// what the language compares it as ([`Rule::compared`])
+    compared: String,
 }
 
 fn decl(id: String, name: Name, rule: Rule, scope: impl Into<String>, role: Role) -> Decl {
-    Decl { id, from: From::Name(name), rule, scope: scope.into(), role, on: ALL }
+    let compared = rule.compared(&id);
+    Decl { id, from: From::Name(name), rule, scope: scope.into(), role, on: ALL, compared }
 }
 
 fn own(id: &str, own: Own, rule: Rule, scope: &str, role: Role, on: &'static [Backend]) -> Decl {
-    Decl { id: id.to_string(), from: From::Own(own), rule, scope: scope.to_string(), role, on }
+    Decl { id: id.to_string(), from: From::Own(own), rule, scope: scope.to_string(), role, on, compared: rule.compared(id) }
 }
 
 /// Go: the types of the package (`<Transfer>Args`, `…Key`, `…Amounts`, `…Calls`, `<Account>Account`),
@@ -398,6 +436,16 @@ fn python_decls(b: &Book) -> Vec<Decl> {
     d.push(own("expire", Own::Expire, r, "Book", Role::Method("Book".into()), EXPIRE));
     d.push(own("_r", Own::Conn, r, "_Balances", Role::Attr("_Balances".into()), ALL));
     d.push(own("__init__", Own::Init, r, "_Balances", Role::Method("_Balances".into()), ALL));
+    // What a method uses beside its parameters: a name written so is set aside (`python::name`), and
+    // only another spelling of it, which Python compares as the same, can meet it.
+    for id in crate::client::python::METHOD_OWN {
+        for (k, t) in b.transfers.iter().enumerate() {
+            d.push(own(id, Own::Local, r, &format!("args {k}"), Role::Kwarg(format!("_{}Transfer", t.name)), ALL));
+        }
+        for (k, a) in b.accounts.iter().enumerate() {
+            d.push(own(id, Own::Local, r, &format!("account {k}"), Role::Kwarg(python::name(&a.name)), ALL));
+        }
+    }
     d
 }
 
@@ -435,6 +483,9 @@ struct Hit {
     subject: Subject,
     rule: Rule,
     base: String,
+    /// the two identifiers, when they are written differently and the language compares them as
+    /// one: a name first, then another name or the client's own
+    compared: Option<(String, String)>,
     roles: Vec<(Role, String)>,
     own: Option<(Own, Role)>,
     on: Vec<Backend>,
@@ -462,7 +513,7 @@ fn hits(b: &Book, decls: &[Decl]) -> Vec<Hit> {
     let mut out: Vec<Hit> = Vec::new();
     for (i, x) in decls.iter().enumerate() {
         for y in &decls[i + 1..] {
-            if x.scope != y.scope || x.id != y.id {
+            if x.scope != y.scope || x.compared != y.compared {
                 continue;
             }
             let on: Vec<Backend> = x.on.iter().copied().filter(|b| y.on.contains(b)).collect();
@@ -475,7 +526,11 @@ fn hits(b: &Book, decls: &[Decl]) -> Vec<Hit> {
                 (From::Own(o), From::Name(n)) => (Subject::Own(*n), Some((*o, x.role.clone())), y.role.clone()),
                 (From::Own(_), From::Own(_)) => continue,
             };
-            let at = (role, x.id.clone());
+            // The identifier as the code would have it: two names are one as the language compares
+            // them; a name that meets one of the client's own is as the client writes it.
+            let (named, other) = if matches!(x.from, From::Name(_)) { (x, y) } else { (y, x) };
+            let id = if x.id != y.id && matches!(subject, Subject::Two(..)) { x.compared.clone() } else { named.id.clone() };
+            let at = (role, id);
             match out.iter_mut().find(|h| h.subject == subject && h.rule == x.rule) {
                 Some(h) => {
                     if !h.roles.contains(&at) {
@@ -486,7 +541,8 @@ fn hits(b: &Book, decls: &[Decl]) -> Vec<Hit> {
                     let n = match subject {
                         Subject::Two(n, _) | Subject::Own(n) | Subject::AsIs(n) => n,
                     };
-                    out.push(Hit { subject, rule: x.rule, base: spelled(b, x.rule, n), roles: vec![at], own, on });
+                    let compared = (x.id != y.id).then(|| (named.id.clone(), other.id.clone()));
+                    out.push(Hit { subject, rule: x.rule, base: spelled(b, x.rule, n), compared, roles: vec![at], own, on });
                 }
             }
         }
@@ -579,7 +635,10 @@ fn note_of(b: &Book, h: &Hit) -> Text {
     };
     match (&h.subject, &h.own) {
         (Subject::Two(x, y), None) => {
-            let why = h.rule.why(&h.base);
+            let why = match &h.compared {
+                Some((p, q)) => h.rule.why_compared(p, q),
+                None => h.rule.why(&h.base),
+            };
             let breaks = match lang {
                 Lang::Python => py_two(b, *x, *y, &h.roles[0]),
                 _ => {
@@ -593,7 +652,7 @@ fn note_of(b: &Book, h: &Hit) -> Text {
             let (role, id) = &h.roles[0];
             let owner = owner_of(own_role);
             let written = roles_text(&h.roles[..1]);
-            let has = o.has(id, &owner);
+            let has = o.has(h.compared.as_ref().map_or(id, |c| &c.1), &owner);
             let what = n.what(b);
             let breaks = match (lang, o, role) {
                 (Lang::Go, Own::Expire, _) => tr!(
@@ -621,14 +680,25 @@ fn note_of(b: &Book, h: &Hit) -> Text {
                     "`{owner}` would have two members of that name, and {}",
                     module.ja; module.en
                 ),
+                (Lang::Python, Own::Local, _) => tr!(
+                    "同じ名前の引数がそれを隠すか二つになるので、モジュールを読み込めないか、呼び出しが止まります（`SyntaxError`、`TypeError`）",
+                    "the parameter of that name hides it or is a second one, so the module does not load, or a call stops (`SyntaxError`, `TypeError`)"
+                ),
                 _ => tr!("二度宣言することになり、{}", "it would be declared twice, and {}", module.ja; module.en),
             };
-            tr!(
+            let said = tr!(
                 "クライアントは、{} を {} にしますが、{}。{}。",
                 "the client writes {} as {}, and {}: {}.",
                 what.ja, written.ja, has.ja, breaks.ja;
                 what.en, written.en, has.en, breaks.en
-            )
+            );
+            match &h.compared {
+                Some((p, q)) => {
+                    let why = h.rule.why_compared(p, q);
+                    tr!("{}。{}", "{}: {}", why.ja, said.ja; why.en, said.en)
+                }
+                None => said,
+            }
         }
         _ => unreachable!("a hit of two names has no own name, and one of a name has one"),
     }
@@ -772,7 +842,19 @@ fn typescript_proto(b: &Book) -> Vec<Found> {
 /// module does not meet it, and refuses a word Python keeps itself, as the name its index imports.
 fn python_module(b: &Book) -> Vec<Found> {
     let n = b.name.as_str();
-    let note = if ritsu_emit::words::python::KEYWORDS.contains(&n) {
+    let mut backends = ALL.to_vec();
+    let note = if !ritsu_emit::ident::python_takes(n) {
+        tr!(
+            "クライアントはモジュール `{n}.py` で、`{n}` は Python の識別子にならないので、`import {n}` は Python の文になりません（`SyntaxError`）。",
+            "the client is the module `{n}.py`, and `{n}` is no identifier of Python, so `import {n}` is no Python (`SyntaxError`)."
+        )
+    } else if crate::normal::nfkc(n) != n {
+        let read = crate::normal::nfkc(n);
+        tr!(
+            "クライアントはモジュール `{n}.py` で、Python は識別子を NFKC にしてから読むので、`import {n}` が探すのは `{read}` です（`ModuleNotFoundError`）。",
+            "the client is the module `{n}.py`, and Python reads an identifier in NFKC, so `import {n}` looks for `{read}` (`ModuleNotFoundError`)."
+        )
+    } else if ritsu_emit::words::python::KEYWORDS.contains(&n) {
         tr!(
             "クライアントはモジュール `{n}.py` で、`{n}` は Python が予約している語なので、`import {n}` は Python の文になりません（`SyntaxError`）。`ritsu gen` のパッケージにも、この名前のモジュールは置けません。",
             "the client is the module `{n}.py`, and `{n}` is a word Python keeps, so `import {n}` is no Python (`SyntaxError`); a package of `ritsu gen` cannot hold a module of that name either."
@@ -782,10 +864,39 @@ fn python_module(b: &Book) -> Vec<Found> {
             "クライアントはモジュール `{n}.py` で、Python の標準ライブラリにもモジュール `{n}` があります。Python は同じ名前のモジュールを一つしか読み込まず、`import {n}` は先に読み込んだほうを返すので、標準ライブラリの `{n}` を読み込んだあとでは、クライアントを読み込めません。先にクライアントを読み込むと、プログラムのどの `import {n}` も、標準ライブラリのものの代わりにクライアントを返します。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.{n}` として持つので、標準ライブラリのものとぶつかりません。",
             "the client is the module `{n}.py`, and Python's standard library has a module `{n}` too. Python keeps one module per name, and `import {n}` gives the one imported first: once the standard library's `{n}` is imported, the client cannot be imported; imported before it, the client is what every `import {n}` in the program gets in place of the standard library's. A package of `ritsu gen` holds the module as `<package>.books.{n}`, which does not meet the standard library's."
         )
+    } else if n == "tigerbeetle" {
+        backends = vec![Backend::TigerBeetle];
+        tr!(
+            "クライアントはモジュール `tigerbeetle.py` で、TigerBeetle のライブラリを `import tigerbeetle` で読み込みます。モジュールの横から読み込むと、モジュールが自分を読み込むので、ライブラリの関数がありません（`AttributeError`）。`ritsu gen` のパッケージは、このモジュールを `<パッケージ>.books.tigerbeetle` として持つので、ライブラリとぶつかりません。",
+            "the client is the module `tigerbeetle.py`, and it imports TigerBeetle's library with `import tigerbeetle`. Imported from beside it, the module imports itself, which has none of the library's functions (`AttributeError`). A package of `ritsu gen` holds the module as `<package>.books.tigerbeetle`, which does not meet the library."
+        )
     } else {
         return Vec::new();
     };
-    vec![Found { subject: Subject::AsIs(Name::Book), said: vec![Said { lang: Lang::Python, backends: ALL.to_vec(), note, in_package: false }] }]
+    vec![Found { subject: Subject::AsIs(Name::Book), said: vec![Said { lang: Lang::Python, backends, note, in_package: false }] }]
+}
+
+/// PostgreSQL: the schema the SQL makes, by the book's name, when it is one of PostgreSQL's own: a
+/// name that starts with `pg_`, which PostgreSQL keeps for the schemas of the system and will not
+/// create (`unacceptable schema name`), or `information_schema`, which is there already, and where
+/// only a superuser creates a function (`permission denied for schema information_schema`). The
+/// clients call into the schema, so they are held to it as to every other form of the SQL.
+fn pg_schema(b: &Book) -> Vec<Found> {
+    let n = b.name.as_str();
+    let note = if n.starts_with("pg_") {
+        tr!(
+            "SQL はスキーマ `{n}` を作りますが、`pg_` で始まる名前は PostgreSQL がシステムのスキーマのために取っておく名前なので、`create schema` が止まり（`unacceptable schema name`）、読み込めません。",
+            "the SQL makes the schema `{n}`, and a name that starts with `pg_` is one PostgreSQL keeps for the schemas of the system: `create schema` stops (`unacceptable schema name`), and the SQL does not load."
+        )
+    } else if n == "information_schema" {
+        tr!(
+            "SQL はスキーマ `{n}` に関数を作りますが、これは PostgreSQL がもとから持つスキーマで、関数を作れるのはスーパーユーザーだけです。ほかのロールでは止まり（`permission denied for schema information_schema`）、読み込めません。",
+            "the SQL makes its functions in the schema `{n}`, one PostgreSQL has itself, where only a superuser creates a function: as any other role it stops (`permission denied for schema information_schema`), and the SQL does not load."
+        )
+    } else {
+        return Vec::new();
+    };
+    vec![Found { subject: Subject::AsIs(Name::Book), said: vec![Said { lang: Lang::Sql, backends: vec![Backend::Postgres], note, in_package: true }] }]
 }
 
 /// The SQL types of a PostgreSQL function's parameters after the tenant's, and how many of the
@@ -909,7 +1020,7 @@ pub fn find(b: &Book) -> Vec<Found> {
             }
         }
     }
-    for f in typescript_proto(b).into_iter().chain(python_module(b)).chain(python_mangled(b)).chain(pg_found(b)) {
+    for f in typescript_proto(b).into_iter().chain(python_module(b)).chain(python_mangled(b)).chain(pg_schema(b)).chain(pg_found(b)) {
         match out.iter_mut().find(|o| o.subject == f.subject) {
             Some(o) => o.said.extend(f.said),
             None => out.push(f),
@@ -1019,4 +1130,46 @@ pub fn check_target(b: &Book, target: Target, in_package: bool) -> Vec<Diag> {
 
 fn join(a: &Text, b: &Text) -> Text {
     Text::new(format!("{}{}", a.ja, b.ja), format!("{}{}", a.en, b.en))
+}
+
+/// One book checked before another in one run: its path as given, the book, and what its file's name
+/// gives the Go package ([`across`]).
+pub struct Earlier {
+    pub path: String,
+    pub book: Book,
+    pub stem: String,
+}
+
+/// W108 of one book, with the books checked before it in one run (`chobo check` of several, and the
+/// books of `ritsu check`), told of the later book, which names the earlier one: two books of
+/// different names that are one Go package (`Shop` and `shop`, or two whose names are not ASCII and
+/// whose files' names are not either, which are both `book`). The client's file is that package's,
+/// so what `gen` writes of the later takes the place of the earlier's, and `ritsu gen` stops at two
+/// books with one path. Each of the other things a book's name names is told apart by its name as it
+/// is written: a TypeScript and a Rust file, a Python module, a PostgreSQL schema (quoted, and cut by
+/// no book, since E061 stops a long one). Two books of one name are not compared: a directory can
+/// hold the versions of one book. `chobo gen` takes one book, so it has nothing to stop.
+pub fn across(earlier: &[Earlier], b: &Book, stem: &str) -> Vec<Diag> {
+    let pkg = go::package(b, stem);
+    let Some(e) = earlier.iter().find(|e| e.book.name != b.name && go::package(&e.book, &e.stem) == pkg) else { return Vec::new() };
+    let (n, other, path) = (&b.name, &e.book.name, &e.path);
+    let d = diag::warning(
+        "W108",
+        b.line,
+        b.col,
+        tr!(
+            "帳簿 `{n}` と、`{path}` の帳簿 `{other}` は、Go のクライアントで同じパッケージ `{pkg}` になります",
+            "The book `{n}` and the book `{other}` of `{path}` are one package, `{pkg}`, in the Go client"
+        ),
+    );
+    let targets: Vec<Target> = Target::ALL.into_iter().filter(|t| t.lang() == Lang::Go).collect();
+    let why = tr!(
+        "パッケージは、帳簿の名前（ASCII の識別子のとき、小文字にしたもの）か、ファイルの名前か、`book` です。どちらも `{pkg}` なので、同じ `go/{pkg}/` に書くことになり、後の帳簿のクライアントが前の帳簿のものを置き換えます（`ritsu gen` のパッケージでは、`books/{pkg}/` に二つ書くことになり、止まります）。",
+        "A package is the book's name (in lower case, when it is an ASCII identifier), or the file's name, or `book`. Both are `{pkg}`, so both write `go/{pkg}/`, and the later book's client takes the place of the earlier's (in a package of `ritsu gen`, both write `books/{pkg}/`, and it stops)."
+    );
+    let rename = tr!(
+        "使わないターゲットなら、このままで構いません。使うなら、どちらかの帳簿の名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。",
+        "For a target you do not build, leave it as it is. For one you do, rename one of the two books; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`."
+    );
+    vec![d.note(join(&prefix(Lang::Go, &targets), &why)).hint(rename)]
 }

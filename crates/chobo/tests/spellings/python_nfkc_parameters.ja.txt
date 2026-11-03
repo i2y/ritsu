@@ -1,0 +1,9 @@
+警告[W108]: python_nfkc_parameters.book:11:62: 振替 `receive` の引数 `ｑｔｙ` と `qty` は、Python のクライアントで同じ識別子になります
+    11 | transfer receive(delivery: string, ｑｔｙ: string, sku: string, qty: pcs)
+  = Python（`--target python --books postgres|tigerbeetle|mysql`）: Python は識別子を NFKC にしてから比べるので、`ｑｔｙ` と `qty` は同じ識別子です（U+FF51 と U+0071 の字が違います）。`_receiveTransfer` のメソッドに同じ名前の引数 `qty` が二つでき、モジュールを読み込めません（`SyntaxError`）。
+  ヒント: 使わないターゲットなら、このままで構いません。使うなら、どちらかの名前を変えてください。すでに使っている帳簿なら、名前を変えたあと、使っているリビジョンと `chobo check --diff-base` で比べてください。
+python_nfkc_parameters.book: ok、警告 1 件
+  receive.do  拒否されうる理由: key_conflict
+  ship.do     拒否されうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  キー: receive は、delivery と ｑｔｙ の組ごとに一度だけ動きます。キーが同じで sku、qty のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: ship は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。

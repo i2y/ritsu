@@ -1,0 +1,9 @@
+warning[W108]: python_nfkc_parameters.book:11:62: The parameters `ｑｔｙ` and `qty` of the transfer `receive` are one identifier in the Python client
+    11 | transfer receive(delivery: string, ｑｔｙ: string, sku: string, qty: pcs)
+  = Python (`--target python --books postgres|tigerbeetle|mysql`): Python compares identifiers in NFKC, so `ｑｔｙ` and `qty` are one identifier (their characters U+FF51 and U+0071 differ): a method of `_receiveTransfer` would have two parameters `qty`, and the module does not load (`SyntaxError`).
+  hint: For a target you do not build, leave it as it is. For one you do, rename one of the two; if the book is in use, check the renamed book against the revision in use with `chobo check --diff-base`.
+python_nfkc_parameters.book: ok, 1 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per delivery, ｑｔｙ; a second call that differs only in sku or qty is refused with key_conflict
+  key: ship once per order, sku; a second call that differs only in qty is refused with key_conflict

@@ -1,0 +1,17 @@
+book rust_nfc_parameters v1
+description "Two parameters written differently that Rust and Python take for one: lot_K, and lot_K with the Kelvin sign, which NFC makes K"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, lot_K: string, lot_K: string, sku: string, qty: pcs)
+  key delivery, lot_K, lot_K
+  move qty from suppliers to stock(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers

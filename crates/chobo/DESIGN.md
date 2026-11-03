@@ -1358,8 +1358,7 @@ ritsu の言語の生成物が Rust でも書かれるようになり（kaname �
 
 ### 14.6 見つけて直していないもの
 
-- chobo の名前に書けて、ほかの言語の識別子にもならない字（`²` など）は、TypeScript・Python・Go のターゲットでは止まらず、生成したクライアントが組めない。`tests/fixtures/identifiers.book` の三つの言語のクライアントで、tsc は `Invalid character`、go vet は `illegal character U+00B2 '²'`、Python は `SyntaxError: invalid character '²' (U+00B2)` で止まった。E063 は Rust のターゲットだけを止める。三つの言語の識別子の決まりは、Rust とも互いとも少しずつ違う（TypeScript は ID_Start と ID_Continue、Python は NFKC にしてからの XID、Go は文字と十進の数字）ので、止めるなら言語ごとの表になる。
-- Rust は識別子を NFC にしてから比べる。NFC で同じになる二つの名前（ハングルの字母を並べたものと、合わせた音節）は、chobo では別の名前で、Rust のクライアントでは同じ名前になって組めない。chobo は名前を正規化しない（1.6）ので、これは確かめていない。Python の NFKC（11.3）と同じ形の穴である。
+- chobo の名前に書けて、ほかの言語の識別子にもならない字（`²` など）と、NFC か NFKC で同じになる二つの名前は、18 章で E063 と W108 にした。
 - 名前に NFKC で変わる字（全角の英字、半角のカナ、ハングルの互換の字母、`ǅ`、合字の `ﬁ`）があると、rustc は、クライアントを入れたクレートに `uncommon_codepoints` の警告（`identifier contains a non normalized (NFKC) character`）を出す。この lint はクレートの根でしか切れないので、モジュールの頭の `#![allow]` では止められない。`#![deny(warnings)]` のクレートでは組めない。`docs/targets.md` に、クレートの根で許すよう書いた。
 - Vitess が sqlx の既定の接続（`sql_mode` に `PIPES_AS_CONCAT` を足す）を断ることは、4.5 の vtgate の振る舞いから決めたもので、Rust のクライアントで確かめてはいない。Vitess の上の Rust のクライアントは、platforms の段で `.pipes_as_concat(false)` を付けて流す。
 
@@ -1453,8 +1452,7 @@ PascalCase は、`_` で区切った語の頭を大文字にして `_` を除い
 
 ### 16.7 見つけて直していないもの
 
-- Python のクライアントのモジュールの名前が、クライアントが読み込む外のパッケージの名前と同じとき（帳簿 `tigerbeetle` の `tigerbeetle-python`）は、W108 にしていない。クライアントの中の `import tigerbeetle as tb` が自分自身を読み、`partially initialized module 'tigerbeetle' … has no attribute 'CreateTransferStatus'` で読み込めない（確かめた）。PostgreSQL と MySQL の系統の Python のクライアントは、標準ライブラリのほかを読み込まない。
-- 14.6 の、ほかの言語の識別子にならない字（`²`）と、NFKC と NFC で同じになる名前は、そのままである。
+- 帳簿 `tigerbeetle` の Python のクライアントと、14.6 の二つの形は、18 章で W108 と E063 にした。
 
 ## 17. `build` を `gen` にし、出力先を言語に、帳簿のデータベースを `--books` に分ける（2026-11-01）
 
@@ -1512,6 +1510,78 @@ PascalCase は、`_` で区切った語の頭を大文字にして `_` を除い
 ### 17.7 見つけて直していないもの
 
 - 0.40.0 が `--out` に平らに書いたファイル（`--out db` の `db/inventory.sql`）は、`gen` が消さず、`--check` も見ない。rulec と koyomi は頼まれなくなった付属物の残りを挙げるが（ritsu の DESIGN 9.6）、出力先のディレクトリの中だけを見るので、chobo の前の置き方の残りは挙げない。
+
+## 18. 識別子にならない字、正規化で一つになる名前、一緒に渡した帳簿（2026-11-04）
+
+### 18.1 きっかけ
+
+14.6 の二つの形（`²` のように TypeScript・Python・Go の名前にならない字を持つ名前、NFC と NFKC で同じになる名前）と、16.7 の帳簿 `tigerbeetle` である。koyomi が一緒に渡したファイルを比べるようになったので（koyomi の DESIGN 17 章）、帳簿の名前にも同じ形があるかを見た。
+
+### 18.2 原因
+
+E063 は Rust のターゲットの表だけを読んでいた。ほかの三つの言語のクライアントは、名前を書いたままの識別子にするので、`²` を持つ名前で組めなかった。W108 が比べる綴りは、言語が名前をどう書くかだけを見て、言語が識別子を比べる前に行う正規化（Rust は NFC、Python は NFKC）を含まなかった。W108 は一冊の帳簿しか読まないので、二冊の帳簿が一つの Go のパッケージになることも言えなかった。
+
+### 18.3 決定
+
+1. **E063 を四つの言語のクライアントで見る。** `client::check_names(book, lang)` が `ritsu_emit::ident` の `typescript_takes`、`python_takes`、`go_takes`、`rust_takes` を読む。表は言語ごとに違うので、止まる名前も言語ごとに違う。SQL は名前を引用するので、どの字でも通る。
+
+   | 名前 | TypeScript | Python | Go | Rust |
+   |---|---|---|---|---|
+   | `area_m²` | 止まる | 止まる | 止まる | 止まる |
+   | `कीमत` | 通る | 通る | 止まる | 通る |
+   | `ͺarea` | 通る | 止まる | 通る | 止まる |
+   | `Ⅻ` | 通る | 通る | 止まる | 通る |
+   | 理由 `no_room²` | 通る | 通る | 通る | 止まる |
+
+   理由の名前を見るのは Rust だけである。ほかの三つの言語は理由を文字列で書くので、どの字でも組める。Rust の文は一字も変えない。帳簿の名前は E063 で見ない。名前がモジュールになる Python で W108 にする（4）。E060〜E063 と同じく `chobo check` は言わず、`chobo gen` で止まる。
+
+2. **W108 は言語が識別子として比べる形で比べる。** `Decl.compared` が、Rust は NFC、Python は NFKC にした名前を持ち（`Rule::compared`）、ほかの言語は書いたままである。注は、二つの名前と、言語が比べる形の両方を言う。
+3. **Python の引数の自分の名前も NFKC で比べる。** クライアントのメソッドが引数の隣で使う `self`、`_str`、`_amt`、`_amounts`（`client::python::METHOD_OWN`）は、NFKC で同じになる引数（`ｓｅｌｆ`）とぶつかる。
+
+4. **帳簿の名前の Python のモジュールを三つ足す。** どれも Python のクライアントだけの W108 と E064 で、単独の帳簿の形なので、パッケージ（`ritsu gen`）は止めない。
+
+   | 帳簿の名前 | 壊れ方 |
+   |---|---|
+   | 識別子にならない名前（`rooms²`） | `import rooms²` が `SyntaxError` になる |
+   | NFKC で変わる名前（`ｓｈｏｐ`） | `import ｓｈｏｐ` は `shop` を探す（`ModuleNotFoundError`） |
+   | `tigerbeetle`（TigerBeetle の Python のクライアントだけ） | クライアントの `import tigerbeetle as tb` が自分を読む |
+
+5. **帳簿の名前がクライアントの読み込む名前と同じになる形を全部見た。** Python の `tigerbeetle` のほかには無かった。読み込む名前をクライアントの出力から読み、帳簿の名前にして三つのデータベースで道具に通した。Go は 21 の名前（`pgx`、`pgconn`、`mysql`、`tb`、`context`、`fmt`、`errors`、`tigerbeetle` など）で 63 の組の全部が `go vet` を通り、TypeScript は 5 つの名前で 15 の組の全部が `tsc` を通り、Rust は 8 つの名前で 24 の組の全部が `cargo check` を通った。Python で読み込むのは標準ライブラリのモジュール（16 章で W108）と `tigerbeetle` だけである。PostgreSQL と MySQL の系統の SQL は何も読み込まない。
+6. **PostgreSQL が自分のものにするスキーマの名前を W108 にする。** `pg_` で始まる帳簿は `unacceptable schema name` で読み込めず、`information_schema` はスーパーユーザーでないロールでは読み込めない。SQL と TypeScript と Python と Go と Rust の PostgreSQL の組で止まる。ほかのデータベースは止まらない。これはパッケージでも止める。
+7. **一緒に渡した帳簿を比べる。** `chobo check` と `ritsu check` は、渡された順に帳簿を比べ、Go のパッケージの名前が同じになる二冊の後のほうに W108 を付けて、注で前の帳簿のパスを言う（`spellings::across`、`check::compare_across`）。`shop` と `Shop`、日本語の名前の二冊（どちらも `book`）が当たる。`chobo gen` は帳簿を一冊しか取らないので、E064 は無い。`ritsu gen` は同じパスに書くとして前から exit 2 で止まる（`both write go/books/shop/book.go of the package`）。一つの帳簿の版を並べても比べない。ほかの形は無かった。Python のモジュールは帳簿の名前のままで、NFKC で変わる名前は（4）で止まる。PostgreSQL のスキーマの 63 バイトは E061 が先に止める。Python と TypeScript の `ritsu gen` の置き場所は、名前が違えば別である。
+8. **名前の正規化の表をクレートに置く。** `src/normal.rs` の `nfc` と `nfkc`、`src/normal_table.rs`（Unicode 17.0.0。`tools/normal/make_table.py` が UCD の二つのファイルから作り、SHA-256 が違えば作らない）。このために chobo は UCD から作った表を持つので、`license` を `(MIT OR Apache-2.0) AND Unicode-3.0` にし、`THIRD_PARTY_NOTICES` を置いた（ritsu-emit と同じ）。
+
+### 18.4 捨てたもの
+
+- `unicode-normalization` のクレートを足すこと。依存が一つ増えて `Cargo.lock` が変わる。同じ作り方の字の表が ritsu-emit にあるので、それにそろえた。
+- 字の表を言語ごとの版に合わせること（言語のツールが支える最も古い版の UCD から作る）。このリリースではしない。表は ritsu-emit の一つの版を使う。
+- `²` を W108 にすること。どの出力先でも `check` で警告するより、E060〜E063 と同じ形（そのターゲットの `gen` で止まるエラー）にそろえた。
+- 帳簿の名前を E063 で見ること。SQL と Go と TypeScript は帳簿の名前で組めるので、止まるのは Python のモジュールの形だけである。
+
+### 18.5 変わること
+
+- `²` などの字を持つ名前は、その字を持てない言語のターゲットで E063 で止まる。前は書いて、組めなかった。
+- NFC か NFKC で同じになる二つの名前は、その言語のターゲットで E064 で止まる。前は書いて、組めなかった。
+- 帳簿の名前 `rooms²`、`ｓｈｏｐ`、`tigerbeetle` は Python のターゲットで、`pg_` で始まる名前と `information_schema` は PostgreSQL のターゲットで E064 で止まる。
+- 二冊の帳簿を一緒に `check` すると、新しい W108 が出ることがある。日本語の名前の帳簿は、どれも Go のパッケージ `book` になるので、一つのプロジェクトに二冊あれば W108 になる。
+- 正規化の表が増え、ライセンスの書き方が変わる。
+- 生成物は、この形に当たらない帳簿では一字も変わらない。
+
+### 18.6 確かめたこと
+
+- `tests/spellings.rs`（15）と、材料の `tests/spellings/`（24 の形。英語を先に、日本語の版を横に置いて 48 冊、どれも英日の golden を持つ）と `tests/spellings/across/`。どの帳簿も W108 を一つだけ言い、挙げるターゲットの `chobo gen` は同じ場所の E064 で止まる。注のとおりに名前を変えた 48 冊（`tests/spellings/renamed/`）は何も言われず、14 のターゲットのどれでも書ける。
+- `a_name_a_language_takes_as_no_identifier_stops_its_clients` は、上の表のとおりに止まること、止まらない組が組めることを確かめる。直す前のバイナリでは、`area_m²` は `tsc` が `TS1131`、Python が `SyntaxError`、`go vet` が `illegal character U+00B2` で止まり、`कीमत` と `Ⅻ` は Go だけが、`ͺarea` は Python だけが止まった。
+- ツールの段で、W108 の挙げるターゲットを含めて検査をせずに書き、言語の道具に通した。壊れたのは、どれも W108 が挙げるターゲットで、壊れ方は注のとおりだった。`go vet` は 288 のターゲットのうち 22、`tsc` と Node は 288 のうち 16、Python は 288 のうち 78、`cargo check` は 288 のうち 46、PostgreSQL は 96 のうち 6 が止まった。挙げないターゲットと名前を変えた版は、どれも通った。`information_schema` がスーパーユーザーでないロールを止めることは、使い捨てのロールで確かめる。
+- `tests/normal.rs`（2）は、表を Python の `unicodedata` と 314,368 個の文字列で比べる。ランナーの Python の Unicode は 15.1.0 で、表は 17.0.0 なので、その版で定まった字だけを比べる。一度だけ、Unicode 17.0.0 の `NormalizationTest.txt` の 20,034 行と、そこに載らない 1,094,978 字を確かめ、全部が決まりどおりだった。
+- `two_books_given_together_that_are_one_go_package` は、二冊を別の実行で一つの `--out` に書くと、後の帳簿が同じパスを上書きすることと、注のとおりに名前を変えた帳簿ならパッケージが二つになることを確かめる。
+- この章の前のバイナリといまのバイナリで、木の `.book`（215 冊）の `check`（英語、日本語、JSON）と全部のターゲットの生成物を比べた。違うのは 19 冊で、この章で足した材料の 16 冊と、`tests/fixtures/` の 3 冊である。`identifiers.book` と `識別子.book` は `²` の例として置いた帳簿で、Go、Python、TypeScript のターゲットが E063 で止まるようになった。`wide_letters.book` は `stock_𝐀𝐁` の例で、Python のターゲットの W108 が増えた（NFKC で変わる帳簿の名前）。
+
+### 18.7 見つけて直していないもの
+
+- 14.6 の三つ目の形（NFKC で変わる字に rustc が言う `uncommon_codepoints`）はそのままである。クレートの根でしか切れない。
+- 言語のツールの Unicode が表より古いときの差。表は Unicode 17.0.0 だが、確かめたランナーの Python は 15.1.0、別の手元の Python は 16.0 である。表より古いツールでは、新しい版で足された字を持つ名前を `check` が通し、ツールが受け付けないことがある。
+- `chobo gen` を別々に走らせて一つの `--out` に書くと、同じ Go のパッケージの二冊は黙って上書きする。`chobo gen` は一度に一冊だけ読むので比べられない。`chobo check` で一緒に渡せば W108 になる。
+- 大文字と小文字を区別しないファイルシステムと、MySQL の表の名前の大文字と小文字は、ここでは確かめられない（MySQL が手元に無い）。
 
 ## 19. 止まる文の頭と `help <コマンド>`（2026-11-04）
 
