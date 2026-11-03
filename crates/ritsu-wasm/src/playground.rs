@@ -8,9 +8,11 @@
 //! - [`check`]: `ritsu check .` — every file by its language's own check, the languages joined once,
 //!   then what ritsu checks across them. It is ritsu's own `check` (`ritsu::check::run`), so a check
 //!   ritsu gains later is in the page with nothing changed here.
-//! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo gen`, `dandori gen`,
-//!   `sakai export cml`, `yuen export`, `sekisho gen --target cedar` (the last three given the
-//!   project's root, as `ritsu check` gives it them). geas and `.proto` files generate nothing.
+//! - [`generate`]: one file's generator, on the target the page picked: `rulec gen --target <t>`,
+//!   `koyomi gen --target <t>`, `chobo gen --target <language> --books <database>`, `dandori gen
+//!   --target <t>`, `sekisho gen --target <t>`, `sakai export cml`, `yuen export reqif|prov` (the
+//!   last three given the project's root, as `ritsu check` gives it them). A target's library is
+//!   what is written, with nothing `--extra` asks for. geas and `.proto` files generate nothing.
 //! - [`doc`]: one file's page for the people who read it, as HTML and as Markdown: `rulec doc`,
 //!   `koyomi doc`, `chobo doc`, `dandori doc`, `sekisho doc`.
 //!
@@ -144,11 +146,17 @@ fn tool_of(path: &str) -> Option<Tool> {
     ritsu_project::project::kind_of(path)
 }
 
-/// The targets of the generators that take one, the first the one a file opens on.
+/// The targets of the generators that take one, in the order of the command's own list, the first
+/// the one a file opens on (rulec's `python`, koyomi's `typescript`, sekisho's `cedar`). chobo's are
+/// its pairs of a database and a language by their names (`tigerbeetle-go`), each the flags
+/// `--target <language> --books <database>` of `chobo gen` ([`chobo_build`]).
 fn targets(t: Tool) -> Vec<&'static str> {
     match t {
-        Tool::Dandori => dandori::commands::TARGETS.to_vec(),
+        Tool::Rulec => rulec::targets::target_names().to_vec(),
+        Tool::Koyomi => koyomi::naming::TARGETS.iter().map(|t| t.key()).collect(),
         Tool::Chobo => chobo::target::Target::ALL.iter().map(|t| t.name()).collect(),
+        Tool::Dandori => dandori::commands::TARGETS.to_vec(),
+        Tool::Sekisho => sekisho::r#gen::TARGETS.to_vec(),
         Tool::Yuen => vec!["reqif", "prov"],
         _ => vec![],
     }
@@ -166,18 +174,19 @@ pub fn generate(r: &Request) -> Value {
     let m = r.memory();
     let p = r.path.as_str();
     let l = r.lang;
+    let t = target.as_deref().unwrap_or_default();
     let did = fs::with(m.clone(), || -> Option<Ran> {
         let joined = Joined::new();
         Some(match tool {
             Tool::Rulec => {
-                // every target with every extra, as `rulec gen` wrote with no `--target` up to 0.40.0
-                let (_, shown) = words(&rulec::targets::up_to_0_40(&["rulec", "gen", p, "--out", OUT]), l);
-                rulec_lang(l, || ran(shown, |o, e| rulec::codegen::generate(&[p], OUT, &rulec::targets::Asked::up_to_0_40(), false, false, o, e)))
+                let (_, shown) = words(&["rulec", "gen", p, "--target", t, "--out", OUT], l);
+                let asked = rulec::targets::Asked::new(&[t], &[]).expect("the target is one of rulec's own");
+                rulec_lang(l, || ran(shown, |o, e| rulec::codegen::generate(&[p], OUT, &asked, false, false, o, e)))
             }
-            Tool::Koyomi => koyomi_gen(p, l),
-            Tool::Chobo => chobo_build(p, l, target.as_deref().unwrap_or_default()),
+            Tool::Koyomi => koyomi_gen(p, l, t),
+            Tool::Chobo => chobo_build(p, l, t),
             Tool::Dandori => {
-                let (args, shown) = words(&["dandori", "gen", p, "--target", target.as_deref().unwrap_or_default(), "--out", OUT], l);
+                let (args, shown) = words(&["dandori", "gen", p, "--target", t, "--out", OUT], l);
                 ran(shown, |o, e| ritsu::languages::dandori(&args[1..], o, e))
             }
             Tool::Sakai => {
@@ -188,10 +197,12 @@ pub fn generate(r: &Request) -> Value {
                 let (args, shown) = words(&["yuen", "export", target.as_deref().unwrap_or_default(), p, "--root", "."], l);
                 ran(shown, |o, e| yuen::run::run(&args[1..], joined.yuen(), o, e))
             }
-            // a gate's Cedar, the schema and the policies in their text and their JSON, as `ritsu
-            // sekisho` writes them with the rules, the dates and the flows a gate reads joined
+            // a gate's Cedar (the schema and the policies, in their text and their JSON), or the code
+            // of a language that asks the gate, which reads the rules and the dates of the package
+            // `ritsu gen` writes; as `ritsu sekisho` writes them, with the rules, the dates and the
+            // flows a gate reads joined
             Tool::Sekisho => {
-                let (args, shown) = words(&["sekisho", "gen", p, "--target", "cedar", "--root", ".", "--out", OUT], l);
+                let (args, shown) = words(&["sekisho", "gen", p, "--target", t, "--root", ".", "--out", OUT], l);
                 ran(shown, |o, e| sekisho::run::run(&args[1..], joined.sekisho().into(), o, e))
             }
             // kaname writes into a package of ritsu gen only, and is not on the page yet (kaname's
@@ -325,13 +336,16 @@ fn head(l: Lang) -> &'static str {
     if l == Lang::Ja { "エラー" } else { "error" }
 }
 
-/// `koyomi gen <path> --out generated` with every target and its runner, as 0.40.0 wrote with no
-/// `--target` (koyomi's `run::gen_cmd`, one file).
-fn koyomi_gen(path: &str, l: Lang) -> Ran {
+/// `koyomi gen <path> --target <target> --out generated`, the library of the target the page picked
+/// (koyomi's `run::gen_cmd`, one file and one target, into a `generated/` the project has no file
+/// in), or what stops that target (E016, koyomi's DESIGN 15), with nothing written.
+fn koyomi_gen(path: &str, l: Lang, target: &str) -> Ran {
     use koyomi::calendar::Loader;
     use koyomi::check::{self, Options};
-    use koyomi::naming::TARGETS;
-    let (_, shown) = words(&koyomi::cli::up_to_0_40(&["koyomi", "gen", path, "--out", OUT]), l);
+    let (_, shown) = words(&["koyomi", "gen", path, "--target", target, "--out", OUT], l);
+    let Some(t) = koyomi::naming::TARGETS.into_iter().find(|t| t.key() == target) else {
+        return Ran { command: shown, code: 2, err: format!("there is no target `{target}`\n"), ..Ran::default() };
+    };
     let mut r = Ran { command: shown, ..Ran::default() };
     let refuse = |mut r: Ran, t: Text| {
         r.err.push_str(&format!("{}: {}\n", head(l), t.get(l)));
@@ -351,7 +365,23 @@ fn koyomi_gen(path: &str, l: Lang) -> Ran {
         return r;
     };
     let u = koyomi::codegen::unit_of(checked, l);
-    let planned: Vec<(String, String)> = TARGETS.iter().flat_map(|t| koyomi::codegen::files(&u, *t)).collect();
+    let planned = match koyomi::codegen::build(&o, &u, t, false) {
+        Ok(files) => files,
+        Err(found) => {
+            // each finding once, as `koyomi gen` says them, then why nothing is generated
+            let mut stops: Vec<koyomi::diag::Diag> = Vec::new();
+            for d in found {
+                if !stops.iter().any(|s| s.place() == d.place() && s.message.en == d.message.en) {
+                    stops.push(d);
+                }
+            }
+            r.out.push_str(&stops.iter().map(|d| d.render(l)).collect::<String>());
+            let why = tr!("`{path}` からは `{target}` のコードを生成できないので、何も生成しません", "`{path}` cannot be made into the code of `{target}`, so nothing is generated");
+            r.err.push_str(&format!("{}: {}\n", head(l), why.get(l)));
+            r.code = 1;
+            return r;
+        }
+    };
     for (rel, body) in planned {
         let p = Path::new(OUT).join(&rel);
         let shown = p.to_string_lossy().to_string();
@@ -439,16 +469,27 @@ fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
     w.extend(["--out", OUT]);
     let (_, shown) = words(&w, l);
     let mut r = Ran { command: shown, ..Ran::default() };
-    let Some((src, book, _)) = chobo_load(path, l, &mut r) else { return r };
+    let Some((src, book, c)) = chobo_load(path, l, &mut r) else { return r };
     let stem = Path::new(path).file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
     let origin = chobo::target::Origin::named(path, src.as_bytes());
     let files = match chobo::target::build(&book, &stem, t, &origin) {
         Ok(f) => f,
-        Err(diags) => {
-            for d in &diags {
+        Err(found) => {
+            // each finding once, as `chobo gen` says them, and a summary that counts the warnings
+            // the load said as well
+            let key = |d: &chobo::diag::Diag| (d.code, d.line, d.col, d.message.en.clone(), d.notes.iter().map(|n| n.en.clone()).collect::<Vec<_>>());
+            let mut stops: Vec<chobo::diag::Diag> = Vec::new();
+            for d in found {
+                if !stops.iter().any(|s| key(s) == key(&d)) {
+                    stops.push(d);
+                }
+            }
+            for d in &stops {
                 r.err.push_str(&d.shown(path, &src, l));
             }
-            r.err.push_str(&format!("{}\n", chobo::diag::summary(path, &diags, l)));
+            let mut all = c.diags.clone();
+            all.extend(stops);
+            r.err.push_str(&format!("{}\n", chobo::diag::summary(path, &all, l)));
             r.code = 1;
             return r;
         }

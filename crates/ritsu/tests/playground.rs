@@ -883,18 +883,28 @@ fn holds(files: &[(String, String)], lang: &str, what: &str, answer: &Value, fai
     }
 }
 
+/// The targets the page offers a file's generator, in the order its command lists them, the first
+/// the one the file opens on (DESIGN 8.7): every target of rulec, koyomi, sekisho and dandori,
+/// chobo's pairs of a database and a language, and yuen's two formats.
+fn targets_of(path: &str) -> Vec<&'static str> {
+    match ritsu_project::project::kind_of(path) {
+        Some(Tool::Rulec) => vec!["python", "numpy", "typescript", "javascript", "rust", "ruby", "php", "go", "swift", "java", "sql", "wasm", "proto"],
+        Some(Tool::Koyomi) => vec!["typescript", "python", "go", "rust", "sql", "wasm"],
+        Some(Tool::Chobo) => vec!["postgres", "postgres-typescript", "postgres-python", "postgres-go", "postgres-rust", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "tigerbeetle-rust", "mysql", "mysql-typescript", "mysql-python", "mysql-go", "mysql-rust"],
+        Some(Tool::Dandori) => vec!["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"],
+        Some(Tool::Sekisho) => vec!["cedar", "typescript", "python", "go"],
+        Some(Tool::Yuen) => vec!["reqif", "prov"],
+        _ => vec![],
+    }
+}
+
 /// The requests a project's page makes: `ritsu check`, and for every file its generator (with
 /// every target the generator takes) and its page. The files go in with [`files_json`].
 fn requests(files: &[(String, String)], lang: &str) -> Vec<(&'static str, Value)> {
     let base = |path: &str, target: Option<&str>| json!({ "files": {}, "lang": lang, "path": path, "target": target });
     let mut out = vec![("check", base("", None))];
     for (p, _) in files {
-        let targets: Vec<&str> = match ritsu_project::project::kind_of(p) {
-            Some(Tool::Dandori) => vec!["asl", "temporal-typescript", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"],
-            Some(Tool::Chobo) => vec!["postgres", "postgres-typescript", "postgres-python", "postgres-go", "postgres-rust", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "tigerbeetle-rust", "mysql", "mysql-typescript", "mysql-python", "mysql-go", "mysql-rust"],
-            Some(Tool::Yuen) => vec!["reqif", "prov"],
-            _ => vec![],
-        };
+        let targets = targets_of(p);
         if targets.is_empty() {
             out.push(("gen", base(p, None)));
         }
@@ -1173,6 +1183,10 @@ fn compare(what: &str, lang: &str, files: &[(String, String)], failures: &mut Ve
             "gen" => {
                 let a = playground::generate(&r);
                 if a["none"] != true {
+                    let offered: Vec<&str> = a["targets"].as_array().map(|ts| ts.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+                    if offered != targets_of(&path) {
+                        failures.push(format!("{label} ({lang}): the page offers the targets {offered:?}"));
+                    }
                     holds(files, lang, &label, &a, failures);
                     n += 1;
                 }
@@ -1344,8 +1358,11 @@ fn the_module_answers_as_the_library_does() {
     let mut requests: Vec<(String, String)> = Vec::new();
     for p in committed() {
         for lang in p.langs() {
+            // the target the file opens on: the project's (a version of dandori's examples), or the
+            // first of its generator's
+            let first = p.target.as_deref().or_else(|| targets_of(&p.open).first().copied());
             for (kind, mut req) in requests_of(&p.files, lang) {
-                let opened = req["path"] == p.open.as_str() && (req["target"].is_null() || req["target"].as_str() == p.target.as_deref());
+                let opened = req["path"] == p.open.as_str() && (req["target"].is_null() || req["target"].as_str() == first);
                 if p.group != "ritsu" && kind != "check" && !opened {
                     continue;
                 }
@@ -1637,9 +1654,9 @@ const READY: &str = r#"(() => { const r = document.querySelector(".pg"); const s
 /// What the playground shows, as a reader sees it: the project and the file open (by the tab
 /// selected, which is there even when a project of one file hides the tabs), the file's text in the
 /// editor, the view, the tabs marked, the list of projects, the status, what the panel of the check
-/// or of the generator prints, the problems and their count, the page for people as its frame holds
-/// it, whether it is faded, the band under it, the Markdown, the line the cursor is on, and where
-/// the page is.
+/// or of the generator prints, the generator's target, the problems and their count, the page for
+/// people as its frame holds it, whether it is faded, the band under it, the Markdown, the line the
+/// cursor is on, and where the page is.
 const STATE: &str = r#"(async () => {
   const r = document.querySelector(".pg");
   const lib = new URL("libraries.js", document.querySelector('script[src$="playground.js"]').src).href;
@@ -1652,6 +1669,7 @@ const STATE: &str = r#"(async () => {
   const band = r.querySelector(".pg-band");
   const save = r.querySelector(".pg-save");
   const open = r.querySelector('.pg-file[aria-selected="true"]');
+  const target = r.querySelector(".pg-target");
   return {
     status: r.querySelector(".pg-status").textContent,
     project: (r.querySelector(".pg-project").selectedOptions[0] || { dataset: {} }).dataset.name || null,
@@ -1663,6 +1681,7 @@ const STATE: &str = r#"(async () => {
     listed: [...r.querySelectorAll(".pg-project option")].map((o) => o.dataset.name),
     groups: r.querySelectorAll(".pg-project optgroup").length,
     said,
+    target: target && !target.hidden ? target.value : null,
     problems: [...r.querySelectorAll(".pg-problem")].map((b) => b.textContent),
     count: r.querySelector(".pg-count").textContent,
     page: frame ? frame.srcdoc : null,
@@ -2337,6 +2356,57 @@ fn a_link_opens_the_same_file_and_tab_on_either_page() {
         looked += 3;
     }
     eprintln!("compared: {looked} links between the two pages of the playground and of the pages before, in Chrome, with what the library answers");
+}
+
+/// A link names the target of the generator it opens on, as the command's flags name it (DESIGN
+/// 8.7): `target=go` for a rule, a calendar and a gate, and for a book the flags of `chobo gen`,
+/// `target=go&books=tigerbeetle`, on postgres when it names no database. The page gives such a link
+/// of the pair picked, and the links of 0.40.0's page open on the target they named
+/// (`target=temporal`, `target=tigerbeetle-go`). Each shows what the library writes for that target.
+#[test]
+fn a_link_opens_the_target_it_names() {
+    let Some(chrome) = chrome() else {
+        return;
+    };
+    let projects = committed();
+    let shop = projects.iter().find(|p| p.name == "shop").unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(playground_pages(Vec::new())));
+    let (book, flow, rule, cal, gate) = ("warehouse/inventory.book", "ordering/ship_order.flow", "ordering/rules/urgency.rule", "billing/net30.cal", "gates/orders.gate");
+    // what the link says of the target, the file it opens, and the target the page should pick
+    let links = [
+        ("target=go&books=tigerbeetle", book, "tigerbeetle-go"),
+        ("target=sql", book, "postgres"),
+        ("target=tigerbeetle-go", book, "tigerbeetle-go"),
+        ("target=temporal", flow, "temporal-typescript"),
+        ("target=go", rule, "go"),
+        ("target=proto", rule, "proto"),
+        ("target=sql", cal, "sql"),
+        ("target=python", gate, "python"),
+    ];
+    let pick = "const s = document.querySelector('.pg-target'); s.value = 'mysql-python'; s.dispatchEvent(new Event('change'));";
+    let mut looked = 0;
+    for (tag, at) in [("en", PUBLISHED[0]), ("ja", PUBLISHED[1])] {
+        let mut visits: Vec<Visit> = links.iter().map(|(said_of, file, _)| Visit::to(format!("{base}{at}#project=shop&file={file}&view=gen&{said_of}")).ready().state()).collect();
+        visits.push(Visit::to(format!("{base}{at}#project=shop&file={book}&view=gen")).ready().run(pick).ready().run(&press(".pg-share")).wait("location.hash.includes('books=')").state());
+        let got = drive(&chrome, visits);
+        for ((said_of, file, picked), got) in links.iter().zip(&got) {
+            let state = &got[0];
+            assert_eq!((text_of(state, "open"), text_of(state, "view"), text_of(state, "target")), (*file, "gen", *picked), "{tag}: the link `{said_of}` does not open {file} on {picked}");
+            let want = playground::generate(&ask_in(tag, &shop.files, file, Some(picked)));
+            assert_eq!(want["target"], *picked);
+            if want["code"] == 0 {
+                assert_eq!(text_of(state, "said"), want["files"][0]["body"].as_str().unwrap(), "{tag}: the link `{said_of}` shows another first file of {file}");
+            } else {
+                assert!(text_of(state, "said").ends_with(&said(&want)), "{tag}: the link `{said_of}` does not say why {file} is not made for {picked}");
+            }
+            looked += 1;
+        }
+        let own = &got[links.len()][0];
+        assert_eq!(text_of(own, "hash"), "#project=shop&file=warehouse%2Finventory.book&view=gen&target=python&books=mysql", "{tag}: the page gives another link to the pair picked");
+        assert_eq!(text_of(own, "target"), "mysql-python", "{tag}: the page has moved off the pair picked");
+        looked += 1;
+    }
+    eprintln!("compared: {looked} links that name a target, in Chrome, with what the library answers");
 }
 
 /// A page the playground of rulec's or dandori's site had, kept to send a reader on to this page

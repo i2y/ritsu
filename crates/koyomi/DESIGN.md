@@ -1760,7 +1760,7 @@ ritsu の生成物に、Rust と Wasm の出力先をそろえる。koyomi、kan
 - WIT の world と package の名前は、別名の語を `-` でつなぐので（13 章）、`_` の数だけが違う別名の二つのファイル（`pay__days` と `pay_days`）は、どちらも `koyomi:pay-days` になる。一つのファイルでは困らない。二つを一緒に使うときにどうなるかは確かめていない。
 - 先頭の 63 バイトが同じ別名を持つ二つのファイルは、PostgreSQL で一つのスキーマになる。二つを一つのデータベースに読み込むと、後のファイルの関数が前のファイルの同じ名前の関数を置き換える（確かめた：日付 `pay` が 30 日後のファイルと 60 日後のファイルで、前のファイルの `pay` が 60 日後を返した）。`check` は一つのファイルを読み、`gen` は二つのファイルが同じパスに書くとき（Go のパッケージ `pay_days` と `paydays`、ファイル `x` と `x_runner` のランナー）だけを止めるので、どちらも言わない。
 - 入力の名前が `__proto__` のとき（別名を付けた `__proto__(received)`。別名には `_` で始まる名前を付けられない）、Wasm のモジュールが受け取る JSON のキーは `__proto__` になる。JavaScript のホストがオブジェクトのリテラルで JSON を作ると（`JSON.stringify({ __proto__: "2026-01-05" })`）、リテラルの `__proto__` はプロトタイプを決める書き方なのでキーが落ち、モジュールは `{"refused":"input","error":"__proto__ is missing"}` を返す（確かめた。計算したキーの `{ ["__proto__"]: … }` と JSON の文字列なら答える）。生成したコードとランナーは壊れない（ランナーは `koyomi vectors` の行をそのまま渡す）ので、W001 にしていない。
-- ritsu の playground（ritsu-wasm）は、`koyomi::codegen::files` でコードを作るので、E016 で止まらず、W001 の挙げる出力先のコードも見せる。ritsu-wasm は、この章の変更では触っていない。
+- ritsu の playground（ritsu-wasm）は、この章の変更では触っていない。E016 で止まるようになったのは、16 章で `codegen::build` を呼ぶようにしてからである（根の DESIGN 8.7）。
 
 ## 16. `gen` は指定した出力先とランナーだけを書く（2026-11-01）
 
@@ -1806,7 +1806,7 @@ ritsu の生成物に、Rust と Wasm の出力先をそろえる。koyomi、kan
 **変わること**：
 
 - `koyomi gen`（と `--check`）は `--target` が要る。ランナーは `--extra runner`。5 章の表と 6.1 の決定。
-- dandori の試験の `koyomi_gen` は、glue が読むモジュールだけを書く（`codegen::library`）。ritsu の試験は、0.40.0 と同じものを読むところで `cli::up_to_0_40` の引数を渡す。ブラウザで試すページ（ritsu-wasm）が見せるコマンドも、同じ引数を付けたものにした（書くものは 0.40.0 のまま）。
+- dandori の試験の `koyomi_gen` は、glue が読むモジュールだけを書く（`codegen::library`）。ritsu の試験は、0.40.0 と同じものを読むところで `cli::up_to_0_40` の引数を渡す。ブラウザで試すページ（ritsu-wasm）は、選んだ一つの出力先のモジュールだけを書く（`gen --target <出力先>` と同じ。`codegen::build` を呼ぶので E016 で止まる。根の DESIGN 8.7）。
 - 文書：`docs/reference.md`、`docs/generated-code.md`、README（英日）、スキル（`skills/koyomi/`）。
 
 **確かめたこと**：

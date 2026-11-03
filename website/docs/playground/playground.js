@@ -104,9 +104,40 @@ const TEXT = {
       geas: "it holds the code it names to the claims a person has read, by running it, which a page cannot",
       proto: "a .proto is a contract the languages read",
     },
+    // the targets by the names the commands give them: the languages of rulec, koyomi and sekisho,
+    // with rulec's .proto and sekisho's Cedar; chobo's pairs of a database and a language; dandori's
+    // platforms; yuen's formats
     targets: {
+      python: "Python",
+      numpy: "NumPy",
+      typescript: "TypeScript",
+      javascript: "JavaScript",
+      rust: "Rust",
+      ruby: "Ruby",
+      php: "PHP",
+      go: "Go",
+      swift: "Swift",
+      java: "Java",
+      sql: "SQL",
+      wasm: "Wasm",
+      proto: ".proto",
+      cedar: "Cedar",
+      postgres: "PostgreSQL (SQL)",
+      "postgres-typescript": "PostgreSQL (TypeScript)",
+      "postgres-python": "PostgreSQL (Python)",
+      "postgres-go": "PostgreSQL (Go)",
+      "postgres-rust": "PostgreSQL (Rust)",
+      "tigerbeetle-typescript": "TigerBeetle (TypeScript)",
+      "tigerbeetle-python": "TigerBeetle (Python)",
+      "tigerbeetle-go": "TigerBeetle (Go)",
+      "tigerbeetle-rust": "TigerBeetle (Rust)",
+      mysql: "MySQL (SQL)",
+      "mysql-typescript": "MySQL (TypeScript)",
+      "mysql-python": "MySQL (Python)",
+      "mysql-go": "MySQL (Go)",
+      "mysql-rust": "MySQL (Rust)",
       asl: "Step Functions (ASL)",
-      temporal: "Temporal (TypeScript)",
+      "temporal-typescript": "Temporal (TypeScript)",
       "temporal-python": "Temporal (Python)",
       "temporal-go": "Temporal (Go)",
       durable: "Lambda durable functions",
@@ -191,8 +222,36 @@ const TEXT = {
       proto: ".proto は、言語どうしが読む契約です",
     },
     targets: {
+      python: "Python",
+      numpy: "NumPy",
+      typescript: "TypeScript",
+      javascript: "JavaScript",
+      rust: "Rust",
+      ruby: "Ruby",
+      php: "PHP",
+      go: "Go",
+      swift: "Swift",
+      java: "Java",
+      sql: "SQL",
+      wasm: "Wasm",
+      proto: ".proto",
+      cedar: "Cedar",
+      postgres: "PostgreSQL（SQL）",
+      "postgres-typescript": "PostgreSQL（TypeScript）",
+      "postgres-python": "PostgreSQL（Python）",
+      "postgres-go": "PostgreSQL（Go）",
+      "postgres-rust": "PostgreSQL（Rust）",
+      "tigerbeetle-typescript": "TigerBeetle（TypeScript）",
+      "tigerbeetle-python": "TigerBeetle（Python）",
+      "tigerbeetle-go": "TigerBeetle（Go）",
+      "tigerbeetle-rust": "TigerBeetle（Rust）",
+      mysql: "MySQL（SQL）",
+      "mysql-typescript": "MySQL（TypeScript）",
+      "mysql-python": "MySQL（Python）",
+      "mysql-go": "MySQL（Go）",
+      "mysql-rust": "MySQL（Rust）",
       asl: "Step Functions（ASL）",
-      temporal: "Temporal（TypeScript）",
+      "temporal-typescript": "Temporal（TypeScript）",
       "temporal-python": "Temporal（Python）",
       "temporal-go": "Temporal（Go）",
       durable: "Lambda durable functions",
@@ -242,6 +301,28 @@ const KINDS = [
 ];
 const kind = (p) => (KINDS.find(([ext]) => p.endsWith(ext)) || [])[1] || null;
 const extension = (p) => (p.match(/\.([A-Za-z0-9]+)$/) || [])[1] || "";
+
+// A target in a link, as the command's flags say it: a pair of chobo's, a database and a language,
+// is `target=<language>&books=<database>`, the flags of `chobo gen` (`postgres-go` is
+// `target=go&books=postgres`, `postgres` is `target=sql&books=postgres`); any other target is
+// `target=<name>`.
+const CHOBO = ["sql", "typescript", "python", "go", "rust"];
+function targetInLink(k, name) {
+  if (k !== "chobo") return [["target", name]];
+  const [books, language] = name.includes("-") ? name.split("-") : [name, "sql"];
+  return [["target", language], ["books", books]];
+}
+// The target a link names, by the page's name for it: chobo's flags as their pair (on postgres when
+// the link names no database, as `chobo gen` takes them), and the names 0.40.0 gave as they are now
+// (dandori's `temporal`; a pair's name, `target=tigerbeetle-go`, is the page's own still).
+const RENAMED = { dandori: { temporal: "temporal-typescript" } };
+function targetOfLink(k, name, books) {
+  if (k === "chobo" && CHOBO.includes(name)) {
+    const db = books || "postgres";
+    return name === "sql" ? db : `${db}-${name}`;
+  }
+  return (RENAMED[k] || {})[name] || name;
+}
 
 // A column of a finding counts characters, as every language counts them but one: rulec counts the
 // bytes of the line's UTF-8.
@@ -755,14 +836,14 @@ function start(root, bundle, words, worker) {
   }
 
   // ── links
-  // A link to the project as it stands: its name, the file, the view, the target, and what the
-  // reader changed. The view is left out when it is the check, which is what a link without one
-  // opens on, on either page.
+  // A link to the project as it stands: its name, the file, the view, the target (`targetInLink`),
+  // and what the reader changed. The view is left out when it is the check, which is what a link
+  // without one opens on, on either page.
   async function link() {
     const h = [["project", project.name]];
     if (open && open !== project.open) h.push(["file", open]);
     if (view !== "check") h.push(["view", view]);
-    if (view === "gen" && !target.hidden && target.value) h.push(["target", target.value]);
+    if (view === "gen" && !target.hidden && target.value) h.push(...targetInLink(kind(open || ""), target.value));
     const c = changes(project.files, files);
     if (c.length) h.push(["edits", await pack(c)]);
     return "#" + h.map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
@@ -1393,11 +1474,12 @@ function start(root, bundle, words, worker) {
 
   // ── links the page is opened with
   // A link can open the page on a project, a file, a view and a target, with what the reader
-  // changed: #project=shop&file=ordering/ship_order.flow&view=gen&target=asl&edits=…. A link with
-  // no view opens on the check. It reads the links dandori's page gave as well:
+  // changed: #project=shop&file=ordering/ship_order.flow&view=gen&target=asl&edits=…, and for a
+  // book the target as `chobo gen`'s flags, &target=go&books=tigerbeetle. A link with no view
+  // opens on the check. It reads the links dandori's page gave as well:
   // #flow=examples/hotel/temporal/hotel.flow&view=build&target=asl opens the project of that flow
-  // (build is the generator; rules, the page of its first rule). The headings' own anchors name none
-  // of them, and leave the page as it is.
+  // (build is the generator; rules, the page of its first rule), and the names of targets 0.40.0
+  // gave (`targetOfLink`). The headings' own anchors name none of them, and leave the page as it is.
   async function follow() {
     const h = {};
     for (const kv of location.hash.replace(/^#/, "").split("&")) {
@@ -1437,7 +1519,7 @@ function start(root, bundle, words, worker) {
       h.view = rule ? "doc" : "check";
     }
     switchTo(VIEWS.includes(h.view) ? h.view : "check");
-    if (h.target) targets.set(kind(open || ""), h.target);
+    if (h.target) targets.set(kind(open || ""), targetOfLink(kind(open || ""), h.target, h.books));
     keep();
     return true;
   }

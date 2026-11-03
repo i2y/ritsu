@@ -88,8 +88,11 @@ billing's layer against ordering. One line in one file, and three languages say 
    names. Pick Step Functions in the list above the code, and nothing is written: the flow waits for
    an event sent to the workflow and cleans up in `on cancel`, which Step Functions cannot do, and
    its tasks name no connection to call the warehouse through. Every language that generates does
-   it here: a rule its code in twelve languages, a calendar in five, the book its SQL and its
-   clients, a gate its Cedar, the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
+   it here, one target at a time, which that list picks: a rule's code in any of twelve languages,
+   or its `.proto`; a calendar's in any of six; the book's SQL or a client, for each of its
+   databases; a gate's Cedar, or the TypeScript, Python or Go that asks it; the map's Context Mapper
+   CML; the requirements as ReqIF or W3C PROV. What shows is the library `gen --target` writes,
+   without what `--extra` asks for beside it, such as the runners.
 8. **Open the page for people** of a rule, a calendar, the book, the flow or a gate: the page for
    those who read to understand and check what the code is to carry out. The page of the
    warehouse's gate lists each call the flow makes, the action that guards it and whether the
@@ -155,7 +158,9 @@ it names it by.
    every combination it would allow ``), each with a combination it would have allowed, and that the
    expectation that a manager refunds while the period lasts no longer holds.
 3. **Generate.** Open *generated code* on the gate: the Cedar schema and policies, in their text and
-   in their JSON, the files `sekisho gen --target cedar` writes.
+   in their JSON, the files `sekisho gen --target cedar` writes. Pick TypeScript, Python or Go in
+   the list above the code for the module that asks the gate; it reads the rule and the dates from
+   the package `ritsu gen` writes.
 4. **Open the page for people**: each action's table of the combinations allowed and denied, each
    policy beside the Cedar it becomes, and the pages of the rule and the dates the conditions read.
 
@@ -175,7 +180,8 @@ tabs is showing, the target, and every file you changed, added or removed, packe
 itself. Nothing is stored anywhere: whoever opens the link has the same files in the same tabs, on
 this page or on the full-screen one, and *undo my edits* takes them back to the project as it
 opens. The links dandori's playground gave, such as
-`#flow=examples/hotel/temporal/hotel.flow&view=build`, open the same flow here.
+`#flow=examples/hotel/temporal/hotel.flow&view=build`, open the same flow here, and a link that
+names a target as 0.40.0 did (`target=temporal`, `target=tigerbeetle-go`) opens on that target.
 
 ## What is not here
 
