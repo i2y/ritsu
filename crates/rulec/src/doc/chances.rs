@@ -281,13 +281,20 @@ pub(super) fn panel(p: String) -> String {
 
 /// Where the panel's script calls for the chances of the case entered: in `run`, once the inputs
 /// are read, whether or not the case itself has an answer.
-const RUN_AT: &str = "  for (const el of document.querySelectorAll(\".hit\")) el.classList.remove(\"hit\");\n";
+const RUN_AT: &str = "    const [out, trace] = FN.run(...args);\n";
+
+/// Where `run` starts, clearing the lit rows. A case whose fields cannot be read (a day that is not
+/// on the calendar, §15.279) has no chances to show, so the box is emptied here as well.
+const START_AT: &str = "  for (const el of document.querySelectorAll(\".hit\")) el.classList.remove(\"hit\");\n";
 
 /// The panel's script for a rule with random inputs: [`super::PAGE_JS`] (as the page has it) calling
 /// for the chances in `run`, and the function that shows them.
 pub(super) fn page_js(js: String) -> String {
-    debug_assert!(js.contains(RUN_AT), "the page script no longer clears the lit rows in `run`");
-    let mut js = js.replacen(RUN_AT, &format!("  rulecChances(args);\n{RUN_AT}"), 1);
+    debug_assert!(js.contains(START_AT), "the page script no longer clears the lit rows in `run`");
+    debug_assert!(js.contains(RUN_AT), "the page script no longer calls the module in `run`");
+    let mut js = js
+        .replacen(START_AT, &format!("{START_AT}  if ($(\"#try-chances\")) $(\"#try-chances\").textContent = \"\";\n"), 1)
+        .replacen(RUN_AT, &format!("    rulecChances(args);\n{RUN_AT}"), 1);
     js.push_str(PAGE_CHANCES_JS);
     js
 }

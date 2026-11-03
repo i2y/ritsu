@@ -3505,6 +3505,9 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
                 .str("add", &tr!("行を足す", "Add a row"))
                 .str("remove", &tr!("この行を消す", "Remove this row"))
                 .str("carry", &tr!("この答えの状態から続ける", "Continue from this state"))
+                // A field that holds no day on the calendar is refused with the runner's sentence
+                // (§15.279); the page puts the field's name in place of `{name}`.
+                .str("notDate", &crate::door::not_date("{name}"))
                 .finish(),
         );
     if let Some(e) = elements {
@@ -3720,8 +3723,16 @@ function toWire(inp, el) {
     case "bool":
       return inp.optional ? el.value === "true" : el.checked;
     case "date": {
-      const [y, m, d] = el.value.split("-").map(Number);
-      return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));
+      // The day as the runner reads it (§15.279): written YYYY-MM-DD, on the calendar, and in
+      // the year written (Date.UTC would read a year from 0 to 99 as one of the 1900s).
+      const s = el.value;
+      const [y, m, d] = s.split("-").map(Number);
+      const at = new Date(0);
+      at.setUTCFullYear(y, m - 1, d);
+      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(s) || at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
+        throw new RuleInputError(RULE.text.notDate.split("{name}").join(inp.name), s);
+      }
+      return BigInt(Math.round(at.getTime() / 86400000));
     }
     case "rate":
       return BigInt(Math.round((Number(el.value) * inp.scale) / 100));
@@ -3764,18 +3775,20 @@ function shown(o, v) {
 // `?example=2` has already run by the time there are cards to put the result on.
 let lastRun = null;
 function run() {
-  const args = RULE.inputs.map((inp) => toWire(inp, form.elements[inp.alias]));
-  if (RULE.elements) {
-    args.push(
-      rows.map((r) => {
-        const e = {};
-        for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
-        return e;
-      })
-    );
-  }
   for (const el of document.querySelectorAll(".hit")) el.classList.remove("hit");
   try {
+    // The fields as the module takes them. A field that holds no value of its kind, such as a
+    // day that is not on the calendar, is refused here, and shown where the module's refusals are.
+    const args = RULE.inputs.map((inp) => toWire(inp, form.elements[inp.alias]));
+    if (RULE.elements) {
+      args.push(
+        rows.map((r) => {
+          const e = {};
+          for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+          return e;
+        })
+      );
+    }
     const [out, trace] = FN.run(...args);
     const vals = RULE.outputs.length === 1 ? [out] : RULE.outputs.map((o) => out[o.alias]);
     $("#try-result").textContent = RULE.outputs.map((o, i) => o.name + " = " + shown(o, vals[i])).join("   ");
@@ -4070,17 +4083,17 @@ function fillRows(ex) {
 "##,
     ),
     (
-        r##"  if (RULE.elements) {
-    args.push(
-      rows.map((r) => {
-        const e = {};
-        for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+        r##"    if (RULE.elements) {
+      args.push(
+        rows.map((r) => {
+          const e = {};
+          for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
 "##,
-        r##"  for (const list of lists) {
-    args.push(
-      list.rows.map((r) => {
-        const e = {};
-        for (const fd of list.sq.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+        r##"    for (const list of lists) {
+      args.push(
+        list.rows.map((r) => {
+          const e = {};
+          for (const fd of list.sq.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
 "##,
     ),
 ];

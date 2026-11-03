@@ -8909,7 +8909,9 @@ function _date(v: unknown, what: string): bigint {
     throw new RuleInputError(what, v);
   }
   const [y, m, d] = v.split("-").map(Number);
-  const at = new Date(Date.UTC(y, m - 1, d));
+  // The year as written: Date.UTC reads a year from 0 to 99 as one of the 1900s.
+  const at = new Date(0);
+  at.setUTCFullYear(y, m - 1, d);
   if (at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
     throw new RuleInputError(what, v);
   }
