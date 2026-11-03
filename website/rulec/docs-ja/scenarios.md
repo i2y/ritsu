@@ -116,7 +116,7 @@ $ rulec doc rules/印紙税.rule --lang ja > 印紙税.md
 ```console
 $ rulec gen rules/印紙税.rule --target python --target sql --extra runner --extra vectors --out generated/
 …
-$ rulec test generated/
+$ rulec test generated/ --lang ja
 …
 ok    stamp_duty_split (Python) ベクタ 296 件、受け付けない入力 13 件
 ok    stamp_duty_split (SQL) ベクタ 296 件、受け付けない入力 13 件
@@ -545,7 +545,7 @@ $ rulec diff 送料.rule 送料_新.rule --fixtures 記録.jsonl --lang ja --ter
 担当: エージェント
 
 ```console
-$ rulec gen rules/送料.rule --target python --target typescript --target go --target sql --target wasm --extra runner --extra vectors --out generated/
+$ rulec gen rules/送料.rule --target python --target typescript --target go --target sql --target wasm --extra runner --extra vectors --out generated/ --lang ja
 生成しました: generated/python/shipping_fee.py
 生成しました: generated/python/shipping_fee_runner.py
 生成しました: generated/typescript/shipping_fee.ts
@@ -580,7 +580,7 @@ func ShippingFee(in Input) (YenInclTax, error)
 生成した全言語が、参照評価器と同じ答えを返すことを確かめます。表の境界から作ったテストケースを全言語に流し、答えをバイト単位で比べます。
 
 ```console
-$ rulec test generated/
+$ rulec test generated/ --lang ja
 …
 ok    shipping_fee (Python) ベクタ 70 件、受け付けない入力 16 件
 ok    shipping_fee (TypeScript) ベクタ 70 件、受け付けない入力 16 件

@@ -1,7 +1,7 @@
 # 生成して呼ぶ
 
 ```console
-$ rulec gen rules/ --target python --target typescript --out generated/
+$ rulec gen rules/ --target python --target typescript --out generated/ --lang ja
 生成しました: generated/python/shipping_fee.py
 生成しました: generated/typescript/shipping_fee.ts
 ```
@@ -344,7 +344,7 @@ ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
 ## テストケースの側は足りているか
 
 ```console
-$ rulec coverage rules/送料.rule
+$ rulec coverage rules/送料.rule --lang ja
 rules/送料.rule
 ベクタ 70 件
   行カバー                      7 / 7     満たす
