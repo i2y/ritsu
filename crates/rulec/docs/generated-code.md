@@ -1675,9 +1675,11 @@ every day of the years 0001 to 9999 is one, at every reader of the wire and on t
 `rulec doc`, which reads its date fields the same way. Each reads the day the string writes, so
 the module gets the same day number in every language (0001-01-01 is −719162, 9999-12-31 is
 2932896) and the record gives the day back as it came; a day the calendar does not have, such as
-2026-02-30 or 1900-02-29, is not a date. Before, some readers refused the years 0001 to 0099,
-some read the days before 1677-09-22, after 2262-04-11 or before 1582-10-15 as other days, and
-the page took 2026-02-30 for 2026-03-02 (§15.279).
+2026-02-30 or 1900-02-29, is not a date, and neither is a day of the year 0000, which no rule can
+write. The records `rulec replay`, `rulec diff` and `rulec fixtures lint` read take the same days.
+Before, some readers refused the years 0001 to 0099, some read the days before 1677-09-22, after
+2262-04-11 or before 1582-10-15 as other days, some took the year 0000, and the page and the
+records took 2026-02-30 for 2026-03-02 (§15.279).
 
 `rulec api` states the same bounds, taken from the same place, so an integration built from
 the inventory cannot send values the guard rejects. It names each language's two errors too:

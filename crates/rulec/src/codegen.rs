@@ -8912,7 +8912,7 @@ function _date(v: unknown, what: string): bigint {
   // The year as written: Date.UTC reads a year from 0 to 99 as one of the 1900s.
   const at = new Date(0);
   at.setUTCFullYear(y, m - 1, d);
-  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
+  if (y < 1 || at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
     throw new RuleInputError(what, v);
   }
   return BigInt(Math.round(at.getTime() / 86400000));
@@ -9048,7 +9048,7 @@ func date(v any, what string) int64 {
 		panic(&r.RuleInputError{What: what})
 	}
 	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
+	if err != nil || t.Year() < 1 {
 		panic(&r.RuleInputError{What: what})
 	}
 	// From the seconds, not t.Sub: a Duration holds about 292 years, and stops there.
@@ -9163,7 +9163,7 @@ const SWIFT_WIRE: &str = r#"    static func _take(_ d: Any?, _ k: String, _ miss
         let (y, m, d) = (Int64(s.prefix(4))!, Int64(s.dropFirst(5).prefix(2))!, Int64(s.suffix(2))!)
         let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
         let last: Int64 = [1, 3, 5, 7, 8, 10, 12].contains(m) ? 31 : [4, 6, 9, 11].contains(m) ? 30 : m == 2 ? (leap ? 29 : 28) : 0
-        guard d >= 1, d <= last else {
+        guard y >= 1, d >= 1, d <= last else {
             throw RuleError.input(what: what, value: nil)
         }
         return _ord(s)
@@ -9482,7 +9482,7 @@ fn date(v: &str, what: &'static str) -> Result<i64, r::RuleError> {
         2 => 28,
         _ => return Err(refused(what)),
     };
-    if !(1..=last).contains(&d) {
+    if y < 1 || !(1..=last).contains(&d) {
         return Err(refused(what));
     }
     Ok(ord(s))
@@ -12224,7 +12224,7 @@ def _str(v, what)
 end
 
 def _date(v, what)
-  raise @M@::RuleInputError.new(what, v) unless v.is_a?(String) && v.match?(/\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/)
+  raise @M@::RuleInputError.new(what, v) unless v.is_a?(String) && v.match?(/\A(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}\z/)
 
   begin
     _ord(v)

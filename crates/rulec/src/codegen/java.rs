@@ -1742,7 +1742,7 @@ const JAVA_WIRE: &str = r##"
 
     private static long date(String v, String what) {
         String s = text(v, what);
-        if (!s.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+        if (!s.matches("(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
             throw new @CLS@.RuleInputError(what);
         }
         try {

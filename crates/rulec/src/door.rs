@@ -183,7 +183,8 @@ pub fn whole(j: &Json) -> Option<i128> {
     }
 }
 
-/// `YYYY-MM-DD`, four digits, two and two, of a day the calendar has: 2026-02-30 is not one.
+/// `YYYY-MM-DD`, four digits, two and two, of a day the calendar has from the year 0001 on: 2026-02-30
+/// is not one, and neither is 0000-12-31 (§15.279).
 pub fn civil(s: &str) -> Option<(i32, u32, u32)> {
     let b = s.as_bytes();
     if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
@@ -201,7 +202,7 @@ pub fn civil(s: &str) -> Option<(i32, u32, u32)> {
         2 => 28,
         _ => return None,
     };
-    (1..=last).contains(&d).then_some((y, m, d))
+    (y >= 1 && (1..=last).contains(&d)).then_some((y, m, d))
 }
 
 /// What the door of every generated language refuses this input for, in the order the doors

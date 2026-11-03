@@ -129,17 +129,11 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
         }
         (Ty::Bool, Json::Bool(b)) => Ok(Val::Bool(*b)),
         (Ty::Str, Json::Str(s)) => Ok(Val::Str(s.clone())),
-        (Ty::Date, Json::Str(s)) => {
-            let p: Vec<&str> = s.split('-').collect();
-            let ok = p.len() == 3 && p[0].len() == 4 && p[1].len() == 2 && p[2].len() == 2;
-            let n: Option<Vec<i64>> = p.iter().map(|x| x.parse::<i64>().ok()).collect();
-            match (ok, n) {
-                (true, Some(v)) if (1..=12).contains(&v[1]) && (1..=31).contains(&v[2]) => {
-                    Ok(Val::Date(v[0] as i32, v[1] as u32, v[2] as u32))
-                }
-                _ => Err(tr!("`{s}` は YYYY-MM-DD の日付ではありません", "`{s}` is not a YYYY-MM-DD date")),
-            }
-        }
+        // A date of a record is what a date is at every door: 2026-02-30 is not a later day (§15.279).
+        (Ty::Date, Json::Str(s)) => match crate::door::civil(s) {
+            Some((y, m, d)) => Ok(Val::Date(y, m, d)),
+            None => Err(tr!("`{s}` は YYYY-MM-DD の日付ではありません", "`{s}` is not a YYYY-MM-DD date")),
+        },
         (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number, Json::Int(n)) => {
             // The wire carries an integer in the canonical unit; a rate carries a count of
             // steps (§10.2). The range was declared in true values, so convert first.

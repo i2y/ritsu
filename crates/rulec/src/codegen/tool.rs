@@ -794,7 +794,7 @@ function _date(name: string, v: unknown): bigint {
   // The year as written: Date.UTC reads a year from 0 to 99 as one of the 1900s.
   const at = new Date(0);
   at.setUTCFullYear(y, mo - 1, d);
-  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== mo - 1 || at.getUTCDate() !== d) {
+  if (y < 1 || at.getUTCFullYear() !== y || at.getUTCMonth() !== mo - 1 || at.getUTCDate() !== d) {
     throw new m.RuleInputError(@M_DATE@, v);
   }
   return BigInt(Math.round(at.getTime() / 86400000));

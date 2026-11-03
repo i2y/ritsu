@@ -506,7 +506,7 @@ impl Gen<'_> {
         }
         if want.contains(&"_date_of") {
             o.push_str(&format!(
-                "def _date_of(v: Any, at: str) -> int:\n    if not isinstance(v, str) or len(v) != 10 or v[4] != \"-\" or v[7] != \"-\":\n        raise RuleInputError({said}, _repr(v))\n    if not all(c in \"0123456789\" for c in v[:4] + v[5:7] + v[8:]):\n        raise RuleInputError({said}, _repr(v))\n    y, m, d = int(v[:4]), int(v[5:7]), int(v[8:])\n    leap = y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)\n    last = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n    if not (1 <= m <= 12 and 1 <= d <= last[m - 1]):\n        raise RuleInputError({said}, _repr(v))\n    return _days(v)\n\n\n",
+                "def _date_of(v: Any, at: str) -> int:\n    if not isinstance(v, str) or len(v) != 10 or v[4] != \"-\" or v[7] != \"-\":\n        raise RuleInputError({said}, _repr(v))\n    if not all(c in \"0123456789\" for c in v[:4] + v[5:7] + v[8:]):\n        raise RuleInputError({said}, _repr(v))\n    y, m, d = int(v[:4]), int(v[5:7]), int(v[8:])\n    leap = y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)\n    last = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n    if not (y >= 1 and 1 <= m <= 12 and 1 <= d <= last[m - 1]):\n        raise RuleInputError({said}, _repr(v))\n    return _days(v)\n\n\n",
                 said = j(&s.date, "at")
             ));
         }
@@ -868,7 +868,7 @@ impl Gen<'_> {
         }
         if want.contains(&"_dateOf") {
             o.push_str(&format!(
-                "function _dateOf(v: unknown, at: string): bigint {{\n  if (typeof v !== \"string\" || !/^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$/.test(v)) {{\n    throw new RuleInputError({said}, v);\n  }}\n  const [y, m, d] = v.split(\"-\").map(Number);\n  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);\n  const last = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];\n  if (m < 1 || m > 12 || d < 1 || d > last[m - 1]) {{\n    throw new RuleInputError({said}, v);\n  }}\n  return _days(v);\n}}\n\n",
+                "function _dateOf(v: unknown, at: string): bigint {{\n  if (typeof v !== \"string\" || !/^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$/.test(v)) {{\n    throw new RuleInputError({said}, v);\n  }}\n  const [y, m, d] = v.split(\"-\").map(Number);\n  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);\n  const last = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];\n  if (y < 1 || m < 1 || m > 12 || d < 1 || d > last[m - 1]) {{\n    throw new RuleInputError({said}, v);\n  }}\n  return _days(v);\n}}\n\n",
                 said = j(&s.date, "at")
             ));
         }
@@ -1209,7 +1209,7 @@ impl Gen<'_> {
         }
         if want.contains(&"_date_of") {
             o.push_str(&format!(
-                "  def self._date_of(v, at)\n    raise RuleInputError.new({said}, v) unless v.is_a?(String) && v.match?(/\\A[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}\\z/)\n    y, m, d = v.split(\"-\").map(&:to_i)\n    leap = (y % 4).zero? && (!(y % 100).zero? || (y % 400).zero?)\n    last = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n    raise RuleInputError.new({said}, v) unless m.between?(1, 12) && d.between?(1, last[m - 1])\n    _days(v)\n  end\n\n",
+                "  def self._date_of(v, at)\n    raise RuleInputError.new({said}, v) unless v.is_a?(String) && v.match?(/\\A[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}\\z/)\n    y, m, d = v.split(\"-\").map(&:to_i)\n    leap = (y % 4).zero? && (!(y % 100).zero? || (y % 400).zero?)\n    last = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n    raise RuleInputError.new({said}, v) unless y >= 1 && m.between?(1, 12) && d.between?(1, last[m - 1])\n    _days(v)\n  end\n\n",
                 said = j(&s.date, "at")
             ));
         }

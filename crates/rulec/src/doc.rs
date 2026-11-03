@@ -3723,13 +3723,14 @@ function toWire(inp, el) {
     case "bool":
       return inp.optional ? el.value === "true" : el.checked;
     case "date": {
-      // The day as the runner reads it (§15.279): written YYYY-MM-DD, on the calendar, and in
-      // the year written (Date.UTC would read a year from 0 to 99 as one of the 1900s).
+      // The day as the runner reads it (§15.279): written YYYY-MM-DD, on the calendar, from the
+      // year 0001, and in the year written (Date.UTC would read a year from 0 to 99 as one of
+      // the 1900s).
       const s = el.value;
       const [y, m, d] = s.split("-").map(Number);
       const at = new Date(0);
       at.setUTCFullYear(y, m - 1, d);
-      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(s) || at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
+      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(s) || y < 1 || at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
         throw new RuleInputError(RULE.text.notDate.split("{name}").join(inp.name), s);
       }
       return BigInt(Math.round(at.getTime() / 86400000));

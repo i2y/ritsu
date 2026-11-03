@@ -1,15 +1,16 @@
-//! Every day of the years 0001 to 9999 is a date at every door (§15.279).
+//! Every day of the years 0001 to 9999 is a date at every door, and nothing else is (§15.279).
 //!
 //! A date on the wire is `YYYY-MM-DD`, a day of the Gregorian calendar taken back before 1582
-//! (§10.2), and the reference evaluator takes every day of the years 0001 to 9999 (`door::civil`).
-//! Not every reader of the generated code did. The TypeScript and JavaScript runners and MCP
+//! (§10.2), and the reference evaluator takes every day of the years 0001 to 9999 and refuses the
+//! year 0000 (`door::civil`). Not every reader of the generated code did. The TypeScript and JavaScript runners and MCP
 //! servers refused the years 0001 to 0099 as not dates, because `Date.UTC` reads such a year as one
 //! of the 1900s. The Go runner read every day before 1677-09-22 as that day, and every day after
 //! 2262-04-11 as that day, because a `time.Duration` holds no more. The Ruby runner read the days
 //! before 1582-10-15 in the Julian calendar, so it answered 1500-02-29 and refused 1582-10-10. The
 //! page of `rulec doc` read the years 0001 to 0099 as the 1900s and answered for them, and took
 //! 2026-02-30 for 2026-03-02. None of it was seen, because the vectors are made of the rule's own
-//! days and the days beside them.
+//! days and the days beside them. Some readers took the year 0000 and some did not; the reader of
+//! the records took 2026-02-30 for 2026-03-02.
 //!
 //! The materials are the two rules of the tree whose dates have no range, so that every day is in
 //! it: `tests/corpus/coupon_order.rule` and its Japanese version `tests/corpus/適用順序.rule`. Both
@@ -90,8 +91,9 @@ const FAR: [&str; 17] = [
 
 /// Strings that are not days, which every door refuses: leap days of the Julian calendar that the
 /// Gregorian does not have, two of them before 1582 (1500-02-29, 0100-02-29) and one after
-/// (1900-02-29), and a day no month has (2026-02-30).
-const NOT_DAYS: [&str; 4] = ["1500-02-29", "0100-02-29", "1900-02-29", "2026-02-30"];
+/// (1900-02-29), a day no month has (2026-02-30), and days of the year 0000, which the Gregorian
+/// calendar taken back would have, the first, its leap day and the last.
+const NOT_DAYS: [&str; 7] = ["1500-02-29", "0100-02-29", "1900-02-29", "2026-02-30", "0000-01-01", "0000-02-29", "0000-12-31"];
 
 /// The pairs of due dates tried: each day against itself, against the next one both ways, and the
 /// first against the last both ways.
@@ -247,6 +249,102 @@ fn every_door_reads_every_day_of_the_years_0001_to_9999() {
         }
         println!("dates [{}]: {} vectors with {} far, {} refused with {} not days, through {}", c.lang, n, vectors.len(), r, refused.len(), ran.join(", "));
     });
+}
+
+/// A date of a record is what a date is at every door: `fixtures lint` says a string that is not a
+/// day is not a date, and `replay` leaves the record out, where they took 2026-02-30 for 2026-03-02.
+#[test]
+fn a_record_takes_the_days_the_doors_take() {
+    side_by_side(&CASES, |c| {
+        let t = TempDir::new("dates-records");
+        let Said::Answer { expected, .. } = reference(c, "2026-01-01", "2026-01-01") else { panic!("{}: the reference evaluator refuses 2026-01-01", c.rule) };
+        let at = expected.find("\"observed\":").expect("the record has no observed");
+        let observed = &expected[at..at + expected[at..].find('}').expect("the record is not closed") + 1];
+        let line = |a: &str, b: &str| format!("{{\"in\":{},{observed}}}", in_object(c, a, b));
+        let mut lines: Vec<String> = Vec::new();
+        for d in FAR {
+            match reference(c, d, d) {
+                Said::Answer { expected, .. } => lines.push(expected),
+                Said::Refused(l) => panic!("{}: the reference evaluator refuses {d}: {l}", c.rule),
+            }
+        }
+        lines.extend(NOT_DAYS.iter().map(|d| line(d, "2026-01-01")));
+        let records = t.path().join("records.jsonl");
+        std::fs::write(&records, lines.join("\n") + "\n").unwrap();
+        let r = records.to_string_lossy().into_owned();
+
+        let (code, said, e) = rulec(c.lang, None, &["fixtures", "lint", r.as_str(), c.rule]);
+        assert_eq!(code, 1, "{}: {said}{e}", c.rule);
+        for d in NOT_DAYS {
+            let sentence = if c.lang == "ja" { format!("`{d}` は YYYY-MM-DD の日付ではありません") } else { format!("`{d}` is not a YYYY-MM-DD date") };
+            assert!(said.contains(&sentence), "{}: fixtures lint does not say `{sentence}`: {said}", c.rule);
+        }
+        for d in FAR {
+            assert!(!said.contains(d), "{}: fixtures lint finds fault with {d}: {said}", c.rule);
+        }
+
+        let (code, said, e) = rulec(c.lang, None, &["replay", c.rule, "--fixtures", r.as_str(), "--format", "json"]);
+        assert_eq!(code, 0, "{}: {said}{e}", c.rule);
+        let j = rulec::json::parse(said.trim()).unwrap_or_else(|_| panic!("{}: {said}", c.rule));
+        let n = |k: &str| j.get(k).and_then(|v| v.as_int()).unwrap_or_else(|| panic!("{}: no {k}: {said}", c.rule));
+        let excluded = j.get("excluded").and_then(|v| v.get("bad_format")).and_then(|v| v.as_int());
+        assert_eq!((n("compared"), n("matched"), excluded), (FAR.len() as i128, FAR.len() as i128, Some(NOT_DAYS.len() as i128)), "{}: {said}", c.rule);
+        println!("dates [{}]: the records of {} days are compared, those of {} strings are left out", c.lang, FAR.len(), NOT_DAYS.len());
+    });
+}
+
+/// The functions that read a rule's inputs from a record of the caller's shape (`from`) read a date
+/// as the runners do: every day of the years 0001 to 9999, and nothing else.
+#[test]
+fn the_functions_that_read_a_shape_take_the_days_the_doors_take() {
+    if !ready(Need::Python, || have("python3", &["--version"]), "python3 is not here") {
+        return;
+    }
+    let t = TempDir::new("dates-from");
+    let dir = t.path().to_path_buf();
+    std::fs::write(dir.join("o.json"), "{\"$defs\":{\"O\":{\"type\":\"object\",\"properties\":{\"placed_at\":{\"type\":\"string\"}},\"required\":[\"placed_at\"]}}}\n").unwrap();
+    let rule = "rule d(d) v1\n\nshape o(o) = jsonschema \"o.json\" \"#/$defs/O\"\n\n\
+        inputs\n  placed(placed) : date  from o.placed_at\n\n\
+        outputs\n  first_half(first_half) : bool\n\n\
+        table decide(decide)\npolicy unique\n\
+        | placed       | -> first_half(first_half) : bool |\n\
+        | <=2026-06-30 | true                             |\n\
+        | >2026-06-30  | false                            |\n";
+    std::fs::write(dir.join("d.rule"), rule).unwrap();
+    let (rule_path, out) = (dir.join("d.rule").to_string_lossy().into_owned(), dir.to_string_lossy().into_owned());
+    let (code, said, e) = rulec("en", None, &["gen", rule_path.as_str(), "--out", out.as_str(), "--target", "python", "--target", "typescript", "--target", "javascript", "--target", "ruby", "--target", "php"]);
+    assert_eq!(code, 0, "{said}{e}");
+
+    let days: Vec<&str> = FAR.iter().chain(NOT_DAYS.iter()).copied().collect();
+    let lines = days.iter().map(|d| format!("{{\"placed_at\":{}}}", quote(d))).collect::<Vec<_>>().join("\n");
+    let want: Vec<&str> = days.iter().map(|d| if NOT_DAYS.contains(d) { "refused" } else if *d <= "2026-06-30" { "true" } else { "false" }).collect();
+    let run = |lang: &str, cmd: &mut Command| {
+        let o = cmd.env("LINES", &lines).output().unwrap_or_else(|e| panic!("{lang}: {e}"));
+        let out = String::from_utf8_lossy(&o.stdout).into_owned();
+        assert!(o.status.success(), "{lang}: {out}{}", String::from_utf8_lossy(&o.stderr));
+        let got: Vec<&str> = out.lines().collect();
+        assert_eq!(got.len(), want.len(), "{lang}: {out}");
+        for ((d, g), w) in days.iter().zip(&got).zip(&want) {
+            assert_eq!(g, w, "{lang}: {d}");
+        }
+        println!("dates: the function of {lang} answers {} days and refuses {}", FAR.len(), NOT_DAYS.len());
+    };
+    let py = "import json,os,d\nfor l in os.environ['LINES'].split('\\n'):\n    try:\n        print('true' if d.d_from(json.loads(l)) else 'false')\n    except d.RuleInputError:\n        print('refused')\n";
+    run("Python", Command::new("python3").current_dir(dir.join("python")).args(["-B", "-c", py]));
+    if ready(Need::Node, || have("node", &["--version"]), "node is not here") {
+        for (lang, sub, file) in [("JavaScript", "javascript", "d.mjs"), ("TypeScript", "typescript", "d.ts")] {
+            let js = format!("const m=await import('./{file}');for(const l of process.env.LINES.split('\\n')){{try{{console.log(m.d_from(JSON.parse(l))?'true':'false')}}catch(e){{console.log(e instanceof m.RuleInputError?'refused':String(e))}}}}");
+            run(lang, Command::new("node").current_dir(dir.join(sub)).args(["--no-warnings", "--input-type=module", "-e", &js]));
+        }
+    }
+    if ready(Need::Ruby, || have("ruby", &["--version"]), "ruby is not here") {
+        let rb = "require 'json'\nrequire './d.rb'\nENV['LINES'].split(\"\\n\").each{|l| begin; puts D.d_from(JSON.parse(l)); rescue D::RuleInputError; puts 'refused'; end}";
+        run("Ruby", Command::new("ruby").current_dir(dir.join("ruby")).args(["-e", rb]));
+    }
+    if ready(Need::Php, || have("php", &["--version"]), "php is not here") {
+        let php = "require './d.php';\nforeach(explode(\"\\n\",getenv('LINES')) as $l){ try { echo \\D\\d_from(json_decode($l,true))?\"true\\n\":\"false\\n\"; } catch (\\D\\RuleInputError $e) { echo \"refused\\n\"; } }";
+        run("PHP", Command::new("php").current_dir(dir.join("php")).args(["-r", php]));
+    }
 }
 
 /// A stand-in for the browser, as much of it as the panel of the page touches.
