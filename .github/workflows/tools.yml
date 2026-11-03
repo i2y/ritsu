@@ -47,7 +47,7 @@ env:
 jobs:
   tools:
     name: tools (${{ matrix.group }}${{ matrix.part && format(', {0}', matrix.part) || '' }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The longest of these, rulec's first job and the others', take about 50 minutes (DESIGN 10.5)
     timeout-minutes: 120
 
@@ -580,7 +580,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         node: ["22", "24", "26"]
         part: [1, 2]
         include:

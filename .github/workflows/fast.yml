@@ -29,7 +29,7 @@ env:
 
 jobs:
   fast:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The tests took 32 minutes (DESIGN 10.5)
     timeout-minutes: 60
 

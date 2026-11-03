@@ -2071,6 +2071,24 @@ C.12 で、`release` のほかの五つを根の `.github/workflows/` に書い�
 
   見つけて直していないもの：`fast` の `target` を外しても、`tools` の rulec とそれ以外の組と `platforms` で 8,495,193,864 バイトあり（2026-10-31）、`tools` の dandori の組、npm、`kani`、Lean を足すと 10 GB を超えうる。どれを残すかは、`fast` を直したあとの回で、それぞれの大きさと、次の回に使われたかを見て決める。
 
+- ランナーの版（2026-11-04）：Linux のジョブは、どのワークフローも `ubuntu-latest` ではなく `ubuntu-24.04` で走らせる（ARM の `ubuntu-24.04-arm` は前からこの版である）。
+
+  きっかけ：GitHub は `ubuntu-latest` を Ubuntu 26.04 へ移している（actions/runner-images の #14748。2026-11-19 までに終わる）。同じコミットの毎晩の回で、2026-11-01（UTC）の回は全部 ubuntu-24.04 で通り、次の回では全部のジョブが ubuntu-26.04（イメージ 20261025.179.1）になって、次の二つが準備の段で落ちた。
+  - `tools` の rulec の二つの組：`swift-actions/setup-swift@v2` が `Version "26.04" of Ubuntu is not supported` で止まる。
+  - `platforms`：`crates/dandori/tools/argo/setup.sh` の `kind load docker-image` が `ctr: content digest sha256:…: not found` で止まる。
+
+  決定：`.github/workflows/` の `ubuntu-latest` を全部 `ubuntu-24.04` にする。全部のワークフローが通った最後のイメージに戻すためである。26.04 へは、上の二つを直して全部のワークフローを一度回せるときに、別の変更として移る。
+
+  変えないもの：README と `website/` の見本の `ubuntu-latest`（読む人のリポジトリで走るものである）。`macos-latest`（いまのイメージで通っている）。
+
+  捨てたもの：
+  - 落ちた二つのジョブだけを固定すること。`fast`、`packages`、`docs`、`proofs`、`modules`、`release` はまだ 26.04 で走っておらず、`release` はタグを打つまで試せない。
+  - 先に 26.04 に合わせること。rulec の組と `platforms` は準備の段で止まったので、その先の段が 26.04 で通るかは分かっていない。
+
+  確かめたこと：同じ回で、`audit`、`kani`、`tools` のそれ以外の組と dandori の組、npm は 26.04 でも通った。試験とコードは runner の名前を読まない。キャッシュの鍵は `runner.os`（どちらも `Linux`）で版を分けないので、26.04 のランナーが保存した `kani` の二つ（`cargo-v2-kani-Linux-…` と `kani-Linux-0.68.0`）は、26.04 の glibc でリンクしたものを 24.04 に戻さないよう消した。手元では、十個のワークフローが YAML として読めることを確かめた。actionlint は走らせていない。
+
+  見つけて直していないもの：26.04 へ移るときの二つ。setup-swift は、安定版の最新 v2.4.0 が 26.04 を知らない（3.0.0-beta.1 は Swiftly を使う）。Swift 6.1 に 26.04 のツールチェーンがあるかは確かめていない。`kind load docker-image` の失敗の原因も確かめていない。kind はどちらのイメージでも 0.33.0 で、Docker は 24.04 が 28.0.4、26.04 が 29.4.2 である。
+
 クレートの中に残っていた `.github/workflows/` は、GitHub が走らせない（2.1）。どれも消した。
 
 - rulec の `ci.yml`：中身は根の `tools`・`proofs`・`kani`・`packages` に移した。クレートの中のものは、ritsu の最初のリリースのあと（2026-10-05）に、`release.yml`、`packaging/`、`action.yml` と一緒に消した（`packages` のジョブだけを消して残りを残す形は取らなかった。残るジョブも走らず、同じことを根がしている）。

@@ -88,7 +88,7 @@ env:
 
 jobs:
   proofs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # rulec's re-checker and the models' comparison both build the languages in release
     timeout-minutes: 45
 

@@ -59,7 +59,7 @@ jobs:
         # release gives that archive
         include:
           - target: x86_64-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             host: x86_64-unknown-linux-gnu
             auditable_sha256: 4c8d3b08c3c34e9f2333367224dbbfb4aab68067698b43de59fe19aded3416dd
           - target: aarch64-unknown-linux-musl
@@ -150,7 +150,7 @@ jobs:
   # carries the list of its crates, as the binaries do.
   npm:
     needs: audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -201,7 +201,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, macos-latest]
+        runner: [ubuntu-24.04, macos-latest]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -239,7 +239,7 @@ jobs:
 
   publish:
     needs: [build, npm-check]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -274,7 +274,7 @@ jobs:
   # these very archives; the jobs below test that file and push that file.
   formula:
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -302,7 +302,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-latest, ubuntu-latest]
+        runner: [macos-latest, ubuntu-24.04]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -336,7 +336,7 @@ jobs:
   # from the tap is a step of its own (DESIGN 13.2), made when the author says.
   tap:
     needs: homebrew
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
