@@ -481,7 +481,7 @@ instead, and says W401 of what is over its quotas. An action whose policies read
 that action first, through its function, and puts the answer in the context (`allowed_approve`);
 a refusal of that action refuses this one, of the same kind, and with `--authorizer avp` the
 request function of such an action takes `avp` too. `ritsu gen` writes the same into the packages
-of a project, with the Cedar once in `<out>/cedar/`.
+of a project, and with `--target cedar` the Cedar once in `<out>/cedar/`.
 
 ## Across the languages
 

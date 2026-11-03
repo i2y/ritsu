@@ -50,13 +50,13 @@ test("installed offline from the .tgz, with no script run, the bins work in a re
     assert.deepEqual([v.code, v.stdout, v.stderr], [0, `ritsu ${version}\n`, ""]);
     const r = sh(join(project, "node_modules/.bin/rulec"), ["--version"], { cwd: project, env });
     assert.equal(r.stdout, `rulec ${version}\n`);
-    const gen = sh(join(project, "node_modules/.bin/ritsu"), ["gen", "--root", ".", "--module", "example.com/stockroom/generated"], { cwd: project, env });
+    const gen = sh(join(project, "node_modules/.bin/ritsu"), ["gen", "--root", ".", "--module", "example.com/stockroom/generated", "--target", "typescript", "--target", "python", "--target", "go"], { cwd: project, env });
     assert.equal(gen.code, 0, gen.stderr);
     assert.match(gen.stdout, /^generated: generated\/typescript\/rules\/delivery\.ts$/m);
     for (const f of ["generated/typescript/index.ts", "generated/python/generated/__init__.py", "generated/go/doc.go"]) {
       assert.ok(existsSync(join(project, f)), f);
     }
-    const check = sh(join(project, "node_modules/.bin/ritsu"), ["gen", "--root", ".", "--module", "example.com/stockroom/generated", "--check", "--format", "json"], { cwd: project, env });
+    const check = sh(join(project, "node_modules/.bin/ritsu"), ["gen", "--root", ".", "--module", "example.com/stockroom/generated", "--target", "typescript", "--target", "python", "--target", "go", "--check", "--format", "json"], { cwd: project, env });
     assert.equal(check.code, 0, check.stderr);
     const json = JSON.parse(check.stdout);
     assert.equal(json.ok, true);
