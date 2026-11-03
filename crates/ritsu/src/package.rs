@@ -1805,8 +1805,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
                 stdout,
                 "{}",
                 tr!(
-                    "注記: これらは `--target cedar` が書くファイルで、この実行は頼んでいません。gen は指定していない出力先のファイルに触らないので、要らなければ消してかまいません",
-                    "note: `--target cedar` writes these files, and this run does not ask for it; gen touches no file of a target it is not given, so they can be deleted if they are not wanted"
+                    "注記: これらは `--target cedar` が書くファイルで、この実行は頼んでいません。gen は指定していない出力先のファイルに触らないので、要らなければ消してかまいません。`--target cedar` が書く二つの JSON（`.cedarschema.json`、`.policies.json`）は、頭のコメントが無いので挙げません",
+                    "note: `--target cedar` writes these files, and this run does not ask for it; gen touches no file of a target it is not given, so they can be deleted if they are not wanted; the two JSON files it writes (`.cedarschema.json`, `.policies.json`) have no head to tell them by, and are not listed"
                 )
                 .get(lang)
             );

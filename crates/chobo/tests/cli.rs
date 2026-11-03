@@ -268,11 +268,19 @@ fn what_stops_gen_and_what_it_says() {
         said(&["gen", b, "--lang", "ja"]),
         "エラー: `chobo gen` には `--target sql|typescript|python|go|rust` が一つ以上要ります。どのデータベースのためのものかは `--books postgres|tigerbeetle|mysql` で指定します（無ければ postgres）\n"
     );
-    assert_eq!(said(&["build", b, "--target", "postgres", "--lang", "en"]), "`chobo build` is `chobo gen` from 0.41.0\n");
-    assert_eq!(said(&["build", b, "--lang", "ja"]), "`chobo build` は 0.41.0 から `chobo gen` です\n");
+    assert_eq!(said(&["build", b, "--target", "postgres", "--lang", "en"]), "error: `chobo build` is `chobo gen` from 0.41.0\n");
+    assert_eq!(said(&["build", b, "--lang", "ja"]), "エラー: `chobo build` は 0.41.0 から `chobo gen` です\n");
+    // `help` reads a command as dandori and sakai do: the verb up to 0.40.0 stops there too
+    assert_eq!(said(&["help", "build", "--lang", "en"]), "error: `chobo build` is `chobo gen` from 0.41.0\n");
+    assert_eq!(said(&["help", "--lang", "ja", "build"]), "エラー: `chobo build` は 0.41.0 から `chobo gen` です\n");
+    assert_eq!(run(&["help", "gen", "--lang", "en"]), run(&["gen", "--help", "--lang", "en"]));
+    assert_eq!(run(&["help", "--lang", "ja"]), run(&["--help", "--lang", "ja"]));
+    let (code, out, err) = run(&["help", "nothing", "--lang", "en"]);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.starts_with("error: unknown command `nothing`\n\n"), "{err}");
     for (old, new, since) in chobo::target::RENAMED {
-        assert_eq!(said(&["gen", b, "--target", old, "--lang", "en"]), format!("`{old}` is `{new}` from {since}\n"));
-        assert_eq!(said(&["gen", b, "--target", "sql", "--target", old, "--lang", "ja"]), format!("`{old}` は {since} から `{new}` です\n"));
+        assert_eq!(said(&["gen", b, "--target", old, "--lang", "en"]), format!("error: `{old}` is `{new}` from {since}\n"));
+        assert_eq!(said(&["gen", b, "--target", "sql", "--target", old, "--lang", "ja"]), format!("エラー: `{old}` は {since} から `{new}` です\n"));
         // what it says to write is a line gen takes
         let words: Vec<&str> = new.split(' ').collect();
         let pair = chobo::target::Target::parse(old).unwrap();
@@ -282,10 +290,10 @@ fn what_stops_gen_and_what_it_says() {
         said(&["gen", b, "--target", "go", "--target", "sql", "--books", "tigerbeetle", "--lang", "en"]),
         "error: there is no `--target sql` for `--books tigerbeetle`: TigerBeetle takes no SQL; its clients are `--target typescript|python|go|rust`\n"
     );
-    assert_eq!(said(&["gen", b, "--target", "go", "--target", "go", "--lang", "en"]), "`--target go` is given twice\n");
+    assert_eq!(said(&["gen", b, "--target", "go", "--target", "go", "--lang", "en"]), "error: `--target go` is given twice\n");
     assert!(said(&["gen", b, "--target", "sqlite"]).contains("sqlite"));
     assert!(said(&["gen", b, "--target", "sql", "--books", "sqlite"]).contains("sqlite"));
-    assert_eq!(said(&["gen", b, "--target", "sql", "--books", "mysql", "--books", "mysql", "--lang", "en"]), "`--books` is given twice\n");
+    assert_eq!(said(&["gen", b, "--target", "sql", "--books", "mysql", "--books", "mysql", "--lang", "en"]), "error: `--books` is given twice\n");
     // the names of --target are the languages, in their order
     let (_, page, _) = run(&["gen", "--help", "--lang", "en"]);
     assert!(page.starts_with("chobo gen <file.book> --target sql|typescript|python|go|rust... "), "{page}");

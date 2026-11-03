@@ -237,7 +237,7 @@ pub fn commands() -> Vec<Cmd> {
         ],
         exits: vec![
             (0, tr!("書いた、または --check で古いものが無い", "written, or --check found nothing stale")),
-            (1, tr!("検査を通らないファイルがある、書く出力先が受け取れない名前がある、モジュールの木にエラーがある、または --check で古いものがある", "a file does not pass its check, a target given cannot take a name of a file, the tree of modules has an error, or --check found something stale")),
+            (1, tr!("検査を通らないファイルがある、書く出力先が受け取れない名前がある、モジュールの木にエラーがある、または --check で古いものがある（何も書かない）", "a file does not pass its check, a target given cannot take a name of a file, the tree of modules has an error, or --check found something stale (nothing is written)")),
             (2, tr!(
                 "引数の誤り（--target も ritsu.mod の target の行も無い、も含む）、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存か、Rust の出力先",
                 "bad arguments (neither --target nor a target line in ritsu.mod, among them), a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, or under --library a dependency no library holds that --embed does not name, or the target rust"

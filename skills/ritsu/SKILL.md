@@ -221,7 +221,7 @@ whatever the order of the flags; with no `--target`, the `target` line of the mo
 2. A package holds the rules, the dates, the
 clients of the books, the workflows, the code that asks the gates and the functional cores
 (kaname's modules, under `glue/`) of the project, where a workflow and a module read their rules, dates and books,
-and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`. A package of Rust
+and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`, and a run without it lists what an earlier run left there and keeps it, the files with ritsu's head (the two JSON files, `.cedarschema.json` and `.policies.json`, have none and are not listed). A package of Rust
 is one crate with no workflow and no code that asks a gate (a warning names each file it leaves out, and
 the exit is 0), and with functional cores it can be built as one Wasm module by the line at the head of its
 `Cargo.toml`; `--library` does not write Rust (exit 2). An amount of money or of a quantity is of

@@ -1992,7 +1992,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 - **`--check` は、どのコマンドも、その実行が書くはずのファイルだけを比べる。** 無いか違えば 1。頼まなかった出力先と付属物のファイルは比べない。chobo と dandori には、ここで `--check` を足した。
 - **一つの実行は、途中まで書いて止まらない。** chobo・dandori・sakai・koyomi・`ritsu gen` は、指定した全部の出力先を作ってから書く。一つでも作れなければ、どの出力先も書かず、前の実行が書いたファイルにも触らずに止まる。chobo の E060〜E064、dandori のプラットフォームが受け取れないフロー、sakai の E501、koyomi の E016 は 1 で終わり、`ritsu gen` は止まった理由の終了コード（1 か 2）で終わる（17.8。chobo の E064、koyomi の E016、kaname の E008 は 1）。書きかけが残るのは、ディスクに書けなかったときだけである。0.40.0 の `ritsu gen` は出力先を一つ作るたびに書いたので、止まった出力先より前の出力先が残り、文の出力はそれを挙げなかった（下の通販）。
 - **ある出力先だけを壊す名前は、検査では警告にし、その出力先を書くときだけ止まる（2026-11-04）。** koyomi の W001 と E016、chobo の W108 と E064、kaname の W001 と E008 である。使わない出力先のために名前を替えさせず、その出力先を書くなら組めないコードを書かない。止まる文は、使わない出力先なら `--target` で使う出力先を挙げるように言う。
-- **前に書いたが頼まれなくなったファイルは、消さずに挙げる。** rulec と koyomi の付属物、`ritsu gen` の `cedar/` で、終了コードは変えない。挙げるのは、頭のコメントで ritsu の生成器のものと分かるファイルである（9.3 の `--check` と同じ見分け方。Cedar の二つの JSON は頭を持たないので挙げない）。
+- **前に書いたが頼まれなくなったファイルは、消さずに挙げる。** rulec と koyomi の付属物、`ritsu gen` の `cedar/` で、終了コードは変えない。挙げるのは、頭のコメントで ritsu の生成器のものと分かるファイルである（9.3 の `--check` と同じ見分け方）。頭を持たないものは挙げない。Cedar の二つの JSON（`.cedarschema.json`、`.policies.json`）、rulec の `vectors/`、Go の `go.mod` がそうで、`ritsu gen` の Cedar の注はそのことも言う。
 - **0.40.0 までの名前は、新しい名前を添えて止まる。** `chobo build`・`dandori build`・`sakai build` は知らないコマンドとして、dandori の `temporal`（`ritsu run --target` も）と chobo の組の名前（`postgres-go` など）は知らない名前として exit 2 で止まり、文に 0.41.0 からの名前を添える（`` `chobo build` is `chobo gen` from 0.41.0 ``、`` `postgres-go` is `--target go --books postgres` from 0.41.0 ``）。別名は作らない。
 
 `--target` も `target` の行も無い `ritsu gen`（sekisho の例 `crates/sekisho/examples/refunds` で走らせたもの。exit 2）：

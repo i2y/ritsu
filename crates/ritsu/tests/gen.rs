@@ -731,7 +731,7 @@ fn the_cedar_not_asked_for_is_said_and_left() {
     assert_eq!(code, 0, "{err}");
     let o = out.display().to_string();
     let left: String = ["refunds.cedar", "refunds.cedarschema", "refunds_ja.cedar", "refunds_ja.cedarschema"].iter().map(|f| format!("generated no more, and still there: {o}/cedar/{f}\n")).collect();
-    let note = "note: `--target cedar` writes these files, and this run does not ask for it; gen touches no file of a target it is not given, so they can be deleted if they are not wanted\n";
+    let note = "note: `--target cedar` writes these files, and this run does not ask for it; gen touches no file of a target it is not given, so they can be deleted if they are not wanted; the two JSON files it writes (`.cedarschema.json`, `.policies.json`) have no head to tell them by, and are not listed\n";
     let checked = [&UP_TO_0_40[..], &["--check"]].concat();
     for more in [&UP_TO_0_40[..], &checked[..]] {
         let (code, stdout, err) = generate(&project, &out, more);
@@ -746,7 +746,7 @@ fn the_cedar_not_asked_for_is_said_and_left() {
     let left_ja: String = ["refunds.cedar", "refunds.cedarschema", "refunds_ja.cedar", "refunds_ja.cedarschema"].iter().map(|f| format!("もう生成しないファイルが残っています: {j}/cedar/{f}\n")).collect();
     assert_eq!(
         (code, stdout),
-        (0, format!("{left_ja}注記: これらは `--target cedar` が書くファイルで、この実行は頼んでいません。gen は指定していない出力先のファイルに触らないので、要らなければ消してかまいません\n"))
+        (0, format!("{left_ja}注記: これらは `--target cedar` が書くファイルで、この実行は頼んでいません。gen は指定していない出力先のファイルに触らないので、要らなければ消してかまいません。`--target cedar` が書く二つの JSON（`.cedarschema.json`、`.policies.json`）は、頭のコメントが無いので挙げません\n"))
     );
     let (code, stdout, _) = generate(&project, &out, &["--target", "go", "--check", "--format", "json"]);
     let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));

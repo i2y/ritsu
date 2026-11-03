@@ -438,7 +438,7 @@ fn chobo_load(path: &str, l: Lang, r: &mut Ran) -> Option<(String, chobo::model:
     let (src, c) = match chobo::check::check_file(Path::new(path)) {
         Ok(x) => x,
         Err(e) => {
-            r.err.push_str(&format!("{e}\n"));
+            r.err.push_str(&format!("{}: {e}\n", head(l)));
             r.code = 2;
             return None;
         }
@@ -497,7 +497,7 @@ fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
     for (rel, text) in &files {
         let p = Path::new(OUT).join(t.lang().key()).join(rel);
         if let Err(e) = p.parent().map(fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| fs::write(&p, text)) {
-            r.err.push_str(&format!("{}: {e}\n", p.display()));
+            r.err.push_str(&format!("{}: {}: {e}\n", head(l), p.display()));
             r.code = 2;
             return r;
         }

@@ -313,25 +313,21 @@ fn parse(argv: Vec<String>) -> Parsed {
         return Parsed::Print(top_help(lang), 2, true);
     };
     match cmd.as_str() {
-        "--help" | "-h" | "help" => return Parsed::Print(top_help(lang), 0, false),
+        "--help" | "-h" => return Parsed::Print(top_help(lang), 0, false),
+        "help" => return help_of(&argv[1..], lang),
         "--version" | "-V" => return Parsed::Print(format!("chobo {}\n", env!("CARGO_PKG_VERSION")), 0, false),
         _ => {}
     }
     let t = table();
     let Some(c) = t.command(&cmd) else {
-        // the verb up to 0.40.0 is not read as the new one (ritsu's DESIGN 9.6)
-        if cmd == "build" {
-            return Parsed::Print(format!("{}\n", ritsu_base::cli::renamed("chobo build", "chobo gen", "0.41.0").get(lang)), 2, true);
-        }
-        let msg = tr!("知らないコマンド `{cmd}` です\n\n", "unknown command `{cmd}`\n\n").get(lang).to_string();
-        return Parsed::Print(msg + &top_help(lang), 2, true);
+        return no_command(&cmd, lang);
     };
     // `--help` ends the line: what comes before it is read, and what comes after it is not
     let rest = &argv[1..];
     let until = rest.iter().position(|x| x == "--help" || x == "-h").unwrap_or(rest.len());
     let got = match t.read(c, &rest[..until]) {
         Ok(g) => g,
-        Err(m) => return Parsed::Print(misuse(&m, &cmd, c, lang), 2, true),
+        Err(m) => return Parsed::Print(format!("{}: {}", stop_head(lang), misuse(&m, &cmd, c, lang)), 2, true),
     };
     if until < rest.len() {
         return Parsed::Print(cmd_help(c, lang), 0, false);
@@ -343,6 +339,45 @@ fn parse(argv: Vec<String>) -> Parsed {
         a.flags.insert(k.to_string(), takes.then(|| v.clone()));
     }
     Parsed::Run(a)
+}
+
+/// The head of a line that stops a command, as every language's command writes it (DESIGN 19).
+fn stop_head(lang: Lang) -> &'static str {
+    if lang == Lang::Ja { "エラー" } else { "error" }
+}
+
+/// `chobo help [<command>]`: the page of the command named, or of them all, as dandori and sakai
+/// read it; `--lang` is not the command named.
+fn help_of(words: &[String], lang: Lang) -> Parsed {
+    let mut rest = words.iter();
+    let mut asked = None;
+    while let Some(w) = rest.next() {
+        if w == "--lang" {
+            rest.next();
+        } else if !w.starts_with("--lang=") {
+            asked = Some(w.as_str());
+            break;
+        }
+    }
+    let Some(name) = asked else {
+        return Parsed::Print(top_help(lang), 0, false);
+    };
+    let t = table();
+    match t.command(name) {
+        Some(c) => Parsed::Print(cmd_help(c, lang), 0, false),
+        None => no_command(name, lang),
+    }
+}
+
+/// A word that is no command of chobo's: the verb up to 0.40.0 is not read as the new one (ritsu's
+/// DESIGN 9.6), and says it.
+fn no_command(cmd: &str, lang: Lang) -> Parsed {
+    let head = stop_head(lang);
+    if cmd == "build" {
+        return Parsed::Print(format!("{head}: {}\n", ritsu_base::cli::renamed("chobo build", "chobo gen", "0.41.0").get(lang)), 2, true);
+    }
+    let msg = tr!("知らないコマンド `{cmd}` です\n\n", "unknown command `{cmd}`\n\n");
+    Parsed::Print(format!("{head}: {}{}", msg.get(lang), top_help(lang)), 2, true)
 }
 
 /// What stopped a command line, in chobo's words; a flag it does not know is followed by the
@@ -419,7 +454,7 @@ fn load(path: &Path, lang: Lang) -> Result<(String, crate::model::Book, check::C
     let (src, c) = match check::check_file(path) {
         Ok(x) => x,
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{}: {e}", stop_head(lang));
             return Err(2);
         }
     };
@@ -448,7 +483,7 @@ fn cmd_check(a: &Args) -> u8 {
         let (src, mut c) = match check::check_file(path) {
             Ok(x) => x,
             Err(e) => {
-                eprintln!("{e}");
+                eprintln!("{}: {e}", stop_head(a.lang));
                 worst = 2;
                 continue;
             }
@@ -466,7 +501,7 @@ fn cmd_check(a: &Args) -> u8 {
                     note = n;
                 }
                 Err(e) => {
-                    eprintln!("{}", e.get(a.lang));
+                    eprintln!("{}: {}", stop_head(a.lang), e.get(a.lang));
                     return 2;
                 }
             }
@@ -498,7 +533,7 @@ fn cmd_check(a: &Args) -> u8 {
 fn cmd_run(a: &Args) -> u8 {
     let Some(path) = one_book(a) else { return usage(a) };
     let Some(Some(sc)) = a.flags.get("--scenario") else {
-        eprintln!("{}", tr!("`--scenario <file.json>` が要ります", "`--scenario <file.json>` is required").get(a.lang));
+        eprintln!("{}: {}", stop_head(a.lang), tr!("`--scenario <file.json>` が要ります", "`--scenario <file.json>` is required").get(a.lang));
         return 2;
     };
     let (_, book, _) = match load(&path, a.lang) {
@@ -508,7 +543,7 @@ fn cmd_run(a: &Args) -> u8 {
     let v: Value = match ritsu_base::fs::read_to_string(sc).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{sc}: {e}");
+            eprintln!("{}: {sc}: {e}", stop_head(a.lang));
             return 2;
         }
     };
@@ -524,14 +559,14 @@ fn cmd_run(a: &Args) -> u8 {
         let s = match scenario::from_json(&book, x) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("{sc}: {}{e}", if list.len() > 1 { format!("scenario {}: ", i + 1) } else { String::new() });
+                eprintln!("{}: {sc}: {}{e}", stop_head(a.lang), if list.len() > 1 { format!("scenario {}: ", i + 1) } else { String::new() });
                 return 2;
             }
         };
         let runs = match scenario::run(&book, &s) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{sc}: {e}");
+                eprintln!("{}: {sc}: {e}", stop_head(a.lang));
                 return 2;
             }
         };
@@ -556,7 +591,7 @@ fn cmd_run(a: &Args) -> u8 {
             match scenario::run_json(&book, &s) {
                 Ok(r) => outs.push(r),
                 Err(e) => {
-                    eprintln!("{sc}: {e}");
+                    eprintln!("{}: {sc}: {e}", stop_head(a.lang));
                     return 2;
                 }
             }
@@ -584,13 +619,13 @@ fn cmd_scenarios(a: &Args) -> u8 {
         Some(dir) => {
             let dir = PathBuf::from(dir);
             if let Err(e) = std::fs::create_dir_all(&dir) {
-                eprintln!("{}: {e}", dir.display());
+                eprintln!("{}: {}: {e}", stop_head(a.lang), dir.display());
                 return 2;
             }
             for (i, s) in list.iter().enumerate() {
                 let p = dir.join(format!("{:03}.json", i + 1));
                 if let Err(e) = std::fs::write(&p, serde_json::to_string_pretty(s).unwrap() + "\n") {
-                    eprintln!("{}: {e}", p.display());
+                    eprintln!("{}: {}: {e}", stop_head(a.lang), p.display());
                     return 2;
                 }
             }
@@ -689,7 +724,7 @@ fn cmd_gen(a: &Args) -> u8 {
     }
     for (p, text) in &planned {
         if let Err(e) = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(p, text)) {
-            eprintln!("{}: {e}", p.display());
+            eprintln!("{}: {}: {e}", stop_head(a.lang), p.display());
             return 2;
         }
         let shown = p.display();
@@ -714,7 +749,7 @@ fn cmd_doc(a: &Args) -> u8 {
             let stem = path.file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
             let p = PathBuf::from(dir).join(format!("{stem}.{}", if html { "html" } else { "md" }));
             if let Err(e) = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(&p, &page)) {
-                eprintln!("{}: {e}", p.display());
+                eprintln!("{}: {}: {e}", stop_head(a.lang), p.display());
                 return 2;
             }
             let shown = p.display();
@@ -753,7 +788,7 @@ fn cmd_explain(a: &Args) -> u8 {
             0
         }
         None => {
-            eprintln!("{}", tr!("`{code}` というコードはありません。一覧は `chobo explain --all` で出ます", "there is no code `{code}`; `chobo explain --all` lists them").get(a.lang));
+            eprintln!("{}: {}", stop_head(a.lang), tr!("`{code}` というコードはありません。一覧は `chobo explain --all` で出ます", "there is no code `{code}`; `chobo explain --all` lists them").get(a.lang));
             2
         }
     }
