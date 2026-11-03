@@ -1,14 +1,15 @@
-//! Every day of the years 0001 to 9999 is a date at every door but the Go and Ruby runners
-//! (§15.279).
+//! Every day of the years 0001 to 9999 is a date at every door but the Ruby runner (§15.279).
 //!
 //! A date on the wire is `YYYY-MM-DD`, a day of the Gregorian calendar taken back before 1582
 //! (§10.2), and the reference evaluator takes every day of the years 0001 to 9999 (`door::civil`).
 //! Not every reader of the generated code did. The TypeScript and JavaScript runners and MCP
 //! servers refused the years 0001 to 0099 as not dates, because `Date.UTC` reads such a year as one
-//! of the 1900s. The page of `rulec doc` read the years 0001 to 0099 as the 1900s and answered for
-//! them, and took 2026-02-30 for 2026-03-02. None of it was seen, because the vectors are made of
-//! the rule's own days and the days beside them. The Go and Ruby runners still read some of the
-//! far days as other days, so they are left out here.
+//! of the 1900s. The Go runner read every day before 1677-09-22 as that day, and every day after
+//! 2262-04-11 as that day, because a `time.Duration` holds no more. The page of `rulec doc` read
+//! the years 0001 to 0099 as the 1900s and answered for them, and took 2026-02-30 for 2026-03-02.
+//! None of it was seen, because the vectors are made of the rule's own days and the days beside
+//! them. The Ruby runner still reads the days before 1582-10-15 in the Julian calendar, so it is
+//! left out here.
 //!
 //! The materials are the two rules of the tree whose dates have no range, so that every day is in
 //! it: `tests/corpus/coupon_order.rule` and its Japanese version `tests/corpus/適用順序.rule`. Both
@@ -153,15 +154,15 @@ fn reference(c: &Case, a: &str, b: &str) -> Said {
 }
 
 /// The targets held to the far days, each with its runner, and the MCP servers and the Connect
-/// service beside them: every target but Go and Ruby.
-const GEN: [&str; 30] = [
+/// service beside them: every target but Ruby.
+const GEN: [&str; 32] = [
     "--target", "python", "--target", "numpy", "--target", "typescript", "--target", "javascript", "--target", "rust",
-    "--target", "php", "--target", "swift", "--target", "java", "--target", "sql", "--target", "wasm", "--target",
-    "proto", "--extra", "runner", "--extra", "mcp", "--extra", "connect", "--extra", "vectors",
+    "--target", "php", "--target", "go", "--target", "swift", "--target", "java", "--target", "sql", "--target", "wasm",
+    "--target", "proto", "--extra", "runner", "--extra", "mcp", "--extra", "connect", "--extra", "vectors",
 ];
 
 /// The runners that read a far day differently before (§15.279): each has to have run.
-const FIXED: [&str; 4] = ["typescript/runner", "typescript/mcp", "javascript/runner", "javascript/mcp"];
+const FIXED: [&str; 5] = ["typescript/runner", "typescript/mcp", "javascript/runner", "javascript/mcp", "go/runner"];
 
 /// Lines added to the end of a file.
 fn append(p: &Path, lines: &[String]) {
@@ -188,9 +189,9 @@ fn rulec_test(out: &Path) -> (i32, Json) {
 
 /// Every way the rule is reached answers each pair of far days as the reference evaluator does,
 /// the record giving back the days as they were written, and refuses each string that is not a
-/// day with the evaluator's sentence: the runners of every language but Go and Ruby, the MCP
-/// servers, the Connect service, the WASI module and the function on PostgreSQL. The English rule
-/// and the Japanese version run side by side.
+/// day with the evaluator's sentence: the runners of every language but Ruby, the MCP servers, the
+/// Connect service, the WASI module and the function on PostgreSQL. The English rule and the
+/// Japanese version run side by side.
 #[test]
 fn every_door_reads_every_day_of_the_years_0001_to_9999() {
     if !ready(Need::Python, || have("python3", &["--version"]), "python3 is not here") {

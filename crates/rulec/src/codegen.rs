@@ -9051,7 +9051,8 @@ func date(v any, what string) int64 {
 	if err != nil {
 		panic(&r.RuleInputError{What: what})
 	}
-	return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+	// From the seconds, not t.Sub: a Duration holds about 292 years, and stops there.
+	return t.Unix() / 86400
 }
 
 func member[T any](parse func(string) (T, bool), v any, what string) T {
