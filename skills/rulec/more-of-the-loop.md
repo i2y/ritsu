@@ -7,7 +7,7 @@ rather than in SKILL.md, which is read whole whenever the skill is used.
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/ritsu@v0.38.0                     # ritsu's release with the link rulec, verified against its checksums
+- uses: i2y/ritsu@v0.41.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check

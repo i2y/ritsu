@@ -22,7 +22,7 @@ rulec の表は検査を通ってから生成され、生成物のヘッダに�
 
 ```console
 $ rulec check rules/            # 通らなければ何も生成しない
-$ rulec gen rules/ --out generated/
+$ rulec gen rules/ --target python --target numpy --target typescript --target javascript --target rust --target ruby --target go --target swift --target sql --target wasm --extra runner --extra vectors --out generated/
 $ rulec test generated/         # 九言語が参照評価器と同じ答えか
 $ rulec api rules/協会けんぽ健康保険料.rule   # 呼び方（署名・範囲・列挙の綴り）
 ```

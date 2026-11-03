@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/ritsu@v0.38.0
-      - run: rulec check rules/ && rulec gen rules/ --out generated/ --check
+      - uses: i2y/ritsu@v0.41.0
+      - run: rulec check rules/ && rulec gen rules/ --target python --target numpy --target typescript --target javascript --target rust --target ruby --target go --target swift --target sql --target wasm --extra runner --extra vectors --out generated/ --check
       - name: One archive per language
         run: |
           mkdir -p dist

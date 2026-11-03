@@ -130,7 +130,7 @@ the upgrade migrates rulec and takes it to 0.38.0 in one go.
 Installing ritsu's `.deb` or `.rpm` as above removes the package `rulec`, and
 `/usr/bin/rulec` becomes a link to `ritsu`. ritsu's archive, unpacked into the
 directory that holds the old `rulec`, puts the link in place of the old binary. In CI, the line `uses: i2y/rulec@v0.22.1` becomes
-`uses: i2y/ritsu@v0.38.0` ([In CI](#in-ci)).
+`uses: i2y/ritsu@v0.41.0` ([In CI](#in-ci)).
 
 ## From source
 
@@ -254,7 +254,7 @@ it runs on.
 
 ## In CI
 
-`uses: i2y/ritsu@v0.38.0` puts that release of ritsu on the runner's `PATH`,
+`uses: i2y/ritsu@v0.41.0` puts that release of ritsu on the runner's `PATH`,
 `rulec` and the other links with it, verified against the checksums
 published with it. The ref the action is referenced with is the release, so
 by default the two cannot drift apart (`with: { version: … }` is how you ask
@@ -274,7 +274,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base reads origin/main
-    - uses: i2y/ritsu@v0.38.0
+    - uses: i2y/ritsu@v0.41.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
@@ -316,7 +316,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # origin/main is where the old version is read from
-    - uses: i2y/ritsu@v0.38.0
+    - uses: i2y/ritsu@v0.41.0
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
     - run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:

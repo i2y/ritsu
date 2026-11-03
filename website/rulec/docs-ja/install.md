@@ -83,7 +83,7 @@ rulec 0.38.0
 
 `brew trust --formula i2y/tap/ritsu` のあとに `brew upgrade` を走らせても同じです。`brew upgrade` が、移すことと 0.38.0 に上げることを一度にします。
 
-ritsu の `.deb` か `.rpm` を上の手順で入れると、`rulec` のパッケージは取り除かれ、`/usr/bin/rulec` は `ritsu` を指すリンクになります。アーカイブで入れていたなら、古い `rulec` があるディレクトリに ritsu のアーカイブを展開すると、古いバイナリがリンクに置き換わります。CI では、`uses: i2y/rulec@v0.22.1` の行が `uses: i2y/ritsu@v0.38.0` になります（[CI に置く](#ci-に置く)）。
+ritsu の `.deb` か `.rpm` を上の手順で入れると、`rulec` のパッケージは取り除かれ、`/usr/bin/rulec` は `ritsu` を指すリンクになります。アーカイブで入れていたなら、古い `rulec` があるディレクトリに ritsu のアーカイブを展開すると、古いバイナリがリンクに置き換わります。CI では、`uses: i2y/rulec@v0.22.1` の行が `uses: i2y/ritsu@v0.41.0` になります（[CI に置く](#ci-に置く)）。
 
 ## ソースから
 
@@ -166,7 +166,7 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 
 ## CI に置く
 
-`uses: i2y/ritsu@v0.38.0` の一行で、そのリリースの ritsu が検査済みで runner の `PATH` に入ります。`rulec` などのリンクも一緒です。action を指す ref がそのままリリースなので、既定では二つがずれません（別のリリースを入れたいときだけ `with: { version: … }` で明示します）。`SHA256SUMS` との突き合わせは**必ず走ります** — その行が無いだけでも落ちます。アーカイブのハッシュを workflow 側にも書いて固定したいなら、`with: { sha256: … }` を足します。検査が一つ増えます。rulec 自身の最後のリリースを指す `uses: i2y/rulec@v0.22.1` も、rulec のリポジトリが残っているあいだは動きます。
+`uses: i2y/ritsu@v0.41.0` の一行で、そのリリースの ritsu が検査済みで runner の `PATH` に入ります。`rulec` などのリンクも一緒です。action を指す ref がそのままリリースなので、既定では二つがずれません（別のリリースを入れたいときだけ `with: { version: … }` で明示します）。`SHA256SUMS` との突き合わせは**必ず走ります** — その行が無いだけでも落ちます。アーカイブのハッシュを workflow 側にも書いて固定したいなら、`with: { sha256: … }` を足します。検査が一つ増えます。rulec 自身の最後のリリースを指す `uses: i2y/rulec@v0.22.1` も、rulec のリポジトリが残っているあいだは動きます。
 
 **入れるのに要るのはその一行だけ**ですが、その前に `actions/checkout` が要ります — rulec が読むのは、あなたのリポジトリの `rules/` だからです。ジョブ全体ではこうなります。
 
@@ -177,7 +177,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base が origin/main を読む
-    - uses: i2y/ritsu@v0.38.0
+    - uses: i2y/ritsu@v0.41.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
@@ -207,7 +207,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # 旧の版は origin/main から読む
-    - uses: i2y/ritsu@v0.38.0
+    - uses: i2y/ritsu@v0.41.0
     # 記録を $FIXTURES に置くところはご自身で: アーティファクトか、権限を絞った保管先から
     - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:

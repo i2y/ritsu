@@ -222,7 +222,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked rulec
 That builds rulec alone, which needs no other language and fetches nothing, because there are no
 dependencies. With the package `ritsu` in its place, you have `ritsu` and every language of it, and
 `ritsu rulec <command>` is every command below; a rule over the days of a koyomi date
-(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/ritsu@v0.38.0` does the
+(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/ritsu@v0.41.0` does the
 download and the check ([In CI](#in-ci)).
 
 ## Using it
@@ -255,7 +255,7 @@ once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/ritsu@v0.38.0                     # ritsu's release with the link rulec, verified against its checksums
+- uses: i2y/ritsu@v0.41.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --target python --extra runner --extra vectors --out generated/ --check
