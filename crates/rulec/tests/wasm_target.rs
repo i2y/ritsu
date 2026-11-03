@@ -208,7 +208,7 @@ fn 規則の名前はどれもwitが読めるworldになる() {
         let rule = dir.join(format!("{name}.rule"));
         std::fs::write(&rule, NAMED.replace("@NAME@", name)).unwrap();
         let out = dir.join("out");
-        let (c, o, e) = run(&["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()]);
+        let (c, o, e) = run(&["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap(), "--target", "wasm"]);
         if c == 1 {
             not_rules.push(name.clone());
             continue;

@@ -4725,7 +4725,7 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 
 **前と後の比べ**。替える前は 0.40.0 の公式のバイナリで、替えた後は手元のビルドで、同じ入力から取ったものを一字ずつ比べた（木をコピーした場所で、ディレクトリの全部、標準出力、標準エラー、終了コード）。
 
-- `rulec gen` と `rulec api`：コーパスと例の `.rule` の全部（英日の 994 ファイル）の `gen` を、そのまま、`--format json`、`--lang ja` の三通りで、ほかに 160 のディレクトリで、`api` を一つずつ、4,136 回。違ったのは `gen` の 1,931 回で、違うファイルはどれも `wasm/<別名>_wasm.rs` だった（2,210。36.12）。ほかに書いた 127,041 のファイルと、`api` の 994 回は同じだった。
+- `rulec gen` と `rulec api`：コーパスと例の `.rule` の全部（英日の 994 ファイル）の `gen` を、形と言語はそのまま、`--format json`、`--lang ja` の三通りで、ほかに 160 のディレクトリで、`api` を一つずつ、4,136 回。`gen` には、0.40.0 には何も足さず、替えた後には 0.40.0 と同じファイルを書く rulec の `targets::UP_TO_0_40` の引数（rulec の DESIGN §15.277）を足した。違ったのは `gen` の 1,931 回で、違うファイルはどれも `wasm/<別名>_wasm.rs` だった（2,210。36.12）。ほかに書いた 127,041 のファイルと、`api` の 994 回は同じだった。
 - kaname と `ritsu gen`：木の全部の `.kn`（例、`tests/modules/`、ritsu の `tests/projects/`）の `check` 218 回、`vectors` 52 回、`ritsu gen` の TypeScript・Python・Go（帳簿の置き場所の三つと `--library`）399 回。違ったのは 33 回である。30 回は、範囲の両端を書いた日付の引数かフィールドを持つモジュール（例の `late_payment` の英日、`tests/modules/` の `dicts`・`results`・`sums` の英日と `lists`・`walks`、ritsu の `tests/projects/settlement`）の TypeScript と Go で、差は入口の確かめの `if` の行だけだった（ファイルごとに 1 行か 2 行。36.14）。残りの 3 回は `tests/modules/names.kn` の生成物で、差は `letters` の行である。前の生成物はそこで組めなかった：
 
 ```text
