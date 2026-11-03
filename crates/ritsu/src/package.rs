@@ -1,7 +1,7 @@
 //! `ritsu gen` (DESIGN 9.3, 9.6): the rules, the dates, the clients of the books, the workflows, the
 //! functional cores (kaname's modules) and the code that asks the gates of a project, as one package
-//! for each language it is given (TypeScript, Python, Go), and the gates' Cedar beside them, written
-//! once, when it is given `cedar`. What it is given is `--target`'s, or else the `target` line of
+//! for each language it is given (TypeScript, Python, Go, Rust), and the gates' Cedar beside them,
+//! written once, when it is given `cedar`. What it is given is `--target`'s, or else the `target` line of
 //! the module's ritsu.mod (DESIGN 17.3); with neither, nothing is written. Every target given is
 //! made before any is written, so a run that stops writes none of them (DESIGN 9.6). kaname's
 //! modules go under glue/, a name kept because a host's code imports them by that path.
@@ -18,6 +18,14 @@
 //!   glue/books/<book>.ts, …        <name>/glue/books/<book>.py, … glue/books/<package>/…
 //!   authz/<gate>.ts
 //!   units.ts                       <name>/units.py                units/units.go
+//! generated/rust/                the crate of the submodule [`rust`], which holds no flows and no authz
+//!   Cargo.toml, lib.rs
+//!   rules.rs, rules/<alias>.rs
+//!   dates.rs, dates/<alias>.rs
+//!   books.rs, books/<book>.rs
+//!   glue.rs, glue/<module>.rs, kaname.rs, door.rs
+//!   glue/books.rs, glue/books/<book>.rs, <book>_apply.rs
+//!   units.rs, wasm.rs, <name>.wit
 //! generated/cedar/<gate>.cedar, .cedarschema, .cedarschema.json, .policies.json
 //! ```
 //!
@@ -51,6 +59,7 @@
 //! as ranges, reading the parts of a dependency that is a library from that library.
 
 mod library;
+mod rust;
 
 use crate::cli;
 use ritsu_base::diag::Severity;
@@ -74,10 +83,11 @@ pub enum Target {
     TypeScript,
     Python,
     Go,
+    Rust,
 }
 
 impl Target {
-    pub const ALL: [Target; 3] = [Target::TypeScript, Target::Python, Target::Go];
+    pub const ALL: [Target; 4] = [Target::TypeScript, Target::Python, Target::Go, Target::Rust];
 
     /// The value of `--target`, and the directory under `--out`.
     pub fn key(self) -> &'static str {
@@ -85,6 +95,7 @@ impl Target {
             Target::TypeScript => "typescript",
             Target::Python => "python",
             Target::Go => "go",
+            Target::Rust => "rust",
         }
     }
 
@@ -92,13 +103,20 @@ impl Target {
         Target::ALL.into_iter().find(|t| t.key() == s)
     }
 
-    /// dandori's target for the workflow (Temporal, in this language).
-    fn dandori(self) -> &'static str {
+    /// dandori's target for the workflow (Temporal, in this language); Rust has none.
+    fn dandori(self) -> Option<&'static str> {
         match self {
-            Target::TypeScript => "temporal-typescript",
-            Target::Python => "temporal-python",
-            Target::Go => "temporal-go",
+            Target::TypeScript => Some("temporal-typescript"),
+            Target::Python => Some("temporal-python"),
+            Target::Go => Some("temporal-go"),
+            Target::Rust => None,
         }
+    }
+
+    /// Whether the package holds the workflows and the code that asks the gates: dandori and sekisho
+    /// write neither in Rust, so its package leaves them out, and `ritsu gen` says so (DESIGN 9.3).
+    fn holds_flows_and_gates(self) -> bool {
+        self != Target::Rust
     }
 }
 
@@ -134,6 +152,14 @@ pub enum Books {
 }
 
 impl Books {
+    /// Where kaname's Rust makes the transfers (kaname's DESIGN 36.6).
+    fn store(self) -> kaname::r#gen::Store {
+        match self {
+            Books::TigerBeetle => kaname::r#gen::Store::TigerBeetle,
+            Books::Postgres | Books::MySql => kaname::r#gen::Store::Sql,
+        }
+    }
+
     fn chobo(self, t: Target) -> chobo::target::Target {
         use chobo::target::Target as C;
         match (self, t) {
@@ -143,6 +169,9 @@ impl Books {
             (Books::TigerBeetle, Target::TypeScript) => C::TigerBeetleTypeScript,
             (Books::TigerBeetle, Target::Python) => C::TigerBeetlePython,
             (Books::TigerBeetle, Target::Go) => C::TigerBeetleGo,
+            (Books::Postgres, Target::Rust) => C::PostgresRust,
+            (Books::TigerBeetle, Target::Rust) => C::TigerBeetleRust,
+            (Books::MySql, Target::Rust) => C::MySqlRust,
             (Books::MySql, Target::TypeScript) => C::MySqlTypeScript,
             (Books::MySql, Target::Python) => C::MySqlPython,
             (Books::MySql, Target::Go) => C::MySqlGo,
@@ -505,6 +534,7 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             Target::TypeScript => koyomi::naming::Target::TypeScript,
             Target::Python => koyomi::naming::Target::Python,
             Target::Go => koyomi::naming::Target::Go,
+            Target::Rust => koyomi::naming::Target::Rust,
         };
         let body = koyomi::codegen::package_module(&outcome, &u, t).map_err(|ds| {
             let text: String = ds.iter().map(|d| d.render(lang)).collect();
@@ -552,9 +582,11 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             }
         }
     }
+    // what a package of Rust leaves out, which `ritsu gen` says ([`rust::left_out`])
+    let held = |tool: Tool| if target.holds_flows_and_gates() { project.of(tool) } else { Vec::new() };
     // dandori: each workflow, for Temporal in the language, reading the package's rules, dates and books
     let module = o.module.clone();
-    for f in project.of(Tool::Dandori) {
+    for f in held(Tool::Dandori) {
         let place = at(&f.rel);
         if place.read_from_library(&place.dir) {
             continue;
@@ -587,14 +619,14 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
                 Target::Go => dandori::temporal_go::package(&m),
                 _ => dandori::render::ident(&m.name),
             };
-            match dandori::commands::build(&m, target.dandori()) {
+            match target.dandori().and_then(|to| dandori::commands::build(&m, to)) {
                 Some(Ok(files)) => Ok((files, dir)),
                 Some(Err(diags)) => {
                     let json = diags.iter().map(|d| diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(lang)))).collect();
                     let (shown, to) = (&f.shown, target.key());
                     Err(stopped(dandori::commands::render(&diags, &f.shown, &src, lang), 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang))
                 }
-                None => unreachable!("the three targets are dandori's"),
+                None => unreachable!("the targets that hold workflows are dandori's"),
             }
         })?;
         let (built, dir) = built;
@@ -606,7 +638,7 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     }
     // sekisho: each gate's code of the requests, which reads the package's rules/ and dates/
     let gates: sekisho::suite::Suite = joined.sekisho().into();
-    for f in project.of(Tool::Sekisho) {
+    for f in held(Tool::Sekisho) {
         let outcome = gate(project, &gates, f, lang)?;
         let place = at(&f.rel);
         if place.read_from_library(&place.dir) {
@@ -631,9 +663,18 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     // the transfers of its books, with the helper every module reads and the types of the
     // transfers; glue/'s indexes are kaname's own (the books' transfers are under glue/books/)
     if !modules.is_empty() {
-        let kt = kaname::r#gen::Target::parse(target.key()).expect("the three targets are kaname's");
+        let kt = kaname::r#gen::Target::parse(target.key()).expect("the four targets are kaname's");
         let placed: Vec<(Rc<kaname::check::Checked>, String, Place)> = modules.iter().map(|(c, rel)| (c.clone(), rel.clone(), at(rel))).filter(|(_, _, p)| !p.read_from_library(&p.dir)).collect();
-        let made = kaname::r#gen::package_in(&placed, kt, lang, &o.module);
+        for (c, rel, _) in &placed {
+            let ds = kaname::r#gen::stops(c, kt);
+            if !ds.is_empty() {
+                let text: String = ds.iter().map(|d| d.render(lang)).collect();
+                let json = ds.iter().map(|d| diagnostic("kaname", Some(rel.clone()), d.to_json(lang))).collect();
+                let (shown, to) = (&c.path, target.key());
+                return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang));
+            }
+        }
+        let made = kaname::r#gen::package_for(&placed, kt, lang, &o.module, o.books.store());
         units.extend(made.units);
         for (c, rel, _) in &placed {
             named.push(("glue", c.module.name.ascii().to_string(), rel.clone()));
@@ -642,6 +683,9 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             // glue/'s indexes are kaname's, at each module's directory it writes under
             kinds.entry(module_dir(&rel)).or_default().entry("glue").or_default();
             files.push((format!("{base}{rel}"), body, from));
+        }
+        if target == Target::Rust {
+            files.extend(rust::wasm_files(project, &placed, &o.name, lang));
         }
     }
     // the package's one type of each unit they take amounts in (rulec's §15.248); a library's is the
@@ -680,10 +724,15 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     let kept: &[&str] = match target {
         Target::Python => ritsu_emit::words::python::KEYWORDS,
         Target::Go => ritsu_emit::words::go::KEYWORDS,
+        Target::Rust => &rust::NO_FILE_OF_A_DIRECTORY,
         Target::TypeScript => &[],
     };
     if let Some((kind, name, from)) = named.iter().find(|(_, n, _)| kept.contains(&n.as_str())) {
-        let language = if target == Target::Python { "Python" } else { "Go" };
+        let language = match target {
+            Target::Python => "Python",
+            Target::Rust => "Rust",
+            _ => "Go",
+        };
         return Err(refusal(
             2,
             tr!(
@@ -699,19 +748,20 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
 
 /// What stops the packages of a module for the modules' sake, made sure of once, before any target
 /// is made (DESIGN 17.8): two flows of two modules that make one Temporal workflow type, two gates of
-/// two modules that declare one name of Cedar's, and, when Python is among the targets, a dependency
-/// named with a word Python keeps. Each stops the run whatever target is made; a stop of another
-/// kind is met where its target is made, as in a tree without a manifest, which none of these can
-/// stop. Either way nothing is written, as every target is made before any is (DESIGN 9.6). A file
-/// that does not pass is left to the target that reads it.
-pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], lang: Lang) -> Result<(), Refusal> {
+/// two modules that declare one name of Cedar's, unless the run is to write Rust alone, whose package
+/// holds neither (`only_rust`), and, when Python or Rust is among the targets, a dependency named with
+/// a word that language keeps. Each stops the run whatever target is made; a stop of another kind is
+/// met where its target is made, as in a tree without a manifest, which none of these can stop. Either
+/// way nothing is written, as every target is made before any is (DESIGN 9.6). A file that does not
+/// pass is left to the target that reads it.
+pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], only_rust: bool, lang: Lang) -> Result<(), Refusal> {
     if project.tree.is_none() {
         return Ok(());
     }
     // a workflow runs by the name of its type, which a worker of a server's knows one of: two flows
     // of two modules that make one type would be one workflow
     let mut types: Vec<(String, String, &str)> = Vec::new();
-    for f in project.of(Tool::Dandori) {
+    for f in if only_rust { Vec::new() } else { project.of(Tool::Dandori) } {
         let Some(m) = with_ports(joined, || dandori::check::check_file(Path::new(&f.shown)).ok().and_then(|(_, c)| c.model)) else {
             continue;
         };
@@ -731,12 +781,13 @@ pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], lang
     }
     // what each gate's Cedar declares, each name with the file that declares it
     let gates: sekisho::suite::Suite = joined.sekisho().into();
-    let declared: Vec<Vec<(String, String)>> = project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, &gates, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect();
+    let declared: Vec<Vec<(String, String)>> = if only_rust { Vec::new() } else { project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, &gates, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect() };
     cedar_names_hold(project, &declared, lang)?;
     // a dependency's name is the name of a Python package of the package's (DESIGN 17.3), which a
-    // word Python keeps cannot be: the directories of the modules the package holds a part of are
-    // the ones of its files (a contribution has no module of its own)
-    if targets.contains(&Target::Python) {
+    // word Python keeps cannot be, and of a module of Rust's, which a word no file can be the module of
+    // cannot: the directories of the modules the package holds a part of are the ones of its files (a
+    // contribution has no module of its own)
+    if targets.iter().any(|t| matches!(t, Target::Python | Target::Rust)) {
         let made = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Sekisho, Tool::Kaname];
         let dirs: Vec<String> = made
             .iter()
@@ -744,12 +795,23 @@ pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], lang
             .filter(|f| !(f.tool == Tool::Rulec && rulec::link::is_contribution_file(&f.shown)))
             .map(|f| place_of(project, &f.rel).dir)
             .collect();
-        if let Some(name) = dirs.iter().flat_map(|d| ritsu_emit::package::chain(d)).find(|n| ritsu_emit::words::python::KEYWORDS.contains(n)) {
+        let named = |kept: &dyn Fn(&str) -> bool| dirs.iter().flat_map(|d| ritsu_emit::package::chain(d)).find(|n| kept(n));
+        if let Some(name) = named(&|n| targets.contains(&Target::Python) && ritsu_emit::words::python::KEYWORDS.contains(&n)) {
             return Err(refusal(
                 2,
                 tr!(
                     "依存の名前 `{name}` は Python が予約している語なので、パッケージの deps/ に置けません。`require` で別の名前を付けてください",
                     "the dependency `{name}` is named with a word Python keeps, which the package cannot hold in its deps/; require it by another name"
+                ),
+                lang,
+            ));
+        }
+        if let Some(name) = named(&|n| targets.contains(&Target::Rust) && rust::no_dependency(n)) {
+            return Err(refusal(
+                2,
+                tr!(
+                    "依存の名前 `{name}` は Rust のモジュールの名前にできない語なので、パッケージの deps/ に置けません。`require` で別の名前を付けてください",
+                    "the dependency `{name}` is named with a word no module of Rust takes, which the package cannot hold in its deps/; require it by another name"
                 ),
                 lang,
             ));
@@ -921,7 +983,8 @@ fn dependency_indexes(target: Target, o: &Options, kinds: &BTreeMap<String, BTre
                 }
                 out.push((format!("{base}{dir}deps/__init__.py"), init, None));
             }
-            Target::Go => {}
+            // Rust's are the crate's ([`rust::crate_files`])
+            Target::Go | Target::Rust => {}
         }
     }
     for (dir, ks) in kinds.iter().filter(|(d, _)| !d.is_empty()) {
@@ -963,7 +1026,7 @@ fn dependency_indexes(target: Target, o: &Options, kinds: &BTreeMap<String, BTre
                     out.push((format!("{base}{dir}{kind}/__init__.py"), sub, None));
                 }
             }
-            Target::Go => {}
+            Target::Go | Target::Rust => {}
         }
     }
     out
@@ -1186,6 +1249,7 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
                 out.push(("go.mod".to_string(), library::go_mod(l, &head(Comment::Slashes), go, &requires, &raised), None));
             }
         }
+        Target::Rust => out.extend(rust::crate_files(o, all, files)),
     }
     out.extend(dependency_indexes(target, o, all));
     out
@@ -1205,7 +1269,7 @@ fn top<'a>(kinds: &BTreeMap<&'a str, Vec<String>>, deps: bool) -> Vec<&'a str> {
 /// The name of the Go package of the directory at `module`: its last part, as a Go identifier. A
 /// last part Go keeps as a word cannot name a package: the directory `<out>/go`, put in a module as
 /// it is, would be `package go`, which no Go compiler takes. The package then takes the package's
-/// name (`name`, the `--name` of all three languages), or, when Go keeps that too, the last part with
+/// name (`name`, the `--name` of every language), or, when Go keeps that too, the last part with
 /// a `p` before it, as a last part that does not begin with a letter has.
 fn go_package_name(module: &str, name: &str) -> String {
     let last = module.rsplit('/').next().unwrap_or(module);
@@ -1218,7 +1282,7 @@ fn go_package_name(module: &str, name: &str) -> String {
     }
 }
 
-/// A package's name, as all three of its languages take it.
+/// A package's name, as every language of a package takes it.
 fn good_name(n: &str) -> bool {
     !n.is_empty() && n.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && n.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') && !ritsu_emit::words::python::KEYWORDS.contains(&n)
 }
@@ -1266,7 +1330,8 @@ impl Emitted {
 /// The files of the package's directory that ritsu wrote before (their head says so) and this run
 /// does not write: what a rule taken out of the project left behind. A library's directory leaves
 /// out what its build writes beside the package (DESIGN 17.16): tsc's `dist/`, whose files keep the
-/// head, setuptools's `build/` and `*.egg-info`, and a `go.sum`.
+/// head, setuptools's `build/` and `*.egg-info`, and a `go.sum`. The `target/` of a crate is never read:
+/// no directory of a package of Rust is named so at its top, and what cargo writes there is no part of it.
 fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut todo = vec![dir.to_path_buf()];
@@ -1278,6 +1343,9 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<Path
             let p = e.path();
             let name = e.file_name().to_string_lossy().to_string();
             if name.starts_with('.') || name == "node_modules" || name == "__pycache__" {
+                continue;
+            }
+            if d.as_path() == dir && name == "target" && target_of_a_crate(dir) {
                 continue;
             }
             if library && d.as_path() == dir && (name == "dist" || name == "build" || name.ends_with(".egg-info") || name == "go.sum") {
@@ -1292,6 +1360,11 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<Path
     }
     out.sort();
     out
+}
+
+/// Whether the directory of a package is a crate's: the `target/` of what cargo writes beside it.
+fn target_of_a_crate(dir: &Path) -> bool {
+    dir.join("Cargo.toml").is_file()
 }
 
 /// Whether a file begins with the head of a file ritsu's generators write (DESIGN 9.2): in a
@@ -1430,7 +1503,7 @@ fn for_target(o: &Options, libraries: &[(Target, library::Library)], t: Target) 
     }
 }
 
-/// `ritsu gen [<path>...] [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--books
+/// `ritsu gen [<path>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--books
 /// postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--library
 /// [--embed <name>]...] [--root <dir>] [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
@@ -1574,6 +1647,10 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     answer.targets = names.clone();
     let cedar_given = names.contains(&CEDAR);
     let targets: Vec<Target> = names.iter().filter_map(|n| Target::parse(n)).collect();
+    // a library of Rust has three things to decide first (DESIGN 17.16): `--target`'s and the line's alike
+    if library && targets.contains(&Target::Rust) {
+        return say(rust::no_library(lang), answer);
+    }
     // a library: a `library` line for each language it is written in, and its module's files but
     // what it leaves out
     let project = if library {
@@ -1617,7 +1694,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         Err(r) => return say(r, answer),
     };
     // what stops the packages of a module for the modules' sake, once, before any target is made
-    if let Err(r) = modules_hold(&project, &joined, &targets, lang) {
+    let only_rust = !cedar_given && targets == [Target::Rust];
+    if let Err(r) = modules_hold(&project, &joined, &targets, only_rust, lang) {
         return say(r, answer);
     }
     // each language's library: where it reads each module, and what it says it depends on
@@ -1636,7 +1714,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     // the run with nothing written, so a run that stops leaves no target of its own behind; only a
     // write the disk refuses can.
     let mut made: Vec<(PathBuf, &'static str, Package, bool)> = Vec::new();
-    for t in targets {
+    for t in targets.iter().copied() {
         let o = for_target(&o, &libraries, t);
         let p = match package(&project, &contributions, &joined, &modules, t, &o) {
             Ok(p) => p,
@@ -1675,6 +1753,15 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
             print!("{warnings}");
         }
         made.push((out.join("cedar"), CEDAR, p, false));
+    }
+    // what a package of Rust leaves out, said once the run is sure to write it
+    if targets.contains(&Target::Rust) {
+        let (said, warned) = rust::left_out(&project, lang);
+        if json {
+            answer.diagnostics.extend(warned);
+        } else {
+            print!("{said}");
+        }
     }
     let mut st = Emitted::default();
     for (dir, target, p, library) in &made {

@@ -179,7 +179,7 @@ pub const STATEMENTS: [&str; 11] = ["module", "version", "description", "ritsu",
 
 /// The names a `target` line takes (DESIGN 17.3, 9.6): the targets of `ritsu gen`. ritsu-base
 /// cannot read ritsu's own list of them, so a test of ritsu's holds the two to each other.
-pub const TARGET_WORDS: [&str; 4] = ["typescript", "python", "go", "cedar"];
+pub const TARGET_WORDS: [&str; 5] = ["typescript", "python", "go", "rust", "cedar"];
 
 /// How a statement is written, for the sentence that says a line is not.
 fn form(word: &str) -> Text {
@@ -199,7 +199,7 @@ fn form(word: &str) -> Text {
             "signature \"<頭の部分>\" key \"<パス>\"`（あとに `tlog off` を付けてもよい）、`signature \"<頭の部分>\" by \"<署名者>\" issuer \"<発行者>\"`、`signature \"<頭の部分>\" by matching \"<正規表現>\" issuer \"<発行者>\"",
             "signature \"<start>\" key \"<path>\"` (with `tlog off` after it, if need be), `signature \"<start>\" by \"<identity>\" issuer \"<issuer>\"` or `signature \"<start>\" by matching \"<pattern>\" issuer \"<issuer>\""
         ),
-        "target" => tr!("target typescript|python|go|cedar …", "target typescript|python|go|cedar …"),
+        "target" => tr!("target typescript|python|go|rust|cedar …", "target typescript|python|go|rust|cedar …"),
         _ => tr!("library typescript|python|go \"<名前>\"", "library typescript|python|go \"<name>\""),
     }
 }

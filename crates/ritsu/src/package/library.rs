@@ -161,6 +161,7 @@ fn line(t: Target) -> Line {
         Target::TypeScript => Line::Typescript,
         Target::Python => Line::Python,
         Target::Go => Line::Go,
+        Target::Rust => unreachable!("--library stops before it writes Rust"),
     }
 }
 
@@ -171,7 +172,7 @@ fn named(tree: &Tree, i: usize, t: Target) -> Option<&str> {
 
 /// The languages the module at hand has a `library` line of, in `--target`'s order.
 fn lines_of(tree: &Tree) -> Vec<Target> {
-    Target::ALL.into_iter().filter(|t| named(tree, 0, *t).is_some()).collect()
+    Target::ALL.into_iter().filter(|t| *t != Target::Rust && named(tree, 0, *t).is_some()).collect()
 }
 
 /// What `--library` runs on (DESIGN 17.16): a module, which has a `version`. Exit 2 when the root has
@@ -520,6 +521,7 @@ pub fn plan(
                 ));
             };
             let (name, import) = match t {
+                Target::Rust => unreachable!("--library stops before it writes Rust"),
                 Target::TypeScript => (line_name.to_string(), line_name.to_string()),
                 Target::Python => {
                     let Some(import) = python_import(line_name) else {
@@ -583,6 +585,7 @@ pub fn plan(
             units.libs.insert(d, (brands, its));
         }
         let (name, import, shown_version) = match t {
+            Target::Rust => unreachable!("--library stops before it writes Rust"),
             Target::TypeScript => {
                 let l = named(tree, 0, t).unwrap_or_default().to_string();
                 (l.clone(), l, version.to_string())
@@ -665,7 +668,7 @@ fn library_units(
     let modules: Vec<(Rc<kaname::check::Checked>, String, Place)> =
         kaname_modules(&reach, joined, verdicts, lang)?.into_iter().filter(|(_, rel)| held.contains(rel)).map(|(c, rel)| (c, rel, Place::here())).collect();
     if !modules.is_empty() {
-        let kt = kaname::r#gen::Target::parse(t.key()).expect("the three targets are kaname's");
+        let kt = kaname::r#gen::Target::parse(t.key()).expect("the four targets are kaname's");
         units.extend(kaname::r#gen::package_in(&modules, kt, lang, "units").units);
     }
     let brands = units.iter().filter_map(|u| u.first_spelling().type_name()).collect();

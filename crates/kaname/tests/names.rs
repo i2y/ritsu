@@ -189,6 +189,14 @@ fn names_given_twice_or_not_ascii() {
     assert_eq!(check("module m v1\n\nfn def() -> number\n  1\n"), ["E007"]);
     assert_eq!(check("module m v1\n\nrecord R\n  名前(func) : string\n"), ["E007"]);
     assert_eq!(check("module m v1\n\nrecord KanameError\n  a : string\n"), ["E007"]);
+    // a name of a module the generated Rust alone cannot take is a warning (W001), and `gen::stops` says
+    // E008 of that target alone; another keyword of Rust is no name to warn of
+    for name in ["crate", "self", "Self", "mod", "door"] {
+        assert_eq!(check(&format!("module {name} v1\n")), ["W001"], "{name}");
+        assert_eq!(check(&format!("module 名前({name}) v1\n")), ["W001"], "{name}");
+    }
+    assert_eq!(check("module loop v1\n"), [] as [&str; 0]);
+    assert_eq!(check("module 名前(ref) v1\n"), [] as [&str; 0]);
     // a `let` needs no alias, as rulec's internal names need none
     assert_eq!(check("module m v1\n\nfn f() -> number\n  let 合計 = 1\n  合計\n"), Vec::<&str>::new());
     // a type that names nothing

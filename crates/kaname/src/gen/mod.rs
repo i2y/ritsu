@@ -26,6 +26,7 @@ pub mod wasm;
 
 use crate::check::Checked;
 use ritsu_base::text::Lang;
+use ritsu_base::tr;
 use ritsu_units::Unit;
 use std::rc::Rc;
 
@@ -129,6 +130,28 @@ pub fn helper(t: Target, lang: Lang) -> (String, String) {
         Target::Rust => ("glue/kaname.rs", RS_HELPER),
     };
     (path.to_string(), src.replace("@HEAD@", &head).replace("@LANG@", word))
+}
+
+/// What stops the code of `t` of a module that passes its check (DESIGN 36.3): E008, the W001 of a
+/// module whose name the generated Rust cannot take, as that warning says it, at the same place, and
+/// in place of its last note what to do. `ritsu gen` asks this before it makes a package; the other
+/// targets take the name.
+pub fn stops(c: &Checked, t: Target) -> Vec<crate::diag::Diag> {
+    if t != Target::Rust {
+        return Vec::new();
+    }
+    crate::names::no_rust_module(&c.module, &c.path, &c.src)
+        .map(|mut d| {
+            d.code = "E008";
+            d.severity = crate::diag::Severity::Error;
+            d.notes.pop();
+            d.note(tr!(
+                "別の名前か別名にしてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "Choose another name or alias. For a target you do not use, name the ones you use with `--target`."
+            ))
+        })
+        .into_iter()
+        .collect()
 }
 
 /// Everything kaname writes into a package of `t` for `modules` (each with the path from the project's

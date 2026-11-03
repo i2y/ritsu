@@ -31,14 +31,14 @@ error: ritsu.mod has no `library go` line: write `library go "<name>"`, the name
 エラー: ritsu.mod に `library go` の行がありません。パッケージの名前にする `library go "<名前>"` を書いてください
 
 ── pricing: ritsu gen --library (library lines: tax)
-error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|cedar`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
-エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|cedar` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
+エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|cedar` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
 
 ── pricing: ritsu gen --library (library lines: tax, pricing, shop)
-error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|cedar`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
 note: up to 0.40.0, `ritsu gen --library` with no `--target` wrote a library for each language of the `library` lines; this writes the same files:
   ritsu gen --library --out <dir>/out --lang en --target typescript --target python --target go
-エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|cedar` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
+エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|cedar` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
 注記: 0.40.0 までの `ritsu gen --library` は、`--target` が無ければ、`library` の行の言語ごとにライブラリを書きました。同じファイルを書くのは次のコマンドです
   ritsu gen --library --out <dir>/out --lang ja --target typescript --target python --target go
 
@@ -73,4 +73,12 @@ error: `--library` makes a library of a module, and there is no ritsu.mod at the
 ── shop: ritsu gen --library (library lines: tax, pricing, shop)
 error: `rules/spring_sale.rule` contributes to `@pricing/rules/order_discount.rule`, a rule the library `@acme/pricing` holds, and a library's code takes no contribution from the code that uses it: take the contribution out, or generate the app form (without --library)
 エラー: `rules/spring_sale.rule` は、ライブラリ `@acme/pricing` が持つ規則 `@pricing/rules/order_discount.rule` に寄与しています。ライブラリのコードは、それを使う側の寄与を受けられません。寄与を外すか、アプリの形（--library なし）で生成してください
+
+── pricing: ritsu gen --library --target rust (library lines: tax, pricing, shop)
+error: `--library` does not write a package of Rust: a crate's name, how it writes the versions of what it depends on, and the units' types across libraries are not decided. Write it without `--library`, or take Rust out of the targets (`--target`, or the `target` line of ritsu.mod)
+エラー: `--library` は Rust のパッケージを書きません。クレートの名前、依存の版の書き方、ライブラリをまたぐ単位の型を決めていないからです。`--library` を付けずに書くか、Rust を出力先（`--target` か ritsu.mod の `target` の行）から外してください
+
+── pricing: ritsu gen --library (library lines: tax, pricing, shop)
+error: `--library` does not write a package of Rust: a crate's name, how it writes the versions of what it depends on, and the units' types across libraries are not decided. Write it without `--library`, or take Rust out of the targets (`--target`, or the `target` line of ritsu.mod)
+エラー: `--library` は Rust のパッケージを書きません。クレートの名前、依存の版の書き方、ライブラリをまたぐ単位の型を決めていないからです。`--library` を付けずに書くか、Rust を出力先（`--target` か ritsu.mod の `target` の行）から外してください
 

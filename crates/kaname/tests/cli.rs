@@ -115,7 +115,7 @@ fn explain() {
     assert!(out.contains("    module 例(example) v1\n"), "{out}");
     let (code, out, _) = joined(&["explain", "--all", "--format", "json"]);
     assert_eq!(code, 0);
-    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 38);
+    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 40);
     let (code, out, _) = joined(&["explain", "W501"]);
     assert_eq!(code, 0);
     assert!(out.starts_with("W501 (warning) — A decision is written in code; a table should hold it\n"), "{out}");

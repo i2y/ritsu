@@ -10,13 +10,27 @@ use kaname::suite::Suite;
 use ritsu_base::ledger::{self, Repro};
 use ritsu_base::text::Lang;
 
+/// What the code of `e` is given for its example in `dir`: `kaname check`'s answer, as `ritsu kaname
+/// check` checks it (E202's as the binary of kaname's own crate does). E008 is `ritsu gen --target
+/// rust`'s, which stops where the module passes its check: its diagnostics in place of that answer
+/// (ritsu's tests/gen.rs runs the command).
+fn run_example(e: &ledger::Entry, dir: &std::path::Path) -> std::rc::Rc<kaname::check::Outcome> {
+    let path = dir.join("example.kn");
+    let suite = if e.code == "E202" { Suite::default() } else { common::joined() };
+    let o = Run::new(suite).file(path.to_str().unwrap()).unwrap();
+    if e.code != "E008" {
+        return o;
+    }
+    let c = o.checked.as_ref().expect("E008's example passes its check");
+    let diags = kaname::r#gen::stops(c, kaname::r#gen::Target::Rust);
+    std::rc::Rc::new(kaname::check::Outcome { path: o.path.clone(), diags, checked: None, analysed: None })
+}
+
 #[test]
 fn every_example_gives_its_code() {
     let scratch = ritsu_testkit::TempDir::new("codes");
     let failures = ledger::check_every(&kaname::codes::ledger(), scratch.path(), |e, dir| {
-        let path = dir.join("example.kn");
-        let suite = if e.code == "E202" { Suite::default() } else { common::joined() };
-        let o = Run::new(suite).file(path.to_str().unwrap()).unwrap();
+        let o = run_example(e, dir);
         let codes: Vec<String> = o.diags.iter().map(|d| d.code.to_string()).collect();
         if !codes.iter().any(|c| c == e.code) {
             let text: String = o.diags.iter().map(|d| d.render(Lang::En)).collect();
@@ -33,9 +47,7 @@ fn every_example_gives_its_code_alone() {
     let scratch = ritsu_testkit::TempDir::new("codes-alone");
     let mut noisy = Vec::new();
     ledger::check_every(&kaname::codes::ledger(), scratch.path(), |e, dir| {
-        let path = dir.join("example.kn");
-        let suite = if e.code == "E202" { Suite::default() } else { common::joined() };
-        let o = Run::new(suite).file(path.to_str().unwrap()).unwrap();
+        let o = run_example(e, dir);
         let codes: Vec<String> = o.diags.iter().map(|d| d.code.to_string()).collect();
         if codes.iter().any(|c| c != e.code) {
             noisy.push(format!("{}: {codes:?}", e.code));
@@ -49,8 +61,8 @@ fn every_example_gives_its_code_alone() {
 fn the_ledger_has_each_code_once() {
     let l = kaname::codes::ledger();
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
-    // DESIGN 12: E001–E007, E101–E115, E201–E204, E301–W303, E401, E402, W501, E601, E602, W901
-    assert_eq!(l.entries.len(), 38);
+    // DESIGN 12: E001–E008, W001, E101–E115, E201–E204, E301–W303, E401, E402, W501, E601, E602, W901
+    assert_eq!(l.entries.len(), 40);
     // every code is printed by now, and has its example
     let later: Vec<&str> = l.entries.iter().filter(|e| matches!(e.repro, Repro::Later)).map(|e| e.code).collect();
     assert!(later.is_empty(), "{later:?}");
@@ -71,9 +83,7 @@ fn the_examples_say_what_the_golden_files_hold() {
     let scratch = ritsu_testkit::TempDir::new("codes-golden");
     let mut failures = Vec::new();
     ledger::check_every(&kaname::codes::ledger(), scratch.path(), |e, dir| {
-        let path = dir.join("example.kn");
-        let suite = if e.code == "E202" { Suite::default() } else { common::joined() };
-        let o = Run::new(suite).file(path.to_str().unwrap()).unwrap();
+        let o = run_example(e, dir);
         let ja = e.repro_ja.is_none() && dir.file_name().is_some_and(|n| n.to_string_lossy().ends_with("-ja"));
         let lang = if ja { Lang::Ja } else { Lang::En };
         let prefix = format!("{}/", dir.display());

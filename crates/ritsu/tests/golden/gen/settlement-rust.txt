@@ -1,0 +1,22 @@
+rust:
+  Cargo.toml: ritsu
+  books.rs: ritsu
+  books/ledger.rs: chobo <- books/ledger.book
+  books/ledger.sql: chobo <- books/ledger.book
+  dates.rs: ritsu
+  dates/payment_terms.rs: koyomi <- dates/payment_terms.cal
+  generated.wit: kaname
+  glue.rs: kaname
+  glue/books.rs: kaname
+  glue/books/ledger.rs: kaname
+  glue/books/ledger_apply.rs: kaname
+  glue/door.rs: kaname
+  glue/kaname.rs: kaname
+  glue/late_payment.rs: kaname <- late_payment.kn
+  glue/payout.rs: kaname <- payout.kn
+  lib.rs: ritsu
+  rules.rs: ritsu
+  rules/card_fee.rs: rulec <- rules/card_fee.rule
+  rules/late_payment_charges.rs: rulec <- rules/late_payment_charges.rule
+  units.rs: ritsu
+  wasm.rs: kaname

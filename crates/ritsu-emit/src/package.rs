@@ -211,6 +211,15 @@ pub fn rust_path(to: &str) -> String {
     format!("crate::{}", parts.join("::"))
 }
 
+/// The declaration of the module of the file `<dir><stem>.rs`, in the file of `dir` (Rust 2018's way:
+/// `rules.rs` and `rules/`): `pub mod stem;`, a keyword of Rust as a raw identifier, with its path
+/// where Rust finds no file by the name: one that is no ASCII identifier, or a word no raw identifier
+/// writes.
+pub fn rust_mod_line(dir: &str, stem: &str) -> String {
+    let name = crate::ident::rust_name(stem);
+    if crate::ident::is_ascii_ident(stem) && crate::ident::rust_raw(stem).is_some() { format!("pub mod {name};\n") } else { format!("#[path = \"{dir}{stem}.rs\"]\npub mod {name};\n") }
+}
+
 /// The Go import path of `to` (as for [`ts_path`]) in the package whose module is `go_module`.
 pub fn go_path(go_module: &str, to: &str) -> String {
     format!("{go_module}/{to}")

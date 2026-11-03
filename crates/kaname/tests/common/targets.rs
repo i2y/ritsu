@@ -214,7 +214,7 @@ pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Chec
             for rel in written.keys().cloned().collect::<Vec<_>>() {
                 let Some((dir, file)) = rel.split_once('/') else {
                     if let Some(stem) = rel.strip_suffix(".rs") {
-                        tree.entry(String::new()).or_default().push(mod_line("", stem));
+                        tree.entry(String::new()).or_default().push(ritsu_emit::package::rust_mod_line("", stem));
                     }
                     continue;
                 };
@@ -222,7 +222,7 @@ pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Chec
                     && let Some(stem) = file.strip_suffix(".rs")
                     && !stem.contains('/')
                 {
-                    tree.entry(dir.to_string()).or_default().push(mod_line(&format!("{dir}/"), stem));
+                    tree.entry(dir.to_string()).or_default().push(ritsu_emit::package::rust_mod_line(&format!("{dir}/"), stem));
                 }
             }
             for dir in ["rules", "dates", "books"] {
@@ -232,7 +232,7 @@ pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Chec
                     let lines: Vec<String> = if dir == "books" { lines.clone() } else { lines.iter().map(|l| format!("#[allow(clippy::all)]\n{l}")).collect() };
                     put(&mut written, format!("{dir}.rs"), format!("//! The package's {dir}, a module each.\n\n{}", lines.join("")));
                     // the books' clients wait on a database's driver, which the Wasm has none of
-                    tree.entry(String::new()).or_default().push(if dir == "books" { kaname::r#gen::wasm::BOOKS.to_string() } else { mod_line("", dir) });
+                    tree.entry(String::new()).or_default().push(if dir == "books" { kaname::r#gen::wasm::BOOKS.to_string() } else { ritsu_emit::package::rust_mod_line("", dir) });
                 }
             }
             put(&mut written, kaname::r#gen::wasm::FILE.into(), kaname::r#gen::wasm::abi(lang));
@@ -249,14 +249,6 @@ pub fn write_package_for(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Chec
         Target::Go | Target::TypeScript => {}
     }
     written.into_keys().collect()
-}
-
-/// The declaration of the module of the file `<dir><stem>.rs` in its directory's file: `pub mod stem;`
-/// (a keyword of Rust as a raw identifier), with its path where the name is no ASCII identifier, which
-/// Rust finds no file by.
-fn mod_line(dir: &str, stem: &str) -> String {
-    let name = ritsu_emit::ident::rust_name(stem);
-    if ritsu_emit::ident::is_ascii_ident(stem) && ritsu_emit::ident::rust_raw(stem).is_some() { format!("pub mod {name};\n") } else { format!("#[path = \"{dir}{stem}.rs\"]\npub mod {name};\n") }
 }
 
 /// How many cases of each kind a target runs, and how many of them it does not, for they do not stop.

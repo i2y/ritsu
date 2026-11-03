@@ -181,3 +181,110 @@ pub fn type_check_go(dir: &Path, package: &Path, gomod: &(String, String)) {
 pub fn have_go() -> bool {
     Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false)
 }
+
+// ── Rust ─────────────────────────────────────────────────────────────────────────────────────────
+
+/// The cargo that runs the tests, run in `dir` with `target` a target directory of its own in the
+/// tests' temporary directory, so that the crates the books' clients need are built once.
+pub fn cargo_in(dir: &Path, target: &str) -> Command {
+    let mut c = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+    c.current_dir(dir).env("CARGO_TARGET_DIR", rust_target(target)).env_remove("RUSTFLAGS").env_remove("CARGO_ENCODED_RUSTFLAGS");
+    c
+}
+
+/// The target directory of [`cargo_in`].
+pub fn rust_target(target: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(target)
+}
+
+/// Whether cargo's clippy is here.
+pub fn have_clippy() -> bool {
+    ritsu_testkit::tools::runs(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()), &["clippy", "--version"])
+}
+
+/// Whether rustc has the target of the Wasm.
+pub fn have_wasm32() -> bool {
+    let Ok(o) = Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };
+    o.status.success() && Path::new(String::from_utf8_lossy(&o.stdout).trim()).join("lib/rustlib/wasm32-unknown-unknown/lib").is_dir()
+}
+
+/// The package of Rust at `dir` made a crate a test builds with `--offline`: a workspace of its own
+/// (the temporary directory may be under this one's), and the lock of the crate of kaname's tests, whose
+/// crates are the ones the package's manifest may name, at the versions tested. Its version is made
+/// from `tag`: to cargo, crates of one name and version are one library in a target directory, whatever
+/// their directories. Up to here, the manifest is as `ritsu gen` writes it.
+pub fn rust_crate(dir: &Path, tag: &str) {
+    static FETCHED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    let tools = workspace().join("crates/kaname/tools/rust");
+    FETCHED.get_or_init(|| {
+        let fetch = |more: &[&str]| Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())).args(["fetch", "--locked"]).args(more).current_dir(&tools).output().is_ok_and(|o| o.status.success());
+        assert!(fetch(&["--offline"]) || fetch(&[]), "cargo fetch of the crates of {} failed", tools.display());
+    });
+    let toml = read(&dir.join("Cargo.toml"));
+    let name = toml.lines().find_map(|l| l.strip_prefix("name = \"")).and_then(|l| l.strip_suffix('"')).expect("the manifest names the crate").to_string();
+    let version = format!("0.0.{}", tag.bytes().fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b))));
+    let toml = toml.replacen("version = \"0.0.0\"", &format!("version = \"{version}\""), 1);
+    std::fs::write(dir.join("Cargo.toml"), format!("{toml}\n[workspace]\n")).unwrap();
+    let lock = read(&tools.join("Cargo.lock"));
+    let tested = "name = \"pkg\"\nversion = \"0.0.0\"\n";
+    assert!(lock.contains(tested), "the crate of kaname's tests is pkg 0.0.0");
+    std::fs::write(dir.join("Cargo.lock"), lock.replacen(tested, &format!("name = \"{name}\"\nversion = \"{version}\"\n"), 1)).unwrap();
+}
+
+/// The crate at `dir` ([`rust_crate`]) passes clippy's lints (rustc's alone where clippy is not here)
+/// with `-D warnings`, as it is built, and for wasm32 where rustc has that target.
+pub fn rust_lints(dir: &Path, target: &str) {
+    let clippy = have_clippy();
+    let mut more: Vec<&[&str]> = vec![&[]];
+    if have_wasm32() {
+        more.push(&["--target", "wasm32-unknown-unknown"]);
+    }
+    for more in more {
+        let mut c = cargo_in(dir, target);
+        c.args(if clippy { ["clippy", "--offline", "--quiet", "--lib"] } else { ["rustc", "--offline", "--quiet", "--lib"] }).args(more).args(["--", "-D", "warnings"]);
+        let r = ritsu_testkit::run(&mut c, std::time::Duration::from_secs(1800));
+        assert!(r.ok, "{}: the crate does not build with no warning ({more:?}):\n{}", dir.display(), r.both());
+    }
+}
+
+/// The crate at `dir` ([`rust_crate`]) built for Wasm with the line its manifest says: the module. The
+/// line is `ritsu_emit::wasm::CARGO_LINE`, which kaname's tests build with.
+pub fn rust_wasm(dir: &Path, target: &str) -> PathBuf {
+    let toml = read(&dir.join("Cargo.toml"));
+    let line = toml.lines().find_map(|l| l.strip_prefix("#   cargo rustc ")).expect("the manifest says the line of its Wasm");
+    let line = format!("cargo rustc --offline --quiet {line}");
+    let r = ritsu_testkit::run(Command::new("sh").current_dir(dir).env("CARGO_TARGET_DIR", rust_target(target)).env_remove("RUSTFLAGS").env_remove("CARGO_ENCODED_RUSTFLAGS").arg("-c").arg(&line), std::time::Duration::from_secs(1800));
+    assert!(r.ok, "{line}:\n{}", r.both());
+    let name = toml.lines().find_map(|l| l.strip_prefix("name = \"")).and_then(|l| l.strip_suffix('"')).expect("the manifest names the crate");
+    rust_target(target).join("wasm32-unknown-unknown/release").join(format!("{name}.wasm"))
+}
+
+/// A host of a package's Wasm in Node: the module imports nothing, and each line of the file is called,
+/// each answer a line on the standard output.
+const WASM_HOST: &str = r#"import { readFileSync } from "node:fs";
+
+const mod = new WebAssembly.Module(readFileSync(process.argv[2]));
+if (WebAssembly.Module.imports(mod).length !== 0) throw new Error("the module imports " + JSON.stringify(WebAssembly.Module.imports(mod)));
+const ex = new WebAssembly.Instance(mod, {}).exports;
+const enc = new TextEncoder();
+const dec = new TextDecoder("utf-8", { fatal: true });
+for (const line of readFileSync(process.argv[3], "utf8").split("\n")) {
+  if (line === "") continue;
+  const bytes = enc.encode(line);
+  const ptr = ex.cabi_realloc(0, 0, 1, bytes.length);
+  new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+  const ret = ex.call(ptr, bytes.length);
+  const [p, n] = new Uint32Array(ex.memory.buffer, ret, 2);
+  console.log(dec.decode(new Uint8Array(ex.memory.buffer, p, n)));
+  ex.cabi_post_call(ret);
+}
+"#;
+
+/// What the module answers to each line of the file `calls`, through a host of Node.
+pub fn wasm_answers(dir: &Path, module: &Path, calls: &Path) -> String {
+    let host = dir.join("wasm_host.mjs");
+    std::fs::write(&host, WASM_HOST).unwrap();
+    let r = ritsu_testkit::run(Command::new("node").arg(&host).arg(module).arg(calls), std::time::Duration::from_secs(600));
+    assert!(r.ok, "the host of the Wasm:\n{}", r.both());
+    r.stdout
+}

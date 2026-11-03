@@ -373,11 +373,34 @@ pub fn taken_word(w: &str) -> bool {
     ritsu_emit::words::typescript::NAMES.contains(w) || ritsu_emit::words::python::KEYWORDS.contains(&w) || ritsu_emit::words::go::KEYWORDS.contains(&w) || kw::HELPERS.contains(&w)
 }
 
-/// The names no module can have, for the Rust of its package (E007, DESIGN 36.2): a module is a
+/// The names the Rust of a package cannot give a module (W001 and E008, DESIGN 36.3): a module is a
 /// module of Rust's `glue/` and its file, and `crate`, `self` and `Self` are words Rust names no
-/// module (`super` is a reserved word of TypeScript), and `mod` and `door` the files kaname writes
-/// there itself (the directory's own, which `glue.rs` is, and the package's door).
+/// module (`super` is a reserved word of TypeScript, E007), and `mod` and `door` the files kaname
+/// writes there itself (the directory's own, which `glue.rs` is, and the package's door). The other
+/// targets take all five: `check` warns (W001), and the package of Rust stops (E008).
 pub const NO_RUST_MODULE: [&str; 5] = ["crate", "self", "Self", "mod", "door"];
+
+/// W001: the module is named with one of [`NO_RUST_MODULE`], which breaks the generated Rust alone (DESIGN
+/// 36.3). Its last note says what to do, which `gen::stops` says otherwise where the warning stops a
+/// package of Rust (E008).
+pub fn no_rust_module(m: &Module, path: &str, src: &str) -> Option<Diag> {
+    let a = m.name.ascii();
+    if !NO_RUST_MODULE.contains(&a) || !ritsu_emit::ident::is_ascii_ident(a) {
+        return None;
+    }
+    let sp = m.name.alias.as_ref().map(|(_, s)| *s).unwrap_or(m.name.span);
+    let d = Diag::at("W001", path, sp.line, sp.col, tr!("生成する Rust は、`{a}` をモジュールの名前に使えません", "The generated Rust cannot take `{a}` as the name of a module")).source(src);
+    Some(
+        d.note(tr!(
+            "生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。",
+            "In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door)."
+        ))
+        .note(tr!(
+            "`ritsu gen --target rust` はこのモジュールで止まります（E008）。Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。",
+            "`ritsu gen --target rust` stops at this module (E008). If you do not generate Rust, leave it; if you do, choose another name or alias."
+        )),
+    )
+}
 
 /// The declarations of a module and the names they give, checked: what [`declare`] answers.
 pub struct Declared {
@@ -470,14 +493,7 @@ impl<'a> Dc<'a> {
     pub fn names(&mut self) {
         let m = self.module;
         self.public_name(&m.name, &tr!("モジュール", "module"));
-        let a = m.name.ascii();
-        if NO_RUST_MODULE.contains(&a) && ritsu_emit::ident::is_ascii_ident(a) {
-            let sp = m.name.alias.as_ref().map(|(_, s)| *s).unwrap_or(m.name.span);
-            self.err("E007", sp, tr!("生成するコードは、`{a}` をモジュールの名前に使えません", "The generated code cannot take `{a}` as the name of a module")).notes.push(tr!(
-                "生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。別の名前か別名にしてください。",
-                "In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door); choose another name or alias."
-            ));
-        }
+        self.diags.extend(no_rust_module(m, self.path, self.src));
         let mut all: Vec<(Name, Text)> = Vec::new();
         for u in &m.uses {
             all.push((Name { text: u.name.clone(), alias: None, span: u.name_span }, tr!("`use` の名前", "`use` name")));

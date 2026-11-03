@@ -1,8 +1,9 @@
 //! `ritsu gen` (DESIGN 9.3; PLAN E.7): a project's rules, dates, clients of the books and workflows
-//! as one package for each of TypeScript, Python and Go.
+//! as one package for each of TypeScript, Python, Go and Rust.
 //!
 //! - The packages pass the target's own type checker: `tsc --strict`, `mypy --strict`, `go vet` (and
-//!   gofmt), with the clients of the books on PostgreSQL and on TigerBeetle.
+//!   gofmt), `cargo clippy -- -D warnings`, with the clients of the books on PostgreSQL and on
+//!   TigerBeetle.
 //! - A workflow reads the rules, the dates and the books from its package: its imports name the
 //!   package's rules/, dates/ and books/, the books its transport takes are the package's clients,
 //!   and the rule's and the date's activities, run, answer through the package's modules.
@@ -22,7 +23,9 @@
 //! package's `authz/`.
 //!
 //! `ritsu gen` writes the targets it is given (DESIGN 9.6): the tests give it the three languages
-//! 0.40.0 wrote when it was given none ([`UP_TO_0_40`]), and `cedar` where the gates are tested.
+//! 0.40.0 wrote when it was given none ([`UP_TO_0_40`]), `cedar` where the gates are tested, and
+//! `rust` where the crate is tested. A crate holds no workflow and no gate's code, so the rest of
+//! this list does not hold for it: it leaves them out, and says so.
 
 mod type_checkers;
 
@@ -59,6 +62,8 @@ fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
 const UP_TO_0_40: [&str; 6] = ["--target", "typescript", "--target", "python", "--target", "go"];
 /// The same for a project with gates, whose Cedar 0.40.0 wrote too.
 const WITH_CEDAR: [&str; 8] = ["--target", "typescript", "--target", "python", "--target", "go", "--target", "cedar"];
+/// Every language of `ritsu gen`.
+const EVERY_LANGUAGE: [&str; 8] = ["--target", "typescript", "--target", "python", "--target", "go", "--target", "rust"];
 
 /// `ritsu gen` of the project at `project` (from this crate), its root the project's directory,
 /// writing under `out`: the targets of `more`, or else the three languages ([`UP_TO_0_40`]).
@@ -765,7 +770,7 @@ fn gen_given_no_target_says_what_writes_what_0_40_0_wrote() {
     let t = TempDir::new("gen-no-target");
     let out = t.path().join("my out");
     let o = out.display().to_string();
-    let names = "`--target typescript|python|go|cedar`";
+    let names = "`--target typescript|python|go|rust|cedar`";
     let bare = |project: &Path, more: &[&str]| {
         let mut args = vec!["gen", "--root", ".", "--out", o.as_str()];
         args.extend_from_slice(more);
@@ -1142,9 +1147,14 @@ fn every_file_says_what_wrote_it_and_what_it_is_made_from() {
 /// ritsu's version), and the file of the project at `project` it is made from, whose digest the head
 /// holds.
 fn shape(out: &Path, project: &Path) -> String {
+    shape_of(out, &["typescript", "python", "go"], project)
+}
+
+/// [`shape`], of the packages of `targets`.
+fn shape_of(out: &Path, targets: &[&str], project: &Path) -> String {
     let version = env!("CARGO_PKG_VERSION");
     let mut shape = String::new();
-    for target in ["typescript", "python", "go"] {
+    for target in targets {
         shape.push_str(&format!("{target}:\n"));
         for f in files(&out.join(target)) {
             let text = read(&out.join(target).join(&f));
@@ -1505,7 +1515,7 @@ fn checked_places(modules: &[std::rc::Rc<kaname::check::Checked>]) -> (usize, us
 fn the_code_of_the_modules_answers_as_the_reference_does() {
     let t = TempDir::new("gen-kaname-vectors");
     let out = t.path().join("settlement");
-    let (code, _, err) = generate(&here().join(SETTLEMENT), &out, &[]);
+    let (code, _, err) = generate(&here().join(SETTLEMENT), &out, &EVERY_LANGUAGE);
     assert_eq!(code, 0, "{err}");
     let modules = settlement_modules(true);
     let (with, with_across) = checked_places(&modules);
@@ -1585,6 +1595,34 @@ fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the modules is not run"),
         }
     }
+    if ritsu_testkit::need(Need::Rustc) {
+        use kaname::r#gen::harness;
+        let cases = harness::of_target(&cases, kaname::r#gen::Target::Rust);
+        let held = |target: &str, stdout: &str| {
+            let (agree, wrong) = harness::compare_lines(&cases, stdout);
+            assert!(wrong.is_empty(), "the {target} answers otherwise than the reference:\n{}", wrong.join("\n"));
+            println!("{target}: {agree} cases agree with the reference");
+        };
+        // the package's crate, with a harness of the tests' beside it, which answers through its door
+        let dir = out.join("rust");
+        rust_crate(&dir, name);
+        let bin = format!("harness_{name}");
+        let toml = read(&dir.join("Cargo.toml"));
+        std::fs::write(dir.join("Cargo.toml"), format!("{toml}\n[[bin]]\nname = \"{bin}\"\npath = \"harness/main.rs\"\n")).unwrap();
+        std::fs::create_dir_all(dir.join("harness")).unwrap();
+        std::fs::write(dir.join("harness/main.rs"), program(kaname::r#gen::Target::Rust)).unwrap();
+        std::fs::write(dir.join("calls.jsonl"), harness::call_lines(modules, &cases)).unwrap();
+        let o = cargo_in(&dir, "ritsu-rust").args(["build", "--offline", "--quiet", "--bin", &bin]).output().unwrap();
+        assert!(o.status.success(), "cargo build of the harness:\n{}", said(&o));
+        let o = Command::new(rust_target("ritsu-rust").join("debug").join(&bin)).arg("calls.jsonl").current_dir(&dir).output().unwrap();
+        assert!(o.status.success(), "the harness:\n{}", said(&o));
+        held("Rust", &String::from_utf8_lossy(&o.stdout));
+        // the package's Wasm, built with the line its manifest says, through a host of Node
+        if ready(Need::Node, have_wasm32, "rustc's wasm32-unknown-unknown target is missing; the package's Wasm is not built") {
+            let module = rust_wasm(&dir, &format!("ritsu-wasm-{name}"));
+            held("package's Wasm", &wasm_answers(t.path(), &module, &dir.join("calls.jsonl")));
+        }
+    }
 }
 
 // ── the units written with a sign ────────────────────────────────────────────────────────────────
@@ -1619,7 +1657,7 @@ fn cold_chain_modules() -> Vec<std::rc::Rc<kaname::check::Checked>> {
 fn the_units_written_with_a_sign_go_into_the_package() {
     let t = TempDir::new("gen-signs");
     let out = t.path().join("cold_chain");
-    let (code, _, err) = generate(&here().join(COLD_CHAIN), &out, &[]);
+    let (code, _, err) = generate(&here().join(COLD_CHAIN), &out, &EVERY_LANGUAGE);
     assert_eq!(code, 0, "ritsu gen of the cold chain:\n{err}");
     assert_has(&out.join("typescript/units.ts"), "export type Celsius = bigint & { readonly __rulec: \"Celsius\" }; // temperature[℃]\n");
     assert_has(&out.join("python/generated/units.py"), "Celsius = NewType(\"Celsius\", int)  # temperature[℃]\n");
@@ -1643,4 +1681,264 @@ fn the_units_written_with_a_sign_go_into_the_package() {
         }
     }
     the_modules_answer_as_the_reference_does(&t, &out, &cold_chain_modules(), "cold_chain");
+}
+
+// ── the package of Rust ──────────────────────────────────────────────────────────────────────────
+
+/// `--target rust` writes the parts the generators write as one crate (DESIGN 9.3): each directory's
+/// modules declared in the file of its name, the root with the lints a name of another script raises
+/// allowed, the books' clients and the crates they name left out of the Wasm, and the two files of the
+/// Wasm when the package has modules of kaname. The manifest names the crates of the store's client
+/// (the golden is the shape of the package, each file with what wrote it and what it is made from).
+#[test]
+fn the_package_of_rust_is_a_crate() {
+    let t = TempDir::new("gen-rust");
+    let out = t.path().join("settlement");
+    let (code, stdout, err) = generate(&here().join(SETTLEMENT), &out, &["--target", "rust"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(!stdout.contains("warning"), "the settlement has no flow and no gate: {stdout}");
+    golden(here().join("tests/golden/gen/settlement-rust.txt"), &shape_of(&out, &["rust"], &here().join(SETTLEMENT)));
+    assert_eq!(std::fs::read_dir(&out).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect::<Vec<_>>(), ["rust"], "only the target given");
+    let dir = out.join("rust");
+    assert_has(&dir.join("lib.rs"), "#![allow(confusable_idents, mixed_script_confusables, uncommon_codepoints)]\n");
+    assert_has(&dir.join("lib.rs"), "#[cfg(not(target_arch = \"wasm32\"))]\npub mod books;\npub mod dates;\npub mod glue;\npub mod rules;\npub mod units;\n#[cfg(target_arch = \"wasm32\")]\nmod wasm;\n");
+    assert_has(&dir.join("rules.rs"), "#[allow(clippy::all)]\npub mod card_fee;\n");
+    assert_has(&dir.join("generated.wit"), "\npackage kaname:generated;\n");
+    // the crates of the store's client, none on the other stores, and the line that builds the Wasm
+    let wanted = [
+        ("postgres", "sqlx = { version = \"=0.9.0\", default-features = false, features = [\"runtime-tokio\", \"postgres\"] }\ntokio = { version = \"=1.54.1\", features = [\"sync\", \"time\"] }\n"),
+        ("tigerbeetle", "tigerbeetle = \"=0.17.9\"\n"),
+        ("mysql", "sqlx = { version = \"=0.9.0\", default-features = false, features = [\"runtime-tokio\", \"mysql\"] }\ntokio = { version = \"=1.54.1\", features = [\"sync\", \"time\"] }\n"),
+    ];
+    for (books, crates) in wanted {
+        let (code, _, err) = generate(&here().join(SETTLEMENT), &out, &["--target", "rust", "--books", books]);
+        assert_eq!(code, 0, "{books}: {err}");
+        let toml = read(&dir.join("Cargo.toml"));
+        assert!(toml.ends_with(&format!("[lib]\npath = \"lib.rs\"\n\n[target.'cfg(not(target_arch = \"wasm32\"))'.dependencies]\n{crates}")), "{books}:\n{toml}");
+        assert!(toml.contains("name = \"generated\"\nversion = \"0.0.0\"\nedition = \"2024\"\nrust-version = \"1.94\"\npublish = false\n"), "{toml}");
+        assert!(toml.contains(&format!("#   {}\n", ritsu_emit::wasm::CARGO_LINE)), "{toml}");
+    }
+    // no book: no crate; no module of kaname: no Wasm
+    let catalog = t.path().join("catalog");
+    let (code, _, err) = generate(&here().join(CATALOG), &catalog, &["--target", "rust"]);
+    assert_eq!(code, 0, "{err}");
+    let toml = read(&catalog.join("rust/Cargo.toml"));
+    assert!(toml.ends_with("[lib]\npath = \"lib.rs\"\n") && !toml.contains("cargo rustc"), "{toml}");
+    assert!(!catalog.join("rust/wasm.rs").exists() && !catalog.join("rust/generated.wit").exists());
+    // the world's name is the package's, and its version the module's
+    let named = t.path().join("named");
+    let (code, _, err) = generate(&here().join(SETTLEMENT), &named, &["--target", "rust", "--name", "settlement"]);
+    assert_eq!(code, 0, "{err}");
+    assert_has(&named.join("rust/settlement.wit"), "\nworld settlement {\n");
+    assert_has(&named.join("rust/Cargo.toml"), "\nname = \"settlement\"\n");
+}
+
+/// A package of Rust builds with no warning, as it is written: on each store, with names in Japanese, a
+/// file of enums two rules read, and the units written with a sign; for wasm32 too, which leaves the
+/// clients of the books out.
+#[test]
+fn the_packages_of_rust_build_with_no_warning() {
+    if !ritsu_testkit::need(Need::Rustc) {
+        return;
+    }
+    if !have_clippy() {
+        ritsu_testkit::skip("cargo clippy is not here; the packages of Rust are held to rustc's lints alone");
+    }
+    if !have_wasm32() {
+        ritsu_testkit::skip("rustc's wasm32-unknown-unknown target is missing; the packages of Rust are not built for it");
+    }
+    let t = TempDir::new("gen-rust-builds");
+    let cases: [(&str, &str, &[&str]); 8] = [
+        ("settlement_postgres", SETTLEMENT, &["--books", "postgres"]),
+        ("settlement_tigerbeetle", SETTLEMENT, &["--books", "tigerbeetle"]),
+        ("settlement_mysql", SETTLEMENT, &["--books", "mysql"]),
+        ("stockroom", STOCKROOM, &[]),
+        ("shop_ja", SHOP, &[]),
+        ("catalog", CATALOG, &[]),
+        ("marketplace", MARKETPLACE, &[]),
+        ("cold_chain", COLD_CHAIN, &[]),
+    ];
+    for (name, project, more) in cases {
+        let out = t.path().join(name);
+        let mut args = vec!["--target", "rust", "--name", name];
+        args.extend_from_slice(more);
+        let (code, _, err) = generate(&here().join(project), &out, &args);
+        assert_eq!(code, 0, "{name}: {err}");
+        rust_crate(&out.join("rust"), name);
+        rust_lints(&out.join("rust"), "ritsu-rust");
+    }
+    println!("the packages of Rust of {} projects build with -D warnings", cases.len());
+}
+
+/// dandori and sekisho write nothing in Rust: `--target rust` writes the other parts, says on a line for
+/// each file what it leaves out, and ends with 0, in the JSON as warnings. The other languages given
+/// with it hold them as ever, and a run that stops does not say it.
+#[test]
+fn a_package_of_rust_leaves_out_the_flows_and_the_gates() {
+    let t = TempDir::new("gen-rust-left-out");
+    let project = here().join(COLD_CHAIN);
+    let out = t.path().join("out");
+    let (code, stdout, err) = generate(&project, &out, &["--target", "rust", "--check"]);
+    assert_eq!((code, err.as_str()), (1, ""), "--check says the warnings and what is missing");
+    assert!(stdout.starts_with("warning: A package of Rust holds no workflow, so it leaves out `cold_chain.flow`; the other parts are written\n"), "{stdout}");
+    let (code, stdout, err) = generate(&project, &out, &["--target", "rust"]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    let warnings: Vec<&str> = stdout.lines().filter(|l| !l.starts_with("generated: ")).collect();
+    assert_eq!(
+        warnings,
+        [
+            "warning: A package of Rust holds no workflow, so it leaves out `cold_chain.flow`; the other parts are written",
+            "warning: A package of Rust holds no workflow, so it leaves out `cold_chain.ja.flow`; the other parts are written",
+            "warning: A package of Rust holds no code of a gate, so it leaves out `cold_chain.gate`; the other parts are written",
+            "warning: A package of Rust holds no code of a gate, so it leaves out `cold_chain.ja.gate`; the other parts are written",
+        ]
+    );
+    assert!(files(&out.join("rust")).iter().all(|f| !f.starts_with("flows") && !f.starts_with("authz")), "{:?}", files(&out.join("rust")));
+    assert!(out.join("rust/rules/cold_chain_departure.rs").is_file());
+    let (code, stdout, _) = generate(&project, &out, &["--target", "rust", "--lang", "ja"]);
+    assert_eq!(code, 0);
+    assert!(stdout.starts_with("警告: Rust のパッケージにはワークフローを入れないので、`cold_chain.flow` は入りません。ほかの部分は書きます\n"), "{stdout}");
+    assert!(stdout.contains("警告: Rust のパッケージにはゲートのコードを入れないので、`cold_chain.gate` は入りません。ほかの部分は書きます\n"), "{stdout}");
+    // the JSON: warnings, and all is well
+    let (code, stdout, err) = generate(&project, &out, &["--target", "rust", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    assert_eq!((&v["ok"], &v["error"], &v["targets"]), (&serde_json::json!(true), &serde_json::Value::Null, &serde_json::json!(["rust"])));
+    let d = v["diagnostics"].as_array().unwrap();
+    assert_eq!(d.len(), 4, "{d:?}");
+    assert_eq!(
+        d[0],
+        serde_json::json!({"tool": "dandori", "file": "cold_chain.flow", "code": null, "severity": "warning", "line": null, "message": "A package of Rust holds no workflow, so it leaves out `cold_chain.flow`; the other parts are written"})
+    );
+    assert_eq!((&d[3]["tool"], &d[3]["file"]), (&serde_json::json!("sekisho"), &serde_json::json!("cold_chain.ja.gate")));
+    // beside another language, which holds them
+    let both = t.path().join("both");
+    let (code, _, err) = generate(&project, &both, &["--target", "go", "--target", "rust"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(both.join("go/authz").is_dir() && both.join("go/flows").is_dir() && !both.join("rust/authz").exists() && !both.join("rust/flows").exists());
+    // none of it from a project with neither, or from another language alone
+    let (code, stdout, _) = generate(&project, &both, &["--target", "go"]);
+    assert_eq!(code, 0);
+    assert!(!stdout.contains("warning"), "{stdout}");
+}
+
+/// `--check` holds a package of Rust as it holds the others: a file edited by hand and a file missing are
+/// said, and a file ritsu wrote before and writes no more; what cargo writes beside the crate is no part
+/// of the package.
+#[test]
+fn gen_check_holds_a_package_of_rust() {
+    let t = TempDir::new("gen-rust-check");
+    let project = here().join(SETTLEMENT);
+    let out = t.path().join("out");
+    let (code, _, err) = generate(&project, &out, &["--target", "rust"]);
+    assert_eq!(code, 0, "{err}");
+    let dir = out.join("rust");
+    let check = || generate(&project, &out, &["--target", "rust", "--check"]);
+    assert_eq!(check(), (0, String::new(), String::new()));
+    // what cargo writes: the lock, and a target directory whose files keep the head they were copied with
+    std::fs::write(dir.join("Cargo.lock"), "# This file is automatically @generated by Cargo.\nversion = 4\n").unwrap();
+    std::fs::create_dir_all(dir.join("target/debug")).unwrap();
+    std::fs::write(dir.join("target/debug/copy.rs"), read(&dir.join("lib.rs"))).unwrap();
+    assert_eq!(check(), (0, String::new(), String::new()));
+    let lib = dir.join("lib.rs");
+    let body = read(&lib);
+    std::fs::write(&lib, format!("{body}// edited by hand\n")).unwrap();
+    let (code, stdout, _) = check();
+    assert_eq!(code, 1);
+    assert!(stdout.ends_with(&format!("generated file is stale or hand-edited: {}\n", lib.display())), "{stdout}");
+    std::fs::write(&lib, &body).unwrap();
+    let door = dir.join("glue/door.rs");
+    let body = read(&door);
+    std::fs::remove_file(&door).unwrap();
+    let (code, stdout, _) = check();
+    assert_eq!(code, 1);
+    assert!(stdout.ends_with(&format!("missing: {}\n", door.display())), "{stdout}");
+    std::fs::write(&door, &body).unwrap();
+    let old = dir.join("rules/old_rule.rs");
+    std::fs::write(&old, read(&dir.join("rules/card_fee.rs"))).unwrap();
+    let (code, stdout, _) = check();
+    assert_eq!(code, 1);
+    assert!(stdout.ends_with(&format!("generated no more, and still there: {}\n", old.display())), "{stdout}");
+    let (code, stdout, _) = generate(&project, &out, &["--target", "rust"]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains(&format!("removed, as it is generated no more: {}\n", old.display())), "{stdout}");
+    assert!(!old.exists() && dir.join("target/debug/copy.rs").is_file());
+}
+
+/// What the languages say would break a package of Rust stops `--target rust`, and writes no target given
+/// with it: koyomi's E016 and chobo's E064, which their checks warn of as W001 and W108, kaname's E008
+/// (W001 of `ritsu check`), and a rule named `mod`, whose module no file of `rules/` can be. Each of the
+/// other targets writes the same project.
+#[test]
+fn what_breaks_the_rust_stops_its_package() {
+    let t = TempDir::new("gen-rust-stops");
+    let out = t.path().join("out");
+    let project = |name: &str| {
+        let d = t.path().join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    };
+    let others = |d: &Path| {
+        for target in ["typescript", "python", "go"] {
+            let other = t.path().join(format!("other-{target}"));
+            let (code, _, err) = generate(d, &other, &["--target", target]);
+            assert_eq!(code, 0, "{target}: {err}");
+            assert!(other.join(target).is_dir());
+        }
+    };
+    // koyomi
+    let dates = project("dates");
+    std::fs::copy(here().join("../koyomi/tests/spellings/rust_function.cal"), dates.join("terms.cal")).unwrap();
+    let (code, stdout, err) = generate(&dates, &out, &["--target", "typescript", "--target", "rust"]);
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert!(err.starts_with("error[E016]: terms.cal:"), "{err}");
+    assert!(err.ends_with(". For a target you do not use, name the ones you use with `--target`.\n"), "{err}");
+    assert!(!out.exists(), "nothing is written");
+    others(&dates);
+    // chobo: the Rust client, on every store
+    let books = project("books");
+    std::fs::copy(here().join("../chobo/tests/spellings/rust_types.book"), books.join("stock.book")).unwrap();
+    for store in ["postgres", "tigerbeetle", "mysql"] {
+        let (code, stdout, err) = generate(&books, &out, &["--target", "typescript", "--target", "rust", "--books", store]);
+        assert_eq!((code, stdout.as_str()), (1, ""), "{store}: {err}");
+        assert!(err.starts_with("error[E064]: stock.book:"), "{store}: {err}");
+        assert!(!out.exists(), "{store}: nothing is written");
+    }
+    let (code, stdout, _) = generate(&books, &out, &["--target", "rust", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    assert_eq!((code, &v["diagnostics"][0]["tool"], &v["diagnostics"][0]["code"]), (1, &serde_json::json!("chobo"), &serde_json::json!("E064")));
+    assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`stock.book` cannot be made into the rust package"}));
+    assert!(!out.exists());
+    others(&books);
+    // kaname: each name of a module, by itself and as an alias
+    for (i, name) in ["crate", "self", "Self", "mod", "door"].into_iter().enumerate() {
+        let modules = project(&format!("modules{i}"));
+        std::fs::write(modules.join("m.kn"), format!("module {name} v1\n\nfn one() -> number\n  1\n")).unwrap();
+        let (code, stdout, err) = ritsu_in(&modules, &["check", "--root", "."]);
+        assert_eq!((code, err.as_str()), (0, ""), "{name}: {stdout}");
+        assert!(stdout.starts_with(&format!("warning[kaname W001]: m.kn:1:8: The generated Rust cannot take `{name}` as the name of a module\n")), "{name}: {stdout}");
+        let (code, stdout, err) = generate(&modules, &out, &["--target", "go", "--target", "rust"]);
+        assert_eq!((code, stdout.as_str()), (1, ""), "{name}: {err}");
+        assert!(err.starts_with(&format!("error[E008]: m.kn:1:8: The generated Rust cannot take `{name}` as the name of a module\n")), "{name}: {err}");
+        assert!(err.ends_with("  = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.\n"), "{name}: {err}");
+        assert!(!out.exists(), "{name}: nothing is written");
+        others(&modules);
+    }
+    let modules = project("modules0");
+    let (_, _, err) = generate(&modules, &out, &["--target", "rust", "--lang", "ja"]);
+    assert!(err.starts_with("エラー[E008]: m.kn:1:8: 生成する Rust は、`crate` をモジュールの名前に使えません\n"), "{err}");
+    let (code, stdout, _) = generate(&modules, &out, &["--target", "rust", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    let d = &v["diagnostics"][0];
+    assert_eq!((code, &d["tool"], &d["code"], &d["severity"], &d["file"], &d["line"]), (1, &serde_json::json!("kaname"), &serde_json::json!("E008"), &serde_json::json!("error"), &serde_json::json!("m.kn"), &serde_json::json!(1)));
+    assert_eq!(v["error"], serde_json::json!({"code": 1, "message": "`m.kn` cannot be made into the rust package"}));
+    // a rule whose module no file of `rules/` can be, where the others keep no such word
+    let rules = project("rules");
+    ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &rules);
+    let rule = rules.join("rules/delivery.rule");
+    std::fs::write(&rule, read(&rule).replace("rule delivery v1", "rule mod v1")).unwrap();
+    let (code, stdout, err) = generate(&rules, &out, &["--target", "typescript", "--target", "rust"]);
+    assert_eq!((code, stdout.as_str()), (2, ""));
+    assert_eq!(err, "error: `rules/delivery.rule` makes the module `mod`, a word Rust keeps, which the package cannot hold in its rules/; give it another name (an alias)\n");
+    assert!(!out.exists());
 }

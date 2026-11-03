@@ -337,6 +337,13 @@ fn a_workflow_type_two_modules_make_stops_gen() {
     let v = json(&stdout);
     assert_eq!((code, &v["error"]["code"], &v["files"]), (2, &serde_json::json!(2), &serde_json::json!([])));
     assert!(!out.exists(), "nothing is written");
+    // a package of Rust holds neither flow, so nothing stops it, unless another target is given with it
+    let (code, _, err) = generate(&shop, t.path(), &out, &["--target", "rust"]);
+    assert_eq!(code, 0, "{err}");
+    std::fs::remove_dir_all(&out).unwrap();
+    let (code, _, _) = generate(&shop, t.path(), &out, &["--target", "rust", "--target", "go"]);
+    assert_eq!(code, 2);
+    assert!(!out.exists(), "nothing is written");
     // another version: another type
     replace(&t, "pricing/flows/place_order.flow", "workflow place_order v1", "workflow place_order v2");
     let (code, _, err) = generate(&shop, t.path(), &out, &[]);
@@ -587,6 +594,14 @@ fn the_target_line_says_what_gen_writes() {
     let (code, _, err) = ritsu_in(&shop, &store, &["gen", "--out", other.to_str().unwrap(), "--module", MODULE, "--target", "typescript"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(dirs(&other), ["typescript"], "--target stands in for the line");
+    // Rust, by the line alone, and from then on beside the others; its package leaves out the flow
+    replace(&t, "shop/ritsu.mod", "target go python\n", "target rust\n");
+    let rust = t.path().join("rust");
+    let (code, stdout, err) = ritsu_in(&shop, &store, &["gen", "--out", rust.to_str().unwrap(), "--module", MODULE]);
+    assert_eq!(code, 0, "{err}");
+    assert!(stdout.starts_with("warning: A package of Rust holds no workflow, so it leaves out `orders/place_order.flow`; the other parts are written\n"), "{stdout}");
+    assert_eq!(dirs(&rust), ["rust"]);
+    replace(&t, "shop/ritsu.mod", "target rust\n", "target go python\n");
     // a line that does not read
     replace(&t, "shop/ritsu.mod", "target go python\n", "target go python go\n");
     let (code, stdout, err) = ritsu_in(&shop, &store, &["gen", "--out", o, "--module", MODULE, "--target", "go"]);
@@ -659,6 +674,85 @@ fn a_dependency_named_with_a_word_python_keeps_has_no_python() {
     }
     assert!(out.join("typescript/deps/lambda/rules/vat_rate.ts").is_file());
     assert!(out.join("go/deps/lambda/rules/vatrate/vat_rate.go").is_file());
+}
+
+/// A dependency's name is the name of a module of Rust too, with its file, which holds modules in turn:
+/// a word no raw identifier writes, or `mod`, which Rust reads as a directory's own file, cannot be one.
+/// gen of the Rust says so and stops (exit 2), and the other languages are written. A keyword a raw
+/// identifier writes is such a name, and the crate builds.
+#[test]
+fn a_dependency_named_with_a_word_no_rust_module_takes_has_no_rust() {
+    let t = example();
+    t.write("till/vat.kn", TILL_KN);
+    let till = t.path().join("till");
+    let out = t.path().join("out");
+    for name in ["crate", "self", "super", "mod"] {
+        t.write("till/ritsu.mod", format!("# A till of the shop, which requires the module tax by a word no module of Rust takes.\nmodule example.com/acme/till\nversion 0.1.0\n\nrequire {name} path \"../tax\"\n"));
+        t.write("till/vat.kn", TILL_KN.replace("@lambda/", &format!("@{name}/")));
+        let (code, stdout, err) = generate(&till, t.path(), &out, &["--target", "rust"]);
+        assert_eq!((code, stdout.as_str()), (2, ""), "{name}: {err}");
+        assert_eq!(err, format!("error: the dependency `{name}` is named with a word no module of Rust takes, which the package cannot hold in its deps/; require it by another name\n"));
+        let (_, _, err) = generate(&till, t.path(), &out, &["--target", "go", "--target", "rust", "--lang", "ja"]);
+        assert_eq!(err, format!("エラー: 依存の名前 `{name}` は Rust のモジュールの名前にできない語なので、パッケージの deps/ に置けません。`require` で別の名前を付けてください\n"));
+        assert!(!out.exists(), "{name}: no target is written");
+        let (code, _, err) = generate(&till, t.path(), &out, &["--target", "go"]);
+        assert_eq!(code, 0, "{name}: {err}");
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+    t.write("till/ritsu.mod", "# A till of the shop, which requires the module tax by a keyword of Rust.\nmodule example.com/acme/till\nversion 0.1.0\n\nrequire match path \"../tax\"\n");
+    t.write("till/vat.kn", TILL_KN.replace("@lambda/", "@match/"));
+    let (code, _, err) = generate(&till, t.path(), &out, &["--target", "rust"]);
+    assert_eq!(code, 0, "{err}");
+    assert_has(&out.join("rust/deps.rs"), "pub mod r#match;\n");
+    assert!(out.join("rust/deps/match/rules/vat_rate.rs").is_file());
+    if ritsu_testkit::need(Need::Rustc) {
+        rust_crate(&out.join("rust"), "dependency_named_match");
+        rust_lints(&out.join("rust"), "ritsu-rust");
+    }
+}
+
+/// A dependency's modules of kaname and books go into the crate under `deps/<name>/` as its rules do, each
+/// reading the others where they are; the door answers for them by the name of the chain, and the
+/// package's Wasm answers as the native crate does.
+#[test]
+fn a_dependencys_modules_and_books_are_in_the_crate() {
+    let t = TempDir::new("modules-gen-rust");
+    ritsu_testkit::tmp::copy_dir(&here().join("tests/projects/settlement"), &t.path().join("pay"));
+    t.write("pay/ritsu.mod", "# The payments of the shop, with what a payment is charged.\nmodule example.com/acme/pay\nversion 1.2.0\n");
+    t.write("app/ritsu.mod", "# The till of the shop, which settles through the module pay.\nmodule example.com/acme/app\nversion 0.3.0\n\nrequire pay path \"../pay\"\n");
+    t.write("app/till.kn", "module till v1\ndescription \"What a sale pays out, through the payments' module\"\n\nuse module payout from \"@pay/payout.kn\"\n\nfn settle_sale(amount: money[USDc] range >=1USDc <=100_000_000USDc) -> payout.Settlement total\n  description \"A card payment of the amount\"\n  payout.settle(payment: payout.Payment { id: \"p\", seller: \"s\", amount: amount, international: false })\n");
+    let app = t.path().join("app");
+    let out = t.path().join("out");
+    let (code, _, err) = generate(&app, t.path(), &out, &["--target", "rust", "--name", "shop_till"]);
+    assert_eq!(code, 0, "{err}");
+    let dir = out.join("rust");
+    let held = files(&dir);
+    for f in ["deps.rs", "deps/pay.rs", "deps/pay/books.rs", "deps/pay/books/ledger.rs", "deps/pay/glue.rs", "deps/pay/glue/books/ledger.rs", "deps/pay/glue/payout.rs", "deps/pay/rules.rs", "deps/pay/rules/card_fee.rs", "glue/door.rs", "glue/till.rs", "lib.rs", "shop_till.wit", "wasm.rs"] {
+        assert!(held.iter().any(|h| h == f), "{f} is not in {held:?}");
+    }
+    assert_has(&dir.join("deps/pay.rs"), "#[cfg(not(target_arch = \"wasm32\"))]\npub mod books;\npub mod glue;\npub mod rules;\n");
+    assert_has(&dir.join("shop_till.wit"), "\npackage kaname:shop-till@0.3.0;\n");
+    assert_has(&dir.join("shop_till.wit"), "@pay/payout\n");
+    assert_has(&dir.join("Cargo.toml"), "\nsqlx = ");
+    if !ritsu_testkit::need(Need::Rustc) {
+        return;
+    }
+    rust_crate(&dir, "shop_till");
+    rust_lints(&dir, "ritsu-rust");
+    if ready(Need::Node, have_wasm32, "rustc's wasm32-unknown-unknown target is missing; the package's Wasm is not built") {
+        let module = rust_wasm(&dir, "ritsu-wasm-shop-till");
+        std::fs::write(
+            t.path().join("calls.jsonl"),
+            "{\"module\":\"till\",\"function\":\"settle_sale\",\"in\":{\"amount\":10000}}\n{\"module\":\"@pay/payout\",\"function\":\"settle\",\"in\":{\"payment\":{\"id\":\"p\",\"seller\":\"s\",\"amount\":10000,\"international\":false}}}\n",
+        )
+        .unwrap();
+        let answers = wasm_answers(t.path(), &module, &t.path().join("calls.jsonl"));
+        let lines: Vec<serde_json::Value> = answers.lines().map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("{e}: {l}"))).collect();
+        assert_eq!(lines.len(), 2, "{answers}");
+        assert_eq!(lines[0]["function"], "settle_sale", "{answers}");
+        assert_eq!(lines[0]["out"], lines[1]["out"], "the till's answer is the payments' module's: {answers}");
+        assert_eq!(lines[0]["out"]["fee"]["args"]["fee"], 398, "{answers}");
+    }
 }
 
 /// A file of a dependency given on the command line (`@pricing/…`, DESIGN 17.6) is made into the
@@ -823,5 +917,17 @@ fn the_packages_of_modules_pass_the_type_checkers() {
             }
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the packages of modules is not vetted"),
         }
+    }
+    if ritsu_testkit::need(Need::Rustc) {
+        let mut n = 0;
+        for (dir, name) in [("tests/projects/modules/shop", "shop"), ("tests/projects/modules.ja/店", "mise")] {
+            let out = t.path().join(format!("rust-{name}"));
+            let (code, _, err) = generate(&here().join(dir), empty.path(), &out, &["--target", "rust", "--name", name]);
+            assert_eq!(code, 0, "{name}: {err}");
+            rust_crate(&out.join("rust"), name);
+            rust_lints(&out.join("rust"), "ritsu-rust");
+            n += 1;
+        }
+        println!("the packages of modules of {n} modules build as crates of Rust with -D warnings");
     }
 }

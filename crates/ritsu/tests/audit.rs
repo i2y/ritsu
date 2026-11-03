@@ -129,12 +129,14 @@ fn every_manifest_the_tests_install_from_is_locked() {
 
 /// The versions the tools lock, of the packages `ritsu gen` writes into a package: npm's (dandori's
 /// Temporal runner, chobo's runner, sekisho's runner of TypeScript), PyPI's (dandori's Temporal
-/// runner for Python, chobo's, sekisho's runner of Python) and Go's (dandori's tools/temporal-go,
-/// chobo's tools/runner/go, sekisho's runner of Go).
+/// runner for Python, chobo's, sekisho's runner of Python), Go's (dandori's tools/temporal-go,
+/// chobo's tools/runner/go, sekisho's runner of Go) and Rust's (the crate of kaname's tests, which
+/// builds the package of Rust with the crates chobo's clients name).
 struct Locked {
     npm: BTreeMap<String, String>,
     pypi: BTreeMap<String, String>,
     go: BTreeMap<String, String>,
+    cargo: BTreeMap<String, String>,
 }
 
 /// Which runner locks a package a package asks for: Temporal's dandori's, Cedar's and the AWS SDK's
@@ -185,7 +187,14 @@ fn locked() -> Locked {
             }
         }
     }
-    Locked { npm, pypi, go }
+    let mut cargo = BTreeMap::new();
+    for p in read(&tools.join("kaname/tools/rust/Cargo.lock")).split("[[package]]\n").skip(1) {
+        let field = |key: &str| p.lines().find_map(|l| l.strip_prefix(key)).map(|v| v.trim_matches('"').to_string());
+        if let (Some(name), Some(version)) = (field("name = "), field("version = ")) {
+            cargo.insert(name, version);
+        }
+    }
+    Locked { npm, pypi, go, cargo }
 }
 
 /// The package of the stockroom project in each language, with its books on PostgreSQL, on
@@ -197,7 +206,7 @@ fn packages(t: &TempDir) -> Vec<PathBuf> {
         let out = t.path().join(format!("{}-{value}", project.rsplit('/').next().unwrap()));
         let o = Command::new(env!("CARGO_BIN_EXE_ritsu"))
             .current_dir(root().join(project))
-            .args(["gen", "--root", ".", "--out", out.to_str().unwrap(), flag, value, "--target", "typescript", "--target", "python", "--target", "go", "--target", "cedar"])
+            .args(["gen", "--root", ".", "--out", out.to_str().unwrap(), flag, value, "--target", "typescript", "--target", "python", "--target", "go", "--target", "rust", "--target", "cedar"])
             .output()
             .unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -241,6 +250,14 @@ fn the_packages_ask_for_the_versions_the_tools_lock() {
         for d in deps.split(',').map(|d| d.trim().trim_matches('"')).filter(|d| !d.is_empty()) {
             let (name, v) = pinned(d).unwrap_or_else(|| panic!("python/pyproject.toml asks for `{d}`, not one version"));
             assert_eq!(lock.pypi.get(&name), Some(&v), "python/pyproject.toml asks for {name} {v}");
+            checked += 1;
+        }
+        // Rust: the dependencies of Cargo.toml, a crate with no book having none
+        let manifest = read(&out.join("rust/Cargo.toml"));
+        for line in manifest.split("dependencies]\n").nth(1).unwrap_or("").lines() {
+            let name = line.split(" = ").next().unwrap();
+            let v = line.split('"').find(|w| w.starts_with('=')).unwrap_or_else(|| panic!("rust/Cargo.toml asks for `{line}`, not one version"));
+            assert_eq!(lock.cargo.get(name).map(String::as_str), Some(&v[1..]), "rust/Cargo.toml asks for {name} {v}");
             checked += 1;
         }
         // Go: what every comment of the package names, doc.go's list the first

@@ -121,13 +121,43 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("生成するコードが使えない名前です", "A name the generated code cannot take"),
             tr!(
-                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。フィールドを持つ値のある列挙の値に、`kind` という名前のフィールドを付けたときも出ます。生成する TypeScript は、値を `kind` で見分けます。モジュールの名前が `crate`、`self`、`Self`、`mod`、`door` のときも出ます。生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になり、はじめの三つは Rust がモジュールに付けられない語、あとの二つは kaname が `glue/` に書くファイルの名前です。Rust の予約語は、ほかの名前には使えます（生の識別子 `r#ref` にします）。",
-                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. So is a module named `crate`, `self`, `Self`, `mod` or `door`: in the generated Rust a module's name is the name of its Rust module in `glue/` and of its file, the first three are words Rust names no module, and the other two are files kaname writes into `glue/`. A reserved word of Rust is free to be any other name (it is a raw identifier, `r#ref`)."
+                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。フィールドを持つ値のある列挙の値に、`kind` という名前のフィールドを付けたときも出ます。生成する TypeScript は、値を `kind` で見分けます。Rust の予約語は名前に使えます（生の識別子 `r#ref` にします。モジュールの名前の五つは W001）。",
+                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. A reserved word of Rust is free to be a name (it is a raw identifier, `r#ref`; five names of a module are W001)."
             ),
             tr!("別の名前か別名にしてください。", "Choose another name or alias."),
             "module example v1\n\nrecord Seat\n  class : string\n",
             "module 例(example) v1\n\nrecord 座席(Seat)\n  等級(class) : string\n",
-            &["E005"],
+            &["E005", "W001"],
+        ),
+        e(
+            "E008",
+            tr!("生成する Rust が、モジュールの名前に使えない名前です", "A name the generated Rust cannot give a module"),
+            tr!(
+                "`ritsu gen --target rust` が書くモジュールの名前が、W001 が挙げる名前のとき。そのまま書くと Rust のコードを組めないので、`ritsu gen` はどの出力先のファイルも書かずに 1 で終わります。`--target` に `rust` が無ければ止まりません。`kaname check` はこのコードを出しません。",
+                "`ritsu gen --target rust` is to write a module whose name W001 warns of. The Rust as written would not build, so `ritsu gen` writes no file of any target and exits 1. Without `rust` among the targets it does not stop, and `kaname check` does not give this code."
+            ),
+            tr!(
+                "別の名前か別名にしてください。使わない出力先なら、`--target` で使う出力先を挙げてください。",
+                "Choose another name or alias. For a target you do not use, name the ones you use with `--target`."
+            ),
+            "module door v1\n\nfn one() -> number\n  1\n",
+            "module 入口(door) v1\n\nfn 一(one)() -> number\n  1\n",
+            &["E007", "W001"],
+        ),
+        e(
+            "W001",
+            tr!("生成する Rust が、モジュールの名前に使えない名前です", "A name the generated Rust cannot give a module"),
+            tr!(
+                "モジュールの名前（別名、別名が無ければ名前）が `crate`、`self`、`Self`、`mod`、`door` のとき。生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になり、はじめの三つは Rust がモジュールに付けられない語、あとの二つは kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。TypeScript、Python、Go はどれも名前に取るので、警告です。`ritsu gen --target rust` は、このモジュールで止まります（E008）。",
+                "The module's name (the alias, or the name with none) is `crate`, `self`, `Self`, `mod` or `door`. In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: the first three are words Rust names no module, and the other two are the files kaname writes into `glue/` itself (the directory's own, and the package's door). TypeScript, Python and Go take all five, so it is a warning; `ritsu gen --target rust` stops at the module (E008)."
+            ),
+            tr!(
+                "Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。",
+                "If you do not generate Rust, leave it; if you do, choose another name or alias."
+            ),
+            "module door v1\n\nfn one() -> number\n  1\n",
+            "module 入口(door) v1\n\nfn 一(one)() -> number\n  1\n",
+            &["E007", "E008"],
         ),
         // ── Names and types ──
         e(

@@ -1,0 +1,5 @@
+warning[W001]: example.kn:1:8: The generated Rust cannot take `door` as the name of a module
+     1 | module door v1
+  = In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door).
+  = `ritsu gen --target rust` stops at this module (E008). If you do not generate Rust, leave it; if you do, choose another name or alias.
+ok example.kn: 1 function, total

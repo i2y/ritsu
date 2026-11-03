@@ -1,0 +1,5 @@
+警告[W001]: example.kn:1:11: 生成する Rust は、`door` をモジュールの名前に使えません
+     1 | module 入口(door) v1
+  = 生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。
+  = `ritsu gen --target rust` はこのモジュールで止まります（E008）。Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+ok example.kn: 関数 1 個、total

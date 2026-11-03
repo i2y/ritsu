@@ -127,7 +127,7 @@ See also: [E005](#e005), [E110](#e110)
 
 ## E007 — A name the generated code cannot take
 
-**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. So is a module named `crate`, `self`, `Self`, `mod` or `door`: in the generated Rust a module's name is the name of its Rust module in `glue/` and of its file, the first three are words Rust names no module, and the other two are files kaname writes into `glue/`. A reserved word of Rust is free to be any other name (it is a raw identifier, `r#ref`).
+**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart. A reserved word of Rust is free to be a name (it is a raw identifier, `r#ref`; five names of a module are W001).
 
 **Fix**: Choose another name or alias.
 
@@ -140,7 +140,45 @@ record Seat
   class : string
 ```
 
-See also: [E005](#e005)
+See also: [E005](#e005), [W001](#w001)
+
+<a id="e008"></a>
+
+## E008 — A name the generated Rust cannot give a module
+
+**When**: `ritsu gen --target rust` is to write a module whose name W001 warns of. The Rust as written would not build, so `ritsu gen` writes no file of any target and exits 1. Without `rust` among the targets it does not stop, and `kaname check` does not give this code.
+
+**Fix**: Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+
+**Example**:
+
+```kn
+module door v1
+
+fn one() -> number
+  1
+```
+
+See also: [E007](#e007), [W001](#w001)
+
+<a id="w001"></a>
+
+## W001 — A name the generated Rust cannot give a module
+
+**When**: The module's name (the alias, or the name with none) is `crate`, `self`, `Self`, `mod` or `door`. In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: the first three are words Rust names no module, and the other two are the files kaname writes into `glue/` itself (the directory's own, and the package's door). TypeScript, Python and Go take all five, so it is a warning; `ritsu gen --target rust` stops at the module (E008).
+
+**Fix**: If you do not generate Rust, leave it; if you do, choose another name or alias.
+
+**Example**:
+
+```kn
+module door v1
+
+fn one() -> number
+  1
+```
+
+See also: [E007](#e007), [E008](#e008)
 
 <a id="e101"></a>
 

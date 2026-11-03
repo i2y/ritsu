@@ -218,8 +218,8 @@ fn a_dependency_with_no_library_line_stops_the_run_unless_it_is_embedded() {
 /// languages of the lines), a target line with no `library` line of a language on it,
 /// no version (the module's, a dependency's); a
 /// Python name Python cannot import; a pre-release PEP 440 has no form of (the module's, a
-/// dependency's); a directory that is not a module; and a contribution to a rule a library holds,
-/// which the library's code cannot take.
+/// dependency's); a directory that is not a module; a contribution to a rule a library holds,
+/// which the library's code cannot take; and Rust, from `--target` and from the `target` line alike.
 #[test]
 fn what_a_library_refuses() {
     type Setup = fn(&TempDir);
@@ -248,6 +248,8 @@ fn what_a_library_refuses() {
             t.write("pricing/rules/order_discount.rule", ORDER_DISCOUNT);
             t.write("shop/rules/spring_sale.rule", SPRING_SALE);
         }),
+        ("pricing", &["gen", "--library", "--target", "rust"], all, |_| {}),
+        ("pricing", &["gen", "--library"], all, |t| replace(t, "pricing/ritsu.mod", "target typescript python go\n", "target typescript python go rust\n")),
     ];
     let mut said = String::new();
     for (dir, args, with, setup) in cases {
