@@ -1,0 +1,6 @@
+tests/spellings/across/pay_days.cal: ok — received 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます
+警告[W001]: tests/spellings/across/paydays.cal:1:7: 生成した Go のコードでは、ファイルの別名 `paydays` と、`tests/spellings/across/pay_days.cal` の別名 `pay_days` が、同じパッケージ `paydays` になります
+     1 | dates paydays v1
+  = Go: パッケージの名前は、ファイルの別名から `_` を除いたものなので、どちらも `paydays` です。二つのファイルが同じ `go/paydays/paydays.go` を書くことになります（`ritsu gen` のパッケージでは `dates/paydays/paydays.go`）。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates paydays(<別名>) v1`）。
+tests/spellings/across/paydays.cal: ok — received 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/python_str.cal:8:6: 生成した Python のコードでは、`str` が、コードの使う組み込みの `str` を隠します
+     8 | date str = received
+  = Python: 生成したコードは、型の注釈に組み込みの `str` を使い、範囲の外の整数の入力を言う文も `str` で作ります。日付「str」の関数はモジュールの一番外の同じ名前の関数なので、`mypy --strict` が通らず（`is not valid as a type`）、整数の入力が範囲の外のとき、関数は `KoyomiError` でない例外で止まります。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`str(<別名>)`）。
+tests/spellings/python_str.cal: ok — received 2026-01-01〜2026-01-31、n 0〜3 の 124 通りのすべてで、どの日付も計算できます

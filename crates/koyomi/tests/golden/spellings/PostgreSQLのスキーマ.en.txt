@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/PostgreSQLのスキーマ.cal:1:23: In the code generated for PostgreSQL, the file's alias `pg_terms_ja` is the schema's name, a name of PostgreSQL's own schemas
+     1 | dates PostgreSQLのスキーマ(pg_terms_ja) v1
+  = PostgreSQL: a name that starts with `pg_` is one PostgreSQL keeps for the schemas of the system, so the `CREATE SCHEMA` of the SQL file stops (`unacceptable schema name`), and the file does not load.
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates PostgreSQLのスキーマ(<alias>) v1`).
+tests/spellings/PostgreSQLのスキーマ.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

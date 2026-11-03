@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/wasm_proto_input.cal:6:3: In the Wasm module, the input __proto__ is the JSON key `__proto__`, which a JavaScript object literal cannot carry
+     6 |   __proto__(proto) : int range >=0 <=3
+  = Wasm: the module takes the inputs as one JSON object, by their names. A JavaScript host that writes the object as a literal writes in `{ __proto__: … }` the object's prototype, not a property (a string or a number is no prototype, and is dropped), so the JSON `JSON.stringify` writes has no key `__proto__`, and the module answers that the input is missing (`refused` is `input`).
+  = For a target you do not generate, leave it. For one you do, give the input a name other than `__proto__` (the key is its name, not its alias).
+tests/spellings/wasm_proto_input.cal: ok — every date computes on all 124 combinations of received (2026-01-01..2026-01-31) and __proto__ (0..3)

@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/Goの日付を読む関数.cal:7:9: `parse_date` takes a name the code generated for Go uses itself
+     7 | date 期日(parse_date) = 受領日
+  = Go: the generated code declares `ParseDate`, the function that reads a date, and in PascalCase the function of 期日 (`parse_date`) is `ParseDate` as well: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`期日(<alias>)`).
+tests/spellings/Goの日付を読む関数.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

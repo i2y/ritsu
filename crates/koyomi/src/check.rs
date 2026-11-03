@@ -107,12 +107,38 @@ pub struct Outcome {
     /// The names the targets spell as one identifier or cannot take, with the targets each breaks
     /// (W001, among `diags`): what stops `gen` for those targets (E016, DESIGN 15).
     pub spelled: Vec<crate::spellings::Found>,
+    /// A calendar file as parsed, which [`Calendar`] does not keep: what [`compare_across`] reads of
+    /// it (a dates file's is in its model).
+    pub calendar_file: Option<File>,
 }
 
 impl Outcome {
     pub fn has_errors(&self) -> bool {
         self.diags.iter().any(|d| d.is_error())
     }
+
+    /// The file as parsed, when the check has one.
+    fn file(&self) -> Option<&File> {
+        match &self.checked {
+            Some(Checked::Dates(m, _)) => Some(&m.file),
+            Some(Checked::Calendar(_)) => self.calendar_file.as_ref(),
+            None => None,
+        }
+    }
+}
+
+/// Compare a checked file with the files given before it in one run ([`crate::spellings::across`]):
+/// what it finds joins the file's own W001 and what stops `gen`, and the file joins `earlier`, unless
+/// it has errors, which are said first and of which nothing is generated.
+pub fn compare_across(o: &mut Outcome, earlier: &mut Vec<File>) {
+    if o.has_errors() {
+        return;
+    }
+    let Some(f) = o.file().cloned() else { return };
+    let found = crate::spellings::across(earlier, &f);
+    o.diags.extend(found.iter().map(|x| x.diag.clone()));
+    o.spelled.extend(found);
+    earlier.push(f);
 }
 
 /// The first line of a `.cal`, for choosing what to do with it before parsing.
@@ -129,14 +155,14 @@ pub fn check_file(path: &str, opts: &Options, loader: &mut Loader) -> Result<Out
 pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader) -> Outcome {
     let Ok(src) = std::str::from_utf8(bytes) else {
         let d = Diag::error("E001", path, 0, 0, tr!("ファイルが UTF-8 ではありません", "The file is not UTF-8"));
-        return Outcome { path: path.into(), diags: vec![d], checked: None, ok: None, spelled: Vec::new() };
+        return Outcome { path: path.into(), diags: vec![d], checked: None, ok: None, spelled: Vec::new(), calendar_file: None };
     };
     let parsed = crate::parse::parse(path, src);
     // The keys written in the file first (W901): they are said whatever else the file holds.
     let mut diags = crate::diag::keys(path, src);
     diags.extend(parsed.diags);
     let Some(f) = parsed.file else {
-        return Outcome { path: path.into(), diags, checked: None, ok: None, spelled: Vec::new() };
+        return Outcome { path: path.into(), diags, checked: None, ok: None, spelled: Vec::new(), calendar_file: None };
     };
     match f.kind {
         Kind::Calendar => {
@@ -146,12 +172,12 @@ pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader
             let spelled = if diags.iter().any(|d| d.is_error()) { Vec::new() } else { crate::spellings::file_alias(&f) };
             diags.extend(spelled.iter().map(|x| x.diag.clone()));
             let ok = cal.as_ref().filter(|_| !diags.iter().any(|d| d.is_error())).map(calendar_summary);
-            Outcome { path: path.into(), diags, checked: cal.map(|c| Checked::Calendar(Box::new(c))), ok, spelled }
+            Outcome { path: path.into(), diags, checked: cal.map(|c| Checked::Calendar(Box::new(c))), ok, spelled, calendar_file: Some(f) }
         }
         Kind::Dates => match prepare_file(f, path, bytes, loader, opts) {
             Err(mut ds) => {
                 diags.append(&mut ds);
-                Outcome { path: path.into(), diags, checked: None, ok: None, spelled: Vec::new() }
+                Outcome { path: path.into(), diags, checked: None, ok: None, spelled: Vec::new(), calendar_file: None }
             }
             Ok((m, mut ds)) => {
                 diags.append(&mut ds);
@@ -160,7 +186,7 @@ pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader
                 let ok = if diags.iter().any(|d| d.is_error()) { None } else { Some(dates_summary(&m, &report)) };
                 // the W001 of stage 2 again, with their targets (`prepare_file` gave their diagnostics)
                 let spelled = crate::spellings::find(&m);
-                Outcome { path: path.into(), diags, checked: Some(Checked::Dates(Box::new(m), report)), ok, spelled }
+                Outcome { path: path.into(), diags, checked: Some(Checked::Dates(Box::new(m), report)), ok, spelled, calendar_file: None }
             }
         },
     }
@@ -217,7 +243,11 @@ fn prepare_file(f: File, path: &str, bytes: &[u8], loader: &mut Loader, opts: &O
         return Err(diags);
     }
     // Still stage 2: the names as the targets spell them, once the calendar says whether the code
-    // has `is_open` (W001).
+    // has `is_open`: the ones every target breaks on (E009), then the ones some break on (W001).
+    diags.extend(crate::spellings::every_target(&m));
+    if diags.iter().any(|d| d.is_error()) {
+        return Err(diags);
+    }
     diags.extend(crate::spellings::check(&m));
     // Stage 3: the file's own laws, and what needs the calendar.
     let origin = Origin { file: &m.file, dir: &dir };

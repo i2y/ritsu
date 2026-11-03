@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_parse_date.cal:7:6: `parse_date` takes a name the code generated for Go uses itself
+     7 | date parse_date = received
+  = Go: the generated code declares `ParseDate`, the function that reads a date, and in PascalCase the function of the date parse_date is `ParseDate` as well: one package declares the name twice, which does not compile.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`parse_date(<alias>)`).
+tests/spellings/go_parse_date.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

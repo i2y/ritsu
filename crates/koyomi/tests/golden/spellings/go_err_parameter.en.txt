@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/go_err_parameter.cal:6:3: In the code generated for Go, the parameter `err` of the input err is the variable `err` the functions keep their errors in
+     6 |   err      : int   range >=0 <=3
+  = Go: a function keeps its errors in `err` (`day, err := …`), so the function of the date due (and every other function that takes the input) puts an `error` in the parameter `err`, which does not compile (`value of interface type error`).
+  = For a target you do not generate, leave it. For one you do, give it another alias (`err(<alias>)`).
+tests/spellings/go_err_parameter.cal: ok — every date computes on all 124 combinations of received (2026-01-01..2026-01-31) and err (0..3)

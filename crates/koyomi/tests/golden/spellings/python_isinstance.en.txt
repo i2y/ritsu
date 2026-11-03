@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/python_isinstance.cal:8:6: In the code generated for Python, `isinstance` hides Python's built-in `isinstance`, which the code uses
+     8 | date isinstance = received
+  = Python: the generated code checks an integer input with the built-in `isinstance`. The function of the date isinstance is a function of that name at the top of the module, so the check calls it, and every function that takes an integer input stops with an exception that is not a `KoyomiError`; `mypy --strict` does not pass either.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`isinstance(<alias>)`).
+tests/spellings/python_isinstance.cal: ok — every date computes on all 124 combinations of received (2026-01-01..2026-01-31) and n (0..3)

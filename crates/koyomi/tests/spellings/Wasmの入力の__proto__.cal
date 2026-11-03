@@ -1,0 +1,9 @@
+dates Wasmの入力の__proto__(wasm_proto_input_ja) v1
+description "名前が __proto__ の入力。Wasm のモジュールは入力を、名前をキーにした一つの JSON のオブジェクトで受け取り、JavaScript のオブジェクトリテラルはそのキーを書けないので、モジュールは入力が無いと答える（W001）。ほかの出力先は、入力を別名の引数で受け取る"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+  __proto__(proto) : int range >=0 <=3
+
+date 期日(due) = 受領日
+  + __proto__ days

@@ -91,8 +91,8 @@ The last three lines are from the Japanese version of an example. A name in Engl
 that form takes an alias too (`InvoiceDate(invoice_date)`).
 
 Claims and sources are not in the generated code and need no alias. A name or an alias cannot be
-a keyword, a reserved word of a target language, or a name the generated code uses itself
-(`is_open`, `Date`, `KoyomiError`, `<alias>_at`, …): E009.
+a keyword, a reserved word of a target language, or a name that breaks the code of every target
+(`<alias>_at`, and `is_open` beside a calendar when the function takes the date alone): E009.
 
 Go and PostgreSQL spell an alias their own way, rustc warns of some aliases as they are, and Python
 keeps one module per name. Go names a date's function in PascalCase and the package by the file's
@@ -104,10 +104,19 @@ file's alias can make a package Go cannot take (`go_to_` is `goto`, `main_` is `
 aliases that share their first 63 bytes are one function, or one parameter, in PostgreSQL,
 `ship__by` is a function rustc warns of (so is `cutoff__at`, the function of the time of a date
 `cutoff_`), and a file's alias can be the name of a module of Python's standard library (`abc`),
-so that whichever of the two is imported first is what every `import abc` gives. `check` warns
-about each (W001) and names the targets, and the file passes. `gen` writes nothing when it is to
-write a target the warning names (E016), and no name is changed: give the name the note points to
-another alias, or, for a target you do not use, generate only the ones you use with `--target`.
+so that whichever of the two is imported first is what every `import abc` gives. A name can be
+one that only some targets declare or read: `koyomi_error` and `parse_date` in Go, `err` in Go
+beside an integer input, `str`, `tuple` and `isinstance` in Python, `is_open` beside a calendar a
+function also gives integers, and `datetime`, `sys` and `typing` as a file's alias in Python. A
+file's alias can be a schema PostgreSQL keeps for itself (`pg_terms`, `information_schema`), and an
+input `__proto__` is the prototype of the object a JavaScript host builds for the Wasm module. And
+files given together can be one in a target: two aliases that are one Go package (`pay_days`,
+`paydays`), one WIT package (`pay__days`, `pay_days`, of one version), or one PostgreSQL schema
+(the first 63 bytes). `check` warns about each (W001) and names the targets, and the file passes;
+for files given together, the warning is on the later file and names the earlier. `gen` writes
+nothing when it is to write a target the warning names (E016), and no name is changed: give the
+name the note points to another alias, or, for a target you do not use, generate only the ones you
+use with `--target`.
 
 ### Keywords
 

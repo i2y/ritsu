@@ -297,15 +297,15 @@ fn every_example_checks_as_designed() {
 
 #[test]
 fn names_the_generated_code_leans_on_are_refused() {
-    // Go's `err`, the Python builtins the generated Python calls, PL/pgSQL's reserved words
-    // (PLAN C, src/naming.rs and src/reserved.rs): E009, before any code is generated.
-    for a in ["err", "range", "str", "isinstance", "frozenset", "begin", "declare", "execute", "foreach", "strict"] {
+    // A word of koyomi and PL/pgSQL's reserved words (PLAN C, src/reserved.rs): E009, before any code
+    // is generated. The names only some targets break on are W001 (tests/spellings.rs).
+    for a in ["range", "begin", "declare", "execute", "foreach", "strict"] {
         let src = format!("dates 試験(test) v1\n\ninputs\n  入力({a}) : date  range >=2026-01-01 <=2026-01-02\n\ndate 翌日(next_day) = 入力\n  + 1 day\n");
         let o = check_text("tests/試験.cal", &src, &Options::default());
         assert!(o.diags.iter().any(|d| d.code == "E009"), "{a} is refused:\n{}", o.diags.iter().map(|d| d.render(Lang::En)).collect::<String>());
     }
-    // A file's alias names a module and a schema.
-    for a in ["json", "datetime", "std", "pg_catalog"] {
+    // A file's alias is held to the same words.
+    for a in ["json", "public"] {
         let src = format!("dates 試験({a}) v1\n\ninputs\n  入力(day_in) : date  range >=2026-01-01 <=2026-01-02\n\ndate 翌日(next_day) = 入力\n  + 1 day\n");
         let o = check_text("tests/試験.cal", &src, &Options::default());
         assert!(o.diags.iter().any(|d| d.code == "E009"), "the file alias {a} is refused");
@@ -497,12 +497,12 @@ fn the_budget_in_english() {
 
 #[test]
 fn names_the_generated_code_leans_on_are_refused_in_english() {
-    for a in ["err", "range", "str", "isinstance", "frozenset", "begin", "declare", "execute", "foreach", "strict"] {
+    for a in ["range", "begin", "declare", "execute", "foreach", "strict"] {
         let src = format!("dates test v1\n\ninputs\n  input({a}) : date  range >=2026-01-01 <=2026-01-02\n\ndate next_day = input\n  + 1 day\n");
         let o = check_text("tests/test.cal", &src, &Options::default());
         assert!(o.diags.iter().any(|d| d.code == "E009"), "{a} is refused:\n{}", o.diags.iter().map(|d| d.render(Lang::En)).collect::<String>());
     }
-    for a in ["json", "datetime", "std", "pg_catalog"] {
+    for a in ["json", "public"] {
         let src = format!("dates test({a}) v1\n\ninputs\n  input(day_in) : date  range >=2026-01-01 <=2026-01-02\n\ndate next_day = input\n  + 1 day\n");
         let o = check_text("tests/test.cal", &src, &Options::default());
         assert!(o.diags.iter().any(|d| d.code == "E009"), "the file alias {a} is refused");

@@ -1,0 +1,10 @@
+dates calendar_function v1
+description "A date with the alias is_open that uses a calendar and takes an integer input. The code of every target has is_open for the calendar, so TypeScript, Python, Go, Rust and Wasm have the name twice (W001). PostgreSQL holds the two functions apart, by the types they take"
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+  n        : int   range >=0 <=3
+
+date is_open = received
+  + n business days

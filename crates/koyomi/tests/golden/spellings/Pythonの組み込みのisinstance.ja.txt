@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/Pythonの組み込みのisinstance.cal:8:9: 生成した Python のコードでは、`isinstance` が、コードの使う組み込みの `isinstance` を隠します
+     8 | date 期日(isinstance) = 受領日
+  = Python: 生成したコードは、整数の入力を組み込みの `isinstance` で確かめます。日付「期日」の関数 `isinstance` はモジュールの一番外の同じ名前の関数なので、確かめるところでその関数が呼ばれ、整数の入力を取る関数は、どれも `KoyomiError` でない例外で止まります。`mypy --strict` も通りません。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`期日(<別名>)`）。
+tests/spellings/Pythonの組み込みのisinstance.cal: ok — 受領日 2026-01-01〜2026-01-31、日数 0〜3 の 124 通りのすべてで、どの日付も計算できます

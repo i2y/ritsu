@@ -4,24 +4,6 @@
 
 use crate::ast::Ty;
 
-/// The names the generated code defines or leans on beside the dates' functions, spelled as
-/// aliases. An alias equal to one of them would collide with it in some target (E009): `date`
-/// is Go's `Date` type, `koyomi_error` its `KoyomiError`, `parse_date` its `ParseDate`; `err`
-/// is the error a Go function carries; and the Python calls the builtins `range`, `str`,
-/// `int`, `bool`, `tuple`, `isinstance`, `frozenset` and `super`, which a function of the same
-/// name would hide. The helpers the generators write start with `_`, which no alias can, and
-/// the one local of every function is `day`, a word of the language, so neither needs an entry.
-pub const GENERATED: &[&str] = &[
-    "is_open", "date", "koyomi_error", "parse_date", "datetime", "timedelta", "err", "range", "str", "int", "bool", "tuple",
-    "isinstance", "frozenset", "super",
-];
-
-/// The names a file's alias cannot take, because the alias names a Python module, a Rust
-/// module and a PostgreSQL schema beside ones the generated code reads (E009): Python's
-/// `datetime`, `json`, `sys` and `typing` (a module of that name beside the runner would be
-/// imported in their place), Rust's `std`, `core` and `alloc`, and PostgreSQL's own schemas.
-pub const MODULES: &[&str] = &["datetime", "json", "sys", "typing", "std", "core", "alloc", "pg_catalog", "pg_temp", "pg_toast", "information_schema"];
-
 /// `payment_at` → `PaymentAt`: Go's exported name for an alias; `payment_terms` →
 /// `paymentterms`: a Go package's name (ritsu's, `ritsu_emit::ident`).
 pub use ritsu_emit::ident::{go_package, pascal};

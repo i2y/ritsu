@@ -1,0 +1,9 @@
+dates Pythonの組み込みのisinstance(python_isinstance_ja_renamed) v1
+description "../Pythonの組み込みのisinstance.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+  日数(n) : int   range >=0 <=3
+
+date 期日(due) = 受領日
+  + 日数 days

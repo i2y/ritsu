@@ -1,0 +1,10 @@
+tests/spellings/across/支払日.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます
+警告[W001]: tests/spellings/across/支払日三.cal:1:12: 生成した Go のコードでは、ファイルの別名 `pay_days_ja_` と、`tests/spellings/across/支払日.cal` の別名 `pay_days_ja` が、同じパッケージ `paydaysja` になります
+     1 | dates 支払日三(pay_days_ja_) v1
+  = Go: パッケージの名前は、ファイルの別名から `_` を除いたものなので、どちらも `paydaysja` です。二つのファイルが同じ `go/paydaysja/paydaysja.go` を書くことになります（`ritsu gen` のパッケージでは `dates/paydaysja/paydaysja.go`）。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates 支払日三(<別名>) v1`）。
+警告[W001]: tests/spellings/across/支払日三.cal:1:12: 生成した Wasm の `.wit` では、ファイルの別名 `pay_days_ja_` と、`tests/spellings/across/支払日.cal` の別名 `pay_days_ja` が、同じパッケージ `koyomi:pay-days-ja@1.0.0` になります
+     1 | dates 支払日三(pay_days_ja_) v1
+  = Wasm: WIT の名前は、ファイルの別名の `_` を `-` にしたものです（続く `_` と端の `_` は一つの区切りか、無いものになります）。版も同じなので、二つの `.wit` を一緒に読むと、WIT のツールが止まります（`is defined in two different locations`）。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates 支払日三(<別名>) v1`）。
+tests/spellings/across/支払日三.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

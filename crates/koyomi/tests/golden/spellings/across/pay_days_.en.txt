@@ -1,0 +1,10 @@
+tests/spellings/across/pay_days.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)
+warning[W001]: tests/spellings/across/pay_days_.cal:1:7: In the code generated for Go, the file's alias `pay_days_` and the alias `pay_days` of `tests/spellings/across/pay_days.cal` are one package, `paydays`
+     1 | dates pay_days_ v1
+  = Go: a package is named by the file's alias without its `_`, so both are `paydays`, and both files write `go/paydays/paydays.go` (`dates/paydays/paydays.go` in a package of `ritsu gen`).
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates pay_days_(<alias>) v1`).
+warning[W001]: tests/spellings/across/pay_days_.cal:1:7: In the `.wit` generated for Wasm, the file's alias `pay_days_` and the alias `pay_days` of `tests/spellings/across/pay_days.cal` are one package, `koyomi:pay-days@1.0.0`
+     1 | dates pay_days_ v1
+  = Wasm: a WIT name is the file's alias with `-` for its `_` (a run of `_` is one, and one at either end none). The versions are the same too, so the WIT tools stop when the two `.wit` are read together (`is defined in two different locations`).
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates pay_days_(<alias>) v1`).
+tests/spellings/across/pay_days_.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

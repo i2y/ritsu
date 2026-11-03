@@ -1,0 +1,6 @@
+tests/spellings/across/pay_days.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)
+warning[W001]: tests/spellings/across/paydays.cal:1:7: In the code generated for Go, the file's alias `paydays` and the alias `pay_days` of `tests/spellings/across/pay_days.cal` are one package, `paydays`
+     1 | dates paydays v1
+  = Go: a package is named by the file's alias without its `_`, so both are `paydays`, and both files write `go/paydays/paydays.go` (`dates/paydays/paydays.go` in a package of `ritsu gen`).
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates paydays(<alias>) v1`).
+tests/spellings/across/paydays.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

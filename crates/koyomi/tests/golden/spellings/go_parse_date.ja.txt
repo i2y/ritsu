@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/go_parse_date.cal:7:6: `parse_date` は、生成した Go のコードが自分で使う名前と同じになります
+     7 | date parse_date = received
+  = Go: 生成したコードは、日付を読む関数 `ParseDate` を宣言します。日付「parse_date」の関数も、PascalCase で書くと `ParseDate` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`parse_date(<別名>)`）。
+tests/spellings/go_parse_date.cal: ok — received 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

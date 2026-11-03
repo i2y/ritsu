@@ -201,12 +201,15 @@ impl Engine {
     pub fn checked(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
         use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
         let mut loader = Loader::default();
+        // the files as they come, as the command compares them (W001, spellings.rs)
+        let mut earlier = Vec::new();
         files
             .iter()
             .map(|f| match check::check_file(f, &Options::default(), &mut loader) {
-                Ok(o) => {
+                Ok(mut o) => {
+                    check::compare_across(&mut o, &mut earlier);
                     let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, Path::new(&d.file)), lang))).collect();
-                    let tail = check::render(&check::Outcome { path: o.path.clone(), diags: vec![], checked: None, ok: o.ok.clone(), spelled: Vec::new() }, lang);
+                    let tail = check::render(&check::Outcome { path: o.path.clone(), diags: vec![], checked: None, ok: o.ok.clone(), spelled: Vec::new(), calendar_file: None }, lang);
                     if !tail.is_empty() {
                         parts.push(Part::Text(tail));
                     }

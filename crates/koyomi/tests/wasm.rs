@@ -513,3 +513,75 @@ fn every_alias_gives_a_world_wit_reads() {
     assert!(read.iter().any(|w| w.starts_with('%')), "no alias that is a word of WIT passed check: {refused:?}");
     assert!(read.len() >= 20, "{} worlds", read.len());
 }
+
+/// An input named `__proto__` (W001 of Wasm, DESIGN 17): a JavaScript host that writes the inputs as
+/// an object literal sets the object's prototype, not a key, so what it sends has no such input, and
+/// the module answers that it is missing. Sent as the JSON it is, with the key written, the module
+/// answers as the other targets do. With the alias and name the note gives, the literal works.
+#[test]
+fn a_javascript_object_literal_cannot_carry_an_input_named_proto() {
+    if !ready(Need::Rustc, toolchain, "rustc's wasm32-unknown-unknown target or node is missing; the module of an input named __proto__ is not built") {
+        return;
+    }
+    let d = TempDir::new("wasm-proto");
+    for (path, key, literal, answers) in [
+        (common::SPELLING_FILES.iter().map(|(p, _)| *p).find(|p| p.ends_with("/wasm_proto_input.cal")).unwrap(), "__proto__", "{ received: \"2026-01-01\", __proto__: 2 }", false),
+        ("tests/spellings/renamed/wasm_proto_input.cal", "proto", "{ received: \"2026-01-01\", proto: 2 }", true),
+    ] {
+        let c = checked(path);
+        let w = d.path().join(key);
+        std::fs::create_dir_all(&w).unwrap();
+        generate(&w, &c, Lang::En);
+        let module = build(&w, &c);
+        let h = host(&w);
+        // the JSON as it is, with the key written
+        let (lines, _) = ask(&h, &module, &[Value::String(serde_json::json!({ "received": "2026-01-01", key: 2 }).to_string())]);
+        let parsed: Value = serde_json::from_str(&lines[0]).unwrap();
+        assert_eq!(parsed["out"]["due"], "2026-01-03", "{path}, as JSON: {}", lines[0]);
+        // the same thing from a JavaScript object literal
+        let script = format!(
+            "const inputs = {literal};\nprocess.stdout.write(JSON.stringify(inputs));\n"
+        );
+        let r = run(Command::new("node").arg("--input-type=module").arg("-e").arg(&script), LIMIT);
+        ok_or_fail("node", &r);
+        let (lines, _) = ask(&h, &module, &[Value::String(r.stdout.trim().to_string())]);
+        let parsed: Value = serde_json::from_str(&lines[0]).unwrap();
+        if answers {
+            assert_eq!(parsed["out"]["due"], "2026-01-03", "{path}, as a literal: {}", lines[0]);
+        } else {
+            assert_eq!(parsed["refused"], "input", "{path}, as a literal: {}", lines[0]);
+            assert!(parsed["error"].as_str().unwrap().contains(common::PROTO_MISSING), "{path}, as a literal: {}", lines[0]);
+        }
+    }
+}
+
+/// Two `.wit` that are one package (W001 of Wasm, DESIGN 17): `pay_days` and `pay_days_`, of one version,
+/// both declare `koyomi:pay-days@1.0.0`, and a host that reads the two stops. With the alias the note
+/// gives, it reads them.
+#[test]
+fn two_worlds_of_one_package_do_not_resolve() {
+    if !ready(Need::Rustc, || on_path("wasm-tools").is_some(), "wasm-tools is missing; two worlds are not read together") {
+        return;
+    }
+    let (first, later) = ("tests/spellings/across/pay_days.cal", "tests/spellings/across/pay_days_.cal");
+    let renamed = "tests/spellings/across/renamed/pay_days_.cal";
+    for (l, resolves) in [(later, false), (renamed, true)] {
+        let d = TempDir::new("wasm-two-worlds");
+        let wit = d.path().join("wit");
+        for (k, p) in [first, l].iter().enumerate() {
+            let c = checked(p);
+            let u = codegen::unit_of(&c, Lang::En);
+            let deps = wit.join("deps").join(format!("f{k}"));
+            std::fs::create_dir_all(&deps).unwrap();
+            std::fs::write(deps.join(format!("{}.wit", u.alias)), wasm::wit(&u)).unwrap();
+        }
+        std::fs::write(wit.join("host.wit"), "package app:host;\n\nworld host {\n  include koyomi:pay-days/pay-days@1.0.0;\n}\n").unwrap();
+        let r = run(Command::new("wasm-tools").args(["component", "wit"]).arg(&wit), LIMIT);
+        let said = format!("{}{}", r.stdout, r.stderr);
+        if resolves {
+            assert!(r.ok, "{l}: wasm-tools was to read the two, and said:\n{said}");
+        } else {
+            assert!(!r.ok && said.contains("is defined in two different locations"), "{l}: wasm-tools was to stop, and said:\n{said}");
+        }
+    }
+}

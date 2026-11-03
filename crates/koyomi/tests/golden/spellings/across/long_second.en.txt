@@ -1,0 +1,6 @@
+tests/spellings/across/long_first.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)
+warning[W001]: tests/spellings/across/long_second.cal:1:7: In the code generated for PostgreSQL, the file's alias `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_second` and the alias `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_first` of `tests/spellings/across/long_first.cal` are one schema, `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_nam`
+     1 | dates terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_second v1
+  = PostgreSQL: a name keeps its first 63 bytes, so both schemas are `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_nam`. Loaded into one database, the later file's functions replace the earlier file's of the same name and parameter types (where the type returned differs, the load stops), so a call of the earlier file's function gets the later file's answer.
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_second(<alias>) v1`).
+tests/spellings/across/long_second.cal: ok — every date computes on all 31 days of received (2026-01-01..2026-01-31)

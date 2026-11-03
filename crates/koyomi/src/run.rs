@@ -158,10 +158,13 @@ fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
     let mut loader = Loader::default();
     let mut unreadable = false;
     let mut errors = false;
+    // The files given before each, for what they make one in a target (W001, DESIGN 17).
+    let mut earlier = Vec::new();
     for arg in &a.pos {
         for f in expand(arg, "check", lang) {
             match check::check_file(&f, &opts, &mut loader) {
-                Ok(o) => {
+                Ok(mut o) => {
+                    check::compare_across(&mut o, &mut earlier);
                     errors |= o.has_errors();
                     if json {
                         println!("{}", check::to_json(&o, lang));
@@ -394,12 +397,15 @@ fn gen_cmd(a: &Args, typed: &[String], lang: Lang) -> ExitCode {
     let mut unasked: Vec<String> = Vec::new();
     // Whether a file's names break a target the run writes (E016, DESIGN 15): then it writes nothing.
     let mut stopped = false;
+    // The files given before each, for what they make one in a target (W001, DESIGN 17).
+    let mut earlier = Vec::new();
     for arg in &a.pos {
         for f in expand(arg, "gen", lang) {
-            let o = match check::check_file(&f, &Options::default(), &mut loader) {
+            let mut o = match check::check_file(&f, &Options::default(), &mut loader) {
                 Ok(o) => o,
                 Err(e) => return refuse(tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
             };
+            check::compare_across(&mut o, &mut earlier);
             let Some(checked) = o.checked.as_ref().filter(|_| !o.has_errors()) else {
                 refused(&o, tr!("`{f}` は検査を通らないので、生成しません", "`{f}` does not pass check, so nothing is generated from it"), lang);
                 failed = true;

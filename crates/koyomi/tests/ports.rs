@@ -385,3 +385,17 @@ fn a_kept_check_is_of_what_the_thread_reads() {
     assert_ne!(a.sha256, b.sha256);
     assert!(Engine.facts(file).is_err(), "there is no /project/net30.cal on the disk");
 }
+
+/// `ritsu check` of several files, through the port: the files are compared as `koyomi check`
+/// compares them (DESIGN 17), and the later file's W001 is among its findings and in its JSON.
+#[test]
+fn the_port_compares_the_files_it_is_given() {
+    use ritsu_ports::Part;
+    let files = ["tests/spellings/across/pay_days.cal".to_string(), "tests/spellings/across/paydays.cal".to_string()];
+    let got = Engine.checked(Path::new("."), &files, ritsu_base::text::Lang::En);
+    assert_eq!(got.len(), 2);
+    let findings = |k: usize| got[k].parts.iter().filter(|p| matches!(p, Part::Finding(_))).count();
+    assert_eq!(findings(0), 0);
+    assert_eq!(findings(1), 1);
+    assert_eq!(got[1].json.to_string().matches("\"W001\"").count(), 1, "{}", got[1].json.to_string());
+}

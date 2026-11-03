@@ -9,8 +9,11 @@
 //! The files of `tests/spellings/` (DESIGN 15) go through the targets too: each through the
 //! targets its W001 does not name, its renamed one (the alias the note gives) through all six, and
 //! each through the ones it names, which have to stop where `common::SPELLING_FILES` says, or load
-//! and answer wrongly (`breaks_python`, `breaks_go`, `breaks_sql`, `breaks_rust`, `breaks_wasm`).
-//! These are the files `gen` does not write (E016), made as `gen` made them before it stopped.
+//! and answer wrongly (`breaks_typescript`, `breaks_python`, `breaks_go`, `breaks_sql`, `breaks_rust`,
+//! `breaks_wasm`). These are the files `gen` does not write (E016), made as `gen` made them before it
+//! stopped. So do the files of `tests/spellings/across/` (DESIGN 17): the versions with the alias the
+//! note gives go through all six, and two files loaded into one PostgreSQL database show why the
+//! later one's W001 is there (`across_sql`).
 //!
 //! The vectors are made in this process and piped to the runner as they are made; nothing as
 //! large as them is written to disk. A tool that is missing prints `SKIP:` and the test passes
@@ -77,12 +80,27 @@ fn subjects(t: Target) -> Vec<Subject> {
         }
         v.push(subject(&common::renamed(p)));
     }
+    let mut seen = Vec::new();
+    for (first, later, _) in common::ACROSS {
+        for p in [first.to_string(), later.to_string(), common::renamed_across(later)] {
+            if seen.contains(&p) {
+                continue;
+            }
+            seen.push(p.clone());
+            // the first file and the renamed ones are subjects of every target; of a later file,
+            // the targets its pair does not make one
+            let named = common::ACROSS.iter().any(|(_, l, n)| *l == p && n.contains(&t));
+            if !named {
+                v.push(subject(&p));
+            }
+        }
+    }
     v
 }
 
 /// The files of tests/spellings whose W001 names `t`, with what its tool says of each.
 fn broken(t: Target) -> Vec<(Subject, &'static str)> {
-    common::SPELLING_FILES.iter().map(|(p, says)| (subject(p), *says)).filter(|(s, _)| named(s).contains(&t)).collect()
+    common::SPELLING_FILES.iter().filter_map(|(p, says)| says.iter().find(|(x, _)| *x == t).map(|(_, said)| (subject(p), *said))).collect()
 }
 
 /// Write each subject's code for `t` under `dir`, its comments and messages in `lang`.
@@ -267,6 +285,23 @@ fn typescript() {
     };
     compare_all("typescript", &ss, |s| runner(&dir, s));
     compare_ja("typescript", &ss, |s| runner(&ja, s));
+    breaks_typescript();
+}
+
+/// Each file of tests/spellings whose W001 names TypeScript, generated alone: Node, which strips the
+/// types and loads the module, stops where `common::SPELLING_FILES` says.
+fn breaks_typescript() {
+    let bs = broken(Target::TypeScript);
+    for (s, says) in &bs {
+        let d = TempDir::new("ts-breaks");
+        generate(d.path(), Target::TypeScript, std::slice::from_ref(s), Lang::En);
+        std::fs::write(d.path().join("typescript/package.json"), "{\"type\": \"module\"}\n").unwrap();
+        let r = run(Command::new("node").arg("--disable-warning=ExperimentalWarning").arg(d.path().join(format!("typescript/{}_runner.ts", s.alias))).stdin(std::process::Stdio::null()), LIMIT);
+        let said = format!("{}{}", r.stdout, r.stderr);
+        assert!(!r.ok && said.contains(says), "{}: node was to stop with {says:?}, and said:\n{said}", s.path);
+        println!("typescript: {} stops node ({says})", s.path);
+    }
+    assert!(bs.len() >= 2, "{} files of tests/spellings name TypeScript", bs.len());
 }
 
 #[test]
@@ -308,8 +343,9 @@ fn python() {
 }
 
 /// Each file of tests/spellings whose W001 names Python, generated alone, its runner run from
-/// beside the module as every runner is: `import <alias>` gives the standard library's module of
-/// that name, read before it, and the runner stops where `common::SPELLING_FILES` says.
+/// beside the module as every runner is: it stops where `common::SPELLING_FILES` says (`import
+/// <alias>` gives the standard library's module of that name, or the generated module hides a
+/// built-in it uses); or, when it answers as it should, mypy --strict stops there.
 fn breaks_python() {
     let bs = broken(Target::Python);
     for (s, says) in &bs {
@@ -318,10 +354,21 @@ fn breaks_python() {
         let mut c = Command::new("python3");
         c.arg(d.path().join(format!("python/{}_runner.py", s.alias)));
         match compare(s, c) {
-            Ok(n) => panic!("{}: the runner was to stop with {says:?}, and answered its {n} lines", s.path),
-            Err(e) => assert!(e.contains(says), "{}: the runner was to stop with {says:?}, and said:\n{e}", s.path),
+            Ok(_) => {
+                let Some(mypy) = find("MYPY", Some(Path::new("tools/.venv/bin/mypy")), "mypy", &["--version"]) else {
+                    skip("mypy is not installed (tools/requirements.txt); what it says of a built-in the module hides is not looked at");
+                    continue;
+                };
+                let r = run(Command::new(&mypy).args(["--strict", "--no-incremental", "--cache-dir", &d.path().join(".mypy_cache").to_string_lossy()]).arg(format!("{}.py", s.alias)).current_dir(d.path().join("python")), LIMIT);
+                let said = format!("{}{}", r.stdout, r.stderr);
+                assert!(!r.ok && said.contains(says), "{}: mypy was to stop with {says:?}, and said:\n{said}", s.path);
+                println!("python: {} answers as it should, and stops mypy ({says})", s.path);
+            }
+            Err(e) => {
+                assert!(e.contains(says), "{}: the runner was to stop with {says:?}, and said:\n{e}", s.path);
+                println!("python: {} stops its runner ({says})", s.path);
+            }
         }
-        println!("python: {} stops its runner ({says})", s.path);
     }
     assert!(bs.len() >= 2, "{} files of tests/spellings name Python", bs.len());
 }
@@ -447,11 +494,11 @@ fn breaks_rust() {
         let runner = d.path().join(format!("rust/{}_runner.rs", s.alias));
         let out = d.path().join("rust/out");
         let warns = run(Command::new("rustc").args(["--edition", "2021", "--emit=metadata", "--out-dir"]).arg(&out).arg(&runner), LIMIT);
-        assert!(warns.ok && warns.stderr.contains(says), "{}: rustc was to warn with {says:?}, and said:\n{}", s.path, warns.stderr);
+        assert!(warns.stderr.contains(says), "{}: rustc was to say {says:?}, and said:\n{}", s.path, warns.stderr);
         let r = run(Command::new("rustc").args(["--edition", "2021", "-D", "warnings", "--emit=metadata", "--out-dir"]).arg(&out).arg(&runner), LIMIT);
         let said = format!("{}{}", r.stdout, r.stderr);
         assert!(!r.ok && said.contains(says), "{}: rustc -D warnings was to stop with {says:?}, and said:\n{said}", s.path);
-        println!("rust: {} builds with a warning, and stops rustc -D warnings ({says})", s.path);
+        println!("rust: {} {}, and stops rustc -D warnings ({says})", s.path, if warns.ok { "builds with a warning" } else { "does not build" });
     }
     assert!(bs.len() >= 8, "{} files of tests/spellings name Rust", bs.len());
 }
@@ -491,6 +538,53 @@ fn sql() {
     compare_all("sql", &ss, |s| runner(&dir, "postgres", s));
     compare_ja("sql", &ss, |s| runner(&ja, "ja", s));
     breaks_sql(&cluster);
+    information_schema(&cluster);
+    across_sql(&cluster);
+}
+
+/// A file named `information_schema`: as a superuser it loads, but only a superuser creates a function
+/// in that schema, and the role an application connects as stops there. There is one such name, so
+/// the file is written here rather than kept as a file of tests/spellings with a Japanese version.
+fn information_schema(cluster: &Postgres) {
+    let d = TempDir::new("sql-information-schema");
+    let p = d.path().join("information_schema.cal");
+    std::fs::write(&p, "dates information_schema v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate due = received\n  + 30 days\n").unwrap();
+    let s = subject(&p.to_string_lossy());
+    assert_eq!(named(&s), [Target::Sql]);
+    generate(d.path(), Target::Sql, std::slice::from_ref(&s), Lang::En);
+    let sql = d.path().join("sql/information_schema.sql");
+    ok_or_fail("CREATE DATABASE", &run(cluster.psql("postgres").args(["-c", "CREATE DATABASE information_schema_db", "-c", "CREATE ROLE koyomi_application LOGIN", "-c", "GRANT CREATE ON DATABASE information_schema_db TO koyomi_application"]), LIMIT));
+    let r = run(cluster.psql("information_schema_db").args(["-U", "koyomi_application"]).arg("-f").arg(&sql), LIMIT);
+    let said = format!("{}{}", r.stdout, r.stderr);
+    let says = "permission denied for schema information_schema";
+    assert!(!r.ok && said.contains(says), "PostgreSQL was to stop with {says:?}, and said:\n{said}");
+    ok_or_fail("psql -f as a superuser", &run(cluster.psql("information_schema_db").arg("-f").arg(&sql), LIMIT));
+    println!("sql: the alias information_schema stops PostgreSQL, as a role that is no superuser ({says})");
+}
+
+/// The two files of `common::ACROSS` that are one schema, generated as `gen` made them before it
+/// stopped and loaded into one database: each function that had an answer of its own gets the later
+/// file's. With the alias the note gives, each answers for itself.
+fn across_sql(cluster: &Postgres) {
+    for (k, (first, later, named)) in common::ACROSS.iter().filter(|(_, _, n)| n.contains(&Target::Sql)).enumerate() {
+        assert_eq!(*named, [Target::Sql]);
+        for (j, (l, keeps)) in [(later.to_string(), false), (common::renamed_across(later), true)].into_iter().enumerate() {
+            let d = TempDir::new("sql-across");
+            let ss = [subject(first), subject(&l)];
+            generate(d.path(), Target::Sql, &ss, Lang::En);
+            let [a, b] = &ss;
+            let db = format!("across{k}_{j}");
+            ok_or_fail(&format!("CREATE DATABASE {db}"), &run(cluster.psql("postgres").args(["-c", &format!("CREATE DATABASE {db}")]), LIMIT));
+            for s in [a, b] {
+                ok_or_fail(&format!("psql -f {}.sql", s.alias), &run(cluster.psql(&db).arg("-f").arg(d.path().join(format!("sql/{}.sql", s.alias))), LIMIT));
+            }
+            let asked = run(cluster.psql(&db).args(["-At", "-c", &format!("SELECT {}.due(DATE '2026-01-01'), {}.due(DATE '2026-01-01')", a.alias, b.alias)]), LIMIT);
+            ok_or_fail("SELECT", &asked);
+            let want = if keeps { "2026-01-04|2026-01-06" } else { "2026-01-06|2026-01-06" };
+            assert!(asked.stdout.lines().any(|x| x == want), "{first} and {l}: {want} was to be the answer, and PostgreSQL said:\n{}", asked.stdout);
+            println!("sql: {first} and {l} in one database answer {want}");
+        }
+    }
 }
 
 /// Each file of tests/spellings whose W001 names PostgreSQL, generated alone and loaded into a
@@ -582,6 +676,10 @@ fn wasm() {
 fn breaks_wasm() {
     let bs = broken(Target::Wasm);
     for (s, says) in &bs {
+        if *says == common::PROTO_MISSING {
+            // The code builds: what it answers a host is tests/wasm.rs's.
+            continue;
+        }
         let d = TempDir::new("wasm-breaks");
         generate(d.path(), Target::Wasm, std::slice::from_ref(s), Lang::En);
         let mut c = Command::new("rustc");

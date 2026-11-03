@@ -1,0 +1,9 @@
+dates Pythonの組み込みのstr(python_str_ja) v1
+description "整数の入力があるファイルの、別名が str の日付。Python のモジュールの一番外の関数が、モジュールの使う組み込みの str を隠す（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+  日数(n) : int   range >=0 <=3
+
+date 期日(str) = 受領日
+  + 日数 days

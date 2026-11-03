@@ -1,0 +1,8 @@
+dates Pythonの組み込みのtuple(python_tuple_ja) v1
+description "別名が tuple の日付。Python のモジュールの一番外の関数が、モジュールが型の注釈に使う組み込みの tuple を隠すので、mypy --strict が通らない。動かしたときの答えは変わらない（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 期日(tuple) = 受領日
+  + 30 days

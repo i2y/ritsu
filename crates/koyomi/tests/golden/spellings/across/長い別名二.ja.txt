@@ -1,0 +1,6 @@
+tests/spellings/across/長い別名一.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます
+警告[W001]: tests/spellings/across/長い別名二.cal:1:13: 生成した PostgreSQL のコードでは、ファイルの別名 `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_second_ja` と、`tests/spellings/across/長い別名一.cal` の別名 `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_first_ja` が、同じスキーマ `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_nam` になります
+     1 | dates 長い別名二(terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_second_ja) v1
+  = PostgreSQL: 名前は先頭の 63 バイトしか残らないので、どちらのスキーマも `terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_nam` です。一つのデータベースに読み込むと、後のファイルの関数が、前のファイルの同じ名前で同じ引数の型の関数を置き換えるので（返す型が違えば、読み込みが止まります）、前のファイルの関数の呼び出しに、後のファイルの答えが返ります。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates 長い別名二(<別名>) v1`）。
+tests/spellings/across/長い別名二.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

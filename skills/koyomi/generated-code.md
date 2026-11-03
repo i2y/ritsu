@@ -34,11 +34,14 @@ Every name is written as the `.cal` writes it, and none is changed to make room 
 PascalCase and package name and PostgreSQL's 63 bytes can make two aliases one identifier, or an
 alias a name that target cannot take; rustc warns of an alias with two `_` in a row
 (`non_snake_case`); and a file's alias can be the name of a module of Python's standard library,
-which then stands in for the generated module, or the generated module for it. `koyomi check`
-warns about each and names the targets (W001). Written as it is, the code of those targets would
-not build (for Rust and Wasm, with `-D warnings`), would answer for one date with another, or
-could not be imported, so `gen` writes nothing when it is to write one of them (E016); a
-`--target` that names only the others writes them.
+which then stands in for the generated module, or the generated module for it. Some names break
+only the targets that declare or read them (`koyomi_error` in Go, `str` in Python), a schema is
+PostgreSQL's own (`pg_terms`), the Wasm module takes `__proto__` from a JSON object, and files given
+together can be one Go package, one WIT package or one PostgreSQL schema. `koyomi check` warns
+about each and names the targets (W001). Written as it is, the code of those targets would not
+build (for Rust and Wasm, with `-D warnings`), would answer for one date with another, or could not
+be imported, so `gen` writes nothing when it is to write one of them (E016); a `--target` that
+names only the others writes them.
 
 `--target` says what to write, given once for each target (`--target typescript --target go`); the
 targets are written in the order of the table above, whatever the order of the flags. With no

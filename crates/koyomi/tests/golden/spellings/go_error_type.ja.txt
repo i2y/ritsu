@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/go_error_type.cal:7:6: `koyomi_error` は、生成した Go のコードが自分で使う名前と同じになります
+     7 | date koyomi_error = received
+  = Go: 生成したコードは、エラーの型 `KoyomiError` を宣言します。日付「koyomi_error」の関数も、PascalCase で書くと `KoyomiError` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`koyomi_error(<別名>)`）。
+tests/spellings/go_error_type.cal: ok — received 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

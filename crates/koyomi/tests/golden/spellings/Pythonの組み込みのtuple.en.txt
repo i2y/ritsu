@@ -1,0 +1,5 @@
+warning[W001]: tests/spellings/Pythonの組み込みのtuple.cal:7:9: In the code generated for Python, `tuple` hides Python's built-in `tuple`, which the code uses
+     7 | date 期日(tuple) = 受領日
+  = Python: the generated code annotates with the built-in `tuple`. The function of 期日 (`tuple`) is a function of that name at the top of the module, so `mypy --strict` does not pass (`is not valid as a type`); what the code answers when run is the same.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`期日(<alias>)`).
+tests/spellings/Pythonの組み込みのtuple.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

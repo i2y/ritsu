@@ -1,0 +1,10 @@
+警告[W001]: tests/spellings/calendar_function.cal:9:6: `is_open` は、カレンダーを使うファイルで生成したコードが置く関数 `is_open` と同じ名前になります
+     9 | date is_open = received
+  = TypeScript: モジュールが `is_open` を二度宣言することになり、`tsc` が通らず、Node も読み込めません（`Identifier 'is_open' has already been declared`）。
+  = Python: 後の `def is_open` が前の関数を置き換えるので、モジュールの `is_open` はカレンダーの関数になり、日付「is_open」の関数を呼べません。`mypy --strict` も通りません。
+  = Go: どちらも `IsOpen` です。同じ名前を一つのパッケージに二度宣言することになり、コンパイルできません。
+  = Rust: 同じ名前の関数を二度宣言することになり、コンパイルできません。
+  = Wasm: モジュールは同じ Rust のコードから組むので、同じところで止まります。
+  = PostgreSQL: 日付「is_open」の関数は整数の入力も取り、引数の型がカレンダーの `is_open(day date)` と違うので、PostgreSQL は二つを別の関数として持ちます。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`is_open(<別名>)`）。
+tests/spellings/calendar_function.cal: ok — received 2026-01-01〜2026-01-31、n 0〜3 の 124 通りのすべてで、どの日付も計算できます

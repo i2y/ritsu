@@ -1,0 +1,8 @@
+dates Goのエラーの型(go_error_type_ja) v1
+description "別名が koyomi_error の日付。Go のコードはエラーの型 KoyomiError を宣言し、この日付の関数も KoyomiError になるので、コンパイルできない（W001）。ほかの出力先は、そのままで使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 期日(koyomi_error) = 受領日
+  + 30 days

@@ -1,0 +1,8 @@
+dates PostgreSQLのスキーマ(terms_ja_renamed) v1
+description "../PostgreSQLのスキーマ.cal と同じファイルに、W001 の注のとおりに別名を付けたもの。check は何も言わず、どの出力先も使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 期日(due) = 受領日
+  + 30 days

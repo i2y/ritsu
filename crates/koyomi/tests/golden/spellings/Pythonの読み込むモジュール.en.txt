@@ -1,0 +1,7 @@
+warning[W001]: tests/spellings/Pythonの読み込むモジュール.cal:1:24: In the code generated for Python, the file's alias `typing` is the module's name, which a module of Python's standard library has
+     1 | dates Pythonの読み込むモジュール(typing) v1
+  = Python: Python keeps one module per name, and `import typing` gives the one imported first. Once the standard library's `typing` is imported, the generated functions cannot be called; imported before it, the generated module is what every `import typing` in the program gets in place of the standard library's.
+  = The runner `gen` writes beside the module imports the standard library's `typing` too.
+  = A package of `ritsu gen` holds the module as `<package>.dates.typing`, which does not meet the standard library's.
+  = For a target you do not generate, leave it. For one you do, give the file another alias (`dates Pythonの読み込むモジュール(<alias>) v1`).
+tests/spellings/Pythonの読み込むモジュール.cal: ok — every date computes on all 31 days of 受領日 (2026-01-01..2026-01-31)

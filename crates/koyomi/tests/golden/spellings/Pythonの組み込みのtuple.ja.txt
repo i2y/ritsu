@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/Pythonの組み込みのtuple.cal:7:9: 生成した Python のコードでは、`tuple` が、コードの使う組み込みの `tuple` を隠します
+     7 | date 期日(tuple) = 受領日
+  = Python: 生成したコードは、組み込みの `tuple` を型の注釈に使います。日付「期日」の関数 `tuple` はモジュールの一番外の同じ名前の関数なので、`mypy --strict` が通りません（`is not valid as a type`）。動かしたときの答えは変わりません。
+  = 使わない出力先なら、このままで構いません。使うなら、別の別名を付けてください（`期日(<別名>)`）。
+tests/spellings/Pythonの組み込みのtuple.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

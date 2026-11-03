@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+use koyomi::naming::Target::{self, Go, Python, Rust, Sql, TypeScript, Wasm};
+
 /// Every file the generated code is held to (tests/targets.rs): the examples that pass check, in
 /// English and in Japanese (the examples on England and Wales, the English versions of the Japanese
 /// examples, and the Japanese versions), and the fixtures made to use every operation over
@@ -39,49 +41,107 @@ pub const TARGET_FILES: &[&str] = &[
     "tests/fixtures/helpers_日付が一つも無い.cal",
 ];
 
-/// The files of `tests/spellings/` (DESIGN 15): each writes names some targets spell as one
-/// identifier, or cannot take, and `check` warns about it once (W001), in English and in Japanese.
-/// Beside each is what the tool of the targets it names says of the code: the line it stops at
-/// (for Python, what the runner stops with), or nothing when the code loads and answers for one
-/// function with another. tests/targets.rs runs each file through the targets W001 does not name,
-/// and the named ones with this line.
-pub const SPELLING_FILES: &[(&str, &str)] = &[
-    ("tests/spellings/go_functions.cal", "Net30 redeclared in this block"),
-    ("tests/spellings/go_time_function.cal", "CutoffAt redeclared in this block"),
-    ("tests/spellings/go_date_type.cal", "Date redeclared in this block"),
-    ("tests/spellings/go_test_main.cal", "TestMain redeclared in this block"),
-    ("tests/spellings/go_package_keyword.cal", "expected 'IDENT', found 'goto'"),
-    ("tests/spellings/go_package_main.cal", "is a program, not an importable package"),
-    ("tests/spellings/postgresql_functions.cal", ""),
-    ("tests/spellings/postgresql_time_function.cal", "cannot change return type of existing function"),
-    ("tests/spellings/postgresql_parameters.cal", "used more than once"),
-    ("tests/spellings/postgresql_parameter_names.cal", "cannot change name of input parameter"),
-    ("tests/spellings/rust_function.cal", "should have a snake case name"),
-    ("tests/spellings/rust_time_function.cal", "should have a snake case name"),
-    ("tests/spellings/rust_parameter.cal", "should have a snake case name"),
-    ("tests/spellings/rust_module.cal", "should have a snake case name"),
-    ("tests/spellings/python_library_module.cal", "has no attribute"),
-    ("tests/spellings/Goの関数.cal", "Net30 redeclared in this block"),
-    ("tests/spellings/Goの時刻の関数.cal", "CutoffAt redeclared in this block"),
-    ("tests/spellings/Goの日付の型.cal", "Date redeclared in this block"),
-    ("tests/spellings/GoのTestMain.cal", "TestMain redeclared in this block"),
-    ("tests/spellings/Goのキーワードのパッケージ.cal", "expected 'IDENT', found 'goto'"),
-    ("tests/spellings/Goのmainのパッケージ.cal", "is a program, not an importable package"),
-    ("tests/spellings/PostgreSQLの関数.cal", ""),
-    ("tests/spellings/PostgreSQLの時刻の関数.cal", "cannot change return type of existing function"),
-    ("tests/spellings/PostgreSQLの引数.cal", "used more than once"),
-    ("tests/spellings/PostgreSQLの引数の名前.cal", "cannot change name of input parameter"),
-    ("tests/spellings/Rustの関数.cal", "should have a snake case name"),
-    ("tests/spellings/Rustの時刻の関数.cal", "should have a snake case name"),
-    ("tests/spellings/Rustの引数.cal", "should have a snake case name"),
-    ("tests/spellings/Rustのモジュール.cal", "should have a snake case name"),
-    ("tests/spellings/Pythonの標準ライブラリのモジュール.cal", "has no attribute"),
+/// The files of `tests/spellings/` (DESIGN 15, 17): each writes a name some targets spell as another
+/// one, or cannot take, and `check` warns about it once (W001), in English and in Japanese. Beside
+/// each are the targets W001 names, with what the tool of each says of the code: the line it stops
+/// at (for Python, what the runner stops with, or what mypy says when the code answers as it should;
+/// for the Wasm module of `__proto__`, what it answers a host), or nothing when the code loads and
+/// answers for one function with another. tests/targets.rs runs each file through the targets W001
+/// does not name, and the named ones with this line.
+pub const SPELLING_FILES: &[(&str, &[(Target, &str)])] = &[
+    ("tests/spellings/go_functions.cal", &[(Go, "Net30 redeclared in this block")]),
+    ("tests/spellings/go_time_function.cal", &[(Go, "CutoffAt redeclared in this block")]),
+    ("tests/spellings/go_date_type.cal", &[(Go, "Date redeclared in this block")]),
+    ("tests/spellings/go_error_type.cal", &[(Go, "KoyomiError redeclared in this block")]),
+    ("tests/spellings/go_parse_date.cal", &[(Go, "ParseDate redeclared in this block")]),
+    ("tests/spellings/go_test_main.cal", &[(Go, "TestMain redeclared in this block")]),
+    ("tests/spellings/go_err_parameter.cal", &[(Go, "value of interface type error")]),
+    ("tests/spellings/go_package_keyword.cal", &[(Go, "expected 'IDENT', found 'goto'")]),
+    ("tests/spellings/go_package_main.cal", &[(Go, "is a program, not an importable package")]),
+    ("tests/spellings/calendar_function.cal", CALENDAR_FUNCTION),
+    ("tests/spellings/postgresql_functions.cal", &[(Sql, "")]),
+    ("tests/spellings/postgresql_time_function.cal", &[(Sql, "cannot change return type of existing function")]),
+    ("tests/spellings/postgresql_parameters.cal", &[(Sql, "used more than once")]),
+    ("tests/spellings/postgresql_parameter_names.cal", &[(Sql, "cannot change name of input parameter")]),
+    ("tests/spellings/postgresql_schema.cal", &[(Sql, "unacceptable schema name")]),
+    ("tests/spellings/rust_function.cal", &[(Rust, SNAKE), (Wasm, SNAKE)]),
+    ("tests/spellings/rust_time_function.cal", &[(Rust, SNAKE), (Wasm, SNAKE)]),
+    ("tests/spellings/rust_parameter.cal", &[(Rust, SNAKE), (Wasm, SNAKE)]),
+    ("tests/spellings/rust_module.cal", &[(Rust, SNAKE)]),
+    ("tests/spellings/python_library_module.cal", &[(Python, "has no attribute")]),
+    ("tests/spellings/python_imported_module.cal", &[(Python, "cannot import name")]),
+    ("tests/spellings/python_str.cal", &[(Python, "missing 1 required positional argument")]),
+    ("tests/spellings/python_isinstance.cal", &[(Python, "has no attribute 'year'")]),
+    ("tests/spellings/python_tuple.cal", &[(Python, "is not valid as a type")]),
+    ("tests/spellings/wasm_proto_input.cal", &[(Wasm, PROTO_MISSING)]),
+    ("tests/spellings/Goの関数.cal", &[(Go, "Net30 redeclared in this block")]),
+    ("tests/spellings/Goの時刻の関数.cal", &[(Go, "CutoffAt redeclared in this block")]),
+    ("tests/spellings/Goの日付の型.cal", &[(Go, "Date redeclared in this block")]),
+    ("tests/spellings/Goのエラーの型.cal", &[(Go, "KoyomiError redeclared in this block")]),
+    ("tests/spellings/Goの日付を読む関数.cal", &[(Go, "ParseDate redeclared in this block")]),
+    ("tests/spellings/GoのTestMain.cal", &[(Go, "TestMain redeclared in this block")]),
+    ("tests/spellings/Goの引数err.cal", &[(Go, "value of interface type error")]),
+    ("tests/spellings/Goのキーワードのパッケージ.cal", &[(Go, "expected 'IDENT', found 'goto'")]),
+    ("tests/spellings/Goのmainのパッケージ.cal", &[(Go, "is a program, not an importable package")]),
+    ("tests/spellings/カレンダーの関数.cal", CALENDAR_FUNCTION),
+    ("tests/spellings/PostgreSQLの関数.cal", &[(Sql, "")]),
+    ("tests/spellings/PostgreSQLの時刻の関数.cal", &[(Sql, "cannot change return type of existing function")]),
+    ("tests/spellings/PostgreSQLの引数.cal", &[(Sql, "used more than once")]),
+    ("tests/spellings/PostgreSQLの引数の名前.cal", &[(Sql, "cannot change name of input parameter")]),
+    ("tests/spellings/PostgreSQLのスキーマ.cal", &[(Sql, "unacceptable schema name")]),
+    ("tests/spellings/Rustの関数.cal", &[(Rust, SNAKE), (Wasm, SNAKE)]),
+    ("tests/spellings/Rustの時刻の関数.cal", &[(Rust, SNAKE), (Wasm, SNAKE)]),
+    ("tests/spellings/Rustの引数.cal", &[(Rust, SNAKE), (Wasm, SNAKE)]),
+    ("tests/spellings/Rustのモジュール.cal", &[(Rust, SNAKE)]),
+    ("tests/spellings/Pythonの標準ライブラリのモジュール.cal", &[(Python, "has no attribute")]),
+    ("tests/spellings/Pythonの読み込むモジュール.cal", &[(Python, "cannot import name")]),
+    ("tests/spellings/Pythonの組み込みのstr.cal", &[(Python, "missing 1 required positional argument")]),
+    ("tests/spellings/Pythonの組み込みのisinstance.cal", &[(Python, "has no attribute 'year'")]),
+    ("tests/spellings/Pythonの組み込みのtuple.cal", &[(Python, "is not valid as a type")]),
+    ("tests/spellings/Wasmの入力の__proto__.cal", &[(Wasm, PROTO_MISSING)]),
 ];
+
+const SNAKE: &str = "should have a snake case name";
+
+/// What the Wasm module of an input named `__proto__` answers a host that writes the inputs as an
+/// object literal (tests/wasm.rs): the code builds.
+pub const PROTO_MISSING: &str = "__proto__ is missing";
+
+const CALENDAR_FUNCTION: &[(Target, &str)] = &[
+    (TypeScript, "has already been declared"),
+    (Python, "takes 1 positional argument"),
+    (Go, "IsOpen redeclared in this block"),
+    (Rust, "defined multiple times"),
+    (Wasm, "defined multiple times"),
+];
+
+/// The targets a file of [`SPELLING_FILES`] is about.
+pub fn targets_of(path: &str) -> Vec<Target> {
+    SPELLING_FILES.iter().find(|(p, _)| *p == path).unwrap().1.iter().map(|(t, _)| *t).collect()
+}
 
 /// The same files with the alias their W001's note gives (`tests/spellings/renamed/`): `check`
 /// says nothing of them, and tests/targets.rs runs every one through all six targets.
 pub fn renamed(path: &str) -> String {
     path.replacen("tests/spellings/", "tests/spellings/renamed/", 1)
+}
+
+/// Two files of `tests/spellings/across/` given together, in this order, whose names are one in the
+/// targets beside them (DESIGN 17): the later file's W001 names each, and the earlier file. Each
+/// later file has a version with the alias the note gives (`tests/spellings/across/renamed/`):
+/// given after the same earlier file, `check` says nothing of it.
+pub const ACROSS: &[(&str, &str, &[Target])] = &[
+    ("tests/spellings/across/pay_days.cal", "tests/spellings/across/paydays.cal", &[Go]),
+    ("tests/spellings/across/pay_days.cal", "tests/spellings/across/pay_days_.cal", &[Go, Wasm]),
+    ("tests/spellings/across/long_first.cal", "tests/spellings/across/long_second.cal", &[Sql]),
+    ("tests/spellings/across/支払日.cal", "tests/spellings/across/支払日二.cal", &[Go]),
+    ("tests/spellings/across/支払日.cal", "tests/spellings/across/支払日三.cal", &[Go, Wasm]),
+    ("tests/spellings/across/長い別名一.cal", "tests/spellings/across/長い別名二.cal", &[Sql]),
+];
+
+/// The version of a later file of [`ACROSS`] with the alias the note gives.
+pub fn renamed_across(path: &str) -> String {
+    path.replacen("tests/spellings/across/", "tests/spellings/across/renamed/", 1)
 }
 
 /// Whether rustc has the standard library of `target` installed (`rustup target add <target>`).

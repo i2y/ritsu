@@ -1,0 +1,10 @@
+dates カレンダーの関数(calendar_function_ja) v1
+description "カレンダーを使い、整数の入力も取る、別名が is_open の日付。どの出力先のコードも、カレンダーのために is_open を置くので、TypeScript、Python、Go、Rust、Wasm で同じ名前が二つになる（W001）。PostgreSQL は引数の型で二つの関数を別のものとして持つ"
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+  日数(n) : int   range >=0 <=3
+
+date 期日(is_open) = 受領日
+  + 日数 business days

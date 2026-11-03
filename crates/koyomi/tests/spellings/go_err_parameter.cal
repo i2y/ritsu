@@ -1,0 +1,9 @@
+dates go_err_parameter v1
+description "An input with the alias err. Every function of the Go code keeps its errors in the variable err, which here is the parameter, of another type, so the Go code does not compile (W001). Every other target takes it as it is"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+  err      : int   range >=0 <=3
+
+date due = received
+  + err days

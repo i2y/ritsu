@@ -1,45 +1,27 @@
-//! The names a target spells as one identifier, or cannot take (W001 and E016, DESIGN 15). Every
-//! file of `tests/spellings/` gives W001 once, naming the targets its name says, and what `check`
+//! The names a target spells as one identifier, or cannot take (W001 and E016, DESIGN 15, 17). Every
+//! file of `tests/spellings/` gives W001 once, naming the targets `common::SPELLING_FILES` says, and what `check`
 //! prints of it, in English and in Japanese, is its golden file in `tests/golden/spellings/`
 //! (`KOYOMI_BLESS=1 cargo test` writes them again; read the diff). `gen` stops at the targets it
 //! names (E016) and writes the others. The same file with the alias the note gives
 //! (`tests/spellings/renamed/`) gives nothing. That the named target breaks, and that the others
-//! take both files, is tests/targets.rs's.
+//! take both files, is tests/targets.rs's. The files of `tests/spellings/across/` are the forms of
+//! files given together.
 
 mod common;
 
 use koyomi::check::{Checked, Options, check, check_text, render};
 use koyomi::codegen;
+use common::targets_of;
 use koyomi::naming::{TARGETS, Target};
 use ritsu_base::text::Lang;
 use std::path::Path;
 use std::process::{Command, Output};
 
-/// The targets a file of tests/spellings is about, by its name: Go, PostgreSQL, Python, or Rust
-/// with the Wasm module built from the same code (but for the module's own name, which only Rust
-/// declares).
-fn targets_of(path: &str) -> Vec<Target> {
-    let name = path.rsplit('/').next().unwrap();
-    if name.starts_with("go_") || name.starts_with("Go") {
-        vec![Target::Go]
-    } else if name.starts_with("postgresql_") || name.starts_with("PostgreSQL") {
-        vec![Target::Sql]
-    } else if name.starts_with("python_") || name.starts_with("Python") {
-        vec![Target::Python]
-    } else if name.starts_with("rust_module") || name.starts_with("Rustのモジュール") {
-        vec![Target::Rust]
-    } else if name.starts_with("rust_") || name.starts_with("Rust") {
-        vec![Target::Rust, Target::Wasm]
-    } else {
-        panic!("{path}: a file of tests/spellings starts with the target it is about")
-    }
-}
-
 /// Whether a package of ritsu's breaks where the file's W001 says: every form but the Python
 /// module named like one of the standard library's, which a package holds as
 /// `<package>.dates.<alias>`.
 fn breaks_in_a_package(path: &str) -> bool {
-    !targets_of(path).contains(&Target::Python)
+    !["python_library_module", "python_imported_module", "Pythonの標準ライブラリのモジュール", "Pythonの読み込むモジュール"].iter().any(|n| path.ends_with(&format!("/{n}.cal")))
 }
 
 fn koyomi(args: &[&str]) -> Output {
@@ -115,10 +97,11 @@ fn the_targets_w001_names_stop_and_the_others_build() {
             }
         }
         // The aliases are in the code as they are written: every target but Go has each.
-        let ts = codegen::build(&o, &u, Target::TypeScript, false).unwrap();
-        for d in &u.dates {
-            if !ts.iter().any(|(_, body)| body.contains(&format!("export function {}(", d.alias))) {
-                failures.push(format!("{path}: {} is not in the TypeScript", d.alias));
+        if let Ok(ts) = codegen::build(&o, &u, Target::TypeScript, false) {
+            for d in &u.dates {
+                if !ts.iter().any(|(_, body)| body.contains(&format!("export function {}(", d.alias))) {
+                    failures.push(format!("{path}: {} is not in the TypeScript", d.alias));
+                }
             }
         }
         // The targets a package of ritsu's is made in.
@@ -206,12 +189,14 @@ fn every_file_is_listed_in_english_and_in_japanese() {
     assert_eq!(en.len(), ja.len(), "as many Japanese files as English ones");
     for (e, j) in en.iter().zip(&ja) {
         assert_eq!(targets_of(e), targets_of(j), "{e} and {j} are about the same targets");
-        assert_eq!(common::SPELLING_FILES.iter().find(|(p, _)| p == e).unwrap().1, common::SPELLING_FILES.iter().find(|(p, _)| p == j).unwrap().1, "{e} and {j} stop the target alike");
+        let says = |f: &str| common::SPELLING_FILES.iter().find(|(p, _)| *p == f).unwrap().1;
+        assert_eq!(says(e), says(j), "{e} and {j} stop the targets alike");
     }
 }
 
 /// The names the Go code declares beside the dates' functions that no file of tests/spellings
-/// takes: `ParseDate`, `KoyomiError`, and `IsOpen`, which it declares when the file has a calendar.
+/// takes as written: `ParseDate`, `KoyomiError` and `IsOpen` as other aliases spell them, and `IsOpen`,
+/// which it declares when the file has a calendar.
 #[test]
 fn the_other_names_the_go_code_declares() {
     let warned = |body: &str| -> Vec<String> {
@@ -234,6 +219,162 @@ fn the_other_names_the_go_code_declares() {
     let o = check_text("tests/spellings/inline.cal", "calendar for_ v1\n\nclosed weekly sat, sun\n", &Options::default());
     let codes: Vec<&str> = o.diags.iter().map(|d| d.code).collect();
     assert_eq!(codes, ["W001"], "a calendar named for_ is the Go package for");
+}
+
+/// `is_open`, the function of the calendar: with no calendar it is a name like any other; beside a
+/// calendar it is E009 when the date takes the date input alone, as every target's code then
+/// declares the function twice (PostgreSQL's `is_open(day date)` has the same types), and W001 of
+/// the five that have the name twice when the date takes an integer input as well.
+#[test]
+fn is_open_beside_a_calendar() {
+    let with = |cal: bool, n: bool| {
+        let calendar = if cal { "use calendar \"../fixtures/calendars/weekends.cal\"\n" } else { "" };
+        let input = if n { "  n : int range >=0 <=3\n" } else { "" };
+        let plus = if n { "n" } else { "1" };
+        format!("dates inline v1\n{calendar}\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n{input}\ndate is_open = received\n  + {plus} days\n")
+    };
+    let check_of = |body: &str| check_text("tests/spellings/inline.cal", body, &Options::default());
+    let o = check_of(&with(false, false));
+    assert!(o.diags.is_empty(), "{:?}", o.diags.iter().map(|d| d.code).collect::<Vec<_>>());
+    let o = check_of(&with(false, true));
+    assert!(o.diags.is_empty(), "{:?}", o.diags.iter().map(|d| d.code).collect::<Vec<_>>());
+    let o = check_of(&with(true, false));
+    let codes: Vec<&str> = o.diags.iter().map(|d| d.code).collect();
+    assert_eq!(codes, ["E009"]);
+    for (lang, says) in [(Lang::En, "The alias is_open collides with is_open, the function of the calendar"), (Lang::Ja, "別名 is_open は、カレンダーの関数 is_open とぶつかります")] {
+        assert!(o.diags[0].render(lang).contains(says), "{}", o.diags[0].render(lang));
+    }
+    let o = check_of(&with(true, true));
+    let codes: Vec<&str> = o.diags.iter().map(|d| d.code).collect();
+    assert_eq!(codes, ["W001"]);
+    assert_eq!(o.spelled[0].targets, [Target::TypeScript, Target::Python, Target::Go, Target::Rust, Target::Wasm]);
+}
+
+/// The names the code of no target breaks on, which E009 used to stop: nothing is said of them. And
+/// the ones `check` still stops, whatever the target: a word of koyomi or a reserved word.
+#[test]
+fn the_names_nothing_breaks_on_and_the_words_no_target_takes() {
+    let codes = |body: &str| -> Vec<&'static str> { check_text("tests/spellings/inline.cal", body, &Options::default()).diags.iter().map(|d| d.code).collect() };
+    let date = |alias: &str| format!("dates inline v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate {alias} = received\n  + 30 days\n");
+    let input = |alias: &str| format!("dates inline v1\n\ninputs\n  received({alias}) : date  range >=2026-01-01 <=2026-01-31\n\ndate due = received\n  + 30 days\n");
+    let file = |alias: &str| format!("dates {alias} v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate due = received\n  + 30 days\n");
+    // A date's function: `isinstance` only hides what a file with an integer input calls, and the
+    // Python module's `frozenset` and imports are read before the date's function is.
+    for alias in ["datetime", "timedelta", "frozenset", "err", "isinstance"] {
+        assert!(codes(&date(alias)).is_empty(), "the date {alias}");
+    }
+    // A parameter is the function's own.
+    for alias in ["datetime", "timedelta", "frozenset", "isinstance", "str", "tuple", "is_open", "koyomi_error", "parse_date"] {
+        assert!(codes(&input(alias)).is_empty(), "the input {alias}");
+    }
+    assert_eq!(codes(&input("err")), ["W001"]);
+    // A file's alias: Rust's `std`, `core` and `alloc` are other paths than the module's.
+    for alias in ["std", "core", "alloc"] {
+        assert!(codes(&file(alias)).is_empty(), "the file {alias}");
+    }
+    for (alias, why) in [("date", "date"), ("range", "date"), ("int", "date"), ("bool", "date"), ("super", "date"), ("json", "file"), ("public", "file")] {
+        let body = if why == "date" { date(alias) } else { file(alias) };
+        assert_eq!(codes(&body), ["E009"], "{alias}");
+    }
+}
+
+/// A file's alias that names one of PostgreSQL's own schemas: `pg_…`, and `information_schema`,
+/// which only a superuser creates a function in (tests/targets.rs). A calendar's alias is a schema
+/// as well. A name that only looks like them is not told.
+#[test]
+fn the_schemas_of_postgresql() {
+    let found = |body: &str| -> Vec<(Vec<Target>, String)> { check_text("tests/spellings/inline.cal", body, &Options::default()).spelled.into_iter().map(|f| (f.targets, f.diag.render(Lang::En))).collect() };
+    let dates = |alias: &str| format!("dates {alias} v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate due = received\n  + 30 days\n");
+    for alias in ["pg_catalog", "pg_toast", "pg_temp", "pg_terms", "information_schema"] {
+        let w = found(&dates(alias));
+        assert!(w.len() == 1 && w[0].0 == [Target::Sql] && w[0].1.contains("a name of PostgreSQL's own schemas"), "{alias}: {w:?}");
+    }
+    for alias in ["pgterms", "information_schemas", "my_pg_terms"] {
+        assert!(found(&dates(alias)).is_empty(), "{alias}");
+    }
+    let w = found("calendar pg_days v1\n\nclosed weekly sat, sun\n");
+    assert!(w.len() == 1 && w[0].0 == [Target::Sql], "{w:?}");
+}
+
+/// The files given together (DESIGN 17): the later file's W001 names the targets beside the pair, and
+/// the earlier file; the earlier file's output does not change, and what `check` prints of the two,
+/// in English and in Japanese, is the golden file of the later one in
+/// `tests/golden/spellings/across/`. `gen` of a named target stops at the later file (E016) and writes
+/// nothing; `gen` of the others writes both; and given the other way round, the warning is of the
+/// other file. The version of the later file with the alias the note gives is told nothing, and
+/// `gen` of every target writes both.
+#[test]
+fn the_files_given_together() {
+    let out = ritsu_testkit::TempDir::new("spellings-across");
+    let dir = out.path().to_str().unwrap();
+    let mut failures = Vec::new();
+    for (first, later, named) in common::ACROSS {
+        let stem = later.rsplit('/').next().unwrap().trim_end_matches(".cal");
+        for (lang, tag) in [("en", "en"), ("ja", "ja")] {
+            let o = koyomi(&["check", first, later, "--lang", lang]);
+            assert_eq!(o.status.code(), Some(0), "{first} {later}");
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            let golden = format!("tests/golden/spellings/across/{stem}.{tag}.txt");
+            if let Err(e) = ritsu_testkit::golden::check(Path::new(&golden), &stdout) {
+                failures.push(format!("{later} ({tag}): {e}"));
+            }
+            let alone = koyomi(&["check", first, "--lang", lang]);
+            let alone = String::from_utf8_lossy(&alone.stdout);
+            assert!(stdout.starts_with(alone.as_ref()), "{first} says the same with or without {later}");
+        }
+        let o = koyomi(&["check", first, later, "--format", "json"]);
+        let lines: Vec<serde_json::Value> = String::from_utf8_lossy(&o.stdout).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lines[0]["diagnostics"].as_array().unwrap().len(), 0, "{first}");
+        assert_eq!(lines[1]["diagnostics"].as_array().unwrap().len(), named.len(), "{later}");
+        assert_eq!(lines[1]["ok"], true, "{later}");
+        for t in *named {
+            let o = koyomi(&["gen", first, later, "--out", dir, "--target", t.key()]);
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            assert_eq!(o.status.code(), Some(1), "{later} {}: {stdout}", t.key());
+            assert!(stdout.starts_with(&format!("error[E016]: {later}:")), "{later} {}: {stdout}", t.key());
+            assert!(stdout.contains(first), "{later} {}: E016 names the earlier file: {stdout}", t.key());
+            assert!(std::fs::read_dir(dir).unwrap().next().is_none(), "{later} {}: gen wrote a file", t.key());
+        }
+        for t in TARGETS.iter().filter(|t| !named.contains(t)) {
+            let o = koyomi(&["gen", first, later, "--out", dir, "--target", t.key()]);
+            assert_eq!(o.status.code(), Some(0), "{later} {}: {}", t.key(), String::from_utf8_lossy(&o.stdout));
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+        std::fs::create_dir(dir).unwrap();
+        // the other way round
+        let o = koyomi(&["check", later, first, "--format", "json"]);
+        let lines: Vec<serde_json::Value> = String::from_utf8_lossy(&o.stdout).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lines[0]["diagnostics"].as_array().unwrap().len(), 0, "{later}, given first");
+        assert_eq!(lines[1]["diagnostics"].as_array().unwrap().len(), named.len(), "{first}, given second");
+        // with the alias the note gives
+        let renamed = common::renamed_across(later);
+        let o = koyomi(&["check", first, &renamed, "--format", "json"]);
+        for l in String::from_utf8_lossy(&o.stdout).lines() {
+            let v: serde_json::Value = serde_json::from_str(l).unwrap();
+            assert_eq!(v["diagnostics"].as_array().unwrap().len(), 0, "{renamed}: {l}");
+        }
+        let mut args = vec!["gen", first, &renamed, "--out", dir];
+        for t in TARGETS {
+            args.extend(["--target", t.key()]);
+        }
+        let o = koyomi(&args);
+        assert_eq!(o.status.code(), Some(0), "{renamed}: {}", String::from_utf8_lossy(&o.stdout));
+        std::fs::remove_dir_all(dir).unwrap();
+        std::fs::create_dir(dir).unwrap();
+    }
+    // Two files of one alias are not compared: every target has the one name for both, so `gen` says
+    // both write it, and `check` of a directory can hold the versions of one file.
+    let same = out.path().join("same.cal");
+    std::fs::copy(common::ACROSS[0].0, &same).unwrap();
+    let same = same.to_string_lossy().to_string();
+    let o = koyomi(&["check", common::ACROSS[0].0, &same]);
+    assert!(!String::from_utf8_lossy(&o.stdout).contains("W001"), "{}", String::from_utf8_lossy(&o.stdout));
+    // A calendar is compared too: its alias makes a package and a schema as a dates file's does.
+    std::fs::write(out.path().join("paydays.cal"), "calendar paydays v1\n\nclosed weekly sat, sun\n").unwrap();
+    let cal = out.path().join("paydays.cal").to_string_lossy().to_string();
+    let o = koyomi(&["check", common::ACROSS[0].0, &cal]);
+    assert!(String::from_utf8_lossy(&o.stdout).contains("W001"), "{}", String::from_utf8_lossy(&o.stdout));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// What rustc's lint `non_snake_case` takes as it is: an alias with no two `_` in a row once the
@@ -268,24 +409,30 @@ fn the_names_rustc_warns_of() {
 }
 
 /// A file's alias that is a module of Python's standard library, as `sys.stdlib_module_names` lists
-/// it: a calendar's too, since a calendar is a Python module as well. The four the generated code
-/// imports itself are E009, and a name that only starts like one is not told.
+/// it: a calendar's too, since a calendar is a Python module as well. The ones the generated code
+/// imports itself are told the same, with a note that says so; `json` is a reserved word of
+/// PostgreSQL (E009). A name that only starts like one is not told.
 #[test]
 fn the_modules_of_pythons_standard_library() {
     let codes = |body: &str| -> Vec<&'static str> { check_text("tests/spellings/inline.cal", body, &Options::default()).diags.iter().map(|d| d.code).collect() };
     let dates = |alias: &str| format!("dates {alias} v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-01-31\n\ndate due = received\n  + 30 days\n");
-    for alias in ["collections", "site", "random", "queue", "secrets"] {
+    for alias in ["collections", "site", "random", "queue", "secrets", "datetime", "sys", "typing"] {
         assert_eq!(codes(&dates(alias)), ["W001"], "{alias}");
     }
-    for alias in ["datetime", "json", "sys", "typing"] {
-        assert_eq!(codes(&dates(alias)), ["E009"], "{alias}");
-    }
+    assert_eq!(codes(&dates("json")), ["E009"]);
     for alias in ["collections_", "my_site", "secret"] {
         assert!(codes(&dates(alias)).is_empty(), "{alias}");
     }
     let o = check_text("tests/spellings/inline.cal", "calendar secrets v1\n\nclosed weekly sat, sun\n", &Options::default());
     let w: Vec<String> = o.diags.iter().map(|d| d.render(Lang::En)).collect();
     assert!(w.len() == 1 && w[0].contains("the file's alias `secrets` is the module's name, which a module of Python's standard library has"), "{w:?}");
+    let imports = |alias: &str, says: &str| {
+        let o = check_text("tests/spellings/inline.cal", &dates(alias), &Options::default());
+        assert!(o.diags[0].render(Lang::En).contains(says), "{alias}: {}", o.diags[0].render(Lang::En));
+    };
+    imports("datetime", "imports the standard library's `datetime` itself");
+    imports("sys", "The runner `gen` writes beside the module imports the standard library's `sys` too");
+    imports("typing", "The runner `gen` writes beside the module imports the standard library's `typing` too");
 }
 
 /// The JSON of W001: a warning, with the keys every diagnostic has.

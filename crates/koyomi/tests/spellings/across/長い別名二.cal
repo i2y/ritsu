@@ -1,0 +1,8 @@
+dates 長い別名二(terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_second_ja) v1
+description "長い別名一.cal のあとに渡すファイル。二つの別名は先頭の 63 バイトが同じなので、PostgreSQL では一つのスキーマになり、このファイルの期日が前のファイルの期日を置き換える（W001、このファイルに付く）。ほかの出力先は、どちらも使える"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-01-31
+
+date 期日(due) = 受領日
+  + 5 days

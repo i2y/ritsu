@@ -1,0 +1,5 @@
+警告[W001]: tests/spellings/PostgreSQLのスキーマ.cal:1:23: 生成した PostgreSQL のコードでは、ファイルの別名 `pg_terms_ja` がスキーマの名前になり、PostgreSQL のスキーマの名前と同じです
+     1 | dates PostgreSQLのスキーマ(pg_terms_ja) v1
+  = PostgreSQL: `pg_` で始まる名前は、PostgreSQL がシステムのスキーマのために取っておく名前なので、SQL のファイルの `CREATE SCHEMA` が止まり（`unacceptable schema name`）、ファイルを読み込めません。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates PostgreSQLのスキーマ(<別名>) v1`）。
+tests/spellings/PostgreSQLのスキーマ.cal: ok — 受領日 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

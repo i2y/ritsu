@@ -1,0 +1,7 @@
+警告[W001]: tests/spellings/python_imported_module.cal:1:7: 生成した Python のコードでは、ファイルの別名 `datetime` がモジュールの名前になり、Python の標準ライブラリに同じ名前のモジュールがあります
+     1 | dates datetime v1
+  = Python: Python は同じ名前のモジュールを一つしか読み込まず、`import datetime` は先に読み込んだほうを返します。標準ライブラリの `datetime` を読み込んだあとでは、生成した関数を呼べません。先に生成したモジュールを読み込むと、プログラムのどの `import datetime` も、標準ライブラリのものの代わりに生成したモジュールを返します。
+  = 生成したモジュールも `from datetime import date` で標準ライブラリの `datetime` を読み込むので、モジュールの横から読み込むと、モジュールが自分を読み込んで止まります（`ImportError`）。
+  = `ritsu gen` のパッケージは、このモジュールを `<パッケージ>.dates.datetime` として持つので、標準ライブラリのものとぶつかりません。
+  = 使わない出力先なら、このままで構いません。使うなら、ファイルに別の別名を付けてください（`dates datetime(<別名>) v1`）。
+tests/spellings/python_imported_module.cal: ok — received 2026-01-01〜2026-01-31 の 31 日のすべてで、どの日付も計算できます

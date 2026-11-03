@@ -1,0 +1,8 @@
+dates terms_of_payment_that_go_on_past_what_postgresql_keeps_of_a_name_first v1
+description "Given with long_second.cal, this is the earlier file: the later one's W001 names it"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+
+date due = received
+  + 3 days

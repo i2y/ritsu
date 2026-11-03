@@ -1,0 +1,10 @@
+warning[W001]: tests/spellings/calendar_function.cal:9:6: `is_open` takes the name of `is_open`, the function the generated code has for the calendar
+     9 | date is_open = received
+  = TypeScript: the module declares `is_open` twice, which `tsc` does not take and Node does not load (`Identifier 'is_open' has already been declared`).
+  = Python: the later `def is_open` takes the place of the first, so the module's `is_open` is the calendar's, and the function of the date is_open cannot be called; `mypy --strict` does not pass either.
+  = Go: both are `IsOpen`: one package declares the name twice, which does not compile.
+  = Rust: the module declares two functions of the name, which does not compile.
+  = Wasm: the module is built from the same Rust code, and stops at the same place.
+  = PostgreSQL: The function of the date is_open takes an integer input as well, so its types are not those of the calendar's `is_open(day date)`, and PostgreSQL holds the two apart.
+  = For a target you do not generate, leave it. For one you do, give it another alias (`is_open(<alias>)`).
+tests/spellings/calendar_function.cal: ok — every date computes on all 124 combinations of received (2026-01-01..2026-01-31) and n (0..3)

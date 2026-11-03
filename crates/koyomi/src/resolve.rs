@@ -198,13 +198,16 @@ impl Ctx<'_> {
 /// E009 and E010 for the heading's name, which names the module, schema and package.
 pub fn check_header(f: &File) -> Vec<Diag> {
     let mut c = Ctx { f, diags: vec![] };
-    alias_checks(&mut c, &f.name, &tr!("ファイル", "the file"), true);
+    alias_checks(&mut c, &f.name, &tr!("ファイル", "the file"));
     c.diags
 }
 
-/// E010 (an alias missing or of the wrong form) and E009 (an alias or name the language or
-/// a target will not take).
-fn alias_checks(c: &mut Ctx, n: &Name, what: &Text, module: bool) {
+/// E010 (an alias missing or of the wrong form) and E009 (an alias or name the language or a
+/// target will not take as it is written: a word of koyomi, or a reserved word of a target). The
+/// names a target spells as another, or takes as a name its code uses itself, are the spellings'
+/// (W001, spellings.rs), and so is a date named `is_open` beside a calendar's (E009 there, when it
+/// breaks every target).
+fn alias_checks(c: &mut Ctx, n: &Name, what: &Text) {
     if kw::is_reserved(&n.text) {
         c.err("E009", n.span, tr!("{}の名前「{}」は koyomi の予約語です", "The name {} of {} is a word of the language", what.ja, n.text; n.text, what.en))
             .notes
@@ -250,29 +253,13 @@ fn alias_checks(c: &mut Ctx, n: &Name, what: &Text, module: bool) {
             .push(tr!("別の別名を付けてください。", "Choose another alias."));
         return;
     }
-    if module && naming::MODULES.contains(&a) {
-        c.err("E009", span, tr!("別名 {a} は、生成したコードが読み込むモジュールやスキーマの名前とぶつかります", "The alias {a} collides with a module or schema the generated code reads"))
-            .notes
-            .push(tr!(
-                "ファイルの別名は、Python と Rust のモジュール、PostgreSQL のスキーマの名前になります。Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`、PostgreSQL の `pg_catalog` などとは別の名前にしてください。",
-                "A file's alias names a Python and a Rust module and a PostgreSQL schema; keep it apart from Python's `datetime`, `json`, `sys` and `typing`, Rust's `std`, `core` and `alloc`, and PostgreSQL's `pg_catalog` and its kin."
-            ));
-    }
-    if !module && naming::GENERATED.contains(&a) {
-        c.err("E009", span, tr!("別名 {a} は、生成したコードが使う名前とぶつかります", "The alias {a} collides with a name the generated code defines"))
-            .notes
-            .push(tr!(
-                "生成したコードは `is_open`、`Date`、`KoyomiError`、`ParseDate` を置き、Go は `err` を使い、Python は `date` を読み込んで `range`、`str`、`int`、`bool`、`tuple`、`isinstance`、`frozenset`、`super` を呼びます。",
-                "The generated code defines `is_open`, `Date`, `KoyomiError` and `ParseDate`; the Go uses `err`; the Python imports `date` and calls `range`, `str`, `int`, `bool`, `tuple`, `isinstance`, `frozenset` and `super`."
-            ));
-    }
 }
 
 /// Turn a parsed dates file into a model (stage 2 of DESIGN 3.1). The calendar and the laws
 /// are filled in by the check.
 pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag>> {
     let mut c = Ctx { f: &f, diags: vec![] };
-    alias_checks(&mut c, &f.name, &tr!("ファイル", "the file"), true);
+    alias_checks(&mut c, &f.name, &tr!("ファイル", "the file"));
     // Sources: names once each.
     let mut src_seen: HashMap<&str, Span> = HashMap::new();
     for s in &f.sources {
@@ -307,11 +294,11 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
     };
     for i in &f.inputs {
         declare(&mut c, &i.name);
-        alias_checks(&mut c, &i.name, &tr!("入力", "the input"), false);
+        alias_checks(&mut c, &i.name, &tr!("入力", "the input"));
     }
     for d in &f.dates {
         declare(&mut c, &d.name);
-        alias_checks(&mut c, &d.name, &tr!("日付", "the date"), false);
+        alias_checks(&mut c, &d.name, &tr!("日付", "the date"));
     }
     // `<alias>_at` is the function of a date's time.
     for d in &f.dates {

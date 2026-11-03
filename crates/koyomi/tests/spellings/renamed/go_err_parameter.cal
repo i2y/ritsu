@@ -1,0 +1,9 @@
+dates go_err_parameter_renamed v1
+description "The same file as ../go_err_parameter.cal, with the alias the note of its W001 gives; check says nothing, and every target takes it. Its own alias differs from the other file's only so that the two go through the targets side by side"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-01-31
+  err(n)   : int   range >=0 <=3
+
+date due = received
+  + err days
