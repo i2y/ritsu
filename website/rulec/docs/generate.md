@@ -305,7 +305,12 @@ taken as 1.83%. A truth value is JSON's `true` or `false` and nothing
 else: the string `"false"`, the numbers `0` and `1` and any other value
 are refused with the same sentence in every language (`express is not a
 boolean`), where `"false"` used to be true in some languages and false in
-the others. The NumPy plan carries the same guard as data, and its
+the others. A date read off the wire is `YYYY-MM-DD`, and every day of the
+years 0001 to 9999 is one, in every language and on the page `rulec doc`
+draws; a day the calendar does not have, such as 2026-02-30, is refused
+as not a date. Some readers used to refuse the years 0001 to 0099, and
+some read the days before 1677-09-22, after 2262-04-11 or before 1582-10-15
+as other days. The NumPy plan carries the same guard as data, and its
 evaluator refuses the first element that fails with the sentence the
 other languages raise and that element's place: `the constraint does not
 hold: declared <= cover (row 1)`.

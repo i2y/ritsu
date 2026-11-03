@@ -12191,8 +12191,10 @@ impl<'a> Gen<'a> {
 }
 
 /// How the generated Ruby runner reads the wire (§15.204): the readers of `PY_WIRE` in Ruby.
-const RB_WIRE: &str = r#"def _ord(s)
-  Date.iso8601(s).jd - Date.new(1970, 1, 1).jd
+const RB_WIRE: &str = r#"# The calendar of every year (Date::GREGORIAN): by default Date takes the Julian calendar before
+# 1582-10-15, where 1500-02-29 is a day and 1582-10-10 is not.
+def _ord(s)
+  Date.iso8601(s, Date::GREGORIAN).jd - Date.new(1970, 1, 1).jd
 end
 
 def _take(d, k, missing, optional = false)

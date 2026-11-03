@@ -1670,6 +1670,15 @@ if not _isinstance(express, _bool):
     raise RuleInputError("express is not a boolean", _repr(express))
 ```
 
+A date on the wire is `YYYY-MM-DD`, a day of the Gregorian calendar taken back before 1582, and
+every day of the years 0001 to 9999 is one, at every reader of the wire and on the page of
+`rulec doc`, which reads its date fields the same way. Each reads the day the string writes, so
+the module gets the same day number in every language (0001-01-01 is −719162, 9999-12-31 is
+2932896) and the record gives the day back as it came; a day the calendar does not have, such as
+2026-02-30 or 1900-02-29, is not a date. Before, some readers refused the years 0001 to 0099,
+some read the days before 1677-09-22, after 2262-04-11 or before 1582-10-15 as other days, and
+the page took 2026-02-30 for 2026-03-02 (§15.279).
+
 `rulec api` states the same bounds, taken from the same place, so an integration built from
 the inventory cannot send values the guard rejects. It names each language's two errors too:
 `errors` gives the names to catch, and `error_types` says which one the entry guard raises
