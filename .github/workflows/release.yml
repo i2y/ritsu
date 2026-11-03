@@ -233,8 +233,8 @@ jobs:
           for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho kaname; do
             test "$(offline "node_modules/.bin/$n" --version < /dev/null)" = "$n $v" || { echo "::error::$n --version says '$(offline "node_modules/.bin/$n" --version < /dev/null)'"; exit 1; }
           done
-          offline node_modules/.bin/ritsu gen < /dev/null
-          offline node_modules/.bin/ritsu gen --check --format json < /dev/null > check.json
+          offline node_modules/.bin/ritsu gen --target typescript --target python --target go < /dev/null
+          offline node_modules/.bin/ritsu gen --target typescript --target python --target go --check --format json < /dev/null > check.json
           node -e 'const r = JSON.parse(require("fs").readFileSync("check.json", "utf8")); if (!r.ok || r.files.length === 0) { console.error("::error::ritsu gen --check: " + JSON.stringify(r)); process.exit(1); }'
 
   publish:
