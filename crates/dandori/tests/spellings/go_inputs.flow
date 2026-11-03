@@ -1,0 +1,11 @@
+workflow go_inputs v1
+description "Two inputs whose exported names are one."
+
+inputs
+  order_id : string
+  orderId : string
+
+task note(a: string, b: string)
+
+flow
+  note(a: order_id, b: orderId)

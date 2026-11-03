@@ -1,0 +1,18 @@
+workflow Goのフィールド v1
+description "Go で公開する名前が一つになる、レコードの二つのフィールドです。"
+
+record Order
+  order_id : string
+  order_no : string
+
+inputs
+  番号 : string
+
+outputs
+  結果 : string
+
+task 探す(番号: string) -> Order
+
+flow
+  let o = 探す(番号: 番号)
+  succeed 結果 = o.order_no

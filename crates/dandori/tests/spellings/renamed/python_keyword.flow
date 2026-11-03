@@ -1,0 +1,10 @@
+workflow python_keyword v1
+description "A task you implement named as a keyword of Python."
+
+inputs
+  id : string
+
+task lesson(id: string)
+
+flow
+  lesson(id: id)

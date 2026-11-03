@@ -1,0 +1,19 @@
+workflow go_is v1
+description "An enum named as what a record declares beside itself."
+
+enum IsRoom = yes | no
+
+record Room
+  taken : IsRoom
+
+inputs
+  id : string
+
+outputs
+  taken : IsRoom
+
+task look(id: string) -> Room
+
+flow
+  let r = look(id: id)
+  succeed taken = r.taken

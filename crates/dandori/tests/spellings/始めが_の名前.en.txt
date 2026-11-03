@@ -1,0 +1,11 @@
+warning[W105]: tests/spellings/始めが_の名前.flow:4:8: The type `_Room` cannot keep its name in the code of TypeScript and Python
+     4 | record _Room
+  = TypeScript (`--target temporal-typescript`, `--target durable`): the name would be `v_Room` in the code, which does not begin a name with `_`.
+  = Python (`--target temporal-python`, `--target pydantic-graph`): the name would be `v_Room` in the code, which does not begin a name with `_`.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+warning[W105]: tests/spellings/始めが_の名前.flow:13:6: The task `_look` cannot keep its name in the code of TypeScript and Python
+    13 | task _look(鍵: string) -> _Room
+  = TypeScript (`--target temporal-typescript`, `--target durable`): the method you implement would be `v_look`: a name in the code does not begin with `_`.
+  = Python (`--target temporal-python`, `--target pydantic-graph`): the name would be `v_look` in the code, which does not begin a name with `_`.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/始めが_の名前.flow: ok (2 warning(s))

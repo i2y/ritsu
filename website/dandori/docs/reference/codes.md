@@ -1,6 +1,6 @@
 # Diagnostics
 
-`dandori check` finds all of these but E040 and E050, which `dandori gen` finds for each platform
+`dandori check` finds all of these but E040, E050 and E051, which `dandori gen` finds for each platform
 it writes for. An error stops `gen`, which then writes nothing; a warning (W) does not. Each diagnostic comes with a run that
 gets there, and `--lang ja` gives the same in Japanese. `dandori explain <code>` says when one comes,
 how to fix it, and the smallest `.flow` that gets it.
@@ -32,6 +32,7 @@ how to fix it, and the smallest `.flow` that gets it.
 | E031 | what an Express workflow cannot do: a wait longer than five minutes, a callback, a nested execution, a call that changes the other side without a `key` |
 | E040 | one run can grow too large for the platform: its history over the limit (25,000 events on Step Functions, 51,200 on Temporal, 3,000 operations on Lambda durable functions), or on Argo Workflows more than 10,000 nodes |
 | E050 | what the platform needs is missing, or the platform cannot do it: on Step Functions, a way of calling or a `connection` (an agent's, a decision task's and a rule at its service's too), a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS (a rule's service too); off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`, and a called date's `lambda`; on Step Functions, a book's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task, `history encrypted` |
+| E051 | a name W105 warns of, for a platform being written: the code cannot keep the name, and the run writes nothing |
 | E906 | a value marked secret sent to a party outside the project: a model's provider (OpenAI, Anthropic, or an Open Responses server not on this machine), the API of a decision model (Jev, OpenAI's Decisions API, or a server not on this machine), a host an `http` task names by its URL alone, an AWS service; unless the task says it `discloses` the parameter ([Secrets](../secrets.md)) |
 | W030 | a call that may change the other side, retried without a `key` |
 | W032 | a decision task that sets or reads a confidence, and names a model that moves to another by itself: an alias of Jev (`jev-latest`, `jev-preview`), a name without a tag or with `:latest` on a server of the System One API, any model of OpenAI's Decisions API (it names no version) |
@@ -39,6 +40,7 @@ how to fix it, and the smallest `.flow` that gets it.
 | W102 | an `on <refusal>` that can never happen |
 | W103 | a task that starts a case without a `key` |
 | W104 | a value whose range nothing says, where a range is (`now` in a workflow that says no period it runs in, and in `on failure` and `on cancel`, too) |
+| W105 | a name the code of a platform cannot keep: two names are one identifier there (`send_mail` and `sendMail` in Go), or the code has the name itself (`Outcome` in Go, `Date` in TypeScript, `format` in Python). `gen` stops for that platform (E051) |
 | W901 | a value in the shape of a key (an AWS access key ID; a GitHub, Slack, Stripe, OpenAI, Anthropic or Google key or token; a Slack incoming webhook URL; a PEM private key) written in the `.flow`, in a string or a comment; the line that says `ritsu: test secret` is a value for tests |
 | W902 | a URL a task calls over plain HTTP, to a host that is not this machine (an `http` task's URL, an agent's `url`, `use rule … connect`, the `url` of `use openapi` and `use proto`, an OpenAPI document's first server), unless `plaintext "<why>"` is written where the URL is |
 | W904 | a value marked secret kept in the history of the workflow: an input or an output, the answer of a task, an argument of a call, the reason of a `fail`; unless the workflow says `history encrypted` |

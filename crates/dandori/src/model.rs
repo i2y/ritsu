@@ -1255,6 +1255,8 @@ pub struct Model {
     pub moment_texts: Vec<(Range, String)>,
     /// the `.flow` as dandori reached it, which a mark written in it names (`SecretMark::file`)
     pub source_reached: String,
+    /// the names a target's code cannot keep (DESIGN 22), which `check` says and `gen` stops at
+    pub spellings: Vec<crate::spellings::Found>,
 }
 
 impl Model {

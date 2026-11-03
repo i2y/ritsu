@@ -1,6 +1,6 @@
 # 診断コード
 
-E040 と E050 は `dandori gen` が書き出す先のプラットフォームごとに出し、それ以外はすべて `dandori check` が出します。エラーがあると `gen` は何も書かずに止まり、警告（W）では止まりません。どの診断にもそこへ至る実行の例が付き、`--lang ja` を付ければ日本語で出ます。`dandori explain <コード>` は、いつ出るか、直し方、そのコードを出す最小の `.flow` を出します。
+E040、E050、E051 は `dandori gen` が書き出す先のプラットフォームごとに出し、それ以外はすべて `dandori check` が出します。エラーがあると `gen` は何も書かずに止まり、警告（W）では止まりません。どの診断にもそこへ至る実行の例が付き、`--lang ja` を付ければ日本語で出ます。`dandori explain <コード>` は、いつ出るか、直し方、そのコードを出す最小の `.flow` を出します。
 
 | コード | 見つけるもの |
 |---|---|
@@ -29,6 +29,7 @@ E040 と E050 は `dandori gen` が書き出す先のプラットフォームご
 | E031 | Express のワークフローにできないこと。五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し |
 | E040 | 一回の実行が、プラットフォームにとって大きくなりすぎうる。実行履歴の上限は Step Functions が 25,000 件、Temporal が 51,200 件、Lambda durable functions が 3,000 操作。Argo Workflows ではノードが 10,000 個を超えうるもの |
 | E050 | プラットフォームに要るものが無いか、プラットフォームにできないこと。Step Functions では、呼び出し方か `connection`（エージェントと判断のタスク、サービスで呼ぶ規則にも要る）、ネストした実行が宣言するエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送信先（規則のサービスも）。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッド。Step Functions と Lambda durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。Lambda durable functions では、invoke する関数の `timeout`。Argo では、呼び出し方か `image`、`workflow template` が宣言するエラー、`callback` のタスクの `retry`、`history encrypted` |
+| E051 | 書き出す先のプラットフォームについて W105 が言っている名前。コードがその名前をそのまま持てないので、その実行は何も書かない |
 | E906 | 秘密と印を付けた値を、プロジェクトの外の相手に送る。相手は、モデルのプロバイダー（OpenAI、Anthropic、このマシンの外の Open Responses のサーバー）、判断のモデルの API（Jev、OpenAI の Decisions API、このマシンの外のサーバー）、URL だけで書いた `http` の送り先、AWS のサービス。タスクが `discloses` でその引数を書いていれば出ない（[秘密の値](../secrets.md)） |
 | W030 | 外部のデータを変えるかもしれない呼び出しを、`key` なしでリトライする |
 | W032 | 確信度の下限を書くか確信度を受け取る判断のタスクが、ひとりでに別のモデルに移る名前でモデルを書いている。Jev のエイリアス（`jev-latest`・`jev-preview`）、System One の API のサーバーのタグの無い名前と `:latest`、OpenAI の Decisions API のどのモデルも（バージョンを固定する名前が無い） |
@@ -36,6 +37,7 @@ E040 と E050 は `dandori gen` が書き出す先のプラットフォームご
 | W102 | 起きることのない `on <拒否のエラー>` |
 | W103 | 案件を始めるタスクに `key` が無い |
 | W104 | 範囲のある場所に、範囲の分からない値を渡している（動く期間を書いていないワークフローの `now` と、`on failure`・`on cancel` の中の `now` も） |
+| W105 | プラットフォームのコードが名前をそのまま持てない。二つの名前が一つの識別子になる（Go の `send_mail` と `sendMail`）か、コードがその名前を自分で使う（Go の `Outcome`、TypeScript の `Date`、Python の `format`）。`gen` はそのプラットフォームで止まる（E051） |
 | W901 | 鍵の形の値（AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵）が、`.flow` の文字列かコメントに書かれている。`ritsu: test secret` と書いた行はテスト用の値として出ない |
 | W902 | タスクが呼ぶ URL（`http` のタスクの URL、エージェントの `url`、`use rule … connect`、`use openapi` と `use proto` の `url`、OpenAPI の文書の最初のサーバー）が、このマシンの外へ暗号化しない HTTP で送る。URL を書いたところに `plaintext "<理由>"` があれば出ない |
 | W904 | 秘密と印を付けた値が、ワークフローの履歴に残る。入力・出力、タスクの結果、呼び出しの引数、`fail` の理由。ワークフローに `history encrypted` と書いてあれば出ない |

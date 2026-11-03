@@ -1,0 +1,11 @@
+警告[W105]: tests/spellings/leading_underscore.flow:4:8: 型 `_Room`は、TypeScript、Python のコードでそのままの名前では使えません
+     4 | record _Room
+  = TypeScript（`--target temporal-typescript`, `--target durable`）：TypeScript の名前は `_` で始められるのに、生成するコードの名前は `v_Room` になります。
+  = Python（`--target temporal-python`, `--target pydantic-graph`）：生成するコードの名前は `_` で始められないので、`v_Room` になります。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+警告[W105]: tests/spellings/leading_underscore.flow:13:6: タスク `_look`は、TypeScript、Python のコードでそのままの名前では使えません
+    13 | task _look(id: string) -> _Room
+  = TypeScript（`--target temporal-typescript`, `--target durable`）：あなたが実装するメソッドの名前は `v_look` になります。生成するコードの名前は `_` で始められません。
+  = Python（`--target temporal-python`, `--target pydantic-graph`）：生成するコードの名前は `_` で始められないので、`v_look` になります。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+tests/spellings/leading_underscore.flow: 検査を通りました（警告 2 件）

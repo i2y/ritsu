@@ -3,8 +3,8 @@
 // Connect is `connect` in Python, EncryptedClient and Encrypted are `encryptedClient` and
 // `encrypted` in TypeScript, and EncryptedClient, Dial and CodecFailureConverter are Go's own; the
 // messages Connection, PayloadCodec and ClientOptions are TypeScript's, NewType, PayloadCodec and
-// DataConverter Python's, and CodecDataConverter Go's. In each client, a function or a type of one
-// of these names takes `Rpc`, `_rpc` or `RPC`. (A method cannot have the name of a message the
+// DataConverter Python's, and CodecDataConverter Go's. So check says W105 of each, for the
+// language whose client has it, and gen stops there (E051). (A method cannot have the name of a message the
 // service takes: inside the service, protoc reads the name as the method's.)
 syntax = "proto3";
 

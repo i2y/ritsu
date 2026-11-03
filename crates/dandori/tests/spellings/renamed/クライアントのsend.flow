@@ -1,0 +1,22 @@
+workflow クライアントのsend v1 implements svc.Svc
+description "イベントを送るクライアントの関数と同じメソッドです。"
+
+use proto svc from "protos/クライアントのsend.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

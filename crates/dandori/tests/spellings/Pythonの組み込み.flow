@@ -1,0 +1,14 @@
+workflow Pythonの組み込み v1
+description "Python の組み込みと同じ、自分で実装するタスクです。"
+
+inputs
+  番号 : string
+
+outputs
+  文 : string
+
+task format(番号: string) -> string
+
+flow
+  let t = format(番号: 番号)
+  succeed 文 = t

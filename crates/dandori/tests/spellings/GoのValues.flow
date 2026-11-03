@@ -1,0 +1,19 @@
+workflow GoのValues v1
+description "列挙が横に宣言する名前と同じレコードです。"
+
+enum Color = 赤 | 青
+
+record ColorValues
+  先頭 : Color
+
+inputs
+  番号 : string
+
+outputs
+  先頭 : Color
+
+task 選ぶ(番号: string) -> ColorValues
+
+flow
+  let p = 選ぶ(番号: 番号)
+  succeed 先頭 = p.先頭

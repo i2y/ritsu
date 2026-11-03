@@ -1,0 +1,6 @@
+warning[W105]: tests/spellings/Pythonのis.flow:7:8: The type `room` and the type `is_room` are one name in the code of Python and Go
+     7 | record is_room
+  = Python (`--target temporal-python`, `--target pydantic-graph`): both are `is_room` in `types.py`: the later declaration takes the place of the earlier, so what reads the earlier reads the later (`mypy --strict` says `already defined`).
+  = Go (`--target temporal-go`): both are `IsRoom`: a name cannot be declared twice, so the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/Pythonのis.flow: ok (1 warning(s))

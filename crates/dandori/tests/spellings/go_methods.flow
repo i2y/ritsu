@@ -1,0 +1,12 @@
+workflow go_methods v1
+description "Two tasks you implement whose methods are one in Go."
+
+inputs
+  id : string
+
+task send_mail(id: string)
+task sendMail(id: string)
+
+flow
+  send_mail(id: id)
+  sendMail(id: id)

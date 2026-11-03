@@ -1,0 +1,17 @@
+workflow workflow_input v1
+description "A record named as what the code of every language declares."
+
+record WorkflowInput
+  sku : string
+
+inputs
+  id : string
+
+outputs
+  sku : string
+
+task find(id: string) -> WorkflowInput
+
+flow
+  let w = find(id: id)
+  succeed sku = w.sku

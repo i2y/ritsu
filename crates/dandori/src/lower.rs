@@ -170,6 +170,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             period: None,
             moment_texts: vec![],
             source_reached: file.to_string_lossy().to_string(),
+            spellings: Vec::new(),
         },
         enum_ix: BTreeMap::new(),
         record_ix: BTreeMap::new(),
@@ -232,6 +233,8 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     let ok = !crate::diag::has_errors(&lw.diags);
     if ok {
         crate::periods::insert(&mut lw.m);
+        let places = crate::spellings::Places { prog, made_at: &lw.made_at, use_spans: &lw.use_spans };
+        lw.m.spellings = crate::spellings::find(&lw.m, &places);
     }
     (if ok { Some(lw.m) } else { None }, lw.diags)
 }

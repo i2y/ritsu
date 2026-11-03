@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package client_two_types.ja.v1;
+
+import "dandori/v1/options.proto";
+
+service Svc {
+  option (dandori.v1.workflow) = {name: "クライアントの二つの型", version: 1};
+
+  rpc Begin(Order) returns (Reply) {
+    option (dandori.v1.start) = {fails: ["Late"]};
+  }
+
+  rpc Tell(Sent) returns (Ack) {
+    option (dandori.v1.event) = {task: "待つ"};
+  }
+
+  rpc GetStatus(StatusRequest) returns (dandori.v1.Status) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message Order {
+  string id = 1;
+}
+
+message Sent {
+  string note = 1;
+}
+
+message Reply {
+  string id = 1;
+}
+
+message Ack {}
+
+message StatusRequest {}

@@ -5,7 +5,7 @@ description "履歴を暗号化するワークフローのクライアントが�
 use proto 通話 from "protos/calls.ja.proto"
 
 # 履歴を暗号化するとき、Go の client.go は Dial・EncryptedClient・CodecFailureConverter・
-# CodecDataConverter を宣言するので、dandori が生成する Go では、これらの型の名前に `_` が付く。
+# CodecDataConverter を宣言するので、check はこれらの型に W105 を出し、Go の gen は E051 で止まる。
 record Dial
   答え : string
 

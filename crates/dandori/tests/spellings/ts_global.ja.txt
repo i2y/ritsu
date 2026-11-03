@@ -1,0 +1,5 @@
+警告[W105]: tests/spellings/ts_global.flow:4:8: 型 `Date`は、TypeScript のコードでそのままの名前では使えません
+     4 | record Date
+  = TypeScript（`--target temporal-typescript`, `--target durable`）：`Date` は JavaScript のグローバルです。同じ名前の型は、生成するコードが読む `Date` を隠します。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+tests/spellings/ts_global.flow: 検査を通りました（警告 1 件）

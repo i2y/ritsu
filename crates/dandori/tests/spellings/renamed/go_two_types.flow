@@ -1,0 +1,22 @@
+workflow go_two_types v1
+description "Two records whose exported names are one."
+
+record order_item
+  sku : string
+
+record order_line
+  qty : int
+
+inputs
+  id : string
+
+outputs
+  qty : int
+
+task first(id: string) -> order_item
+task second(sku: string) -> order_line
+
+flow
+  let a = first(id: id)
+  let b = second(sku: a.sku)
+  succeed qty = b.qty

@@ -1,0 +1,5 @@
+warning[W105]: tests/spellings/Pythonのキーワード.flow:7:6: The task `class` cannot keep its name in the code of Python
+     7 | task class(番号: string)
+  = Python (`--target temporal-python`, `--target pydantic-graph`): `class` is a keyword of Python: the code cannot declare it by that name.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/Pythonのキーワード.flow: ok (1 warning(s))

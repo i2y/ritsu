@@ -1,0 +1,17 @@
+workflow ts_global v1
+description "A record named as a global of JavaScript."
+
+record Day
+  day : string
+
+inputs
+  id : string
+
+outputs
+  day : string
+
+task when(id: string) -> Day
+
+flow
+  let d = when(id: id)
+  succeed day = d.day

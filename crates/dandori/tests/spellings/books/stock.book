@@ -1,0 +1,12 @@
+book stock v1
+description "Stock by SKU."
+
+unit pieces
+
+account shelf(sku: string) : pieces
+  at least 0 refused as out_of_stock
+account supplier : pieces outside
+
+transfer receive(delivery: string, sku: string, qty: pieces)
+  key delivery, sku
+  move qty from supplier to shelf(sku)

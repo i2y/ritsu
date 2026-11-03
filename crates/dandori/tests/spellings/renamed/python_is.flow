@@ -1,0 +1,22 @@
+workflow python_is v1
+description "A record named as what another record declares beside itself, in Python and in Go."
+
+record room
+  number : int
+
+record room_state
+  taken : bool
+
+inputs
+  id : string
+
+outputs
+  taken : bool
+
+task look(id: string) -> room
+task ask(n: int) -> room_state
+
+flow
+  let r = look(id: id)
+  let t = ask(n: r.number)
+  succeed taken = t.taken

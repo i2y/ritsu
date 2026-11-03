@@ -1,0 +1,6 @@
+warning[W105]: tests/spellings/クライアントのメッセージ.flow:1:37: The service's message `client_message.ja.v1.Client` cannot keep its name in the code of TypeScript and Python
+     1 | workflow クライアントのメッセージ v1 implements svc.Svc
+  = TypeScript (`--target temporal-typescript`): `client.ts` has `Client` itself: a name cannot be declared twice, so the module does not type-check.
+  = Python (`--target temporal-python`): `client.py` has `Client` itself: a declaration of that name takes its place.
+  = For a target you do not build, leave it as it is. For one you do, rename the method or the message in the `.proto`. A method's name is also its path on Connect, so change the callers with it.
+tests/spellings/クライアントのメッセージ.flow: ok (1 warning(s))

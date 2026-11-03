@@ -1,0 +1,7 @@
+warning[W105]: tests/spellings/client_two_types.flow:1:41: The service's message `client_two_types.v1.Order` is the name of two types in the code of TypeScript, Python and Go
+     1 | workflow client_two_types v1 implements svc.Svc
+  = TypeScript (`--target temporal-typescript`): `Order` in `client.ts` can be one type only.
+  = Python (`--target temporal-python`): `Order` in `client.py` can be one type only.
+  = Go (`--target temporal-go`): `Order` in `client.go` can be one type only.
+  = For a target you do not build, leave it as it is. For one you do, rename the method or the message in the `.proto`. A method's name is also its path on Connect, so change the callers with it.
+tests/spellings/client_two_types.flow: ok (1 warning(s))

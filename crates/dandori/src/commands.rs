@@ -16,9 +16,10 @@ pub const RENAMED: [(&str, &str, &str); 1] = [("temporal", "temporal-typescript"
 /// (`<out>/<target>/`), or the diagnostics of what the platform cannot do.
 pub type Built = Result<Vec<(String, String)>, Vec<Diag>>;
 
-/// Build for a target; None for a target there is not.
+/// Build for a target; None for a target there is not. A name the target's code cannot keep stops
+/// it (E051), with whatever else the platform cannot do.
 pub fn build(m: &Model, target: &str) -> Option<Built> {
-    Some(match target {
+    let built = match target {
         "asl" => crate::asl::build(m),
         "temporal-typescript" => crate::temporal::build(m),
         "temporal-python" => crate::temporal_py::build(m),
@@ -27,6 +28,15 @@ pub fn build(m: &Model, target: &str) -> Option<Built> {
         "argo" => crate::argo::build(m),
         "pydantic-graph" => crate::pydantic_graph::build(m),
         _ => return None,
+    };
+    let stops = crate::spellings::stops(m, target);
+    Some(match built {
+        Ok(files) if stops.is_empty() => Ok(files),
+        Ok(_) => Err(stops),
+        Err(mut diags) => {
+            diags.extend(stops);
+            Err(diags)
+        }
     })
 }
 

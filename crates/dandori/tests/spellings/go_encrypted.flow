@@ -1,0 +1,18 @@
+workflow go_encrypted v1
+  history encrypted
+description "A record named as what client.go declares when the history is encrypted."
+
+record Dial
+  number : string
+
+inputs
+  id : string  secret
+
+outputs
+  number : string
+
+task call(id: string) -> Dial
+
+flow
+  let d = call(id: id)
+  succeed number = d.number

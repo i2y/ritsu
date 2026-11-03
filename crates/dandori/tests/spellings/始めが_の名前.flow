@@ -1,0 +1,17 @@
+workflow 始めが_の名前 v1
+description "名前が _ で始まるレコードとタスクです。"
+
+record _Room
+  番号 : int
+
+inputs
+  鍵 : string
+
+outputs
+  番号 : int
+
+task _look(鍵: string) -> _Room
+
+flow
+  let r = _look(鍵: 鍵)
+  succeed 番号 = r.番号

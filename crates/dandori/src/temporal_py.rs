@@ -20,6 +20,8 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
+use crate::spellings::{Alias, Clash, ClientNames, Lang, Name, With};
+use crate::diag::Text;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -262,7 +264,7 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("    async for w in client.list_workflows(query or f\"WorkflowType = '{WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'\"):\n");
     c.push_str("        yield await client.get_workflow_handle(w.id, run_id=w.run_id).fetch_history()\n");
     if let Some(s) = &m.service {
-        c.push_str(&service_client_py(m, s));
+        c.push_str(&service_client_py(m, s).0);
     }
     if m.history_encrypted.is_some() {
         return encrypted_client_py(c);
@@ -328,30 +330,32 @@ pub(crate) fn snake(name: &str) -> String {
 
 /// The names client.py has besides its own when the workflow says `history encrypted` (DESIGN 1.18):
 /// what it imports for the codec, and what it declares. A method's function or a message's type of
-/// one of these names takes `_rpc`, as one of the client's own names does (1.14).
+/// one of these names cannot be written, as for one of the client's own names (1.14; W105).
 pub const ENCRYPTED_CLIENT: &[&str] = &["dataclasses", "NewType", "temporalio", "DataConverter", "DefaultFailureConverterWithEncodedAttributes", "PayloadCodec", "EncryptedClient", "data_converter", "connect"];
 
 /// client.py, for a workflow that implements a service: the service's name, a name for each
 /// message's type, and a function for each method, which calls the client's own `start`, `send`,
-/// `answer` or `status`. The names are those of client.ts, in Python's way.
-fn service_client_py(m: &Model, s: &ServiceUse) -> String {
-    use crate::temporal::{client_name, Named};
+/// `answer` or `status`. The names are those of client.ts, in Python's way. And the names it could
+/// not write.
+fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
     const OTHERS: &[&str] = &["WORKFLOW_TYPE", "TASK_QUEUE", "EVENTS", "SERVICE", "json", "Any", "AsyncIterator", "Client", "WorkflowHandle", "WorkflowHistory", "WorkflowIDReusePolicy", "T", "annotations"];
     let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
-    let others: Vec<&str> = OTHERS.iter().chain(encrypted).copied().collect();
+    let own: Vec<(String, With)> = OTHERS.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
+    let mut names = ClientNames::new(own, FUNCTIONS);
     let mut c = String::new();
     c.push_str(&format!("\n\n# The service the workflow implements, which `{}` describes. Its methods are the functions below.\nSERVICE = {}\n", s.file, q(&s.name)));
-    let mut written: Vec<String> = Vec::new();
     // a name for a message's type, by its name in the .proto
-    let alias = |c: &mut String, written: &mut Vec<String>, message: &str, ty: &str, what: String| -> String {
-        let name = type_name(message.rsplit('.').next().unwrap_or(message));
-        let taken: Vec<&str> = others.iter().copied().chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
-        match client_name(name, &taken, false, "_rpc") {
-            Named::Same => ty.to_string(),
-            Named::New(n) => {
+    let alias = |c: &mut String, names: &mut ClientNames, message: &str, ty: &str, what: String| -> String {
+        let short = message.rsplit('.').next().unwrap_or(message);
+        let id = type_name(short);
+        if id != short {
+            names.clashes.push((short.to_string(), Name::Message(message.to_string()), With::Own));
+        }
+        match names.message(id, message, ty, false) {
+            Alias::Use(n) => n,
+            Alias::Write(n) => {
                 c.push_str(&format!("\n\n# {what}: `{message}`.\n{n} = {ty}\n"));
-                written.push(n.clone());
                 n
             }
         }
@@ -359,17 +363,16 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
     let task_type = |task: &str| m.tasks.iter().find(|t| t.name == task).and_then(|t| t.result.as_ref()).map(|t| py_type(m, t)).unwrap_or_else(|| "Any".into());
     for mt in &s.methods {
         let label = s.label(mt);
-        let base = py_name(&snake(&mt.name));
-        let taken: Vec<String> = others.iter().map(|x| x.to_string()).chain(written.iter().cloned()).collect();
-        let named = |same: bool| match client_name(base.clone(), FUNCTIONS, same, "_rpc") {
-            Named::New(n) if taken.contains(&n) => Named::New(format!("{n}_rpc")),
-            other => other,
-        };
+        let plain = snake(&mt.name);
+        let base = py_name(&plain);
+        if base != plain {
+            names.clashes.push((plain, Name::Method(mt.name.clone()), With::Own));
+        }
         let (f, sig, call, what) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = named(true);
-                let req = alias(&mut c, &mut written, &mt.request, "T.WorkflowInput", format!("The request of {label}, the workflow's input"));
-                alias(&mut c, &mut written, &mt.response, "T.WorkflowOutput", format!("The response of {label}, the workflow's output"));
+                let f = names.function(base.clone(), &mt.name, true);
+                let req = alias(&mut c, &mut names, &mt.request, "T.WorkflowInput", format!("The request of {label}, the workflow's input"));
+                alias(&mut c, &mut names, &mt.response, "T.WorkflowOutput", format!("The response of {label}, the workflow's output"));
                 (
                     f,
                     format!("(client: Client, id: str, input: {req}, *, search_attributes: bool = False) -> WorkflowHandle[Any, Any]"),
@@ -378,8 +381,8 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
                 )
             }
             Some(Mark::Event { task }) => {
-                let f = named(false);
-                let req = alias(&mut c, &mut written, &mt.request, &task_type(task), format!("The request of {label}, the value of the event of `{task}`"));
+                let f = names.function(base.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), format!("The request of {label}, the value of the event of `{task}`"));
                 (
                     f,
                     format!("(client: Client, workflow_id: str, value: {req}) -> None"),
@@ -388,8 +391,8 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
                 )
             }
             Some(Mark::Answer { task }) => {
-                let f = named(false);
-                let req = alias(&mut c, &mut written, &mt.request, &task_type(task), format!("The request of {label}, the answer of the callback of `{task}`"));
+                let f = names.function(base.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), format!("The request of {label}, the answer of the callback of `{task}`"));
                 (
                     f,
                     format!("(client: Client, callback_id: str, value: {req}) -> None"),
@@ -398,17 +401,89 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
                 )
             }
             Some(Mark::Status) => {
-                let f = named(true);
+                let f = names.function(base.clone(), &mt.name, true);
                 (f, "(client: Client, id: str) -> dict[str, Any]".to_string(), "    return await status(client, id)\n".to_string(), "where the workflow `id` is, as `status` says".to_string())
             }
             None => continue,
         };
-        if let Named::New(name) = f {
+        if let Some(name) = f {
             c.push_str(&format!("\n\nasync def {name}{sig}:\n    \"\"\"{label}: {what}.\"\"\"\n{call}"));
-            written.push(name);
         }
     }
-    c
+    (c, names.clashes)
+}
+
+/// Why the code of Python cannot keep `plain`, a name `py_name` writes another way.
+fn reserved_why(plain: &str, id: &str) -> Text {
+    use ritsu_emit::words::python::{KEYWORDS, SOFT_KEYWORDS};
+    if id == ident(plain) {
+        tr!("生成するコードの名前は `_` で始められないので、`{id}` になります。", "the name would be `{id}` in the code, which does not begin a name with `_`.")
+    } else if KEYWORDS.contains(&plain) || SOFT_KEYWORDS.contains(&plain) {
+        tr!("`{plain}` は Python のキーワードです。生成するコードはこの名前で宣言できません。", "`{plain}` is a keyword of Python: the code cannot declare it by that name.")
+    } else {
+        tr!("`{plain}` は、生成するコードが使う名前か、隠してしまう Python の組み込みの名前です。", "`{plain}` is a name the code uses itself, or a builtin of Python it would hide.")
+    }
+}
+
+/// What the code of Python cannot keep (DESIGN 22): a name `py_name` writes another way, which a
+/// type of `types.py` and a method of `OwnTasks` go by; a type's name that is one with what
+/// another type declares beside itself (`<type>_values`, `is_<type>`); and what its client could
+/// not write. pydantic-graph has the types and the methods, and no client.
+pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
+    const TYPES: [&str; 2] = ["temporal-python", "pydantic-graph"];
+    let mut out = Vec::new();
+    let mut said = |target: &'static str, id: &str, name: &Name, with: &With, why: &Text| {
+        out.push(Clash { lang: Lang::Python, target, id: id.to_string(), name: name.clone(), with: with.clone(), why: why.clone(), in_package: false });
+    };
+    let (enums, recs) = crate::temporal::used_types(m);
+    let mut declared: BTreeMap<String, Name> = BTreeMap::new();
+    let mut add = |id: String, name: &Name, said: &mut dyn FnMut(&'static str, &str, &Name, &With, &Text)| {
+        match declared.get(&id) {
+            Some(first) if first != name => {
+                let why = tr!("どちらも `types.py` の `{id}` です。後の宣言が前の宣言に置き換わり、前の名前を読むコードが後の値を読みます（`mypy --strict` は `already defined` と言います）。", "both are `{id}` in `types.py`: the later declaration takes the place of the earlier, so what reads the earlier reads the later (`mypy --strict` says `already defined`).");
+                for target in TYPES {
+                    said(target, &id, name, &With::Name(first.clone()), &why);
+                }
+            }
+            Some(_) => {}
+            None => {
+                declared.insert(id, name.clone());
+            }
+        }
+    };
+    for (index, suffix) in enums.iter().map(|e| (&m.enums[*e].name, true)).chain(recs.iter().map(|r| (&m.records[*r].name, false))) {
+        let plain = index.replace('.', "_");
+        let id = type_name(index);
+        let name = Name::Type(index.clone());
+        if id != plain {
+            let why = reserved_why(&plain, &id);
+            for target in TYPES {
+                said(target, &plain, &name, &With::Own, &why);
+            }
+        }
+        add(id.clone(), &name, &mut said);
+        add(if suffix { format!("{id}_values") } else { format!("is_{id}") }, &name, &mut said);
+    }
+    for (p, target) in [(Platform::Temporal, "temporal-python"), (Platform::Graph, "pydantic-graph")] {
+        for t in m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))) {
+            let id = method(&t.name);
+            if id != t.name {
+                let why = reserved_why(&t.name, &id);
+                said(target, &t.name, &Name::Task(t.name.clone()), &With::Own, &why);
+            }
+        }
+    }
+    if let Some(s) = &m.service {
+        for (id, name, with) in service_client_py(m, s).1 {
+            let why = match &with {
+                With::Name(_) => tr!("どちらも `client.py` の `{id}` です。後の宣言が前の宣言に置き換わります（`mypy --strict` は `already defined` と言います）。", "both are `{id}` in `client.py`: the later declaration takes the place of the earlier (`mypy --strict` says `already defined`)."),
+                With::TwoTypes => tr!("`client.py` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.py` can be one type only."),
+                With::Own => tr!("`client.py` は `{id}` を自分で持っています。同じ名前を宣言すると、自分のものが置き換わります。", "`client.py` has `{id}` itself: a declaration of that name takes its place."),
+            };
+            said("temporal-python", &id, &name, &with, &why);
+        }
+    }
+    out
 }
 
 /// worker.py: the worker that runs the workflow, its tasks and its rules. For a workflow whose history

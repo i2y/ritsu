@@ -1,0 +1,6 @@
+警告[W105]: tests/spellings/python_is.flow:7:8: 型 `room`と型 `is_room`は、Python、Go のコードで一つの名前になります
+     7 | record is_room
+  = Python（`--target temporal-python`, `--target pydantic-graph`）：どちらも `types.py` の `is_room` です。後の宣言が前の宣言に置き換わり、前の名前を読むコードが後の値を読みます（`mypy --strict` は `already defined` と言います）。
+  = Go（`--target temporal-go`）：どちらも `IsRoom` です。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+tests/spellings/python_is.flow: 検査を通りました（警告 1 件）

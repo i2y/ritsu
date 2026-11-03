@@ -139,6 +139,10 @@ fn checked_text(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, V
     diags.extend(crate::ranges::check(&model));
     diags.extend(crate::service::check(&model));
     diags.extend(crate::secrets::check(&model));
+    // what a target's code cannot keep (W105), of a flow that passes
+    if !crate::diag::has_errors(&diags) {
+        diags.extend(crate::spellings::warnings(&model));
+    }
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
     (Some(model), fr.facts, diags)
 }

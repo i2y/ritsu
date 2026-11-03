@@ -1,0 +1,22 @@
+workflow client_two_types v1 implements svc.Svc
+description "One message as the input and as the output, which are two types."
+
+use proto svc from "protos/client_two_types.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task wait() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = wait()
+    on timeout => fail Late "no word"
+  succeed id = "{id} {s.note}"

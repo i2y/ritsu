@@ -5,7 +5,7 @@ description "The names the client of an encrypted history declares, given to rec
 use proto calls from "protos/calls.proto"
 
 # Go's client.go declares Dial, EncryptedClient, CodecFailureConverter and CodecDataConverter when
-# the history is encrypted, so these types take `_` in the Go dandori writes.
+# the history is encrypted, so check says W105 of these types and Go's gen stops (E051).
 record Dial
   answer : string
 

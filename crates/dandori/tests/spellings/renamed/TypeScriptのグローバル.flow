@@ -1,0 +1,17 @@
+workflow TypeScriptのグローバル v1
+description "JavaScript のグローバルと同じレコードです。"
+
+record Day
+  日 : string
+
+inputs
+  番号 : string
+
+outputs
+  日 : string
+
+task いつ(番号: string) -> Day
+
+flow
+  let d = いつ(番号: 番号)
+  succeed 日 = d.日

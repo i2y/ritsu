@@ -1,0 +1,22 @@
+workflow Goの二つの型 v1
+description "Go で公開する名前が一つになる二つのレコードです。"
+
+record order_item
+  品番 : string
+
+record order_line
+  数 : int
+
+inputs
+  番号 : string
+
+outputs
+  数 : int
+
+task 一つ目(番号: string) -> order_item
+task 二つ目(品番: string) -> order_line
+
+flow
+  let a = 一つ目(番号: 番号)
+  let b = 二つ目(品番: a.品番)
+  succeed 数 = b.数

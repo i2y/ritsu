@@ -1,0 +1,16 @@
+workflow go_own v1
+description "An enum named as a name the package has."
+
+enum Outcome = won | lost
+
+inputs
+  id : string
+
+outputs
+  how : Outcome
+
+task decide(id: string) -> Outcome
+
+flow
+  let how = decide(id: id)
+  succeed how = how

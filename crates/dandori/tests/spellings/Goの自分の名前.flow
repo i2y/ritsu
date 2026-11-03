@@ -1,0 +1,16 @@
+workflow Goの自分の名前 v1
+description "パッケージが持つ名前と同じ列挙です。"
+
+enum Outcome = 勝ち | 負け
+
+inputs
+  番号 : string
+
+outputs
+  結果 : Outcome
+
+task 決める(番号: string) -> Outcome
+
+flow
+  let 結果 = 決める(番号: 番号)
+  succeed 結果 = 結果

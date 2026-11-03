@@ -1,0 +1,7 @@
+warning[W105]: tests/spellings/自分のWorkflowInput.flow:4:8: The type `WorkflowInput` cannot keep its name in the code of TypeScript, Python and Go
+     4 | record WorkflowInput
+  = TypeScript (`--target temporal-typescript`, `--target durable`): `types.ts` declares `WorkflowInput` itself: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`).
+  = Python (`--target temporal-python`, `--target pydantic-graph`): `WorkflowInput` is a name the code uses itself, or a builtin of Python it would hide.
+  = Go (`--target temporal-go`): the package declares `IsWorkflowInput` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/自分のWorkflowInput.flow: ok (1 warning(s))

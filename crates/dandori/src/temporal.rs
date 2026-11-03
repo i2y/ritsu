@@ -25,6 +25,8 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
+use crate::spellings::{Alias, Clash, ClientNames, Lang, Name, With};
+use crate::diag::Text;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -554,7 +556,7 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("export async function* histories(client: Client, query = `WorkflowType = '${WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'`): AsyncIterable<{ workflowId: string; history: Awaited<ReturnType<WorkflowHandle[\"fetchHistory\"]>> }> {\n");
     c.push_str("  for await (const w of client.workflow.list({ query })) {\n    yield { workflowId: w.workflowId, history: await client.workflow.getHandle(w.workflowId, w.runId).fetchHistory() };\n  }\n}\n");
     if let Some(s) = &m.service {
-        c.push_str(&service_client_ts(m, s));
+        c.push_str(&service_client_ts(m, s).0);
     }
     if m.history_encrypted.is_some() {
         return encrypted_client_ts(c);
@@ -608,53 +610,33 @@ export function encryptedClient(connection: Connection, codec: PayloadCodec, opt
     out
 }
 
-/// What a client of a method of the service is: the name of a function, a type, or an answer
-/// that the client already has, and whether that one does what the method does.
-pub(crate) enum Named {
-    /// a name of its own
-    New(String),
-    /// the client's own function or type of that name does it
-    Same,
-}
-
-/// The name of a method's function or a message's type in the client: `name`, unless the client
-/// has it already (`taken`), which then does what the method does (`same`), or something else,
-/// and the name takes `suffix`.
-pub(crate) fn client_name(name: String, taken: &[&str], same: bool, suffix: &str) -> Named {
-    if !taken.contains(&name.as_str()) {
-        Named::New(name)
-    } else if same {
-        Named::Same
-    } else {
-        Named::New(format!("{name}{suffix}"))
-    }
-}
-
 /// The names client.ts has besides its own when the workflow says `history encrypted` (DESIGN 1.18):
 /// what it imports for the codec, and what it declares. A method's function or a message's type of
-/// one of these names takes `Rpc`, as one of the client's own names does (1.14).
+/// one of these names cannot be written, as for one of the client's own names (1.14; W105).
 pub const ENCRYPTED_CLIENT: &[&str] = &["Connection", "ClientOptions", "PayloadCodec", "encrypted", "EncryptedClient", "encryptedClient"];
 
 /// client.ts, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
-/// client's own `start`, `send`, `answer` or `status`.
-fn service_client_ts(m: &Model, s: &ServiceUse) -> String {
+/// client's own `start`, `send`, `answer` or `status`. And the names it could not write.
+fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
     const OTHERS: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy"];
     let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
-    let others: Vec<&str> = OTHERS.iter().chain(encrypted).copied().collect();
+    let own: Vec<(String, With)> = OTHERS.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
+    let mut names = ClientNames::new(own, FUNCTIONS);
     let mut c = String::new();
     c.push_str(&format!("\n/** The service the workflow implements, which `{}` describes. Its methods are the functions below. */\nexport const SERVICE = {};\n", s.file, q(&s.name)));
-    let mut written: Vec<String> = Vec::new();
     // a type for a message, by its name in the .proto, unless the client has one of the name already
-    let alias = |c: &mut String, written: &mut Vec<String>, message: &str, ty: &str, same: bool, what: String| -> String {
-        let name = type_name(message.rsplit('.').next().unwrap_or(message));
-        let taken: Vec<&str> = others.iter().copied().chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
-        match client_name(name, &taken, same, "Rpc") {
-            Named::Same => ty.to_string(),
-            Named::New(n) => {
+    let alias = |c: &mut String, names: &mut ClientNames, message: &str, ty: &str, same: bool, what: String| -> String {
+        let short = message.rsplit('.').next().unwrap_or(message);
+        let id = type_name(short);
+        if id != short {
+            names.clashes.push((short.to_string(), Name::Message(message.to_string()), With::Own));
+        }
+        match names.message(id, message, ty, same) {
+            Alias::Use(n) => n,
+            Alias::Write(n) => {
                 c.push_str(&format!("\n/** {what}: `{message}`. */\nexport type {n} = {ty};\n"));
-                written.push(n.clone());
                 n
             }
         }
@@ -667,31 +649,26 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> String {
             let mut cs = mt.name.chars();
             ident(&cs.next().map(|f| f.to_lowercase().chain(cs).collect::<String>()).unwrap_or_default())
         };
-        let taken: Vec<String> = others.iter().map(|x| x.to_string()).chain(written.iter().cloned()).collect();
-        let named = |same: bool| match client_name(lower.clone(), FUNCTIONS, same, "Rpc") {
-            Named::New(n) if taken.contains(&n) => Named::New(format!("{n}Rpc")),
-            other => other,
-        };
         let (f, sig, call) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = named(true);
-                let req = alias(&mut c, &mut written, &mt.request, "T.WorkflowInput", false, format!("The request of {label}, the workflow's input"));
-                alias(&mut c, &mut written, &mt.response, "T.WorkflowOutput", false, format!("The response of {label}, the workflow's output"));
+                let f = names.function(lower.clone(), &mt.name, true);
+                let req = alias(&mut c, &mut names, &mt.request, "T.WorkflowInput", false, format!("The request of {label}, the workflow's input"));
+                alias(&mut c, &mut names, &mt.response, "T.WorkflowOutput", false, format!("The response of {label}, the workflow's output"));
                 (f, format!("(client: Client, id: string, input: {req}, options: StartOptions = {{}}): Promise<WorkflowHandle>"), "  return start(client, id, input, options);\n".to_string())
             }
             Some(Mark::Event { task }) => {
-                let f = named(false);
-                let req = alias(&mut c, &mut written, &mt.request, &task_type(task), false, format!("The request of {label}, the value of the event of `{task}`"));
+                let f = names.function(lower.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), false, format!("The request of {label}, the value of the event of `{task}`"));
                 (f, format!("(client: Client, workflowId: string, value: {req}): Promise<void>"), format!("  await send(client, workflowId, {}, {{ ok: value }});\n", q(task)))
             }
             Some(Mark::Answer { task }) => {
-                let f = named(false);
-                let req = alias(&mut c, &mut written, &mt.request, &task_type(task), false, format!("The request of {label}, the answer of the callback of `{task}`"));
+                let f = names.function(lower.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), false, format!("The request of {label}, the answer of the callback of `{task}`"));
                 (f, format!("(client: Client, callbackId: string, value: {req}): Promise<void>"), "  await answer(client, callbackId, { ok: value });\n".to_string())
             }
             Some(Mark::Status) => {
-                let f = named(true);
-                let res = alias(&mut c, &mut written, &mt.response, "Status", true, format!("The response of {label}, where a run is"));
+                let f = names.function(lower.clone(), &mt.name, true);
+                let res = alias(&mut c, &mut names, &mt.response, "Status", true, format!("The response of {label}, where a run is"));
                 (f, format!("(client: Client, id: string): Promise<{res}>"), "  return status(client, id);\n".to_string())
             }
             None => continue,
@@ -702,12 +679,59 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> String {
             Some(Mark::Answer { task }) => format!("answer the callback of `{task}`, by the id its task handed on (as `answer` does)"),
             _ => "where the workflow `id` is (as `status` says)".to_string(),
         };
-        if let Named::New(name) = f {
+        if let Some(name) = f {
             c.push_str(&format!("\n/** {label}: {what}. */\nexport async function {name}{sig} {{\n{call}}}\n"));
-            written.push(name);
         }
     }
-    c
+    (c, names.clashes)
+}
+
+/// What the code of TypeScript cannot keep (DESIGN 22): a type's name that is a global of
+/// JavaScript or the code's, which is a type of another name in `type_name`; a name that begins
+/// with `_`, which begins with `v` in `ident`; and what its client could not write.
+pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
+    let mut out = Vec::new();
+    let (enums, recs) = used_types(m);
+    let types = enums.iter().map(|e| &m.enums[*e].name).chain(recs.iter().map(|r| &m.records[*r].name));
+    let mut said = |targets: &[&'static str], id: String, name: Name, why: Text| {
+        for target in targets {
+            out.push(Clash { lang: Lang::TypeScript, target, id: id.clone(), name: name.clone(), with: With::Own, why: why.clone(), in_package: false });
+        }
+    };
+    for n in types {
+        let plain = n.replace('.', "_");
+        let id = type_name(n);
+        if id != plain {
+            let why = if id == ident(&plain) {
+                tr!("TypeScript の名前は `_` で始められるのに、生成するコードの名前は `{id}` になります。", "the name would be `{id}` in the code, which does not begin a name with `_`.")
+            } else if plain.starts_with("Workflow") {
+                tr!("`types.ts` は `{plain}` を自分で宣言します。同じ名前を二度宣言できないので、モジュールが型の検査を通りません（`Duplicate identifier`）。", "`types.ts` declares `{plain}` itself: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`).")
+            } else {
+                tr!("`{plain}` は JavaScript のグローバルです。同じ名前の型は、生成するコードが読む `{plain}` を隠します。", "`{plain}` is a global of JavaScript, and a type of that name hides the one the code reads.")
+            };
+            said(&["temporal-typescript", "durable"], plain, Name::Type(n.clone()), why);
+        }
+    }
+    for (p, target) in [(Platform::Temporal, "temporal-typescript"), (Platform::Durable, "durable")] {
+        for t in m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))) {
+            let id = ident(&t.name);
+            if id != t.name {
+                let why = tr!("あなたが実装するメソッドの名前は `{id}` になります。生成するコードの名前は `_` で始められません。", "the method you implement would be `{id}`: a name in the code does not begin with `_`.");
+                said(&[target], t.name.clone(), Name::Task(t.name.clone()), why);
+            }
+        }
+    }
+    if let Some(s) = &m.service {
+        for (id, name, with) in service_client_ts(m, s).1 {
+            let why = match &with {
+                With::Name(_) => tr!("どちらも `client.ts` の `{id}` です。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。", "both are `{id}` in `client.ts`: a name cannot be declared twice, so the module does not type-check."),
+                With::TwoTypes => tr!("`client.ts` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.ts` can be one type only."),
+                With::Own => tr!("`client.ts` は `{id}` を自分で持っています。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。", "`client.ts` has `{id}` itself: a name cannot be declared twice, so the module does not type-check."),
+            };
+            out.push(Clash { lang: Lang::TypeScript, target: "temporal-typescript", id, name, with, why, in_package: false });
+        }
+    }
+    out
 }
 
 /// worker.ts: the worker that runs the workflow, its tasks and its rules. For a workflow whose history

@@ -1,0 +1,18 @@
+workflow Goの暗号化 v1
+  history encrypted
+description "履歴を暗号化するときに client.go が宣言する名前と同じレコードです。"
+
+record Dial
+  番号 : string
+
+inputs
+  相手 : string  secret
+
+outputs
+  番号 : string
+
+task かける(相手: string) -> Dial
+
+flow
+  let d = かける(相手: 相手)
+  succeed 番号 = d.番号

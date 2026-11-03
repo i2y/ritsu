@@ -1,0 +1,28 @@
+workflow クライアントの共有 v1 implements svc.Svc
+description "二つのメソッドが一つの型として共有するメッセージです。名前の問題はありません。"
+
+use proto svc from "protos/クライアントの共有.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+task もっと待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  let t = もっと待つ()
+    on timeout => fail Late "続きがありません"
+  succeed id = "{id} {s.note}"

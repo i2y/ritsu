@@ -1,0 +1,18 @@
+workflow go_fields v1
+description "Two fields of a record whose exported names are one."
+
+record Order
+  order_id : string
+  orderId : string
+
+inputs
+  key : string
+
+outputs
+  id : string
+
+task find(id: string) -> Order
+
+flow
+  let o = find(id: key)
+  succeed id = o.orderId

@@ -1,0 +1,17 @@
+workflow 自分のWorkflowInput v1
+description "どの言語のコードも宣言する名前と同じレコードです。"
+
+record WorkflowInput
+  品番 : string
+
+inputs
+  番号 : string
+
+outputs
+  品番 : string
+
+task 探す(番号: string) -> WorkflowInput
+
+flow
+  let w = 探す(番号: 番号)
+  succeed 品番 = w.品番

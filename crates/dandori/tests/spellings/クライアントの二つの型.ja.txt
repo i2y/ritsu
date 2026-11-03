@@ -1,0 +1,7 @@
+警告[W105]: tests/spellings/クライアントの二つの型.flow:1:36: サービスのメッセージ `client_two_types.ja.v1.Order`は、TypeScript、Python、Go のコードで二つの型の名前になります
+     1 | workflow クライアントの二つの型 v1 implements svc.Svc
+  = TypeScript（`--target temporal-typescript`）：`client.ts` の `Order` は一つの型にしかなれません。
+  = Python（`--target temporal-python`）：`client.py` の `Order` は一つの型にしかなれません。
+  = Go（`--target temporal-go`）：`client.go` の `Order` は一つの型にしかなれません。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.proto` のメソッドかメッセージの名前を変えてください。メソッドの名前は Connect のパスでもあるので、呼ぶ側と合わせて変えてください。
+tests/spellings/クライアントの二つの型.flow: 検査を通りました（警告 1 件）

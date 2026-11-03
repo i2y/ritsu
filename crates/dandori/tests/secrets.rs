@@ -389,36 +389,44 @@ fn the_code_of_an_encrypted_history_takes_the_codec() {
 /// declares.
 const NAMES: [&str; 2] = ["tests/encrypted/names.flow", "tests/encrypted/names.ja.flow"];
 
+/// The same flows, with those names changed as the notes of W105 say.
+const RENAMED: [&str; 2] = ["tests/encrypted/renamed/names.flow", "tests/encrypted/renamed/names.ja.flow"];
+
 /// A name the client of an encrypted history declares, given to a record, an enum, or a method or a
-/// message of the service the workflow implements, gives way in the code dandori writes as one of
-/// the client's own names does (DESIGN 1.14, 1.18): a function or a type of the service takes `Rpc`,
-/// `_rpc` or `RPC`, and a Go type `_`. The check says nothing of them, the code passes `tsc --strict`
-/// and `go vet`, and `mypy --strict` finds no name defined twice in the Python.
+/// message of the service the workflow implements, is one the code of that language cannot keep, as
+/// for one of the client's own names (DESIGN 1.14, 1.18, 22): `check` says so (W105), and `gen` stops
+/// for the language whose client has it (E051), each language at its own names. Renamed, nothing is
+/// said, the code passes `tsc --strict` and `go vet`, and `mypy --strict` finds no name defined twice
+/// in the Python.
 #[test]
-fn the_names_of_an_encrypted_client_give_way() {
+fn the_names_of_an_encrypted_client_stop_the_code_that_has_them() {
     let scratch = TempDir::new("dandori-encrypted-names");
+    let stops: [(&str, &[&str]); 3] = [
+        ("temporal-typescript", &["`EncryptedClient`", "`Encrypted`", "ClientOptions", "Connection", "PayloadCodec"]),
+        ("temporal-python", &["`Connect`", "DataConverter", "NewType", "PayloadCodec"]),
+        ("temporal-go", &["`CodecFailureConverter`", "`Dial`", "`EncryptedClient`", "CodecDataConverter"]),
+    ];
     for f in NAMES {
+        let (_, c) = dandori::check::check_file(&root().join(f)).unwrap();
+        assert!(c.diags.iter().all(|d| d.code == "W105"), "{f}: {:?}", c.diags.iter().map(|d| format!("{} {}", d.code, d.en)).collect::<Vec<_>>());
+        let m = c.model.unwrap_or_else(|| panic!("{f} passes check"));
+        for (target, names) in stops {
+            let d = dandori::commands::build(&m, target).unwrap().err().unwrap_or_else(|| panic!("{f} does not stop for {target}"));
+            assert!(d.iter().all(|x| x.code == "E051"), "{f} --target {target}: {d:?}");
+            for n in names {
+                assert!(d.iter().any(|x| x.en.contains(n)), "{f} --target {target} does not stop at {n}: {:?}", d.iter().map(|x| &x.en).collect::<Vec<_>>());
+            }
+        }
+    }
+    for f in RENAMED {
         let (_, c) = dandori::check::check_file(&root().join(f)).unwrap();
         assert!(c.diags.is_empty(), "{f} is said something: {:?}", c.diags.iter().map(|d| format!("{} {}", d.code, d.en)).collect::<Vec<_>>());
     }
-    // what the code of both flows names them (the names are the .proto's and the types', the same in both)
     let code_of = |f: &str, target: &str| build_into(&root().join(f), target, &scratch.path().join(target).join(f.rsplit('/').next().unwrap()));
-    let has = |target: &str, file: &str, names: &[&str]| {
-        for f in NAMES {
-            let text = std::fs::read_to_string(code_of(f, target).join(file)).unwrap();
-            for n in names {
-                assert!(text.contains(n), "{f}: the {file} dandori writes for {target} has no `{n}`:\n{text}");
-            }
-        }
-    };
-    has("temporal-typescript", "client.ts", &["export type ConnectionRpc =", "export type PayloadCodecRpc =", "export type ClientOptionsRpc =", "export async function encryptedClientRpc(", "export async function encryptedRpc("]);
-    has("temporal-python", "client.py", &["\nNewType_rpc = ", "\nPayloadCodec_rpc = ", "\nDataConverter_rpc = ", "async def connect_rpc("]);
-    has("temporal-go", "client.go", &["func EncryptedClientRPC(", "func DialRPC(", "func CodecFailureConverterRPC(", "type CodecDataConverterRPC ="]);
-    has("temporal-go", "types.go", &["type Dial_ struct", "type EncryptedClient_ struct", "type CodecFailureConverter_ struct", "type CodecDataConverter_ string"]);
     // TypeScript
     let tsc = root().join("tools/temporal/node_modules/.bin/tsc");
     if ready(Need::Node, || tsc.exists(), "TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`") {
-        for f in NAMES {
+        for f in RENAMED {
             let out = tsc_strict(&tsc, &code_of(f, "temporal-typescript"));
             assert!(out.status.success(), "tsc --strict refuses the TypeScript of {f}:\n{}", said(&out));
         }
@@ -429,7 +437,7 @@ fn the_names_of_an_encrypted_client_give_way() {
     let mypy = std::env::var_os("DANDORI_MYPY").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("mypy"));
     let has_mypy = || python.exists() && Command::new(&mypy).arg("--version").output().is_ok_and(|o| o.status.success());
     if ready(Need::Python, has_mypy, "mypy (on PATH, or DANDORI_MYPY) or tools/temporal-python/.venv is missing") {
-        for f in NAMES {
+        for f in RENAMED {
             let code = code_of(f, "temporal-python");
             let package = code.file_name().unwrap().to_string_lossy().to_string();
             let out = Command::new(&mypy).current_dir(code.parent().unwrap()).args(["--strict", "--no-color-output", "--cache-dir", "cache", "--python-executable"]).arg(&python).args(["-p", &package]).output().unwrap();
@@ -449,7 +457,7 @@ fn the_names_of_an_encrypted_client_give_way() {
     let has_go = || Command::new("go").arg("version").output().is_ok_and(|o| o.status.success()) && root().join("tools/temporal-go/go.mod").exists();
     if ready(Need::Go, has_go, "go or tools/temporal-go is missing") {
         let dir = scratch.path().join("go");
-        go_module_of(&dir, &NAMES, &[]);
+        go_module_of(&dir, &RENAMED, &[]);
         let out = go_in(&dir).args(["vet", "./flows/..."]).output().unwrap();
         assert!(out.status.success(), "go vet refuses the Go of the names of an encrypted client:\n{}", said(&out));
         let fmt = Command::new("gofmt").arg("-l").arg("flows").current_dir(&dir).output().unwrap();
@@ -541,7 +549,7 @@ fn top_names(lang: &str, text: &str) -> BTreeSet<String> {
 /// of the flow are in types.ts and types.py, its rules in rules.ts and rules.py, and the worker
 /// holds no name of the flow), and the whole package in Go.
 #[test]
-fn the_names_an_encrypted_history_adds_are_the_ones_given_way_to() {
+fn the_names_an_encrypted_history_adds_are_the_ones_the_lists_hold() {
     let scratch = TempDir::new("dandori-encrypted-added");
     let plain = scratch.path().join("plain/pay.flow");
     std::fs::create_dir_all(plain.parent().unwrap()).unwrap();

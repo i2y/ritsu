@@ -1,0 +1,19 @@
+workflow GoのIs v1
+description "レコードが横に宣言する名前と同じ列挙です。"
+
+enum RoomState = はい | いいえ
+
+record Room
+  空き : RoomState
+
+inputs
+  番号 : string
+
+outputs
+  空き : RoomState
+
+task 見る(番号: string) -> Room
+
+flow
+  let r = 見る(番号: 番号)
+  succeed 空き = r.空き

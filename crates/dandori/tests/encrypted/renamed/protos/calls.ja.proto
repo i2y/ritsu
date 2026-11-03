@@ -1,0 +1,68 @@
+// calls.ja.proto の、W105 が挙げた名前を変えたもの。
+syntax = "proto3";
+
+package calls.ja.v1;
+
+import "dandori/v1/options.proto";
+
+service CallService {
+  option (dandori.v1.workflow) = {name: "名前の重なり", version: 1};
+
+  rpc Begin(CallRequest) returns (Receipt) {
+    option (dandori.v1.start) = {fails: ["出ない", "確かめられない"]};
+  }
+
+  rpc PickUp(PickUpNote) returns (Ack) {
+    option (dandori.v1.event) = {task: "出る"};
+  }
+
+  rpc Hold(HoldNote) returns (Ack) {
+    option (dandori.v1.event) = {task: "待たせる"};
+  }
+
+  rpc Reply(ReplyNote) returns (Ack) {
+    option (dandori.v1.answer) = {task: "かける"};
+  }
+
+  rpc Confirm(ConfirmNote) returns (Ack) {
+    option (dandori.v1.answer) = {task: "確かめる"};
+  }
+
+  rpc GetStatus(StatusRequest) returns (dandori.v1.Status) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message CallRequest {
+  string number = 1 [json_name = "番号"];
+  Line line = 2 [json_name = "回線"];
+}
+
+enum Line {
+  landline = 0;
+  mobile = 1;
+}
+
+message Receipt {
+  string memo = 1 [json_name = "記録"];
+}
+
+message PickUpNote {
+  bool answered = 1 [json_name = "出た"];
+}
+
+message HoldNote {
+  string reason = 1 [json_name = "理由"];
+}
+
+message ReplyNote {
+  string answer = 1 [json_name = "答え"];
+}
+
+message ConfirmNote {
+  string note = 1 [json_name = "確認"];
+}
+
+message Ack {}
+
+message StatusRequest {}

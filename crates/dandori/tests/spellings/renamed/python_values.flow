@@ -1,0 +1,19 @@
+workflow python_values v1
+description "A record named as what an enum declares beside itself, in Python and in Go."
+
+enum color = red | blue
+
+record color_choice
+  first : color
+
+inputs
+  id : string
+
+outputs
+  first : color
+
+task pick(id: string) -> color_choice
+
+flow
+  let p = pick(id: id)
+  succeed first = p.first

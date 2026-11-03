@@ -1,0 +1,12 @@
+workflow Goのメソッド v1
+description "Go のメソッドが一つになる、自分で実装する二つのタスクです。"
+
+inputs
+  番号 : string
+
+task send_mail(番号: string)
+task sendMail(番号: string)
+
+flow
+  send_mail(番号: 番号)
+  sendMail(番号: 番号)

@@ -1,0 +1,14 @@
+workflow python_builtin v1
+description "A task you implement named as a builtin of Python."
+
+inputs
+  id : string
+
+outputs
+  text : string
+
+task format(id: string) -> string
+
+flow
+  let t = format(id: id)
+  succeed text = t

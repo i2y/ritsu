@@ -1,0 +1,23 @@
+workflow Goの帳簿 v1
+description "ritsu gen のパッケージで io_books.go が宣言する名前と同じレコードです。"
+
+use book 倉庫 from "../flows/books/倉庫.book"
+
+record Books
+  注記 : string
+
+inputs
+  便 : string
+
+outputs
+  注記 : string
+
+task 入荷する(便: string, sku: string, 数: int)
+  book 倉庫.入荷.do
+
+task 書く() -> Books
+
+flow
+  入荷する(便: 便, sku: "a", 数: 1)
+  let n = 書く()
+  succeed 注記 = n.注記

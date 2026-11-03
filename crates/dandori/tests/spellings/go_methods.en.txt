@@ -1,0 +1,5 @@
+warning[W105]: tests/spellings/go_methods.flow:8:6: The task `send_mail` and the task `sendMail` are one name in the code of Go
+     8 | task sendMail(id: string)
+  = Go (`--target temporal-go`): both are the method `SendMail` of `OwnTasks`: a method cannot be declared twice, so the package does not compile (`duplicate method`).
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/go_methods.flow: ok (1 warning(s))

@@ -1,0 +1,17 @@
+workflow leading_underscore v1
+description "A record and a task whose names begin with _."
+
+record _Room
+  number : int
+
+inputs
+  id : string
+
+outputs
+  number : int
+
+task _look(id: string) -> _Room
+
+flow
+  let r = _look(id: id)
+  succeed number = r.number

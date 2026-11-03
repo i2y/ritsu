@@ -1,0 +1,5 @@
+warning[W105]: tests/spellings/TypeScriptのグローバル.flow:4:8: The type `Date` cannot keep its name in the code of TypeScript
+     4 | record Date
+  = TypeScript (`--target temporal-typescript`, `--target durable`): `Date` is a global of JavaScript, and a type of that name hides the one the code reads.
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/TypeScriptのグローバル.flow: ok (1 warning(s))

@@ -1,0 +1,11 @@
+workflow Goの入力 v1
+description "Go で公開する名前が一つになる二つの入力です。"
+
+inputs
+  order_id : string
+  order_no : string
+
+task 書く(甲: string, 乙: string)
+
+flow
+  書く(甲: order_id, 乙: order_no)

@@ -256,7 +256,7 @@ pub fn ledger() -> Ledger {
             tr!("一回の実行がプラットフォームの上限を超えることがあります", "One run can grow too large for the platform"),
             tr!("一回の実行の履歴が、プラットフォームの上限を超えうるとき（`dandori gen` が出します）。上限は、Step Functions が 25,000 件、Temporal が 51,200 件、Lambda durable functions が 3,000 操作です。Argo Workflows では、ノードが 10,000 個を超えうるときに出ます。", "From `dandori gen`: one run's history can outgrow the platform's limit (25,000 events on Step Functions, 51,200 on Temporal, 3,000 operations on Lambda durable functions), or on Argo Workflows more than 10,000 nodes."),
             tr!("ループの回数（`at most`）を下げるか、続きを新しい実行で始めてください。", "Lower the loop counts (`at most`), or start a new execution to go on."),
-            "workflow w v1\n\nrecord Status\n  done : bool\n\ntask look() -> Status\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:look\"\n  idempotent\n\nflow\n  repeat at most 9000 times\n    let s = look()\n    match s.done\n      true => break\n      false => pass\n",
+            "workflow w v1\n\nrecord Progress\n  done : bool\n\ntask look() -> Progress\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:look\"\n  idempotent\n\nflow\n  repeat at most 9000 times\n    let s = look()\n    match s.done\n      true => break\n      false => pass\n",
             &["E050"],
         ),
         e(
@@ -269,6 +269,17 @@ pub fn ledger() -> Ledger {
             tr!("メッセージに挙がったものを書き足すか、そのプラットフォームにできる書き方にしてください。", "Add what the message says the platform needs, or write it in a way the platform can do."),
             "workflow w v1\n\nflow\n  pass\n\non cancel\n  pass\n",
             &["E040", "E007"],
+        ),
+        e(
+            "E051",
+            tr!("出力先のコードが名前をそのまま持てません", "A name the code of a target cannot keep"),
+            tr!(
+                "W105 が挙げた名前の、その出力先に向けて `dandori gen` を走らせたとき。二つの名前が一つの識別子になるか、その名前をコードが自分で使っています。生成器はほかの名前に変えないので、その実行は何も書きません。W105 の挙げない出力先だけを `--target` に書けば、書けます。`ritsu gen` も同じです。",
+                "`dandori gen` for a target W105 names: two names are one identifier there, or the code has the name for itself. A generator does not pick another name, so the run writes nothing. A run that names only targets W105 does not name writes them. `ritsu gen` stops the same way.",
+            ),
+            tr!("メッセージのとおりに `.flow` か `.proto` の名前を変えてください。その出力先を作らないなら、`--target` から外してください。", "Rename it in the `.flow` or the `.proto`, as the message says. If you do not build that target, leave it out of `--target`."),
+            "workflow w v1\n\nenum Outcome = won | lost\n\noutputs\n  how : Outcome\n\ntask decide() -> Outcome\n\nflow\n  let how = decide()\n  succeed how = how\n",
+            &["W105", "E050", "E006"],
         ),
         Entry::new(
             "E906",
@@ -330,6 +341,17 @@ pub fn ledger() -> Ledger {
             tr!("値の出どころに `range` を書いてください。`now` なら、ワークフローに動く期間を書いてください（`workflow` の下の `now range >=2026-01-01 <=2027-12-31`）。`on failure` と `on cancel` の中の `now` は期間で確かめないので、受け取る側の範囲を外すか、範囲のある値を渡してください。", "Write a `range` where the value comes from; for `now`, the period the workflow runs in (`now range >=2026-01-01 <=2027-12-31` under `workflow`). `now` in `on failure` and `on cancel` is not held to the period: take the range off where it goes, or give a value that has one."),
             "workflow w v1\n\ninputs\n  n : int\n\ntask take(n: int range >=0 <=10)\n\nflow\n  take(n: n)\n",
             &["E014"],
+        ),
+        e(
+            "W105",
+            tr!("出力先のコードが名前をそのまま持てません", "A name the code of a target cannot keep"),
+            tr!(
+                "型、自分で実装するタスク、レコードのフィールド、入出力、サービスのメソッドとメッセージの名前が、ある出力先のコードで別の名前と一つの識別子になるか、そのコードが自分で使う名前のとき。Go は名前を公開の形に変える（`send_mail` も `sendMail` も `SendMail`）ので、`Outcome`・`Status`・`Answer` のようなパッケージが持つ名前を含めて、形が同じになるものが当たります。TypeScript は JavaScript のグローバルと同じ型の名前と `_` で始まる名前、Python はキーワード、組み込み、生成するコードが使う名前、`_` で始まる名前です。生成器は別の名前に変えないので、警告が挙げた出力先の `gen` は E051 で止まります。ほかの出力先は作れます。",
+                "A type's, a task's you implement, a field's, an input's or an output's name, or a method's or a message's of the service, that is one identifier with another name in the code of a target, or that the code has for itself. Go exports names (`send_mail` and `sendMail` are both `SendMail`), and every package has names of its own such as `Outcome`, `Status` and `Answer`. In TypeScript, a type named as a global of JavaScript, and a name that begins with `_`; in Python, a keyword, a builtin, a name the code uses, and a name that begins with `_`. A generator does not pick another name, so `gen` stops with E051 for the targets the warning names. The other targets build."
+            ),
+            tr!("作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` か `.proto` で名前を変えてください。", "For a target you do not build, leave it as it is. For one you do, rename it in the `.flow` or the `.proto`."),
+            "workflow w v1\n\nenum Outcome = won | lost\n\noutputs\n  how : Outcome\n\ntask decide() -> Outcome\n\nflow\n  let how = decide()\n  succeed how = how\n",
+            &["E051", "E006"],
         ),
         Entry::new(
             "W901",

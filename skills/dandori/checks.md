@@ -126,6 +126,14 @@ On Temporal, a loop at the top of the flow goes on in a new run (Continue-As-New
 long, so such a loop counts only up to that point. What still does not fit is the part outside the
 loop, or one round that is too large, and the diagnostic says which.
 
+## Names in the code
+
+A generator does not pick another name. When the code of a platform cannot keep a name of the `.flow`
+or the `.proto`, because two names are one identifier there (`send_mail` and `sendMail` in Go) or the
+code has the name for itself (`Outcome` in the Go package, `Date` in TypeScript, `format` in Python),
+`dandori check` warns and names the platforms (W105), and `dandori gen` writes nothing when it is to
+write one of them (E051). Rename it, or leave that platform out of `--target`.
+
 ## Every code
 
-[Diagnostics](codes.md) lists all 35, with what each one finds.
+[Diagnostics](codes.md) lists all 37, with what each one finds.

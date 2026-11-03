@@ -1,0 +1,22 @@
+workflow Pythonのis v1
+description "別のレコードが横に宣言する名前と同じレコードです（Python と Go）。"
+
+record room
+  番号 : int
+
+record is_room
+  空き : bool
+
+inputs
+  鍵 : string
+
+outputs
+  空き : bool
+
+task 見る(鍵: string) -> room
+task 聞く(番号: int) -> is_room
+
+flow
+  let r = 見る(鍵: 鍵)
+  let t = 聞く(番号: r.番号)
+  succeed 空き = t.空き

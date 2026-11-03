@@ -1,0 +1,23 @@
+workflow go_books v1
+description "A record named as what io_books.go declares in a package of ritsu gen."
+
+use book stock from "books/stock.book"
+
+record Books
+  note : string
+
+inputs
+  id : string
+
+outputs
+  note : string
+
+task receive(delivery: string, sku: string, qty: int)
+  book stock.receive.do
+
+task note() -> Books
+
+flow
+  receive(delivery: id, sku: "a", qty: 1)
+  let n = note()
+  succeed note = n.note

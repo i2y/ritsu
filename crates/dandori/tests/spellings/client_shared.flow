@@ -1,0 +1,28 @@
+workflow client_shared v1 implements svc.Svc
+description "A message two methods share, as one type: no name is at stake."
+
+use proto svc from "protos/client_shared.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task wait() -> Sent
+  event
+  timeout 1 day
+
+task wait_more() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = wait()
+    on timeout => fail Late "no word"
+  let t = wait_more()
+    on timeout => fail Late "no more word"
+  succeed id = "{id} {s.note}"

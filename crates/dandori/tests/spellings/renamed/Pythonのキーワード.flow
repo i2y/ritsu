@@ -1,0 +1,10 @@
+workflow Pythonのキーワード v1
+description "Python のキーワードと同じ、自分で実装するタスクです。"
+
+inputs
+  番号 : string
+
+task lesson(番号: string)
+
+flow
+  lesson(番号: 番号)

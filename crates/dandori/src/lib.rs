@@ -39,6 +39,7 @@ pub mod scenarios;
 pub mod secrets;
 pub mod service;
 pub mod sources;
+pub mod spellings;
 pub mod syntax;
 pub mod temporal;
 pub mod temporal_go;

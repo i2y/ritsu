@@ -1,0 +1,17 @@
+workflow python_own v1
+description "A record named as a name the code of Python uses."
+
+record Any
+  note : string
+
+inputs
+  id : string
+
+outputs
+  note : string
+
+task find(id: string) -> Any
+
+flow
+  let a = find(id: id)
+  succeed note = a.note

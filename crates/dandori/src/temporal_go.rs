@@ -26,6 +26,8 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
+use crate::spellings::{Alias, Clash, ClientNames, Lang, Name, With};
+use crate::diag::Text;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -39,9 +41,9 @@ const ANTHROPIC_SDK: &str = "github.com/anthropics/anthropic-sdk-go v1.78.0";
 /// Functions gives each: the package of the AWS SDK for Go v2 has the same name.
 const AWS_SERVICES: &[&str] = &["bedrockruntime", "dynamodb", "ecs", "eventbridge", "kinesis", "lambda", "s3", "secretsmanager", "sesv2", "sfn", "sns", "sqs", "ssm"];
 
-/// What a name of the flow cannot be in the generated Go, with an `_` after it when it is (the
-/// keywords, the predeclared names, and the names the generated code uses), and the exported
-/// names every package has, which a record's, an enum's or a method's name gives way to:
+/// What a local name of the flow cannot be in the generated Go, with an `_` after it when it is
+/// (the keywords, the predeclared names, and the names the generated code uses), and the exported
+/// names every package has, which a record's, an enum's or a method's name cannot be (W105):
 /// ritsu-emit's copies of the tables that were kept here.
 use ritsu_emit::copies::dandori::{GO_EXPORTED, GO_RESERVED};
 
@@ -102,78 +104,22 @@ pub fn task_function(task: &str) -> String {
 }
 
 /// The names client.go declares when the workflow says `history encrypted` (DESIGN 1.18). A record's
-/// or an enum's type, and a method's function or a message's type of the service, of one of these
-/// names takes `_` or `RPC`, as for the names every package has (`GO_EXPORTED`; 1.14).
+/// or an enum's type, and a method's function or a message's type of the service, cannot have one
+/// of these names, nor one every package has (`GO_EXPORTED`; 1.14; W105).
 pub const ENCRYPTED: &[&str] = &["EncryptedClient", "encryptedClient", "CodecDataConverter", "CodecFailureConverter", "Dial"];
 
-/// The Go names of what the package exports for the flow: the records' and enums' types, and the
-/// methods of `OwnTasks`, each made unique.
-struct Names {
-    types: BTreeMap<String, String>,
-    methods: BTreeMap<String, String>,
-}
-
-impl Names {
-    fn new(m: &Model) -> Names {
-        let (enums, recs) = crate::temporal::used_types(m);
-        let mut taken: BTreeSet<String> = GO_EXPORTED.iter().map(|s| s.to_string()).collect();
-        // and the names client.go declares when the history is encrypted
-        if m.history_encrypted.is_some() {
-            taken.extend(ENCRYPTED.iter().map(|s| s.to_string()));
-        }
-        // a flow of a package declares Books too (io_books.go)
-        if m.package.is_some() {
-            taken.insert("Books".to_string());
-        }
-        let mut types = BTreeMap::new();
-        let unique = |base: String, taken: &mut BTreeSet<String>| {
-            let mut n = base;
-            while taken.contains(&n) {
-                n.push('_');
-            }
-            taken.insert(n.clone());
-            n
-        };
-        for e in &enums {
-            let name = &m.enums[*e].name;
-            let n = unique(exported(name), &mut taken);
-            taken.insert(format!("{n}Values"));
-            types.insert(name.clone(), n);
-        }
-        for r in &recs {
-            let name = &m.records[*r].name;
-            let n = unique(exported(name), &mut taken);
-            taken.insert(format!("Is{n}"));
-            types.insert(name.clone(), n);
-        }
-        let mut methods = BTreeMap::new();
-        let mut own_taken = BTreeSet::new();
-        for t in &m.tasks {
-            if matches!(t.via(Platform::Temporal), Some(Via::Own)) {
-                let n = unique(exported(&t.name), &mut own_taken);
-                methods.insert(t.name.clone(), n);
-            }
-        }
-        Names { types, methods }
-    }
-
-    fn ty(&self, name: &str) -> String {
-        self.types.get(name).cloned().unwrap_or_else(|| exported(name))
-    }
-}
-
 /// The Go type of `t`, for the structs of types.go.
-fn go_type(m: &Model, n: &Names, t: &Ty) -> String {
+fn go_type(m: &Model, t: &Ty) -> String {
     match t {
         Ty::Int | Ty::Num(_) => "int64".into(),
         Ty::Str | Ty::Timestamp | Ty::Date => "string".into(),
         Ty::Bool => "bool".into(),
-        Ty::Enum(e) => n.ty(&m.enums[*e].name),
-        Ty::Record(r) => n.ty(&m.records[*r].name),
-        Ty::List(t) => format!("[]{}", go_type(m, n, t)),
+        Ty::Enum(e) => exported(&m.enums[*e].name),
+        Ty::Record(r) => exported(&m.records[*r].name),
+        Ty::List(t) => format!("[]{}", go_type(m, t)),
         Ty::Opt(inner) => match &**inner {
-            Ty::List(_) | Ty::Json | Ty::Opt(_) => go_type(m, n, inner),
-            other => format!("*{}", go_type(m, n, other)),
+            Ty::List(_) | Ty::Json | Ty::Opt(_) => go_type(m, inner),
+            other => format!("*{}", go_type(m, other)),
         },
         Ty::Json => "any".into(),
     }
@@ -181,7 +127,7 @@ fn go_type(m: &Model, n: &Names, t: &Ty) -> String {
 
 /// A check that `x` is a well-formed JSON value of `t`, in `rg` (a number's range, or the values
 /// an enum's range lets in), as a Go expression.
-fn go_check(m: &Model, n: &Names, x: &str, t: &Ty, rg: Option<Range>, depth: usize) -> String {
+fn go_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize) -> String {
     match t {
         Ty::Int | Ty::Num(_) => match rg {
             Some(r) => format!("(ddIsInt({x}) && {})", r.tests(|op, k| format!("ddNum({x}) {op} {k}")).join(" && ")),
@@ -200,31 +146,25 @@ fn go_check(m: &Model, n: &Names, x: &str, t: &Ty, rg: Option<Range>, depth: usi
         Ty::Enum(e) => match m.held_values(t, rg) {
             // a place that holds the enum to a range: the values the range lets in
             Some(values) => format!("ddIsOneOf({x}, {})", values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
-            None => format!("ddIsOneOf({x}, {}Values...)", n.ty(&m.enums[*e].name)),
+            None => format!("ddIsOneOf({x}, {}Values...)", exported(&m.enums[*e].name)),
         },
-        Ty::Record(r) => format!("Is{}({x})", n.ty(&m.records[*r].name)),
+        Ty::Record(r) => format!("Is{}({x})", exported(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");
-            format!("ddEvery({x}, func({v} any) bool {{ return {} }})", go_check(m, n, &v, inner, rg, depth + 1))
+            format!("ddEvery({x}, func({v} any) bool {{ return {} }})", go_check(m, &v, inner, rg, depth + 1))
         }
-        Ty::Opt(inner) => format!("({x} == nil || {})", go_check(m, n, x, inner, rg, depth)),
+        Ty::Opt(inner) => format!("({x} == nil || {})", go_check(m, x, inner, rg, depth)),
         Ty::Json => "true".into(),
     }
 }
 
 /// The struct's fields, each by an exported name with the JSON name in its tag, in the columns
 /// gofmt puts them in.
-fn struct_fields(m: &Model, n: &Names, fields: &[(String, Ty)], optional_json: bool) -> String {
+fn struct_fields(m: &Model, fields: &[(String, Ty)], optional_json: bool) -> String {
     let mut rows = Vec::new();
-    let mut taken = BTreeSet::new();
     for (f, ft) in fields {
-        let mut name = exported(f);
-        while taken.contains(&name) {
-            name.push('_');
-        }
-        taken.insert(name.clone());
         let omit = if matches!(ft, Ty::Opt(_)) || (optional_json && *ft == Ty::Json) { ",omitempty" } else { "" };
-        rows.push((name, go_type(m, n, ft), format!("`json:\"{f}{omit}\"`")));
+        rows.push((exported(f), go_type(m, ft), format!("`json:\"{f}{omit}\"`")));
     }
     let width = |s: &String| s.chars().count();
     let names = rows.iter().map(|r| width(&r.0)).max().unwrap_or(0);
@@ -350,8 +290,8 @@ fn gofmt_columns(text: &str) -> String {
 
 /// A check function for a JSON object with these fields: a field that is not there reads as nil,
 /// which is a value of a `T?` and of a `json`.
-fn check_function(m: &Model, n: &Names, name: &str, fields: &[(String, Ty)], ranges: &BTreeMap<String, Range>) -> String {
-    let conds: Vec<String> = fields.iter().filter(|(_, ft)| *ft != Ty::Json).map(|(f, ft)| go_check(m, n, &format!("m[{}]", q(f)), ft, ranges.get(f).copied(), 0)).collect();
+fn check_function(m: &Model, name: &str, fields: &[(String, Ty)], ranges: &BTreeMap<String, Range>) -> String {
+    let conds: Vec<String> = fields.iter().filter(|(_, ft)| *ft != Ty::Json).map(|(f, ft)| go_check(m, &format!("m[{}]", q(f)), ft, ranges.get(f).copied(), 0)).collect();
     if conds.is_empty() {
         format!("func {name}(v any) bool {{\n\t_, ok := v.(map[string]any)\n\treturn ok\n}}\n")
     } else {
@@ -359,7 +299,7 @@ fn check_function(m: &Model, n: &Names, name: &str, fields: &[(String, Ty)], ran
     }
 }
 
-fn types_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
+fn types_file(m: &Model, pkg: &str, header: &str) -> String {
     let (enums, recs) = crate::temporal::used_types(m);
     let mut t = header.to_string();
     t.push_str(&format!(
@@ -372,20 +312,20 @@ fn types_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     }
     for e in &enums {
         let en = &m.enums[*e];
-        let tn = n.ty(&en.name);
+        let tn = exported(&en.name);
         let vals: Vec<String> = en.values.iter().map(|v| q(v)).collect();
         t.push_str(&format!("\n// {tn} is the enum {}: one of {tn}Values.\ntype {tn} string\n\n// {tn}Values are the values of {tn}.\nvar {tn}Values = []string{{{}}}\n", en.name, vals.join(", ")));
     }
     for r in &recs {
         let rd = &m.records[*r];
-        let tn = n.ty(&rd.name);
-        t.push_str(&format!("\n// {tn} is the record {}.\ntype {tn} struct {{\n{}}}\n", rd.name, struct_fields(m, n, &rd.fields, true)));
-        t.push_str(&format!("\n// Is{tn} checks that v is a {tn} as JSON carries it.\n{}", check_function(m, n, &format!("Is{tn}"), &rd.fields, &rd.ranges)));
+        let tn = exported(&rd.name);
+        t.push_str(&format!("\n// {tn} is the record {}.\ntype {tn} struct {{\n{}}}\n", rd.name, struct_fields(m, &rd.fields, true)));
+        t.push_str(&format!("\n// Is{tn} checks that v is a {tn} as JSON carries it.\n{}", check_function(m, &format!("Is{tn}"), &rd.fields, &rd.ranges)));
     }
     // an input that may be absent (`T?`, `json`) may be left out of the execution's input
-    t.push_str(&format!("\n// WorkflowInput is the input of a run.\ntype WorkflowInput struct {{\n{}}}\n", struct_fields(m, n, &m.inputs, true)));
-    t.push_str(&format!("\n// IsWorkflowInput checks that v is a WorkflowInput as JSON carries it.\n{}", check_function(m, n, "IsWorkflowInput", &m.inputs, &m.input_ranges)));
-    t.push_str(&format!("\n// WorkflowOutput is what a run ends with.\ntype WorkflowOutput struct {{\n{}}}\n", struct_fields(m, n, &m.outputs, false)));
+    t.push_str(&format!("\n// WorkflowInput is the input of a run.\ntype WorkflowInput struct {{\n{}}}\n", struct_fields(m, &m.inputs, true)));
+    t.push_str(&format!("\n// IsWorkflowInput checks that v is a WorkflowInput as JSON carries it.\n{}", check_function(m, "IsWorkflowInput", &m.inputs, &m.input_ranges)));
+    t.push_str(&format!("\n// WorkflowOutput is what a run ends with.\ntype WorkflowOutput struct {{\n{}}}\n", struct_fields(m, &m.outputs, false)));
     t
 }
 
@@ -2144,8 +2084,8 @@ func ddClaude(ctx context.Context, t *DefaultTransport, call AgentCall) (any, er
 "##;
 
 /// What a task's code gets, as a comment: its arguments, the key, a callback's id, and the answer.
-fn task_doc(m: &Model, n: &Names, task: &TaskDef) -> String {
-    let mut params: Vec<String> = task.params.iter().map(|(p, pt)| format!("{}: {}", q(p), go_type(m, n, pt))).collect();
+fn task_doc(m: &Model, task: &TaskDef) -> String {
+    let mut params: Vec<String> = task.params.iter().map(|(p, pt)| format!("{}: {}", q(p), go_type(m, pt))).collect();
     if task.key {
         params.push("\"idempotency_key\": string".into());
     }
@@ -2156,7 +2096,7 @@ fn task_doc(m: &Model, n: &Names, task: &TaskDef) -> String {
         "nothing; the answer comes to the callback".to_string()
     } else {
         match &task.result {
-            Some(t) => format!("a {} as JSON", go_type(m, n, t)),
+            Some(t) => format!("a {} as JSON", go_type(m, t)),
             None => "anything; the workflow does not read it".into(),
         }
     };
@@ -2345,7 +2285,7 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
 
 /// activities.go: every task the workflow calls as an activity, the ones the user writes, and the
 /// code for the others.
-fn activities_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
+fn activities_file(m: &Model, pkg: &str, header: &str) -> String {
     let p = Platform::Temporal;
     let tasks: Vec<&TaskDef> = m.tasks.iter().filter(|t| !t.is_child(p) && !t.event).collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
@@ -2378,15 +2318,15 @@ fn activities_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     a.push_str(&format!("\npackage {pkg}\n\nimport \"context\"\n\n"));
     a.push_str("// OwnTasks are the tasks you write: the ones that say neither `lambda`, `http`, `aws`, `agent` nor `jev`.\ntype OwnTasks interface {\n");
     for task in &own {
-        let method = &n.methods[&task.name];
-        a.push_str(&format!("\t// {method} runs the task {}: {}\n\t{method}(ctx context.Context, args map[string]any) (any, error)\n", task.name, task_doc(m, n, task)));
+        let method = exported(&task.name);
+        a.push_str(&format!("\t// {method} runs the task {}: {}\n\t{method}(ctx context.Context, args map[string]any) (any, error)\n", task.name, task_doc(m, task)));
     }
     a.push_str("}\n\n");
     a.push_str("// OwnTasksBy is an OwnTasks whose every method calls f with the task's name as the .flow writes it.\n");
     a.push_str("func OwnTasksBy(f func(ctx context.Context, task string, args map[string]any) (any, error)) OwnTasks {\n\treturn ddOwnTasksBy{f}\n}\n\n");
     a.push_str("type ddOwnTasksBy struct {\n\tf func(ctx context.Context, task string, args map[string]any) (any, error)\n}\n");
     for task in &own {
-        let method = &n.methods[&task.name];
+        let method = exported(&task.name);
         a.push_str(&format!("\nfunc (o ddOwnTasksBy) {method}(ctx context.Context, args map[string]any) (any, error) {{\n\treturn o.f(ctx, {}, args)\n}}\n", q(&task.name)));
     }
     let agents: Vec<&&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Agent { .. }))).collect();
@@ -2432,10 +2372,10 @@ fn activities_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     a.push_str("\treturn map[string]func(context.Context, map[string]any) (any, error){\n");
     for task in &tasks {
         let name = ident(&task.name);
-        a.push_str(&format!("\t\t// {}\n", task_doc(m, n, task)));
+        a.push_str(&format!("\t\t// {}\n", task_doc(m, task)));
         a.push_str(&format!("\t\t{}: ddBeating(func(ctx context.Context, args map[string]any) (any, error) {{\n", q(&name)));
         match task.via(p) {
-            Some(Via::Own) => a.push_str(&format!("\t\t\treturn own.{}(ctx, args)\n", n.methods[&task.name])),
+            Some(Via::Own) => a.push_str(&format!("\t\t\treturn own.{}(ctx, args)\n", exported(&task.name))),
             _ => {
                 for l in task_body(m, task) {
                     a.push_str(&format!("\t\t\t{l}\n"));
@@ -2846,8 +2786,8 @@ const NOW_GO: &str = "\n// ddNow is `now`: the moment, by the workflow's clock, 
 /// whose history is encrypted, every function, and the worker, takes a client whose payloads go
 /// through the codec, which only `Dial` makes: a value of the interface `EncryptedClient` comes from
 /// this package alone, so that a client without the codec is a type error (DESIGN 1.18).
-fn client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
-    let c = plain_client_file(m, n, pkg, header);
+fn client_file(m: &Model, pkg: &str, header: &str) -> String {
+    let c = plain_client_file(m, pkg, header);
     if m.history_encrypted.is_none() {
         return c;
     }
@@ -2899,7 +2839,7 @@ func Dial(options client.Options, codec converter.PayloadCodec) (EncryptedClient
     out
 }
 
-fn plain_client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
+fn plain_client_file(m: &Model, pkg: &str, header: &str) -> String {
     let ty = crate::temporal::workflow_type(m);
     let mut c = header.to_string();
     c.push_str(&format!("// Starting {} v{}, answering its callbacks, sending it events, and asking where it is.\n\npackage {pkg}\n\n", m.name, m.version));
@@ -2919,7 +2859,7 @@ fn plain_client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     c.push_str("// History is the history of a run.\ntype History struct {\n\tWorkflowID string\n\tHistory    *historypb.History\n}\n\n");
     c.push_str("// Histories are the histories of the runs of this workflow that query finds, by default (\"\") the\n// ones going on: replay them with new code (worker.go: Replay) before it takes them over.\nfunc Histories(ctx context.Context, c client.Client, query string) ([]History, error) {\n\tif query == \"\" {\n\t\tquery = fmt.Sprintf(\"WorkflowType = '%s' AND ExecutionStatus = 'Running'\", WorkflowType)\n\t}\n\tvar out []History\n\tvar token []byte\n\tfor {\n\t\tlisted, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query, NextPageToken: token})\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, e := range listed.Executions {\n\t\t\th := &historypb.History{}\n\t\t\tevents := c.GetWorkflowHistory(ctx, e.Execution.WorkflowId, e.Execution.RunId, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)\n\t\t\tfor events.HasNext() {\n\t\t\t\tev, err := events.Next()\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t\th.Events = append(h.Events, ev)\n\t\t\t}\n\t\t\tout = append(out, History{WorkflowID: e.Execution.WorkflowId, History: h})\n\t\t}\n\t\ttoken = listed.NextPageToken\n\t\tif len(token) == 0 {\n\t\t\treturn out, nil\n\t\t}\n\t}\n}\n");
     if let Some(s) = &m.service {
-        c.push_str(&service_client_go(m, n, s));
+        c.push_str(&service_client_go(m, s).0);
     }
     c
 }
@@ -2927,40 +2867,33 @@ fn plain_client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
 /// client.go, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
 /// client's own Start, Send, Answer or Status. The names are those of client.ts, as Go exports them.
-fn service_client_go(m: &Model, n: &Names, s: &ServiceUse) -> String {
-    use crate::temporal::{client_name, Named};
+/// And the names it could not write.
+fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
     const FUNCTIONS: &[&str] = &["Start", "Answer", "Send", "Status", "Histories"];
     let mut c = String::new();
     c.push_str(&format!("\n// Service is the service the workflow implements, which `{}` describes. Its methods are the functions below.\nconst Service = {}\n", s.file, q(&s.name)));
-    let mut written: Vec<String> = Vec::new();
-    let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED } else { &[] };
-    let others: Vec<String> = GO_EXPORTED.iter().chain(encrypted).map(|x| x.to_string()).chain(n.types.values().cloned()).chain(n.types.values().map(|t| format!("Is{t}"))).chain(n.types.values().map(|t| format!("{t}Values"))).collect();
-    let alias = |c: &mut String, written: &mut Vec<String>, message: &str, ty: &str, same: bool, what: String| -> String {
-        let name = exported(message.rsplit('.').next().unwrap_or(message));
-        let taken: Vec<&str> = others.iter().map(|x| x.as_str()).chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
-        match client_name(name, &taken, same, "RPC") {
-            Named::Same => ty.to_string(),
-            Named::New(t) => {
+    let mut own: Vec<(String, With)> = own_names(m).into_iter().map(|x| (x, With::Own)).collect();
+    own.extend(declared_types(m).into_iter().map(|(id, name)| (id, With::Name(name))));
+    let mut names = ClientNames::new(own, FUNCTIONS);
+    let alias = |c: &mut String, names: &mut ClientNames, message: &str, ty: &str, same: bool, what: String| -> String {
+        let id = exported(message.rsplit('.').next().unwrap_or(message));
+        match names.message(id, message, ty, same) {
+            Alias::Use(t) => t,
+            Alias::Write(t) => {
                 c.push_str(&format!("\n// {t} is {what}: `{message}`.\ntype {t} = {ty}\n"));
-                written.push(t.clone());
                 t
             }
         }
     };
-    let task_type = |task: &str| m.tasks.iter().find(|t| t.name == task).and_then(|t| t.result.as_ref()).map(|t| go_type(m, n, t)).unwrap_or_else(|| "any".into());
+    let task_type = |task: &str| m.tasks.iter().find(|t| t.name == task).and_then(|t| t.result.as_ref()).map(|t| go_type(m, t)).unwrap_or_else(|| "any".into());
     for mt in &s.methods {
         let label = s.label(mt);
         let base = exported(&mt.name);
-        let taken: Vec<String> = others.iter().cloned().chain(written.iter().cloned()).collect();
-        let named = |same: bool| match client_name(base.clone(), FUNCTIONS, same, "RPC") {
-            Named::New(x) if taken.contains(&x) => Named::New(format!("{x}RPC")),
-            other => other,
-        };
         let (f, sig, call, what) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = named(true);
-                let req = alias(&mut c, &mut written, &mt.request, "WorkflowInput", false, format!("the request of {label}, the workflow's input"));
-                alias(&mut c, &mut written, &mt.response, "WorkflowOutput", false, format!("the response of {label}, the workflow's output"));
+                let f = names.function(base.clone(), &mt.name, true);
+                let req = alias(&mut c, &mut names, &mt.request, "WorkflowInput", false, format!("the request of {label}, the workflow's input"));
+                alias(&mut c, &mut names, &mt.response, "WorkflowOutput", false, format!("the response of {label}, the workflow's output"));
                 (
                     f,
                     format!("(ctx context.Context, c client.Client, id string, input {req}, searchAttributes bool) (client.WorkflowRun, error)"),
@@ -2969,8 +2902,8 @@ fn service_client_go(m: &Model, n: &Names, s: &ServiceUse) -> String {
                 )
             }
             Some(Mark::Event { task }) => {
-                let f = named(false);
-                let req = alias(&mut c, &mut written, &mt.request, &task_type(task), false, format!("the request of {label}, the value of the event of `{task}`"));
+                let f = names.function(base.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), false, format!("the request of {label}, the value of the event of `{task}`"));
                 (
                     f,
                     format!("(ctx context.Context, c client.Client, workflowID string, value {req}) error"),
@@ -2979,8 +2912,8 @@ fn service_client_go(m: &Model, n: &Names, s: &ServiceUse) -> String {
                 )
             }
             Some(Mark::Answer { task }) => {
-                let f = named(false);
-                let req = alias(&mut c, &mut written, &mt.request, &task_type(task), false, format!("the request of {label}, the answer of the callback of `{task}`"));
+                let f = names.function(base.clone(), &mt.name, false);
+                let req = alias(&mut c, &mut names, &mt.request, &task_type(task), false, format!("the request of {label}, the answer of the callback of `{task}`"));
                 (
                     f,
                     format!("(ctx context.Context, c client.Client, callbackID string, value {req}) error"),
@@ -2989,18 +2922,121 @@ fn service_client_go(m: &Model, n: &Names, s: &ServiceUse) -> String {
                 )
             }
             Some(Mark::Status) => {
-                let f = named(true);
-                let res = alias(&mut c, &mut written, &mt.response, "Where", true, format!("the response of {label}, where a run is"));
+                let f = names.function(base.clone(), &mt.name, true);
+                let res = alias(&mut c, &mut names, &mt.response, "Where", true, format!("the response of {label}, where a run is"));
                 (f, format!("(ctx context.Context, c client.Client, id string) ({res}, error)"), "\treturn Status(ctx, c, id)\n".to_string(), "is where the run id is, as Status says".to_string())
             }
             None => continue,
         };
-        if let Named::New(name) = f {
+        if let Some(name) = f {
             c.push_str(&format!("\n// {name} ({label}) {what}.\nfunc {name}{sig} {{\n{call}}}\n"));
-            written.push(name);
         }
     }
-    c
+    (c, names.clashes)
+}
+
+/// The exported names the package has for itself: every package's, what client.go declares for an
+/// encrypted history, and the service's name when there is a service.
+fn own_names(m: &Model) -> Vec<String> {
+    let mut own: Vec<String> = GO_EXPORTED.iter().filter(|x| **x != "Service" || m.service.is_some()).map(|x| x.to_string()).collect();
+    if m.history_encrypted.is_some() {
+        own.extend(ENCRYPTED.iter().map(|x| x.to_string()));
+    }
+    own
+}
+
+/// What the package declares for the flow's types, each with the type that declares it: a type by
+/// its exported name, and beside it `<enum>Values` and `Is<record>`. Enums first, as types.go has
+/// them; when two types declare one name, the first holds it.
+fn declared_types(m: &Model) -> Vec<(String, Name)> {
+    let (enums, recs) = crate::temporal::used_types(m);
+    let mut out = Vec::new();
+    for e in &enums {
+        let id = exported(&m.enums[*e].name);
+        out.push((format!("{id}Values"), Name::Type(m.enums[*e].name.clone())));
+        out.push((id, Name::Type(m.enums[*e].name.clone())));
+    }
+    for r in &recs {
+        let id = exported(&m.records[*r].name);
+        out.push((format!("Is{id}"), Name::Type(m.records[*r].name.clone())));
+        out.push((id, Name::Type(m.records[*r].name.clone())));
+    }
+    out
+}
+
+/// What the code of Go cannot keep (DESIGN 22): a type's name, or what it declares beside itself,
+/// that is one with the package's own or another type's; two fields of a struct, or two methods
+/// of `OwnTasks`, that are one exported name; and what its client could not write.
+pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
+    let mut out = Vec::new();
+    let mut said = |id: String, name: Name, with: With, why: Text, in_package: bool| {
+        out.push(Clash { lang: Lang::Go, target: "temporal-go", id, name, with, why, in_package });
+    };
+    let own = own_names(m);
+    let dup = |id: &str| tr!("どちらも `{id}` です。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "both are `{id}`: a name cannot be declared twice, so the package does not compile (`redeclared in this block`).");
+    let mut held: BTreeMap<String, Name> = BTreeMap::new();
+    for (id, name) in declared_types(m) {
+        if own.contains(&id) {
+            let why = tr!("`{id}` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "the package declares `{id}` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`).");
+            said(id, name, With::Own, why, false);
+        } else if id == "Books" && !crate::asl::used_books(m).is_empty() {
+            let why = tr!("`ritsu gen` のパッケージの中では、`io_books.go` が `Books` を宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "in a package of `ritsu gen`, `io_books.go` declares `Books`: a name cannot be declared twice, so the package does not compile (`redeclared in this block`).");
+            said(id, name, With::Own, why, true);
+        } else {
+            match held.get(&id) {
+                Some(first) if *first != name => said(id.clone(), name, With::Name(first.clone()), dup(&id), false),
+                Some(_) => {}
+                None => {
+                    held.insert(id, name);
+                }
+            }
+        }
+    }
+    // the structs' fields, by the place each struct is written from
+    let (_, recs) = crate::temporal::used_types(m);
+    let fields = |fields: &[(String, Ty)], name: &dyn Fn(&str) -> Name, said: &mut dyn FnMut(String, Name, With, Text, bool)| {
+        let mut held: BTreeMap<String, &str> = BTreeMap::new();
+        for (f, _) in fields {
+            let id = exported(f);
+            match held.get(&id) {
+                Some(first) => said(id.clone(), name(f), With::Name(name(first)), dup(&id), false),
+                None => {
+                    held.insert(id, f);
+                }
+            }
+        }
+    };
+    for r in &recs {
+        let rd = &m.records[*r];
+        fields(&rd.fields, &|f| Name::Field(rd.name.clone(), f.to_string()), &mut said);
+    }
+    fields(&m.inputs, &|f| Name::Input(f.to_string()), &mut said);
+    fields(&m.outputs, &|f| Name::Output(f.to_string()), &mut said);
+    // the methods of OwnTasks
+    let mut methods: BTreeMap<String, &str> = BTreeMap::new();
+    for t in m.tasks.iter().filter(|t| matches!(t.via(Platform::Temporal), Some(Via::Own))) {
+        let id = exported(&t.name);
+        match methods.get(&id) {
+            Some(first) => {
+                let why = tr!("どちらも `OwnTasks` のメソッド `{id}` です。同じ名前のメソッドを二度宣言できないので、パッケージがコンパイルできません（`duplicate method`）。", "both are the method `{id}` of `OwnTasks`: a method cannot be declared twice, so the package does not compile (`duplicate method`).");
+                said(id.clone(), Name::Task(t.name.clone()), With::Name(Name::Task(first.to_string())), why, false);
+            }
+            None => {
+                methods.insert(id, &t.name);
+            }
+        }
+    }
+    if let Some(s) = &m.service {
+        for (id, name, with) in service_client_go(m, s).1 {
+            let why = match &with {
+                With::Name(_) => dup(&id),
+                With::TwoTypes => tr!("`client.go` の `{id}` は一つの型にしかなれません。", "`{id}` in `client.go` can be one type only."),
+                With::Own => tr!("`{id}` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。", "the package declares `{id}` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`)."),
+            };
+            said(id, name, with, why, false);
+        }
+    }
+    out
 }
 
 /// worker.go: the worker that runs the workflow, its tasks and its rules. For a workflow whose
@@ -3071,18 +3107,17 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     }
     let pkg = package(m);
     let header = format!("{}\n", m.head("//"));
-    let names = Names::new(m);
     let nd = needs(m);
     // the rules whose code goes with the workflow are in rules.go; the others are called at their services, from activities.go
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
     let constant = |text: &str| format!("{header}{}", text.replace("{{PKG}}", &pkg));
-    let mut g = Gen { m, names: &names, out: String::new(), loops: vec![], can: None, time: false, now: None };
+    let mut g = Gen { m, out: String::new(), loops: vec![], can: None, time: false, now: None };
     let wf = g.workflow(&header, &pkg);
     let mut files = vec![
         (format!("{pkg}/doc.go"), doc_file(m, &nd, &pkg, &header, &called)),
-        (format!("{pkg}/types.go"), types_file(m, &names, &pkg, &header)),
+        (format!("{pkg}/types.go"), types_file(m, &pkg, &header)),
         (format!("{pkg}/values.go"), constant(VALUES)),
-        (format!("{pkg}/activities.go"), activities_file(m, &names, &pkg, &header)),
+        (format!("{pkg}/activities.go"), activities_file(m, &pkg, &header)),
         (format!("{pkg}/io.go"), io_file(&nd, &pkg, &header)),
     ];
     if nd.lambda || !nd.aws.is_empty() {
@@ -3102,7 +3137,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     if !called.is_empty() {
         files.push((format!("{pkg}/rules.go"), rules_file(m, &pkg, &header, &called)));
     }
-    files.push((format!("{pkg}/client.go"), client_file(m, &names, &pkg, &header)));
+    files.push((format!("{pkg}/client.go"), client_file(m, &pkg, &header)));
     let mut files: Vec<(String, String)> = files.into_iter().map(|(name, text)| (name, gofmt_columns(&text))).collect();
     let id = crate::temporal::build_id(&files);
     files.push((format!("{pkg}/worker.go"), gofmt_columns(&worker_file(m, &pkg, &header, !called.is_empty(), &id))));
@@ -3160,8 +3195,6 @@ fn retriers(m: &Model, callee: &Callee) -> String {
 
 struct Gen<'a> {
     m: &'a Model,
-    /// the Go names of the records and enums
-    names: &'a Names,
     out: String,
     /// the counters of the loops around the current statement
     loops: Vec<usize>,
@@ -3823,7 +3856,7 @@ impl<'a> Gen<'a> {
                 if let Some(z) = filled {
                     g.line(d, &format!("dd_r = ddFill(dd_r, {})", json_value(z)));
                 }
-                g.line(d, &format!("if !{} {{", go_check(m, g.names, "dd_r", ty, m.answer_range(callee), 0)));
+                g.line(d, &format!("if !{} {{", go_check(m, "dd_r", ty, m.answer_range(callee), 0)));
                 g.line(d + 1, &format!("return nil, ddFail(\"Dandori.BadResponse\", {})", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
                 g.line(d, "}");
                 if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
