@@ -4,7 +4,7 @@ Functional Core を書くための小さな汎用の言語。ファイルは `.k
 
 名前は要（かなめ）から取った。扇の骨を一つに留める部品である。
 
-この文書は、ritsu 0.35.0 の上の kaname の設計である（2026-10-22）。言語（字句と構文、名前と読むファイル、型、エフェクト、範囲の解析と例を探すこと、逃げ道の警告、言語をまたぐ判定とそのための口）、コマンド（`check`、`run`、`vectors`、`doc`、`api`、`explain`）、`ritsu gen` が書く TypeScript・Python・Go、意味の中心の Lean のモデルと定理は、ここに書いたとおりに実装してある。例の 16 の `.kn`（八つの例の英語と日本語の版）は `ritsu kaname check` を警告も無く通り、その `examples` も成り立つ。そのうち四つの例は、生成したコードを TypeScript・Python・Go のホストから呼ぶプログラムも持つ（17.5）。生成したコードは、例とテストのモジュールの全部のベクタで、TypeScript・Python・Go・Rust の四つの出力先とも参照インタプリタと同じ答えを返す（16.4）。Rust の生成物は kaname の生成の関数が書き、kaname のテストがクレートにして確かめる。`ritsu gen` が書くのは、まだ TypeScript・Python・Go である（36 章、19 章）。範囲の解析と参照インタプリタは、Lean のモデルと、例とテストのモジュールの全部で同じ答えを出す（15.3）。実装したものの出力は、実物を貼ってある（4 章、5 章、7 章、8 章、9 章、10 章、11.1、12 章、13 章、14 章、15.3、16.4、17 章）。内側のファイル（`.rule`・`.cal`・`.book`）は、ritsu 0.34.1 の `ritsu check` を通し、規則の `examples` も走らせてある。丸めの五つの仕方と日の番号の計算は rulec と koyomi の手順と照らし合わせ、rulec のコーパスの `derive` と `define` の式の全部は、kaname の式として読んで型と値が rulec と同じになる（16.2、16.3）。段階ごとの作業と完了の条件は PLAN.md にある。
+この文書は、ritsu 0.35.0 の上の kaname の設計である（2026-10-22）。言語（字句と構文、名前と読むファイル、型、エフェクト、範囲の解析と例を探すこと、逃げ道の警告、言語をまたぐ判定とそのための口）、コマンド（`check`、`run`、`vectors`、`doc`、`api`、`explain`）、`ritsu gen` が書く TypeScript・Python・Go・Rust、意味の中心の Lean のモデルと定理は、ここに書いたとおりに実装してある。例の 16 の `.kn`（八つの例の英語と日本語の版）は `ritsu kaname check` を警告も無く通り、その `examples` も成り立つ。そのうち四つの例は、生成したコードを TypeScript・Python・Go のホストから呼ぶプログラムも持つ（17.5）。生成したコードは、例とテストのモジュールの全部のベクタで、TypeScript・Python・Go・Rust の四つの出力先とも参照インタプリタと同じ答えを返す（16.4）。Rust の生成物は kaname の生成の関数が書き、`ritsu gen --target rust` がクレートにする（36 章）。範囲の解析と参照インタプリタは、Lean のモデルと、例とテストのモジュールの全部で同じ答えを出す（15.3）。実装したものの出力は、実物を貼ってある（4 章、5 章、7 章、8 章、9 章、10 章、11.1、12 章、13 章、14 章、15.3、16.4、17 章）。内側のファイル（`.rule`・`.cal`・`.book`）は、ritsu 0.34.1 の `ritsu check` を通し、規則の `examples` も走らせてある。丸めの五つの仕方と日の番号の計算は rulec と koyomi の手順と照らし合わせ、rulec のコーパスの `derive` と `define` の式の全部は、kaname の式として読んで型と値が rulec と同じになる（16.2、16.3）。段階ごとの作業と完了の条件は PLAN.md にある。
 
 この文書の並び：
 
@@ -425,7 +425,7 @@ kaname のクレートのバイナリ（`kaname`）は内側の言語を持た�
 
 ### 2.6 名前と別名
 
-名前は rulec と同じ字句で、漢字、かな、ラテン文字が使える。名前は書いたとおりに比べ、NFC に正規化しない。rulec も、依存を持たず Unicode の表を持たないので、正規化を約束していない（rulec の DESIGN §15.70）。生成するコードに出る名前（モジュール、関数、引数、レコード、フィールド、列挙、列挙の値）が ASCII でなければ、丸括弧で ASCII の別名を付ける（無ければ E005。別名が ASCII の名前でなくても E005）。ASCII の名前には要らない。別名か、別名の無い名前が、出力先（TypeScript の strict mode、Python、Go）の予約語か、補助のモジュールの名前（`kaname`、`KanameError` など。10.1）なら E007 にする。Rust の予約語は生の識別子（`r#ref`）にするので E007 にしないが、モジュールの名前が `crate`、`self`、`Self`、`mod`、`door`（Rust がモジュールに付けられない語と、kaname が Rust の `glue/` に書くファイルの名前）なら E007 にする（36.3）。`let` の名前とラムダの引数は、生成するコードの関数の中の名前なので、別名を付けない（rulec が内部の名前に日本語の識別子をそのまま使うのと同じ。TypeScript・Python・Go のどれも、関数の中の日本語の識別子を受け付け、Rust もクレートの根で字の lint を許せば受け付ける。36.8）。出力先が名前に取らない字を持つ名前（`m²`）は、その出力先の生成物では `v` になる（36.3）。
+名前は rulec と同じ字句で、漢字、かな、ラテン文字が使える。名前は書いたとおりに比べ、NFC に正規化しない。rulec も、依存を持たず Unicode の表を持たないので、正規化を約束していない（rulec の DESIGN §15.70）。生成するコードに出る名前（モジュール、関数、引数、レコード、フィールド、列挙、列挙の値）が ASCII でなければ、丸括弧で ASCII の別名を付ける（無ければ E005。別名が ASCII の名前でなくても E005）。ASCII の名前には要らない。別名か、別名の無い名前が、出力先（TypeScript の strict mode、Python、Go）の予約語か、補助のモジュールの名前（`kaname`、`KanameError` など。10.1）なら E007 にする。Rust の予約語は生の識別子（`r#ref`）にするので E007 にしない。モジュールの名前が `crate`、`self`、`Self`、`mod`、`door`（Rust がモジュールに付けられない語と、kaname が Rust の `glue/` に書くファイルの名前）なら、壊れるのは Rust だけなので、`check` は W001 の警告にし、`ritsu gen --target rust` だけが E008 で止まる（36.3）。`let` の名前とラムダの引数は、生成するコードの関数の中の名前なので、別名を付けない（rulec が内部の名前に日本語の識別子をそのまま使うのと同じ。TypeScript・Python・Go のどれも、関数の中の日本語の識別子を受け付け、Rust もクレートの根で字の lint を許せば受け付ける。36.8）。出力先が名前に取らない字を持つ名前（`m²`）は、その出力先の生成物では `v` になる（36.3）。
 
 **決定（宣言したものは、名前でも別名でも指せる）**：レコードとフィールド、列挙とその値、関数とその引数、規則の入力と出力は、宣言した名前でも別名でも指せる（sekisho と同じ）。英語の版と日本語の版が同じ別名を持つので、日本語の版の中で英語の別名を使っても同じものを指す。そのかわり、名前と別名は一つの名前空間にあり、ほかの名前とも別名とも重なれない（E006）。規則の列挙とその値も、規則のファイルに書いた名前か別名で指す（`due.緊急度`、`due.urgency`、`due.urgency.later`）。口は、列挙の名前と、規則が括弧の中に書いた別名（列挙の公開名、`urgency`）を渡す（`RuleEnum::public`。14.1）。生成するコードの型の名前（`Urgency`）では指さない。
 
@@ -1191,7 +1191,7 @@ Rust のパッケージは一つのクレートで、kaname はその `glue/` �
   glue/books/<帳簿>_apply.rs   振替を当てる関数（帳簿ごと。wasm32 では外す）
 ```
 
-パッケージの Wasm には、クレートの根に二つのファイルが要る。canonical ABI の三つの関数の `wasm.rs`（根は wasm32 のときだけ読む）と、パッケージの `.wit` である。中身は kaname の `kaname::r#gen::wasm` が作り、クレートを組み立てる側が置く（36.10）。
+パッケージの Wasm には、クレートの根に二つのファイルが要る。canonical ABI の三つの関数の `wasm.rs`（根は wasm32 のときだけ読む）と、パッケージの `.wit` である。中身は kaname の `kaname::r#gen::wasm` が作り、クレートを組み立てる側（`ritsu gen --target rust`。36.17）が置く（36.10）。
 
 - **補助のモジュール**（`glue/kaname.*`）：丸めていない値（有理数）、確かめつきの算術、丸めの五つ、`allocate` と `isqrt`、日付と日の番号の換算、`KanameError`、入口と渡す先の確かめの答えの型、`text` の書き方。パッケージに一つだけ書き、kaname のどのモジュールもそれを読む。rulec と koyomi は、補助の関数を生成物ごとに書く（依存の無い一つのファイルにするため）。kaname は、モジュールどうしが互いのレコードと振替の型を読むので、補助の型（`KanameError` など）を一つにしなければ、モジュールをまたいで値を渡せない。Python と Go の型は名前で比べるからである。パッケージの中の生成物で、パッケージの外に依存しないことは変わらない（rulec の P5）。
 - **インデックス**：`glue/` と `glue/books/` のインデックス（TypeScript の `index.ts`、Python の `__init__.py`）は kaname が書き、モジュール、補助のモジュール `kaname`、`books` を名前で並べる。パッケージの頭のインデックス（`index.ts`、`<name>/__init__.py`）は ritsu が書き、そこに `glue` を足す。Go にはインデックスが無い。Rust では `glue.rs` と `glue/books.rs` を kaname が書き、クレートの根（`lib.rs`）が `glue` を宣言する。
@@ -1555,6 +1555,8 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | E005 | A name the generated code takes needs an ASCII alias | 生成するコードに出る名前には、ASCII の別名が要ります（別名が ASCII の名前でないときも） | `fn 請求する(…)` に別名が無い |
 | E006 | The same name is given twice | 同じ名前が二度あります（モジュールの `use` の名前と宣言、一つのレコードのフィールド、一つの関数の引数、一つの列挙の値、関数の形で書く組み込みの関数の名前、関数の中の名前、生成するコードの値の型の名前、モジュールの関数と同じ名前の関数の値） | `fn quote` が二つ、`fn sum`、`fn numbers`、`fn char`、`fn ok`、引数と同じ名前の `let`、`record OrderPlaced` と値 `Order.placed`、レコードと同じ名前の型の引数 |
 | E007 | A name the generated code cannot take | 生成するコードが使えない名前です（出力先の予約語、補助のモジュールの名前、直和型の値のフィールドの `kind`） | フィールドの別名が `KanameError` |
+| E008 | A name the generated Rust cannot give a module | 生成する Rust が、モジュールの名前に使えない名前です（W001 の名前で、`ritsu gen --target rust` のとき） | `module door` を `ritsu gen --target rust` で書く |
+| W001 | A name the generated Rust cannot give a module | 生成する Rust が、モジュールの名前に使えない名前です（`check` は通す） | `module door` |
 | E101 | Nothing has this name | この名前のものはありません（値の型も。メソッドの形でだけ書く組み込みの関数を関数の形で、関数の形でだけ書くものをメソッドの形で書いたとき、ほかのモジュールの `private` のものも） | `charges(…).fees`（無い出力）、`Order.shipped`（無い値の型）、`keys(prices)`、`trim(name)` |
 | E102 | The types do not agree | 型が合いません（単位と税区分を含む。`..` のあとの値、比べる二つの値、関数の型、関数の型の引数に渡す関数でないものも） | ドルの額をセントの帳簿の振替に渡す（17.6） |
 | E103 | An unrounded value is given where a rounded one goes | 丸めた値を受け取るところに、丸めていない値を渡しています（辞書の鍵と値、集合の要素、型の引数も） | `amount × 3%` を `money[USDc]` の引数に渡す、`running_totals(xs, x => 1 / x)`、`prices.map_values(p => p * 8%)` |
@@ -2380,8 +2382,8 @@ ok rules/値引きの配分.rule
 - **帳簿の口からページを読むこと**（`Books` に `doc` を足して、chobo のページを埋め込む）：いまは振替の操作と理由を kaname のページに並べるだけである。
 - **逃げ道の警告を、意図を書いて消す書き方**：7 章。
 - **`fmt` と LSP**：ritsu の LSP と同じく作らない（ritsu の DESIGN 15 章）。
-- **`ritsu gen` の Rust とパッケージの Wasm**（`--target rust`）：kaname の Rust の生成物は、kaname の生成の関数が書き、Wasm の二つのファイル（`wasm.rs` と `.wit`）の中身は `kaname::r#gen::wasm` が作る（36.10）。kaname のテストが、規則・日付・帳簿の Rust と一つのクレートにし、ネイティブと wasm32 に組んで確かめる（36.9）。`ritsu gen` は、まだ Rust のパッケージを書かない。書くのは、モジュールの木をつなぐファイル（`lib.rs`、`rules.rs`、`dates.rs`、`books.rs`）、Wasm の二つのファイル、`Cargo.toml`（帳簿の置き場所ごとの依存の行。帳簿のクレートは wasm32 のほかでだけ読む）と、`--check` と `--format json` で、形はテストのクレート（36.8〜36.10）と同じにする。`.wit` の版は `ritsu.mod` の `version` から取る（36.11）。
-- **モジュールを Rust のライブラリにすること**（`ritsu gen --library --target rust`）：ライブラリの形（ritsu の DESIGN 17.8）は npm・PyPI・Go のモジュールで書き、Rust では exit 2 で止まる。足すには三つを決める。一つ目は crates.io のクレートの名前で、モジュールの正規の書き方の連なりと別名から、crates.io が受け付ける名前を作る決まりである。二つ目は依存の版の書き方で、Cargo の版の範囲（`^`）と、ritsu の DESIGN 17.16 の「ちょうどの版」で書く決まりをどう合わせるかである。三つ目はライブラリの単位の型で、`units` をライブラリごとに持つか、共通のクレートから読むかである。単位の型が別のクレートで別の型になると、ライブラリの額とパッケージの額を同じ型で受け渡せない。
+- **四つの例の Rust のホスト**：例のホストのプログラムは TypeScript・Python・Go のままである（17.5）。Rust から呼ぶ形は `docs/reference.md` が見せる（36.17）。
+- **モジュールを Rust のライブラリにすること**（`ritsu gen --library --target rust`）：ライブラリの形（ritsu の DESIGN 17.16）は npm・PyPI・Go のモジュールで書き、Rust では exit 2 で止まる。足すには三つを決める。一つ目は crates.io のクレートの名前で、モジュールの正規の書き方の連なりと別名から、crates.io が受け付ける名前を作る決まりである。二つ目は依存の版の書き方で、Cargo の版の範囲（`^`）と、ritsu の DESIGN 17.16 の「ちょうどの版」で書く決まりをどう合わせるかである。三つ目はライブラリの単位の型で、`units` をライブラリごとに持つか、共通のクレートから読むかである。単位の型が別のクレートで別の型になると、ライブラリの額とパッケージの額を同じ型で受け渡せない。
 - **TypeScript・Python・Go・Rust のほかの出力先**（rulec の 12 の出力先のような）。
 - **前提を破る入力を解いて、見た値に足すこと**：見た値の入力は、ベクタと、振替の額と日を渡す先の範囲の一つ外にする入力だけである（14.2）。二つの入力の関係（`before <= upto`）を破る入力は解かないので、区間の端で破る前提は、ベクタに破る実行が無ければ決められない（W201）になる。
 
@@ -4417,7 +4419,7 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 
 **原因**（Go の形をなぞるだけでは足りない理由）：Go の生成物は、中の関数の失敗を panic で運び、入口の `kaname.Recover` で `error` に直す（10.4）。wasm32 の Rust は `panic=abort` で組む（rulec と koyomi の組み方と同じ）ので、panic はトラップになり、「どの入力にもトラップせずに答える」という Wasm の約束が守れない。そこで Rust では、失敗を `Result` で運ぶ（36.4）。もう一つは値の持ち方で、Rust の値には持ち主があるので、借りるかコピーするかを生成物が決める（36.4）。
 
-いまの範囲：Rust の生成物は kaname の生成の関数（`kaname::r#gen::package_in` に `Target::Rust`）が書き、パッケージの Wasm に要る二つのファイル（クレートの根の `wasm.rs` とパッケージの `.wit`）の中身は `kaname::r#gen::wasm` が作る（36.10）。kaname のテスト（`tests/rust.rs`、`tests/wasm.rs`）が、規則・日付・帳簿の Rust と一つのクレートにし、ネイティブと wasm32 に組んで確かめる（36.9）。`ritsu gen --target rust`（パッケージの残りと `Cargo.toml` を書き、Wasm の二つのファイルを置くこと）は、まだ無い（19 章）。
+いまの範囲：Rust の生成物は kaname の生成の関数（`kaname::r#gen::package_in` に `Target::Rust`）が書き、パッケージの Wasm に要る二つのファイル（クレートの根の `wasm.rs` とパッケージの `.wit`）の中身は `kaname::r#gen::wasm` が作る（36.10）。kaname のテスト（`tests/rust.rs`、`tests/wasm.rs`）が、規則・日付・帳簿の Rust と一つのクレートにし、ネイティブと wasm32 に組んで確かめる（36.9）。`ritsu gen --target rust` が、パッケージの残りと `Cargo.toml` を書き、Wasm の二つのファイルを置く（36.17）。
 
 ### 36.2 型と値（10.2 の表の Rust の列）
 
@@ -4461,18 +4463,38 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 - **関数の中の名前**（`let`、ラムダの引数、`some` の名前）は書いたとおりにする（TypeScript と Python と同じ）。日本語の `let` の名前もそのまま置く。引数は別名で書く。どれも、生成物が使う名前（モジュールの関数、`check_<関数>`、`_<関数>`、`_MODULE`、生の識別子にできない語、`Some`・`None`・`Ok`・`Err`、`std`・`core`・`alloc`）か前に付けた名前と同じになれば、TypeScript と Python の決まり（10.3）で `_` と番号を足す。値の名前空間で、引数と `let` はモジュールの関数を隠すからである（`tests/modules/names.kn` の `helpers(units, ctx)` の `units` は、同じモジュールに関数 `units` があるので `units_` になる）。パスの頭（`kaname::add` の `kaname`、`units::USDc` の `units`、`rule_late_payment_charges::late_payment_charges` の `rule_late_payment_charges`）は型の名前空間で探すので、`let` と引数には隠されない。そこで Rust では、TypeScript と Go が分けている `kaname` と `units` を分けない（36.15）。
 - **Rust の予約語**：E007 は、TypeScript の strict モードの予約語、Python と Go の予約語、補助のモジュールの名前を、宣言の名前から外している（`names::taken_word`）。Rust の予約語はそこに足さない。足すと、`ref`、`box`、`move`、`use` のような、いま通っているモジュールの名前が止まるからである。代わりに、Rust の予約語は生の識別子にする（`r#ref`、`r#move`、`r#impl`、`r#dyn`、`r#where`、`r#mut`、`r#loop`。エディション 2024 の予約語 `gen` も `r#gen` にし、これは 2021 でも書ける）。生の識別子にできない五つ（`crate`、`self`、`super`、`Self`、`_`。`ritsu_emit::ident::RUST_UNRAW`）は、フィールドと関数と型なら `_` を足す（`self_`、`crate_`、`Self_`。chobo の Rust のクライアントと同じ）。関数の中の名前と引数は、上の決まりで `_` と番号を足す。
 - **標準の型と値の名前**：モジュールの型の名前が、生成物が名前だけで書く標準の型かトレイト（`Option`、`Result`、`Vec`、`String`、`Box`、`BTreeMap`、`BTreeSet`、`Fn`、`FnOnce`、`Clone`、`Ord`、`PartialOrd`、`PartialEq`、`Eq`、`From`。`plan::RUST_STD_TYPES`）と同じなら、`_` を足す（`record Vec` は `Vec_`、`enum Option` は `Option_`）。モジュールの型が標準の型を隠すと、生成物の `Option<…>` がその型を指すからである。関数の名前が、生成物が名前だけで書く値（`Some`、`None`、`Ok`、`Err`。`plan::RUST_STD_VALUES`）と同じなら、関数にも `_` を足す（`fn Some` は `Some_`、中の関数は `_Some`、確かめは `check_Some`）。関数は値の名前空間にあり、`Some(…)` を隠すからである。名前付きフィールドの構造体は値の名前空間に入らないので、型の名前は値を隠さない（36.15）。モジュールのコードの名前（関数）が標準の型と同じ名前のときは、生成物がその型をパスで書く（`::std::vec::Vec`。`Gen::std_type`）。
-- **モジュールの名前（E007）**：Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になる。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前なので、モジュールの名前か別名がこの五つなら E007 にする（`names::NO_RUST_MODULE`。`super` は TypeScript の予約語として、もう E007 である）。どの出力先で生成するかによらず、`check` が止める。ほかの Rust の予約語（`match` など）は生の識別子のモジュールにする（`pub mod r#match;` は `match.rs` を読む。36.15）。
+- **モジュールの名前（W001、E008）**：Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になる。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前である（`names::NO_RUST_MODULE`。`super` は TypeScript の予約語として、もう E007 である）。TypeScript・Python・Go はどれも名前に取り、壊れるのは Rust だけなので、`check` は W001 の警告にして通し、`ritsu gen --target rust` だけが E008 で止まる（`r#gen::stops`。36.17）。ほかの Rust の予約語（`match` など）は生の識別子のモジュールにする（`pub mod r#match;` は `match.rs` を読む。36.15）。
 
   ```text
-  error[E007]: example.kn:1:8: The generated code cannot take `door` as the name of a module
+  warning[W001]: example.kn:1:8: The generated Rust cannot take `door` as the name of a module
        1 | module door v1
-    = In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door); choose another name or alias.
+    = In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door).
+    = `ritsu gen --target rust` stops at this module (E008). If you do not generate Rust, leave it; if you do, choose another name or alias.
+  ok example.kn: 1 function, total
   ```
 
   ```text
-  エラー[E007]: example.ja.kn:1:11: 生成するコードは、`door` をモジュールの名前に使えません
+  警告[W001]: example.kn:1:11: 生成する Rust は、`door` をモジュールの名前に使えません
        1 | module 入口(door) v1
-    = 生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。別の名前か別名にしてください。
+    = 生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。
+    = `ritsu gen --target rust` はこのモジュールで止まります（E008）。Rust を生成しないなら、このままで構いません。生成するなら、別の名前か別名にしてください。
+  ok example.kn: 関数 1 個、total
+  ```
+
+  `ritsu gen --target rust` は、同じ場所で次のように止まる。
+
+  ```text
+  error[E008]: example.kn:1:8: The generated Rust cannot take `door` as the name of a module
+       1 | module door v1
+    = In the generated Rust, a module's name is the name of its Rust module in `glue/` and of its file: `crate`, `self` and `Self` are words Rust names no module, and `mod` and `door` are the files kaname writes into `glue/` itself (the directory's own, and the package's door).
+    = Choose another name or alias. For a target you do not use, name the ones you use with `--target`.
+  ```
+
+  ```text
+  エラー[E008]: example.kn:1:11: 生成する Rust は、`door` をモジュールの名前に使えません
+       1 | module 入口(door) v1
+    = 生成する Rust では、モジュールの名前が `glue/` の Rust のモジュールとそのファイルの名前になります。`crate`、`self`、`Self` は Rust がモジュールに付けられない語で、`mod` と `door` は kaname が `glue/` に書くファイル（ディレクトリのもの、パッケージの入口）の名前です。
+    = 別の名前か別名にしてください。使わない出力先なら、`--target` で使う出力先を挙げてください。
   ```
 
 - **生成物が足す名前**：入口の確かめは `check_<関数>`（別名から作る。モジュールの関数の名前と同じになれば、2 からの番号を足す）、入口を通らない中の関数は `_<関数>`（10.3 の `_claim`）、モジュールの名前は `const _MODULE: &str`、計算のあいだの値は一時的な名前（`_t4`）にする。
@@ -4665,7 +4687,7 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - 帳簿を使うモジュールも入る。振替の値はデータで、vectors と同じ `{"book","transfer","op","args"}` で答える。当てる関数と chobo のクライアントは入れない（async で、データベースのドライバに依る）。クレートの根は帳簿のクライアントを `#[cfg(not(target_arch = "wasm32"))]` を付けて宣言し（`kaname::r#gen::wasm::BOOKS`）、`glue/books.rs` は当てる関数を同じく外す。`Cargo.toml` は帳簿のクレートを `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` に書く（テストの `tools/rust/Cargo.toml`。`Cargo.lock` は変わらず、`--locked` で組める）。
 - **決定（パッケージに一つの Wasm）**：Wasm はパッケージに一つで、呼ぶモジュールを入力の `module` で選ぶ。
   **捨てたもの**：Wasm をモジュールごとに一つ組む形（rulec と koyomi のファイルごとと同じ）。vectors の行を `module` 無しで渡せるが、パッケージのクレートをモジュールの数だけ組むことになり、テストのパッケージ（52 のモジュール）では組むだけで数分かかる。一つのクレートを組んだものがネイティブのハーネスと同じコードになる、という利点も無くなる。
-- **ファイル**：Wasm のための二つのファイルの中身は `kaname::r#gen::wasm` が作り、クレートを組み立てる側（いまはテスト。`ritsu gen` は 19 章）が置く。
+- **ファイル**：Wasm のための二つのファイルの中身は `kaname::r#gen::wasm` が作り、クレートを組み立てる側（`ritsu gen --target rust` とテスト）が置く（36.17）。
   - `abi(lang)`：クレートの根の `wasm.rs`（`FILE`）。canonical ABI の三つの関数で、`call` は入力が UTF-8 であることを確かめてから `crate::glue::door::answer` に渡し、UTF-8 でなければ `crate::glue::door::not_utf8()` の拒否の行を返す。三つの関数の本体と doc コメントは `ritsu_emit::wasm::abi` が書き、koyomi の Wasm と同じである（36.12）。
   - `DECLARE`：根がこのファイルを読む行 `#[cfg(target_arch = "wasm32")] mod wasm;`。wasm32 のほかに組めば三つの関数は無い。パッケージのクレートを依存に読んで自分の Wasm を組むクレートとも、export の名前がぶつからない。三つの関数が根でないモジュールにあっても export されることは、36.15 で確かめた。
   - `wit(modules, name, version, lang)`：パッケージの `.wit`（`wit_file(name)`）。名前は 36.11 のとおりで、ドキュメントのコメントに、呼び方と答えの形、範囲と失敗は `kaname api` が言うこと、振替の扱い（帳簿を使うモジュールがあるときだけ）、止まらない入力のこと、呼べるモジュールと関数の型（`kaname api` の型の書き方）を書く。実物は 36.15 にある。
@@ -4684,7 +4706,7 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - **深すぎる入れ子**：読む JSON の深さの上限（`DEPTH`）は、引数の型の 201 段の入れ子が JSON でとる深さ（生成のときに型から求める）と 1,024 の大きいほうにする。201 段の入力は読んで入口が `input` で答え、それより深いものは読まずに拒否する（「The input nests deeper than 1024」）。スタックを守るためである。
 - **正しくない文字列**：JSON の `"\ud800"` のような、Unicode のスカラー値にならないエスケープは、入口の失敗「The argument `<パス>` of `<関数>` is no well-formed string of Unicode」（25.8）の `fails` の行で答える。TypeScript と Python の入口が答えるのと同じである。Rust の値はその文字列を持てないので、入口は引数を読むあいだに、確かめる順（宣言の順、フィールドの宣言の順、要素の順）で最初の正しくない文字列の場所を覚え、範囲の確かめより先に言う。ほかの出力先の入口は範囲の外れと同じ順で確かめるので、一つの入力に正しくない文字列と範囲の外れの両方があると、答える失敗が違いうる（宣言の外の入力のケースは、どれも一か所だけを外す）。int64 の外の数は持てないので拒否する（その入力は Rust では流さない。Go と同じ）。
 - **止まらない入力**：参照インタプリタが止まらないと言う入力（200 段を超える再帰）では、生成物が段を数えないので、Wasm のスタックを使い切ってトラップすることがある。`call` がトラップしないと言えるのは、参照インタプリタが止まる入力までである。そう `.wit` と文書に書く。
-- **`.wit` の名前**：`package kaname:<world>@<版>; world <world> { export call: func(input: string) -> string; }`。`<world>` はパッケージの名前（`ritsu gen` の `--name`）を、koyomi と同じ `world()` で直したもの（`_` を `-` にし、続く `-` と端の `-` をまとめ、WIT の予約語なら前に `%` を付ける）。版は `wit` が受け取ったもの（semver）で、無ければ書かない。`ritsu gen` は `ritsu.mod` の `version` を渡す（19 章）。`--name` が取る名前のうち、Python の予約語でもある WIT の予約語（`as`、`async`、`from`、`import`、`with`）は、`ritsu gen` が先に止める。
+- **`.wit` の名前**：`package kaname:<world>@<版>; world <world> { export call: func(input: string) -> string; }`。`<world>` はパッケージの名前（`ritsu gen` の `--name`）を、koyomi と同じ `world()` で直したもの（`_` を `-` にし、続く `-` と端の `-` をまとめ、WIT の予約語なら前に `%` を付ける）。版は `wit` が受け取ったもの（semver）で、無ければ書かない。`ritsu gen` は `ritsu.mod` の `version` を渡す（36.17）。`--name` が取る名前のうち、Python の予約語でもある WIT の予約語（`as`、`async`、`from`、`import`、`with`）は、`ritsu gen` が先に止める。
 - **`kaname api` の `wasm` の項**（11.1）：ホストが呼ぶ関数を持つモジュールでは、`call`、`call_signature`、`post_return`、`realloc`、`memory`（rulec と koyomi の `api` の `wasm` と同じ名前）、`input`（呼び出しのキー `["module", "function", "in"]` と、このモジュールを選ぶ `module` の値）、`functions`（呼べる関数の名前）、`answers`（答えの三つの形。`answer` は `function`・`in`・`out`、`failure` は `function`・`in`・`fails` と `fails` のキー、`refusal` は `refused`・`error` と `refused` の値 `input`）を持つ。振替を作るモジュールでは、振替の値のキー（`transfers`）も持つ。ホストが呼ぶ関数を持たないモジュールは Wasm に入らないので、項は `null` である。`input.module` は、モジュールが書いた名前である。依存のモジュールとしてパッケージに入れば、呼び出しは依存の名前の連なりを前に付けて書く（`@pricing/fees`）が、一つのモジュールの `api` はそれを知らない。
 
 ### 36.12 Wasm の書き出しを共通にする（`ritsu-emit` の `wasm`）
@@ -4706,6 +4728,7 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - **生成物の失敗を panic にして、Wasm だけ `catch_unwind` で受ける形**。wasm32 は `panic=abort` で組むので受けられない。
 - **Rust では ASCII でない名前を全部 `v` などに替える形**。TypeScript と Python と Go は書いたとおりにしているので、生成物をソースと並べて読めなくなる。代わりに、クレートの根で三つの lint を許し（36.8）、出力先が名前にできない字だけを替える（36.3）。
 - **Rust の予約語を E007 に足す形**。いま通っているモジュールが止まる（36.3）。
+- **モジュールの名前の五つを、どの出力先でも E007 で止める形**。TypeScript・Python・Go では何も壊れないので、Rust を書かない人にも名前を替えさせることになる（36.3）。
 - **標準の型と同じ名前のモジュールの型を、名前を変えずに置き、標準の型をそのモジュールではパスで書く形**。生成物のどこで標準の型を書くかを全部パスにすることになり、ホストの書くコードでも、モジュールの型と標準の型が同じ名前になる。`_` を足す形（`Option_`）は、生の識別子にできない語と同じ決まりで済む。
 - **規則の Rust の名前を、口の言語によらない事実（規則の別名、入力と出力の名前と順）から、rulec の Rust の名前の決まりで kaname が作る形**。決まりが二か所に分かれ、ずれればパッケージが組めない。口の `RuleFacts::rust` に足し、rulec が `api` と同じ関数で埋めるほうが確かである（36.6）。
 
@@ -4714,7 +4737,7 @@ fn _claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Resu
 - `kaname::r#gen::Target` に `Rust`（キー `rust`）を足した。`Target::ALL` に入るので、`kaname api` の `generated` に `rust` のキーが増える。増えるキーは、頭の `generated.rust`（モジュールのファイル。`glue/late_payment.rs`）、`enums[].generated.rust`、`enums[].values[].generated.rust`、`records[].generated.rust`、`functions[].generated.rust` である。あわせて、`functions[]` に `check` を足した。入口の確かめの名前（`{"go": "CheckClaimFn", "rust": "check_claim"}`）で、中の関数は `null` である。ほかのキーは変わらない。`api` の golden は、`KANAME_BLESS=1` で取り直した。
 - `kaname::r#gen::Options` に帳簿の置き場所（`store`）を足した（Rust の当てる関数だけが読む）。
 - 生成物のファイル：`glue/kaname.rs`、`glue/<別名>.rs`、`glue/books/<帳簿>.rs`、`glue/books/<帳簿>_apply.rs`、`glue.rs` と `glue/books.rs`（Rust のモジュールの木をつなぐファイル）、`glue/door.rs`（JSON の一行の呼び出しに答える入口）。
-- **E007**：モジュールの名前か別名が `crate`、`self`、`Self`、`mod`、`door` のとき、どの出力先で生成するかによらず E007 になる（36.3）。前は通っていたモジュールが止まりうる変更である。例とテストのモジュールと、ritsu のテストのプロジェクトには、この名前のモジュールは無い。
+- **W001、E008**：モジュールの名前か別名が `crate`、`self`、`Self`、`mod`、`door` のとき、`check` は W001 の警告を言う。止まるのは `ritsu gen --target rust`（E008）だけで、`check` と TypeScript・Python・Go の生成は止まらない（36.3）。例とテストのモジュールと、ritsu のテストのプロジェクトには、この名前のモジュールは無い。
 - **関数の中の名前の字**：TypeScript・Python・Go の生成物で、出力先が名前に取らない字を持つ関数の中の名前が `v` になる（36.3）。変わるのは、前の生成物を各言語が読めなかった行だけで、木の全部の `.kn` では `names.kn` の `letters` の行だけである（36.15）。
 - 口の `RuleFacts` に `rust` を足した（36.6）。
 - `kaname api` に `wasm` の項を足した（36.11。`generated` の後に入る）。ほかのキーは変わらない。`api` の golden は `KANAME_BLESS=1` で取り直し、16 本とも差は `wasm` の項だけだった。
@@ -4969,3 +4992,16 @@ open 2026-03-02: -1
 - rulec と koyomi の Rust のモジュールは、clippy に当たる形を持つ（36.8）。どちらも単独の生成物と同じ形で、変えると使う人の `--check` が落ちる。
 - 表のほうがツールの Unicode より新しいとき、表が通す字をツールが名前に取らない（36.3）。`tests/idents.rs` で、Python 3.13.11（Unicode 15.1.0）は 18,040、Go 1.26.10（Unicode 15.0.0）は 19,226、tsc 7.0.2 は 18,040 の名前がそれにあたる。kaname の字句（`starts_name`、`is_name_char`）は Rust の `char` の Unicode（17.0.0）で読むので、その字を名前に取る。ツールの Unicode に合わせて表を分けることはしていない。
 - Rust は識別子を NFC にしてから比べる（36.3）。NFC で同じになる二つの関数の中の名前は、Rust で同じ名前になる。Python の NFKC と同じ形の穴で、確かめていない（chobo の DESIGN 14.6 と同じ）。
+
+### 36.17 `ritsu gen --target rust`（2026-11-04）
+
+**決定**：`ritsu gen --target rust` が Rust のパッケージを書く。クレートの形（`Cargo.toml`、`lib.rs`、部分をつなぐファイル、帳簿の依存、ワークフローとゲートを入れないこと）は ritsu の DESIGN 9.3 にある。ここには kaname の側を書く。
+
+- **書くもの**：`glue/` の下の全部（36.14）は `r#gen::package_for` が、帳簿の置き場所を受け取って書く。根の `wasm.rs` と `<name>.wit` は、`kaname::r#gen::wasm` が作る中身を ritsu が置く（36.10）。`.wit` の版は `ritsu.mod` の `version` を書かれたまま渡す。無ければ書かない（36.11）。依存のモジュールの kaname は `deps/<名前>/glue/` に入り、入口はチェーンの名前で答える（ritsu の DESIGN 17.8）。
+- **モジュールの宣言**：ritsu が書くインデックスは `ritsu_emit::package::rust_mod_line` で宣言を作り、kaname のテストがクレートを組み立てるときも同じ関数を読む（`tests/common/targets.rs`）。
+- **止めるもの**：`ritsu gen` は、出力先ごとに `r#gen::stops` に尋ねる。答えるのは `Target::Rust` の E008 だけで、W001 と同じ場所と文で、最後の注だけを直し方に替える（36.3）。ほかの出力先は同じモジュールを書く。
+- **出力先の表で名前にならない字**：止める診断を足さない。宣言の名前は、E005 で ASCII の別名を持つので、どの出力先でも名前になる。関数の中の名前は、出力先が取らない字なら `v` になる（36.3）。どちらも、ある出力先だけで止まることが無いので、W001 と E008 の形は要らない。
+
+**確かめたこと**：`tests/codes.rs` が W001 と E008 の例を golden（英日）と比べ、E008 の例は `r#gen::stops` を通す。`crates/ritsu/tests/gen.rs` の `what_breaks_the_rust_stops_its_package` は、五つの名前を、名前そのものと別名で、`ritsu check` が警告で通し、`--target go --target rust` が何も書かずに止まり、TypeScript・Python・Go は書くことを確かめる。`the_packages_of_rust_build_with_no_warning` は kaname のモジュールを持つプロジェクトのクレートを警告をエラーにして組み、`crates/ritsu/tests/modules_gen.rs` の `a_dependencys_modules_and_books_are_in_the_crate` は、依存の kaname と帳簿を持つクレートの Wasm が、ネイティブと同じに答えることを確かめる。
+
+ホストから読む形は `docs/reference.md` に実物を貼ってある。`late_payment` を `ritsu gen --target rust` で書き、パスの依存で読むクレートを手で一度走らせた答えである（試験には入れていない）。

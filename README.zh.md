@@ -24,7 +24,7 @@ ritsu 为其中每一项提供一种小型语言，写在人能读懂的文件�
 | [yuen](README.md#yuen--where-requirements-come-from) | `.req` | 需求从何而来，又由什么来满足 | ReqIF、W3C PROV |
 | [sakai](README.md#sakai--the-map-of-bounded-contexts) | `.ctx` | 限界上下文的映射图 | 导入检查工具（import linter）的配置；Context Mapper |
 | [sekisho](README.md#sekisho--who-may-do-what) | `.gate` | 谁可以做什么：角色、属性、关系，并以规则和日期为条件 | Cedar，以及调用它的 TypeScript、Python 和 Go |
-| [kaname](README.md#kaname--a-functional-core) | `.kn` | 函数式核心：不做输入输出的通用代码，可以按各自的类型调用规则、日期和账本 | TypeScript、Python 和 Go，放在 `ritsu gen` 写出的包里 |
+| [kaname](README.md#kaname--a-functional-core) | `.kn` | 函数式核心：不做输入输出的通用代码，可以按各自的类型调用规则、日期和账本 | TypeScript、Python、Go 和 Rust，放在 `ritsu gen` 写出的包里，以及由 Rust 构建的 Wasm |
 
 语言名的链接指向英文 README 中介绍该语言的一节。每种语言都可以单独使用：不写 `.flow` 也能用 rulec。一个文件不会混用两种语言，因为费率、日历、账本和工作流的读者各不相同。
 

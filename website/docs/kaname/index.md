@@ -8,13 +8,14 @@ hide:
 **A small general-purpose language for writing a Functional Core: the part of a program that only
 computes and decides, with no input or output of its own. kaname checks it by the rules ritsu's
 languages are checked by, says of each function how far it is checked, and writes it as TypeScript,
-Python and Go for the program around it to call.**
+Python, Go and Rust for the program around it to call, and the Rust as one Wasm module for a program
+in any language.**
 
 A program reads requests, the clock and a database, keeps state, and carries out what it decides.
 What it decides needs none of that: the next state of an order, whether what a person typed can be
 a handle, what changed between two counts of a stockroom are functions of the values they are
 given. A module of kaname (a `.kn` file) is that part. The rest stays in the host, the program in
-TypeScript, Python or Go that reads and writes, keeps the state, and calls the code `ritsu gen`
+TypeScript, Python, Go or Rust that reads and writes, keeps the state, and calls the code `ritsu gen`
 writes of the module.
 
 An order moved from state to state by events is the first of the examples
@@ -87,8 +88,8 @@ ok order_flow.kn: 5 functions, total
 ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
 ```
 
-`ritsu gen` writes the module into the package it writes for each of TypeScript, Python and Go.
-The host keeps the order and hands the code each event as it comes (`host/main.ts`; the Python and
+`ritsu gen` writes the module into the package it writes for each of TypeScript, Python, Go and
+Rust. The host keeps the order and hands the code each event as it comes (`host/main.ts`; the Python and
 the Go beside it print the same):
 
 ```ts
@@ -140,8 +141,9 @@ and Go, and [Writing kaname](language.md) what they are written with.
   (it recurses, and that it stops is not checked).
 - An error comes with an input that shows it. A place the check can neither show nor break is a
   warning, and the generated code checks it there.
-- The code generated in TypeScript, Python and Go answers what the reference interpreter answers,
-  on every vector of 52 modules of the examples and the tests, in English and in Japanese.
+- The code generated in TypeScript, Python, Go and Rust, and the package's Wasm, answers what the
+  reference interpreter answers, on every vector of 52 modules of the examples and the tests, in
+  English and in Japanese.
 - The evaluation and the analysis of ranges are written again in Lean, with proofs that the analysis
   is sound and that a function it finds total does not fail.
 

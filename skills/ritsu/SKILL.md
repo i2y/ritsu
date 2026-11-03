@@ -215,13 +215,16 @@ cancelled), 1 the flow has errors or the run could not go on (the scenario ran o
 2 bad arguments or a scenario that cannot be run.
 
 **`ritsu gen [<path>...] --target <target>... [--out <dir>]`** writes one package for each language
-given, of TypeScript, Python and Go (`<out>/<language>/`, `generated` by default), in that order
+given, of TypeScript, Python, Go and Rust (`<out>/<language>/`, `generated` by default), in that order
 whatever the order of the flags; with no `--target`, the `target` line of the module's `ritsu.mod`
 (`target typescript python go`) names them, and with neither, nothing is written and the exit is
 2. A package holds the rules, the dates, the
 clients of the books, the workflows, the code that asks the gates and the functional cores
 (kaname's modules, under `glue/`) of the project, where a workflow and a module read their rules, dates and books,
-and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`. An amount of money or of a quantity is of
+and a gate's code its rules and dates, from the package itself; `--target cedar` writes the gates' Cedar once into `<out>/cedar/`. A package of Rust
+is one crate with no workflow and no code that asks a gate (a warning names each file it leaves out, and
+the exit is 0), and with functional cores it can be built as one Wasm module by the line at the head of its
+`Cargo.toml`; `--library` does not write Rust (exit 2). An amount of money or of a quantity is of
 the package's one type of its unit, declared in `units` and taken and returned in it by the rules
 and the clients of the books alike, so code written by hand that gives a book what a rule returns,
 with no workflow between them, is held to the book's unit by the type checker of the language

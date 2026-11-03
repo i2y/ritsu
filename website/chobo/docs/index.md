@@ -241,9 +241,9 @@ interpreter, which [Targets](targets.md#tigerbeetle) describes. The design, the 
 is left are in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md), in
 Japanese; its main decisions are on [Design](design.md). chobo is one of the languages of
 [ritsu](../), and is licensed under either of the Apache License 2.0 or the MIT license, at your
-option; its table of the characters a Rust name cannot hold is made from the Unicode Character
-Database, under the Unicode License V3
-([THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/crates/chobo/THIRD_PARTY_NOTICES)).
+option. The table of the characters a Rust name cannot hold is ritsu-emit's, the crate the
+generators share; it is made from the Unicode Character Database, under the Unicode License V3
+([THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/crates/ritsu-emit/THIRD_PARTY_NOTICES)).
 
 ## Where to read next
 

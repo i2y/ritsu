@@ -76,7 +76,8 @@ people.
   one answer into the next call and hands an amount to a book, in ritsu's types. `kaname check`
   holds it to units, money, rounding and int64 and to the range of every value it passes, and shows
   that a function marked `total` answers every input of its ranges; `ritsu gen` writes it as
-  TypeScript, Python and Go for the host to call, beside the code it calls.
+  TypeScript, Python, Go and Rust for the host to call, beside the code it calls, and the Rust builds
+  to a Wasm module that any host calls with one JSON object.
   [The kaname pages](kaname/index.md) show [how a module is written](kaname/language.md),
   [four functional cores called from TypeScript, Python and Go](kaname/examples.md),
   [what the check guarantees](kaname/checks.md) and

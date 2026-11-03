@@ -1,6 +1,6 @@
 ---
 name: kaname
-description: Write, check and fix kaname modules (`.kn`), a small general-purpose language for the functional core of a program — the part with no input or output that only computes and decides, such as a state moved by events, input checked and normalized, counts compared in dicts and sets, a tree reshaped, and the code around business rules that calls rulec's rules, koyomi's dates and chobo's books — in ritsu's types (records, enums with fields, lists, dicts, sets, strings, generics, `result`, function values), held to the rules of units, rounding, ranges and int64, with each function's effect (total, the places checked when it runs, or may not stop) in its type, and generated as TypeScript, Python and Go by `ritsu gen` for a host to call. Use when such a core has to be written, checked or called from a host; when a kaname diagnostic (E001-E602, W301-W501, W901) or ritsu's E201-W205 across the languages has to be fixed; or when a person has to be shown which functions are total and which decisions are in tables.
+description: Write, check and fix kaname modules (`.kn`), a small general-purpose language for the functional core of a program — the part with no input or output that only computes and decides, such as a state moved by events, input checked and normalized, counts compared in dicts and sets, a tree reshaped, and the code around business rules that calls rulec's rules, koyomi's dates and chobo's books — in ritsu's types (records, enums with fields, lists, dicts, sets, strings, generics, `result`, function values), held to the rules of units, rounding, ranges and int64, with each function's effect (total, the places checked when it runs, or may not stop) in its type, and generated as TypeScript, Python, Go and Rust by `ritsu gen` for a host to call. Use when such a core has to be written, checked or called from a host; when a kaname diagnostic (E001-E602, W301-W501, W901) or ritsu's E201-W205 across the languages has to be fixed; or when a person has to be shown which functions are total and which decisions are in tables.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run kaname as `ritsu kaname <command>`, or as `kaname <command>` through a link to ritsu named for it. A module has no input or output of its own; the host reads and writes, keeps state, and makes the transfers a function returns.
 license: MIT OR Apache-2.0
 ---
@@ -228,6 +228,7 @@ reproduction. The usual ones:
 |---|---|---|
 | E001-E004 | a word, a line, a part's order or the indentation the language does not read | fix the line |
 | E005-E007 | a name without an ASCII alias, given twice, or one the generated code cannot take | add or change the alias |
+| W001, E008 | a module named `crate`, `self`, `Self`, `mod` or `door`, which the generated Rust alone cannot take: `kaname check` warns, and `ritsu gen --target rust` stops | if Rust is generated, change the name or the alias; else leave it |
 | E101 | a name names nothing, or a builtin written the way it is not (`keys(d)`) | fix the spelling, or declare it; write the builtin as the note shows (`d.keys()`) |
 | E102 | types or units that do not agree, a currency or a tax that differs | convert with `in` where the dimension is one; else the value is the wrong one |
 | E103 | an unrounded value where a rounded one goes | round it with the step the place takes; ask which way |
@@ -266,21 +267,29 @@ Fix the first diagnostic first: an error of words, names or types stops the chec
 
 ## 5. What it generates, and the page
 
-`ritsu gen` writes each module under `glue/` in the package of each of TypeScript, Python and Go,
+`ritsu gen` writes each module under `glue/` in the package of each of TypeScript, Python, Go and Rust,
 beside the code of the rules, dates and books it calls, with a helper module and no dependency.
 Each function is one a host calls, which checks its arguments, and one the module's functions call.
 Amounts travel in the package's one type of each unit; a rate as a count of its step. The code
 checks the places the analysis did not show and fails with `KanameError` (`input`, `rule`, `date`,
 `range`, `overflow`, `zero`), the line of the `.kn` and its message. In Go, only a function that can
-fail returns `(T, error)`. A transfer is a value whose type lists the reasons it can be refused
+fail returns `(T, error)`, and in Rust `Result<T, KanameError>`. A transfer is a value whose type lists the reasons it can be refused
 with; the book's `apply` function makes it through chobo's client.
 
 The host calls a module's functions from the package: `import { next } from "./glue/order_flow"` in
-TypeScript, `from generated.glue import order_flow` in Python, and in Go the path given to `ritsu gen
---module` with `/glue/orderflow` after it. A value of a sum is an object with `kind`, a frozen data class or a struct of an interface; a
-`result` is the helper's `Ok` or `Err`. Python's `frozenset` and Go's `map` have no order: sort the
+TypeScript, `from generated.glue import order_flow` in Python, in Go the path given to `ritsu gen
+--module` with `/glue/orderflow` after it, and `use generated::glue::order_flow` in Rust, with the crate
+as a dependency by its path. A value of a sum is an object with `kind`, a frozen data class, a struct of
+an interface or an `enum` of structs; a `result` is the helper's `Ok` or `Err`, in Rust the standard
+`Result`. Python's `frozenset` and Go's `map` have no order: sort the
 keys to print them. The examples `order_flow`, `stock_diff`, `handles` and `catalog` of the
-repository each have a host in the three languages (`host/`).
+repository each have a host in TypeScript, Python and Go (`host/`).
+
+The package of Rust is one crate. It holds no workflow and no code that asks a gate (a warning names
+each file it leaves out), and `--library` does not write it. With modules of kaname, the head of its
+`Cargo.toml` has the line that builds it as one Wasm module, whose `call` takes
+`{"module", "function", "in"}` and answers the line of `kaname vectors` for that input
+([reference.md](reference.md#the-packages-wasm)).
 
 `ritsu kaname doc` writes the page for people: the rules and dates files called, with the pages
 their languages draw, and the transfers built; the functions, total, checked when they run (each

@@ -5,7 +5,10 @@ English and, beside it, in Japanese (`<name>.ja.kn`), and each has a host under 
 TypeScript, one in Python and one in Go, which calls the code `ritsu gen` writes of the module and
 prints what `host/output.txt` holds. ritsu's tests build each package and run the twelve programs
 against it, the TypeScript through `tsc --strict`, the Python through `mypy --strict` and the Go
-through `go vet`.
+through `go vet`. `ritsu gen --target rust` writes the same modules as a crate, for a host in Rust or
+as one Wasm module; the examples have no host in Rust, and
+[the reference](https://github.com/i2y/ritsu/blob/main/crates/kaname/docs/reference.md#the-package-of-rust)
+shows one.
 
 ## The package a host calls
 
@@ -403,9 +406,9 @@ fn tag(text: string) -> result[Tag, list[string]]
 "ada#0" -> refused: the number is not from 1 to 9999
 ```
 
-The generated code counts, cuts and compares a string in code points in all three targets, though a
-TypeScript string is made of units of UTF-16 and a Go string of bytes: `"ünïcode"` is 7 characters,
-and 9 bytes in Go. `ü` and `ï` are not among the characters a handle takes, and `ü` is not one of
+The generated code counts, cuts and compares a string in code points in all four targets, though a
+TypeScript string is made of units of UTF-16 and a Go or a Rust string of bytes: `"ünïcode"` is 7
+characters, and 9 bytes in Go and Rust. `ü` and `ï` are not among the characters a handle takes, and `ü` is not one of
 the letters a to z it has to start with. In Go, `tag` is `TagFn`, as the module has a record `Tag`
 too.
 

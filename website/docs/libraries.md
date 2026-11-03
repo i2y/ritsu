@@ -73,7 +73,9 @@ generated: ../out/pricing/go/go.mod
 
 `ritsu gen --library` writes a library for each language of the `target` line, in `typescript/`,
 `python/` and `go/` under `--out`; `--target typescript|python|go` writes the languages it names.
-A library is the whole module, all but what its `exclude` lines leave out, so `--library` takes
+Rust is not written as a library, since a crate's name, how it writes the versions of what it depends
+on and the units' types across libraries are not decided: with `rust` in `--target` or on the
+`target` line, `--library` writes nothing and exits 2. A library is the whole module, all but what its `exclude` lines leave out, so `--library` takes
 no paths, and no `--name` or `--module`: the `library` lines name the libraries. `--check` says
 what differs from what is there, as it does without `--library`.
 

@@ -171,8 +171,8 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、指定した言語（TypeScript、Python、Go）ごとに一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。cedar を指定すれば、ゲートの Cedar を <out>/cedar/ に一度だけ書く",
-            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each language given (TypeScript, Python, Go), whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units); given cedar, the gates' Cedar goes once into <out>/cedar/"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、指定した言語（TypeScript、Python、Go、Rust）ごとに一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。Rust のパッケージは一つのクレートで、ワークフローとゲートのコードを入れず（入らないファイルを警告で言う）、Functional Core があれば Wasm の二つのファイルも持つ。cedar を指定すれば、ゲートの Cedar を <out>/cedar/ に一度だけ書く",
+            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each language given (TypeScript, Python, Go, Rust), whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units). A package of Rust is one crate, with no workflow and no gate's code (a warning names the files it leaves out), and with the two files of its Wasm when it has functional cores; given cedar, the gates' Cedar goes once into <out>/cedar/"
         ),
         params: vec![(
             "<path>...",
@@ -186,8 +186,8 @@ pub fn commands() -> Vec<Cmd> {
                 "--target",
                 Some("<target>"),
                 tr!(
-                    "書くもの（書く順はフラグの順でなく typescript、python、go、cedar）。言語はそのパッケージ、cedar はゲートの Cedar。無ければ ritsu.mod の target の行を読み、それも無ければ何も書かずに 2 で終わる",
-                    "a target to write (written in the order typescript, python, go, cedar whatever the order of the flags): a language its package, cedar the gates' Cedar. Without it, the target line of ritsu.mod; without that too, nothing is written and the exit is 2"
+                    "書くもの（書く順はフラグの順でなく typescript、python、go、rust、cedar）。言語はそのパッケージ、cedar はゲートの Cedar。無ければ ritsu.mod の target の行を読み、それも無ければ何も書かずに 2 で終わる",
+                    "a target to write (written in the order typescript, python, go, rust, cedar whatever the order of the flags): a language its package, cedar the gates' Cedar. Without it, the target line of ritsu.mod; without that too, nothing is written and the exit is 2"
                 ),
             )
             .choices(&ritsu_base::modules::manifest::TARGET_WORDS)
@@ -214,14 +214,14 @@ pub fn commands() -> Vec<Cmd> {
             )
             .choices(&sekisho::r#gen::Authorizer::WORDS)
             .default("cedar"),
-            flag("--name", Some("<name>"), tr!("パッケージの名前（npm のパッケージ、Python のパッケージのディレクトリ、Go の import のパスの既定）", "the package's name: the npm package's, the Python package's directory, and the Go import path unless --module says one")).default("generated"),
+            flag("--name", Some("<name>"), tr!("パッケージの名前（npm のパッケージ、Python のパッケージのディレクトリ、Go の import のパスの既定、Rust のクレート）", "the package's name: the npm package's, the Python package's directory, the Go import path unless --module says one, and the Rust crate's")).default("generated"),
             flag("--module", Some("<path>"), tr!("Go のパッケージのディレクトリの import のパス", "the Go import path of the package's directory")),
             flag(
                 "--library",
                 None,
                 tr!(
-                    "モジュール全体を、npm・PyPI・Go のモジュールに出せるライブラリにする。名前は ritsu.mod の library の行、版は version の行から取り、依存は範囲で書く。library の行を持つ依存の部分は中に入れず、そのライブラリから読む",
-                    "make the whole module a library npm, PyPI or a Go module takes: named by the library lines of ritsu.mod and versioned by its version line, with what it depends on as ranges. The parts of a dependency with a library line are read from that library, not held"
+                    "モジュール全体を、npm・PyPI・Go のモジュールに出せるライブラリにする。名前は ritsu.mod の library の行、版は version の行から取り、依存は範囲で書く。library の行を持つ依存の部分は中に入れず、そのライブラリから読む。Rust はライブラリにしない",
+                    "make the whole module a library npm, PyPI or a Go module takes: named by the library lines of ritsu.mod and versioned by its version line, with what it depends on as ranges. The parts of a dependency with a library line are read from that library, not held. Rust is not written as a library"
                 ),
             ),
             flag(
@@ -237,15 +237,16 @@ pub fn commands() -> Vec<Cmd> {
         ],
         exits: vec![
             (0, tr!("書いた、または --check で古いものが無い", "written, or --check found nothing stale")),
-            (1, tr!("検査を通らないファイルがある、モジュールの木にエラーがある、または --check で古いものがある", "a file does not pass its check, the tree of modules has an error, or --check found something stale")),
+            (1, tr!("検査を通らないファイルがある、書く出力先が受け取れない名前がある、モジュールの木にエラーがある、または --check で古いものがある", "a file does not pass its check, a target given cannot take a name of a file, the tree of modules has an error, or --check found something stale")),
             (2, tr!(
-                "引数の誤り（--target も ritsu.mod の target の行も無い、も含む）、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存",
-                "bad arguments (neither --target nor a target line in ritsu.mod, among them), a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, or under --library a dependency no library holds that --embed does not name"
+                "引数の誤り（--target も ritsu.mod の target の行も無い、も含む）、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存か、Rust の出力先",
+                "bad arguments (neither --target nor a target line in ritsu.mod, among them), a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, or under --library a dependency no library holds that --embed does not name, or the target rust"
             )),
         ],
         examples: vec![
             "ritsu gen --target typescript --target python --target go --target cedar",
             "ritsu gen --target typescript --out generated --books tigerbeetle",
+            "ritsu gen --target rust --books tigerbeetle",
             "ritsu gen --target go --check --format json",
             "ritsu gen --check",
             "ritsu gen --library --target python --embed tax",

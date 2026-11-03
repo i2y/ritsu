@@ -32,7 +32,7 @@ ok tests/doc/decisions.kn: 関数 3 個: total 2 個、fails rule 1 個
 
 三つ目のモジュールは kaname のテストの材料で、手本にする例ではありません。その `quote` は、Media Mail の料金の規則に重さを渡します。その重さが規則の範囲に収まると示すことも、外れる入力を見つけることも、検査にはできません。そこで検査は警告を出し（W301）、生成したコードが実行時にそこで重さを確かめ、関数のエフェクトは `fails rule` になります。`shipping` は、合計を比べる `if` で送料を選んでいます。これは業務の判断で、rulec の表に書くべきものです（W501）。表に書けば、完全性と重なりを rulec が確かめ、承認する人がページで読めます。規則を呼ぶ前に値を規則の範囲に狭めるだけの分岐には、警告は出ません。
 
-生成するコードの形もエフェクトで決まります。Go では、失敗しうる関数だけが `(T, error)` を返します。TypeScript と Python では、関数ごとに、失敗しうる種類をまとめた型が付きます。
+生成するコードの形もエフェクトで決まります。Go では、失敗しうる関数だけが `(T, error)` を返し、Rust では `Result<T, KanameError>` を返します。TypeScript と Python では、関数ごとに、失敗しうる種類をまとめた型が付きます。
 
 ## 範囲を書かない値
 
@@ -78,7 +78,7 @@ $ ritsu kaname check tests/docs/unnarrowed.kn --lang ja
 
 ## 生成したコードと参照インタプリタの答え
 
-モジュールの意味を決めるのは参照インタプリタです。`kaname run` はそれで関数を走らせ、`vectors` はそれに流す入力を選びます。`ritsu gen` が書く TypeScript、Python、Go のコードは、これと突き合わせています。例とテストの 52 のモジュールのすべてのベクタ（13,982 件）、引数の宣言のすぐ外の入力、自分を含む型の値を、ホストが渡せるいちばん深い 200 段と、それより一段深い 201 段まで入れ子にした値です。英語の版と日本語の版の両方で、TypeScript の 16,717 件、Python の 16,633 件、Go の 16,613 件がすべて一致します（型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは、`tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt と `go vet` を通ります。[Functional Core の四つの例](examples.md)のホストも、`output.txt` のとおりに出力します。
+モジュールの意味を決めるのは参照インタプリタです。`kaname run` はそれで関数を走らせ、`vectors` はそれに流す入力を選びます。`ritsu gen` が書く TypeScript、Python、Go、Rust のコードと、Rust から組んだ Wasm は、これと突き合わせています。例とテストの 52 のモジュールのすべてのベクタ（14,096 件）、引数の宣言のすぐ外の入力、自分を含む型の値を、ホストが渡せるいちばん深い 200 段と、それより一段深い 201 段まで入れ子にした値です。英語の版と日本語の版の両方で、TypeScript の 16,874 件、Python の 16,790 件、Go と Rust と Wasm のそれぞれ 16,770 件がすべて一致します（型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは、`tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt、`go vet`、`cargo clippy -- -D warnings` を通ります。[Functional Core の四つの例](examples.md)のホストも、`output.txt` のとおりに出力します。
 
 ## 範囲の解析と、実際の値
 

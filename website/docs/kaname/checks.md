@@ -44,8 +44,9 @@ runs, and the function is `fails rule`. Its `shipping` chooses a fee by comparin
 overlap are checked and the person who approves it reads it on its page (W501). A function that only
 narrows a value to a rule's range before it calls the rule is not warned of.
 
-The effect shapes the generated code. In Go only a function that can fail returns `(T, error)`, and
-in TypeScript and Python each function has the union of the kinds it can fail with in its type.
+The effect shapes the generated code. In Go only a function that can fail returns `(T, error)`, in
+Rust `Result<T, KanameError>`, and in TypeScript and Python each function has the union of the kinds
+it can fail with in its type.
 
 ## A value whose range is not written
 
@@ -103,12 +104,14 @@ it runs.
 ## The code generated answers as the interpreter does
 
 The meaning of a module is its reference interpreter's, which `kaname run` runs and `vectors`
-chooses inputs for. The code `ritsu gen` writes is held to it in TypeScript, Python and Go: on every
-vector of 52 modules of the examples and the tests (13,982), on every input just outside what their
-parameters declare, and on values of the types that hold themselves nested 200 deep, as deep as a
-host may give one, and 201. In English and in Japanese, all 16,717 cases agree in TypeScript, 16,633
-in Python and 16,613 in Go (an input past the whole of a type is run where the language can hold
-it), and the code passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt and `go vet`.
+chooses inputs for. The code `ritsu gen` writes is held to it in TypeScript, Python, Go and Rust, and
+so is the Wasm built from the Rust: on every vector of 52 modules of the examples and the tests
+(14,096), on every input just outside what their parameters declare, and on values of the types that
+hold themselves nested 200 deep, as deep as a host may give one, and 201. In English and in Japanese,
+all 16,874 cases agree in TypeScript, 16,790 in Python, and 16,770 in each of Go, Rust and the Wasm
+(an input past the whole of a type is run where the language can hold it), and the code passes
+`tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet` and
+`cargo clippy -- -D warnings`.
 The hosts of the four [functional cores](examples.md) print what their `output.txt` holds.
 
 ## The analysis of ranges, against what runs

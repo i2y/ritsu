@@ -1,6 +1,6 @@
 # Functional Core の四つの例
 
-kaname の例の初めの四つは、ほかの言語を読みません。どれも `crates/kaname/examples/` にあり、英語の版の隣に日本語の版（`<name>.ja.kn`）があります。どの例も `host/` の下に、`ritsu gen` がモジュールから書いたコードを呼ぶホストのプログラムを、TypeScript、Python、Go で一つずつ持ち、三つとも `host/output.txt` と同じものを出力します。ritsu のテストは、例ごとにパッケージを作り、12 のプログラムを、TypeScript は `tsc --strict` に、Python は `mypy --strict` に、Go は `go vet` に通してから走らせます。
+kaname の例の初めの四つは、ほかの言語を読みません。どれも `crates/kaname/examples/` にあり、英語の版の隣に日本語の版（`<name>.ja.kn`）があります。どの例も `host/` の下に、`ritsu gen` がモジュールから書いたコードを呼ぶホストのプログラムを、TypeScript、Python、Go で一つずつ持ち、三つとも `host/output.txt` と同じものを出力します。ritsu のテストは、例ごとにパッケージを作り、12 のプログラムを、TypeScript は `tsc --strict` に、Python は `mypy --strict` に、Go は `go vet` に通してから走らせます。`ritsu gen --target rust` は、同じモジュールを、Rust のホストのためのクレートや一つの Wasm のモジュールとして書きます。例に Rust のホストはありません。[リファレンス](https://github.com/i2y/ritsu/blob/main/crates/kaname/docs/reference.md#the-package-of-rust)に一つ載せています。
 
 このページのモジュール、ホストのコード、出力は、どれも英語の版のものです。
 
@@ -381,7 +381,7 @@ fn tag(text: string) -> result[Tag, list[string]]
 "ada#0" -> refused: the number is not from 1 to 9999
 ```
 
-生成したコードは、三つの出力先のどれでも、文字列をコードポイントで数え、切り、比べます。TypeScript の文字列は UTF-16 の単位で、Go の文字列はバイトでできていますが、`"ünïcode"` はどれでも 7 文字です（Go では 9 バイト）。`ü` と `ï` はハンドルに使えない文字で、`ü` は、ハンドルの先頭に来るべき a〜z の英字でもありません。Go では、モジュールにレコード `Tag` もあるので、関数 `tag` は `TagFn` になります。
+生成したコードは、四つの出力先のどれでも、文字列をコードポイントで数え、切り、比べます。TypeScript の文字列は UTF-16 の単位で、Go と Rust の文字列はバイトでできていますが、`"ünïcode"` はどれでも 7 文字です（Go と Rust では 9 バイト）。`ü` と `ï` はハンドルに使えない文字で、`ü` は、ハンドルの先頭に来るべき a〜z の英字でもありません。Go では、モジュールにレコード `Tag` もあるので、関数 `tag` は `TagFn` になります。
 
 ## カタログの分類の木
 

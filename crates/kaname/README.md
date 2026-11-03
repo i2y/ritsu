@@ -4,7 +4,7 @@ A small general-purpose language for writing a Functional Core: the part of a pr
 A state moved by events, input checked and made the form a service keeps, counts kept and compared, a tree reshaped, and the code around business rules are written in it as functions over records, enums with fields on their values, lists, dicts, sets and strings, with generics, `result` and function values.
 The rest of the program — reading a request, the clock or a database, keeping state, and carrying out what the core decides — stays in the host, the imperative shell that calls it.
 kaname checks the core by the rules ritsu's languages are checked by — units, currencies and tax, the steps of rates, ranges, rounding and int64 — and works out what each function can do (`total`, `fails …`, `diverges`).
-It also calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types, and `ritsu gen` writes it as TypeScript, Python and Go, with no dependency, beside their code.
+It also calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types, and `ritsu gen` writes it as TypeScript, Python, Go and Rust, with no dependency, beside their code; the Rust also builds to one Wasm module, which a host in any language calls with one JSON object.
 kaname is one of the nine languages of [ritsu](../../README.md).
 On ritsu's site, **[the pages of kaname](https://i2y.github.io/ritsu/kaname/)** go through how a module is written, the four functional cores below with their hosts in TypeScript, Python and Go, what the check guarantees, and the calls of rules, dates and books.
 
@@ -231,7 +231,7 @@ A **total** one answers every input in the ranges it declares, as a rule and a d
 One that **fails** has places the checks could not show, and says with what: `rule`, `date`, `range`, `overflow`, `zero`.
 One that **diverges** recurses, as a walk of a tree does ([examples/catalog](examples/catalog)); kaname does not check that it stops.
 kaname infers the effect and holds a function to the one its head writes (E401); a call carries the callee's effect to the caller, and a function given to another carries its own to the caller that gives it.
-The effect shapes the code: in Go only a function that can fail returns `(T, error)`, and in TypeScript and Python each has the union of what it can fail with.
+The effect shapes the code: in Go only a function that can fail returns `(T, error)`, in Rust `Result<T, KanameError>`, and in TypeScript and Python each has the union of what it can fail with.
 
 ## Decisions belong in tables
 
@@ -266,11 +266,15 @@ ok tests/doc/decisions.kn: 3 functions: 2 total; 1 fails rule
 
 ## The code it generates
 
-`ritsu gen` writes each module under `glue/` in the package it writes for each of TypeScript, Python and Go, with a helper module of exact fractions, int64, the five roundings, strings by their code points and dicts and sets in the order of their keys, and no dependency.
-A value of a sum is an object with `kind` in TypeScript, a frozen data class in Python and a struct of an interface in Go, and a `result` is the helper module's `Ok` and `Err`; amounts travel in the package's one type of each unit, as the rules and the books take them.
+`ritsu gen` writes each module under `glue/` in the package it writes for each of TypeScript, Python, Go and Rust, with a helper module of exact fractions, int64, the five roundings, strings by their code points and dicts and sets in the order of their keys, and no dependency.
+A value of a sum is an object with `kind` in TypeScript, a frozen data class in Python, a struct of an interface in Go and an `enum` of structs in Rust, and a `result` is the helper module's `Ok` and `Err` (the standard `Result` in Rust); amounts travel in the package's one type of each unit, as the rules and the books take them.
 A function the host calls checks its arguments against what they declare, and the code checks the places the analysis did not show, failing with `KanameError` of the kind the reference interpreter fails with.
 A transfer is a value whose type carries the reasons the book can refuse it with, and a function of the book makes it through chobo's client.
 The four examples of a functional core each have a host in TypeScript, Python and Go under `host/`, which call the package `ritsu gen` writes and print the same.
+
+The package of Rust (`ritsu gen --target rust`) is one crate, which a host takes as a dependency by its path; it holds no workflow and no code that asks a gate, and says so of each file it leaves out.
+With modules of kaname, the head of its `Cargo.toml` has the line that builds it as one Wasm module with no imports, and a `.wit` beside it makes that a component: `call` takes `{"module", "function", "in"}` and answers the line `kaname vectors` writes for that input, the transfers as values, for every function a host calls in the package.
+[docs/reference.md](docs/reference.md#what-gen-writes) has all of this, with the code of each language.
 
 ## The page for people
 
@@ -336,7 +340,7 @@ The other four call rules, dates and books, which read the Japanese versions of 
 - Every `derive` and `define` of rulec's corpus, 143 lines in 85 files, reads as kaname with rulec's type and gives rulec's value on rulec's 20,033 vectors.
 - The analysis of ranges is held to the reference interpreter: 3,452,025 values of 5,009 expressions, seen on 139,754 runs of every function of the examples and the test modules (its vectors, and 200 inputs drawn from what its parameters declare), are inside what it says, and each of the 1,617 runs that fail fails in a way the function's effect says.
 - Its evaluation and its analysis of ranges are written again in Lean (`proofs/KanameCore`, in ritsu's one Lean package), with proofs that the analysis is sound and that a function it finds total does not fail, for every function that takes no function as a parameter (a function that does is held to the model by the tests, with no proof of its own yet); `cargo test -p ritsu-model` holds the model to the reference interpreter and the analysis on 14,092 runs of 59 modules.
-- The code generated in TypeScript, Python and Go answers every vector of 52 modules, every input outside what their parameters declare, and values of types that hold themselves nested as deep as a host may give one and one deeper, as the reference interpreter does, in English and in Japanese (all 16,717 cases in TypeScript, 16,633 in Python and 16,613 in Go: an input past the whole of a type runs where the language can hold it), and passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt and `go vet`.
+- The code generated in TypeScript, Python, Go and Rust, and the package's Wasm, answers every vector of 52 modules, every input outside what their parameters declare, and values of types that hold themselves nested as deep as a host may give one and one deeper, as the reference interpreter does, in English and in Japanese (all 16,874 cases in TypeScript, 16,790 in Python, and 16,770 in each of Go, Rust and the Wasm: an input past the whole of a type runs where the language can hold it), and passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet` and `cargo clippy -- -D warnings`. A component of the package answers under wasmtime as the module does under Node, and ritsu's tests build what `ritsu gen --target rust` writes of its test projects, on all three stores of books and for wasm32.
 - Every diagnostic code has the smallest module that prints it, in English and in Japanese; the pages of `doc` are golden files, the pages of the rules and dates in them are what rulec and koyomi draw, and Chrome opens the HTML.
 - The hosts of the four functional cores, in TypeScript, Python and Go, call the package `ritsu gen` writes of each and print what `host/output.txt` holds (ritsu's `tests/kaname.rs`).
 - The outputs, diagnostics and lines of `.kn` and of the hosts in this README, `docs/` and the skill are real: `tests/docs.rs` compares them, and ritsu's `tests/kaname.rs` runs the commands. ritsu's `tests/website.rs` holds the pages of kaname on the site the same way.
@@ -344,7 +348,7 @@ The other four call rules, dates and books, which read the Japanese versions of 
 ## Status
 
 The language, `check`, `run`, `vectors`, `doc`, `api`, `explain`, and the code `ritsu gen` writes are done, as [DESIGN.md](DESIGN.md) says.
-Not yet: calls from dandori's flows, a calendar of koyomi and the time of a date, the narrowing of a rule's outputs to the inputs given, and modules in the playground on the site (DESIGN 19).
+Not yet: calls from dandori's flows, a calendar of koyomi and the time of a date, the narrowing of a rule's outputs to the inputs given, modules in the playground on the site, and a module as a library of Rust (DESIGN 19).
 
 ## License
 

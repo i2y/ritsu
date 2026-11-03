@@ -141,9 +141,12 @@ range is a value of the whole of its type, as the generated code returns it.
 ## In the package
 
 `ritsu gen` writes a module beside the code of the rules, the dates and the books it calls, in the
-one package of each of TypeScript, Python and Go, and the module's code calls theirs. A transfer is a
-value whose type carries the reasons the book can refuse it with; a module builds it and the host
-makes it, through the function the package writes for the book, which calls chobo's client.
+one package of each of TypeScript, Python, Go and Rust, and the module's code calls theirs. A
+transfer is a value whose type carries the reasons the book can refuse it with; a module builds it
+and the host makes it, through the function the package writes for the book, which calls chobo's
+client. The Wasm built from the package of Rust holds the rules and the dates its modules call and
+answers a transfer as a value; the clients of the books stay out of it, and the host makes the
+transfer with a client of its own.
 
 ## The other examples
 

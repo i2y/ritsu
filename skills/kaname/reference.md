@@ -10,7 +10,7 @@ ritsu's types too, and computes between them. `kaname check` holds every computa
 the languages of ritsu are held to: units, currencies and tax, the steps of rates, ranges, rounding
 and int64. It finds where a value can leave the range of where it goes, and says, function by
 function, whether it answers every input (`total`), checks some places when it runs, or may not stop.
-`ritsu gen` writes it as TypeScript, Python and Go, beside the code of the rules, dates and books it
+`ritsu gen` writes it as TypeScript, Python, Go and Rust, beside the code of the rules, dates and books it
 calls.
 
 This page is the whole language and the commands. [codes.md](codes.md) has every diagnostic, with
@@ -49,11 +49,12 @@ Thirteen words cannot be names (E002): `let` `if` `then` `else` `match` `some` `
 `false` `and` `or` `not` `in`. The other keywords stand where nothing else can, so a field may be
 `total` and a parameter `description`. An alias that is a reserved word of the TypeScript, Python
 or Go it is generated in, or a name of kaname's helper module (`kaname`, `KanameError`, `Q`,
-`Date`, `Rat`, `glue`), is E007, and so is a module named or aliased `crate`, `self`, `Self`,
-`mod` or `door`, which cannot name the module's file in the generated Rust: no Rust module can
-take the first three, Rust reads `mod.rs` as a directory's own file, and `door.rs` is the
-package's door. Elsewhere a keyword of Rust is not E007: the generated Rust writes it as a raw
-identifier (`r#type`), or with `_` after it where no raw identifier writes it (`self_`). One name
+`Date`, `Rat`, `glue`), is E007. A keyword of Rust is not: the generated Rust writes it as a raw
+identifier (`r#type`), or with `_` after it where no raw identifier writes it (`self_`). The one
+thing the generated Rust cannot take is a module named or aliased `crate`, `self`, `Self`, `mod` or
+`door`, which would name the module's file: no Rust module can take the first three, Rust reads
+`mod.rs` as a directory's own file, and `door.rs` is the package's door. The other targets take
+them, so `check` warns (W001), and only `ritsu gen --target rust` stops, with E008. One name
 or alias given twice in one space is E006: the names of a module's `use` lines and its
 declarations, the fields of a record, the parameters of a function, the values of an enum, and the
 names inside a function, which also cannot be one a `use` line gives. A function cannot take the
@@ -696,68 +697,81 @@ It counts the functions by their effects, as their heads would write them: `3 fu
 
 ## What `gen` writes
 
-kaname's code is written by `ritsu gen`, into the package it writes for each of TypeScript, Python
-and Go, beside the code of the rules, the dates and the books the modules call (ritsu's DESIGN
+kaname's code is written by `ritsu gen`, into the package it writes for each of TypeScript, Python,
+Go and Rust, beside the code of the rules, the dates and the books the modules call (ritsu's DESIGN
 9.3). There is no `kaname gen`: a module's code calls theirs.
 
-| | TypeScript | Python | Go |
-|---|---|---|---|
-| a module | `glue/<module>.ts` | `<name>/glue/<module>.py` | `glue/<package>/<package>.go` |
-| the helper module | `glue/kaname.ts` | `glue/kaname.py` | `glue/kaname/kaname.go` |
-| the transfers of a book | `glue/books/<book>.ts` | `glue/books/<book>.py` | `glue/books/<package>/…` |
-| the function that makes them | `glue/books/<book>_apply.ts` | `glue/books/<book>_apply.py` | `glue/books/<package>apply/…` |
+| | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| a module | `glue/<module>.ts` | `<name>/glue/<module>.py` | `glue/<package>/<package>.go` | `glue/<module>.rs` |
+| the helper module | `glue/kaname.ts` | `glue/kaname.py` | `glue/kaname/kaname.go` | `glue/kaname.rs` |
+| the transfers of a book | `glue/books/<book>.ts` | `glue/books/<book>.py` | `glue/books/<package>/…` | `glue/books/<book>.rs` |
+| the function that makes them | `glue/books/<book>_apply.ts` | `glue/books/<book>_apply.py` | `glue/books/<package>apply/…` | `glue/books/<book>_apply.rs` |
 
 The helper module has the exact fractions, the arithmetic checked against int64, the five
 roundings, the dates, and `KanameError`; it uses nothing beyond each language's standard library.
 
-| kaname | TypeScript | Python | Go |
-|---|---|---|---|
-| money, a quantity | the package's `units` type (`units.USDc`) | `units`' type | `units`' type |
-| `number`, a rate | `bigint` (a rate as a count of its step) | `int` | `int64` |
-| `date` | `"YYYY-MM-DD"` `string` | `datetime.date` | the helper's `Date` |
-| a module's enum | an object of values and their union | `enum.Enum` | a named `string` with constants |
-| a record | a read-only `interface` | `@dataclass(frozen=True)` | a struct |
-| a sum | the union of its values' types | a `Union` of them | an interface its values' structs have |
-| a value's type `Order.placed` | an `interface` `OrderPlaced` with `kind: "placed"` | `@dataclass(frozen=True)` `OrderPlaced` | a struct `OrderPlaced` |
-| `list[T]`, `T?` | `readonly T[]`, `T \| null` | `list[T]`, `T \| None` | `[]T`, `*T` |
-| `dict[K, V]`, `set[T]` | `ReadonlyMap<K, V>`, `ReadonlySet<T>` | `Mapping[K, V]`, `AbstractSet[T]` (made a `dict` and a `frozenset`) | `map[K]V`, `map[T]struct{}` |
-| `entry[K, V]`, `indexed[T]` | the helper's `Entry<K, V>`, `Indexed<T>` | the helper's `Entry[K, V]`, `Indexed[T]` | the helper's `Entry[K, V]`, `Indexed[T]` |
-| `result[T, E]` | the helper's `Result<T, E>`: `{ kind: "ok", value }` or `{ kind: "err", error }` | the helper's `Ok`, `Err` and `Result` | the helper's `Result[T, E]`, `Ok[T, E]`, `Err[T, E]` |
-| `record Page[T]`, `fn first_or[T]` | `interface Page<T>`, `export function _first_or<T>` | `class Page(Generic[T])` with `T = TypeVar("T")`, `def _first_or(*, …)` | `type Page[T any] struct`, `func FirstOr[T any]` |
-| a function type `(T) -> U` | `(x: T) => U` | `Callable[[T], U]` | `func(T) U` |
+| kaname | TypeScript | Python | Go | Rust |
+|---|---|---|---|---|
+| money, a quantity | the package's `units` type (`units.USDc`) | `units`' type | `units`' type | `units`' type (`units::USDc`) |
+| `number`, a rate | `bigint` (a rate as a count of its step) | `int` | `int64` | `i64` |
+| `date` | `"YYYY-MM-DD"` `string` | `datetime.date` | the helper's `Date` | the helper's `Date` |
+| a module's enum | an object of values and their union | `enum.Enum` | a named `string` with constants | an `enum` |
+| a record | a read-only `interface` | `@dataclass(frozen=True)` | a struct | a struct |
+| a sum | the union of its values' types | a `Union` of them | an interface its values' structs have | an `enum` with a struct in each variant (`Order::Placed(OrderPlaced { … })`) |
+| a value's type `Order.placed` | an `interface` `OrderPlaced` with `kind: "placed"` | `@dataclass(frozen=True)` `OrderPlaced` | a struct `OrderPlaced` | a struct `OrderPlaced` |
+| `list[T]`, `T?` | `readonly T[]`, `T \| null` | `list[T]`, `T \| None` | `[]T`, `*T` | `Vec<T>`, `Option<T>` |
+| `dict[K, V]`, `set[T]` | `ReadonlyMap<K, V>`, `ReadonlySet<T>` | `Mapping[K, V]`, `AbstractSet[T]` (made a `dict` and a `frozenset`) | `map[K]V`, `map[T]struct{}` | `BTreeMap<K, V>`, `BTreeSet<T>` |
+| `entry[K, V]`, `indexed[T]` | the helper's `Entry<K, V>`, `Indexed<T>` | the helper's `Entry[K, V]`, `Indexed[T]` | the helper's `Entry[K, V]`, `Indexed[T]` | the helper's `Entry<K, V>`, `Indexed<T>` |
+| `result[T, E]` | the helper's `Result<T, E>`: `{ kind: "ok", value }` or `{ kind: "err", error }` | the helper's `Ok`, `Err` and `Result` | the helper's `Result[T, E]`, `Ok[T, E]`, `Err[T, E]` | the standard `Result<T, E>` |
+| `record Page[T]`, `fn first_or[T]` | `interface Page<T>`, `export function _first_or<T>` | `class Page(Generic[T])` with `T = TypeVar("T")`, `def _first_or(*, …)` | `type Page[T any] struct`, `func FirstOr[T any]` | `struct Page<T: Clone + PartialEq>`, `pub fn _first_or<T: Clone + PartialEq>` |
+| a function type `(T) -> U` | `(x: T) => U` | `Callable[[T], U]` | `func(T) U` | `&dyn Fn(&T) -> Result<U, kaname::KanameError>` (`-> U` when the type says `total`) |
+
+Rust takes a value that is `Copy` by value and borrows the rest: a parameter of a record is
+`&Invoice`, of a string `&str`, of a list `&[T]`, of an optional string `Option<&str>`.
 
 Inside a function, a value whose step is whole is the language's integer and any other an exact
 fraction, rounded where the module rounds it. A `match` of a sum is a chain of `if` on `kind` in
-TypeScript and on `isinstance` in Python, and a type switch in Go; a record made from another is
-`{ ...p, on: … }`, `dataclasses.replace` and a copy. Two values compared whole go through the helper
-module's `eq` in TypeScript (and in Python for a sum), and through a function the module writes
-for their type in Go. A dict and a set hold their keys and values as they travel (a date as its
+TypeScript and on `isinstance` in Python, a type switch in Go and a `match` in Rust; a record made
+from another is `{ ...p, on: … }`, `dataclasses.replace`, a copy and `OrderPlaced { on, ..p.clone() }`.
+Two values compared whole go through the helper module's `eq` in TypeScript (and in Python for a
+sum), through a function the module writes for their type in Go, and through the `PartialEq` they
+derive in Rust. A dict and a set hold their keys and values as they travel (a date as its
 `YYYY-MM-DD` string, an enum by its value's name), and are walked in the order of their keys through
 the helper module, which orders each type of key as kaname does: so a `Map`, a `dict` and a Go `map`
-go round in one order, and a sort is each language's stable one. `mod` is the helper's, the
-remainder that is never below 0. A string is the language's, and where the language counts in
-something else (UTF-16 units in TypeScript, bytes in Go) the helper module counts, cuts and orders
-it in code points; it also holds the table of white space and the ways a number and a date are read.
-The function a host calls checks that each string it is given is well-formed Unicode (no lone
-surrogate in TypeScript and Python, valid UTF-8 in Go) and within its `count`.
+go round in one order, and a sort is each language's stable one. In Rust a key keeps its type, since
+the `Ord` of each type a key can be is kaname's order, and a `BTreeMap` goes round in it. `mod` is
+the helper's, the remainder that is never below 0. A string is the language's, and where the
+language counts in something else (UTF-16 units in TypeScript, bytes in Go and Rust) the helper
+module counts, cuts and orders it in code points; it also holds the table of white space and the
+ways a number and a date are read. The function a host calls checks that each string it is given is
+well-formed Unicode (no lone surrogate in TypeScript and Python, valid UTF-8 in Go; a Rust string
+always is) and within its `count`.
 
 **Names.** A function is its alias, in Pascal case in Go, and in Go one named like a type of the
-module takes `Fn` (`fn claim` with `record Claim` is `ClaimFn`). A record and an enum are in Pascal
-case. A parameter and a local are their aliases and names in TypeScript and Python, and in mixed
-caps in Go (`paid_on` is `paidOn`). One spelled like a word the language's code reaches for (Go's
-`len`, Python's `int`, TypeScript's `BigInt`), a name of the module's code or an earlier one is
-moved aside: with `_` after it in TypeScript and Python (a parameter `len_`, a local `int_2`), with
-a number after it in Go (`len2`). Python takes the parameters by keyword only, and the function a
-host calls takes them by their aliases.
+module takes `Fn` (`fn claim` with `record Claim` is `ClaimFn`; in Rust they are `claim` and
+`Claim`). A record and an enum are in Pascal case. A parameter and a local are their aliases and
+names in TypeScript, Python and Rust, and in mixed caps in Go (`paid_on` is `paidOn`). One spelled
+like a word the language's code reaches for (Go's `len`, Python's `int`, TypeScript's `BigInt`), a
+name of the module's code or an earlier one is moved aside: with `_` after it in TypeScript, Python
+and Rust (a parameter `len_`, a local `int_2`), with a number after it in Go (`len2`). Python takes
+the parameters by keyword only, and the function a host calls takes them by their aliases. In Rust,
+a keyword is a raw identifier (`r#type`), and what no raw identifier writes and a type named like
+one of the standard library's take `_` (`self_`, `Option_`).
 
 **Each function** is two: the one a host calls, which checks its arguments against what they
 declare and fails with `input` outside it, and the one the module's own functions call. Its effect
-shapes it: in Go a function that can fail returns `(T, error)` and a total one returns `T` (and
-panics with `input`; `Check<Function>` says so first); in TypeScript and Python each has the union
-of the kinds it can fail with, `ClaimFails`, in its type and its comment.
+shapes it: in Go a function that can fail returns `(T, error)` and in Rust
+`Result<T, kaname::KanameError>`, and a total one returns `T` (and panics with `input`;
+`Check<Function>` in Go and `check_<function>` in Rust say so first); in TypeScript and Python each
+has the union of the kinds it can fail with, `ClaimFails`, in its type and its comment.
 
 ```ts
 export function claim(invoice: Invoice, paid_on: string, reference_rate: bigint): Claim | null {
+```
+
+```rust
+pub fn claim(invoice: &Invoice, paid_on: kaname::Date, reference_rate: i64) -> Option<Claim> {
 ```
 
 The code checks the places the analysis did not show, where kaname's reference interpreter checks
@@ -765,32 +779,122 @@ them, in the same order, and fails with `KanameError` of the same kind, line and
 language of `--lang`). A call of a rule or a date it did not show is wrapped, and what the rule's
 code throws becomes `rule` with the rule's error as its cause. The code is held to kaname's
 reference interpreter on every vector of every function, in English and in Japanese, and passes
-`tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt and `go vet`.
+`tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt, `go vet`, and
+`cargo clippy --all-targets -- -D warnings` on the editions 2021 and 2024 of Rust.
 
 **A generic function** is one function, which the code of every module calls and no host: it is
 exported, and checks nothing at an entry. A type parameter held to keys takes its order as a hidden
 first argument (`kaname.Order<K>` in TypeScript, a key function in Python, `func(a, b K) int` in
-Go), which the caller gives for the type it calls with; values of a type parameter are compared by
-their contents through the helper module (`eq` in TypeScript, `==` in Python, `Equal` in Go).
+Go), which the caller gives for the type it calls with; in Rust it is held to `K: Ord + Clone` and
+takes nothing more. Values of a type parameter are compared by their contents through the helper
+module (`eq` in TypeScript, `==` in Python, `Equal` in Go), and by their `PartialEq` in Rust.
 
-**A function value** is an arrow function in TypeScript, a nested `def` in Python and a function
-literal in Go, and a function given by its name is one that calls it. A function that takes
-functions is one function, exported as a generic one is; in Go a failure of a function value is
-carried as any other, to the function the host calls. **What is `private`** is not exported in
-TypeScript, and its name starts with `_` in Python and in Go.
+**A function value** is an arrow function in TypeScript, a nested `def` in Python, a function
+literal in Go and a closure in Rust, and a function given by its name is one that calls it. A
+function that takes functions is one function, exported as a generic one is; in Go a failure of a
+function value is carried as any other, to the function the host calls. **What is `private`** is not
+exported in TypeScript and Rust, and its name starts with `_` in Python, Go and Rust.
 
 **A transfer** is a value of its operation's type (`CaptureDo`, with `book`, `transfer`, `op` and
-`args`), with the union of the reasons the book can refuse it with at the amounts the modules give
-(`CaptureDoRefusal`). The function of the book's `_apply` module makes one through chobo's client
-and answers what the client answers (`done`, `done_before`, `refused` with its reason).
+`args`; in Rust a struct of the arguments, with the constants `BOOK`, `TRANSFER` and `OP`), with the
+union of the reasons the book can refuse it with at the amounts the modules give
+(`CaptureDoRefusal`; in Rust an enum, and `as_str()` is the name the book writes). The function of
+the book's `_apply` module makes one through chobo's client and answers what the client answers
+(`done`, `done_before`, `refused` with its reason).
 
 **A host** calls a module's functions as it calls any of the package: it imports `glue/<module>`
 (`generated.glue.<module>` in Python, the module path given to `ritsu gen --module` and
-`glue/<package>` in Go), builds the arguments in the types above, and reads the answer, splitting a
-sum on `kind`, on `isinstance` or with a type switch, and a `result` on `Ok` and `Err`. A Python
-`frozenset` and a Go `map` have no order, so a host that prints a set or a dict sorts its keys
-itself. The examples `order_flow`, `stock_diff`, `handles` and `catalog` each have a host in the
-three languages under `host/`, which print the same.
+`glue/<package>` in Go, `generated::glue::<module>` in Rust), builds the arguments in the types
+above, and reads the answer, splitting a sum on `kind`, on `isinstance`, with a type switch or with
+a `match`, and a `result` on `Ok` and `Err`. A Python `frozenset` and a Go `map` have no order, so a
+host that prints a set or a dict sorts its keys itself. The examples `order_flow`, `stock_diff`,
+`handles` and `catalog` each have a host in TypeScript, Python and Go under `host/`, which print the
+same.
+
+### The package of Rust
+
+`ritsu gen --target rust` writes one crate into `<out>/rust/`, named by `--name` (`generated` unless
+it is given):
+
+```text
+Cargo.toml, lib.rs
+rules.rs, rules/<alias>.rs
+dates.rs, dates/<alias>.rs
+books.rs, books/<book>.rs
+glue.rs, glue/<module>.rs, glue/kaname.rs, glue/door.rs
+glue/books.rs, glue/books/<book>.rs, glue/books/<book>_apply.rs
+deps.rs, deps/<name>.rs, deps/<name>/…
+units.rs
+wasm.rs, <name>.wit
+```
+
+The crates it depends on are those of the clients of the books, and only outside wasm32; with no
+book it depends on nothing. A package of Rust holds no workflow and no code that asks a gate, which
+dandori and sekisho do not write in Rust. With a flow or a gate among the files, `ritsu gen` says
+what it leaves out on a line for each file, writes the rest, and exits 0:
+
+```text
+warning: A package of Rust holds no workflow, so it leaves out `orders/order.flow`; the other parts are written
+```
+
+`--library` writes no Rust (ritsu's DESIGN 17.16). A host takes the crate as a dependency by its
+path, here the package of the example `late_payment`, with `check_claim` for an invoice it does not
+trust:
+
+```toml
+[dependencies]
+generated = { path = "generated/rust" }
+```
+
+```rust
+use generated::glue::kaname::Date;
+use generated::glue::late_payment::{Invoice, check_claim, claim};
+use generated::units::GBPc;
+
+let invoice = Invoice { id: "inv_1".to_string(), invoiced: Date { year: 2026, month: 3, day: 2 }, amount: GBPc(100_000) };
+let paid_on = Date { year: 2026, month: 5, day: 20 };
+check_claim(&invoice, paid_on, 50)?;
+println!("{:?}", claim(&invoice, paid_on, 50));
+```
+
+```text
+Some(Claim { due: Date { year: 2026, month: 3, day: 31 }, days_late: 50, compensation: GBP(70), interest: GBPc(1150) })
+```
+
+### The package's Wasm
+
+The same crate with modules of kaname carries `wasm.rs` and a `.wit`, and the head of its
+`Cargo.toml` has the line that builds it, for rustc's wasm32-unknown-unknown target, as one Wasm
+module with no imports:
+
+```sh
+cargo rustc --lib --release --target wasm32-unknown-unknown --crate-type cdylib --config 'profile.release.opt-level="s"' --config 'profile.release.lto=true' --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"'
+```
+
+The module exports `call: func(input: string) -> string`, as rulec's and koyomi's do, and answers
+for every function a host calls in every module of the package. The input is
+`{"module": <module>, "function": <function>, "in": {<parameter>: <value>, …}}`, each name as the
+module writes it (a module of a dependency is `@pricing/fees`) and each value as `kaname vectors`
+writes it; with one module of such functions in the package, `module` may be left out, so a line of
+`kaname vectors` goes in as it is. The answer is that line without its `why`, with `fails` in the
+place of `out` where the function fails. An input that cannot be read as a call is answered
+`{"refused":"input","error":"…"}`. No input traps, but for a call the reference interpreter says
+does not stop, which may use up the module's stack. The `.wit` makes it a component (here the
+package of the example `late_payment`, with the built module and the `.wit` in one directory):
+
+```console
+$ wasm-tools component embed generated.wit generated.wasm -o generated.embedded.wasm
+$ wasm-tools component new generated.embedded.wasm -o generated.component.wasm
+$ wasmtime run --invoke 'call("{\"module\":\"late_payment\",\"function\":\"claim\",\"in\":{\"invoice\":{\"id\":\"inv_1\",\"invoiced\":\"2026-03-02\",\"amount\":100000},\"paid_on\":\"2026-05-20\",\"reference_rate\":50}}")' generated.component.wasm
+"{\"function\":\"claim\",\"in\":{\"invoice\":{\"id\":\"inv_1\",\"invoiced\":\"2026-03-02\",\"amount\":100000},\"paid_on\":\"2026-05-20\",\"reference_rate\":50},\"out\":{\"due\":\"2026-03-31\",\"days_late\":50,\"compensation\":70,\"interest\":1150}}"
+$ wasmtime run --invoke 'call("{\"module\":\"late_payment\",\"function\":\"claim\",\"in\":{\"invoice\":{\"id\":\"inv_1\",\"invoiced\":\"2026-03-02\",\"amount\":100000},\"paid_on\":\"2030-05-20\",\"reference_rate\":50}}")' generated.component.wasm
+"{\"function\":\"claim\",\"in\":{\"invoice\":{\"id\":\"inv_1\",\"invoiced\":\"2026-03-02\",\"amount\":100000},\"paid_on\":\"2030-05-20\",\"reference_rate\":50},\"fails\":{\"kind\":\"input\",\"module\":\"late_payment\",\"line\":18,\"message\":\"The argument `paid_on` of `claim` is 2030-05-20, outside its range >=2026-01-01 <=2029-12-31\"}}"
+```
+
+A module's transfers are answered as the values they are (`{"book", "transfer", "op", "args"}`).
+The clients of the books and the functions of the `_apply` modules wait on a database's driver and
+are not in the Wasm, so a host makes a transfer with a client of its own. `kaname api` says under
+`wasm` how each module is called.
 
 ## Across the languages
 

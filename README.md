@@ -31,7 +31,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
 | [sekisho](#sekisho--who-may-do-what) | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | Cedar, and the TypeScript, Python and Go that ask it |
-| [kaname](#kaname--a-functional-core) | `.kn` | a functional core: general code with no input or output, which can call rules, dates and books in their types | TypeScript, Python and Go, in the package `ritsu gen` writes |
+| [kaname](#kaname--a-functional-core) | `.kn` | a functional core: general code with no input or output, which can call rules, dates and books in their types | TypeScript, Python, Go and Rust, in the package `ritsu gen` writes, and Wasm from the Rust |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -375,8 +375,9 @@ own types too, and puts a rule's inputs together, carries one answer into the ne
 an amount to a book. `kaname check` holds a module to the rules the other languages are held to —
 units and money, rounding, int64 — and to the range of every value it passes: a function marked
 `total` answers every input of the ranges it declares, and a decision written in code rather than
-in a table is a warning. `ritsu gen` writes it as TypeScript, Python and Go for a host to call,
-beside the code of the rules, dates and books it calls.
+in a table is a warning. `ritsu gen` writes it as TypeScript, Python, Go and Rust for a host to
+call, beside the code of the rules, dates and books it calls, and the Rust builds to a Wasm module
+that any host calls with one JSON object.
 
 An order moved by events is a functional core of its own. The states are the values of an enum
 with fields under them, and the next state, or why an event is refused, is a `match` on the state
@@ -830,7 +831,7 @@ There are four ways to install them:
 ```
 ritsu check <dir>         every language's check, then the checks across them
 ritsu run <flow> …        a workflow run with its rules evaluated, dates computed, books moved
-ritsu gen --target …      one package of the whole project per language: TypeScript, Python, Go
+ritsu gen --target …      one package of the whole project per language: TypeScript, Python, Go, Rust
 ritsu gen --check …       whether the packages are current; with --format json, file by file
 ritsu gen --library …     a module as libraries for npm, PyPI and Go
 ritsu mod <command> …     modules: add, lock, fetch, push, diff, report and the rest

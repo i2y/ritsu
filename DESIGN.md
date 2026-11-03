@@ -1457,7 +1457,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 ```
 ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--lang ja|en]
 ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <target>] [--format json]
-ritsu gen [<パス>...] [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
+ritsu gen [<パス>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
 ritsu gen --library [--embed <名前>]... [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
 ritsu mod <コマンド> <引数>...  モジュールの依存、送り出し、版のあいだの差、報告、一覧のサイト（17.19）
@@ -1865,7 +1865,7 @@ WASI で組んだ `realpath` は、パスを含むいちばん深い preopen か
 
 ### 9.3 一つの生成パッケージ（E）
 
-`ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード（2026-10-06 から）、Functional Core（kaname のモジュール。2026-10-18 から）を、言語ごとに一つのパッケージにする。対象は、六つの言語（rulec、koyomi、chobo、dandori、sekisho、kaname）が共に生成している TypeScript、Python、Go。E.7 で作り、sekisho の段階 C で `authz/` を、kaname の段階 D で `glue/` を足した形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
+`ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード（2026-10-06 から）、Functional Core（kaname のモジュール。2026-10-18 から）を、言語ごとに一つのパッケージにする。対象は、六つの言語（rulec、koyomi、chobo、dandori、sekisho、kaname）が共に生成している TypeScript、Python、Go と、ワークフローとゲートのコードを除く四つの言語（rulec、koyomi、chobo、kaname）が生成する Rust（2026-11-04 から）である。E.7 で作り、sekisho の段階 C で `authz/` を、kaname の段階 D で `glue/` を足した形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
 
 ```
 generated/typescript/          generated/python/              generated/go/
@@ -1880,9 +1880,25 @@ generated/typescript/          generated/python/              generated/go/
   units.ts                       <name>/units.py                units/units.go
 ```
 
+Rust のパッケージは一つのクレートで、形は次のとおりである（下の「Rust のパッケージ」）。
+
+```
+generated/rust/
+  Cargo.toml
+  lib.rs
+  rules.rs, rules/<別名>.rs
+  dates.rs, dates/<別名>.rs
+  books.rs, books/<帳簿>.rs (.sql)
+  glue.rs, glue/<別名>.rs, glue/kaname.rs, glue/door.rs
+  glue/books.rs, glue/books/<帳簿>.rs, glue/books/<帳簿>_apply.rs
+  deps.rs, deps/<名前>.rs, deps/<名前>/…
+  units.rs
+  wasm.rs, <name>.wit
+```
+
 ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、`--target cedar`（か `target` の行の `cedar`）のとき、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6、9.6）。
 
-`ritsu gen [<path>...] [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。書くのは `--target`（何度でも書ける）の出力先で、無ければ `ritsu.mod` の `target` の行（17.3）の出力先である。どちらも無ければ、何も書かずに exit 2 で止まる（9.6）。書く順は、フラグの順に依らず、TypeScript、Python、Go、Cedar である。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
+`ritsu gen [<path>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。書くのは `--target`（何度でも書ける）の出力先で、無ければ `ritsu.mod` の `target` の行（17.3）の出力先である。どちらも無ければ、何も書かずに exit 2 で止まる（9.6）。書く順は、フラグの順に依らず、TypeScript、Python、Go、Rust、Cedar である。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
 
 `glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「Functional Core（kaname のモジュール）」（英語では the functional cores (kaname's modules)）を言う。kaname は規則と日付と帳簿をつなぐコードに限らない汎用の言語なので、そう呼ぶ。置き場の名前は `glue/` のままである。ホストのコードはこのパスでモジュールを読むので、名前を変えるとホストのビルドが壊れる。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
 
@@ -1893,8 +1909,8 @@ generated/typescript/          generated/python/              generated/go/
   - Go の帳簿のクライアントは、額を共通の部分（runtime）に `int64` に直して渡す。runtime は `[]any` から額を `int64` として取り出すからである。生成するワークフローのコードは変わらない。トランスポートは帳簿の操作を、TypeScript では型の無い値として、Go ではリフレクションで、Python ではキーワード引数で呼ぶからである。
   - 単独のコマンドの出力は変えない。`rulec gen` の規則のモジュールはブランドを自分で宣言し、`chobo gen` のクライアントは額を素の整数で受け取る。リポジトリの 546 本の規則の `rulec gen` と、95 の帳簿の 11 の出力先の `chobo build` が、変える前と一字も同じであることを確かめた。ブラウザで試すページは単独の生成器を使うので、`ritsu.wasm` も変わらない。
   - 残高（`balance`）は、まだ素の整数で返す（15 章）。
-- 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。`.gate` があれば、TypeScript は `@cedar-policy/cedar-wasm` 4.13.0（`--authorizer avp` なら `@aws-sdk/client-verifiedpermissions` 3.1146.0）、Python は `cedarpy==4.12.1`（avp なら `boto3==1.43.103`）、Go の `doc.go` は `github.com/cedar-policy/cedar-go v1.8.0`（avp なら `github.com/aws/aws-sdk-go-v2 v1.47.1` と `github.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1`）。PostgreSQL と MySQL の系統の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx と go-sql-driver/mysql だけは import するので、`doc.go` に書く）。バージョンは、ここで生成物を確かめているもの（dandori、chobo、sekisho のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。`doc.go` の package の名前は、`--module` の最後の部分（`gocheck/generated` なら `generated`）である。最後の部分が Go の予約語なら、パッケージの名前（`--name`）にし、それも予約語なら、数字で始まる部分と同じく前に `p` を付ける。`<out>/go` をそのままモジュールに置くと import のパスは `…/go` で終わり、前はそれを `package go` と書いて、Go のコンパイラが通さなかった（2026-10-18）。
-- **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール）と、生成したコードがコメントに書くバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go`、chobo の `tools/runner` と `tools/runner/go`、sekisho の `tools/runner-ts`・`tools/runner-py`・`tools/runner-go` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の三つの置き場所で、sekisho の例のパッケージを二つの authorizer で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
+- 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。Rust の `Cargo.toml` は帳簿のクライアントが読むクレートだけで、TigerBeetle なら `tigerbeetle` 0.17.9、PostgreSQL と MySQL の系統なら `sqlx` 0.9.0 と `tokio` 1.54.1。`.gate` があれば、TypeScript は `@cedar-policy/cedar-wasm` 4.13.0（`--authorizer avp` なら `@aws-sdk/client-verifiedpermissions` 3.1146.0）、Python は `cedarpy==4.12.1`（avp なら `boto3==1.43.103`）、Go の `doc.go` は `github.com/cedar-policy/cedar-go v1.8.0`（avp なら `github.com/aws/aws-sdk-go-v2 v1.47.1` と `github.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1`）。PostgreSQL と MySQL の系統の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx と go-sql-driver/mysql、Rust の sqlx と tokio だけは import するので、`doc.go` と `Cargo.toml` に書く）。バージョンは、ここで生成物を確かめているもの（dandori、chobo、sekisho のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。`doc.go` の package の名前は、`--module` の最後の部分（`gocheck/generated` なら `generated`）である。最後の部分が Go の予約語なら、パッケージの名前（`--name`）にし、それも予約語なら、数字で始まる部分と同じく前に `p` を付ける。`<out>/go` をそのままモジュールに置くと import のパスは `…/go` で終わり、前はそれを `package go` と書いて、Go のコンパイラが通さなかった（2026-10-18）。
+- **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール、`Cargo.toml` のクレート）と、生成したコードがコメントに書くバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go`、chobo の `tools/runner` と `tools/runner/go`、sekisho の `tools/runner-ts`・`tools/runner-py`・`tools/runner-go`、kaname の `tools/rust` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の三つの置き場所で、sekisho の例のパッケージを二つの authorizer で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
 - **Go の依存の依存は、`doc.go` に上げるよう書く（2026-10-06）。** Go のモジュールは、求められたうちで最小のバージョンを選ぶ（minimal version selection）。npm や PyPI と違い、利用者が `go mod tidy` をしても、依存の依存は新しくならない。pgx v5.11.0（いま一番新しい）は golang.org/x/text v0.29.0 を求め、そのバージョンには GO-2026-5970 があり、pgx の SCRAM の認証から届く。PostgreSQL の帳簿の Go のクライアントは pgx を import するので、そのままだと利用者のモジュールは v0.29.0 でビルドされる（ほかの依存が上げなければ）。`ritsu gen` は、pgx を import するパッケージの `doc.go` に、次の行を足す（表は `src/package.rs` の `GO_RAISED`。バージョンはランナーが試しているもので、2026-10-09 に v0.41.0 から v0.42.0 にした（3.6）。v0.42.0 は Go 1.26 を求める。pgx が直ったバージョンを求めるようになったら外す）。
 
   ```go
@@ -1906,13 +1922,44 @@ generated/typescript/          generated/python/              generated/go/
   ```
 
 - **パッケージに SBOM は書かない（2026-10-06）。** 確かめたこと：osv-scanner 2.6.0 は、生成したパッケージの `package.json`（ロックファイルが無い）、`pyproject.toml`、`doc.go` のどれも読まない（三つとも「No package sources found」）。同じ依存を並べた CycloneDX 1.6 の `bom.cdx.json` を手で書いて置くと読み、x/text v0.29.0 の GO-2026-5970 などを見つけた。それでも書かない理由は三つある。一つ目に、ritsu が書ける SBOM は、パッケージが直接求めるものだけか、ここで確かめたときの依存の依存で、利用者の npm や uv が解決するものではない。利用者のロックファイル（`npm install` の `package-lock.json`、`uv lock`、`go mod tidy` の `go.mod` と `go.sum`）が、スキャナーが読むべきものである。二つ目に、直接の依存は、GitHub の依存関係グラフ（Dependabot）が `package.json` と `pyproject.toml` からそのまま読む。三つ目に、ritsu の書くバージョンが利用者の依存の依存を決めるのは Go だけで、それは上の `doc.go` の行が言う。作るなら、`ritsu gen --sbom` が、直接の依存と、生成したファイル（頭のハッシュ）を部品にした CycloneDX 1.7 を書く形がよい（15 章）。
-- **パッケージは、確かめたバージョンを「ちょうど」で書く**（`"1.24.0"`、`temporalio==1.33.0`。2026-10-06 に決めた）。確かめていないバージョンを入れないためである。`@temporalio/*` そのものに脆弱性が出たときは、生成した `package.json` か `pyproject.toml` を書き換える（`ritsu gen --check` は手で直したと言う）か、ritsu の次のリリースを待つ。監査（3.6）はツールのロックファイルでそのバージョンを毎日調べるので、アドバイザリが出れば ritsu の側で気づき、直ったバージョンを確かめてからリリースする。下限つきの範囲（`^1.24.0`、`>=1.33.0,<2`）は捨てた。利用者のロックファイルだけで上げられる代わりに、確かめていないバージョンが入るからである。
+- **パッケージは、確かめたバージョンを「ちょうど」で書く**（`"1.24.0"`、`temporalio==1.33.0`、`"=0.9.0"`。2026-10-06 に決めた）。確かめていないバージョンを入れないためである。`@temporalio/*` そのものに脆弱性が出たときは、生成した `package.json` か `pyproject.toml` を書き換える（`ritsu gen --check` は手で直したと言う）か、ritsu の次のリリースを待つ。監査（3.6）はツールのロックファイルでそのバージョンを毎日調べるので、アドバイザリが出れば ritsu の側で気づき、直ったバージョンを確かめてからリリースする。下限つきの範囲（`^1.24.0`、`>=1.33.0,<2`）は捨てた。利用者のロックファイルだけで上げられる代わりに、確かめていないバージョンが入るからである。
+- **Rust のパッケージ（2026-11-04）。** `--target rust` は、規則、日付、帳簿のクライアント、Functional Core を一つのクレートにして `<out>/rust/` に書く。部分は各言語の生成器が書き、ritsu はマニフェストと、部分をつなぐファイルを書く（`crates/ritsu/src/package/rust.rs`）。出すためのクレートではない（`publish = false`）ので、使う側はパスの依存（`generated = { path = "generated/rust" }`）で読む。
+  - `Cargo.toml` は、stockroom を PostgreSQL の帳簿で書くと、頭の二行の下が次のとおりになる。`name` は `--name` で、`edition` と `rust-version` は kaname のテストのクレート（`crates/kaname/tools/rust/Cargo.toml`）と同じにする。依存は wasm32 のほかでだけ読む。cargo は `"0.9.0"` を `^0.9.0` と読むので、ちょうどの版にするには `=` を付ける。chobo のクライアントの頭の注が示す行（`sqlx = { version = "0.9.0", … }`）は範囲のままである。クライアントだけを自分のクレートに入れるなら、版はそのクレートが決めるからである。`[workspace]` とロックファイルは書かない。どちらも使う側のものである。
+
+    ```toml
+    [package]
+    name = "generated"
+    version = "0.0.0"
+    edition = "2024"
+    rust-version = "1.94"
+    publish = false
+
+    [lib]
+    path = "lib.rs"
+
+    [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+    sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "postgres"] }
+    tokio = { version = "=1.54.1", features = ["sync", "time"] }
+    ```
+
+  - `lib.rs` は、部分のモジュールを宣言し、ほかの字の名前に rustc が出す三つの lint（`confusable_idents`、`mixed_script_confusables`、`uncommon_codepoints`）を許す。帳簿のクライアントはデータベースのドライバーを待つので、`books` に `#[cfg(not(target_arch = "wasm32"))]` を付ける。
+  - 部分をつなぐファイルは Rust 2018 の形で、ディレクトリの名前のファイルが中のモジュールを宣言する（`rules.rs` と `rules/`）。規則と日付のモジュールには `#[allow(clippy::all)]` を付ける。どちらも単独の生成物と同じコードで、clippy に合わせて書いていないからである（kaname の DESIGN 36.16）。生の識別子で書けない語や ASCII でない名前のファイルは、`#[path = "…"]` で宣言する（`ritsu_emit::package::rust_mod_line`）。別名が `mod` の規則・日付・帳簿は exit 2 で止まる。`rules/mod.rs` は、Rust がディレクトリ自身のファイルと読むからである（E0761）。
+  - ワークフローとゲートのコードは入れない。dandori と sekisho は Rust を書かないからである。プロジェクトにあれば、ファイルごとに一行警告し、ほかの部分を書いて 0 で終わる。`--check` でも同じ行を言い、`--format json` では `diagnostics` に `code` が null の警告として入る。止まる実行は、この警告を言わない。
+
+    ```
+    warning: A package of Rust holds no workflow, so it leaves out `orders/order.flow`; the other parts are written
+    警告: Rust のパッケージにはワークフローを入れないので、`orders/order.flow` は入りません。ほかの部分は書きます
+    ```
+
+  - kaname のモジュールがあれば、パッケージの Wasm の二つのファイル（`wasm.rs`、`<name>.wit`）も書き、組み方をマニフェストの注に書く（kaname の DESIGN 36.10〜36.12、36.17）。
+  - `--check` と次の `ritsu gen` は、`Cargo.toml` のあるパッケージの根の `target/` を見ない。cargo の置き場で、パッケージの部分ではないからである。
+  - 確かめ方：`crates/ritsu/tests/gen.rs` の `the_package_of_rust_is_a_crate`（テストのプロジェクト `settlement` のファイルと、それを書いた言語の golden `tests/golden/gen/settlement-rust.txt`）、`the_packages_of_rust_build_with_no_warning`（8 のプロジェクト。帳簿の三つの置き場所、日本語の名前、二つの規則が読む `enums` のファイル、記号で書いた単位を、警告をエラーにして組み、wasm32 でも組む）、`a_package_of_rust_leaves_out_the_flows_and_the_gates`、`gen_check_holds_a_package_of_rust`、`what_breaks_the_rust_stops_its_package`。依存のあるクレートは `modules_gen.rs`（17.8）、マニフェストの版は `audit.rs`、`--library` は `library.rs`（17.16）。
 - ★帳簿は `--books` で PostgreSQL（既定）、TigerBeetle、MySQL の系統（`mysql`。MySQL・TiDB・Vitess）のどれかを選ぶ。PostgreSQL ならクライアントが呼ぶ SQL（スキーマと関数）を、MySQL の系統ならクライアントが呼び出しを行うテーブルの SQL を、`books/<帳簿>.sql` に書く。クライアントだけでは動かないからである。
-- ★パッケージの名前（`--name`、既定は `generated`）は、npm のパッケージの名前、Python のパッケージのディレクトリ、Go の import のパスの既定になる。ディレクトリの名前から決めると、CI で別の名前のディレクトリに取り出したときに `--check` が古いと言うからである。
-- 何も書かずにエラーで止まるもの：検査を通らないファイル（その言語の診断を `ritsu check` と同じ形で出し、exit 1）、パッケージの同じファイルを書く二つのファイル（同じ別名の二つの規則、日本語の名前の二つのフローの Go の `workflow`。どちらの名前を替えるかは書いた人が決めることなので、exit 2）、インデックスのファイルや Go のディレクトリが import できない名前（Python と Go が予約している語。exit 2）、プロジェクトに無いファイルを読むワークフロー（exit 1）。
+- ★パッケージの名前（`--name`、既定は `generated`）は、npm のパッケージの名前、Python のパッケージのディレクトリ、Rust のクレートの名前、Go の import のパスの既定になる。ディレクトリの名前から決めると、CI で別の名前のディレクトリに取り出したときに `--check` が古いと言うからである。
+- 何も書かずにエラーで止まるもの：検査を通らないファイル（その言語の診断を `ritsu check` と同じ形で出し、exit 1）、パッケージの同じファイルを書く二つのファイル（同じ別名の二つの規則、日本語の名前の二つのフローの Go の `workflow`。どちらの名前を替えるかは書いた人が決めることなので、exit 2）、インデックスのファイルや Go のディレクトリが import できない名前（Python と Go が予約している語、Rust の `mod`。exit 2）、プロジェクトに無いファイルを読むワークフロー（exit 1）、ある出力先だけを壊す名前（その出力先を書くときの koyomi の E016、chobo の E064、kaname の E008。exit 1。9.6）。
 - ★生成物のコメントは `--lang` の言語で書く（`rulec gen` と同じ）。`--check` は同じ言語で走らせる（違えば古いと言う）。
 - `--check` は書かずに、無いファイル、古いか手で直したファイル、前の `gen` が書いて今は書かないファイル（頭が ritsu の生成器のもの）を挙げて 1 で終わる。書くときは、前に書いて今は書かないファイルを消す（rulec の `gen --check` と同じ考え）。ただし、頼まなかった出力先の `cedar/` に前の実行が書いたファイルは、書くときも `--check` でも挙げるだけで、消さず、終了コードも変えない（9.6）。頭は、最初の 3 行のコメントで見る。注を書けない package.json は、アプリの形なら 4 行目の `description` の値の終わり（`… Code generated by ritsu <版>. DO NOT EDIT.`）で、ライブラリの形なら `"//"` キー（17.16）で見る。どれも、頭のコメントと同じく ritsu の生成器の名前のものだけを数え、人が置いた package.json や、ほかの生成器が書いた package.json は数えない。
-- **`--format json`（2026-10-10）。** 行の代わりに一つの JSON を出す。最初の三つのキーは `ritsu check --format json`（8.3）と同じで、`ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート。プロジェクトを読む前に止まったときは null）、`ok`（終了コードが 0 か）。続いて `check`（`--check` か）、`out`（`--out`）、`targets`（書く出力先。`--target` か `target` の行のもので、書く順）、`files`（パッケージのファイルごとに、`target`（`typescript`・`python`・`go`、ゲートの Cedar なら `cedar`）、`path`（テキストが出すとおりのパス）、`from`（もとのプロジェクトのファイル。パッケージそのものの部分と、もう生成しないファイルは null）、`state`）、`diagnostics`、`error` の順である。`state` は、書いたときは `written`・`same`・`removed`、`--check` のときは `same`・`missing`・`stale`・`left`、どちらでも、頼まなかった出力先の `cedar/` のファイルは `left` である（`left` と `removed` は、ritsu の生成器の頭（`Code generated by … DO NOT EDIT.`）を持つファイルだけで、人が置いたファイルは数えない。前からの `--check` と同じ）。テキストは変わったものだけを並べるが、JSON は同じだったファイルも並べ、パッケージの全部のファイルを言う。何も生成しなかったとき（引数の誤り、検査を通らないファイル、同じファイルを書く二つのファイル、予約語のモジュールの名前、生成器が止めたもの）は、`files` が空で、`error` に終了コードと文（`--lang` の言語。テキストの `error: ` の頭は付けない）が入り、出力先が無くて止まったときは `instead` に 0.40.0 と同じファイルを書くコマンドの語の配列も入り（9.6。17.21）、`diagnostics` に止めた診断が `ritsu check --format json` と同じ形（`tool` と、ルートからの `file`）で入る。`--authorizer avp` の W401 も `diagnostics` に入る。JSON のときは標準エラーに何も書かない。引数の誤りも JSON で答えるため、`--format json` は引数を読む前に見る（`ritsu check --format json` の引数の誤りは、いままでどおり標準エラーのテキストである）。終了コードはテキストと同じ。確かめ方は `tests/npm.rs` の突き合わせ（stockroom、invoice、通販、ページの通販で、書いたとき・`--check`・手で変えたあと・`--authorizer avp`）と、ページの例（`tests/npm.rs` の `the_pages_on_node_show_what_the_package_prints`）。
+- **`--format json`（2026-10-10）。** 行の代わりに一つの JSON を出す。最初の三つのキーは `ritsu check --format json`（8.3）と同じで、`ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート。プロジェクトを読む前に止まったときは null）、`ok`（終了コードが 0 か）。続いて `check`（`--check` か）、`out`（`--out`）、`targets`（書く出力先。`--target` か `target` の行のもので、書く順）、`files`（パッケージのファイルごとに、`target`（`typescript`・`python`・`go`・`rust`、ゲートの Cedar なら `cedar`）、`path`（テキストが出すとおりのパス）、`from`（もとのプロジェクトのファイル。パッケージそのものの部分と、もう生成しないファイルは null）、`state`）、`diagnostics`、`error` の順である。`state` は、書いたときは `written`・`same`・`removed`、`--check` のときは `same`・`missing`・`stale`・`left`、どちらでも、頼まなかった出力先の `cedar/` のファイルは `left` である（`left` と `removed` は、ritsu の生成器の頭（`Code generated by … DO NOT EDIT.`）を持つファイルだけで、人が置いたファイルは数えない。前からの `--check` と同じ）。テキストは変わったものだけを並べるが、JSON は同じだったファイルも並べ、パッケージの全部のファイルを言う。何も生成しなかったとき（引数の誤り、検査を通らないファイル、同じファイルを書く二つのファイル、予約語のモジュールの名前、生成器が止めたもの）は、`files` が空で、`error` に終了コードと文（`--lang` の言語。テキストの `error: ` の頭は付けない）が入り、出力先が無くて止まったときは `instead` に 0.40.0 と同じファイルを書くコマンドの語の配列も入り（9.6。17.21）、`diagnostics` に止めた診断が `ritsu check --format json` と同じ形（`tool` と、ルートからの `file`）で入る。`--authorizer avp` の W401 と、Rust のパッケージが入れないファイルの警告も `diagnostics` に入る。JSON のときは標準エラーに何も書かない。引数の誤りも JSON で答えるため、`--format json` は引数を読む前に見る（`ritsu check --format json` の引数の誤りは、いままでどおり標準エラーのテキストである）。終了コードはテキストと同じ。確かめ方は `tests/npm.rs` の突き合わせ（stockroom、invoice、通販、ページの通販で、書いたとき・`--check`・手で変えたあと・`--authorizer avp`）と、ページの例（`tests/npm.rs` の `the_pages_on_node_show_what_the_package_prints`）。
 - パッケージの Python が `mypy --strict` を通るように、dandori の Temporal の Python（と同じ部品を使う pydantic-graph と Step Functions の Lambda の Python）と、chobo の Python のクライアントの型の書き方を直した（★単独の出力も変わった。振る舞いは変えていない。dandori の DESIGN 0.3、chobo の DESIGN 8.1）。
 
 確かめ方：`crates/ritsu/tests/gen.rs`。テストのプロジェクト `crates/ritsu/tests/projects/stockroom`（英語。rulec の規則 `delivery`、koyomi の日付のファイルとカレンダー、chobo の帳簿、三つを使う dandori のフロー）のパッケージが、帳簿の三つの出力先（PostgreSQL、TigerBeetle、MySQL の系統）で、`tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ること（通販は TypeScript だけ。dandori の Python の残りは dandori の DESIGN 7 章）。フローの import がパッケージのモジュールを指し、規則と日付のアクティビティを走らせるとパッケージのモジュールを通って答えること（Python と Go）。`--check` が、無いもの・古いもの・残ったものを言うこと。`--out` を一つ深くした前の実行が残したアプリの形のパッケージを、`--check` が package.json も含めて「もう生成しない」と言い、次の gen が消し、人の package.json と、ほかの生成器の頭を `description` に持つ package.json は残すこと（`gen_reads_the_apps_package_json_as_ritsus`）。`--module` の最後の部分が `go` のパッケージを `…/go` に置くと、根が `package generated`（`--name go` なら `package pgo`）で、`go vet` と gofmt を通ること（`a_package_whose_directory_is_named_go_vets`）。テストのプロジェクト `crates/ritsu/tests/projects/marketplace`（英語。セントで売上を分ける rulec の規則 `sale_split`、chobo の例の帳簿 `marketplace`、手で書いた決済のコード `service/checkout.{ts,py,go}`）で、単位のモジュールが `USDc` を宣言し、規則のモジュールがそれを読み、帳簿のクライアントの額がその型であること。決済のコードが、帳簿の三つの出力先のパッケージの上で `tsc --strict`、`mypy --strict`、`go vet` と gofmt を通り、規則をドルで数える版では三つとも決済のコードで止まること（`the_checkout_hands_the_book_the_rules_amounts_in_their_units_type`）。決済のコードを走らせると、テストが立てた PostgreSQL に三つの言語で売上を記帳し、Go では TigerBeetle と MySQL にも記帳すること（`the_checkout_records_the_sale`。手数料 149 セントと店の 850 セント、同じ注文の二度目は `done_before`）。`円` で書いた規則の値段を `JPY` で書いた規則に渡すコードが、三つの言語の型の検査を通って走ること（`a_unit_is_one_type_across_the_rules_however_they_spell_it`）。sekisho の例をプロジェクトにしたパッケージで、三つの言語のファイルの形、インデックス、依存が正しく、型の検査（`tsc --strict` と cedar-wasm の型、`mypy --strict` と cedarpy、sekisho の Go のランナーの `go.mod` で作ったモジュールの `go vet` と gofmt）と `--check` を通り、`--authorizer avp` なら avp の依存を書くこと（`the_gates_of_a_project_go_into_the_package`）。テストのプロジェクト `crates/ritsu/tests/projects/settlement`（kaname の例の `payout` と `late_payment` の英語の版と、それが読む規則、日付のファイル、帳簿）のパッケージが、パッケージの形の golden（`golden/gen/settlement.txt`）と三つの型の検査を通ること（`the_modules_of_kaname_go_into_the_package`）、`.kn` を変えると `--check` がそのモジュールの三つの言語のファイルだけを言うこと（`gen_check_says_a_module_of_kaname_is_stale`）、`glue/` の生成物が、三つの言語とも、ベクタと宣言の外の入力で参照インタプリタと同じ答えを返すこと（`the_code_of_the_modules_answers_as_the_reference_does`。kaname の DESIGN 10.7、16.4）。どのファイルの頭も 9.2 の形で、元のファイルとそのハッシュを書くこと（パッケージの形の golden `crates/ritsu/tests/golden/gen/stockroom.txt`。バージョンは `<version>` に置き換えてある）。中身ごとの突き合わせは、いままでどおり各言語のテスト（rulec の 12 言語のベクタ、koyomi の五つの出力先、chobo の PostgreSQL と TigerBeetle の七つの組み合わせと MySQL・TiDB・Vitess の組み合わせ、dandori のプラットフォーム）がする。sekisho のテストは、三つの言語の生成したコードに、検査を通る 35 の `.gate` の生の値 27,579 件を cedar-wasm、cedarpy、cedar-go で答えさせ、参照の評価と比べる（sekisho の DESIGN 6.3）。
@@ -1938,12 +1985,13 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 
 コードを書くコマンド（`rulec gen`、`koyomi gen`、`chobo gen`、`dandori gen`、`sekisho gen`、`sakai gen`、`ritsu gen`）は、一つの決まりで出力先と付属物を選ぶ。動詞はどれも `gen` である。
 
-- **出力先は `--target <名前>` で、何度でも書ける。** 書くのは指定したものだけである。名前は言語の名前でそろえる（`typescript`、`python`、`go`、`rust`、`sql`、`wasm`、rulec だけの `numpy`・`javascript`・`ruby`・`php`・`swift`・`java`、rulec の `proto`、sekisho と `ritsu gen` の `cedar`）。dandori は基盤の名前（`asl`、`temporal-typescript`、`temporal-python`、`temporal-go`、`durable`、`argo`、`pydantic-graph`）、sakai はツールの名前（`import-linter`、`dependency-cruiser`、`archunit`、`go-arch-lint`）で、chobo の帳簿のデータベースは `--books` で選ぶ。書く順は、フラグの順ではなく、コマンドごとの並びの順である（`ritsu gen` は TypeScript、Python、Go、Cedar）。知らない名前と、同じ名前を二度書くのは exit 2。
-- **`--target` が無ければ、何も書かずに exit 2 で止まる。** 書く組がバイナリの版で決まると、出力先が増えるたびに、使う人の `--check` が「無い」と言うからである。止まる文は使える名前を言い、0.40.0 で `--target` を省けた三つ（`rulec gen`、`koyomi gen`、`ritsu gen`）は、0.40.0 の既定と同じファイルを書くコマンド（その人の引数のあとに `--target` と `--extra` を足したもの）も示す。その引数は 0.40.0 で固定し（`UP_TO_0_40`）、あとから足す出力先は入れない。`ritsu gen` は、`ritsu.mod` の `target` の行（17.3）があれば、それを読む。
+- **出力先は `--target <名前>` で、何度でも書ける。** 書くのは指定したものだけである。名前は言語の名前でそろえる（`typescript`、`python`、`go`、`rust`、`sql`、`wasm`、rulec だけの `numpy`・`javascript`・`ruby`・`php`・`swift`・`java`、rulec の `proto`、sekisho と `ritsu gen` の `cedar`）。dandori は基盤の名前（`asl`、`temporal-typescript`、`temporal-python`、`temporal-go`、`durable`、`argo`、`pydantic-graph`）、sakai はツールの名前（`import-linter`、`dependency-cruiser`、`archunit`、`go-arch-lint`）で、chobo の帳簿のデータベースは `--books` で選ぶ。書く順は、フラグの順ではなく、コマンドごとの並びの順である（`ritsu gen` は TypeScript、Python、Go、Rust、Cedar）。知らない名前と、同じ名前を二度書くのは exit 2。
+- **`--target` が無ければ、何も書かずに exit 2 で止まる。** 書く組がバイナリの版で決まると、出力先が増えるたびに、使う人の `--check` が「無い」と言うからである。止まる文は使える名前を言い、0.40.0 で `--target` を省けた三つ（`rulec gen`、`koyomi gen`、`ritsu gen`）は、0.40.0 の既定と同じファイルを書くコマンド（その人の引数のあとに `--target` と `--extra` を足したもの）も示す。その引数は 0.40.0 で固定し（`UP_TO_0_40`）、あとから足す出力先（2026-11-04 の `ritsu gen` の `rust`）は入れない。`ritsu gen` は、`ritsu.mod` の `target` の行（17.3）があれば、それを読む。
 - **出力先ごとに、ほかのコードが読む本体（ライブラリ）だけを書く。** ランナー、MCP のサーバーと確かめのページ、Connect のサービス、丸めの試験、証明のハーネス、ベクタは付属物で、`--extra <名前>`（何度でも書ける）で頼んだときだけ書く。付属物があるのは rulec（`runner`、`mcp`、`connect`、`round-test`、`proof`、`vectors`）と koyomi（`runner`）だけで、ほかのコマンドが書くものは全部が本体である。ライブラリは付属物を読まない。
 - **置き方は `<out>/<出力先>/`、`--out` の既定は `generated`。** 出力先が一つでも同じで、出力先を足しても、ほかのファイルは動かない。0.40.0 で `--out` の直下に書いていた chobo と dandori は、この段が増えた。sakai の設定だけは、ツールが探すところに置く（`--out` を付ければ、そこに全部を置く）。
 - **`--check` は、どのコマンドも、その実行が書くはずのファイルだけを比べる。** 無いか違えば 1。頼まなかった出力先と付属物のファイルは比べない。chobo と dandori には、ここで `--check` を足した。
-- **一つの実行は、途中まで書いて止まらない。** chobo・dandori・sakai・koyomi・`ritsu gen` は、指定した全部の出力先を作ってから書く。一つでも作れなければ、どの出力先も書かず、前の実行が書いたファイルにも触らずに止まる。chobo の E060〜E064、dandori のプラットフォームが受け取れないフロー、sakai の E501、koyomi の E016 は 1 で終わり、`ritsu gen` は止まった理由の終了コード（1 か 2）で終わる（17.8）。書きかけが残るのは、ディスクに書けなかったときだけである。0.40.0 の `ritsu gen` は出力先を一つ作るたびに書いたので、止まった出力先より前の出力先が残り、文の出力はそれを挙げなかった（下の通販）。
+- **一つの実行は、途中まで書いて止まらない。** chobo・dandori・sakai・koyomi・`ritsu gen` は、指定した全部の出力先を作ってから書く。一つでも作れなければ、どの出力先も書かず、前の実行が書いたファイルにも触らずに止まる。chobo の E060〜E064、dandori のプラットフォームが受け取れないフロー、sakai の E501、koyomi の E016 は 1 で終わり、`ritsu gen` は止まった理由の終了コード（1 か 2）で終わる（17.8。chobo の E064、koyomi の E016、kaname の E008 は 1）。書きかけが残るのは、ディスクに書けなかったときだけである。0.40.0 の `ritsu gen` は出力先を一つ作るたびに書いたので、止まった出力先より前の出力先が残り、文の出力はそれを挙げなかった（下の通販）。
+- **ある出力先だけを壊す名前は、検査では警告にし、その出力先を書くときだけ止まる（2026-11-04）。** koyomi の W001 と E016、chobo の W108 と E064、kaname の W001 と E008 である。使わない出力先のために名前を替えさせず、その出力先を書くなら組めないコードを書かない。止まる文は、使わない出力先なら `--target` で使う出力先を挙げるように言う。
 - **前に書いたが頼まれなくなったファイルは、消さずに挙げる。** rulec と koyomi の付属物、`ritsu gen` の `cedar/` で、終了コードは変えない。挙げるのは、頭のコメントで ritsu の生成器のものと分かるファイルである（9.3 の `--check` と同じ見分け方。Cedar の二つの JSON は頭を持たないので挙げない）。
 - **0.40.0 までの名前は、新しい名前を添えて止まる。** `chobo build`・`dandori build`・`sakai build` は知らないコマンドとして、dandori の `temporal`（`ritsu run --target` も）と chobo の組の名前（`postgres-go` など）は知らない名前として exit 2 で止まり、文に 0.41.0 からの名前を添える（`` `chobo build` is `chobo gen` from 0.41.0 ``、`` `postgres-go` is `--target go --books postgres` from 0.41.0 ``）。別名は作らない。
 
@@ -1951,7 +1999,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 
 ```
 $ ritsu gen
-error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|cedar`, or make it a module (`ritsu mod init`) and write them on the `target` line of its ritsu.mod (`target typescript python go`)
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar`, or make it a module (`ritsu mod init`) and write them on the `target` line of its ritsu.mod (`target typescript python go`)
 note: up to 0.40.0, `ritsu gen` with no `--target` wrote the packages of TypeScript, Python and Go, and the gates' Cedar; this writes the same files:
   ritsu gen --target typescript --target python --target go --target cedar
 ```
@@ -1969,7 +2017,7 @@ note: up to 0.40.0, `ritsu gen` with no `--target` wrote the packages of TypeScr
 
 `ritsu gen` は、木の 138 のプロジェクトのルート（`ritsu.mod` のあるディレクトリ、ritsu のテストのプロジェクト、ブラウザで試すページの通販、各言語の例）で、0.40.0 の既定と止まる文が示すコマンドを英日で比べた（書く、`--check`、`--format json`。帳簿のあるルートは `--books` の三つで、ゲートのあるルートは `--authorizer avp` でも）。終了コードと標準出力と標準エラーはどれも一字も違わず、違うのは、帳簿のクライアントと MySQL の系統の SQL のコメントのうちコマンドを言う行（`chobo build --target postgres` が `chobo gen --target sql` に、など）と、JSON の `targets` が `cedar` も言うこと、止まる実行が何も書かないことだけである。止まる実行のうち、0.40.0 が途中まで書いていたのは、ritsu のテストのプロジェクトの通販だけである。二つのフローが Go のパッケージの一つのファイルを書くので Go のところで exit 2 で止まり、0.40.0 はその前に TypeScript と Python の 63 のファイル（`--books tigerbeetle` では 61）を書いて、JSON の `files` に挙げた。いまは何も書かず、`files` は空である。
 
-コマンドごとの名前と付属物の表、止まる文、`ritsu.mod` の行の決まりは、各言語の DESIGN（rulec §15.277、koyomi 16 章、chobo 17 章、dandori 21 章、sekisho 23 章、sakai 28 章）と 17.3・17.16 にある。
+コマンドごとの名前と付属物の表、止まる文、`ritsu.mod` の行の決まりは、各言語の DESIGN（rulec §15.277、koyomi 16 章、chobo 17 章、dandori 21 章、sekisho 23 章、sakai 28 章、kaname 36.17）と 17.3・17.16 にある。
 
 ## 10. テストの組み立て
 
@@ -3609,11 +3657,18 @@ chobo はほかのファイルを指さないので替えるところが無い�
   エラー: モジュールを読めません（エラー 1 件）。何も生成しません
   ```
 
-- **置き場所**。依存の部分は、パッケージの形の中の `deps/<名前>/` の下に置き、`<名前>` の段は正規の書き方の連なりのとおりに重ねる（`@pricing` は `deps/pricing/`、`@pricing/@tax` は `deps/pricing/deps/tax/`）。その下は手元のモジュールの部分と同じ形である（TypeScript の `deps/pricing/rules/order_total.ts`、Python の `<名前>/deps/pricing/rules/order_total.py`、Go の `deps/pricing/rules/ordertotal/order_total.go`）。二つのモジュールに同じ名前のファイルがあっても、パッケージの中でぶつからない。段ごとに索引を置く（TypeScript の `deps/index.ts`、`deps/pricing/index.ts`、種類ごとの `deps/pricing/rules/index.ts`。Python ではそれぞれの `__init__.py`）。手元のモジュールの索引は `deps` も出す。Go のパッケージはディレクトリなので、索引は無い。依存のゲートの Cedar は `cedar/deps/<名前>/` に置く。量の単位の型はパッケージに一つだけの `units` にあり、依存の部分もそれを読む。
+- **置き場所**。依存の部分は、パッケージの形の中の `deps/<名前>/` の下に置き、`<名前>` の段は正規の書き方の連なりのとおりに重ねる（`@pricing` は `deps/pricing/`、`@pricing/@tax` は `deps/pricing/deps/tax/`）。その下は手元のモジュールの部分と同じ形である（TypeScript の `deps/pricing/rules/order_total.ts`、Python の `<名前>/deps/pricing/rules/order_total.py`、Go の `deps/pricing/rules/ordertotal/order_total.go`、Rust の `deps/pricing/rules/order_total.rs`）。二つのモジュールに同じ名前のファイルがあっても、パッケージの中でぶつからない。段ごとに索引を置く（TypeScript の `deps/index.ts`、`deps/pricing/index.ts`、種類ごとの `deps/pricing/rules/index.ts`。Python ではそれぞれの `__init__.py`、Rust ではディレクトリの名前のファイルの `deps.rs`、`deps/pricing.rs`、`deps/pricing/deps.rs`、`deps/pricing/rules.rs`）。手元のモジュールの索引は `deps` も出す。Go のパッケージはディレクトリなので、索引は無い。依存のゲートの Cedar は `cedar/deps/<名前>/` に置く。量の単位の型はパッケージに一つだけの `units` にあり、依存の部分もそれを読む。
 - **読み込むパス**。ほかの部分を読み込むコードを書く生成器（rulec の規則、koyomi、chobo のクライアント、dandori のワークフロー、sekisho のリクエストのコード、kaname の glue）は、自分の部分の置き場所と、読み込むファイルごとの置き場所を `package.rs` から受け取り（`ritsu_emit::package::Place`）、読み込むパスをそこから作る。`rules/<別名>` を自分では組み立てない。
 - **走らせるときに一つでなければならない名前**。二つのモジュールのファイルが、Temporal のワークフローの型（名前と版から作る `place_order_v1` など）か、Cedar の名前（名前空間の中の型と操作）を同じに作れば、二つのファイルを挙げて止まる（exit 2）。走っているときは名前で見分けるので、一つのパッケージに二つは置けない。黙って名前を変えると、走っているときの名前が変わる。一つのモジュールの中のことは、言語が見る。一つのゲートが `use gate` で一緒に読むファイルは、モジュールが違っても一つの名前空間で（sekisho が E210 と E211 で確かめる）、ぶつかりにしない。
 - **Python が予約している語**。依存の名前は Python のパッケージの名前になる。`lambda` のような Python が予約している語の依存があれば、Python のパッケージを作るなら止まる（exit 2）。`--target typescript` と `--target go` では作る。
-- **書く前に確かめる止まり方**。上の二つの名前のぶつかりと Python が予約している語は、どのターゲットを作るより前に、一度だけ確かめる（`package.rs` の `modules_hold`）。どれもモジュールの木から来る止まり方で、マニフェストの無い木では起きない。ほかの理由の止まり方は、そのターゲットを作るところで止まる。どちらでも、`ritsu gen` は指定した全部のターゲットを作ってから書くので（9.6）、止まった実行は何も書かない。出力先を二つ以上指定した `ritsu gen` が Python のところで止まれば、先に作った TypeScript も書かない。マニフェストの無い木でも同じである。これは生成のコマンドの決まり（9.6）で、モジュールが持ち込んだものではないので、M14 の外である。0.40.0 までは、ほかの理由で止まると、それまでに書いたターゲットが残った。
+- **Rust のモジュールにならない語**（2026-11-04）。依存の名前は Rust のモジュールとそのファイルの名前にもなる。`crate`、`self`、`super` は生の識別子で書けず、`mod` は Rust がディレクトリ自身のファイルと読む。依存のモジュールは下にモジュールを持つので、`#[path]` では避けられない。Rust のパッケージを作るなら止まる（exit 2）。ほかの出力先では作る。`match` のような生の識別子で書ける語は名前になる（`pub mod r#match;` と `deps/match/`）。
+
+  ```
+  error: the dependency `crate` is named with a word no module of Rust takes, which the package cannot hold in its deps/; require it by another name
+  エラー: 依存の名前 `crate` は Rust のモジュールの名前にできない語なので、パッケージの deps/ に置けません。`require` で別の名前を付けてください
+  ```
+
+- **書く前に確かめる止まり方**。上の二つの名前のぶつかりと、Python が予約している語と、Rust のモジュールにならない語は、どのターゲットを作るより前に、一度だけ確かめる（`package.rs` の `modules_hold`）。出力先が Rust だけなら、ワークフローとゲートを入れないので、二つの名前のぶつかりでは止まらない（9.3）。どれもモジュールの木から来る止まり方で、マニフェストの無い木では起きない。ほかの理由の止まり方は、そのターゲットを作るところで止まる。どちらでも、`ritsu gen` は指定した全部のターゲットを作ってから書くので（9.6）、止まった実行は何も書かない。出力先を二つ以上指定した `ritsu gen` が Python のところで止まれば、先に作った TypeScript も書かない。マニフェストの無い木でも同じである。これは生成のコマンドの決まり（9.6）で、モジュールが持ち込んだものではないので、M14 の外である。0.40.0 までは、ほかの理由で止まると、それまでに書いたターゲットが残った。
 - **頭の行**。依存の部分の頭の `Source:` には、正規の書き方と、モジュールの名前と版を書く。規則の頭の `Applies:` の行は、依存の規則が自分のルートから書いた形（`@tax/…`）のままにする（★）。規則のファイルに書いてあるとおりで、依存が自分で生成しても同じ行になる。
 
   ```
@@ -4042,7 +4097,7 @@ require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
 **引数**
 
 - モジュール全体（`exclude` の行が外すものを除く）を、出力先ごとに一つのライブラリにする。パスを渡すと exit 2。`--name` と `--module` も exit 2 で、名前は `library` の行から取る。`--embed` は `--library` と一緒にだけ使える（exit 2）。`ritsu.mod` の無いディレクトリでは exit 2。
-- 書く出力先は、アプリの形と同じく `--target` か `target` の行のもの（9.6、17.3）で、`library` の行はパッケージの名前を与えるだけである（2026-11-01）。どちらも無ければ、何も書かずに exit 2 で止まり、0.40.0 と同じファイルを書くコマンド（`library` の行の言語ごとの `--target`）を示す。行が一つも無ければ、0.40.0 も止まったので、コマンドは示さない。書く言語に `library` の行が無ければ exit 2。`cedar` はライブラリにならず（Cedar はゲートのファイルの形のまま `cedar/` に書く）、`library` の行は要らない。
+- 書く出力先は、アプリの形と同じく `--target` か `target` の行のもの（9.6、17.3）で、`library` の行はパッケージの名前を与えるだけである（2026-11-01）。どちらも無ければ、何も書かずに exit 2 で止まり、0.40.0 と同じファイルを書くコマンド（`library` の行の言語ごとの `--target`）を示す。行が一つも無ければ、0.40.0 も止まったので、コマンドは示さない。書く言語に `library` の行が無ければ exit 2。`cedar` はライブラリにならず（Cedar はゲートのファイルの形のまま `cedar/` に書く）、`library` の行は要らない。`rust` は `--library` では書かない（下の「できないこと」）。
 - 名前は `library` の行、版は `version` の行で、版が無ければ exit 2。
 
 **どの部分をどのライブラリが持つか**
@@ -4100,6 +4155,12 @@ require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
 - **依存のライブラリの規則への寄与**（★）：ライブラリのコードは、出したときの寄与だけで組まれていて、使う側の寄与を受けられない。パッケージが持つ寄与のファイルが、ライブラリの持つ規則に寄与していれば exit 2。代わりの手は、アプリの形で生成する（寄与を合わせた規則のコードを、そのパッケージが持つ）か、寄与をライブラリの側のモジュールに移すことである。
 - **kaname の帳簿の受け渡しの型**（★）：`glue/books/` の型は、使う側のパッケージに置く。ライブラリの側にも同じ帳簿の型があれば、Python と Go では別の型になる（TypeScript は型を構造で比べるので同じになる）。`KanameError` もライブラリごとに別のクラスになる。数の型 Q は、Python の Fraction、Go の `*big.Rat`、TypeScript の構造の型なので、同じ型である。ライブラリをまたいで帳簿の振替の値を渡すなら、アプリの形で一つのパッケージにする。
 - **依存の関係の無い二つのライブラリの、同じ単位の型**：上の「単位の型」のとおり exit 2。
+- **Rust のパッケージ**（★。2026-11-04）：`--target rust` でも、`target` の行の `rust` を読んだときでも、同じ一文で exit 2 で止まる。クレートの名前、依存の版の書き方、ライブラリをまたぐ単位の型の三つが決まっていないからである（kaname の DESIGN 19 章）。`library` の行にも `rust` は書けない（E301）。代わりの手は、アプリの形で生成して、使う側のクレートからパスの依存で読むことである（9.3）。
+
+  ```
+  error: `--library` does not write a package of Rust: a crate's name, how it writes the versions of what it depends on, and the units' types across libraries are not decided. Write it without `--library`, or take Rust out of the targets (`--target`, or the `target` line of ritsu.mod)
+  エラー: `--library` は Rust のパッケージを書きません。クレートの名前、依存の版の書き方、ライブラリをまたぐ単位の型を決めていないからです。`--library` を付けずに書くか、Rust を出力先（`--target` か ritsu.mod の `target` の行）から外してください
+  ```
 
 **出し方の文書**：`website/docs/libraries.md`（英）と `website/docs-ja/libraries.md`（日）。npm（`npm publish --provenance`、または信頼された発行者）、PyPI（信頼された発行者）、Go（生成したディレクトリを、モジュールのパスのリポジトリにコミットし、`vX.Y.Z` か `<サブディレクトリ>/vX.Y.Z` のタグを付ける）を、それぞれワークフローの数行で書く。ワークフローは ritsu のリポジトリでは走らせない。書き方は、それぞれの公式の文書で確かめた（2026-10-29。npm の Generating provenance statements と Trusted publishing for npm packages、PyPI の Publishing with a Trusted Publisher と Project metadata と PyPA の Publishing package distribution releases using GitHub Actions、Go の Modules Reference の Mapping versions to commits と Publishing a module）。
 

@@ -4,7 +4,7 @@ Functional Core を書くための、小さな汎用の言語です。
 プログラムのうち、入出力を持たずに計算して決める部分を書きます。イベントで状態を進めること、入力を確かめてサービスが持つ形にすること、数を集めて比べること、木の形のデータを作り替えること、業務の規則のまわりの計算を、レコード、フィールドを持つ値のある列挙、リスト、辞書、集合、文字列の上の関数として書き、ジェネリクス、`result`、関数の値も使えます。
 リクエストや時刻やデータベースを読み、状態を持ち、決めたことを行うほかの部分は、kaname を呼ぶホストの言語（Imperative Shell）に残ります。
 コアは、ritsu の言語と同じ決まり（単位、通貨と税区分、率の刻み、範囲、丸め、int64）で確かめられ、関数ごとに何が起こりうるか（`total`、`fails …`、`diverges`）も検査が推し量ります。
-rulec の規則、koyomi の日付、chobo の帳簿の振替も ritsu の型のまま呼べ、`ritsu gen` が、それらのコードの隣に、何にも依存しない TypeScript、Python、Go のコードを書きます。
+rulec の規則、koyomi の日付、chobo の帳簿の振替も ritsu の型のまま呼べ、`ritsu gen` が、それらのコードの隣に、何にも依存しない TypeScript、Python、Go、Rust のコードを書きます。Rust のコードは、どの言語のホストからも JSON のオブジェクト一つで呼べる一つの Wasm のモジュールにも組めます。
 kaname は [ritsu](../../README.ja.md) の九つの言語の一つです。
 ritsu のサイトの **[kaname のページ](https://i2y.github.io/ritsu/ja/kaname/)** では、モジュールの書き方、下の Functional Core の四つの例と TypeScript、Python、Go のホスト、検査が保証すること、規則・日付・帳簿の呼び方を順に読めます。
 
@@ -234,7 +234,7 @@ ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通
 **fails** の関数には、検査が示せなかった場所があり、`rule`、`date`、`range`、`overflow`、`zero` のどれで失敗しうるかも型に載ります。
 **diverges** の関数は、木をたどる関数（[examples/catalog](examples/catalog)）のように再帰を持ちます。止まることは確かめません。
 エフェクトは kaname が推論し、見出しに書いてあれば、それに収まるかを確かめます（E401）。呼んだ関数のエフェクトは、呼んだ側に伝わります。ほかの関数に渡した関数のエフェクトは、渡した側に伝わります。
-生成するコードの形もエフェクトで決まります。Go では失敗しうる関数だけが `(T, error)` を返し、TypeScript と Python では、関数ごとに失敗の種類の型が付きます。
+生成するコードの形もエフェクトで決まります。Go では失敗しうる関数だけが `(T, error)` を、Rust では `Result<T, KanameError>` を返し、TypeScript と Python では、関数ごとに失敗の種類の型が付きます。
 
 ## 判断は表に書く
 
@@ -269,11 +269,15 @@ ok tests/doc/decisions.kn: 関数 3 個: total 2 個、fails rule 1 個
 
 ## 生成するコード
 
-`ritsu gen` は、TypeScript、Python、Go のパッケージごとに、モジュールのコードを `glue/` の下に書きます。正確な分数、int64 の確かめ、五つの丸め、コードポイントで扱う文字列、鍵の順に回す辞書と集合を持つ補助のモジュールも一緒に書き、ほかには何にも依存しません。
-直和型の値は、TypeScript では `kind` を持つオブジェクト、Python では凍結したデータクラス、Go ではインターフェースを満たす構造体で、`result` は補助のモジュールの `Ok` と `Err` です。お金と量は、規則と帳簿と同じく、パッケージの単位ごとの型で受け渡します。
+`ritsu gen` は、TypeScript、Python、Go、Rust のパッケージごとに、モジュールのコードを `glue/` の下に書きます。正確な分数、int64 の確かめ、五つの丸め、コードポイントで扱う文字列、鍵の順に回す辞書と集合を持つ補助のモジュールも一緒に書き、ほかには何にも依存しません。
+直和型の値は、TypeScript では `kind` を持つオブジェクト、Python では凍結したデータクラス、Go ではインターフェースを満たす構造体、Rust では構造体を持つ `enum` で、`result` は補助のモジュールの `Ok` と `Err`（Rust では標準の `Result`）です。お金と量は、規則と帳簿と同じく、パッケージの単位ごとの型で受け渡します。
 ホストが呼ぶ関数は、引数が宣言に収まるかを最初に確かめます。範囲の解析が示せなかった場所は、生成したコードがそこで確かめ、参照インタプリタと同じ種類の `KanameError` で失敗します。
 振替は値で、その型には、帳簿がそれを拒否しうる理由が載ります。帳簿ごとの関数が、chobo のクライアントでその振替を当てます。
 Functional Core の四つの例は、`host/` の下に TypeScript、Python、Go のホストを持ちます。どれも `ritsu gen` が書くパッケージを呼び、同じものを出力します。
+
+Rust のパッケージ（`ritsu gen --target rust`）は一つのクレートで、ホストはパスで依存に足します。ワークフローとゲートに尋ねるコードは入らず、入らないファイルをファイルごとに警告で言います。
+kaname のモジュールがあれば、`Cargo.toml` の頭に、クレートを import の無い一つの Wasm のモジュールに組む行があり、横の `.wit` でそれを component にできます。`call` は `{"module", "function", "in"}` を受け取り、パッケージのホストが呼ぶ関数のどれにも、その入力の `kaname vectors` の行で答えます。振替は値で答えます。
+全体は、言語ごとのコードと一緒に [docs/reference.md](docs/reference.md#what-gen-writes) にあります。
 
 ## 人が読むページ
 
@@ -340,7 +344,7 @@ $ ritsu kaname explain E301 --lang ja
 - rulec のコーパスの `derive` と `define` の全部（85 のファイルの 143 行）を kaname の式として読み、rulec と同じ型になり、rulec のベクタ 20,033 件で同じ値になることを確かめます。
 - 範囲の解析を参照インタプリタと突き合わせます。例とテストのモジュールのすべての関数で、ベクタと、引数の宣言から選んだ 200 件の入力を流し（139,754 回の評価）、5,009 の式に来た値 3,452,025 個が、どれも解析の言う範囲に入り、失敗した 1,617 回が、どれも関数のエフェクトの言う種類で失敗することを確かめます。
 - 評価と範囲の解析を Lean で書き直し（ritsu の一つの Lean のパッケージの `proofs/KanameCore`）、範囲の解析が健全であることと、total と推論した関数が失敗しないことを、関数を引数に取らない関数について証明しています（関数を引数に取る関数は、試験でモデルと突き合わせていますが、証明はまだありません）。`cargo test -p ritsu-model` が、59 のモジュールの 14,092 の評価で、モデルを参照インタプリタと範囲の解析に突き合わせます。
-- TypeScript、Python、Go に生成したコードが、52 のモジュールのすべてのベクタと、引数の宣言の外の入力と、自分を含む型の値をホストが渡せるいちばん深くまで入れ子にした値とその一段深い値に、参照インタプリタと同じ答えを返すことを、英語と日本語の両方で確かめます（TypeScript は 16,717 件、Python は 16,633 件、Go は 16,613 件のすべてが一致。型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは `tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt と `go vet` を通ります。
+- TypeScript、Python、Go、Rust に生成したコードとパッケージの Wasm が、52 のモジュールのすべてのベクタと、引数の宣言の外の入力と、自分を含む型の値をホストが渡せるいちばん深くまで入れ子にした値とその一段深い値に、参照インタプリタと同じ答えを返すことを、英語と日本語の両方で確かめます（TypeScript は 16,874 件、Python は 16,790 件、Go と Rust と Wasm はそれぞれ 16,770 件のすべてが一致。型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは `tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt、`go vet`、`cargo clippy -- -D warnings` を通ります。パッケージの component は wasmtime の下で、モジュールが Node の下で答えるのと同じに答えます。ritsu のテストは、テストのプロジェクトで `ritsu gen --target rust` が書くものを、帳簿の三つの置き場所のそれぞれと wasm32 で組みます。
 - どの診断のコードにも、それを出す一番小さなモジュールが英語と日本語の両方であります。`doc` のページは golden で、中の規則と日付のページは rulec と koyomi が描いたものです。HTML は Chrome で開いて確かめます。
 - Functional Core の四つの例のホスト（TypeScript、Python、Go）が、`ritsu gen` が書くパッケージを呼び、`host/output.txt` のとおりに出力することを確かめます（ritsu の `tests/kaname.rs`）。
 - この README と `docs/` とスキルに載せた出力、診断、`.kn` とホストの行は本物です。`tests/docs.rs` が突き合わせ、コマンドは ritsu の `tests/kaname.rs` が走らせます。サイトの kaname のページも、ritsu の `tests/website.rs` が同じように確かめます。
@@ -348,7 +352,7 @@ $ ritsu kaname explain E301 --lang ja
 ## 状態
 
 言語、`check`、`run`、`vectors`、`doc`、`api`、`explain`、`ritsu gen` が書くコードはできています（[DESIGN.md](DESIGN.md)）。
-まだ作っていないもの：dandori のフローから kaname の関数を呼ぶこと、koyomi のカレンダーと日付の時刻、渡す入力に合わせて規則の出力の範囲を細かくすること、サイトのブラウザで試すページでモジュールを扱うこと（DESIGN の 19 章）。
+まだ作っていないもの：dandori のフローから kaname の関数を呼ぶこと、koyomi のカレンダーと日付の時刻、渡す入力に合わせて規則の出力の範囲を細かくすること、サイトのブラウザで試すページでモジュールを扱うこと、モジュールを Rust のライブラリにすること（DESIGN の 19 章）。
 
 ## ライセンス
 

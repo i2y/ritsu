@@ -201,7 +201,7 @@ dandori のワークフローは、帳簿の操作をタスクとして呼び、
 - 勘定が受けた記録や振替を読む操作。
 - TigerBeetle の結果が参照インタプリタと違う二つの場合を、そろえること（[出力先](targets.md#tigerbeetle)に書いてあります）。
 
-設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md) にあり、主な決めごとは[設計](design.md)にまとめています。chobo は [ritsu](../../ja/) の言語の一つで、ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。Rust の名前に使えない字の表は Unicode Character Database から作ったもので、Unicode License V3 に従います（[THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/crates/chobo/THIRD_PARTY_NOTICES)）。
+設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md) にあり、主な決めごとは[設計](design.md)にまとめています。chobo は [ritsu](../../ja/) の言語の一つで、ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。Rust の名前に使えない字の表は、生成器が共に使うクレート ritsu-emit のものです。Unicode Character Database から作ったもので、Unicode License V3 に従います（[THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/crates/ritsu-emit/THIRD_PARTY_NOTICES)）。
 
 ## 次に読むページ
 

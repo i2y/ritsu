@@ -49,7 +49,7 @@ $ ritsu gen --library --out ../out/pricing --lang ja
 生成しました: ../out/pricing/go/go.mod
 ```
 
-`ritsu gen --library` は、`target` の行の言語ごとに、`--out` の下の `typescript/`、`python/`、`go/` にライブラリを書きます。`--target typescript|python|go` を付ければ、その言語を書きます。ライブラリはモジュール全体（`exclude` の行が外すものを除く）なので、`--library` にはパスを渡せず、`--name` と `--module` も付けられません。ライブラリの名前は `library` の行から取ります。`--check` は、`--library` を付けないときと同じく、いまあるものとの違いを言います。
+`ritsu gen --library` は、`target` の行の言語ごとに、`--out` の下の `typescript/`、`python/`、`go/` にライブラリを書きます。`--target typescript|python|go` を付ければ、その言語を書きます。Rust はライブラリにしません。クレートの名前、依存の版の書き方、ライブラリをまたぐ単位の型を決めていないからです。`--target` か `target` の行に `rust` があれば、`--library` は何も書かずに 2 で終わります。ライブラリはモジュール全体（`exclude` の行が外すものを除く）なので、`--library` にはパスを渡せず、`--name` と `--module` も付けられません。ライブラリの名前は `library` の行から取ります。`--check` は、`--library` を付けないときと同じく、いまあるものとの違いを言います。
 
 ## 依存は依存のライブラリから読む
 
