@@ -539,7 +539,7 @@ in (`#![allow(uncommon_codepoints)]`), not in the module.
 | `postgres`, `go` | something with `QueryRow`: pgx's `*pgx.Conn`, `*pgxpool.Pool` or `pgx.Tx` |
 | `tigerbeetle`, `typescript` | a client of `tigerbeetle-node` 0.17.9 |
 | `tigerbeetle`, `python` | a `ClientSync` of `tigerbeetle` 0.17.9 |
-| `tigerbeetle`, `go` | a client of `github.com/tigerbeetle/tigerbeetle-go` v0.17.9, which uses cgo |
+| `tigerbeetle`, `go` | a client of `github.com/tigerbeetle/tigerbeetle-go` v0.17.10, which uses cgo |
 | `mysql`, `typescript` | a pool or a connection of `mysql2`'s promise API (`mysql2/promise`); for `batch`, one made with `multipleStatements` |
 | `mysql`, `python` | a DB-API connection of PyMySQL or mysqlclient; for `batch`, one made with `CLIENT.MULTI_STATEMENTS` |
 | `mysql`, `go` | database/sql's `*sql.DB`, `*sql.Conn` or `*sql.Tx` through `github.com/go-sql-driver/mysql`, which the client imports to read the error numbers; for `batch`, `multiStatements=true` in the DSN |

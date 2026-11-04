@@ -212,7 +212,7 @@ fn header(book: &Book, origin: &Origin, what: &str, pkg: &str, in_pkg: Option<&I
 
 pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin, in_pkg: Option<&InPackage>) -> Vec<(String, String)> {
     let pkg = package(book, stem);
-    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9.", &pkg, in_pkg);
+    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.10.", &pkg, in_pkg);
     o.push_str(&arg_types(book, in_pkg));
     o.push_str(&book_struct(book, "TigerBeetle", None));
     let names = members(book);

@@ -64,7 +64,7 @@ Claude Code なら、プラグイン `ritsu` に十のスキルが入ってい�
 | `postgres`、`rust` | sqlx の `PgPool`、または `tokio::sync::Mutex` に入れた sqlx の接続かトランザクション。クレートは sqlx 0.9.0 と tokio で、モジュールの頭に書いてある |
 | `tigerbeetle`、`typescript` | `tigerbeetle-node` 0.17.9 のクライアント |
 | `tigerbeetle`、`python` | `tigerbeetle` 0.17.9 の `ClientSync` |
-| `tigerbeetle`、`go` | `tigerbeetle-go` v0.17.9 のクライアント（cgo を使う） |
+| `tigerbeetle`、`go` | `tigerbeetle-go` v0.17.10 のクライアント（cgo を使う） |
 | `tigerbeetle`、`rust` | クレート `tigerbeetle` 0.17.9 の `Client` |
 | `mysql`、`sql` | MySQL 8.4 以降、TiDB 8.5 以降、Vitess のどれか。SQL が、流したデータベースに帳簿の三つのテーブルを作る。何度流してもよい。TiDB では `tidb_enable_check_constraint` を ON にして流す |
 | `mysql`、`typescript` | `mysql2`（`mysql2/promise`）のプールか接続 |

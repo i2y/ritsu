@@ -228,7 +228,7 @@ const GO_MODULES: &[(&str, &str, &str)] = &[
     ("go.temporal.io/sdk", "v1.49.0", "1.26.0"),
     ("go.temporal.io/api", "v1.63.5", "1.25.4"),
     ("github.com/jackc/pgx/v5", "v5.11.0", "1.25.0"),
-    ("github.com/tigerbeetle/tigerbeetle-go", "v0.17.9", "1.17"),
+    ("github.com/tigerbeetle/tigerbeetle-go", "v0.17.10", "1.17"),
     ("github.com/go-sql-driver/mysql", "v1.10.1", "1.24.0"),
     ("github.com/aws/aws-sdk-go-v2", "v1.47.1", "1.24"),
     ("github.com/aws/aws-sdk-go-v2/config", "v1.33.6", "1.24"),

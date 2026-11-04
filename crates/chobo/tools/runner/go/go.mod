@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/tigerbeetle/tigerbeetle-go v0.17.9
+	github.com/tigerbeetle/tigerbeetle-go v0.17.10
 )
 
 require (
