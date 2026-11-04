@@ -1,7 +1,7 @@
 workflow TypeScriptのグローバル v1
 description "JavaScript のグローバルと同じレコードです。"
 
-record Date
+record Array
   日 : string
 
 inputs
@@ -10,7 +10,7 @@ inputs
 outputs
   日 : string
 
-task いつ(番号: string) -> Date
+task いつ(番号: string) -> Array
 
 flow
   let d = いつ(番号: 番号)

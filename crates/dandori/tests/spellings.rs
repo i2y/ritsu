@@ -3,10 +3,13 @@
 //! `gen` for the targets it names and no other (E051), and, renamed as the note says, is said
 //! nothing and builds everywhere. The code of the targets a form does not name, and of its renamed
 //! flow everywhere, passes `tsc --strict`, `mypy --strict` and `go vet`; and a generator made to write
-//! what `gen` stops at writes Go or Python that does not pass.
+//! what `gen` stops at writes Go or Python that does not pass. What the tables keep is what the code
+//! of every flow of the tree reads, no more and no less; a name it does not read keeps its name
+//! and stops nothing (tests/flows/plain_*.flow, which also run on the platforms' runners).
 //! `DANDORI_BLESS=1` rewrites the golden files.
 
-use ritsu_testkit::{ready, skip, Need, TempDir};
+use ritsu_testkit::{need, ready, skip, Need, TempDir};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::rc::Rc;
@@ -32,6 +35,7 @@ const PY_GO: &[&str] = &["temporal-python", "pydantic-graph", "temporal-go"];
 const EVERY_LANGUAGE: &[&str] = &["temporal-typescript", "durable", "temporal-python", "pydantic-graph", "temporal-go"];
 const CLIENTS: &[&str] = &["temporal-typescript", "temporal-python", "temporal-go"];
 const CLIENT_TS_PY: &[&str] = &["temporal-typescript", "temporal-python"];
+const CLIENT_TS: &[&str] = &["temporal-typescript"];
 
 const FORMS: &[Form] = &[
     Form { en: "go_own", ja: "Goの自分の名前", targets: GO, broken: &["temporal-go"] },
@@ -53,6 +57,7 @@ const FORMS: &[Form] = &[
     Form { en: "client_send", ja: "クライアントのsend", targets: CLIENTS, broken: &[] },
     Form { en: "client_message", ja: "クライアントのメッセージ", targets: CLIENT_TS_PY, broken: &[] },
     Form { en: "client_two_types", ja: "クライアントの二つの型", targets: CLIENTS, broken: &[] },
+    Form { en: "client_global", ja: "クライアントのグローバル", targets: CLIENT_TS, broken: &[] },
     Form { en: "client_answer", ja: "クライアントのanswer", targets: CLIENT_TS_PY, broken: &[] },
     Form { en: "client_answer_callback", ja: "クライアントのAnswerCallback", targets: GO, broken: &[] },
     Form { en: "client_run_status_starts", ja: "クライアントのRunStatusで始める", targets: GO, broken: &[] },
@@ -60,7 +65,7 @@ const FORMS: &[Form] = &[
 ];
 
 /// The flows no name stops, in English and in Japanese: what a form above would be, but for a name
-/// the code does not keep.
+/// the code does not keep. The flows of tests/flows run on the platforms' runners too.
 const FREE: &[&str] = &[
     "tests/spellings/client_shared.flow",
     "tests/spellings/クライアントの共有.flow",
@@ -70,6 +75,10 @@ const FREE: &[&str] = &[
     "tests/spellings/クライアントのRunStatus.flow",
     "tests/spellings/client_status_beside.flow",
     "tests/spellings/クライアントのStatusと並ぶレコード.flow",
+    "tests/flows/plain_names.flow",
+    "tests/flows/plain_names.ja.flow",
+    "tests/flows/plain_tasks.flow",
+    "tests/flows/plain_tasks.ja.flow",
 ];
 
 fn run(args: &[&str]) -> (u8, String, String) {
@@ -386,6 +395,39 @@ fn what_no_code_keeps_is_said_nothing() {
     }
 }
 
+/// A type, a task and a variable named as what no code reads have the names you wrote in the code:
+/// the nouns in Go, the builtins in Python, the globals in TypeScript.
+#[test]
+fn what_no_code_reads_keeps_its_name() {
+    for flow in ["tests/flows/plain_names.flow", "tests/flows/plain_names.ja.flow"] {
+        let go = generated(flow, "temporal-go", "types.go");
+        for head in ["type Outcome string", "type Status string", "type Answer struct", "type History struct"] {
+            assert!(go.contains(head), "{flow}: no `{head}`:\n{go}");
+        }
+        let py = generated(flow, "temporal-python", "types.py");
+        for head in ["\nformat = TypedDict(", "\nhash = TypedDict(", "\nfilter = Literal[", "\nopen = Literal[", "\nprint = Literal["] {
+            assert!(py.contains(head), "{flow}: no `{head}`:\n{py}");
+        }
+        let workflow = generated(flow, "temporal-python", "workflow.py");
+        assert!(workflow.contains("\n        format = dd_r\n") && !workflow.contains("format_"), "{flow}: a variable named as a builtin the code does not read:\n{workflow}");
+        for target in ["temporal-typescript", "durable"] {
+            let ts = generated(flow, target, "types.ts");
+            for head in ["export interface Date ", "export type Map = ", "export interface Number ", "export interface Object ", "export type Promise = "] {
+                assert!(ts.contains(head), "{flow}: no `{head}` for {target}:\n{ts}");
+            }
+        }
+    }
+    for flow in ["tests/flows/plain_tasks.flow", "tests/flows/plain_tasks.ja.flow"] {
+        for target in ["temporal-python", "pydantic-graph"] {
+            let file = if target == "temporal-python" { "activities.py" } else { "tasks.py" };
+            let py = generated(flow, target, file);
+            for head in ["def print(", "def open(", "def format("] {
+                assert!(py.contains(head), "{flow}: no `{head}` for {target}:\n{py}");
+            }
+        }
+    }
+}
+
 /// In Go a method `Status` is a function of its own, over `RunStatus`, and reads the type `Where`,
 /// since the function has the message's name; a method of another name has the alias
 /// `Status`; a method `RunStatus` is the function there is; and `Answer` is a function over
@@ -413,6 +455,187 @@ fn the_status_and_the_answer_of_a_service_in_go() {
         let c = generated(flow, "temporal-go", "client.go");
         assert!(c.contains("func Answer(ctx context.Context, c client.Client, callbackID string, value Sent) error {\n\treturn AnswerCallback(ctx, c, callbackID, CallbackAnswer{OK: value})\n}"), "{flow}:\n{c}");
     }
+}
+
+/// Every `.flow` of the tree.
+fn every_flow(dir: &Path, out: &mut Vec<PathBuf>) {
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            if e.file_name() != "node_modules" && e.file_name() != ".venv" {
+                every_flow(&p, out);
+            }
+        } else if p.extension().is_some_and(|x| x == "flow") {
+            out.push(p);
+        }
+    }
+}
+
+/// Each flow of the tree that passes `check`, read as `ritsu dandori` reads it, with the code of
+/// each of `targets` it can write: the flows of a project's module, whose rules are read by the
+/// project, and a fixture of a check, have none.
+fn code_of_every_flow(targets: &[&'static str]) -> Vec<(String, &'static str, Vec<(String, String)>)> {
+    let mut flows = Vec::new();
+    every_flow(&root().join(".."), &mut flows);
+    flows.sort();
+    let mut out = Vec::new();
+    for f in flows {
+        let rules = rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine));
+        let checked = dandori::sources::with_ports(Rc::new(rules), Rc::new(koyomi::ports::Engine), Rc::new(chobo::ports::Engine), || dandori::check::built(&f));
+        let Ok((_, c)) = checked else { continue };
+        let Some(m) = c.model else { continue };
+        for target in targets {
+            if let Some(Ok(files)) = dandori::commands::build(&m, target) {
+                out.push((f.display().to_string(), *target, files));
+            }
+        }
+    }
+    out
+}
+
+/// What the Python of `dir` reads of `builtins` where the file does not bind the name itself, and
+/// every name of `builtins` it reads or binds.
+const PY_READS: &str = r#"
+import ast, builtins, json, os, sys
+names = {n for n in dir(builtins) if not n.startswith("__")}
+read, seen = set(), set()
+for r, _, fs in os.walk(sys.argv[1]):
+    for x in fs:
+        if not x.endswith(".py"):
+            continue
+        loads, binds = set(), set()
+        for n in ast.walk(ast.parse(open(os.path.join(r, x), encoding="utf-8").read())):
+            if isinstance(n, ast.Name):
+                (loads if isinstance(n.ctx, ast.Load) else binds).add(n.id)
+            elif isinstance(n, ast.arg):
+                binds.add(n.arg)
+            elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                binds.add(n.name)
+            elif isinstance(n, ast.ExceptHandler) and n.name:
+                binds.add(n.name)
+            elif isinstance(n, ast.alias):
+                binds.add((n.asname or n.name).split(".")[0])
+        read |= (loads - binds) & names
+        seen |= (loads | binds) & names
+print(json.dumps({"names": sorted(names), "read": sorted(read), "seen": sorted(seen)}))
+"#;
+
+/// `PY_MORE` keeps every builtin the Python of a flow of the tree reads, and no other: a builtin
+/// the code starts to read has to come into the table (a variable of the name would hide it),
+/// and one it stops reading has to leave, so that nobody is stopped for it. A name of the flow
+/// that is a builtin, which the file binds, is the flow's (`print` in tests/flows/plain_tasks.flow).
+#[test]
+fn the_table_of_python_is_the_builtins_the_code_reads() {
+    if !need(Need::Python) {
+        return;
+    }
+    let scratch = TempDir::new("dandori-spellings-builtins");
+    let code = code_of_every_flow(&["temporal-python", "pydantic-graph"]);
+    let mut written = BTreeSet::new();
+    for (i, (flow, target, files)) in code.iter().enumerate() {
+        written.insert(flow.clone());
+        for (name, text) in files {
+            let p = scratch.path().join(format!("{target}-{i}")).join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, text).unwrap();
+        }
+    }
+    let out = Command::new("python3").args(["-I", "-c", PY_READS]).arg(scratch.path()).output().unwrap();
+    assert!(out.status.success(), "{}", said(&out));
+    let got: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let names = |k: &str| -> BTreeSet<String> { got[k].as_array().unwrap().iter().map(|n| n.as_str().unwrap().to_string()).collect() };
+    use ritsu_emit::copies::dandori::PY_RESERVED;
+    use ritsu_emit::words::python::NAMES;
+    let short: Vec<String> = names("read").into_iter().filter(|n| !PY_RESERVED.contains(n)).collect();
+    assert!(short.is_empty(), "the Python reads {short:?}, which are not in `PY_MORE` (ritsu-emit's copies.rs): a variable of the flow would hide them");
+    let (seen, builtins) = (names("seen"), names("names"));
+    let idle: Vec<&str> = PY_RESERVED.iter().filter(|n| !NAMES.contains(n) && builtins.contains(*n) && !seen.contains(*n)).collect();
+    assert!(idle.is_empty(), "no code of a flow reads {idle:?}: take them out of `PY_MORE` (ritsu-emit's copies.rs), so that they stop nobody");
+    assert!(written.len() > 200, "the code of only {} flows", written.len());
+    eprintln!("the builtins of Python: compared the code of {} flows ({} packages)", written.len(), code.len());
+}
+
+/// The identifiers of TypeScript that read a type, in `text`: comments and strings taken out, and
+/// the values among the names (`Number.isInteger`, what follows a dot) left out.
+fn ts_type_reads(text: &str) -> BTreeSet<String> {
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = BTreeSet::new();
+    let mut i = 0;
+    let mut before = ' ';
+    while i < cs.len() {
+        let c = cs[i];
+        if c == '/' && cs.get(i + 1) == Some(&'/') {
+            while i < cs.len() && cs[i] != '\n' {
+                i += 1;
+            }
+        } else if c == '/' && cs.get(i + 1) == Some(&'*') {
+            i += 2;
+            while i + 1 < cs.len() && !(cs[i] == '*' && cs[i + 1] == '/') {
+                i += 1;
+            }
+            i += 2;
+        } else if c == '"' || c == '\'' || c == '`' {
+            i += 1;
+            while i < cs.len() && cs[i] != c {
+                i += if cs[i] == '\\' { 2 } else { 1 };
+            }
+            i += 1;
+            before = c;
+        } else if c.is_alphabetic() || c == '_' || c == '$' {
+            let start = i;
+            while i < cs.len() && (cs[i].is_alphanumeric() || cs[i] == '_' || cs[i] == '$') {
+                i += 1;
+            }
+            let word: String = cs[start..i].iter().collect();
+            let next = cs[i..].iter().find(|x| !x.is_whitespace()).copied().unwrap_or(' ');
+            if before != '.' && next != '.' {
+                out.insert(word);
+            }
+            before = 'a';
+        } else {
+            if !c.is_whitespace() {
+                before = c;
+            }
+            i += 1;
+        }
+    }
+    out
+}
+
+/// The global types of JavaScript and of TypeScript's own library: what a type of the name would
+/// hide, if the file reads it.
+const LIB_TYPES: &[&str] = &[
+    "Array", "ArrayBuffer", "AsyncIterable", "AsyncIterator", "Awaited", "BigInt", "Boolean", "DataView", "Date", "Error", "Exclude", "Extract", "Float32Array", "Float64Array", "Function", "Int16Array", "Int32Array", "Int8Array", "Iterable", "Iterator", "JSON", "Map", "Math", "NonNullable", "Number", "Object", "Omit", "Parameters", "Partial", "Pick", "Promise",
+    "PromiseLike", "Readonly", "ReadonlyArray", "ReadonlyMap", "ReadonlySet", "Record", "RegExp", "Required", "ReturnType", "Set", "String", "Symbol", "TextDecoder", "TextEncoder", "Uint16Array", "Uint32Array", "Uint8Array", "URL", "WeakMap", "WeakSet",
+];
+
+/// `TS_GLOBALS` keeps every global type `types.ts` reads and no other, and what `client.ts` reads is
+/// in the names its aliases cannot have, for every flow of the tree: a type hides a type, no value,
+/// and the other files read a flow's type as `T.Date`.
+#[test]
+fn the_table_of_typescript_is_the_global_types_the_code_reads() {
+    use dandori::temporal::CLIENT_NAMES;
+    use ritsu_emit::copies::dandori::TS_GLOBALS;
+    let mut in_types: BTreeSet<String> = BTreeSet::new();
+    let mut in_clients: BTreeSet<String> = BTreeSet::new();
+    let code = code_of_every_flow(&["temporal-typescript", "durable"]);
+    for (_, _, files) in &code {
+        for (name, text) in files {
+            let declared = |word: &str| [format!("export type {word} "), format!("export interface {word} ")].iter().any(|h| text.contains(h.as_str()));
+            let reads = || ts_type_reads(text).into_iter().filter(|w| LIB_TYPES.contains(&w.as_str()) && !declared(w));
+            if name.ends_with("/types.ts") {
+                in_types.extend(reads());
+            } else if name.ends_with("/client.ts") {
+                in_clients.extend(reads());
+            }
+        }
+    }
+    let read: BTreeSet<String> = TS_GLOBALS.iter().filter(|n| LIB_TYPES.contains(n)).map(|n| n.to_string()).collect();
+    assert_eq!(in_types, read, "the global types `types.ts` reads are not `TS_GLOBALS` (ritsu-emit's copies.rs)");
+    let short: Vec<&String> = in_clients.iter().filter(|n| !TS_GLOBALS.contains(&n.as_str()) && !CLIENT_NAMES.contains(&n.as_str())).collect();
+    assert!(short.is_empty(), "`client.ts` reads {short:?}, which are not in `CLIENT_NAMES` (src/temporal.rs): a message of the name would hide them");
+    assert!(code.len() > 300, "the code of only {} packages", code.len());
+    eprintln!("the globals of TypeScript: compared {} packages, {} of types and {} of clients", code.len(), in_types.len(), in_clients.len());
 }
 
 /// Every flow of the directory is a form above.

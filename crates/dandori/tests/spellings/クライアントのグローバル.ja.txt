@@ -1,0 +1,5 @@
+警告[W105]: tests/spellings/クライアントのグローバル.flow:1:37: サービスのメッセージ `client_global.ja.v1.Promise`は、TypeScript のコードでそのままの名前では使えません
+     1 | workflow クライアントのグローバル v1 implements svc.Svc
+  = TypeScript（`--target temporal-typescript`）：`client.ts` は `Promise` を自分で持っています。同じ名前を二度宣言できないので、モジュールが型の検査を通りません。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.proto` のメソッドかメッセージの名前を変えてください。メソッドの名前は Connect のパスでもあるので、呼ぶ側と合わせて変えてください。
+tests/spellings/クライアントのグローバル.flow: 検査を通りました（警告 1 件）

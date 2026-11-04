@@ -1,0 +1,84 @@
+# 普通の名前 v1
+
+生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞と、コードが読まない Python の組み込みと JavaScript のグローバルを、型と変数に使います。どのプラットフォームでも動きます
+
+`tests/flows/plain_names.ja.flow`, drawn by `dandori doc`. Inputs: `番号: string`. Outputs: `文: string`, `全部の値: 全部`.
+
+## flow
+
+```mermaid
+flowchart TD
+    start(["普通の名前 v1"])
+    s1["全部の値 = 集める(…)<br>lambda gather"]
+    s2["bytes = 書く(…)<br>lambda note"]
+    s3["callable = 書く(…)<br>lambda note"]
+    s4["format = 書く(…)<br>lambda note"]
+    s5["frozenset = 書く(…)<br>lambda note"]
+    s6["hasattr = 書く(…)<br>lambda note"]
+    s7["hash = 書く(…)<br>lambda note"]
+    s8["iter = 書く(…)<br>lambda note"]
+    s9["object = 書く(…)<br>lambda note"]
+    s10["open = 書く(…)<br>lambda note"]
+    s11["print = 書く(…)<br>lambda note"]
+    s12["repr = 書く(…)<br>lambda note"]
+    s13["reversed = 書く(…)<br>lambda note"]
+    s14["setattr = 書く(…)<br>lambda note"]
+    s15["slice = 書く(…)<br>lambda note"]
+    s16["sum = 書く(…)<br>lambda note"]
+    s17["vars = 書く(…)<br>lambda note"]
+    s18(["succeed 文 = #quot;{bytes}{callable}{format}{frozenset}{hasat…"])
+    start --> s1
+    s1 --> s2
+    s2 --> s3
+    s3 --> s4
+    s4 --> s5
+    s5 --> s6
+    s6 --> s7
+    s7 --> s8
+    s8 --> s9
+    s9 --> s10
+    s10 --> s11
+    s11 --> s12
+    s12 --> s13
+    s13 --> s14
+    s14 --> s15
+    s15 --> s16
+    s16 --> s17
+    s17 --> s18
+    classDef ok stroke:#2da44e,stroke-width:2px
+    classDef bad stroke:#cf222e,stroke-width:2px
+    class s18 ok
+```
+
+A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.
+
+## Calls
+
+| Line | Call | Calls | Retries | Timeout | When it fails |
+|---:|---|---|---|---|---|
+| 114 | `全部の値 = 集める(…)` | `lambda gather`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 115 | `bytes = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 116 | `callable = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 117 | `format = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 118 | `frozenset = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 119 | `hasattr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 120 | `hash = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 121 | `iter = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 122 | `object = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 123 | `open = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 124 | `print = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 125 | `repr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 126 | `reversed = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 127 | `setattr = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 128 | `slice = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 129 | `sum = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 130 | `vars = 書く(…)` | `lambda note`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+
+## Ends
+
+Every way the workflow can end.
+
+| Line | End |
+|---:|---|
+| 131 | `succeed 文 = "{bytes}{callable}{format}{frozenset}{hasattr}{hash}{iter}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値` |
+

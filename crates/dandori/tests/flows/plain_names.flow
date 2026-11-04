@@ -1,0 +1,131 @@
+workflow plain_names v1
+description "Names the generated code has no claim on, though they read like its own: the nouns a Go package might have, and the builtins of Python and the globals of JavaScript the code never reads, as types and variables. Runs on every platform"
+
+# the nouns of a business, which a Go package could have had
+enum Outcome = won | lost
+enum Status = opened | closed
+
+record Answer
+  text : string
+
+record History
+  entries : list[string]
+
+# the builtins of Python the code never reads
+enum bytes = a | b
+enum callable = a | b
+enum filter = a | b
+enum frozenset = a | b
+enum hasattr = a | b
+enum iter = a | b
+enum open = a | b
+enum print = a | b
+enum repr = a | b
+enum reversed = a | b
+enum setattr = a | b
+enum sum = a | b
+enum vars = a | b
+
+record format
+  width : int
+
+record hash
+  value : int
+
+record slice
+  start : int
+
+# the globals of JavaScript no type of the code reads as a type
+enum Boolean = a | b
+enum Function = a | b
+enum JSON = a | b
+enum Map = a | b
+enum Math = a | b
+enum Promise = a | b
+enum RegExp = a | b
+enum Set = a | b
+enum String = a | b
+enum Symbol = a | b
+
+record Date
+  day : date
+
+record Error
+  code : int
+
+record Number
+  count : int
+
+record Object
+  name : string
+
+record Everything
+  the_outcome : Outcome
+  the_status : Status
+  the_answer : Answer
+  the_history : History
+  the_bytes : bytes
+  the_callable : callable
+  the_filter : filter
+  the_format : format
+  the_frozenset : frozenset
+  the_hasattr : hasattr
+  the_hash : hash
+  the_iter : iter
+  the_open : open
+  the_print : print
+  the_repr : repr
+  the_reversed : reversed
+  the_setattr : setattr
+  the_slice : slice
+  the_sum : sum
+  the_vars : vars
+  the_boolean : Boolean
+  the_date : Date
+  the_error : Error
+  the_function : Function
+  the_json : JSON
+  the_map : Map
+  the_math : Math
+  the_number : Number
+  the_object : Object
+  the_promise : Promise
+  the_regexp : RegExp
+  the_set : Set
+  the_string : String
+  the_symbol : Symbol
+
+inputs
+  id : string
+
+outputs
+  text : string
+  everything : Everything
+
+task gather(id: string) -> Everything
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+task note(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+flow
+  let everything = gather(id: id)
+  let bytes = note(id: id)
+  let callable = note(id: id)
+  let format = note(id: id)
+  let frozenset = note(id: id)
+  let hasattr = note(id: id)
+  let hash = note(id: id)
+  let iter = note(id: id)
+  let object = note(id: id)
+  let open = note(id: id)
+  let print = note(id: id)
+  let repr = note(id: id)
+  let reversed = note(id: id)
+  let setattr = note(id: id)
+  let slice = note(id: id)
+  let sum = note(id: id)
+  let vars = note(id: id)
+  succeed text = "{bytes}{callable}{format}{frozenset}{hasattr}{hash}{iter}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", everything = everything

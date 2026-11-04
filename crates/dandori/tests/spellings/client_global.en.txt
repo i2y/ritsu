@@ -1,0 +1,5 @@
+warning[W105]: tests/spellings/client_global.flow:1:38: The service's message `client_global.v1.Promise` cannot keep its name in the code of TypeScript
+     1 | workflow client_global v1 implements svc.Svc
+  = TypeScript (`--target temporal-typescript`): `client.ts` has `Promise` itself: a name cannot be declared twice, so the module does not type-check.
+  = For a target you do not build, leave it as it is. For one you do, rename the method or the message in the `.proto`. A method's name is also its path on Connect, so change the callers with it.
+tests/spellings/client_global.flow: ok (1 warning(s))

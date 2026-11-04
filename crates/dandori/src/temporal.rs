@@ -214,8 +214,8 @@ impl Flavor {
     }
 }
 
-/// The globals of JavaScript a type's name would hide, and the generated code's (ritsu-emit's
-/// copy of the table that was kept here).
+/// The names a type's name cannot be in `types.ts`: the global types it reads, and what it declares
+/// (ritsu-emit's copy of the table that was kept here).
 use ritsu_emit::copies::dandori::TS_GLOBALS;
 
 pub(crate) fn type_name(name: &str) -> String {
@@ -615,14 +615,17 @@ export function encryptedClient(connection: Connection, codec: PayloadCodec, opt
 /// one of these names cannot be written, as for one of the client's own names (1.14; W105).
 pub const ENCRYPTED_CLIENT: &[&str] = &["Connection", "ClientOptions", "PayloadCodec", "encrypted", "EncryptedClient", "encryptedClient"];
 
+/// What client.ts declares and imports, and the global types it reads, which an alias of a message
+/// of the name would hide: a message's type cannot be one of them (W105).
+pub const CLIENT_NAMES: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy", "AsyncIterable", "Awaited", "Omit", "Promise", "ReturnType"];
+
 /// client.ts, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
 /// client's own `start`, `send`, `answer` or `status`. And the names it could not write.
 fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
-    const OTHERS: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy"];
     let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
-    let own: Vec<(String, With)> = OTHERS.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
+    let own: Vec<(String, With)> = CLIENT_NAMES.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
     let mut names = ClientNames::new(own, FUNCTIONS);
     let mut c = String::new();
     c.push_str(&format!("\n/** The service the workflow implements, which `{}` describes. Its methods are the functions below. */\nexport const SERVICE = {};\n", s.file, q(&s.name)));
@@ -707,7 +710,7 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
             } else if plain.starts_with("Workflow") {
                 tr!("`types.ts` は `{plain}` を自分で宣言します。同じ名前を二度宣言できないので、モジュールが型の検査を通りません（`Duplicate identifier`）。", "`types.ts` declares `{plain}` itself: a name cannot be declared twice as a type, so the module does not type-check (`Duplicate identifier`).")
             } else {
-                tr!("`{plain}` は JavaScript のグローバルです。同じ名前の型は、生成するコードが読む `{plain}` を隠します。", "`{plain}` is a global of JavaScript, and a type of that name hides the one the code reads.")
+                tr!("`{plain}` は JavaScript のグローバルな型で、`types.ts` が読みます。同じ名前の型は、それを隠します。", "`{plain}` is a global type of JavaScript that `types.ts` reads, and a type of that name hides it.")
             };
             said(&["temporal-typescript", "durable"], plain, Name::Type(n.clone()), why);
         }

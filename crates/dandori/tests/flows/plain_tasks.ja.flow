@@ -1,0 +1,48 @@
+workflow 普通のタスク v1
+description "コードが読まない Python の組み込みと同じ名前の、自分で実装するタスクです。それぞれ同じ名前の変数に受けます。"
+
+inputs
+  番号 : string
+
+outputs
+  文 : string
+
+task bytes(番号: string) -> string
+task callable(番号: string) -> string
+task filter(番号: string) -> string
+task format(番号: string) -> string
+task frozenset(番号: string) -> string
+task hasattr(番号: string) -> string
+task hash(番号: string) -> string
+task iter(番号: string) -> string
+task map(番号: string) -> string
+task object(番号: string) -> string
+task open(番号: string) -> string
+task print(番号: string) -> string
+task repr(番号: string) -> string
+task reversed(番号: string) -> string
+task setattr(番号: string) -> string
+task slice(番号: string) -> string
+task sum(番号: string) -> string
+task vars(番号: string) -> string
+
+flow
+  let bytes = bytes(番号: 番号)
+  let callable = callable(番号: 番号)
+  let filter = filter(番号: 番号)
+  let format = format(番号: 番号)
+  let frozenset = frozenset(番号: 番号)
+  let hasattr = hasattr(番号: 番号)
+  let hash = hash(番号: 番号)
+  let iter = iter(番号: 番号)
+  let map = map(番号: 番号)
+  let object = object(番号: 番号)
+  let open = open(番号: 番号)
+  let print = print(番号: 番号)
+  let repr = repr(番号: 番号)
+  let reversed = reversed(番号: 番号)
+  let setattr = setattr(番号: 番号)
+  let slice = slice(番号: 番号)
+  let sum = sum(番号: 番号)
+  let vars = vars(番号: 番号)
+  succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}"

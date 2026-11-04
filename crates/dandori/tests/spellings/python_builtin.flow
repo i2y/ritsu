@@ -7,8 +7,8 @@ inputs
 outputs
   text : string
 
-task format(id: string) -> string
+task str(id: string) -> string
 
 flow
-  let t = format(id: id)
+  let t = str(id: id)
   succeed text = t

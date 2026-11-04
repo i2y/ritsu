@@ -26,8 +26,8 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What a flow's name cannot be in the generated Python, with an `_` after it when it is:
-/// the keywords, the builtins, and the names the generated code uses (ritsu-emit's copy of
-/// the table that was kept here).
+/// the keywords, the builtins the generated code reads, and the names it uses (ritsu-emit's copy
+/// of the table that was kept here).
 use ritsu_emit::copies::dandori::PY_RESERVED;
 
 /// A name of the flow as a Python identifier.
@@ -421,7 +421,7 @@ fn reserved_why(plain: &str, id: &str) -> Text {
     } else if KEYWORDS.contains(&plain) || SOFT_KEYWORDS.contains(&plain) {
         tr!("`{plain}` は Python のキーワードです。生成するコードはこの名前で宣言できません。", "`{plain}` is a keyword of Python: the code cannot declare it by that name.")
     } else {
-        tr!("`{plain}` は、生成するコードが使う名前か、隠してしまう Python の組み込みの名前です。", "`{plain}` is a name the code uses itself, or a builtin of Python it would hide.")
+        tr!("`{plain}` は、生成するコードが使う名前か、読む Python の組み込みの名前です。同じ名前にすると、それを隠します。", "`{plain}` is a name the code uses itself, or a builtin of Python it reads, and a name of the flow would hide it.")
     }
 }
 

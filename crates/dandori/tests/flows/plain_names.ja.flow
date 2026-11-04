@@ -1,0 +1,131 @@
+workflow 普通の名前 v1
+description "生成するコードが自分のものにしない名前です。Go のパッケージが持ちそうな名詞と、コードが読まない Python の組み込みと JavaScript のグローバルを、型と変数に使います。どのプラットフォームでも動きます"
+
+# Go のパッケージが持ってもおかしくない、業務の名詞
+enum Outcome = 勝ち | 負け
+enum Status = 受付 | 完了
+
+record Answer
+  文 : string
+
+record History
+  記録 : list[string]
+
+# コードが読まない Python の組み込み
+enum bytes = 甲 | 乙
+enum callable = 甲 | 乙
+enum filter = 甲 | 乙
+enum frozenset = 甲 | 乙
+enum hasattr = 甲 | 乙
+enum iter = 甲 | 乙
+enum open = 甲 | 乙
+enum print = 甲 | 乙
+enum repr = 甲 | 乙
+enum reversed = 甲 | 乙
+enum setattr = 甲 | 乙
+enum sum = 甲 | 乙
+enum vars = 甲 | 乙
+
+record format
+  幅 : int
+
+record hash
+  値 : int
+
+record slice
+  始め : int
+
+# コードの型が型として読まない JavaScript のグローバル
+enum Boolean = 甲 | 乙
+enum Function = 甲 | 乙
+enum JSON = 甲 | 乙
+enum Map = 甲 | 乙
+enum Math = 甲 | 乙
+enum Promise = 甲 | 乙
+enum RegExp = 甲 | 乙
+enum Set = 甲 | 乙
+enum String = 甲 | 乙
+enum Symbol = 甲 | 乙
+
+record Date
+  日 : date
+
+record Error
+  番号 : int
+
+record Number
+  数 : int
+
+record Object
+  名前 : string
+
+record 全部
+  outcomeの欄 : Outcome
+  statusの欄 : Status
+  answerの欄 : Answer
+  historyの欄 : History
+  bytesの欄 : bytes
+  callableの欄 : callable
+  filterの欄 : filter
+  formatの欄 : format
+  frozensetの欄 : frozenset
+  hasattrの欄 : hasattr
+  hashの欄 : hash
+  iterの欄 : iter
+  openの欄 : open
+  printの欄 : print
+  reprの欄 : repr
+  reversedの欄 : reversed
+  setattrの欄 : setattr
+  sliceの欄 : slice
+  sumの欄 : sum
+  varsの欄 : vars
+  booleanの欄 : Boolean
+  dateの欄 : Date
+  errorの欄 : Error
+  functionの欄 : Function
+  jsonの欄 : JSON
+  mapの欄 : Map
+  mathの欄 : Math
+  numberの欄 : Number
+  objectの欄 : Object
+  promiseの欄 : Promise
+  regexpの欄 : RegExp
+  setの欄 : Set
+  stringの欄 : String
+  symbolの欄 : Symbol
+
+inputs
+  番号 : string
+
+outputs
+  文 : string
+  全部の値 : 全部
+
+task 集める(番号: string) -> 全部
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:gather"
+  idempotent
+
+task 書く(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+flow
+  let 全部の値 = 集める(番号: 番号)
+  let bytes = 書く(番号: 番号)
+  let callable = 書く(番号: 番号)
+  let format = 書く(番号: 番号)
+  let frozenset = 書く(番号: 番号)
+  let hasattr = 書く(番号: 番号)
+  let hash = 書く(番号: 番号)
+  let iter = 書く(番号: 番号)
+  let object = 書く(番号: 番号)
+  let open = 書く(番号: 番号)
+  let print = 書く(番号: 番号)
+  let repr = 書く(番号: 番号)
+  let reversed = 書く(番号: 番号)
+  let setattr = 書く(番号: 番号)
+  let slice = 書く(番号: 番号)
+  let sum = 書く(番号: 番号)
+  let vars = 書く(番号: 番号)
+  succeed 文 = "{bytes}{callable}{format}{frozenset}{hasattr}{hash}{iter}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値

@@ -1,5 +1,5 @@
-warning[W105]: tests/spellings/python_builtin.flow:10:6: The task `format` cannot keep its name in the code of Python
-    10 | task format(id: string) -> string
-  = Python (`--target temporal-python`, `--target pydantic-graph`): `format` is a name the code uses itself, or a builtin of Python it would hide.
+warning[W105]: tests/spellings/python_builtin.flow:10:6: The task `str` cannot keep its name in the code of Python
+    10 | task str(id: string) -> string
+  = Python (`--target temporal-python`, `--target pydantic-graph`): `str` is a name the code uses itself, or a builtin of Python it reads, and a name of the flow would hide it.
   = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
 tests/spellings/python_builtin.flow: ok (1 warning(s))

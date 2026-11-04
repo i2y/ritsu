@@ -1,0 +1,48 @@
+workflow plain_tasks v1
+description "Tasks you implement named as the builtins of Python the code never reads, each read into a variable of its name."
+
+inputs
+  id : string
+
+outputs
+  text : string
+
+task bytes(id: string) -> string
+task callable(id: string) -> string
+task filter(id: string) -> string
+task format(id: string) -> string
+task frozenset(id: string) -> string
+task hasattr(id: string) -> string
+task hash(id: string) -> string
+task iter(id: string) -> string
+task map(id: string) -> string
+task object(id: string) -> string
+task open(id: string) -> string
+task print(id: string) -> string
+task repr(id: string) -> string
+task reversed(id: string) -> string
+task setattr(id: string) -> string
+task slice(id: string) -> string
+task sum(id: string) -> string
+task vars(id: string) -> string
+
+flow
+  let bytes = bytes(id: id)
+  let callable = callable(id: id)
+  let filter = filter(id: id)
+  let format = format(id: id)
+  let frozenset = frozenset(id: id)
+  let hasattr = hasattr(id: id)
+  let hash = hash(id: id)
+  let iter = iter(id: id)
+  let map = map(id: id)
+  let object = object(id: id)
+  let open = open(id: id)
+  let print = print(id: id)
+  let repr = repr(id: id)
+  let reversed = reversed(id: id)
+  let setattr = setattr(id: id)
+  let slice = slice(id: id)
+  let sum = sum(id: id)
+  let vars = vars(id: id)
+  succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}"

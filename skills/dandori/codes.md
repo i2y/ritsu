@@ -40,7 +40,7 @@ how to fix it, and the smallest `.flow` that gets it.
 | W102 | an `on <refusal>` that can never happen |
 | W103 | a task that starts a case without a `key` |
 | W104 | a value whose range nothing says, where a range is (`now` in a workflow that says no period it runs in, and in `on failure` and `on cancel`, too) |
-| W105 | a name the code of a platform cannot keep: two names are one identifier there (`send_mail` and `sendMail` in Go), or the code has the name itself (`Transport` in Go, `Date` in TypeScript, `format` in Python). `gen` stops for that platform (E051) |
+| W105 | a name the code of a platform cannot keep: two names are one identifier there (`send_mail` and `sendMail` in Go), or the code has the name itself (`Transport` in Go, `Array` in TypeScript, `str` in Python). `gen` stops for that platform (E051) |
 | W901 | a value in the shape of a key (an AWS access key ID; a GitHub, Slack, Stripe, OpenAI, Anthropic or Google key or token; a Slack incoming webhook URL; a PEM private key) written in the `.flow`, in a string or a comment; the line that says `ritsu: test secret` is a value for tests |
 | W902 | a URL a task calls over plain HTTP, to a host that is not this machine (an `http` task's URL, an agent's `url`, `use rule … connect`, the `url` of `use openapi` and `use proto`, an OpenAPI document's first server), unless `plaintext "<why>"` is written where the URL is |
 | W904 | a value marked secret kept in the history of the workflow: an input or an output, the answer of a task, an argument of a call, the reason of a `fail`; unless the workflow says `history encrypted` |

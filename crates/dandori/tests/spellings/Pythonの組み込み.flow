@@ -7,8 +7,8 @@ inputs
 outputs
   文 : string
 
-task format(番号: string) -> string
+task str(番号: string) -> string
 
 flow
-  let t = format(番号: 番号)
+  let t = str(番号: 番号)
   succeed 文 = t

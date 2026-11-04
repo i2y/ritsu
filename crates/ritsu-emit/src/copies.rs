@@ -226,22 +226,24 @@ pub mod rulec {
     pub const BACKENDS: &[Backend] = &[PYTHON, NUMPY, TYPESCRIPT, JAVASCRIPT, RUST, RUBY, PHP, GO, SWIFT, JAVA, SQL, WASM];
 }
 
-/// dandori's: the names a flow's name gives way to in the generated Python, Go and TypeScript,
-/// with a `_` after it — the language's words and the names the generated code uses itself.
+/// dandori's: the names the generated Python, Go and TypeScript keep for themselves — the language's
+/// words, the builtins and the globals the code reads, and the names it uses itself. A type, a
+/// task you implement or a message of one of these names is W105, which stops that target
+/// (dandori's DESIGN 22); a variable, which no caller reads, gets a `_` after it.
 pub mod dandori {
     use super::*;
 
-    /// The builtins of Python the generated code would hide, and the names it uses.
+    /// The builtins of Python the generated code reads, which a name of the flow would hide (no
+    /// other: `print` or `format` hide nothing, and stop nothing), and the names it uses.
+    /// dandori's `tests/spellings.rs` holds the builtins to what the code of every flow reads.
     const PY_MORE: &[&str] = &[
-        "abs", "all", "any", "bool", "bytes", "callable", "dict", "enumerate", "Exception",
-        "filter", "float", "format", "frozenset", "getattr", "hasattr", "hash", "id", "input",
-        "int", "isinstance", "iter", "len", "list", "map", "max", "min", "next", "object", "open",
-        "print", "range", "repr", "reversed", "round", "set", "setattr", "slice", "sorted", "str",
-        "sum", "super", "tuple", "vars", "zip", "self", "T", "dd", "io", "asyncio", "timedelta",
-        "workflow", "activity", "json", "re", "Any", "Literal", "NotRequired", "Protocol",
-        "TypedDict", "ApplicationError", "RetryPolicy", "NO_RETRY", "TIMESTAMP", "is_int", "rules",
-        "workflows", "fail", "own", "make_activities", "WorkflowInput", "WorkflowOutput",
-        "OwnTasks",
+        "abs", "all", "any", "BaseException", "bool", "dict", "enumerate", "Exception", "float",
+        "getattr", "id", "input", "int", "isinstance", "len", "list", "max", "min", "next", "range",
+        "round", "RuntimeError", "set", "sorted", "str", "super", "TimeoutError", "tuple",
+        "ValueError", "zip", "self", "T", "dd", "io", "asyncio", "timedelta", "workflow",
+        "activity", "json", "re", "Any", "Literal", "NotRequired", "Protocol", "TypedDict",
+        "ApplicationError", "RetryPolicy", "NO_RETRY", "TIMESTAMP", "is_int", "rules", "workflows",
+        "fail", "own", "make_activities", "WorkflowInput", "WorkflowOutput", "OwnTasks",
     ];
 
     /// `PY_RESERVED`: Python's keywords and soft keywords, and [`PY_MORE`].
@@ -270,9 +272,9 @@ pub mod dandori {
         "IsWorkflowInput", "Decode", "TIMESTAMP", "Service",
     ];
 
-    /// `TS_GLOBALS`: the globals of JavaScript a type's name would hide, and the generated code's.
-    pub const TS_GLOBALS: &[&str] = &[
-        "Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object",
-        "Promise", "RegExp", "Set", "String", "Symbol", "WorkflowInput", "WorkflowOutput",
-    ];
+    /// `TS_GLOBALS`: the names a type's name cannot be in `types.ts` (W105): the global types it
+    /// reads, which a type of the name would hide, and what it declares for itself. A type hides no
+    /// value (`Number.isInteger` still reads the global), and the other files read a type as `T.Date`.
+    /// dandori's `tests/spellings.rs` holds the globals to what the code of every flow reads.
+    pub const TS_GLOBALS: &[&str] = &["Array", "Record", "WorkflowInput", "WorkflowOutput"];
 }

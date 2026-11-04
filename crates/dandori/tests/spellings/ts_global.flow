@@ -1,7 +1,7 @@
 workflow ts_global v1
 description "A record named as a global of JavaScript."
 
-record Date
+record Array
   day : string
 
 inputs
@@ -10,7 +10,7 @@ inputs
 outputs
   day : string
 
-task when(id: string) -> Date
+task when(id: string) -> Array
 
 flow
   let d = when(id: id)

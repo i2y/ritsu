@@ -1,7 +1,7 @@
 警告[W105]: tests/spellings/workflow_input.flow:4:8: 型 `WorkflowInput`は、TypeScript、Python、Go のコードでそのままの名前では使えません
      4 | record WorkflowInput
   = TypeScript（`--target temporal-typescript`, `--target durable`）：`types.ts` は `WorkflowInput` を自分で宣言します。同じ名前を二度宣言できないので、モジュールが型の検査を通りません（`Duplicate identifier`）。
-  = Python（`--target temporal-python`, `--target pydantic-graph`）：`WorkflowInput` は、生成するコードが使う名前か、隠してしまう Python の組み込みの名前です。
+  = Python（`--target temporal-python`, `--target pydantic-graph`）：`WorkflowInput` は、生成するコードが使う名前か、読む Python の組み込みの名前です。同じ名前にすると、それを隠します。
   = Go（`--target temporal-go`）：`IsWorkflowInput` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。
   = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
 tests/spellings/workflow_input.flow: 検査を通りました（警告 1 件）
