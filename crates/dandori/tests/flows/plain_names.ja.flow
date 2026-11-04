@@ -114,11 +114,13 @@ flow
   let 全部の値 = 集める(番号: 番号)
   let bytes = 書く(番号: 番号)
   let callable = 書く(番号: 番号)
+  let filter = 書く(番号: 番号)
   let format = 書く(番号: 番号)
   let frozenset = 書く(番号: 番号)
   let hasattr = 書く(番号: 番号)
   let hash = 書く(番号: 番号)
   let iter = 書く(番号: 番号)
+  let map = 書く(番号: 番号)
   let object = 書く(番号: 番号)
   let open = 書く(番号: 番号)
   let print = 書く(番号: 番号)
@@ -128,4 +130,4 @@ flow
   let slice = 書く(番号: 番号)
   let sum = 書く(番号: 番号)
   let vars = 書く(番号: 番号)
-  succeed 文 = "{bytes}{callable}{format}{frozenset}{hasattr}{hash}{iter}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値
+  succeed 文 = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", 全部の値 = 全部の値

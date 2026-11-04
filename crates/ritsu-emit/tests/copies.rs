@@ -24,6 +24,7 @@ fn rendered() -> String {
     line("dandori", "GO_RESERVED", copies::dandori::GO_RESERVED.iter().collect());
     line("dandori", "GO_EXPORTED", copies::dandori::GO_EXPORTED.to_vec());
     line("dandori", "TS_GLOBALS", copies::dandori::TS_GLOBALS.to_vec());
+    line("dandori", "JSONATA_FUNCTIONS", copies::dandori::JSONATA_FUNCTIONS.to_vec());
     o
 }
 

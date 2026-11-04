@@ -279,4 +279,14 @@ pub mod dandori {
     /// value (`Number.isInteger` still reads the global), and the other files read a type as `T.Date`.
     /// dandori's `tests/spellings.rs` holds the globals to what the code of every flow reads.
     pub const TS_GLOBALS: &[&str] = &["Array", "Record", "WorkflowInput", "WorkflowOutput"];
+
+    /// `JSONATA_FUNCTIONS`: the functions of JSONata the generated state machines call. A variable
+    /// of the name would hide the function, so the machine has it by another name (dandori's
+    /// `render::asl_var`). dandori's `tests/spellings.rs` holds them to what the machine of every
+    /// flow calls.
+    pub const JSONATA_FUNCTIONS: &[&str] = &[
+        "abs", "append", "ceil", "contains", "count", "each", "encodeUrlComponent", "error", "exists",
+        "filter", "floor", "join", "keys", "lookup", "lowercase", "map", "max", "merge", "not",
+        "number", "parse", "reduce", "sift", "string", "substring", "toMillis", "type",
+    ];
 }

@@ -114,11 +114,13 @@ flow
   let everything = gather(id: id)
   let bytes = note(id: id)
   let callable = note(id: id)
+  let filter = note(id: id)
   let format = note(id: id)
   let frozenset = note(id: id)
   let hasattr = note(id: id)
   let hash = note(id: id)
   let iter = note(id: id)
+  let map = note(id: id)
   let object = note(id: id)
   let open = note(id: id)
   let print = note(id: id)
@@ -128,4 +130,4 @@ flow
   let slice = note(id: id)
   let sum = note(id: id)
   let vars = note(id: id)
-  succeed text = "{bytes}{callable}{format}{frozenset}{hasattr}{hash}{iter}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", everything = everything
+  succeed text = "{bytes}{callable}{filter}{format}{frozenset}{hasattr}{hash}{iter}{map}{object}{open}{print}{repr}{reversed}{setattr}{slice}{sum}{vars}", everything = everything

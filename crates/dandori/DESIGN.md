@@ -2805,18 +2805,20 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
    | 同じ名前のメッセージ型が二つの型を指す | 違うパッケージの `Sent` | 同じ三つ |
 
 4. **同じメッセージを取る二つのメソッドは、一つの型にする。** `type SentRPC = Sent` を一度だけ書く（`ClientNames::message`）。Go のレコードがメッセージの名前と同じなら、別名を書かずにその型を使う。前は組めなかった形で、W105 は言わない。
-5. **外から見えない名前は、そのままにする。** 流れの変数（`go_name`、`py_name`）、自分で実装しないタスクの Python のメソッド、Argo のテンプレートと Step Functions のステートの名前、`rules.ts` の読み込みの別名、Argo の `caller/types.ts`（`Array_`）は、呼ぶ側が読まない。E006 の `same_generated_names` も同じものを読むので、`type_name` 自体は変えていない。
+5. **外から見えない名前は、そのままにする。** 流れの変数（`go_name`、`py_name`、`asl_var`）、自分で実装しないタスクの Python のメソッド、Argo のテンプレートと Step Functions のステートの名前、`rules.ts` の読み込みの別名、Argo の `caller/types.ts`（`Array_`）は、呼ぶ側が読まない。E006 の `same_generated_names` も同じものを読むので、`type_name` 自体は変えていない。
 6. **Go のパッケージは、業務の型に自然な名詞を取らない。** Go は型と関数が一つの名前空間で、どちらも大文字で公開する。パッケージが `Outcome`、`History`、`Answer`、`Status` を持つと、`enum Outcome` や `record Answer` が `--target temporal-go` だけで止まる。そこでパッケージの名前を `CallOutcome`（Lambda か AWS の API が答えたもの）、`RunHistory`（実行の履歴）、`AnswerCallback`（コールバックに答える）、`RunStatus`（実行がどこにいるか）にした。TypeScript と Python は大文字と小文字で分かれる（関数は `answer`、`status`）ので変えない。`Start`、`Send`、`Histories`、`Where`、`Replay`、`Decode`、`Transport` は、型の名前として稀か、API として読まれるので変えない。
 7. **Go のサービスの状態。** `rpc Status` は、`RunStatus` を呼ぶ関数 `Status` になる。応答の `dandori.v1.Status` は、別名を書くと関数と同じ名前になるので書かず、型は `Where` を読む。組めるので W105 は言わない。`rpc GetStatus` は別名 `type Status = Where` を書く。`record Status` があれば別名は書かずに `Where` を読み、組める。`record Status` の隣の `rpc Status` は、関数とレコードが一つの名前になるので W105 である。
 8. **表は、生成するコードが読む名前だけを持つ。** 書いたまま組めて動く名前は止めない。`PY_MORE` の組み込みは、temporal-python と pydantic-graph の生成物に現れるものだけにして、`bytes`、`callable`、`filter`、`format`、`frozenset`、`hasattr`、`hash`、`iter`、`map`、`object`、`open`、`print`、`repr`、`reversed`、`setattr`、`slice`、`sum`、`vars` を外した。生成物が読むのに無かった `BaseException`、`RuntimeError`、`TimeoutError`、`ValueError` を足した（この名前の変数が、読むものを隠していた）。`TS_GLOBALS` は、`types.ts` が型として読む `Array` と `Record`、自分で宣言する `WorkflowInput` と `WorkflowOutput` だけにした。TypeScript の型は値を隠さず（`Number.isInteger` はグローバルを読む）、ほかのファイルは `T.Date` と読むので、`Date`、`Error`、`Map` は通る。`client.ts` が型として読む `Promise`、`Omit`、`Awaited`、`ReturnType`、`AsyncIterable` は、メッセージの別名だけが隠すので、`temporal::CLIENT_NAMES` に入れた。表が生成物から離れないように、`tests/spellings.rs` が木の全部の `.flow` の生成物と比べる。
 9. **クライアントにもとからある関数と同じ名前のメソッド。** 三つの言語で同じに扱う。同じことをするなら関数を書かない（TypeScript と Python の始めのメソッドの `rpc Start`、状態のメソッドの `rpc Status`、Go の始めのメソッドの `rpc Start`、状態のメソッドの `rpc RunStatus`）。違うことをするなら W105 である（始めのメソッドの `rpc Send`、状態のメソッドの `rpc Histories`、Go の始めのメソッドの `rpc RunStatus`）。何も書かないと、呼ぶ側は `start` のつもりで、イベントを送る `send` を読む。
 10. **フローによってコードが宣言する名前は、そのフローのときだけ数える。** Go のパッケージは、`Service` をサービスを持つフローで、`BookCall`、`BookResult`、`BookTransport` を帳簿の操作を動かすフローで、`DATE` を日付を持つフローで宣言する（`own_names`）。ほかのフローでは、どれも型の名前に使える（`go_no_date_no_book`）。Python の `types.py` も日付を持つフローで `DATE` を宣言して日付の検査に使うので、同じに止める。同じ名前の型があると検査が読むものが置き換わり、`DATE.match` が実行のときに落ちる。TypeScript の `types.ts` の `export const DATE` は値で、型の名前とぶつからないので止めない。
+11. **Step Functions の変数は、JSONata の関数を隠さない。** 生成した式は関数も変数も `$` で読むので、`$count` という変数があると、`$count(…)` は関数を呼べず `States.QueryEvaluationError` になる。そこで `render::asl_var` は、`states` と、ステートマシンが呼ぶ関数の名前（`copies.rs` の `JSONATA_FUNCTIONS`。27 個）を `v_<名前>` にする。`let count` は `$v_count` である。フローが `v_count` も持つなら、それは `v_v_count` にして、二つの名前を一つの変数にしない。入力と出力の JSON のキーは書いた名前のままである（入力 `type` は `$states.input.type` から `$v_type` に入り、出力は `"type": "{% $v_type %}"`）。変数は呼ぶ側が読まないので、W105 は言わない。
 
 ### 22.4 捨てたもの
 
 - 1.14 と 1.18 の、`.proto` を変えられない利用者のために生成する側で避ける形を残すこと。この章で逆にした。残すと、呼ぶ側が読む名前が言語ごとに `.flow` と違うままになる。`.proto` を変えられない利用者は、W105 が挙げる出力先を使えず、挙げない出力先を使う。
 - 表を、名前が読まれるファイルと範囲で分けること（`next` は、`OwnTasks` のメソッドなら何も隠さない）。読む場所は生成器の都合で動くので、直すたびに止まる名前が変わる。一つの言語に一つの表なら、読む名前を変数に使っても壊れないことを、表と生成物の比較だけで確かめられる。`task next` のように、組めるのに止まる名前は残る。
 - E006 にすること。挙げない出力先では組めるので、それらの出力先を使う人まで止める。
+- Step Functions の変数の名前を W105 にすること。呼ぶ側が読まない名前のために、`.flow` の名前を変えさせることになる。
 
 ### 22.5 変わること
 
@@ -2824,21 +2826,23 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 - 始めのメソッドの `rpc Send`、状態のメソッドの `rpc Histories` のように、もとからある関数と違うことをするメソッドを持つフローは、temporal-typescript と temporal-python でも `gen` が止まる。前は関数を書かず、何も言わずに通っていた。
 - 日付を持つフローの型 `DATE` と、帳簿の操作を動かすフローの型 `BookCall`、`BookResult`、`BookTransport` は、W105 が挙げる出力先の `gen` が止まる。前は `gen` が書いて、`go vet` が止め、Python の `DATE` は `mypy --strict` が止めて、実行すると日付の検査で落ちた。
 - `--target temporal-go` の生成物は、どのフローもバイト列が変わる。生成物を読む Go のコードは、`Outcome` を `CallOutcome` に、`History` を `RunHistory` に、`Answer` を `AnswerCallback` に、`Status` を `RunStatus` に書き換える。
+- Step Functions の生成物は、流れの変数が 22.3 の 11 の名前のフローだけ変わる。呼ぶ側が読むもの（入力と出力の JSON のキー）は変わらない。前は、その関数を読むステートマシンが `States.QueryEvaluationError` で落ちた。木のフローで前から変数が当たるのは `tests/flows/paths.flow` の `count` と `preconditions.flow` の `each` で、どちらも関数を読まないので落ちていなかった。
 - ほかの出力先は、形に当たらないフローの生成物は一字も変わらない。
 - 型、タスク、メッセージの `format`、`Date` のような名前は止まらなくなり、変数の `format` は `_` が付かなくなる。木の `.flow` のうち、この章の材料のほかに、そういう変数を持つものは無い。
 
 ### 22.6 確かめたこと
 
-- `tests/spellings.rs`（15）と、材料の `tests/spellings/`（28 の形。英語を先に、日本語の版を横に置いて 56 本、どれも英日の golden を持つ）。どのフローも形ごとに決めた出力先を W105 で挙げ、挙げる出力先の `dandori gen` は E051 で何も書かない。注のとおりに名前を変えた版（`tests/spellings/renamed/`）は何も言われない。
-- ツールの段で、止まらないものを言語の道具に通した。`tsc --strict` は 108 本、`go vet` は 88 本、`mypy --strict` は 100 本のフローが通る。止まるものを検査をせずに書くと、`go vet` と `mypy --strict` が止める（`what_stops_would_not_work`）。
-- どの形にも当たらないフロー（`FREE` の 16 本）は何も言われず、どの出力先でも E051 にならない（`what_no_code_keeps_is_said_nothing`）。`client_status`、`client_run_status`、`client_status_beside` は Go のサービスの状態（22.3 の 7）の材料で、書く関数と別名は `the_status_and_the_answer_of_a_service_in_go` が確かめる。
+- `tests/spellings.rs`（17）と、材料の `tests/spellings/`（28 の形。英語を先に、日本語の版を横に置いて 56 本、どれも英日の golden を持つ）。どのフローも形ごとに決めた出力先を W105 で挙げ、挙げる出力先の `dandori gen` は E051 で何も書かない。注のとおりに名前を変えた版（`tests/spellings/renamed/`）は何も言われない。
+- ツールの段で、止まらないものを言語の道具に通した。`tsc --strict` は 110 本、`go vet` は 90 本、`mypy --strict` は 102 本のフローが通る。止まるものを検査をせずに書くと、`go vet` と `mypy --strict` が止める（`what_stops_would_not_work`）。
+- どの形にも当たらないフロー（`FREE` の 18 本）は何も言われず、どの出力先でも E051 にならない（`what_no_code_keeps_is_said_nothing`）。`client_status`、`client_run_status`、`client_status_beside` は Go のサービスの状態（22.3 の 7）の材料で、書く関数と別名は `the_status_and_the_answer_of_a_service_in_go` が確かめる。
 - `client_same`（始めのメソッドの `rpc Start`、状態のメソッドの `rpc Status`）は何も言われず、TypeScript と Python のクライアントは `start` と `status` を一度ずつだけ持つ（`a_method_that_does_what_a_function_does_is_that_function`）。`client_send_starts`（始めのメソッドの `rpc Send`）と `client_histories_status`（状態のメソッドの `rpc Histories`）は、三つの言語で W105 を言う。
 - `go_book_names`（帳簿の操作を動かすフローの型 `BookCall`、`BookResult`、`BookTransport`）と `date_name`（`enum DATE` と `date` の入力）は、それぞれ temporal-go と、temporal-go、temporal-python、pydantic-graph で W105 を言う。検査をせずに書くと、`go vet` が `redeclared in this block` で、`mypy --strict` が `[assignment]` で止める。同じ四つの名前の型を日付も帳簿の操作も無いフローに置く `go_no_date_no_book` は何も言われず、三つの言語の道具を通る。
-- `tests/flows/plain_names.flow`（英語と日本語）は、Go の `Outcome`、`Status`、`Answer`、`History`、表から外した Python の組み込み、JavaScript のグローバルを型に使い、外した組み込みを変数に使う。`tests/flows/plain_tasks.flow`（英語と日本語）は、外した組み込みを自分で実装するタスクと変数に使う。生成物はその名前のままで（`what_no_code_reads_keeps_its_name`）、Step Functions の JSONata（`plain_names` の 70 回）、durable functions と pydantic-graph（144 回ずつ）で、どの実行も参照インタプリタと同じに終わる。
-- 表と生成物を比べる試験。`the_table_of_python_is_the_builtins_the_code_reads` は、木の `.flow` のうち書けるもの 275 本の Python（496 のパッケージ）を `ast` で読み、ファイルの中で定義せずに読む組み込みが全部 `PY_MORE` にあることと、どのコードにも現れない組み込みが `PY_MORE` に無いことを確かめる。`the_table_of_typescript_is_the_global_types_the_code_reads` は、482 のパッケージで、`types.ts` が読むグローバルな型が `TS_GLOBALS` と同じで、`client.ts` が読むものが `temporal::CLIENT_NAMES` にあることを確かめる。
+- `tests/flows/plain_names.flow`（英語と日本語）は、Go の `Outcome`、`Status`、`Answer`、`History`、表から外した Python の組み込み、JavaScript のグローバルを型に使い、外した組み込みを変数に使う（Step Functions の変数 `v_filter`、`v_map` は 22.3 の 11 のとおり）。`tests/flows/plain_tasks.flow`（英語と日本語）は、外した組み込みを自分で実装するタスクと変数に使う。三つの言語の生成物はその名前のままで（`what_no_code_reads_keeps_its_name`）、Step Functions の JSONata（`plain_names` の 78 回）、durable functions と pydantic-graph（152 回ずつ）で、どの実行も参照インタプリタと同じに終わる。
+- 表と生成物を比べる試験。`the_table_of_python_is_the_builtins_the_code_reads` は、木の `.flow` のうち書けるもの 277 本の Python（500 のパッケージ）を `ast` で読み、ファイルの中で定義せずに読む組み込みが全部 `PY_MORE` にあることと、どのコードにも現れない組み込みが `PY_MORE` に無いことを確かめる。`the_table_of_typescript_is_the_global_types_the_code_reads` は、486 のパッケージで、`types.ts` が読むグローバルな型が `TS_GLOBALS` と同じで、`client.ts` が読むものが `temporal::CLIENT_NAMES` にあることを確かめる。`the_table_of_jsonata_is_the_functions_the_machines_call` は、91 本の `.flow` のステートマシンの式を読み、呼ぶ関数（自分で定義する `$dd_fill` のほか）が `JSONATA_FUNCTIONS` の 27 個と同じで、`Assign` の変数にその名前が無いことを確かめる。
+- `tests/flows/jsonata_names.flow`（英語と日本語）は、27 個の関数の名前を変数に使い（値、タスクの答え、`some`、ループの一件、`yield` の受け、並列の一回とその中の変数）、入力 `type` を持ち、`count` の隣に `v_count`、`states` の隣に `v_states` を置く。Step Functions の JSONata、durable functions、pydantic-graph で 22 回ずつ、どの実行も参照インタプリタと同じに終わる。`a_variable_of_the_machine_hides_no_function` は、変数の名前と、入力と出力のキーが書いた名前のままであることを確かめる。`asl_var` が `states` だけを避けていたバイナリでは、22 回とも最初のステートの `States.QueryEvaluationError` で落ち、`plain_names`（78 回のうち 74 回）も落ちる。関数ごとに、それを呼ぶ木のフローの始めに同じ名前の変数を足して走らせると（12 シナリオまで）、そのバイナリでは 23 個の関数で落ち、いまのバイナリでは 27 個とも参照インタプリタと同じに終わる。残る 4 個は、ランナーが `TimeoutSeconds` の式を読まないこと（`ceil`、`max`、`toMillis`）と、モデルの答えに本文が無い場合を演じないこと（`error`）で落ちない。
 - `client_shared`（二つのメソッドが一つのメッセージを取る）は W105 を言わず、Go の型を一度だけ書く。この章の前のバイナリのコードは、`go vet` が `SentRPC redeclared in this block` で止める。
 - `tests/secrets.rs`。`history encrypted` のときに増える名前は、挙げる言語の出力先を止め、注のとおりに名前を変えた版（`tests/encrypted/renamed/`）は、三つの SDK の道具を通る。
-- この章の前のバイナリといまのバイナリで、木の `.flow`（393 本）の `check`（英語、日本語、JSON）と七つの出力先の生成物を比べた。temporal-go は、書く 251 本のバイト列がどれも変わる（22.3 の 6）。材料の 58 本のほかは、`check` も、temporal-go のほかの生成物も、一字も変わらない。例の `enum Outcome` の 7 本と `tests/flows/deadlines.flow` の `record Answer` は、Go の型が前の `Outcome_`、`Answer_` から書いた名前になり、W105 は言わない。
+- この章の前のバイナリといまのバイナリで、木の `.flow`（415 本）の `check`（英語、日本語、JSON）と七つの出力先の生成物を比べた。temporal-go は、書く 265 本のバイト列がどれも変わる（22.3 の 6）。材料の 68 本と、`paths.flow` と `preconditions.flow` の Step Functions の変数のほかは、`check` も、temporal-go のほかの生成物も、一字も変わらない。例の `enum Outcome` の 7 本と `tests/flows/deadlines.flow` の `record Answer` は、Go の型が前の `Outcome_`、`Answer_` から書いた名前になり、W105 は言わない。
 - 生成した Go は、`go vet`、一つのバイナリに組む Go のランナー、記録した履歴の再生（`temporal_replays_the_recorded_histories`）まで通した。Temporal、Argo、LocalStack に載せる platforms の段は、この章では回していない。
 
 ### 22.7 見つけて直していないもの
@@ -2846,4 +2850,6 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 - 流れの名前が Python の識別子にならないとき（`²`）や、NFKC で別の名前と同じになるとき（`ｆｏｏ` と `foo`）は言わない。chobo の表は dandori から読めない。
 - Python のワークフローのクラスは、前と同じく `py_name(&m.name)` の名前になる。
 - 二冊の帳簿が Go の `Books` の一つのフィールドになる形（`a_b` と `aB`）は言わない。
-- Step Functions では、流れの変数の名前が、生成する JSONata の呼ぶ関数（`$count`、`$filter`、`$type` など）と同じだと、変数が関数を隠す。`render::asl_var` が避けるのは `states` だけなので、`let count = …` や入力 `type` のフローは検査を通り、その関数を読むステートマシンは `tools/asl-run.mjs`（JSONata 2.0.6）で `States.QueryEvaluationError` で失敗する。`plain_names.flow` の変数に `filter` と `map` を使わないのは、このためである。`tests/flows/paths.flow` の `count` と `preconditions.flow` の `each` は、そのフローが関数を読まないので落ちない。本物の Step Functions と LocalStack では確かめていない。
+- 流れの変数 `_x` と `v_x` は、どの言語でも `ident` で一つの名前 `v_x` になる。`check` は言わず、`tsc`、`mypy --strict`、`go vet` が二度の宣言で止め、Step Functions では一つの変数になって、後の値を両方が読む。
+- 流れの変数 `dd_error` は、Step Functions で `on failure` が受けたエラーを入れる生成器の変数と一つの名前になる。`check` は言わない。`dd_loop_*` のようなほかの `dd_` で始まる変数と、ほかの言語の `dd_` で始まる名前は確かめていない。
+- JSONata の関数を避けた変数（22.3 の 11）は、`tools/asl-run.mjs`（JSONata 2.0.6）で確かめた。本物の Step Functions と LocalStack では確かめていない。

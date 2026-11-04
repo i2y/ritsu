@@ -1,0 +1,71 @@
+workflow jsonata_names v1
+description "A variable for each function of JSONata the state machine calls, and the input `type`: no variable hides a function, and the input keeps its key in JSON. `v_count` and `v_states` are variables of their own beside `count` and `states`. Runs on every platform"
+
+record Line
+  sku : string
+  qty : int
+  at : timestamp
+  tags : list[string]
+  note : string?
+
+inputs
+  type : string
+  lines : list[Line]
+
+outputs
+  type : string
+  count : int
+  v_count : int
+  states : string
+  v_states : string
+  skus : list[string]
+  notes : list[string]
+  text : string
+
+task note(id: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task first_line(id: string) -> Line
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:first-line"
+  idempotent
+
+task look(sku: string, qty: int) -> string
+  http GET "https://items.example.com/v1/items/{sku}/counts/{qty}"
+  connection "arn:aws:events:us-east-1:123456789012:connection/items/1"
+  idempotent
+
+flow
+  let count = 1
+  let v_count = 2
+  let states = "states"
+  let v_states = "v_states"
+  let abs = "abs"
+  let append = "append"
+  let ceil = "ceil"
+  let contains = "contains"
+  let encodeUrlComponent = "encodeUrlComponent"
+  let error = "error"
+  let exists = "exists"
+  let floor = "floor"
+  let lowercase = "lowercase"
+  let max = "max"
+  let not = "not"
+  let number = "number"
+  let parse = "parse"
+  let sift = "sift"
+  let substring = "substring"
+  let toMillis = "toMillis"
+  # a task's answer, an optional's value, a loop's item, what a loop yields, a round in parallel
+  let merge = first_line(id: type)
+  match merge.note
+    some string => note(id: string)
+    none => pass
+  for map in lines at most 3
+    let lookup = look(sku: map.sku, qty: map.qty)
+  let filter = for each in lines at most 3
+    yield each.sku
+  let reduce = for keys in lines at most 3 in parallel
+    let join = note(id: keys.sku)
+    yield join
+  succeed type = type, count = count, v_count = v_count, states = states, v_states = v_states, skus = filter, notes = reduce, text = "{abs}{append}{ceil}{contains}{encodeUrlComponent}{error}{exists}{floor}{lowercase}{max}{not}{number}{parse}{sift}{substring}{toMillis}"

@@ -1,0 +1,71 @@
+workflow JSONataの名前 v1
+description "ステートマシンが呼ぶ JSONata の関数ごとの変数と、入力 `type` です。変数は関数を隠さず、入力の JSON のキーは書いた名前のままです。`v_count` と `v_states` は、`count` と `states` の隣の別の変数です。どのプラットフォームでも動きます"
+
+record 明細
+  品番 : string
+  数 : int
+  時刻 : timestamp
+  札 : list[string]
+  注記 : string?
+
+inputs
+  type : string
+  明細の列 : list[明細]
+
+outputs
+  type : string
+  count : int
+  v_count : int
+  states : string
+  v_states : string
+  品番の列 : list[string]
+  注記の列 : list[string]
+  文 : string
+
+task 書く(番号: string) -> string
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note"
+  idempotent
+
+task 最初の明細(番号: string) -> 明細
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:first-line"
+  idempotent
+
+task 見る(品番: string, 数: int) -> string
+  http GET "https://items.example.com/v1/items/{品番}/counts/{数}"
+  connection "arn:aws:events:us-east-1:123456789012:connection/items/1"
+  idempotent
+
+flow
+  let count = 1
+  let v_count = 2
+  let states = "states"
+  let v_states = "v_states"
+  let abs = "abs"
+  let append = "append"
+  let ceil = "ceil"
+  let contains = "contains"
+  let encodeUrlComponent = "encodeUrlComponent"
+  let error = "error"
+  let exists = "exists"
+  let floor = "floor"
+  let lowercase = "lowercase"
+  let max = "max"
+  let not = "not"
+  let number = "number"
+  let parse = "parse"
+  let sift = "sift"
+  let substring = "substring"
+  let toMillis = "toMillis"
+  # タスクの答え、省略できる値の中身、ループの一件、ループが yield するもの、並列の一回
+  let merge = 最初の明細(番号: type)
+  match merge.注記
+    some string => 書く(番号: string)
+    none => pass
+  for map in 明細の列 at most 3
+    let lookup = 見る(品番: map.品番, 数: map.数)
+  let filter = for each in 明細の列 at most 3
+    yield each.品番
+  let reduce = for keys in 明細の列 at most 3 in parallel
+    let join = 書く(番号: keys.品番)
+    yield join
+  succeed type = type, count = count, v_count = v_count, states = states, v_states = v_states, 品番の列 = filter, 注記の列 = reduce, 文 = "{abs}{append}{ceil}{contains}{encodeUrlComponent}{error}{exists}{floor}{lowercase}{max}{not}{number}{parse}{sift}{substring}{toMillis}"

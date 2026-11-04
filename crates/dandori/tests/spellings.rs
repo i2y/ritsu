@@ -5,7 +5,9 @@
 //! flow everywhere, passes `tsc --strict`, `mypy --strict` and `go vet`; and a generator made to write
 //! what `gen` stops at writes Go or Python that does not pass. What the tables keep is what the code
 //! of every flow of the tree reads, no more and no less; a name it does not read keeps its name
-//! and stops nothing (tests/flows/plain_*.flow, which also run on the platforms' runners).
+//! and stops nothing (tests/flows/plain_*.flow, which also run on the platforms' runners). A variable
+//! of a state machine named as a function of JSONata the machines call goes by another name, which no
+//! caller reads (tests/flows/jsonata_names.flow, which runs on them too).
 //! `DANDORI_BLESS=1` rewrites the golden files.
 
 use ritsu_testkit::{need, ready, skip, Need, TempDir};
@@ -87,6 +89,8 @@ const FREE: &[&str] = &[
     "tests/flows/plain_names.ja.flow",
     "tests/flows/plain_tasks.flow",
     "tests/flows/plain_tasks.ja.flow",
+    "tests/flows/jsonata_names.flow",
+    "tests/flows/jsonata_names.ja.flow",
 ];
 
 /// `dandori` with koyomi's and chobo's answers, as a program that joins them runs it: a form may
@@ -422,6 +426,9 @@ fn what_no_code_reads_keeps_its_name() {
         }
         let workflow = generated(flow, "temporal-python", "workflow.py");
         assert!(workflow.contains("\n        format = dd_r\n") && !workflow.contains("format_"), "{flow}: a variable named as a builtin the code does not read:\n{workflow}");
+        for variable in ["filter", "map"] {
+            assert!(workflow.contains(&format!("\n        {variable} = dd_r\n")), "{flow}: the variable `{variable}`:\n{workflow}");
+        }
         for target in ["temporal-typescript", "durable"] {
             let ts = generated(flow, target, "types.ts");
             for head in ["export interface Date ", "export type Map = ", "export interface Number ", "export interface Object ", "export type Promise = "] {
@@ -672,6 +679,105 @@ fn the_table_of_typescript_is_the_global_types_the_code_reads() {
     assert!(short.is_empty(), "`client.ts` reads {short:?}, which are not in `CLIENT_NAMES` (src/temporal.rs): a message of the name would hide them");
     assert!(code.len() > 300, "the code of only {} packages", code.len());
     eprintln!("the globals of TypeScript: compared {} packages, {} of types and {} of clients", code.len(), in_types.len(), in_clients.len());
+}
+
+/// The functions a JSONata expression calls: `$name(`, outside its strings and its names in backquotes.
+fn jsonata_calls(text: &str, out: &mut BTreeSet<String>) {
+    let cs: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < cs.len() {
+        let c = cs[i];
+        if c == '"' || c == '\'' || c == '`' {
+            i += 1;
+            while i < cs.len() && cs[i] != c {
+                i += if cs[i] == '\\' { 2 } else { 1 };
+            }
+            i += 1;
+        } else if c == '$' {
+            let start = i + 1;
+            i = start;
+            while i < cs.len() && (cs[i].is_alphanumeric() || cs[i] == '_') {
+                i += 1;
+            }
+            if i > start && cs.get(i) == Some(&'(') {
+                out.insert(cs[start..i].iter().collect());
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
+/// What a state machine calls, in every expression (`{% … %}`), and the variables it binds (`Assign`).
+fn read_machine(v: &serde_json::Value, calls: &mut BTreeSet<String>, bound: &mut BTreeSet<String>) {
+    match v {
+        serde_json::Value::Object(o) => {
+            for (k, x) in o {
+                if let (true, Some(a)) = (k == "Assign", x.as_object()) {
+                    bound.extend(a.keys().cloned());
+                }
+                read_machine(x, calls, bound);
+            }
+        }
+        serde_json::Value::Array(a) => a.iter().for_each(|x| read_machine(x, calls, bound)),
+        serde_json::Value::String(s) if s.starts_with("{%") => jsonata_calls(s, calls),
+        _ => {}
+    }
+}
+
+/// `JSONATA_FUNCTIONS` is every function the state machine of a flow of the tree calls, and no other
+/// (`$dd_fill` is the machine's own), and no machine has a variable of one of the names, which would
+/// hide the function: `render::asl_var` is the way every variable goes.
+#[test]
+fn the_table_of_jsonata_is_the_functions_the_machines_call() {
+    use ritsu_emit::copies::dandori::JSONATA_FUNCTIONS;
+    let code = code_of_every_flow(&["asl"]);
+    let (mut calls, mut bound) = (BTreeSet::new(), BTreeSet::new());
+    for (_, _, files) in &code {
+        for (name, text) in files {
+            if name.ends_with(".asl.json") {
+                read_machine(&serde_json::from_str(text).unwrap(), &mut calls, &mut bound);
+            }
+        }
+    }
+    calls.retain(|c: &String| !c.starts_with("dd_"));
+    let table: BTreeSet<String> = JSONATA_FUNCTIONS.iter().map(|n| n.to_string()).collect();
+    assert_eq!(calls, table, "the functions the state machines call are not `JSONATA_FUNCTIONS` (ritsu-emit's copies.rs)");
+    let hiding: Vec<&String> = bound.intersection(&table).collect();
+    assert!(hiding.is_empty(), "a state machine has the variables {hiding:?}, which hide the functions");
+    assert!(code.len() > 80, "the machines of only {} flows", code.len());
+    eprintln!("the functions of JSONata: compared the machines of {} flows, {} functions", code.len(), table.len());
+}
+
+/// In the state machine a variable named as a function is `v_<name>`, and one the flow names `v_count`
+/// beside `count` is a variable of its own. The input and the outputs keep their keys in JSON, which
+/// is what a caller reads; any other variable keeps its name. tests/examples.rs runs these machines.
+#[test]
+fn a_variable_of_the_machine_hides_no_function() {
+    let machine = |flow: &str| -> serde_json::Value {
+        let m = checked(flow).model.unwrap_or_else(|| panic!("{flow} passes check"));
+        let files = dandori::commands::build(&m, "asl").unwrap().unwrap_or_else(|d| panic!("{flow}: {d:?}"));
+        serde_json::from_str(&files.iter().find(|(n, _)| n.ends_with(".asl.json")).unwrap().1).unwrap()
+    };
+    for flow in ["tests/flows/jsonata_names.flow", "tests/flows/jsonata_names.ja.flow"] {
+        let v = machine(flow);
+        let start = &v["States"][v["StartAt"].as_str().unwrap()]["Assign"];
+        assert_eq!(start["v_type"], "{% $exists($states.input.type) ? $states.input.type : null %}", "{flow}: {start}");
+        for name in ["v_count", "v_v_count", "v_states", "v_v_states", "v_filter", "v_map", "v_string"] {
+            assert!(start.get(name).is_some(), "{flow}: no variable `{name}`: {start}");
+        }
+        let succeed = v["States"].as_object().unwrap().values().find(|s| s["Type"] == "Succeed").unwrap();
+        for (key, read) in [("type", "$v_type"), ("count", "$v_count"), ("v_count", "$v_v_count"), ("states", "$v_states"), ("v_states", "$v_v_states")] {
+            assert_eq!(succeed["Output"][key], format!("{{% {read} %}}"), "{flow}: {succeed}");
+        }
+    }
+    for flow in ["tests/flows/plain_names.flow", "tests/flows/plain_names.ja.flow"] {
+        let v = machine(flow);
+        let start = &v["States"][v["StartAt"].as_str().unwrap()]["Assign"];
+        for name in ["v_filter", "v_map", "bytes", "format", "object"] {
+            assert!(start.get(name).is_some(), "{flow}: no variable `{name}`: {start}");
+        }
+    }
 }
 
 /// Every flow of the directory is a form above.

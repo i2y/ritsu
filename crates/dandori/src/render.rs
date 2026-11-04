@@ -6,6 +6,7 @@
 //! comparison says so.
 
 use crate::model::*;
+use ritsu_emit::copies::dandori::JSONATA_FUNCTIONS;
 use serde_json::{json, Map, Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -937,12 +938,19 @@ pub fn ident(name: &str) -> String {
     s
 }
 
-/// A variable of the state machine. Step Functions wants a Unicode identifier that does
-/// not start with `_`, and `states` is its own.
+/// A variable of the state machine. Step Functions wants a Unicode identifier that does not start
+/// with `_`; `states` is its own; and a variable named as a function of JSONata the machine calls
+/// would hide the function. Those go by `v_<name>`, which no caller reads: an input's key in JSON
+/// is the name the flow gives it. A name that reads `v_<one of them>` takes one `v_` more, so that
+/// two names of the flow stay two variables.
 pub fn asl_var(name: &str) -> String {
     let s = ident(name);
-    if s == "states" {
-        "v_states".into()
+    let mut bare = s.as_str();
+    while let Some(rest) = bare.strip_prefix("v_") {
+        bare = rest;
+    }
+    if bare == "states" || JSONATA_FUNCTIONS.contains(&bare) {
+        format!("v_{s}")
     } else {
         s
     }
@@ -1422,6 +1430,17 @@ pub fn asl_error(m: &Model, callee: &Callee, e: &HErr) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::rulec::{WireField, WireKind};
+
+    /// A variable keeps out of `states` and the functions of JSONata, and two names stay two variables.
+    #[test]
+    fn a_variable_of_the_state_machine() {
+        for (name, var) in [("order", "order"), ("受注", "受注"), ("Count", "Count"), ("v_order", "v_order"), ("states", "v_states"), ("v_states", "v_v_states"), ("count", "v_count"), ("v_count", "v_v_count"), ("v_v_count", "v_v_v_count"), ("toMillis", "v_toMillis")] {
+            assert_eq!(asl_var(name), var, "{name}");
+        }
+        for f in JSONATA_FUNCTIONS {
+            assert_eq!(asl_var(f), format!("v_{f}"));
+        }
+    }
 
     /// The urgency rule's service: a bool and a number in, a bool and an enum out.
     fn urgency() -> RuleConnect {
