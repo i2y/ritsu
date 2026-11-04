@@ -182,6 +182,35 @@ fn gen_says_what_stopped_it() {
     assert!(said.contains("error[E051]") && said.contains("`send_mail`") && said.contains("`sendMail`") && said.contains("`SendMail`") && said.contains("rename it in the `.flow`"), "{said}");
 }
 
+/// What the code cannot keep apart stops at `check` for every target, in both languages: a variable
+/// named as the code's own, and two that are one name in some target's code. No caller reads a
+/// variable, so the flow renames it; names that stay apart are said nothing.
+#[test]
+fn variables_the_code_cannot_keep_apart_stop_at_check() {
+    let scratch = TempDir::new("dandori-spellings-variables");
+    let check = |name: &str, inputs: &str, lets: &str, lang: &str| {
+        let path = scratch.path().join(format!("{name}.flow"));
+        let text = format!("workflow names v1\n\ninputs\n  a : int\n{inputs}\noutputs\n  n : int\n\nflow\n{lets}  succeed n = a\n");
+        std::fs::write(&path, text).unwrap();
+        run(&["check", path.to_str().unwrap(), "--lang", lang])
+    };
+    for (name, inputs, lets, says) in [
+        ("two_lets", "", "  let _x = 1\n  let v_x = 2\n", "`v_x`"),
+        ("an_input", "  _x : int\n", "  let v_x = 2\n", "`v_x`"),
+        ("python", "", "  let class = 1\n  let class_ = 2\n", "`class_`"),
+        ("go", "", "  let type = 1\n  let type_ = 2\n", "`type_`"),
+        ("its_own", "", "  let dd_error = 1\n", "`dd_error`"),
+    ] {
+        for lang in ["en", "ja"] {
+            let (code, out, err) = check(name, inputs, lets, lang);
+            let said = format!("{out}{err}");
+            assert!(code == 1 && said.contains("E006") && said.contains(says), "{name} {lang}: {said}");
+        }
+    }
+    let (code, out, err) = check("apart", "", "  let x = 1\n  let v_y = 2\n  let _z = 3\n  let class = 4\n  let type = 5\n  let count = 6\n  let v_count = 7\n", "en");
+    assert!(code == 0 && !format!("{out}{err}").contains("E006"), "{out}{err}");
+}
+
 /// A message two methods read as one type is one alias: nothing is said of it, and no client writes
 /// it twice. A record of the flow with the message's name is the type itself, in Go, where an alias
 /// could not have the name.

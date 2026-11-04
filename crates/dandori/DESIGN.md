@@ -2812,6 +2812,7 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 9. **クライアントにもとからある関数と同じ名前のメソッド。** 三つの言語で同じに扱う。同じことをするなら関数を書かない（TypeScript と Python の始めのメソッドの `rpc Start`、状態のメソッドの `rpc Status`、Go の始めのメソッドの `rpc Start`、状態のメソッドの `rpc RunStatus`）。違うことをするなら W105 である（始めのメソッドの `rpc Send`、状態のメソッドの `rpc Histories`、Go の始めのメソッドの `rpc RunStatus`）。何も書かないと、呼ぶ側は `start` のつもりで、イベントを送る `send` を読む。
 10. **フローによってコードが宣言する名前は、そのフローのときだけ数える。** Go のパッケージは、`Service` をサービスを持つフローで、`BookCall`、`BookResult`、`BookTransport` を帳簿の操作を動かすフローで、`DATE` を日付を持つフローで宣言する（`own_names`）。ほかのフローでは、どれも型の名前に使える（`go_no_date_no_book`）。Python の `types.py` も日付を持つフローで `DATE` を宣言して日付の検査に使うので、同じに止める。同じ名前の型があると検査が読むものが置き換わり、`DATE.match` が実行のときに落ちる。TypeScript の `types.ts` の `export const DATE` は値で、型の名前とぶつからないので止めない。
 11. **Step Functions の変数は、JSONata の関数を隠さない。** 生成した式は関数も変数も `$` で読むので、`$count` という変数があると、`$count(…)` は関数を呼べず `States.QueryEvaluationError` になる。そこで `render::asl_var` は、`states` と、ステートマシンが呼ぶ関数の名前（`copies.rs` の `JSONATA_FUNCTIONS`。27 個）を `v_<名前>` にする。`let count` は `$v_count` である。フローが `v_count` も持つなら、それは `v_v_count` にして、二つの名前を一つの変数にしない。入力と出力の JSON のキーは書いた名前のままである（入力 `type` は `$states.input.type` から `$v_type` に入り、出力は `"type": "{% $v_type %}"`）。変数は呼ぶ側が読まないので、W105 は言わない。
+12. **生成するコードが分けられない変数は、`check` が E006 で止める。** 変数は呼ぶ側が読まないので、名前を変えれば済む。一つは `dd_` で始まる変数である。どの生成器の変数も参照インタプリタの変数も `dd_` で始まる（`on failure` が受けるエラーの `dd_error`、TypeScript の `dd_e`）。もう一つは、どれかの出力先で同じ名前になる二つの変数で、`_x` と `v_x`（`ident`）、`class` と `class_`（`py_name`）、`type` と `type_`（`go_name`）である。入力と案件も比べる。出力先を問わず止める。前は `check` を通り、`tsc`、`mypy --strict`、`go vet` が二度の宣言で止めるか、Step Functions で一つの変数になって、後の値を両方が読んだ。
 
 ### 22.4 捨てたもの
 
@@ -2850,6 +2851,4 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 - 流れの名前が Python の識別子にならないとき（`²`）や、NFKC で別の名前と同じになるとき（`ｆｏｏ` と `foo`）は言わない。chobo の表は dandori から読めない。
 - Python のワークフローのクラスは、前と同じく `py_name(&m.name)` の名前になる。
 - 二冊の帳簿が Go の `Books` の一つのフィールドになる形（`a_b` と `aB`）は言わない。
-- 流れの変数 `_x` と `v_x` は、どの言語でも `ident` で一つの名前 `v_x` になる。`check` は言わず、`tsc`、`mypy --strict`、`go vet` が二度の宣言で止め、Step Functions では一つの変数になって、後の値を両方が読む。
-- 流れの変数 `dd_error` は、Step Functions で `on failure` が受けたエラーを入れる生成器の変数と一つの名前になる。`check` は言わない。`dd_loop_*` のようなほかの `dd_` で始まる変数と、ほかの言語の `dd_` で始まる名前は確かめていない。
 - JSONata の関数を避けた変数（22.3 の 11）は、`tools/asl-run.mjs`（JSONata 2.0.6）で確かめた。本物の Step Functions と LocalStack では確かめていない。

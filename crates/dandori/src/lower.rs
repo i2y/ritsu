@@ -48,6 +48,8 @@ pub struct Lowerer<'a> {
     hold_ix: BTreeMap<(String, String), usize>,
     task_ix: BTreeMap<String, usize>,
     var_ty: BTreeMap<String, Ty>,
+    /// where each variable is first set, for what is said of its name
+    var_at: BTreeMap<String, Span>,
     site: usize,
     /// the loops around the statement being lowered: true for `for … in parallel`
     loops: Vec<bool>,
@@ -185,6 +187,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         hold_ix: BTreeMap::new(),
         task_ix: BTreeMap::new(),
         var_ty: BTreeMap::new(),
+        var_at: BTreeMap::new(),
         site: 0,
         loops: vec![],
         par_depth: 0,
@@ -3076,6 +3079,39 @@ impl<'a> Lowerer<'a> {
         for (_, d) in problems {
             self.push(d);
         }
+        self.variables_the_code_keeps_apart();
+    }
+
+    /// E006 for a variable the code a target writes cannot keep apart: one named as the code's own
+    /// (every generator's variables, and the interpreter's, start with `dd_`), and two that are
+    /// one name there (`_x` and `v_x` everywhere, by `render::ident`; `if` and `if_` in Python;
+    /// `type` and `type_` in Go). No caller reads a variable, so the flow can rename it; an input
+    /// is the same variable in the code, under the key a caller gives it (DESIGN 22.3).
+    fn variables_the_code_keeps_apart(&mut self) {
+        let mut names: Vec<(usize, usize, String)> = self.var_at.iter().map(|(n, s)| (s.line, s.col, n.clone())).collect();
+        names.extend(self.prog.inputs.iter().map(|f| (f.name.1.line, f.name.1.col, f.name.0.clone())));
+        names.extend(self.m.cases.iter().map(|c| (c.line, 1, c.name.clone())));
+        names.sort();
+        let spellings: [fn(&str) -> String; 4] = [
+            crate::render::ident,
+            crate::temporal_py::py_name,
+            crate::temporal_go::go_name,
+            crate::render::asl_var,
+        ];
+        let mut found = Vec::new();
+        for (i, (line, col, n)) in names.iter().enumerate() {
+            if n.starts_with("dd_") {
+                found.push(Diag::error("E006", *line, *col, tr!("`{n}` は、`dd_` で始まるので、dandori が生成するコードの変数と同じ名前になることがあります。別の名前を付けてください", "`{n}` starts with `dd_`, as the variables of the code dandori writes do, and can be one of them; give it another name")));
+                continue;
+            }
+            let earlier = names[..i].iter().find_map(|(_, _, m)| spellings.iter().find(|f| f(m) == f(n)).map(|f| (m, f(n))));
+            if let Some((m, id)) = earlier {
+                found.push(Diag::error("E006", *line, *col, tr!("変数 `{m}` と `{n}` は、生成するコードで同じ名前 `{id}` になります。どちらかの名前を変えてください", "the variables `{m}` and `{n}` are one name, `{id}`, in the code dandori writes; rename one of them")));
+            }
+        }
+        for d in found {
+            self.push(d);
+        }
     }
 
     fn reserved(&self, n: &str) -> bool {
@@ -3090,6 +3126,7 @@ impl<'a> Lowerer<'a> {
             );
             return;
         }
+        self.var_at.entry(n.to_string()).or_insert(sp);
         match self.var_ty.get(n).cloned() {
             // a value that fits the name's type is set to it; a name set to both `T` and `T?` is `T?`
             Some(prev) if t.fits(&prev) => {}
