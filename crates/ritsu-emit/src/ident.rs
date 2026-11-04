@@ -111,21 +111,3 @@ pub fn rust_name(name: &str) -> String {
 pub fn aside(s: &str, taken: impl Fn(&str) -> bool) -> String {
     if taken(s) { format!("{s}_") } else { s.to_string() }
 }
-
-/// Names made unique: the second of two that come out the same gets `_2`, the third `_3`;
-/// `taken` are names already used.
-pub fn unique(names: Vec<String>, taken: &[&str]) -> Vec<String> {
-    let mut seen: Vec<String> = taken.iter().map(|s| s.to_string()).collect();
-    let mut out = Vec::new();
-    for n in names {
-        let mut m = n.clone();
-        let mut i = 2;
-        while seen.contains(&m) {
-            m = format!("{n}_{i}");
-            i += 1;
-        }
-        seen.push(m.clone());
-        out.push(m);
-    }
-    out
-}

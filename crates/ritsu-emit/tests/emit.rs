@@ -28,7 +28,6 @@ fn names() {
     assert!(ident::is_ascii_ident("_a1") && !ident::is_ascii_ident("1a") && !ident::is_ascii_ident("在庫"));
     assert_eq!(ident::aside("class", |w| python::KEYWORDS.contains(&w)), "class_");
     assert_eq!(ident::aside("klass", |w| python::KEYWORDS.contains(&w)), "klass");
-    assert_eq!(ident::unique(vec!["a".into(), "a".into(), "b".into(), "a".into()], &["b"]), ["a", "a_2", "b_2", "a_3"]);
     // Rust: a keyword as a raw identifier, a word no raw identifier writes moved aside
     assert_eq!((ident::rust_name("ref"), ident::rust_name("gen"), ident::rust_name("self"), ident::rust_name("Self"), ident::rust_name("_"), ident::rust_name("sku")), ("r#ref".into(), "r#gen".into(), "self_".into(), "Self_".into(), "__".into(), "sku".into()));
     assert_eq!((ident::rust_raw("crate"), ident::rust_raw("move")), (None, Some("r#move".into())));
