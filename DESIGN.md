@@ -2176,7 +2176,7 @@ C.12 で、`release` のほかの五つを根の `.github/workflows/` に書い�
   - 落ちた二つのジョブだけを固定すること。`fast`、`packages`、`docs`、`proofs`、`modules`、`release` はまだ 26.04 で走っておらず、`release` はタグを打つまで試せない。
   - 先に 26.04 に合わせること。rulec の組と `platforms` は準備の段で止まったので、その先の段が 26.04 で通るかは分かっていない。
 
-  確かめたこと：同じ回で、`audit`、`kani`、`tools` のそれ以外の組と dandori の組、npm は 26.04 でも通った。試験とコードは runner の名前を読まない。キャッシュの鍵は `runner.os`（どちらも `Linux`）で版を分けないので、26.04 のランナーが保存した `kani` の二つ（`cargo-v2-kani-Linux-…` と `kani-Linux-0.68.0`）は、26.04 の glibc でリンクしたものを 24.04 に戻さないよう消した。手元では、十個のワークフローが YAML として読めることを確かめた。actionlint は走らせていない。
+  確かめたこと：同じ回で、`audit`、`kani`、`tools` のそれ以外の組と dandori の組、npm は 26.04 でも通った。試験とコードは runner の名前を読まない。キャッシュの鍵は `runner.os`（どちらも `Linux`）で版を分けないので、26.04 のランナーが保存した `kani` の二つ（`cargo-v2-kani-Linux-…` と `kani-Linux-0.68.0`）は、26.04 の glibc でリンクしたものを 24.04 に戻さないよう消した。手元では、十個のワークフローが YAML として読めることを確かめた。actionlint は走らせていない。固定したあとは、`fast`、`audit`、`packages`、`docs`、`proofs` の push の回と、`tools`、`kani`、`platforms` の毎晩の回（イメージ 20261025.353.1）が ubuntu-24.04 で通った。`release` も v0.41.0 のタグで、x86_64 の Linux のビルドと、ubuntu-24.04 の npm と Homebrew の確かめまで通った。`modules` は手で始めるワークフローなので、まだ走っていない。
 
   見つけて直していないもの：26.04 へ移るときの二つ。setup-swift は、安定版の最新 v2.4.0 が 26.04 を知らない（3.0.0-beta.1 は Swiftly を使う）。Swift 6.1 に 26.04 のツールチェーンがあるかは確かめていない。`kind load docker-image` の失敗の原因も確かめていない。kind はどちらのイメージでも 0.33.0 で、Docker は 24.04 が 28.0.4、26.04 が 29.4.2 である。
 
