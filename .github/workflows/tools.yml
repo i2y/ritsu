@@ -103,10 +103,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           # rulec writes Rust for the browser and for WASI, koyomi a Wasm module for any host, and
-          # kaname a package of Rust that builds into one; geas reads coverage with llvm-tools, and
-          # chobo and kaname hold their Rust to clippy's lints
-          targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || matrix.group == 'the others' && 'wasm32-unknown-unknown' || '' }}
-          components: ${{ matrix.group == 'the others' && 'llvm-tools, clippy' || '' }}
+          # kaname and `ritsu gen` a package of Rust that builds into one; geas reads coverage with
+          # llvm-tools, and chobo, kaname and `ritsu gen` hold their Rust to clippy's lints
+          targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || 'wasm32-unknown-unknown' }}
+          components: ${{ matrix.group == 'the others' && 'llvm-tools, clippy' || matrix.group == 'dandori' && 'clippy' || '' }}
 
       - uses: actions/cache@v6
         with:
