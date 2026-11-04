@@ -53,6 +53,23 @@ const FORMS: &[Form] = &[
     Form { en: "client_send", ja: "クライアントのsend", targets: CLIENTS, broken: &[] },
     Form { en: "client_message", ja: "クライアントのメッセージ", targets: CLIENT_TS_PY, broken: &[] },
     Form { en: "client_two_types", ja: "クライアントの二つの型", targets: CLIENTS, broken: &[] },
+    Form { en: "client_answer", ja: "クライアントのanswer", targets: CLIENT_TS_PY, broken: &[] },
+    Form { en: "client_answer_callback", ja: "クライアントのAnswerCallback", targets: GO, broken: &[] },
+    Form { en: "client_run_status_starts", ja: "クライアントのRunStatusで始める", targets: GO, broken: &[] },
+    Form { en: "client_status_type", ja: "クライアントのStatusのレコード", targets: GO, broken: &[] },
+];
+
+/// The flows no name stops, in English and in Japanese: what a form above would be, but for a name
+/// the code does not keep.
+const FREE: &[&str] = &[
+    "tests/spellings/client_shared.flow",
+    "tests/spellings/クライアントの共有.flow",
+    "tests/spellings/client_status.flow",
+    "tests/spellings/クライアントのstatus.flow",
+    "tests/spellings/client_run_status.flow",
+    "tests/spellings/クライアントのRunStatus.flow",
+    "tests/spellings/client_status_beside.flow",
+    "tests/spellings/クライアントのStatusと並ぶレコード.flow",
 ];
 
 fn run(args: &[&str]) -> (u8, String, String) {
@@ -192,7 +209,7 @@ fn write_files(flow: &str, target: &str, dir: &Path) {
 }
 
 /// Every flow whose code `target` writes: each form's renamed flow, the form itself when it does not
-/// stop `target`, and the flow of the shared message.
+/// stop `target`, and the flows no name stops.
 fn buildable(target: &'static str) -> Vec<String> {
     let mut out = Vec::new();
     for form in FORMS {
@@ -203,8 +220,7 @@ fn buildable(target: &'static str) -> Vec<String> {
             }
         }
     }
-    out.push("tests/spellings/client_shared.flow".to_string());
-    out.push("tests/spellings/クライアントの共有.flow".to_string());
+    out.extend(FREE.iter().map(|f| f.to_string()));
     out
 }
 
@@ -348,11 +364,63 @@ fn what_stops_would_not_work() {
     }
 }
 
+/// The file `name` of the code `flow` writes for `target`.
+fn generated(flow: &str, target: &str, name: &str) -> String {
+    let (_, c) = dandori::check::check_file(Path::new(flow)).unwrap();
+    let m = c.model.unwrap_or_else(|| panic!("{flow} passes check"));
+    let files = dandori::commands::build(&m, target).unwrap().unwrap_or_else(|d| panic!("{flow} --target {target}: {d:?}"));
+    files.into_iter().find(|(n, _)| n.ends_with(&format!("/{name}"))).unwrap_or_else(|| panic!("{flow} --target {target}: no {name}")).1
+}
+
+/// The flows no name stops are said nothing, and every target that can write them does.
+#[test]
+fn what_no_code_keeps_is_said_nothing() {
+    let scratch = TempDir::new("dandori-spellings-free");
+    for flow in FREE {
+        let (code, o, e) = run(&["check", flow]);
+        assert!(code == 0 && !format!("{o}{e}").contains("warning["), "{flow}: {o}{e}");
+        for target in dandori::commands::TARGETS {
+            let (_, said, _) = gen_for(flow, target, scratch.path());
+            assert!(!said.contains("E051"), "{flow} --target {target}:\n{said}");
+        }
+    }
+}
+
+/// In Go a method `Status` is a function of its own, over `RunStatus`, and reads the type `Where`,
+/// since the function has the message's name; a method of another name has the alias
+/// `Status`; a method `RunStatus` is the function there is; and `Answer` is a function over
+/// `AnswerCallback`, which `go vet` passes (`buildable`).
+#[test]
+fn the_status_and_the_answer_of_a_service_in_go() {
+    for flow in ["tests/spellings/client_status.flow", "tests/spellings/クライアントのstatus.flow"] {
+        let c = generated(flow, "temporal-go", "client.go");
+        assert!(c.contains("func Status(ctx context.Context, c client.Client, id string) (Where, error) {\n\treturn RunStatus(ctx, c, id)\n}"), "{flow}:\n{c}");
+        assert!(!c.contains("type Status"), "{flow}:\n{c}");
+    }
+    for flow in ["tests/spellings/client_run_status.flow", "tests/spellings/クライアントのRunStatus.flow"] {
+        let c = generated(flow, "temporal-go", "client.go");
+        assert_eq!(c.matches("func RunStatus(").count(), 1, "{flow}:\n{c}");
+    }
+    for flow in ["tests/spellings/client_shared.flow", "tests/spellings/クライアントの共有.flow"] {
+        let c = generated(flow, "temporal-go", "client.go");
+        assert!(c.contains("\ntype Status = Where\n") && c.contains("func GetStatus(ctx context.Context, c client.Client, id string) (Status, error) {\n\treturn RunStatus(ctx, c, id)\n}"), "{flow}:\n{c}");
+    }
+    for flow in ["tests/spellings/client_status_beside.flow", "tests/spellings/クライアントのStatusと並ぶレコード.flow"] {
+        let c = generated(flow, "temporal-go", "client.go");
+        assert!(!c.contains("type Status") && c.contains("func GetStatus(ctx context.Context, c client.Client, id string) (Where, error) {"), "{flow}:\n{c}");
+    }
+    for flow in ["tests/spellings/client_answer.flow", "tests/spellings/クライアントのanswer.flow"] {
+        let c = generated(flow, "temporal-go", "client.go");
+        assert!(c.contains("func Answer(ctx context.Context, c client.Client, callbackID string, value Sent) error {\n\treturn AnswerCallback(ctx, c, callbackID, CallbackAnswer{OK: value})\n}"), "{flow}:\n{c}");
+    }
+}
+
 /// Every flow of the directory is a form above.
 #[test]
 fn the_form_list_is_every_flow_of_the_directory() {
     let mut names: Vec<String> = FORMS.iter().flat_map(|f| [f.en.to_string(), f.ja.to_string()]).collect();
-    names.extend(["client_shared", "クライアントの共有", "go_books", "Goの帳簿"].map(String::from));
+    names.extend(["go_books", "Goの帳簿"].map(String::from));
+    names.extend(FREE.iter().filter_map(|f| f.strip_prefix("tests/spellings/")).map(|f| f.trim_end_matches(".flow").to_string()));
     names.sort();
     let mut files: Vec<String> = std::fs::read_dir(root().join("tests/spellings")).unwrap().flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".flow")).map(String::from)).collect();
     files.sort();

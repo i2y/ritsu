@@ -59,7 +59,7 @@ $ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|tempo
 - `rules.go`：rulec の Go を包んで、規則をアクティビティにしたもの
 - `runtime.go`、`values.go`
 - `worker.go`：`NewWorker(client, own, transport, deployment)` と `Replay`
-- `client.go`：`Start`、`Answer`、`Send`、`Status`、`Histories`。サービスを実装するワークフローなら、メソッドごとの関数（`Fulfill`、`AnswerPacking`）も入ります
+- `client.go`：`Start`、`AnswerCallback`、`Send`、`RunStatus`、`Histories`。サービスを実装するワークフローなら、メソッドごとの関数（`Fulfill`、`AnswerPacking`）も入ります
 
 ワークフローの型やアクティビティなど、外から見える名前は TypeScript 版とそろえてあります。
 

@@ -1,0 +1,22 @@
+workflow クライアントのRunStatusで始める v1 implements svc.Svc
+description "ワークフローを始めるメソッドで、Go のクライアントの実行がどこにいるかを言う関数と同じ名前です。"
+
+use proto svc from "protos/クライアントのRunStatusで始める.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

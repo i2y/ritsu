@@ -717,7 +717,7 @@ service FulfillmentService {
 
 **ペイロード**：値は JSON で、形は protojson である。Temporal では `json/plain` のペイロードになる。ペイロードのコンバーターは使わない。dandori が生成するクライアント（`client.ts`・`client.py`・`client.go`）は、値を JSON のまま送る。protobuf のメッセージを持つほかのクライアントは、メッセージを protojson にし、それを JSON の値としてペイロードに入れればよい（Go なら `json.RawMessage(protojson.Marshal(m))`、Python なら `json_format.MessageToDict(m)`）。protojson を文字列のまま渡すと、ワークフローには文字列が届いて `Dandori.BadInput` になる。Temporal の Go の SDK は、proto のメッセージをそのまま渡すと `json/protobuf` のペイロードに書き、TypeScript の既定のコンバーターはそれを読まない（7 章）。
 
-**Temporal での名前**：ワークフローの型はいまのまま `<名前>_v<版>` で、`event` は Update `dandori.event`、`answer` は Update `dandori.answer`、`status` はクエリ `dandori.status` である。生成する `client.ts`・`client.py`・`client.go` には、メソッドの名前の関数（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）と、メッセージの名前の型（`FulfillRequest` は `WorkflowInput`）を足す。関数の名前がクライアントにもとからある関数と同じになるときは、同じことをするなら書かず（`Start` は `start`、`GetStatus` が返す `dandori.v1.Status` の型は `Status`）、違うことをするなら、名前を付け替えず、`check` が W105 で言い、その出力先の `gen` を E051 で止める（22 章）。`history encrypted` のフローでは、クライアントが暗号化のために持つ名前（1.18）も、もとからある名前に数える。イベントとコールバックの関数はリクエストの値だけを送り（`{ ok: 値 }`）、エラーの名前を送りたいときは、いまの `send` と `answer` を使う。提供側のスタブは、いまの生成物（ワークフローとワーカー）そのものである。ほかの言語のクライアントは、この `.proto` から protoc のプラグインで作れるが、そのプラグインはまだ作らない（7 章）。
+**Temporal での名前**：ワークフローの型はいまのまま `<名前>_v<版>` で、`event` は Update `dandori.event`、`answer` は Update `dandori.answer`、`status` はクエリ `dandori.status` である。生成する `client.ts`・`client.py`・`client.go` には、メソッドの名前の関数（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）と、メッセージの名前の型（`FulfillRequest` は `WorkflowInput`）を足す。関数の名前がクライアントにもとからある関数と同じになるときは、同じことをするなら書かず（`Start` は `start`、`GetStatus` が返す `dandori.v1.Status` の型は `Status`）、違うことをするなら、名前を付け替えず、`check` が W105 で言い、その出力先の `gen` を E051 で止める（22 章）。Go のクライアントの関数は `AnswerCallback` と `RunStatus` なので、`rpc Answer` と `rpc Status` は、それを呼ぶ関数になる（22.3）。`history encrypted` のフローでは、クライアントが暗号化のために持つ名前（1.18）も、もとからある名前に数える。イベントとコールバックの関数はリクエストの値だけを送り（`{ ok: 値 }`）、エラーの名前を送りたいときは、いまの `send` と `answer` を使う。提供側のスタブは、いまの生成物（ワークフローとワーカー）そのものである。ほかの言語のクライアントは、この `.proto` から protoc のプラグインで作れるが、そのプラグインはまだ作らない（7 章）。
 
 **ほかのプラットフォーム**：start と `answer` は、どのプラットフォームでも同じ意味で作る（入口で埋める）。`event` は、いまと同じく Temporal のほかでは E050 である。`status` のメソッドを持つサービスも、Temporal のほかでは E050 にする。実行がいまどこにいるかを答えるクエリが、ほかのプラットフォームに無いからである（P6）。Step Functions と durable functions は、実行の中のコードに問い合わせる手段を持たない。Argo（ワークフローの出力のパラメータ）と pydantic-graph（`Deps` の状態）は答えられるはずだが、まだ書いていないので、診断もそう言う（7 章）。
 
@@ -1228,7 +1228,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - 日付は `rules.py` が `.koyomi.python.<別名>` から読み、`{"day": …, "at": …}` を返す。帳簿の操作は `io.py` の `book`（帳簿の値は `transport(books=…)`。chobo の Python のクライアントは同期なので `asyncio.to_thread` で呼ぶ）。`now` は `workflow.now()` で、`now` を読む呼び出しは、その前で一度読んで変数に入れる（試しのたびに走る `lambda` と `async def dd_call_<場所>` の外で）。
 - 規則の前提の確かめ（1.17）は、`if not (…): raise dd.fail("Dandori.BrokenPrecondition", …)`（日は `in` と日のタプル）。ワークフローが動く期間の確かめ（20 章）は、走り始めの外が `raise dd.fail("Dandori.OutOfPeriod", …)`、`now` を読む文の前の外が `raise dd.TaskError("Dandori.OutOfPeriod", …)`。
 
-**Go SDK 向け**（`--target temporal-go`）も出す（2026-10-02）。ワークフローの名前の Go のパッケージ一つに、`doc.go`（パッケージの説明と、前提にするモジュールのバージョン）、`types.go`、`values.go`（JSON の値を読み書きする部品）、`activities.go`（`OwnTasks` と `Activities(own, transport)`）、`io.go`（と、フローが使うときだけ `io_aws.go`・`io_openai.go`・`io_claude.go`）、`rules.go`、`runtime.go`、`workflow.go`（`Workflow`）、`client.go`（`Start`・`Answer`・`Send`・`Status`・`Histories`）、`worker.go`（`NewWorker`・`Replay`）を置く。線に乗る名前は TypeScript 版と同じなので、ワークフローとアクティビティを TypeScript や Python のワーカーと分け合える（5 章で、Go と TypeScript の組み合わせを両方向に走らせて確かめている）。書き方が違うのは次のところ。
+**Go SDK 向け**（`--target temporal-go`）も出す（2026-10-02）。ワークフローの名前の Go のパッケージ一つに、`doc.go`（パッケージの説明と、前提にするモジュールのバージョン）、`types.go`、`values.go`（JSON の値を読み書きする部品）、`activities.go`（`OwnTasks` と `Activities(own, transport)`）、`io.go`（と、フローが使うときだけ `io_aws.go`・`io_openai.go`・`io_claude.go`）、`rules.go`、`runtime.go`、`workflow.go`（`Workflow`）、`client.go`（`Start`・`AnswerCallback`・`Send`・`RunStatus`・`Histories`）、`worker.go`（`NewWorker`・`Replay`）を置く。線に乗る名前は TypeScript 版と同じなので、ワークフローとアクティビティを TypeScript や Python のワーカーと分け合える（5 章で、Go と TypeScript の組み合わせを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
 - **値は JSON のまま運ぶ。** ワークフローの変数、タスクの引数と結果は、JSON の値（`map[string]any`、`[]any`、`float64`、`string`、`bool`、`nil`）のまま持ち、構造体には読まない。Python 版と同じ形である。構造体に読むと、無いフィールドと null の区別が消え、構造体が知らないフィールドが落ち、型に合わない結果は読む段階でエラーになる。シナリオは型に合わない結果（`{}` や `[]`）も返し、ワークフローがそれを `Dandori.BadResponse` で拒否すること、無いフィールドを無いまま次の呼び出しに渡すことを、参照インタプリタと比べる。型を確かめる関数（`Is<型>`）は JSON の値に対して書く。`types.go` には、レコードごとの構造体（JSON の名前をタグに持つ）と列挙ごとの文字列の型も書き、利用者は自分のタスクの中で `Decode` で読める。自分で書くタスク（`OwnTasks` のメソッド）は、引数を `map[string]any` で受け取り、SDK が JSON に書ける値を何でも返せる。
 - **パッケージの名前は ASCII にする。** Go の import パスには ASCII しか使えない（golang.org/x/mod の `CheckImportPath`）ので、`宿泊` というディレクトリは import できない。ワークフローの名前が ASCII の識別子ならそれを、そうでなければ `.flow` のファイル名（`hotel.ja.flow` なら `hotel_ja`）を、それも使えなければ `workflow` を名前にする。Go の識別子は日本語を受け付けるので、変数の名前は日本語のまま書く。外から見える名前（型、構造体のフィールド、`OwnTasks` のメソッド）は先頭が大文字でなければならないので、日本語の名前には前に `X` を付ける（`X承認を求める`）。
@@ -2787,7 +2787,7 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
    |---|---|---|
    | 二つの名前が Go の一つの識別子 | 列挙 `order_status` と `orderStatus`、タスク `send_mail` と `sendMail`、フィールド、入力 | temporal-go |
    | 型が Go の派生の名前 | `Color` の隣の `ColorValues`、`Room` の隣の `IsRoom` | temporal-go |
-   | 型が Go のパッケージの持つ名前 | `Outcome`、`Status`、`Answer`、`History`、`Start`、`Send`、`Where`、`Workflow` など | temporal-go |
+   | 型が Go のパッケージの持つ名前 | `Transport`、`Start`、`Send`、`Where`、`Workflow` など | temporal-go |
    | 暗号化のときの Go の名前 | `Dial`、`CodecDataConverter` など | temporal-go |
    | パッケージの中の帳簿が Go の `Books` と同じ | 型 `Books` と帳簿を読むフロー | temporal-go（パッケージのときだけ） |
    | 型が JavaScript のグローバル | `Date` | temporal-typescript、durable |
@@ -2796,22 +2796,26 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
    | 型とメソッドが Python の予約語、組み込み、自分の名前 | `class`、`format`、`workflow` | temporal-python、pydantic-graph |
    | 型が Python の派生の名前 | `Color` の隣の `Color_values`、`is_Room` | temporal-python、pydantic-graph |
    | サービスのメソッドがクライアントの関数 | `Send` | temporal-typescript、temporal-python、temporal-go |
+   | サービスのメソッドが一つの言語の関数 | `Answer`（TypeScript と Python）、`AnswerCallback`（Go） | その言語の出力先 |
+   | Go の関数になるメソッドと同じ名前の型 | `record Status` と `rpc Status` | temporal-go |
    | サービスのメッセージがクライアントの型 | `Order` | 同じ三つ |
    | 同じ名前のメッセージ型が二つの型を指す | 違うパッケージの `Sent` | 同じ三つ |
 
 4. **同じメッセージを取る二つのメソッドは、一つの型にする。** `type SentRPC = Sent` を一度だけ書く（`ClientNames::message`）。Go のレコードがメッセージの名前と同じなら、別名を書かずにその型を使う。前は組めなかった形で、W105 は言わない。
 5. **外から見えない名前は、そのままにする。** 流れの変数（`go_name`、`py_name`）、自分で実装しないタスクの Python のメソッド、Argo のテンプレートと Step Functions のステートの名前、`rules.ts` の読み込みの別名、Argo の `caller/types.ts`（`Date_`）は、呼ぶ側が読まない。E006 の `same_generated_names` も同じものを読むので、`type_name` 自体は変えていない。
+6. **Go のパッケージは、業務の型に自然な名詞を取らない。** Go は型と関数が一つの名前空間で、どちらも大文字で公開する。パッケージが `Outcome`、`History`、`Answer`、`Status` を持つと、`enum Outcome` や `record Answer` が `--target temporal-go` だけで止まる。そこでパッケージの名前を `CallOutcome`（Lambda か AWS の API が答えたもの）、`RunHistory`（実行の履歴）、`AnswerCallback`（コールバックに答える）、`RunStatus`（実行がどこにいるか）にした。TypeScript と Python は大文字と小文字で分かれる（関数は `answer`、`status`）ので変えない。`Start`、`Send`、`Histories`、`Where`、`Replay`、`Decode`、`Transport` は、型の名前として稀か、API として読まれるので変えない。
+7. **Go のサービスの状態。** `rpc Status` は、`RunStatus` を呼ぶ関数 `Status` になる。応答の `dandori.v1.Status` は、別名を書くと関数と同じ名前になるので書かず、型は `Where` を読む。組めるので W105 は言わない。`rpc GetStatus` は別名 `type Status = Where` を書く。`record Status` があれば別名は書かずに `Where` を読み、組める。`record Status` の隣の `rpc Status` は、関数とレコードが一つの名前になるので W105 である。`rpc RunStatus` は、もとからある関数と同じことをするので書かない。名前が同じで違うことをするもの（始めのメソッドの `rpc RunStatus`、状態のメソッドの `rpc Histories`、`rpc AnswerCallback`）は W105 である。
 
 ### 22.4 捨てたもの
 
 - 1.14 と 1.18 の、`.proto` を変えられない利用者のために生成する側で避ける形を残すこと。この章で逆にした。残すと、呼ぶ側が読む名前が言語ごとに `.flow` と違うままになる。`.proto` を変えられない利用者は、W105 が挙げる出力先を使えず、挙げない出力先を使う。
-- 生成するコードの自分の名前を変えて、ぶつかりにくくすること（Go の `Outcome` を別の名前に）。ぶつからないフローの生成物のバイト列まで変わる。
 - E006 にすること。挙げない出力先では組めるので、それらの出力先を使う人まで止める。
 
 ### 22.5 変わること
 
 - 上の形のフローは、挙げる出力先の `gen` が止まる。前は別の名前で書いて通っていた。名前を変えるときは、タスクの名前がアクティビティの名前で、フィールドの名前が JSON のキーなので、動いている実行があればワークフローの版も変える。
-- 形に当たらないフローの生成物は一字も変わらない。
+- `--target temporal-go` の生成物は、どのフローもバイト列が変わる。生成物を読む Go のコードは、`Outcome` を `CallOutcome` に、`History` を `RunHistory` に、`Answer` を `AnswerCallback` に、`Status` を `RunStatus` に書き換える。
+- ほかの出力先は、形に当たらないフローの生成物は一字も変わらない。
 
 ### 22.6 確かめたこと
 
@@ -2826,8 +2830,8 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 
 ### 22.7 見つけて直していないもの
 
-- 例の 7 本の `enum Outcome` と `deadlines.flow` の `record Answer` に W105 が出ている。Go を生成しないなら困らないが、例としては直したい。名前を変えるか、Go のパッケージの持つ名前の表を見直すかは決めていない。
 - 流れの名前が Python の識別子にならないとき（`²`）や、NFKC で別の名前と同じになるとき（`ｆｏｏ` と `foo`）は言わない。chobo の表は dandori から読めない。
-- 始めのメソッドの名前がクライアントの関数と同じだと、前と同じく関数を書かない（`Start`）。ほかの役のメソッドは止まる。Python のワークフローのクラスは、前と同じく `py_name(&m.name)` の名前になる。
+- TypeScript と Python のクライアントでは、始めのメソッドと状態のメソッドの名前がクライアントの関数と同じだと、違うことをする関数でも（始めのメソッドの `rpc Send`、状態のメソッドの `rpc Histories`）何も書かず、何も言わない。Go は 22.3 の 7 のとおり W105 にした。Python のワークフローのクラスは、前と同じく `py_name(&m.name)` の名前になる。
 - 二冊の帳簿が Go の `Books` の一つのフィールドになる形（`a_b` と `aB`）は言わない。
 - Python の組み込みの全部を止めるのは、広めである。`format` のように、モジュールが読まない組み込みでも止まる。
+- Go のパッケージがフローによって宣言する `BookCall`、`BookResult`、`BookTransport`（帳簿を読むフロー）と `DATE`（`date` を持つフロー）は、`GO_EXPORTED` に無いので、同じ名前の型は W105 にならず、`go vet` が止める。

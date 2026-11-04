@@ -1,0 +1,28 @@
+workflow client_status_beside v1 implements svc.Svc
+description "A record `Status` beside the method `GetStatus`, whose response is the type `Where` in Go."
+
+use proto svc from "protos/client_status_beside.proto"
+
+record Sent
+  note : string
+
+record Status
+  state : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task look(id: string) -> Status
+
+task wait() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let now = look(id: id)
+  let s = wait()
+    on timeout => fail Late "no word"
+  succeed id = "{id} {now.state} {s.note}"

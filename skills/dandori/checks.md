@@ -130,7 +130,7 @@ loop, or one round that is too large, and the diagnostic says which.
 
 A generator does not pick another name. When the code of a platform cannot keep a name of the `.flow`
 or the `.proto`, because two names are one identifier there (`send_mail` and `sendMail` in Go) or the
-code has the name for itself (`Outcome` in the Go package, `Date` in TypeScript, `format` in Python),
+code has the name for itself (`Transport` in the Go package, `Date` in TypeScript, `format` in Python),
 `dandori check` warns and names the platforms (W105), and `dandori gen` writes nothing when it is to
 write one of them (E051). Rename it, or leave that platform out of `--target`.
 

@@ -1,5 +1,5 @@
-warning[W105]: tests/spellings/Goの自分の名前.flow:4:6: The type `Outcome` cannot keep its name in the code of Go
-     4 | enum Outcome = 勝ち | 負け
-  = Go (`--target temporal-go`): the package declares `Outcome` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`).
+warning[W105]: tests/spellings/Goの自分の名前.flow:4:6: The type `Transport` cannot keep its name in the code of Go
+     4 | enum Transport = 勝ち | 負け
+  = Go (`--target temporal-go`): the package declares `Transport` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`).
   = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
 tests/spellings/Goの自分の名前.flow: ok (1 warning(s))

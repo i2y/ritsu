@@ -1,0 +1,22 @@
+workflow client_run_status_starts v1 implements svc.Svc
+description "The method that starts the workflow, named as the function of the client of Go that tells where a run is."
+
+use proto svc from "protos/client_run_status_starts.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task wait() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = wait()
+    on timeout => fail Late "no word"
+  succeed id = "{id} {s.note}"

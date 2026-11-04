@@ -1,0 +1,22 @@
+workflow client_answer v1 implements svc.Svc
+description "A method named as the function of the clients of TypeScript and Python that answers a callback. Go's is `AnswerCallback`."
+
+use proto svc from "protos/client_answer.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task wait() -> Sent
+  callback
+  timeout 1 day
+
+flow
+  let s = wait()
+    on timeout => fail Late "no word"
+  succeed id = "{id} {s.note}"

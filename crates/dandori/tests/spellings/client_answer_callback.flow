@@ -1,0 +1,22 @@
+workflow client_answer_callback v1 implements svc.Svc
+description "A method named as the function of the client of Go that answers a callback."
+
+use proto svc from "protos/client_answer_callback.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task wait() -> Sent
+  callback
+  timeout 1 day
+
+flow
+  let s = wait()
+    on timeout => fail Late "no word"
+  succeed id = "{id} {s.note}"

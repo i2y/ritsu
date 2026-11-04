@@ -1,0 +1,22 @@
+workflow クライアントのstatus v1 implements svc.Svc
+description "実行がどこにいるかを言うメソッド `Status` とメッセージ `Status` です。Go では関数で、型は `Where` を読みます。"
+
+use proto svc from "protos/クライアントのstatus.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

@@ -1,0 +1,5 @@
+warning[W105]: tests/spellings/client_status_type.flow:1:43: The type `Status` and the service's method `Status` are one name in the code of Go
+     1 | workflow client_status_type v1 implements svc.Svc
+  = Go (`--target temporal-go`): both are `Status`: a name cannot be declared twice, so the package does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/client_status_type.flow: ok (1 warning(s))

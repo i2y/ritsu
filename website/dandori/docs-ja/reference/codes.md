@@ -37,7 +37,7 @@ E040、E050、E051 は `dandori gen` が書き出す先のプラットフォー�
 | W102 | 起きることのない `on <拒否のエラー>` |
 | W103 | 案件を始めるタスクに `key` が無い |
 | W104 | 範囲のある場所に、範囲の分からない値を渡している（動く期間を書いていないワークフローの `now` と、`on failure`・`on cancel` の中の `now` も） |
-| W105 | プラットフォームのコードが名前をそのまま持てない。二つの名前が一つの識別子になる（Go の `send_mail` と `sendMail`）か、コードがその名前を自分で使う（Go の `Outcome`、TypeScript の `Date`、Python の `format`）。`gen` はそのプラットフォームで止まる（E051） |
+| W105 | プラットフォームのコードが名前をそのまま持てない。二つの名前が一つの識別子になる（Go の `send_mail` と `sendMail`）か、コードがその名前を自分で使う（Go の `Transport`、TypeScript の `Date`、Python の `format`）。`gen` はそのプラットフォームで止まる（E051） |
 | W901 | 鍵の形の値（AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵）が、`.flow` の文字列かコメントに書かれている。`ritsu: test secret` と書いた行はテスト用の値として出ない |
 | W902 | タスクが呼ぶ URL（`http` のタスクの URL、エージェントの `url`、`use rule … connect`、`use openapi` と `use proto` の `url`、OpenAPI の文書の最初のサーバー）が、このマシンの外へ暗号化しない HTTP で送る。URL を書いたところに `plaintext "<理由>"` があれば出ない |
 | W904 | 秘密と印を付けた値が、ワークフローの履歴に残る。入力・出力、タスクの結果、呼び出しの引数、`fail` の理由。ワークフローに `history encrypted` と書いてあれば出ない |

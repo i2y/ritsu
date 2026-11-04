@@ -278,7 +278,7 @@ pub fn ledger() -> Ledger {
                 "`dandori gen` for a target W105 names: two names are one identifier there, or the code has the name for itself. A generator does not pick another name, so the run writes nothing. A run that names only targets W105 does not name writes them. `ritsu gen` stops the same way.",
             ),
             tr!("メッセージのとおりに `.flow` か `.proto` の名前を変えてください。その出力先を作らないなら、`--target` から外してください。", "Rename it in the `.flow` or the `.proto`, as the message says. If you do not build that target, leave it out of `--target`."),
-            "workflow w v1\n\nenum Outcome = won | lost\n\noutputs\n  how : Outcome\n\ntask decide() -> Outcome\n\nflow\n  let how = decide()\n  succeed how = how\n",
+            "workflow w v1\n\nenum Transport = air | rail\n\noutputs\n  how : Transport\n\ntask decide() -> Transport\n\nflow\n  let how = decide()\n  succeed how = how\n",
             &["W105", "E050", "E006"],
         ),
         Entry::new(
@@ -346,11 +346,11 @@ pub fn ledger() -> Ledger {
             "W105",
             tr!("出力先のコードが名前をそのまま持てません", "A name the code of a target cannot keep"),
             tr!(
-                "型、自分で実装するタスク、レコードのフィールド、入出力、サービスのメソッドとメッセージの名前が、ある出力先のコードで別の名前と一つの識別子になるか、そのコードが自分で使う名前のとき。Go は名前を公開の形に変える（`send_mail` も `sendMail` も `SendMail`）ので、`Outcome`・`Status`・`Answer` のようなパッケージが持つ名前を含めて、形が同じになるものが当たります。TypeScript は JavaScript のグローバルと同じ型の名前と `_` で始まる名前、Python はキーワード、組み込み、生成するコードが使う名前、`_` で始まる名前です。生成器は別の名前に変えないので、警告が挙げた出力先の `gen` は E051 で止まります。ほかの出力先は作れます。",
-                "A type's, a task's you implement, a field's, an input's or an output's name, or a method's or a message's of the service, that is one identifier with another name in the code of a target, or that the code has for itself. Go exports names (`send_mail` and `sendMail` are both `SendMail`), and every package has names of its own such as `Outcome`, `Status` and `Answer`. In TypeScript, a type named as a global of JavaScript, and a name that begins with `_`; in Python, a keyword, a builtin, a name the code uses, and a name that begins with `_`. A generator does not pick another name, so `gen` stops with E051 for the targets the warning names. The other targets build."
+                "型、自分で実装するタスク、レコードのフィールド、入出力、サービスのメソッドとメッセージの名前が、ある出力先のコードで別の名前と一つの識別子になるか、そのコードが自分で使う名前のとき。Go は名前を公開の形に変える（`send_mail` も `sendMail` も `SendMail`）ので、`Transport`・`Where`・`Start` のようなパッケージが持つ名前を含めて、形が同じになるものが当たります。TypeScript は JavaScript のグローバルと同じ型の名前と `_` で始まる名前、Python はキーワード、組み込み、生成するコードが使う名前、`_` で始まる名前です。生成器は別の名前に変えないので、警告が挙げた出力先の `gen` は E051 で止まります。ほかの出力先は作れます。",
+                "A type's, a task's you implement, a field's, an input's or an output's name, or a method's or a message's of the service, that is one identifier with another name in the code of a target, or that the code has for itself. Go exports names (`send_mail` and `sendMail` are both `SendMail`), and every package has names of its own such as `Transport`, `Where` and `Start`. In TypeScript, a type named as a global of JavaScript, and a name that begins with `_`; in Python, a keyword, a builtin, a name the code uses, and a name that begins with `_`. A generator does not pick another name, so `gen` stops with E051 for the targets the warning names. The other targets build."
             ),
             tr!("作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` か `.proto` で名前を変えてください。", "For a target you do not build, leave it as it is. For one you do, rename it in the `.flow` or the `.proto`."),
-            "workflow w v1\n\nenum Outcome = won | lost\n\noutputs\n  how : Outcome\n\ntask decide() -> Outcome\n\nflow\n  let how = decide()\n  succeed how = how\n",
+            "workflow w v1\n\nenum Transport = air | rail\n\noutputs\n  how : Transport\n\ntask decide() -> Transport\n\nflow\n  let how = decide()\n  succeed how = how\n",
             &["E051", "E006"],
         ),
         Entry::new(

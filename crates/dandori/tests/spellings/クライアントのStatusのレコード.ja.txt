@@ -1,0 +1,5 @@
+警告[W105]: tests/spellings/クライアントのStatusのレコード.flow:1:43: 型 `Status`とサービスのメソッド `Status`は、Go のコードで一つの名前になります
+     1 | workflow クライアントのStatusのレコード v1 implements svc.Svc
+  = Go（`--target temporal-go`）：どちらも `Status` です。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+tests/spellings/クライアントのStatusのレコード.flow: 検査を通りました（警告 1 件）

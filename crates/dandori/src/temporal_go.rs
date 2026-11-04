@@ -1107,9 +1107,9 @@ fn io_file(n: &Needs, pkg: &str, header: &str) -> String {
 }
 
 const IO: &str = r##"
-// Outcome is what Lambda or an AWS API answered: the value OK, or, when Error is not "", the error
+// CallOutcome is what Lambda or an AWS API answered: the value OK, or, when Error is not "", the error
 // by the name the other side gives it.
-type Outcome struct {
+type CallOutcome struct {
 	OK      any
 	Error   string
 	Message string
@@ -1191,11 +1191,11 @@ func (e *AgentStopped) Error() string {
 // Transport is how the tasks dandori writes reach the other side.
 type Transport interface {
 	// Lambda invokes a Lambda function; an error the function raises comes back by its type.
-	Lambda(ctx context.Context, fn string, payload map[string]any) (Outcome, error)
+	Lambda(ctx context.Context, fn string, payload map[string]any) (CallOutcome, error)
 	// HTTP sends an HTTP request.
 	HTTP(ctx context.Context, req HTTPRequest) (HTTPResponse, error)
 	// AWS calls an AWS API, named as Step Functions names it (sns, publish); an exception comes back by its name.
-	AWS(ctx context.Context, service, action string, input map[string]any) (Outcome, error)
+	AWS(ctx context.Context, service, action string, input map[string]any) (CallOutcome, error)
 	// Agent runs an agent once; the answer is the JSON it gave, as Schema says. A refusal is an error.
 	Agent(ctx context.Context, call AgentCall) (any, error)
 }
@@ -1230,22 +1230,22 @@ func (t *DefaultTransport) client(key string, build func() (any, error)) (any, e
 // The parts of the default Transport that a build writes only when the flow needs them: io_aws.go,
 // io_openai.go and io_claude.go set these when the package loads.
 var (
-	ddLambdaCall  func(ctx context.Context, t *DefaultTransport, fn string, payload map[string]any) (Outcome, error)
-	ddAWSCall     func(ctx context.Context, t *DefaultTransport, service, action string, input map[string]any) (Outcome, error)
+	ddLambdaCall  func(ctx context.Context, t *DefaultTransport, fn string, payload map[string]any) (CallOutcome, error)
+	ddAWSCall     func(ctx context.Context, t *DefaultTransport, service, action string, input map[string]any) (CallOutcome, error)
 	ddOpenAIAgent func(ctx context.Context, t *DefaultTransport, call AgentCall) (any, error)
 	ddClaudeAgent func(ctx context.Context, t *DefaultTransport, call AgentCall) (any, error)
 )
 
-func (t *DefaultTransport) Lambda(ctx context.Context, fn string, payload map[string]any) (Outcome, error) {
+func (t *DefaultTransport) Lambda(ctx context.Context, fn string, payload map[string]any) (CallOutcome, error) {
 	if ddLambdaCall == nil {
-		return Outcome{}, errors.New("the flow calls no Lambda function, so this build has no Lambda client: pass a Transport whose Lambda calls it")
+		return CallOutcome{}, errors.New("the flow calls no Lambda function, so this build has no Lambda client: pass a Transport whose Lambda calls it")
 	}
 	return ddLambdaCall(ctx, t, fn, payload)
 }
 
-func (t *DefaultTransport) AWS(ctx context.Context, service, action string, input map[string]any) (Outcome, error) {
+func (t *DefaultTransport) AWS(ctx context.Context, service, action string, input map[string]any) (CallOutcome, error) {
 	if ddAWSCall == nil {
-		return Outcome{}, fmt.Errorf("the default Transport has no client for %s:%s; pass a Transport whose AWS calls it", service, action)
+		return CallOutcome{}, fmt.Errorf("the default Transport has no client for %s:%s; pass a Transport whose AWS calls it", service, action)
 	}
 	return ddAWSCall(ctx, t, service, action, input)
 }
@@ -1496,7 +1496,7 @@ func ddBadArgument(name string, v any) error {
 }
 
 // ddValue is the value of an answer, or the declared error it names (names: the other side's name -> the error).
-func ddValue(o Outcome, err error, names map[string]string) (any, error) {
+func ddValue(o CallOutcome, err error, names map[string]string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -1839,19 +1839,19 @@ fn io_aws_file(n: &Needs, pkg: &str, header: &str) -> String {
     if n.lambda {
         t.push_str(r##"
 // ddAWSLambda invokes a Lambda function; an error the function raises comes back by its type.
-func ddAWSLambda(ctx context.Context, t *DefaultTransport, fn string, payload map[string]any) (Outcome, error) {
+func ddAWSLambda(ctx context.Context, t *DefaultTransport, fn string, payload map[string]any) (CallOutcome, error) {
 	cfg, err := t.awsConfig(ctx)
 	if err != nil {
-		return Outcome{}, err
+		return CallOutcome{}, err
 	}
 	out, err := lambda.NewFromConfig(cfg).Invoke(ctx, &lambda.InvokeInput{FunctionName: aws.String(fn), Payload: []byte(ddJSONText(payload))})
 	if err != nil {
-		return Outcome{}, err
+		return CallOutcome{}, err
 	}
 	var body any
 	if len(out.Payload) > 0 {
 		if err := json.Unmarshal(out.Payload, &body); err != nil {
-			return Outcome{}, err
+			return CallOutcome{}, err
 		}
 	}
 	if out.FunctionError != nil {
@@ -1860,16 +1860,16 @@ func ddAWSLambda(ctx context.Context, t *DefaultTransport, fn string, payload ma
 			name = *out.FunctionError
 		}
 		message, _ := ddGet(body, "errorMessage").(string)
-		return Outcome{Error: name, Message: message}, nil
+		return CallOutcome{Error: name, Message: message}, nil
 	}
-	return Outcome{OK: body}, nil
+	return CallOutcome{OK: body}, nil
 }
 "##);
     }
     if api {
-        t.push_str("\n// ddAWSAPI calls an AWS API, named as Step Functions names it (sns, publish): the input's JSON\n// goes into the SDK's input struct, whose fields take the API's names (QueueUrl) as they are, and\n// the answer comes back as JSON, without the SDK's metadata.\nfunc ddAWSAPI(ctx context.Context, t *DefaultTransport, service, action string, input map[string]any) (Outcome, error) {\n");
+        t.push_str("\n// ddAWSAPI calls an AWS API, named as Step Functions names it (sns, publish): the input's JSON\n// goes into the SDK's input struct, whose fields take the API's names (QueueUrl) as they are, and\n// the answer comes back as JSON, without the SDK's metadata.\nfunc ddAWSAPI(ctx context.Context, t *DefaultTransport, service, action string, input map[string]any) (CallOutcome, error) {\n");
         if !known.is_empty() {
-            t.push_str("\tcfg, err := t.awsConfig(ctx)\n\tif err != nil {\n\t\treturn Outcome{}, err\n\t}\n");
+            t.push_str("\tcfg, err := t.awsConfig(ctx)\n\tif err != nil {\n\t\treturn CallOutcome{}, err\n\t}\n");
             t.push_str("\targs := input\n\t// SQS takes the message as text; Step Functions writes a JSON body out the same way\n\tif service == \"sqs\" && action == \"sendMessage\" {\n\t\tswitch b := input[\"MessageBody\"].(type) {\n\t\tcase map[string]any, []any:\n\t\t\targs = ddWith(input, \"MessageBody\", ddJSONText(b))\n\t\t}\n\t}\n");
             t.push_str("\tvar out any\n\tswitch service + \":\" + action {\n");
             for (s, a) in &known {
@@ -1878,14 +1878,14 @@ func ddAWSLambda(ctx context.Context, t *DefaultTransport, fn string, payload ma
                     cs.next().map(|f| f.to_uppercase().chain(cs).collect::<String>()).unwrap_or_default()
                 };
                 t.push_str(&format!(
-                    "\tcase {}:\n\t\tvar in {s}.{method}Input\n\t\tif err := ddAWSIn(args, &in); err != nil {{\n\t\t\treturn Outcome{{}}, err\n\t\t}}\n\t\to, err := {s}.NewFromConfig(cfg).{method}(ctx, &in)\n\t\tif err != nil {{\n\t\t\treturn ddAWSError(err)\n\t\t}}\n\t\tout = o\n",
+                    "\tcase {}:\n\t\tvar in {s}.{method}Input\n\t\tif err := ddAWSIn(args, &in); err != nil {{\n\t\t\treturn CallOutcome{{}}, err\n\t\t}}\n\t\to, err := {s}.NewFromConfig(cfg).{method}(ctx, &in)\n\t\tif err != nil {{\n\t\t\treturn ddAWSError(err)\n\t\t}}\n\t\tout = o\n",
                     q(&format!("{s}:{a}"))
                 ));
             }
-            t.push_str("\tdefault:\n\t\treturn Outcome{}, fmt.Errorf(\"the default Transport has no client for %s:%s; pass a Transport whose AWS calls it\", service, action)\n\t}\n");
-            t.push_str("\tv, err := ddAWSOut(out)\n\tif err != nil {\n\t\treturn Outcome{}, err\n\t}\n\treturn Outcome{OK: v}, nil\n}\n");
+            t.push_str("\tdefault:\n\t\treturn CallOutcome{}, fmt.Errorf(\"the default Transport has no client for %s:%s; pass a Transport whose AWS calls it\", service, action)\n\t}\n");
+            t.push_str("\tv, err := ddAWSOut(out)\n\tif err != nil {\n\t\treturn CallOutcome{}, err\n\t}\n\treturn CallOutcome{OK: v}, nil\n}\n");
         } else {
-            t.push_str("\treturn Outcome{}, fmt.Errorf(\"the default Transport has no client for %s:%s; pass a Transport whose AWS calls it\", service, action)\n}\n");
+            t.push_str("\treturn CallOutcome{}, fmt.Errorf(\"the default Transport has no client for %s:%s; pass a Transport whose AWS calls it\", service, action)\n}\n");
         }
         if !known.is_empty() {
             t.push_str(r##"
@@ -1940,10 +1940,10 @@ func ddPrune(v any) any {
         t.push_str(r##"
 // ddAWSError is an exception of the API's, by the name the API's model gives it (NotFoundException),
 // as the SDK for JavaScript names it; the code on the wire can be another (NotFound).
-func ddAWSError(err error) (Outcome, error) {
+func ddAWSError(err error) (CallOutcome, error) {
 	var ae smithy.APIError
 	if !errors.As(err, &ae) {
-		return Outcome{}, err
+		return CallOutcome{}, err
 	}
 	name := ae.ErrorCode()
 	if _, generic := ae.(*smithy.GenericAPIError); !generic {
@@ -1953,7 +1953,7 @@ func ddAWSError(err error) (Outcome, error) {
 		}
 		name = t.Name()
 	}
-	return Outcome{Error: name, Message: ae.ErrorMessage()}, nil
+	return CallOutcome{Error: name, Message: ae.ErrorMessage()}, nil
 }
 "##);
     }
@@ -2311,7 +2311,7 @@ fn activities_file(m: &Model, pkg: &str, header: &str) -> String {
     a.push_str("// - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
     a.push_str("// - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
     a.push_str("// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer goes\n");
-    a.push_str("//   to the workflow the id names, with client.go's Answer (the update `dandori.answer`, or the\n");
+    a.push_str("//   to the workflow the id names, with client.go's AnswerCallback (the update `dandori.answer`, or the\n");
     a.push_str("//   signal `dandori.callback`): {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\n");
     a.push_str("// - A task that says `event` is not here: nothing is called, and its value is sent to the workflow\n");
     a.push_str("//   (client.go: Send).\n");
@@ -2852,12 +2852,12 @@ fn plain_client_file(m: &Model, pkg: &str, header: &str) -> String {
     c.push_str("func Start(ctx context.Context, c client.Client, id string, input any, searchAttributes bool) (client.WorkflowRun, error) {\n\to := client.StartWorkflowOptions{ID: id, TaskQueue: TaskQueue, WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE, WorkflowExecutionErrorWhenAlreadyStarted: true}\n\tif searchAttributes {\n\t\to.Memo = map[string]any{\"dandori.cases\": true}\n\t}\n\treturn c.ExecuteWorkflow(ctx, o, WorkflowType, input)\n}\n\n");
     c.push_str("// CallbackAnswer is a callback's answer, or an event's value: OK, or the error Error names, with Message.\ntype CallbackAnswer struct {\n\tOK      any\n\tError   string\n\tMessage string\n}\n\n");
     c.push_str("func (a CallbackAnswer) fields() map[string]any {\n\tif a.Error != \"\" {\n\t\treturn map[string]any{\"error\": a.Error, \"message\": a.Message}\n\t}\n\treturn map[string]any{\"ok\": a.OK}\n}\n\n");
-    c.push_str("// Answer answers a callback, by the id its task handed on. The workflow says whether it took the\n// answer: it refuses one for a callback it does not wait for, and a second one.\nfunc Answer(ctx context.Context, c client.Client, callbackID string, a CallbackAnswer) error {\n\tvar id []any\n\tif err := json.Unmarshal([]byte(callbackID), &id); err != nil || len(id) != 2 {\n\t\treturn fmt.Errorf(\"%q is not the id of a callback\", callbackID)\n\t}\n\tworkflowID, _ := id[0].(string)\n\targs := a.fields()\n\targs[\"callback_id\"] = callbackID\n\th, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: \"dandori.answer\", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn h.Get(ctx, nil)\n}\n\n");
-    c.push_str("// Send sends the workflow an event, by its id and the event's name. The workflow refuses an event\n// it does not wait for now, and a second one: send it again when it waits for it (Status: Events).\nfunc Send(ctx context.Context, c client.Client, workflowID, event string, a CallbackAnswer) error {\n\tif !ddHas(Events, event) {\n\t\treturn fmt.Errorf(\"the workflow has no event %s\", event)\n\t}\n\targs := a.fields()\n\targs[\"event\"] = event\n\th, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: \"dandori.event\", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn h.Get(ctx, nil)\n}\n\n");
+    c.push_str("// AnswerCallback answers a callback, by the id its task handed on. The workflow says whether it took the\n// answer: it refuses one for a callback it does not wait for, and a second one.\nfunc AnswerCallback(ctx context.Context, c client.Client, callbackID string, a CallbackAnswer) error {\n\tvar id []any\n\tif err := json.Unmarshal([]byte(callbackID), &id); err != nil || len(id) != 2 {\n\t\treturn fmt.Errorf(\"%q is not the id of a callback\", callbackID)\n\t}\n\tworkflowID, _ := id[0].(string)\n\targs := a.fields()\n\targs[\"callback_id\"] = callbackID\n\th, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: \"dandori.answer\", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn h.Get(ctx, nil)\n}\n\n");
+    c.push_str("// Send sends the workflow an event, by its id and the event's name. The workflow refuses an event\n// it does not wait for now, and a second one: send it again when it waits for it (RunStatus: Events).\nfunc Send(ctx context.Context, c client.Client, workflowID, event string, a CallbackAnswer) error {\n\tif !ddHas(Events, event) {\n\t\treturn fmt.Errorf(\"the workflow has no event %s\", event)\n\t}\n\targs := a.fields()\n\targs[\"event\"] = event\n\th, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: \"dandori.event\", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn h.Get(ctx, nil)\n}\n\n");
     c.push_str("// Where is where a run is: the line of the call or the wait it is at, each case's state (nil before\n// it starts), and the events it waits for now.\ntype Where struct {\n\tAt     *int           `json:\"at\"`\n\tCases  map[string]any `json:\"cases\"`\n\tEvents []string       `json:\"events\"`\n}\n\n");
-    c.push_str("// Status is where the run id is (the query dandori.status).\nfunc Status(ctx context.Context, c client.Client, id string) (Where, error) {\n\tvar w Where\n\tv, err := c.QueryWorkflow(ctx, id, \"\", \"dandori.status\")\n\tif err != nil {\n\t\treturn w, err\n\t}\n\treturn w, v.Get(&w)\n}\n\n");
-    c.push_str("// History is the history of a run.\ntype History struct {\n\tWorkflowID string\n\tHistory    *historypb.History\n}\n\n");
-    c.push_str("// Histories are the histories of the runs of this workflow that query finds, by default (\"\") the\n// ones going on: replay them with new code (worker.go: Replay) before it takes them over.\nfunc Histories(ctx context.Context, c client.Client, query string) ([]History, error) {\n\tif query == \"\" {\n\t\tquery = fmt.Sprintf(\"WorkflowType = '%s' AND ExecutionStatus = 'Running'\", WorkflowType)\n\t}\n\tvar out []History\n\tvar token []byte\n\tfor {\n\t\tlisted, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query, NextPageToken: token})\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, e := range listed.Executions {\n\t\t\th := &historypb.History{}\n\t\t\tevents := c.GetWorkflowHistory(ctx, e.Execution.WorkflowId, e.Execution.RunId, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)\n\t\t\tfor events.HasNext() {\n\t\t\t\tev, err := events.Next()\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t\th.Events = append(h.Events, ev)\n\t\t\t}\n\t\t\tout = append(out, History{WorkflowID: e.Execution.WorkflowId, History: h})\n\t\t}\n\t\ttoken = listed.NextPageToken\n\t\tif len(token) == 0 {\n\t\t\treturn out, nil\n\t\t}\n\t}\n}\n");
+    c.push_str("// RunStatus is where the run id is (the query dandori.status).\nfunc RunStatus(ctx context.Context, c client.Client, id string) (Where, error) {\n\tvar w Where\n\tv, err := c.QueryWorkflow(ctx, id, \"\", \"dandori.status\")\n\tif err != nil {\n\t\treturn w, err\n\t}\n\treturn w, v.Get(&w)\n}\n\n");
+    c.push_str("// RunHistory is the history of a run.\ntype RunHistory struct {\n\tWorkflowID string\n\tHistory    *historypb.History\n}\n\n");
+    c.push_str("// Histories are the histories of the runs of this workflow that query finds, by default (\"\") the\n// ones going on: replay them with new code (worker.go: Replay) before it takes them over.\nfunc Histories(ctx context.Context, c client.Client, query string) ([]RunHistory, error) {\n\tif query == \"\" {\n\t\tquery = fmt.Sprintf(\"WorkflowType = '%s' AND ExecutionStatus = 'Running'\", WorkflowType)\n\t}\n\tvar out []RunHistory\n\tvar token []byte\n\tfor {\n\t\tlisted, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query, NextPageToken: token})\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, e := range listed.Executions {\n\t\t\th := &historypb.History{}\n\t\t\tevents := c.GetWorkflowHistory(ctx, e.Execution.WorkflowId, e.Execution.RunId, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)\n\t\t\tfor events.HasNext() {\n\t\t\t\tev, err := events.Next()\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t\th.Events = append(h.Events, ev)\n\t\t\t}\n\t\t\tout = append(out, RunHistory{WorkflowID: e.Execution.WorkflowId, History: h})\n\t\t}\n\t\ttoken = listed.NextPageToken\n\t\tif len(token) == 0 {\n\t\t\treturn out, nil\n\t\t}\n\t}\n}\n");
     if let Some(s) = &m.service {
         c.push_str(&service_client_go(m, s).0);
     }
@@ -2866,10 +2866,10 @@ fn plain_client_file(m: &Model, pkg: &str, header: &str) -> String {
 
 /// client.go, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
-/// client's own Start, Send, Answer or Status. The names are those of client.ts, as Go exports them.
+/// client's own Start, Send, AnswerCallback or RunStatus. The names are those of client.ts, as Go exports them.
 /// And the names it could not write.
 fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
-    const FUNCTIONS: &[&str] = &["Start", "Answer", "Send", "Status", "Histories"];
+    const FUNCTIONS: &[&str] = &["Start", "AnswerCallback", "Send", "RunStatus", "Histories"];
     let mut c = String::new();
     c.push_str(&format!("\n// Service is the service the workflow implements, which `{}` describes. Its methods are the functions below.\nconst Service = {}\n", s.file, q(&s.name)));
     let mut own: Vec<(String, With)> = own_names(m).into_iter().map(|x| (x, With::Own)).collect();
@@ -2891,7 +2891,7 @@ fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
         let base = exported(&mt.name);
         let (f, sig, call, what) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = names.function(base.clone(), &mt.name, true);
+                let f = names.function(base.clone(), &mt.name, base == "Start");
                 let req = alias(&mut c, &mut names, &mt.request, "WorkflowInput", false, format!("the request of {label}, the workflow's input"));
                 alias(&mut c, &mut names, &mt.response, "WorkflowOutput", false, format!("the response of {label}, the workflow's output"));
                 (
@@ -2917,14 +2917,14 @@ fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
                 (
                     f,
                     format!("(ctx context.Context, c client.Client, callbackID string, value {req}) error"),
-                    "\treturn Answer(ctx, c, callbackID, CallbackAnswer{OK: value})\n".to_string(),
-                    format!("answers the callback of `{task}`, by the id its task handed on, as Answer does"),
+                    "\treturn AnswerCallback(ctx, c, callbackID, CallbackAnswer{OK: value})\n".to_string(),
+                    format!("answers the callback of `{task}`, by the id its task handed on, as AnswerCallback does"),
                 )
             }
             Some(Mark::Status) => {
-                let f = names.function(base.clone(), &mt.name, true);
+                let f = names.function(base.clone(), &mt.name, base == "RunStatus");
                 let res = alias(&mut c, &mut names, &mt.response, "Where", true, format!("the response of {label}, where a run is"));
-                (f, format!("(ctx context.Context, c client.Client, id string) ({res}, error)"), "\treturn Status(ctx, c, id)\n".to_string(), "is where the run id is, as Status says".to_string())
+                (f, format!("(ctx context.Context, c client.Client, id string) ({res}, error)"), "\treturn RunStatus(ctx, c, id)\n".to_string(), "is where the run id is, as RunStatus says".to_string())
             }
             None => continue,
         };
@@ -3051,7 +3051,7 @@ fn worker_file(m: &Model, pkg: &str, header: &str, rules: bool, build: &str) -> 
         .replace("func NewWorker(c client.Client,", "func NewWorker(c EncryptedClient,")
         .replace("\tw := worker.New(c, TaskQueue, WorkerOptions(deployment))\n", "\tw := worker.New(c.sdkClient(), TaskQueue, WorkerOptions(deployment))\n")
         .replace("// NewWorker is the worker on TaskQueue, with the workflow and the activities registered (\"\": no\n// deployment).\n", "// NewWorker is the worker on TaskQueue, with the workflow and the activities registered (\"\": no\n// deployment). The client carries the codec every payload of the workflow goes through (client.go: Dial).\n")
-        .replace("func Replay(histories []History) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr := worker.NewWorkflowReplayer()\n", "func Replay(histories []History, codec converter.PayloadCodec) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr, err := worker.NewWorkflowReplayerWithOptions(worker.WorkflowReplayerOptions{DataConverter: CodecDataConverter(codec), FailureConverter: CodecFailureConverter(codec)})\n\t\tif err != nil {\n\t\t\treturn append(failed, ReplayFailure{WorkflowID: h.WorkflowID, Error: err.Error()})\n\t\t}\n")
+        .replace("func Replay(histories []RunHistory) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr := worker.NewWorkflowReplayer()\n", "func Replay(histories []RunHistory, codec converter.PayloadCodec) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr, err := worker.NewWorkflowReplayerWithOptions(worker.WorkflowReplayerOptions{DataConverter: CodecDataConverter(codec), FailureConverter: CodecFailureConverter(codec)})\n\t\tif err != nil {\n\t\t\treturn append(failed, ReplayFailure{WorkflowID: h.WorkflowID, Error: err.Error()})\n\t\t}\n")
 }
 
 fn plain_worker_file(m: &Model, pkg: &str, header: &str, rules: bool, build: &str) -> String {
@@ -3068,7 +3068,7 @@ fn plain_worker_file(m: &Model, pkg: &str, header: &str, rules: bool, build: &st
     w.push_str("// WorkerOptions are the worker's options. With deployment, the worker is a version of that deployment\n// (Worker Deployment Versioning), and a run stays on the build it started on (PINNED), so the code\n// dandori writes anew never replays an old run.\nfunc WorkerOptions(deployment string) worker.Options {\n\tif deployment == \"\" {\n\t\treturn worker.Options{}\n\t}\n\treturn worker.Options{DeploymentOptions: worker.DeploymentOptions{\n\t\tUseVersioning:             true,\n\t\tVersion:                   worker.WorkerDeploymentVersion{DeploymentName: deployment, BuildID: BuildID},\n\t\tDefaultVersioningBehavior: workflow.VersioningBehaviorPinned,\n\t}}\n}\n\n");
     w.push_str("// NewWorker is the worker on TaskQueue, with the workflow and the activities registered (\"\": no\n// deployment).\nfunc NewWorker(c client.Client, own OwnTasks, t Transport, deployment string) worker.Worker {\n\tw := worker.New(c, TaskQueue, WorkerOptions(deployment))\n\tRegisterWorkflow(w)\n\tRegisterActivities(w, own, t)\n\treturn w\n}\n\n");
     w.push_str("// ReplayFailure is a run that the code finds nondeterministic, with why.\ntype ReplayFailure struct {\n\tWorkflowID string\n\tError      string\n}\n\n");
-    w.push_str("// Replay replays histories (client.go: Histories) with this code, and tells the runs it finds\n// nondeterministic, with why: before this code takes over runs that are going on, none may be.\nfunc Replay(histories []History) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr := worker.NewWorkflowReplayer()\n\t\tRegisterWorkflow(r)\n\t\t// the run's own id: the code makes keys and the ids of callbacks and child workflows from it\n\t\tif err := r.ReplayWorkflowHistoryWithOptions(nil, h.History, worker.ReplayWorkflowHistoryOptions{OriginalExecution: workflow.Execution{ID: h.WorkflowID}}); err != nil {\n\t\t\tfailed = append(failed, ReplayFailure{WorkflowID: h.WorkflowID, Error: err.Error()})\n\t\t}\n\t}\n\treturn failed\n}\n");
+    w.push_str("// Replay replays histories (client.go: Histories) with this code, and tells the runs it finds\n// nondeterministic, with why: before this code takes over runs that are going on, none may be.\nfunc Replay(histories []RunHistory) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr := worker.NewWorkflowReplayer()\n\t\tRegisterWorkflow(r)\n\t\t// the run's own id: the code makes keys and the ids of callbacks and child workflows from it\n\t\tif err := r.ReplayWorkflowHistoryWithOptions(nil, h.History, worker.ReplayWorkflowHistoryOptions{OriginalExecution: workflow.Execution{ID: h.WorkflowID}}); err != nil {\n\t\t\tfailed = append(failed, ReplayFailure{WorkflowID: h.WorkflowID, Error: err.Error()})\n\t\t}\n\t}\n\treturn failed\n}\n");
     w
 }
 
@@ -3092,7 +3092,7 @@ fn doc_file(m: &Model, nd: &Needs, pkg: &str, header: &str, called: &BTreeSet<us
         ritsu_emit::header::one_line(&m.source_file),
         if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }
     )));
-    d.push_str("//\n// Workflow is the workflow (workflow.go), and NewWorker its worker, with the tasks you write\n// (OwnTasks); Start, Answer, Send and Status are its client (client.go).\n//\n");
+    d.push_str("//\n// Workflow is the workflow (workflow.go), and NewWorker its worker, with the tasks you write\n// (OwnTasks); Start, AnswerCallback, Send and RunStatus are its client (client.go).\n//\n");
     d.push_str(&format!("// It is written against {}; add them to your module with go get.\n", modules.join(", ")));
     if !called.is_empty() {
         d.push_str("// The rules it calls are rulec's Go: see rules.go.\n");

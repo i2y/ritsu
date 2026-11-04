@@ -416,16 +416,16 @@ func DDJev(body, spec any) (any, error) {
 // ddBody is a Transport whose every HTTP request is answered with the body.
 type ddBody struct{ body any }
 
-func (t ddBody) Lambda(context.Context, string, map[string]any) (Outcome, error) {
-	return Outcome{}, errors.New("not here")
+func (t ddBody) Lambda(context.Context, string, map[string]any) (CallOutcome, error) {
+	return CallOutcome{}, errors.New("not here")
 }
 
 func (t ddBody) HTTP(context.Context, HTTPRequest) (HTTPResponse, error) {
 	return HTTPResponse{Status: 200, Body: t.body}, nil
 }
 
-func (t ddBody) AWS(context.Context, string, string, map[string]any) (Outcome, error) {
-	return Outcome{}, errors.New("not here")
+func (t ddBody) AWS(context.Context, string, string, map[string]any) (CallOutcome, error) {
+	return CallOutcome{}, errors.New("not here")
 }
 
 func (t ddBody) Agent(context.Context, AgentCall) (any, error) {
@@ -485,9 +485,9 @@ import (
 
 type {{.Alias}}Transport struct{ t harness.Transport }
 
-func (a {{.Alias}}Transport) Lambda(ctx context.Context, fn string, payload map[string]any) ({{.Alias}}.Outcome, error) {
+func (a {{.Alias}}Transport) Lambda(ctx context.Context, fn string, payload map[string]any) ({{.Alias}}.CallOutcome, error) {
 	o, err := a.t.Lambda(ctx, fn, payload)
-	return {{.Alias}}.Outcome(o), err
+	return {{.Alias}}.CallOutcome(o), err
 }
 
 func (a {{.Alias}}Transport) HTTP(ctx context.Context, req {{.Alias}}.HTTPRequest) ({{.Alias}}.HTTPResponse, error) {
@@ -495,9 +495,9 @@ func (a {{.Alias}}Transport) HTTP(ctx context.Context, req {{.Alias}}.HTTPReques
 	return {{.Alias}}.HTTPResponse(r), err
 }
 
-func (a {{.Alias}}Transport) AWS(ctx context.Context, service, action string, input map[string]any) ({{.Alias}}.Outcome, error) {
+func (a {{.Alias}}Transport) AWS(ctx context.Context, service, action string, input map[string]any) ({{.Alias}}.CallOutcome, error) {
 	o, err := a.t.AWS(ctx, service, action, input)
-	return {{.Alias}}.Outcome(o), err
+	return {{.Alias}}.CallOutcome(o), err
 }
 
 func (a {{.Alias}}Transport) Agent(ctx context.Context, call {{.Alias}}.AgentCall) (any, error) {
@@ -553,9 +553,9 @@ func {{.Alias}}Flow() harness.Flow {
 			return {{.Alias}}.NewWorker(c, {{.Alias}}.OwnTasksBy(own), {{.Alias}}TransportOf(t), deployment)
 		},
 		Replay: func(histories []harness.History) []harness.ReplayFailure {
-			in := make([]{{.Alias}}.History, len(histories))
+			in := make([]{{.Alias}}.RunHistory, len(histories))
 			for i, h := range histories {
-				in[i] = {{.Alias}}.History(h)
+				in[i] = {{.Alias}}.RunHistory(h)
 			}
 			failed := {{.Alias}}.Replay(in)
 			out := make([]harness.ReplayFailure, len(failed))
@@ -567,13 +567,13 @@ func {{.Alias}}Flow() harness.Flow {
 		Start:   {{.Alias}}.Start,
 		SetNows: {{.Alias}}.DDSetNows,
 		Answer: func(ctx context.Context, c client.Client, callbackID string, a harness.CallbackAnswer) error {
-			return {{.Alias}}.Answer(ctx, c, callbackID, {{.Alias}}.CallbackAnswer(a))
+			return {{.Alias}}.AnswerCallback(ctx, c, callbackID, {{.Alias}}.CallbackAnswer(a))
 		},
 		Send: func(ctx context.Context, c client.Client, workflowID, event string, a harness.CallbackAnswer) error {
 			return {{.Alias}}.Send(ctx, c, workflowID, event, {{.Alias}}.CallbackAnswer(a))
 		},
 		Status: func(ctx context.Context, c client.Client, id string) (harness.Where, error) {
-			w, err := {{.Alias}}.Status(ctx, c, id)
+			w, err := {{.Alias}}.RunStatus(ctx, c, id)
 			return harness.Where(w), err
 		},
 		Histories: func(ctx context.Context, c client.Client, query string) ([]harness.History, error) {

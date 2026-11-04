@@ -1,0 +1,22 @@
+workflow クライアントのAnswerCallback v1 implements svc.Svc
+description "Go のクライアントのコールバックに答える関数と同じメソッドです。"
+
+use proto svc from "protos/クライアントのAnswerCallback.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  callback
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

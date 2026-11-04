@@ -66,8 +66,8 @@ names. Go's import paths are ASCII, so when the workflow's name is not, the pack
 `.flow` file (`hotel.ja.flow` writes `hotel_ja`), or else `workflow`. `workflow.go` has `Workflow`,
 `activities.go` the interface `OwnTasks` of the tasks you write and `Activities(own, transport)`,
 `io.go` the `Transport`, `rules.go` the rules as activities around rulec's Go, `worker.go`
-`NewWorker(client, own, transport, deployment)` and `Replay`, and `client.go` `Start`, `Answer`,
-`Send`, `Status` and `Histories`, and for a workflow that implements a service, a function for each
+`NewWorker(client, own, transport, deployment)` and `Replay`, and `client.go` `Start`,
+`AnswerCallback`, `Send`, `RunStatus` and `Histories`, and for a workflow that implements a service, a function for each
 method (`Fulfill`, `AnswerPacking`). Everything on the wire is named as in the TypeScript.
 
 - **JSON values.** The workflow carries its values as JSON values (`map[string]any`, `[]any`,

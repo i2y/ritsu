@@ -1,15 +1,15 @@
 workflow go_own v1
 description "An enum named as a name the package has."
 
-enum Outcome = won | lost
+enum Transport = won | lost
 
 inputs
   id : string
 
 outputs
-  how : Outcome
+  how : Transport
 
-task decide(id: string) -> Outcome
+task decide(id: string) -> Transport
 
 flow
   let how = decide(id: id)

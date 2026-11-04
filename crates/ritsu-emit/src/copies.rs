@@ -256,16 +256,18 @@ pub mod dandori {
     /// `GO_RESERVED`: Go's keywords and predeclared identifiers, and [`GO_MORE`].
     pub const GO_RESERVED: Words = Words(&[go::KEYWORDS, go::PREDECLARED, GO_MORE]);
 
-    /// `GO_EXPORTED`: the exported names every generated package has, which a record's, an
-    /// enum's or a method's name gives way to.
+    /// `GO_EXPORTED`: the exported names every generated package has. Go has one namespace for types
+    /// and functions, and exports both in upper case, so a record's, an enum's or a method's name
+    /// cannot be one of them (W105); so the package keeps out of the nouns a business's types go by
+    /// (`CallOutcome`, `RunHistory`, `AnswerCallback`, `RunStatus`).
     pub const GO_EXPORTED: &[&str] = &[
         "WorkflowType", "TaskQueue", "Events", "Workflow", "RegisterWorkflow", "OwnTasks",
         "OwnTasksBy", "Activities", "RegisterActivities", "BuildID", "WorkerOptions", "NewWorker",
-        "History", "ReplayFailure", "Replay", "Start", "CallbackAnswer", "Answer", "Send", "Where",
-        "Status", "Histories", "Outcome", "HTTPRequest", "HTTPResponse", "AgentCall", "Transport",
-        "TransportOptions", "NewTransport", "DefaultTransport", "AgentHTTPError", "AgentStopped",
-        "JevURL", "DecisionsURL", "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput", "IsWorkflowInput",
-        "Decode", "TIMESTAMP", "Service",
+        "RunHistory", "ReplayFailure", "Replay", "Start", "CallbackAnswer", "AnswerCallback", "Send",
+        "Where", "RunStatus", "Histories", "CallOutcome", "HTTPRequest", "HTTPResponse", "AgentCall",
+        "Transport", "TransportOptions", "NewTransport", "DefaultTransport", "AgentHTTPError",
+        "AgentStopped", "JevURL", "DecisionsURL", "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput",
+        "IsWorkflowInput", "Decode", "TIMESTAMP", "Service",
     ];
 
     /// `TS_GLOBALS`: the globals of JavaScript a type's name would hide, and the generated code's.

@@ -1,15 +1,15 @@
 workflow Goの自分の名前 v1
 description "パッケージが持つ名前と同じ列挙です。"
 
-enum Outcome = 勝ち | 負け
+enum Transport = 勝ち | 負け
 
 inputs
   番号 : string
 
 outputs
-  結果 : Outcome
+  結果 : Transport
 
-task 決める(番号: string) -> Outcome
+task 決める(番号: string) -> Transport
 
 flow
   let 結果 = 決める(番号: 番号)

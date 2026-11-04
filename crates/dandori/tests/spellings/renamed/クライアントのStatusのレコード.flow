@@ -1,0 +1,28 @@
+workflow クライアントのStatusのレコード v1 implements svc.Svc
+description "レコード `Status` とメソッド `Status` です。メソッドは Go では関数です。"
+
+use proto svc from "protos/クライアントのStatusのレコード.proto"
+
+record Sent
+  note : string
+
+record Condition
+  state : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 見る(id: string) -> Condition
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let now = 見る(id: id)
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {now.state} {s.note}"

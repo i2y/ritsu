@@ -1,0 +1,22 @@
+workflow クライアントのanswer v1 implements svc.Svc
+description "TypeScript と Python のクライアントのコールバックに答える関数と同じメソッドです。Go の関数は `AnswerCallback` です。"
+
+use proto svc from "protos/クライアントのanswer.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  callback
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"
