@@ -227,6 +227,42 @@ message CodecDataConverter
   note string
 message Ack
 message StatusRequest
+== ../dandori/tests/encrypted/renamed/protos/calls.ja.proto
+package Some("calls.ja.v1") imports ["dandori/v1/options.proto"]
+enum Line landline=0 mobile=1
+message CallRequest
+  number string json_name="番号"
+  line Line json_name="回線"
+message Receipt
+  memo string json_name="記録"
+message PickUpNote
+  answered bool json_name="出た"
+message HoldNote
+  reason string json_name="理由"
+message ReplyNote
+  answer string json_name="答え"
+message ConfirmNote
+  note string json_name="確認"
+message Ack
+message StatusRequest
+== ../dandori/tests/encrypted/renamed/protos/calls.proto
+package Some("calls.v1") imports ["dandori/v1/options.proto"]
+enum Line landline=0 mobile=1
+message CallRequest
+  number string
+  line Line
+message Receipt
+  receipt string
+message PickUpNote
+  answered bool
+message HoldNote
+  reason string
+message ReplyNote
+  answer string
+message ConfirmNote
+  note string
+message Ack
+message StatusRequest
 == ../dandori/tests/fixtures/apis/warehouse.proto
 package Some("warehouse.v1") imports ["google/protobuf/timestamp.proto"]
 enum Stock unspecified=0 secured=1 short=2
@@ -549,6 +585,502 @@ message AnswerPackingRequest
   boxes int32 json_name="箱の数"
   checked bool json_name="検品済み"
 message AnswerPackingResponse
+== ../dandori/tests/spellings/protos/client_answer.proto
+package Some("client_answer.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_answer_callback.proto
+package Some("client_answer_callback.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_global.proto
+package Some("client_global.v1") imports ["dandori/v1/options.proto"]
+message Promise
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_histories_status.proto
+package Some("client_histories_status.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_message.proto
+package Some("client_message.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Client
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_run_status.proto
+package Some("client_run_status.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_run_status_starts.proto
+package Some("client_run_status_starts.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_same.proto
+package Some("client_same.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_send.proto
+package Some("client_send.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_send_starts.proto
+package Some("client_send_starts.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_shared.proto
+package Some("client_shared.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_status.proto
+package Some("client_status.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_status_beside.proto
+package Some("client_status_beside.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_status_type.proto
+package Some("client_status_type.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/client_two_types.proto
+package Some("client_two_types.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのAnswerCallback.proto
+package Some("client_answer_callback.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのRunStatus.proto
+package Some("client_run_status.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのRunStatusで始める.proto
+package Some("client_run_status_starts.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのStatusと並ぶレコード.proto
+package Some("client_status_beside.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのStatusのレコード.proto
+package Some("client_status_type.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのanswer.proto
+package Some("client_answer.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのhistoriesで状態.proto
+package Some("client_histories_status.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのsend.proto
+package Some("client_send.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのsendで始める.proto
+package Some("client_send_starts.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのstatus.proto
+package Some("client_status.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのグローバル.proto
+package Some("client_global.ja.v1") imports ["dandori/v1/options.proto"]
+message Promise
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのメッセージ.proto
+package Some("client_message.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Client
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントの二つの型.proto
+package Some("client_two_types.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントの共有.proto
+package Some("client_shared.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントの同じ関数.proto
+package Some("client_same.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_answer.proto
+package Some("client_answer.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_answer_callback.proto
+package Some("client_answer_callback.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_global.proto
+package Some("client_global.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_histories_status.proto
+package Some("client_histories_status.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_message.proto
+package Some("client_message.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Customer
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_run_status_starts.proto
+package Some("client_run_status_starts.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_send.proto
+package Some("client_send.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_send_starts.proto
+package Some("client_send_starts.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_status_type.proto
+package Some("client_status_type.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_two_types.proto
+package Some("client_two_types.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Sent
+  note string
+message Reply
+  id string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのAnswerCallback.proto
+package Some("client_answer_callback.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto
+package Some("client_run_status_starts.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのStatusのレコード.proto
+package Some("client_status_type.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのanswer.proto
+package Some("client_answer.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのhistoriesで状態.proto
+package Some("client_histories_status.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのsend.proto
+package Some("client_send.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのsendで始める.proto
+package Some("client_send_starts.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのグローバル.proto
+package Some("client_global.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのメッセージ.proto
+package Some("client_message.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Customer
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントの二つの型.proto
+package Some("client_two_types.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Sent
+  note string
+message Reply
+  id string
+message Ack
+message StatusRequest
 == ../sakai/examples/shop/proto/dandori/v1/options.proto
 package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
 message WorkflowOptions
