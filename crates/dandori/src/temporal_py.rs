@@ -370,7 +370,7 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
         }
         let (f, sig, call, what) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = names.function(base.clone(), &mt.name, true);
+                let f = names.function(base.clone(), &mt.name, base == "start");
                 let req = alias(&mut c, &mut names, &mt.request, "T.WorkflowInput", format!("The request of {label}, the workflow's input"));
                 alias(&mut c, &mut names, &mt.response, "T.WorkflowOutput", format!("The response of {label}, the workflow's output"));
                 (
@@ -401,7 +401,7 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
                 )
             }
             Some(Mark::Status) => {
-                let f = names.function(base.clone(), &mt.name, true);
+                let f = names.function(base.clone(), &mt.name, base == "status");
                 (f, "(client: Client, id: str) -> dict[str, Any]".to_string(), "    return await status(client, id)\n".to_string(), "where the workflow `id` is, as `status` says".to_string())
             }
             None => continue,

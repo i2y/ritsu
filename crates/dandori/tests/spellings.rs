@@ -55,6 +55,8 @@ const FORMS: &[Form] = &[
     Form { en: "python_values", ja: "Pythonのvalues", targets: PY_GO, broken: &["temporal-python", "temporal-go"] },
     Form { en: "python_is", ja: "Pythonのis", targets: PY_GO, broken: &["temporal-python", "temporal-go"] },
     Form { en: "client_send", ja: "クライアントのsend", targets: CLIENTS, broken: &[] },
+    Form { en: "client_send_starts", ja: "クライアントのsendで始める", targets: CLIENTS, broken: &[] },
+    Form { en: "client_histories_status", ja: "クライアントのhistoriesで状態", targets: CLIENTS, broken: &[] },
     Form { en: "client_message", ja: "クライアントのメッセージ", targets: CLIENT_TS_PY, broken: &[] },
     Form { en: "client_two_types", ja: "クライアントの二つの型", targets: CLIENTS, broken: &[] },
     Form { en: "client_global", ja: "クライアントのグローバル", targets: CLIENT_TS, broken: &[] },
@@ -75,6 +77,8 @@ const FREE: &[&str] = &[
     "tests/spellings/クライアントのRunStatus.flow",
     "tests/spellings/client_status_beside.flow",
     "tests/spellings/クライアントのStatusと並ぶレコード.flow",
+    "tests/spellings/client_same.flow",
+    "tests/spellings/クライアントの同じ関数.flow",
     "tests/flows/plain_names.flow",
     "tests/flows/plain_names.ja.flow",
     "tests/flows/plain_tasks.flow",
@@ -454,6 +458,30 @@ fn the_status_and_the_answer_of_a_service_in_go() {
     for flow in ["tests/spellings/client_answer.flow", "tests/spellings/クライアントのanswer.flow"] {
         let c = generated(flow, "temporal-go", "client.go");
         assert!(c.contains("func Answer(ctx context.Context, c client.Client, callbackID string, value Sent) error {\n\treturn AnswerCallback(ctx, c, callbackID, CallbackAnswer{OK: value})\n}"), "{flow}:\n{c}");
+    }
+}
+
+/// A method that does what a function of the client does, and has its name, is that function, in
+/// each language: the client writes no other, and nothing is said (`client_same`). A method of a
+/// name of the client's that does something else is said, and written nowhere (`FORMS`): a caller
+/// would read the client's `send` as the function that starts the workflow.
+#[test]
+fn a_method_that_does_what_a_function_does_is_that_function() {
+    for flow in ["tests/spellings/client_same.flow", "tests/spellings/クライアントの同じ関数.flow"] {
+        for (target, file, heads) in [
+            ("temporal-typescript", "client.ts", ["export async function start(", "export async function status("]),
+            ("temporal-python", "client.py", ["async def start(", "async def status("]),
+        ] {
+            let c = generated(flow, target, file);
+            for head in heads {
+                assert_eq!(c.matches(head).count(), 1, "{flow} --target {target}: `{head}`:\n{c}");
+            }
+        }
+        // in Go the function of `rpc Status` is `Status`, over `RunStatus` (`the_status_and_the_answer_of_a_service_in_go`)
+        let c = generated(flow, "temporal-go", "client.go");
+        for head in ["func Start(", "func RunStatus(", "func Status("] {
+            assert_eq!(c.matches(head).count(), 1, "{flow}: `{head}`:\n{c}");
+        }
     }
 }
 

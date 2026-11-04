@@ -654,7 +654,7 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
         };
         let (f, sig, call) = match mt.marks.first() {
             Some(Mark::Start { .. }) => {
-                let f = names.function(lower.clone(), &mt.name, true);
+                let f = names.function(lower.clone(), &mt.name, lower == "start");
                 let req = alias(&mut c, &mut names, &mt.request, "T.WorkflowInput", false, format!("The request of {label}, the workflow's input"));
                 alias(&mut c, &mut names, &mt.response, "T.WorkflowOutput", false, format!("The response of {label}, the workflow's output"));
                 (f, format!("(client: Client, id: string, input: {req}, options: StartOptions = {{}}): Promise<WorkflowHandle>"), "  return start(client, id, input, options);\n".to_string())
@@ -670,7 +670,7 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
                 (f, format!("(client: Client, callbackId: string, value: {req}): Promise<void>"), "  await answer(client, callbackId, { ok: value });\n".to_string())
             }
             Some(Mark::Status) => {
-                let f = names.function(lower.clone(), &mt.name, true);
+                let f = names.function(lower.clone(), &mt.name, lower == "status");
                 let res = alias(&mut c, &mut names, &mt.response, "Status", true, format!("The response of {label}, where a run is"));
                 (f, format!("(client: Client, id: string): Promise<{res}>"), "  return status(client, id);\n".to_string())
             }
