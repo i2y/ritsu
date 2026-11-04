@@ -62,7 +62,7 @@ pub(super) fn tidy(t: Target, s: &str) -> String {
 /// a name given its value in each branch) and the 2021 edition's (no `if let` chains); and what the
 /// source writes that clippy would say of it (a `match` that answers `true` and `false`, or `none`
 /// and a value).
-pub const RUST_ALLOW: &str = "#![allow(non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::too_many_arguments, clippy::type_complexity, clippy::large_enum_variant, clippy::result_large_err, clippy::eq_op, clippy::identity_op, clippy::erasing_op, clippy::if_same_then_else, clippy::nonminimal_bool, clippy::explicit_auto_deref, clippy::manual_range_contains, clippy::needless_late_init, clippy::match_like_matches_macro, clippy::manual_map, clippy::manual_filter, clippy::collapsible_if, clippy::collapsible_else_if)]\n";
+pub const RUST_ALLOW: &str = "#![allow(non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::too_many_arguments, clippy::type_complexity, clippy::large_enum_variant, clippy::result_large_err, clippy::eq_op, clippy::identity_op, clippy::erasing_op, clippy::if_same_then_else, clippy::nonminimal_bool, clippy::explicit_auto_deref, clippy::manual_range_contains, clippy::needless_late_init, clippy::match_like_matches_macro, clippy::manual_map, clippy::manual_filter, clippy::collapsible_if, clippy::collapsible_else_if, clippy::collapsible_match)]\n";
 
 /// A text as Rust's doc comment of as many lines as it has: `///` before an item, `//!` at the top of
 /// a module.

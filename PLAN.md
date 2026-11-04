@@ -2156,6 +2156,8 @@ kaname の生成物は TypeScript・Python・Go だけで、Rust のホストは
 
 0.41.0 に上げた木で tools の段のワークスペース全体の試験を回し、3,606 件が通って 4 件が落ちた。どちらも試験の側が追いついていなかったもので、生成物とコマンドの不具合ではない。ritsu-proto の `tests/readers.rs` の golden 三つには、dandori の試験に足した 52 の `.proto` の分の行が無かった（増えた行だけで、消えた行は無い）。playground の `the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn` は、ページの中で最初の `const at = ` を読むので、rulec のページが 0100 年より前を読むようになって持った同じ名前の変数を、playground の足すスクリプトと取り違えた。どちらも直して、その試験だけを回し直した。
 
+push の回の CI では二つ落ちた。tools の dandori のジョブには `wasm32-unknown-unknown` が無く、`ritsu gen` の Rust を Wasm に組む試験 4 件が許されない SKIP になったので、ジョブに target と clippy を足した。tools のその他のジョブでは、CI の Rust 1.99 の clippy の `collapsible_match` が、kaname の生成する Rust の `try` の続きの `if` に当たった（手元の 1.94.1 の clippy は言わない）。生成物の `#![allow(...)]` に足し、Rust 1.99.1 で kaname の `tests/rust.rs` と `tests/wasm.rs`、ritsu の四つの試験を回した。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
