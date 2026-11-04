@@ -210,6 +210,7 @@ reproduction. The usual ones:
 | E305 | a principal is allowed two duties a `separate` keeps apart | ask; usually a forbid on one of them for the holders of the other |
 | E306, W302 | a role's reach is not its `can` | ask whether `can` or the policies are right |
 | E307 | too many combinations | split the roles, or narrow the ranges; never raise `--budget` without saying so |
+| W402, E401 | two names that are one identifier in the code of a target, or a name the code uses itself; `gen` of that target stops | leave it for a target you do not generate; for one you do, change the alias, and compare a gate in use with `sekisho diff` |
 | W301 | a permit another one already covers | ask whether it can go |
 | W303 | an answer no concrete input could be found for | read why; a rule whose output cannot be told exactly may need its table made plain |
 | W910 | a policy reads an input the contract marks secret | ask whether the policy needs it; the value goes to Cedar and into the record of the decision |

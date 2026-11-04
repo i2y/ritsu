@@ -69,7 +69,8 @@ a transfer's amounts, refusals and holds (the ritsu skill has the codes).
 6. **Build it:** `ritsu dandori gen <file.flow> --target temporal-typescript` writes the code into
    `generated/temporal-typescript/` (`--out` for another directory); give `--target` once for
    each platform wanted, and each goes into its own `<dir>/<target>/`. `gen` stops, and writes nothing,
-   when a platform cannot do what the workflow asks (E050) or a run can outgrow it (E040). The same
+   when a platform cannot do what the workflow asks (E050), a run can outgrow it (E040), or its code
+   cannot keep a name (E051). The same
    line with `--check` in CI writes nothing and exits 1 if a file is missing or differs.
 7. **Wire it up:** write the tasks that are yours (the `OwnTasks` the generated code asks for), give
    the `Transport` (`io.ts`, `io.py`) its credentials, and start the generated worker, or deploy what
@@ -412,6 +413,7 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E031 | what an Express workflow cannot do | `kind standard`, or less |
 | E040 | a run that can outgrow the platform's history | lower the loop bounds; on Temporal, a loop at the top of the flow goes on in a new run |
 | E050 | what the platform lacks or cannot do | give it what it needs (`connection`, `image`, a way of calling), or another platform |
+| W105, E051 | a name the code of a platform cannot keep: two names are one identifier there, or the code has the name itself (`Transport` in Go, `Array` in TypeScript, `str` in Python); `gen` of that platform stops | leave it for a platform you do not build; for one you do, rename it in the `.flow` or the `.proto` |
 | W101 | a failure that can leave a case unfinished | handle the error at the call, or settle the case in `on failure` |
 | W102 | an `on <refusal>` that cannot happen | remove it |
 | W103 | a task that starts a case without `key` | add `key` |

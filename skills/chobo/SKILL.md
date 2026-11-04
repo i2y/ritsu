@@ -191,14 +191,14 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | E060 | one operation's chain is too long for one TigerBeetle request | split the transfer into kinds with fewer moves |
 | E061 | a name past PostgreSQL's 63 bytes | a shorter name |
 | E062 | a name MySQL cannot hold: a book's name past 51 characters, or with a character beyond the Basic Multilingual Plane (𠮷 and the like) | a shorter name, without such a character |
-| E063 | with `--target rust`, a name with a character no Rust identifier holds where the name has it (`²`, `½`, `①`, `Ⓐ`, a combining mark first) | the name without it (`area_m²` as `area_m2`) |
+| E063 | a name with a character no identifier of the target's language holds where the name has it (`²` in all four; `½`, `①`, `Ⓐ` or a combining mark first in Rust; a vowel sign or `Ⅻ` in Go) | the name without it (`area_m²` as `area_m2`) |
 | E064 | with a target W108 names, `gen` of that target | rename one of the names W108 gives |
 | W101 | an account that only ever fills | a transfer that takes from it, or `outside` |
 | W102 | a transfer always refused: nothing fills what it takes from | a transfer that fills it |
 | W103 | a transfer refused because of the order of its moves | the move that puts in first (the one that takes out first, for an upper bound) |
 | W104 | a hold that counts on what another of its moves puts in | have it there beforehand, or a second transfer after the post |
 | W105, W106 | something never used, a bound that never matters | remove it, or write what uses it |
-| W108 | two names one target's code spells as one identifier (Go's `stock` and `Stock`, Rust's `take_back` and `TakeBack`, Python's `class` and `class_`, PostgreSQL's `balance_<account>` and `<transfer>_<operation>`), a name a client uses itself (a transfer `balance`, or `expire`), or a name a client cannot take as it is (Python's mangled `__note`, a TypeScript parameter `__proto__`, a book named like a Python keyword or a module of its standard library) | leave it for a target you do not build; else rename one of them, and check against the revision in use with `--diff-base` |
+| W108 | two names one target's code spells as one identifier (Go's `stock` and `Stock`, Rust's `take_back` and `TakeBack`, Python's `class` and `class_`, PostgreSQL's `balance_<account>` and `<transfer>_<operation>`), a name a client uses itself (a transfer `balance`, or `expire`), or a name a client cannot take as it is (Python's mangled `__note`, a TypeScript parameter `__proto__`, a book named like a Python keyword or a module of its standard library, a book Python cannot import (`rooms²`, `ｓｈｏｐ`, `tigerbeetle` on TigerBeetle), a book named as a schema PostgreSQL keeps for itself), two names Rust's NFC or Python's NFKC makes one, or a book given with another that is one Go package with it | leave it for a target you do not build; else rename one of them, and check against the revision in use with `--diff-base` |
 | W901 | a key written in the file, in a string or a comment (the kind, its prefix and its length; never the key) | take it out and read it from where the code runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 
 [codes.md](codes.md) has every code with the smallest book that shows it, as `ritsu chobo explain
