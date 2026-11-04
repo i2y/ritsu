@@ -22,7 +22,7 @@ On macOS and on Linux:
 ```console
 $ brew install i2y/tap/ritsu
 $ rulec --version
-rulec 0.38.0
+rulec 0.41.0
 ```
 
 That puts `ritsu` on the path with the nine links beside it, so `rulec` is a
@@ -43,18 +43,18 @@ Every release carries a `.deb` and an `.rpm` for x64 and arm64. They hold the
 same static binary as the archives, so they depend on nothing:
 
 ```console
-$ v=0.38.0; a=amd64                  # arm64 on ARM
+$ v=0.41.0; a=amd64                  # arm64 on ARM
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu_$v-1_$a.deb"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu_$v-1_$a.deb" | sha256sum -c
-ritsu_0.38.0-1_amd64.deb: OK
+ritsu_0.41.0-1_amd64.deb: OK
 $ sudo apt install "./ritsu_$v-1_$a.deb"
 ```
 
 ```console
-$ v=0.38.0; a=x86_64                 # aarch64 on ARM
+$ v=0.41.0; a=x86_64                 # aarch64 on ARM
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu-$v-1.$a.rpm"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu-$v-1.$a.rpm" | sha256sum -c
-ritsu-0.38.0-1.x86_64.rpm: OK
+ritsu-0.41.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
@@ -82,13 +82,13 @@ no dependencies.
 ## The release binary
 
 ```console
-$ v=v0.38.0; t=aarch64-apple-darwin
+$ v=v0.41.0; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-ritsu-v0.38.0-aarch64-apple-darwin.tar.gz: OK
+ritsu-v0.41.0-aarch64-apple-darwin.tar.gz: OK
 $ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
-rulec 0.38.0
+rulec 0.41.0
 ```
 
 The archive holds `ritsu`, a link to it for each language (`rulec`, `dandori`,
@@ -114,18 +114,18 @@ move an installed rulec over to ritsu. Homebrew 7 reads a formula from a tap
 other than its own only once that tap is trusted, and naming the formula with
 its tap trusts it. `brew install` then says that rulec is installed but not
 migrated; `brew migrate ritsu` moves it over, and `brew upgrade ritsu` takes it
-to 0.38.0:
+to 0.41.0:
 
 ```console
 $ brew install i2y/tap/ritsu
 $ brew migrate ritsu
 $ brew upgrade ritsu
 $ rulec --version
-rulec 0.38.0
+rulec 0.41.0
 ```
 
 `brew trust --formula i2y/tap/ritsu` followed by `brew upgrade` does the same:
-the upgrade migrates rulec and takes it to 0.38.0 in one go.
+the upgrade migrates rulec and takes it to 0.41.0 in one go.
 
 Installing ritsu's `.deb` or `.rpm` as above removes the package `rulec`, and
 `/usr/bin/rulec` becomes a link to `ritsu`. ritsu's archive, unpacked into the

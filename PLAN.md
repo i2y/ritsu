@@ -2062,7 +2062,7 @@ ritsu の X4（DESIGN 7.6）は、規則の数の出力を振替の額に渡す�
 
 ### 7.76 rulec の入れ方の出力を 0.38.0 で取り直す（2026-10-30）
 
-rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）、`experiments/library/` の CI の見本は、0.25.0 の出力と `uses: i2y/ritsu@v0.25.0`（15 か所）のままで、ページのとおりに書くと 0.25.0 が入った。0.38.0 のリリースの実物で取り直した（rulec の DESIGN §15.186 の 2026-10-30 の段落）。アーカイブ（macOS の arm64）は、ページのコマンドで落として `SHA256SUMS` と突き合わせ、使い捨ての HOME に展開した。`.deb` と `.rpm` は、Debian 13 と Fedora 43 のコンテナで突き合わせ、`apt install` と `dnf install` まで走らせた。Homebrew は 7.0.11 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を Linux のコンテナで走らせ、どれも `rulec 0.38.0` になった。macOS 27 の上の Xcode 26.2 では、7.0.11 が tap の formula を入れる段で止まるためで、macOS で入れることはリリースのワークフローの `homebrew` の段が確かめている。ページのアーカイブのリンクの並びに、抜けていた `kaname` を足した。
+rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）、`experiments/library/` の CI の見本は、0.25.0 の出力と `uses: i2y/ritsu@v0.25.0`（15 か所）のままで、ページのとおりに書くと 0.25.0 が入った。0.38.0 のリリースの実物で取り直した（rulec の DESIGN §15.186）。アーカイブ（macOS の arm64）は、ページのコマンドで落として `SHA256SUMS` と突き合わせ、使い捨ての HOME に展開した。`.deb` と `.rpm` は、Debian 13 と Fedora 43 のコンテナで突き合わせ、`apt install` と `dnf install` まで走らせた。Homebrew は 7.0.11 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を Linux のコンテナで走らせ、どれも `rulec 0.38.0` になった。macOS 27 の上の Xcode 26.2 では、7.0.11 が tap の formula を入れる段で止まるためで、macOS で入れることはリリースのワークフローの `homebrew` の段が確かめている。ページのアーカイブのリンクの並びに、抜けていた `kaname` を足した。
 
 確かめたこと：文書を読むテスト（rulec の `docs`・`mcp`・`readme`・`skill`・`website`・`library`、ritsu の `release`・`readme`・`sekisho`・`skill`・`website`）が全部通った。SKIP の行は 0 だった。
 
@@ -2157,6 +2157,12 @@ kaname の生成物は TypeScript・Python・Go だけで、Rust のホストは
 0.41.0 に上げた木で tools の段のワークスペース全体の試験を回し、3,606 件が通って 4 件が落ちた。どちらも試験の側が追いついていなかったもので、生成物とコマンドの不具合ではない。ritsu-proto の `tests/readers.rs` の golden 三つには、dandori の試験に足した 52 の `.proto` の分の行が無かった（増えた行だけで、消えた行は無い）。playground の `the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn` は、ページの中で最初の `const at = ` を読むので、rulec のページが 0100 年より前を読むようになって持った同じ名前の変数を、playground の足すスクリプトと取り違えた。どちらも直して、その試験だけを回し直した。
 
 push の回の CI では二つ落ちた。tools の dandori のジョブには `wasm32-unknown-unknown` が無く、`ritsu gen` の Rust を Wasm に組む試験 4 件が許されない SKIP になったので、ジョブに target と clippy を足した。tools のその他のジョブでは、CI の Rust 1.99 の clippy の `collapsible_match` が、kaname の生成する Rust の `try` の続きの `if` に当たった（手元の 1.94.1 の clippy は言わない）。生成物の `#![allow(...)]` に足し、Rust 1.99.1 で kaname の `tests/rust.rs` と `tests/wasm.rs`、ritsu の四つの試験を回した。
+
+### 7.87 rulec の入れ方の出力を 0.41.0 で取り直す（2026-11-04）
+
+rulec の README と入れ方のページ（英日）は、0.38.0 の出力のままだった。ページのとおりにアーカイブや `.deb` を入れると 0.38.0 が入り、その `rulec gen` は `--target` を読まない。0.41.0 のリリースの実物で取り直した（rulec の DESIGN §15.186）。アーカイブ（macOS の arm64）は、ページのコマンドで落として `SHA256SUMS` と突き合わせ、使い捨ての HOME に展開した。`.deb` と `.rpm` は、Debian 13 と Fedora 43 のコンテナで突き合わせ、`apt install` と `dnf install` まで走らせた。Homebrew は 7.0.12 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を Linux のコンテナで走らせ、どれも `rulec 0.41.0` になった。トップの `rulec-recheck` の行と `generated-code.md` の頭の行は版上げで 0.41.0 になっていて、公式のバイナリの出力と同じ形だった。
+
+確かめたこと：文書を読むテスト（rulec の `docs`・`mcp`・`readme`・`skill`・`website`・`library`、ritsu の `release`・`readme`・`sekisho`・`skill`・`website`）が全部通った。SKIP の行は 0 だった。
 
 ## 8. モジュール（2026-10-28）
 

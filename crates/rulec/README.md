@@ -200,12 +200,12 @@ the system library every Mac has. The archive holds `ritsu`, the links, the two 
 0.24.0 on, THIRD_PARTY_NOTICES, the notices of what the binary holds from others:
 
 ```console
-$ v=v0.38.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+$ v=v0.41.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
 $ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
-rulec 0.38.0
+rulec 0.41.0
 ```
 
 ritsu's first release continues rulec's numbering (0.23.0); rulec's own releases end at 0.22.1.
