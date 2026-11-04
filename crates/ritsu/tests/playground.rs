@@ -2121,7 +2121,7 @@ fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
         assert_eq!(text_of(fixed, "text"), rule, "{page}: the rule is not what it was");
         // the page drawn after the edit starts where the reader scrolled to, which its frame said
         let drawn = text_of(scrolled, "page");
-        let at: Value = drawn.split("const at = ").nth(1).and_then(|r| r.split(';').next()).and_then(|r| serde_json::from_str(r).ok()).unwrap_or_else(|| panic!("{page}: the page drawn again does not say where to start"));
+        let at: Value = drawn.split("<script data-pg-scroll>").nth(1).and_then(|r| r.split("const at = ").nth(1)).and_then(|r| r.split(';').next()).and_then(|r| serde_json::from_str(r).ok()).unwrap_or_else(|| panic!("{page}: the page drawn again does not say where to start"));
         let y = at.as_array().unwrap().iter().filter_map(|p| p[2].as_i64()).max().unwrap_or(0);
         assert!(y > SCROLLED, "{page}: the page drawn again starts at {at}, not where the reader scrolled to");
         assert!(unframed(drawn) == playground::doc(&ask(&rule.replacen(from_fee(tag).0, from_fee(tag).1, 1)))["html"]["out"].as_str().unwrap(), "{page}: the page drawn again is not the page of the rule edited");
