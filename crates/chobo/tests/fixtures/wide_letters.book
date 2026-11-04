@@ -1,5 +1,5 @@
 # E062: MySQL holds no character beyond the Basic Multilingual Plane in a name; the tables and checks are named after the book, so the bold letters of this book's name would become `?`
-book stock_𝐀𝐁 v1
+book stock_𐐀𐐁 v1
 
 unit item
 
