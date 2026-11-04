@@ -644,6 +644,13 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
         if place.read_from_library(&place.dir) {
             continue;
         }
+        let stops = sekisho::spellings::stops(&outcome, target.key());
+        if !stops.is_empty() {
+            let text: String = stops.iter().map(|d| d.render(lang)).collect();
+            let json = stops.iter().map(|d| diagnostic("sekisho", Some(f.rel.clone()), d.to_json(lang))).collect();
+            let (shown, to) = (&f.shown, target.key());
+            return Err(stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang));
+        }
         let to = sekisho::r#gen::Target { name: target.key(), authorizer: o.authorizer, go_module: o.module.clone(), place: place.clone() };
         let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
             let shown = &f.shown;

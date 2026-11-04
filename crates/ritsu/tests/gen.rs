@@ -1315,6 +1315,26 @@ fn a_dates_file_whose_names_break_the_target_stops_the_package() {
     }
 }
 
+/// A gate whose name the code of a target cannot keep (sekisho's E401) stops `ritsu gen` as a dates
+/// file's or a flow's does: exit 1, the gate's words, nothing written.
+#[test]
+fn a_gate_with_a_name_the_target_cannot_keep_stops_the_package() {
+    let t = TempDir::new("gen-gate-name");
+    let (gates, out) = (t.path().join("gates"), t.path().join("out"));
+    std::fs::create_dir_all(&gates).unwrap();
+    std::fs::copy(here().join("../sekisho/tests/spellings/own_store.gate"), gates.join("own_store.gate")).unwrap();
+    let (code, stdout, err) = generate(&gates, &out, &["--target", "go"]);
+    assert_eq!((code, stdout.as_str()), (1, ""), "{err}");
+    assert!(err.contains("error[E401]") && !err.contains("a bug in sekisho"), "{err}");
+    assert!(!out.exists());
+    let (code, stdout, err) = generate(&gates, &out, &["--target", "go", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (1, ""));
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"));
+    assert_eq!(v["error"]["message"], "`own_store.gate` cannot be made into the go package");
+    assert_eq!(v["files"], serde_json::json!([]));
+    assert!(!out.exists());
+}
+
 /// A target that cannot be made stops the run before any target is written (DESIGN 9.6), whichever
 /// of the targets given it is: the Go of a dates file whose names break it, after the TypeScript; the
 /// Python of a rule named with a word Python keeps, after the TypeScript; the Go of two flows that
