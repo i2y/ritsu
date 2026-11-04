@@ -258,10 +258,12 @@ pub mod dandori {
     /// `GO_RESERVED`: Go's keywords and predeclared identifiers, and [`GO_MORE`].
     pub const GO_RESERVED: Words = Words(&[go::KEYWORDS, go::PREDECLARED, GO_MORE]);
 
-    /// `GO_EXPORTED`: the exported names every generated package has. Go has one namespace for types
-    /// and functions, and exports both in upper case, so a record's, an enum's or a method's name
-    /// cannot be one of them (W105); so the package keeps out of the nouns a business's types go by
-    /// (`CallOutcome`, `RunHistory`, `AnswerCallback`, `RunStatus`).
+    /// `GO_EXPORTED`: the exported names every generated package has, and `Service`, which one that
+    /// implements a service has. Go has one namespace for types and functions, and exports both in
+    /// upper case, so a record's, an enum's or a method's name cannot be one of them (W105); so the
+    /// package keeps out of the nouns a business's types go by (`CallOutcome`, `RunHistory`,
+    /// `AnswerCallback`, `RunStatus`). What a package has for some flows alone is in dandori's
+    /// `own_names`.
     pub const GO_EXPORTED: &[&str] = &[
         "WorkflowType", "TaskQueue", "Events", "Workflow", "RegisterWorkflow", "OwnTasks",
         "OwnTasksBy", "Activities", "RegisterActivities", "BuildID", "WorkerOptions", "NewWorker",

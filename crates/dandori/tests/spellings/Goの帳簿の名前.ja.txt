@@ -1,0 +1,13 @@
+警告[W105]: tests/spellings/Goの帳簿の名前.flow:6:8: 型 `BookCall`は、Go のコードでそのままの名前では使えません
+     6 | record BookCall
+  = Go（`--target temporal-go`）：`BookCall` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+警告[W105]: tests/spellings/Goの帳簿の名前.flow:9:8: 型 `BookResult`は、Go のコードでそのままの名前では使えません
+     9 | record BookResult
+  = Go（`--target temporal-go`）：`BookResult` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+警告[W105]: tests/spellings/Goの帳簿の名前.flow:12:6: 型 `BookTransport`は、Go のコードでそのままの名前では使えません
+    12 | enum BookTransport = 空路 | 鉄路
+  = Go（`--target temporal-go`）：`BookTransport` はパッケージが自分で宣言します。同じ名前を二度宣言できないので、パッケージがコンパイルできません（`redeclared in this block`）。
+  = 作らない出力先なら、そのままで構いません。作る出力先なら、`.flow` で名前を変えてください。タスクの名前はアクティビティの名前で、フィールドと入出力の名前は JSON の鍵でもあるので、動いている実行があるなら、版を上げてください。
+tests/spellings/Goの帳簿の名前.flow: 検査を通りました（警告 3 件）

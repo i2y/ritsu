@@ -1,0 +1,30 @@
+workflow go_no_date_no_book v1
+description "Types named as what the package of Go declares for some flows, in a flow that has no date and runs no book's operations: the package has none of them."
+
+enum DATE = won | lost
+
+record BookCall
+  note : string
+
+record BookResult
+  count : int
+
+enum BookTransport = air | rail
+
+record Everything
+  date : DATE
+  call : BookCall
+  result : BookResult
+  transport : BookTransport
+
+inputs
+  id : string
+
+outputs
+  everything : Everything
+
+task gather(id: string) -> Everything
+
+flow
+  let everything = gather(id: id)
+  succeed everything = everything

@@ -1,0 +1,30 @@
+workflow Goの日付も帳簿も無いフロー v1
+description "Go のパッケージがフローによって宣言する名前と同じ型です。日付も帳簿の操作も無いフローでは、パッケージはどれも宣言しません。"
+
+enum DATE = 勝ち | 負け
+
+record BookCall
+  注記 : string
+
+record BookResult
+  数 : int
+
+enum BookTransport = 空路 | 鉄路
+
+record 全部
+  日付 : DATE
+  呼び出し : BookCall
+  結果 : BookResult
+  運び方 : BookTransport
+
+inputs
+  番号 : string
+
+outputs
+  全部の値 : 全部
+
+task 集める(番号: string) -> 全部
+
+flow
+  let 全部の値 = 集める(番号: 番号)
+  succeed 全部の値 = 全部の値

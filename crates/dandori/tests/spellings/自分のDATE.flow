@@ -1,0 +1,16 @@
+workflow 自分のDATE v1
+description "日付を持つフローで Go と Python のコードが宣言する名前と同じ列挙です。"
+
+enum DATE = 勝ち | 負け
+
+inputs
+  日 : date
+
+outputs
+  結果 : DATE
+
+task 決める(日: date) -> DATE
+
+flow
+  let 結果 = 決める(日: 日)
+  succeed 結果 = 結果

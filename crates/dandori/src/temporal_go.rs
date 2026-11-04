@@ -2661,6 +2661,10 @@ fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
     t
 }
 
+/// What [`BOOKS_GO`] declares, by its exported names: a type of the flow cannot have one of them
+/// when the flow runs a book's operations (W105).
+const BOOK_NAMES: &[&str] = &["BookCall", "BookResult", "BookTransport"];
+
 /// What io_books.go shares with every flow that runs a book's operations.
 const BOOKS_GO: &str = r##"
 // BookCall is an operation of a book of chobo's: the book's name, the transfer, the operation (do,
@@ -2935,12 +2939,19 @@ fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, W
     (c, names.clashes)
 }
 
-/// The exported names the package has for itself: every package's, what client.go declares for an
-/// encrypted history, and the service's name when there is a service.
+/// The exported names the package has for itself: every package's, the service's name when there
+/// is a service, what client.go declares for an encrypted history, what io_books.go declares for a
+/// flow that runs a book's operations, and what types.go declares for a flow with dates.
 fn own_names(m: &Model) -> Vec<String> {
     let mut own: Vec<String> = GO_EXPORTED.iter().filter(|x| **x != "Service" || m.service.is_some()).map(|x| x.to_string()).collect();
     if m.history_encrypted.is_some() {
         own.extend(ENCRYPTED.iter().map(|x| x.to_string()));
+    }
+    if !crate::asl::used_books(m).is_empty() {
+        own.extend(BOOK_NAMES.iter().map(|x| x.to_string()));
+    }
+    if m.uses_dates() {
+        own.push("DATE".to_string());
     }
     own
 }

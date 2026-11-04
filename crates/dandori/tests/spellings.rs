@@ -46,6 +46,8 @@ const FORMS: &[Form] = &[
     Form { en: "go_inputs", ja: "Goの入力", targets: GO, broken: &["temporal-go"] },
     Form { en: "go_methods", ja: "Goのメソッド", targets: GO, broken: &["temporal-go"] },
     Form { en: "go_encrypted", ja: "Goの暗号化", targets: GO, broken: &["temporal-go"] },
+    Form { en: "go_book_names", ja: "Goの帳簿の名前", targets: GO, broken: &["temporal-go"] },
+    Form { en: "date_name", ja: "自分のDATE", targets: PY_GO, broken: &["temporal-python", "temporal-go"] },
     Form { en: "ts_global", ja: "TypeScriptのグローバル", targets: TS_TYPE, broken: &[] },
     Form { en: "workflow_input", ja: "自分のWorkflowInput", targets: EVERY_LANGUAGE, broken: &["temporal-go"] },
     Form { en: "leading_underscore", ja: "始めが_の名前", targets: TS_PY, broken: &[] },
@@ -79,17 +81,26 @@ const FREE: &[&str] = &[
     "tests/spellings/クライアントのStatusと並ぶレコード.flow",
     "tests/spellings/client_same.flow",
     "tests/spellings/クライアントの同じ関数.flow",
+    "tests/spellings/go_no_date_no_book.flow",
+    "tests/spellings/Goの日付も帳簿も無いフロー.flow",
     "tests/flows/plain_names.flow",
     "tests/flows/plain_names.ja.flow",
     "tests/flows/plain_tasks.flow",
     "tests/flows/plain_tasks.ja.flow",
 ];
 
+/// `dandori` with koyomi's and chobo's answers, as a program that joins them runs it: a form may
+/// have a book.
 fn run(args: &[&str]) -> (u8, String, String) {
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = dandori::cli::run(&args, Rc::new(dandori::sources::NoRules), &mut out, &mut err);
+    let code = dandori::cli::run_with_ports(&args, Rc::new(dandori::sources::NoRules), Rc::new(koyomi::ports::Engine), Rc::new(chobo::ports::Engine), &mut out, &mut err);
     (code, String::from_utf8(out).unwrap(), String::from_utf8(err).unwrap())
+}
+
+/// What `check` makes of `flow`, read as `run` reads it.
+fn checked(flow: &str) -> dandori::check::Checked {
+    dandori::sources::with_ports(Rc::new(dandori::sources::NoRules), Rc::new(koyomi::ports::Engine), Rc::new(chobo::ports::Engine), || dandori::check::check_file(Path::new(flow))).unwrap().1
 }
 
 fn files_under(dir: &Path) -> usize {
@@ -193,7 +204,7 @@ fn a_message_two_methods_share_is_one_type() {
 #[test]
 fn the_books_of_a_package_stop_only_in_a_package() {
     for flow in ["tests/spellings/go_books.flow", "tests/spellings/Goの帳簿.flow"] {
-        let (_, c) = dandori::sources::with_ports(Rc::new(dandori::sources::NoRules), Rc::new(koyomi::ports::Engine), Rc::new(chobo::ports::Engine), || dandori::check::check_file(Path::new(flow))).unwrap();
+        let c = checked(flow);
         assert_eq!(c.diags.iter().map(|d| d.code).collect::<Vec<_>>(), ["W105"], "{flow}");
         assert!(c.diags[0].en.contains("`Books`") && c.diags[0].notes.iter().any(|n| n.en.contains("`ritsu gen`")), "{:?}", c.diags[0]);
         let mut m = c.model.expect("the flow passes");
@@ -211,8 +222,7 @@ fn said(out: &Output) -> String {
 
 /// Each file of `flow`'s build for `target` under `dir`.
 fn write_files(flow: &str, target: &str, dir: &Path) {
-    let (_, c) = dandori::check::check_file(Path::new(flow)).unwrap();
-    let m = c.model.unwrap_or_else(|| panic!("{flow} passes check"));
+    let m = checked(flow).model.unwrap_or_else(|| panic!("{flow} passes check"));
     let files = dandori::commands::build(&m, target).unwrap().unwrap_or_else(|d| panic!("{flow} --target {target}: {d:?}"));
     for (name, text) in files {
         let p = dir.join(name);
@@ -335,8 +345,7 @@ fn the_code_of_what_is_not_stopped_passes_mypy() {
 #[test]
 fn what_stops_would_not_work() {
     let write = |flow: &str, target: &str, dir: &Path| {
-        let (_, c) = dandori::check::check_file(Path::new(flow)).unwrap();
-        let m = c.model.unwrap_or_else(|| panic!("{flow} passes check"));
+        let m = checked(flow).model.unwrap_or_else(|| panic!("{flow} passes check"));
         let files = match target {
             "temporal-go" => dandori::temporal_go::build(&m),
             _ => dandori::temporal_py::build(&m),
@@ -371,7 +380,7 @@ fn what_stops_would_not_work() {
     }
     if let Some(errors) = mypy_errors(&dirs) {
         for form in FORMS.iter().filter(|f| f.broken.contains(&"temporal-python")) {
-            assert!(errors.iter().any(|e| e.starts_with(&format!("{}: ", form.en)) && (e.contains("already defined") || e.contains("[no-redef]") || e.contains("[misc]"))), "{}: mypy passes the code past the stop:\n{}", form.en, errors.join("\n"));
+            assert!(errors.iter().any(|e| e.starts_with(&format!("{}: ", form.en)) && (e.contains("already defined") || e.contains("[no-redef]") || e.contains("[misc]") || e.contains("[assignment]"))), "{}: mypy passes the code past the stop:\n{}", form.en, errors.join("\n"));
         }
         eprintln!("mypy --strict: refused the code past the stop");
     }
@@ -379,8 +388,7 @@ fn what_stops_would_not_work() {
 
 /// The file `name` of the code `flow` writes for `target`.
 fn generated(flow: &str, target: &str, name: &str) -> String {
-    let (_, c) = dandori::check::check_file(Path::new(flow)).unwrap();
-    let m = c.model.unwrap_or_else(|| panic!("{flow} passes check"));
+    let m = checked(flow).model.unwrap_or_else(|| panic!("{flow} passes check"));
     let files = dandori::commands::build(&m, target).unwrap().unwrap_or_else(|d| panic!("{flow} --target {target}: {d:?}"));
     files.into_iter().find(|(n, _)| n.ends_with(&format!("/{name}"))).unwrap_or_else(|| panic!("{flow} --target {target}: no {name}")).1
 }

@@ -1,0 +1,33 @@
+workflow Goの帳簿の名前 v1
+description "帳簿の操作を動かすフローで Go のパッケージが宣言する名前と同じ型です。"
+
+use book 倉庫 from "../../flows/books/倉庫.book"
+
+record 呼び出し
+  注記 : string
+
+record 帳簿の答え
+  数 : int
+
+enum 運び方 = 空路 | 鉄路
+
+record 全部
+  呼び出し : 呼び出し
+  結果 : 帳簿の答え
+  運び方 : 運び方
+
+inputs
+  便 : string
+
+outputs
+  全部の値 : 全部
+
+task 入荷する(便: string, sku: string, 数: int)
+  book 倉庫.入荷.do
+
+task 集める() -> 全部
+
+flow
+  入荷する(便: 便, sku: "a", 数: 1)
+  let 全部の値 = 集める()
+  succeed 全部の値 = 全部の値

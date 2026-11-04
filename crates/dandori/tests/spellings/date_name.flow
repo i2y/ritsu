@@ -1,0 +1,16 @@
+workflow date_name v1
+description "An enum named as what the code of Go and of Python declares for a flow with dates."
+
+enum DATE = won | lost
+
+inputs
+  day : date
+
+outputs
+  how : DATE
+
+task decide(day: date) -> DATE
+
+flow
+  let how = decide(day: day)
+  succeed how = how

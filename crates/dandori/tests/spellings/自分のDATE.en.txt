@@ -1,0 +1,6 @@
+warning[W105]: tests/spellings/自分のDATE.flow:4:6: The type `DATE` cannot keep its name in the code of Python and Go
+     4 | enum DATE = 勝ち | 負け
+  = Python (`--target temporal-python`, `--target pydantic-graph`): a flow with dates has `DATE` in `types.py`, which checks a date with it: a declaration of that name takes its place, and a date can no longer be checked.
+  = Go (`--target temporal-go`): the package declares `DATE` itself: a name cannot be declared twice, so it does not compile (`redeclared in this block`).
+  = For a target you do not build, leave it as it is. For one you do, rename it in the `.flow`. A task's name is also its activity's, and a field's or an input's its key in JSON, so if runs are going on, change the workflow's version with it.
+tests/spellings/自分のDATE.flow: ok (1 warning(s))

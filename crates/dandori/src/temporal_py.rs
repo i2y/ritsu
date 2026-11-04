@@ -461,6 +461,12 @@ pub(crate) fn clashes(m: &Model) -> Vec<Clash> {
                 said(target, &plain, &name, &With::Own, &why);
             }
         }
+        if id == "DATE" && m.uses_dates() {
+            let why = tr!("日付を持つフローでは、`types.py` が `DATE` を宣言し、日付の検査に使います。同じ名前を宣言すると置き換わり、日付を検査できなくなります。", "a flow with dates has `DATE` in `types.py`, which checks a date with it: a declaration of that name takes its place, and a date can no longer be checked.");
+            for target in TYPES {
+                said(target, &id, &name, &With::Own, &why);
+            }
+        }
         add(id.clone(), &name, &mut said);
         add(if suffix { format!("{id}_values") } else { format!("is_{id}") }, &name, &mut said);
     }
