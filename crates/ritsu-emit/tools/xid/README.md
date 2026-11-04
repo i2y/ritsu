@@ -6,8 +6,8 @@ or `_` first, then letters, numbers (Nd, Nl, No) and `_`. For each kind of name 
 the file holds the characters of those that the target's names do not, first and after the
 first: Rust's and Python's (XID_Start and XID_Continue), TypeScript's (ID_Start and ID_Continue)
 and Go's (the letters, Lu, Ll, Lt, Lm and Lo, and the decimal digits, Nd). chobo's E063 stops a
-build for a Rust target on a name with one of Rust's, and its Rust clients read them to write
-their names (chobo's DESIGN.md 14). kaname writes a name of a function's code as it is where the
+build on a name with one of the client's language, and its Rust clients read Rust's to write their
+names (chobo's DESIGN.md 14 and 18). kaname writes a name of a function's code as it is where the
 target takes it, and names it `v` where not (kaname's DESIGN.md 36.3).
 
 The files are not kept in this repository. To make the tables again, in `crates/ritsu-emit`:

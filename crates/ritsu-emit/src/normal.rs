@@ -1,7 +1,8 @@
-//! NFC and NFKC (Unicode Standard Annex #15), for what W108 says of two names: Rust compares
-//! identifiers in NFC, and Python in NFKC, so two names chobo keeps apart can be one identifier in a
-//! client. chobo itself does not normalize a name (DESIGN 1.6). The tables are the Unicode Character
-//! Database's (src/normal_table.rs); a character the database has not assigned is left as it is.
+//! NFC and NFKC (Unicode Standard Annex #15). Rust compares identifiers in NFC, and Python in NFKC,
+//! so two names a language of ritsu keeps apart can be one identifier in the code of a target, which
+//! chobo's W108 says. The languages themselves do not normalize a name. The tables are the Unicode
+//! Character Database's (src/normal_table.rs); a character the database has not assigned is left as
+//! it is.
 
 use crate::normal_table::{COMBINING, COMPOSITIONS, DECOMPOSED, DECOMPOSITIONS};
 

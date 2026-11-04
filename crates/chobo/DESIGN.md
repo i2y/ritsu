@@ -1549,7 +1549,7 @@ E063 は Rust のターゲットの表だけを読んでいた。ほかの三つ
 5. **帳簿の名前がクライアントの読み込む名前と同じになる形を全部見た。** Python の `tigerbeetle` のほかには無かった。読み込む名前をクライアントの出力から読み、帳簿の名前にして三つのデータベースで道具に通した。Go は 21 の名前（`pgx`、`pgconn`、`mysql`、`tb`、`context`、`fmt`、`errors`、`tigerbeetle` など）で 63 の組の全部が `go vet` を通り、TypeScript は 5 つの名前で 15 の組の全部が `tsc` を通り、Rust は 8 つの名前で 24 の組の全部が `cargo check` を通った。Python で読み込むのは標準ライブラリのモジュール（16 章で W108）と `tigerbeetle` だけである。PostgreSQL と MySQL の系統の SQL は何も読み込まない。
 6. **PostgreSQL が自分のものにするスキーマの名前を W108 にする。** `pg_` で始まる帳簿は `unacceptable schema name` で読み込めず、`information_schema` はスーパーユーザーでないロールでは読み込めない。SQL と TypeScript と Python と Go と Rust の PostgreSQL の組で止まる。ほかのデータベースは止まらない。これはパッケージでも止める。
 7. **一緒に渡した帳簿を比べる。** `chobo check` と `ritsu check` は、渡された順に帳簿を比べ、Go のパッケージの名前が同じになる二冊の後のほうに W108 を付けて、注で前の帳簿のパスを言う（`spellings::across`、`check::compare_across`）。`shop` と `Shop`、日本語の名前の二冊（どちらも `book`）が当たる。`chobo gen` は帳簿を一冊しか取らないので、E064 は無い。`ritsu gen` は同じパスに書くとして前から exit 2 で止まる（`both write go/books/shop/book.go of the package`）。一つの帳簿の版を並べても比べない。ほかの形は無かった。Python のモジュールは帳簿の名前のままで、NFKC で変わる名前は（4）で止まる。PostgreSQL のスキーマの 63 バイトは E061 が先に止める。Python と TypeScript の `ritsu gen` の置き場所は、名前が違えば別である。
-8. **名前の正規化の表をクレートに置く。** `src/normal.rs` の `nfc` と `nfkc`、`src/normal_table.rs`（Unicode 17.0.0。`tools/normal/make_table.py` が UCD の二つのファイルから作り、SHA-256 が違えば作らない）。このために chobo は UCD から作った表を持つので、`license` を `(MIT OR Apache-2.0) AND Unicode-3.0` にし、`THIRD_PARTY_NOTICES` を置いた（ritsu-emit と同じ）。
+8. **名前の正規化の表は ritsu-emit に置く。** `ritsu_emit::normal` の `nfc` と `nfkc`、`normal_table`（Unicode 17.0.0。`tools/normal/make_table.py` が UCD の二つのファイルから作り、SHA-256 が違えば作らない）。字の表と同じ作り方で、同じ場所である。chobo のライセンスはワークスペースのままである（14 章）。
 
 ### 18.4 捨てたもの
 
@@ -1564,7 +1564,7 @@ E063 は Rust のターゲットの表だけを読んでいた。ほかの三つ
 - NFC か NFKC で同じになる二つの名前は、その言語のターゲットで E064 で止まる。前は書いて、組めなかった。
 - 帳簿の名前 `rooms²`、`ｓｈｏｐ`、`tigerbeetle` は Python のターゲットで、`pg_` で始まる名前と `information_schema` は PostgreSQL のターゲットで E064 で止まる。
 - 二冊の帳簿を一緒に `check` すると、新しい W108 が出ることがある。日本語の名前の帳簿は、どれも Go のパッケージ `book` になるので、一つのプロジェクトに二冊あれば W108 になる。
-- 正規化の表が増え、ライセンスの書き方が変わる。
+- ritsu-emit の正規化の表が増える。
 - 生成物は、この形に当たらない帳簿では一字も変わらない。
 
 ### 18.6 確かめたこと
@@ -1572,7 +1572,7 @@ E063 は Rust のターゲットの表だけを読んでいた。ほかの三つ
 - `tests/spellings.rs`（15）と、材料の `tests/spellings/`（24 の形。英語を先に、日本語の版を横に置いて 48 冊、どれも英日の golden を持つ）と `tests/spellings/across/`。どの帳簿も W108 を一つだけ言い、挙げるターゲットの `chobo gen` は同じ場所の E064 で止まる。注のとおりに名前を変えた 48 冊（`tests/spellings/renamed/`）は何も言われず、14 のターゲットのどれでも書ける。
 - `a_name_a_language_takes_as_no_identifier_stops_its_clients` は、上の表のとおりに止まること、止まらない組が組めることを確かめる。直す前のバイナリでは、`area_m²` は `tsc` が `TS1131`、Python が `SyntaxError`、`go vet` が `illegal character U+00B2` で止まり、`कीमत` と `Ⅻ` は Go だけが、`ͺarea` は Python だけが止まった。
 - ツールの段で、W108 の挙げるターゲットを含めて検査をせずに書き、言語の道具に通した。壊れたのは、どれも W108 が挙げるターゲットで、壊れ方は注のとおりだった。`go vet` は 288 のターゲットのうち 22、`tsc` と Node は 288 のうち 16、Python は 288 のうち 78、`cargo check` は 288 のうち 46、PostgreSQL は 96 のうち 6 が止まった。挙げないターゲットと名前を変えた版は、どれも通った。`information_schema` がスーパーユーザーでないロールを止めることは、使い捨てのロールで確かめる。
-- `tests/normal.rs`（2）は、表を Python の `unicodedata` と 314,368 個の文字列で比べる。ランナーの Python の Unicode は 15.1.0 で、表は 17.0.0 なので、その版で定まった字だけを比べる。一度だけ、Unicode 17.0.0 の `NormalizationTest.txt` の 20,034 行と、そこに載らない 1,094,978 字を確かめ、全部が決まりどおりだった。
+- `crates/ritsu-emit/tests/normal.rs`（2）は、表を Python の `unicodedata` で比べる。Python の Unicode が表の 17.0.0 より古いときは、その版で定まった字だけを比べる（Unicode 15.1.0 の Python で 314,368 個の文字列）。一度だけ、Unicode 17.0.0 の `NormalizationTest.txt` の 20,034 行と、そこに載らない 1,094,978 字を確かめ、全部が決まりどおりだった。
 - `two_books_given_together_that_are_one_go_package` は、二冊を別の実行で一つの `--out` に書くと、後の帳簿が同じパスを上書きすることと、注のとおりに名前を変えた帳簿ならパッケージが二つになることを確かめる。
 - この章の前のバイナリといまのバイナリで、木の `.book`（215 冊）の `check`（英語、日本語、JSON）と全部のターゲットの生成物を比べた。違うのは 18 冊で、この章で足した材料の 16 冊と、`tests/fixtures/` の 2 冊である。`identifiers.book` と `識別子.book` は `²` の例として置いた帳簿で、Go、Python、TypeScript のターゲットが E063 で止まるようになった。E062 の例の `wide_letters.book` は、帳簿の名前を NFKC で変わらない `stock_𐐀𐐁` にしたので、E062 のほかに言うことはなく、この章では変わらない（NFKC で変わる `stock_𝐀𝐁` なら、Python のターゲットの W108 が増える）。
 

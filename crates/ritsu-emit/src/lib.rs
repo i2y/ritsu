@@ -6,6 +6,8 @@
 //! - [`ident`]: a name of the generated code from a name of the source, and whether a target
 //!   takes a name of the source as it is, by the tables of [`xid`], made from the Unicode
 //!   Character Database (THIRD_PARTY_NOTICES).
+//! - [`normal`]: NFC and NFKC, the forms Rust and Python compare identifiers in, by the tables of
+//!   [`normal_table`], made from the Unicode Character Database too.
 //! - [`lit`]: a string of the source as a literal of the target.
 //! - [`header`]: the line that says a file is generated, and the comments it is written in.
 //! - [`package`]: where a part goes in the package `ritsu gen` writes, and the paths one part imports
@@ -21,6 +23,8 @@ pub mod copies;
 pub mod header;
 pub mod ident;
 pub mod lit;
+pub mod normal;
+pub mod normal_table;
 pub mod package;
 pub mod wasm;
 pub mod words;

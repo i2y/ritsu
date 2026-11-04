@@ -15,7 +15,7 @@
 //! library, which Python keeps one module of, by the name of the library its TigerBeetle client
 //! imports (`tigerbeetle`, which imports itself), or by a name Python reads as another (`ｓｈｏｐ`) or
 //! as none (`rooms²`). The schema of the PostgreSQL SQL cannot be one of PostgreSQL's own (`pg_…`,
-//! `information_schema`). Rust compares identifiers in NFC, and Python in NFKC (src/normal.rs), so
+//! `information_schema`). Rust compares identifiers in NFC, and Python in NFKC (`ritsu_emit::normal`), so
 //! two names can be one identifier though they are written differently, and a name can be one the
 //! client uses itself. And two books checked together can be one Go package ([`across`]).
 //!
@@ -186,8 +186,8 @@ impl Rule {
     /// Python in NFKC (The Python Language Reference, 2.3); Go and TypeScript by its code points.
     fn compared(self, id: &str) -> String {
         match self.lang() {
-            Lang::Rust => crate::normal::nfc(id),
-            Lang::Python => crate::normal::nfkc(id),
+            Lang::Rust => ritsu_emit::normal::nfc(id),
+            Lang::Python => ritsu_emit::normal::nfkc(id),
             _ => id.to_string(),
         }
     }
@@ -848,8 +848,8 @@ fn python_module(b: &Book) -> Vec<Found> {
             "クライアントはモジュール `{n}.py` で、`{n}` は Python の識別子にならないので、`import {n}` は Python の文になりません（`SyntaxError`）。",
             "the client is the module `{n}.py`, and `{n}` is no identifier of Python, so `import {n}` is no Python (`SyntaxError`)."
         )
-    } else if crate::normal::nfkc(n) != n {
-        let read = crate::normal::nfkc(n);
+    } else if ritsu_emit::normal::nfkc(n) != n {
+        let read = ritsu_emit::normal::nfkc(n);
         tr!(
             "クライアントはモジュール `{n}.py` で、Python は識別子を NFKC にしてから読むので、`import {n}` が探すのは `{read}` です（`ModuleNotFoundError`）。",
             "the client is the module `{n}.py`, and Python reads an identifier in NFKC, so `import {n}` looks for `{read}` (`ModuleNotFoundError`)."

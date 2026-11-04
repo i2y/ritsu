@@ -275,7 +275,6 @@ decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese.
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
 [MIT license](LICENSE-MIT), at your option. The tables of the characters a name of each language
-cannot hold, which E063 reads, are ritsu-emit's (`crates/ritsu-emit/src/xid.rs`), and the tables of
-NFC and NFKC, which W108 reads, are `src/normal_table.rs`. Both are made from the Unicode Character
-Database, under the Unicode License V3 ([ritsu-emit's](../ritsu-emit/THIRD_PARTY_NOTICES) and
-[this crate's](THIRD_PARTY_NOTICES) THIRD_PARTY_NOTICES).
+cannot hold, which E063 reads, and of NFC and NFKC, which W108 reads, are ritsu-emit's
+(`crates/ritsu-emit/src/xid.rs` and `normal_table.rs`), made from the Unicode Character Database,
+under the Unicode License V3 (its [THIRD_PARTY_NOTICES](../ritsu-emit/THIRD_PARTY_NOTICES)).

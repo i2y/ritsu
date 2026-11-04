@@ -1,13 +1,13 @@
 //! NFC and NFKC (src/normal.rs) as Python's `unicodedata` writes them: each character it has
 //! assigned, the decomposed form of each that decomposes, and marks in both orders after a letter,
 //! which is what reordering and a blocked composition come to. The tables are of Unicode 17.0, and
-//! Python's may be older: what it has not assigned is not compared. DESIGN 18 says how the module
-//! was held to the conformance file of the Unicode Character Database.
+//! Python's may be older: what it has not assigned is not compared. chobo's DESIGN 18 says how the
+//! module was held to the conformance file of the Unicode Character Database.
 
-mod common;
-use chobo::normal::{nfc, nfkc};
-use common::runners::python;
-use common::*;
+use ritsu_emit::normal::{nfc, nfkc};
+use ritsu_testkit::level::{Need, ready};
+use ritsu_testkit::skip::skip;
+use ritsu_testkit::tmp::TempDir;
 use std::process::Command;
 
 const COMPARE: &str = r#"import sys, unicodedata as u
@@ -42,25 +42,19 @@ out.close()
 
 #[test]
 fn the_forms_are_what_python_writes() {
-    if !need(Need::Python) {
+    let py = "python3";
+    if !ready(Need::Python, || ritsu_testkit::tools::runs(py, &["--version"]), "no python3; NFC and NFKC are not held to unicodedata") {
         return;
     }
-    let py = match python() {
-        Ok(p) => p,
-        Err(why) => {
-            skip(&format!("{why}; NFC and NFKC are not held to unicodedata"));
-            return;
-        }
-    };
     let work = TempDir::new("normal");
     let (script, file) = (work.path().join("compare.py"), work.path().join("forms.txt"));
     std::fs::write(&script, COMPARE).unwrap();
-    let out = Command::new(&py).arg("-I").arg(&script).arg(&file).output().unwrap();
+    let out = Command::new(py).arg("-I").arg(&script).arg(&file).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let text = std::fs::read_to_string(&file).unwrap();
     let mut lines = text.lines();
     let version: Vec<u8> = lines.next().unwrap().split('.').map(|v| v.parse().unwrap()).collect();
-    let (a, b, c) = chobo::normal_table::UNICODE;
+    let (a, b, c) = ritsu_emit::normal_table::UNICODE;
     if (version[0], version[1], version[2]) > (a, b, c) {
         skip(&format!("Python's Unicode {version:?} is newer than the tables' {:?}; NFC and NFKC are not held to it", (a, b, c)));
         return;

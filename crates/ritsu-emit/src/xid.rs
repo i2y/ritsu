@@ -2,9 +2,9 @@
 //! ritsu's languages takes a letter (Alphabetic) or `_` first, then letters, numbers (Nd, Nl, No)
 //! and `_`. Rust and Python take XID_Start or `_` first, then XID_Continue; TypeScript ID_Start or
 //! `_`, then ID_Continue; Go a letter (Lu, Ll, Lt, Lm, Lo) or `_`, then letters, decimal digits
-//! (Nd) and `_`. chobo's E063 and its Rust clients read the tables of Rust, and kaname the tables
-//! of the target it writes ([`crate::ident::rust_takes`] and the three beside it). Unicode 17.0 is
-//! the version of the identifiers of rustc 1.94 to 1.97, and of their `char`.
+//! (Nd) and `_`. chobo's E063 reads the tables of each client's language, its Rust clients those of
+//! Rust, and kaname those of the target it writes ([`crate::ident::rust_takes`] and the three beside
+//! it). Unicode 17.0 is the version of the identifiers of rustc 1.94 to 1.97, and of their `char`.
 //!
 //! Written by tools/xid/make_table.py; do not edit. The files it was made from, of the Unicode
 //! Character Database 17.0.0:

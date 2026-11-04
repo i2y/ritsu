@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Write src/normal_table.rs from the Unicode Character Database (DESIGN 18).
+"""Write src/normal_table.rs from the Unicode Character Database (chobo's DESIGN 18).
 
     python3 tools/normal/make_table.py <UnicodeData.txt> <DerivedNormalizationProps.txt>
 
 Rust compares identifiers in NFC, and Python in NFKC, so two names of a book can be one identifier
-in a client though chobo keeps them apart (W108). The tables hold what the two forms need: each
+in a client though chobo keeps them apart (its W108). The tables hold what the two forms need: each
 character's decomposition of one step, with whether it is a compatibility one, the canonical
 combining classes, and the pairs that compose. The files are not kept in the repository; they are
 at https://www.unicode.org/Public/17.0.0/ucd/, and the script refuses any but the two it was made

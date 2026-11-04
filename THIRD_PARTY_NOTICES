@@ -9,7 +9,7 @@ package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of other
 loads, beside its module, the libraries its editor and its Markdown are made of:
 
   Unicode CLDR 48.2                the names of rulec's built-in divisions  Unicode-3.0
-  Unicode Character Database 17.0  ritsu-emit's tables of name characters  Unicode-3.0
+  Unicode Character Database 17.0  ritsu-emit's tables of name characters and normalization  Unicode-3.0
   The WHATWG Encoding Standard     koyomi's Shift_JIS table                 BSD-3-Clause
   Laws from e-Gov and the eCFR     the examples of explain                  PDL1.0; US government work
   equivalent 1.0.2                 a crate from crates.io                   Apache-2.0 OR MIT
@@ -130,7 +130,19 @@ the Unicode Character Database:
 
 tools/xid/make_table.py writes the tables from the two files, and the head of the tables gives
 each file's date and SHA-256. The tables are lists of ranges of code points; ritsu-emit reads
-nothing at run time. The files say that their terms of use and license are at
+nothing at run time.
+
+ritsu-emit's tables of NFC and NFKC (src/normal_table.rs), which chobo's W108 reads to compare
+names as Rust and Python compare identifiers, are made from two more files of the database:
+
+  Unicode Character Database 17.0.0, https://www.unicode.org/Public/17.0.0/ucd/
+    UnicodeData.txt                  the decompositions and the canonical combining classes
+    DerivedNormalizationProps.txt    the property Full_Composition_Exclusion
+
+tools/normal/make_table.py writes them from the two files, and refuses any but those it was made
+from, by their SHA-256.
+
+The files say that their terms of use and license are at
 https://www.unicode.org/terms_of_use.html, which puts the Unicode data files under the Unicode
 License v3, https://www.unicode.org/license.txt (SPDX-License-Identifier: Unicode-3.0). Its
 text, as that page gives it:
