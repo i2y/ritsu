@@ -1,6 +1,6 @@
 # モジュール
 
-モジュールは `ritsu.mod` を持つディレクトリです。ほかのプロジェクトが、横のディレクトリ、git のリポジトリ、OCI のレジストリのどれかから足して、そのファイルを `@<名前>/…` のパスで読みます。ritsu のリポジトリから配るモジュールは、[モジュールの一覧](modules/list/)に載せています。そこで検索し、持つものを読んで試し、版のあいだの差を見られます。
+モジュールは `ritsu.mod` を持つディレクトリです。ほかのプロジェクトが、横のディレクトリ、git のリポジトリ、OCI のレジストリのどれかから足して、そのファイルを `@<名前>/…` のパスで読みます。ritsu のために公開したモジュールは、[モジュールの一覧](modules/list/)に載せています。そこで検索し、持つものを読んで試し、版のあいだの差を見られます。
 
 プロジェクトは、依存のファイルを、自分のファイルと一緒に、各言語の検査と言語をまたぐ検査にかけます。そのため、証明はモジュールの境目でも切れません。このページの例は、ritsu のテストの三つのモジュール [crates/ritsu/tests/projects/modules.ja](https://github.com/i2y/ritsu/tree/main/crates/ritsu/tests/projects/modules.ja) です。`tax`（ディレクトリは `税`）は付加価値税の税率を、`pricing`（`価格`）は送料と注文の合計を持ちます。注文の合計は `tax` の税率を準用します。`shop`（`店`）は注文のフローとかごを持ち、その値段を `pricing` で決めます。
 
@@ -139,6 +139,14 @@ require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
 - lock は、タグが指していたコミットを、URL と一緒に固定します。`ritsu mod fetch` は、そのコミットを名前で取り、チェックアウトはしません。コミットと木を取り、モジュールのファイルをまとめて取って、git が持つバイトのまま読みます。filter も改行の変換もフックも効きません。モジュールの中にシンボリックリンク、サブモジュール、Git LFS のポインタがあれば止まります。
 - タグが動いたときは、レジストリのタグと同じに扱います。`ritsu mod fetch` は lock のコミットを取り続け、`ritsu mod get` はタグがいま指すコミットを取り、`ritsu mod report` は動いたことを先頭に出します。リポジトリが lock のコミットをもう渡さなければ、`ritsu mod fetch` はタグが動いたと言って止まります。
 - ritsu は、2.30 以上の git を、手元の設定のまま走らせます。ssh の鍵、資格情報のヘルパー、`url.<base>.insteadOf` は、`git fetch` と同じく効きます。git に端末でパスワードを聞かせないので、資格情報が無ければすぐに止まります。
+
+[モジュールの一覧](modules/list/)の `japan_liquor_tax` は、この形で共有しています。自分の公開リポジトリを持ち、タグは `v1.0.0`、`v1.1.0`、`v1.2.0` で、酒税の改正の一段に一つずつです。ある段で何が動いたかを見るには、依存に足して、そのプロジェクトで二つの版を比べます。
+
+```console
+$ ritsu mod versions https://github.com/i2y/ritsu-japan-liquor-tax
+$ ritsu mod add japan_liquor_tax https://github.com/i2y/ritsu-japan-liquor-tax@1.2.0
+$ ritsu mod diff github.com/i2y/ritsu-japan-liquor-tax@1.1.0 github.com/i2y/ritsu-japan-liquor-tax@1.2.0
+```
 
 git で共有するモジュールには、確かめる署名がありません。lock のコミットとダイジェストで固定し、そのモジュールに当たる `signature` の行は E309 です。git から取るモジュールを依存に持つモジュールは、レジストリに送り出せません。git から取るモジュールの名前は置いてある場所なので、一つのモジュールを配る方法はどちらか一つです。git で共有していたモジュールをレジストリに移すときは、`module` の行をレジストリのリポジトリに変えて、新しい版を送り出します。使う側は `require … git` の行を `require … oci` に書き換えて、`ritsu mod lock` を走らせます。ファイルは使う側が付けた名前でモジュールを指すので、変わりません。
 

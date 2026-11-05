@@ -671,6 +671,8 @@ Its calendars close the holidays and nothing else. A calendar of your own reads 
 `closed weekly sat, sun`. The other modules under [modules/](modules) hold rules transcribed from the
 laws of those countries: limits on workplace safety, income tax, stamp duty, social insurance, the
 minimum wage and the charges on a late payment.
+`japan_liquor_tax` is shared by the tags of a repository of its own, with no registry: the liquor tax
+of Japan, with a version for each step of a reform.
 [The list of modules](https://i2y.github.io/ritsu/modules/list/) searches them, and for each version
 shows what it holds, lets you try its rules and calendars on the page, and says what changed from the
 version before.

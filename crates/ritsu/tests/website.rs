@@ -368,11 +368,12 @@ fn the_links_into_the_repository_name_what_is_there() {
             }
             // The repository of a language by itself is not where the language is: only ritsu's is
             // named. Its releases neither: ritsu's releases hand out every language, rulec's binary,
-            // packages and action among them (rulec's install page, DESIGN 13.2).
+            // packages and action among them (rulec's install page, DESIGN 13.2). The one other name is
+            // the module shared by git, whose repository is where the module is (DESIGN 17.18).
             let mut rest = line;
             while let Some(i) = rest.find("github.com/i2y/") {
                 let repo: String = rest[i + 15..].chars().take_while(|c| c.is_alphanumeric() || *c == '-').collect();
-                if repo != "ritsu" {
+                if repo != "ritsu" && repo != "ritsu-japan-liquor-tax" {
                     wrong.push(format!("{name}:{}: names github.com/i2y/{repo}", n + 1));
                 }
                 rest = &rest[i + 15..];
@@ -1386,17 +1387,19 @@ fn build_sh_builds_the_tree_that_is_published() {
     // and does not write.
     std::os::unix::fs::symlink(root().join("crates"), t.path().join("crates")).unwrap();
     // The list of modules (modules.list) shows the seed modules as they are on ghcr.io, and checks
-    // their signatures. This test has no network: the copy of the list shows each module's working
-    // tree in its place, beside website/, the directory named as the module is added, with the ritsu
-    // of these tests (tests/modules_site.rs builds a list from a registry of its own, and checks the
-    // signatures).
+    // their signatures, and a module shared by git as it is at its tags. This test has no network: the
+    // copy of the list shows each seed module's working tree in its place, beside website/, the
+    // directory named as the module is added, with the ritsu of these tests, and leaves out the module
+    // shared by git, whose tree is in a repository of its own (tests/modules_site.rs builds a list from
+    // a registry of its own, and checks the signatures, and tests/modules_git.rs one from git).
     let list = read(&website().join("modules.list"));
     let lines: Vec<&str> = list.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
     assert!(lines.contains(&"module \"ghcr.io/i2y/ritsu-holidays\" as \"holidays\""), "website/modules.list shows the seed module as it is on ghcr.io:\n{list}");
     assert!(lines.iter().any(|l| l.starts_with("signature \"ghcr.io/i2y/\" by matching ")), "website/modules.list checks the seed modules' signatures:\n{list}");
+    assert!(lines.contains(&"git \"https://github.com/i2y/ritsu-japan-liquor-tax\" as \"japan_liquor_tax\""), "website/modules.list shows a module shared by git:\n{list}");
     let local: Vec<String> = lines
         .iter()
-        .filter(|l| !l.starts_with("signature "))
+        .filter(|l| !l.starts_with("signature ") && !l.starts_with("git "))
         .map(|l| match l.strip_prefix("module ") {
             None => l.to_string(),
             Some(rest) => {

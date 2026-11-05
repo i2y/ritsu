@@ -2,8 +2,8 @@
 
 A module is a directory with a `ritsu.mod`: a project that other projects require, from a directory
 beside them, a git repository or an OCI registry, and whose files they read by `@<name>/…` paths.
-The modules published from ritsu's repository are on [the list of modules](modules/list/), where you
-can search them, read and try what they hold, and see what changed between versions.
+The modules published for ritsu are on [the list of modules](modules/list/), where you can search
+them, read and try what they hold, and see what changed between versions.
 
 A project checks the files it requires with its own files, with each language's check and the checks
 across the languages, so a proof does not stop at a module's edge. The examples on this page are the
@@ -222,6 +222,16 @@ require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
 - ritsu runs git, 2.30 or later, with your settings: ssh keys, credential helpers and
   `url.<base>.insteadOf` work as they do for `git fetch`. ritsu does not let git ask for a password
   on the terminal: with no credential, it stops at once.
+
+`japan_liquor_tax` on [the list of modules](modules/list/) is shared this way: a public repository of
+its own with the tags `v1.0.0`, `v1.1.0` and `v1.2.0`, one for each step of a reform of the liquor
+tax. To see what a step moved, require the module, and compare two versions in that project:
+
+```console
+$ ritsu mod versions https://github.com/i2y/ritsu-japan-liquor-tax
+$ ritsu mod add japan_liquor_tax https://github.com/i2y/ritsu-japan-liquor-tax@1.2.0
+$ ritsu mod diff github.com/i2y/ritsu-japan-liquor-tax@1.1.0 github.com/i2y/ritsu-japan-liquor-tax@1.2.0
+```
 
 A module shared by git has no signature to check: the lock's commit and digests hold it, and a
 `signature` line that covers it is E309. A module that requires one from git cannot be pushed to a
