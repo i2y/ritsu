@@ -4319,8 +4319,12 @@ ritsu のリポジトリの `modules/` に置く、公開の一覧に載せる�
 | `late-payment` | 英国の支払い遅延の請求（rulec、koyomi、kaname。英日で 6 本） | 1998 年の法律と GOV.UK の案内（固定あり） | `(MIT OR Apache-2.0) AND OGL-UK-3.0` |
 | `japan-tax` | 日本の所得税と印紙税（rulec。英日で 6 本） | 国税庁のタックスアンサー、e-Gov（契約書の印紙税だけ固定あり） | `(MIT OR Apache-2.0) AND LicenseRef-PDL-1.0` |
 | `japan-social-insurance` | 日本の健康保険料と厚生年金保険料（rulec。英日で 4 本） | 協会けんぽ、日本年金機構（厚生年金だけ固定あり） | `(MIT OR Apache-2.0) AND LicenseRef-JPS-Site-Terms` |
+| `osha-penalties` | 米国の労働安全衛生法の制裁金の上限と下限（rulec、1 本）。版が毎年の改正を追う | 29 CFR 1903.15（eCFR。固定あり） | `MIT OR Apache-2.0` |
+| `fmla` | 米国の家族・医療休暇法の休暇：資格と日数（rulec、2 本）、期限（koyomi、2 本）、休暇の残り（chobo）、申請から取得まで（dandori）、医療の記録を読める人（sekisho） | 29 CFR 825（eCFR。規則が引く節は固定あり） | `MIT OR Apache-2.0` |
 
-- **中身**は、rulec のコーパス（`crates/rulec/tests/corpus`）と kaname の例（`crates/kaname/examples/late_payment`）から写した。rulec と kaname の試験が確かめている表である。直したのは、モジュールとして読むと意味の通らない文（コーパスの中の対応を言う `description` やコメント）と、ファイルと規則の名前（`us_income_tax` を年ごとに、`japan_stamp_duty_split` を `japan_stamp_duty` に）だけである。`us_income_tax_2026.rule` は Rev. Proc. 2025-32 の Table 3 を取って新しく書いた（2026-11-05）。各段の base は表のとおりで、前の段からの計算とも合う。
+- **中身**は、rulec のコーパス（`crates/rulec/tests/corpus`）と kaname の例（`crates/kaname/examples/late_payment`）から持ってきた。rulec と kaname の試験が確かめている表である。直したのは、モジュールとして読むと意味の通らない文（コーパスの中の対応を言う `description` やコメント）と、ファイルと規則の名前（`us_income_tax` を年ごとに、`japan_stamp_duty_split` を `japan_stamp_duty` に）だけである。`us_income_tax_2026.rule` は Rev. Proc. 2025-32 の Table 3 を取って新しく書いた（2026-11-05）。各段の base は表のとおりで、前の段からの計算とも合う。
+- **`osha-penalties` と `fmla`**（2026-11-05）はコーパスに無く、eCFR の節を取って新しく書いた。`osha-penalties` は、版のあいだの差が一覧のページでどう見えるかを示すモジュールでもある。1.0.0、1.1.0、1.2.0 がそれぞれ 2023、2024、2025 年の改正のあとの節を持ち（`asof` は各年の 2 月 1 日）、額と節の固定だけが動く。`fmla` は、rulec と koyomi のほかに chobo、dandori、sekisho のファイルも持つモジュールで、`use rule`、`use dates`、`use book` でそれらを一つのフローにつなぐ。koyomi の日付の計算は eCFR の節を固定できないので、期限の根拠はコメントで節を挙げる。yuen のファイルは持たない。`reviewed … by …` の行が、誰もしていない人の確認を言うことになるからである。
+- **`fmla` の依存**：祝日のモジュールの 1.1.0 を `require` し、`ritsu.lock` と同梱のコピー（`.ritsu/modules/`）をリポジトリに置く。fast の CI の `ritsu check` が、ネットワークも cosign も使わずに通るようにである。同梱のコピーは `ritsu mod push` の対象にならない。
 - **言語**：英語の版が先で、日本の法令には日本語の版を横に置く（英語と日本語の答えが同じことは、コーパスの `twins.tsv` と kaname の試験が確かめている）。
 - **README** は英語と日本語の二つ持ち、持つものの表、時点、法律や税の助言ではないこと、足し方、出典、版の決まりを書く。`THIRD_PARTY_NOTICES.md` は、持つ原文のコピーをすべて挙げ、それぞれの条件を書く。原文のコピーを持たない規則（タックスアンサーを読むもの）は、コメントに出典の名前を書いているだけである。
 - **載せなかったもの**：EU の航空補償（コーパスの `ec261.rule`）。規則の原文を固定しておらず、EUR-Lex は機械で取れず（2026-11-05 に試すと 202 で本文が無い）、改正の Regulation (EU) 2026/2202 の公布が報じられている。原文を確かめられないまま法令のモジュールとして配らない。

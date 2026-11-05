@@ -1,0 +1,43 @@
+rule fmla_entitlement v1
+description "How many workweeks of FMLA leave a reason gives in a 12-month period, and how many minutes they are of an employee's own workweek. Transcribed from 29 CFR 825.200 and 825.205(b)"
+
+# 825.200(a) limits the five reasons together to 12 workweeks in any 12-month period, and 825.200(f) gives
+# 26 workweeks in a single 12-month period to care for a covered servicemember; 825.200(g) makes that 26 a
+# combined total for any qualifying reason. Spouses who work for the same employer may share the limit
+# (825.120(a)(3), 825.127(f)); this rule reads one employee.
+#
+# 825.205(b)(1): "The actual workweek is the basis of leave entitlement". The minutes are the workweeks of
+# this employee's own week, which the book counts down (825.205(a)(1) allows no increment over one hour).
+# When a schedule varies too much to say, 825.205(b)(3) takes the weekly average of the hours scheduled
+# over the 12 months before the leave: that average is the `usual_week` to give here.
+source dol = law ecfr "29 CFR 825" asof 2026-01-01
+  "§825.200" sha256:4011a827cac3a5c6
+  "§825.205" sha256:414ae9fb2ab2a09c
+
+enum reason = birth | placement | care_for_family | own_condition | qualifying_exigency | servicemember_care
+
+inputs
+  reason     : reason
+  usual_week : duration[min]  range >=1min <=10080min
+
+outputs
+  workweeks : number  round down(1)
+  entitled  : duration[min]  round down(1min)
+
+table limit  @dol "§825.200"
+policy unique
+| reason              | -> workweeks |
+| birth               | 12           |
+| placement           | 12           |
+| care_for_family     | 12           |
+| own_condition       | 12           |
+| qualifying_exigency | 12           |
+| servicemember_care  | 26           |
+
+define entitled : duration[min] = usual_week × workweeks  @dol "§825.205"
+
+examples
+| reason             | usual_week | -> workweeks | entitled  |
+| own_condition      | 2400min    | 12           | 28800min  |
+| birth              | 1800min    | 12           | 21600min  |
+| servicemember_care | 2400min    | 26           | 62400min  |

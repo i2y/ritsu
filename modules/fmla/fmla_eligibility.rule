@@ -1,0 +1,37 @@
+rule fmla_eligibility v1
+description "Whether an employee of a covered employer is eligible for FMLA leave, and the first reason why not. Transcribed from 29 CFR 825.110(a)"
+
+# The three conditions of 825.110(a), in its order. 825.300(b)(2) has the eligibility notice state at
+# least one reason an employee is not eligible: this rule gives the first of them. An airline flight crew
+# employee has other hours of service (825.801), and an employee who works outside the United States other
+# conditions (825.105(b)); this rule reads neither.
+source dol = law ecfr "29 CFR 825" asof 2026-01-01
+  "§825.110" sha256:51043e99da79d92a
+
+enum why_not = not_applicable | under_12_months | under_1250_hours | under_50_employees
+
+inputs
+  months_employed           : number  range >=0 <=720
+  hours_of_service          : number  range >=0 <=8784
+  employees_within_75_miles : number  range >=0 <=10000000
+
+outputs
+  eligible : bool
+  why_not  : why_not
+
+table conditions  @dol "§825.110"
+policy unique
+| months_employed | hours_of_service | employees_within_75_miles | -> eligible | why_not            |
+| <12             | -                | -                         | false       | under_12_months    |
+| >=12            | <1250            | -                         | false       | under_1250_hours   |
+| >=12            | >=1250           | <50                       | false       | under_50_employees |
+| >=12            | >=1250           | >=50                      | true        | not_applicable     |
+
+examples
+| months_employed | hours_of_service | employees_within_75_miles | -> eligible | why_not            |
+| 12              | 1250             | 50                        | true        | not_applicable     |
+| 36              | 2080             | 400                       | true        | not_applicable     |
+| 11              | 2080             | 400                       | false       | under_12_months    |
+| 11              | 1000             | 10                        | false       | under_12_months    |
+| 12              | 1249             | 400                       | false       | under_1250_hours   |
+| 12              | 1250             | 49                        | false       | under_50_employees |

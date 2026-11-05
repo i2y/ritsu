@@ -1,0 +1,12 @@
+{
+  "module": "ghcr.io/i2y/ritsu-holidays",
+  "version": "1.1.0",
+  "files": "sha256:bed2c8908acd5f5b19e01ed25fd5ab678338d285bf04feb3a16b51070108fcc8",
+  "fetched": "2026-11-05",
+  "verified": [
+    {
+      "policy": "signature \"ghcr.io/i2y/ritsu-holidays\" by matching \"^https://github[.]com/i2y/ritsu/\" issuer \"https://token.actions.githubusercontent.com\"",
+      "on": "2026-11-05"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+calendar national_holidays v1
+description "The national holidays of Japan and the other days off under the Act on National Holidays, as the Cabinet Office lists them. Weekends are left open: the calendar that uses this one closes its own. The English version of 国民の祝日.cal"
+offset +09:00
+
+source holidays = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
+
+closed holidays

@@ -1,0 +1,127 @@
+gate fmla_records v1
+description "Who may learn what from the medical records of FMLA leave, and who may contact the health care provider. From 29 CFR 825.500(g) and 825.307(a)"
+namespace Fmla
+
+role leave_administrator
+  description "Keeps the confidential file, and may contact the provider: a leave administrator of 825.307(a)"
+  can read_medical_file, contact_provider
+
+role human_resources_professional
+  description "Keeps the confidential file, and may contact the provider: a human resources professional of 825.307(a)"
+  can read_medical_file, contact_provider
+
+role management_official
+  description "May contact the provider, and be informed as a manager is: a management official of 825.307(a), a manager of 825.500(g)(1)"
+  can read_restrictions, contact_provider
+
+role health_care_provider
+  description "A health care provider the employer uses to make contact, as 825.307(a) allows"
+  can contact_provider
+
+role supervisor
+  description "A supervisor or manager of 825.500(g)(1)"
+  can read_restrictions
+
+role first_aid
+  description "First aid and safety personnel of 825.500(g)(2)"
+  can read_emergency_condition
+
+role government_official
+  description "A government official of 825.500(g)(3), investigating compliance with the FMLA or another law"
+  can read_relevant_information
+
+principal Person
+  description "Someone at the employer, or an official from outside it, signed in"
+  roles leave_administrator, human_resources_professional, management_official, health_care_provider, supervisor, first_aid, government_official
+
+resource MedicalFile
+  description "The certifications, recertifications and medical histories of one employee, kept apart from the personnel file"
+  attributes
+    direct_supervisor        : Person
+    chance_to_cure_given     : bool
+    may_need_emergency_care  : bool
+
+action read_medical_file
+  description "Read the certifications and medical histories in the file"
+  principal Person
+  resource MedicalFile from fileId
+
+action read_restrictions
+  description "Learn the necessary restrictions on the employee's work or duties, and the necessary accommodations, and nothing else of the file"
+  principal Person
+  resource MedicalFile from fileId
+
+action read_emergency_condition
+  description "Learn the physical or medical condition that might require emergency treatment"
+  principal Person
+  resource MedicalFile from fileId
+
+action read_relevant_information
+  description "Be given the information relevant to the investigation, on request"
+  principal Person
+  resource MedicalFile from fileId
+
+action contact_provider
+  description "Contact the employee's health care provider to clarify or authenticate a certification"
+  principal Person
+  resource MedicalFile from fileId
+
+# 825.500(g) keeps the file apart from the personnel file and does not say who keeps it. That the leave
+# administrator and the human resources professional read it is a reading made here. What an employee may
+# see of the employee's own file is not in these paragraphs, and this gate does not say it.
+permit keepers_read_the_file
+  description "Those who keep the file read it"
+  principal in leave_administrator, human_resources_professional
+  action read_medical_file
+
+permit supervisors_learn_restrictions
+  description "825.500(g)(1): supervisors and managers may be informed of the necessary restrictions and accommodations"
+  principal in supervisor, management_official
+  action read_restrictions
+
+permit first_aid_learns_an_emergency_condition
+  description "825.500(g)(2): first aid and safety personnel may be informed if the condition might require emergency treatment"
+  principal in first_aid
+  action read_emergency_condition
+  when resource.may_need_emergency_care
+
+permit officials_are_given_what_is_relevant
+  description "825.500(g)(3): officials investigating compliance are provided relevant information on request"
+  principal in government_official
+  action read_relevant_information
+
+permit contact_after_a_chance_to_cure
+  description "825.307(a): those it names may contact the provider, after the employee had a chance to cure any deficiency, and never the employee's direct supervisor"
+  principal in health_care_provider, human_resources_professional, leave_administrator, management_official
+  action contact_provider
+  when resource.chance_to_cure_given
+  unless resource.direct_supervisor is principal
+
+expect deny direct_supervisors_never_contact_the_provider
+  description "825.307(a): under no circumstances may the employee's direct supervisor contact the employee's health care provider"
+  action contact_provider
+  when resource.direct_supervisor is principal
+
+expect deny no_contact_before_a_chance_to_cure
+  description "825.307(a): the employer contacts the provider only after the employee had a chance to cure any deficiency"
+  action contact_provider
+  unless resource.chance_to_cure_given
+
+expect deny supervisors_do_not_read_the_file
+  description "825.500(g)(1): a supervisor or manager learns the restrictions and accommodations, and does not read the file"
+  principal in supervisor, management_official
+  action read_medical_file
+  unless principal in leave_administrator
+  unless principal in human_resources_professional
+
+expect deny first_aid_learns_nothing_without_an_emergency
+  description "825.500(g)(2): first aid and safety personnel are informed only of a condition that might require emergency treatment"
+  action read_emergency_condition
+  unless resource.may_need_emergency_care
+
+expect allow a_leave_administrator_contacts_the_provider
+  description "A leave administrator who is not the direct supervisor contacts the provider after the chance to cure"
+  principal in leave_administrator
+  action contact_provider
+  when resource.chance_to_cure_given
+  unless resource.direct_supervisor is principal

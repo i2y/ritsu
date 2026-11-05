@@ -1,0 +1,6 @@
+calendar business_days v1
+description "Monday to Friday, less the federal holidays of the United States. 29 CFR 825 does not define a business day: an employer's own may differ"
+
+use calendar "@holidays/us/federal_holidays.cal"
+
+closed weekly sat, sun

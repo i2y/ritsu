@@ -1,0 +1,134 @@
+# From an employee's request for FMLA leave to the end of the leave: the notices an employer owes, the days
+# they are due, and the leave the book holds. The notices and the certification go through people, so each
+# task is told the day, and the people's tools keep it: 29 CFR 825 names days and no hour, and no moment
+# here waits on one. 825.300(e): failing to give a notice may interfere with the employee's rights.
+workflow fmla_request v1
+description "An employee asks for FMLA leave: the eligibility notice, the certification, the designation, and the leave held in the book until it is taken. From 29 CFR 825.300 and 825.305"
+
+use rule eligibility from "fmla_eligibility.rule"
+use rule entitlement from "fmla_entitlement.rule"
+use dates deadlines from "fmla_deadlines.cal"
+use book leave from "fmla_leave.book"
+
+record Request
+  id                        : string
+  employee                  : string
+  period                    : string
+  given_on                  : date  range >=2026-01-01 <=2030-12-01
+  reason                    : entitlement.reason
+  months_employed           : int  range >=0 <=720
+  hours_of_service          : int  range >=0 <=8784
+  employees_within_75_miles : int  range >=0 <=10000000
+  usual_week                : duration[min]  range >=1min <=10080min
+  minutes                   : duration[min]  range >=1min <=262080min
+
+# What came back for a certification: whether the employee gave it in time, and the day the employer had
+# enough to decide (825.300(d)(1) counts the designation notice from that day).
+record Certification
+  provided  : bool
+  enough_on : date  range >=2026-01-01 <=2030-12-01
+
+# What came back when the leave ended. 825.205(b)(1): only the amount of leave actually taken may be counted.
+record LeaveEnded
+  taken   : bool
+  minutes : duration[min]  range >=1min <=262080min
+
+enum NoDesignation = no_certification | not_enough_leave
+enum Outcome = taken | not_taken | not_eligible | no_certification | not_enough_leave
+
+inputs
+  request : Request
+
+outputs
+  outcome : Outcome
+
+# 825.300(b)(1), and (b)(2) for the reason when the employee is not eligible. 825.300(c)(1): the notice of
+# rights and responsibilities goes each time this one does.
+task give_eligibility_notice(request: string, eligible: bool, why_not: eligibility.why_not, by: date)
+  queue "fmla-notices"
+  idempotent
+
+# 825.305(a): an employer may require a certification, and when it does not, the tool answers at once with
+# the day the request was given. 825.305(b): the employer asks when the employee gives notice or within
+# five business days, and this flow counts from the first of those days. The tool answers on or after the
+# day it was due, which that paragraph moves when giving it in time is not practicable.
+task get_certification(request: string, by: date) -> Certification
+  callback
+
+# The first request of a period opens it with what its reason gives. A later one that would open it with
+# another amount leaves it as it is: the book holds one limit for a period, and an employer names the
+# single 12-month period of 825.200(f), for a covered servicemember's care, as a period of its own.
+task open_period(employee: string, period: string, minutes: duration[min])
+  book leave.entitle.do
+  errors key_conflict
+
+# A request for more than is left is refused whole: an employer who designates what is left asks for that.
+task hold_leave(request: string, employee: string, period: string, minutes: duration[min]) -> leave.designate
+  book leave.designate.hold
+  starts leave.designate
+  errors not_enough_leave
+
+# 825.300(d)(1), and (d)(6) for the amount that will be counted.
+task give_designation_notice(request: string, minutes: duration[min], by: date)
+  queue "fmla-notices"
+  idempotent
+
+# 825.300(d)(1): an employer who will not designate the leave must say so.
+task give_notice_of_no_designation(request: string, because: NoDesignation, by: date)
+  queue "fmla-notices"
+  idempotent
+
+# Someone says in a tool of their own that the leave has ended, and how much of it was taken.
+task wait_for_the_end_of_leave(request: string) -> LeaveEnded
+  callback
+
+task take_leave(request: string, minutes: duration[min]) -> leave.designate
+  book leave.designate.post
+  sends post
+
+task release_leave(request: string) -> leave.designate
+  book leave.designate.void
+  sends void
+  errors already_posted
+
+case hold : leave.designate follows leave.designate
+
+flow
+  let e = eligibility(months_employed: request.months_employed, hours_of_service: request.hours_of_service, employees_within_75_miles: request.employees_within_75_miles)
+  let notice = deadlines.notice(counted_from: request.given_on)
+  give_eligibility_notice(request: request.id, eligible: e.eligible, why_not: e.why_not, by: notice.day)
+  match e.eligible
+    false => succeed outcome = not_eligible
+    true => pass
+  let asked = deadlines.certification(counted_from: request.given_on)
+  let c = get_certification(request: request.id, by: asked.day)
+  let designation = deadlines.notice(counted_from: c.enough_on)
+  match c.provided
+    false =>
+      give_notice_of_no_designation(request: request.id, because: no_certification, by: designation.day)
+      succeed outcome = no_certification
+    true => pass
+  let limit = entitlement(reason: request.reason, usual_week: request.usual_week)
+  open_period(employee: request.employee, period: request.period, minutes: limit.entitled)
+    on key_conflict => pass
+  hold <- hold_leave(request: request.id, employee: request.employee, period: request.period, minutes: request.minutes)
+    on not_enough_leave =>
+      give_notice_of_no_designation(request: request.id, because: not_enough_leave, by: designation.day)
+      succeed outcome = not_enough_leave
+  give_designation_notice(request: request.id, minutes: request.minutes, by: designation.day)
+  let ended = wait_for_the_end_of_leave(request: request.id)
+  match ended.taken
+    true =>
+      hold <- take_leave(request: request.id, minutes: ended.minutes)
+      succeed outcome = taken
+    false =>
+      hold <- release_leave(request: request.id)
+      succeed outcome = not_taken
+
+on failure
+  match hold.state
+    none => pass
+    held =>
+      hold <- release_leave(request: request.id)
+        on already_posted => pass
+        on failure => fail NotReleased "the leave held for the request could not be released" leaving hold

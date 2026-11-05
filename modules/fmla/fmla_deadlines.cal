@@ -1,0 +1,27 @@
+dates fmla_deadlines v1
+description "The last day for the notices of FMLA leave: five business days for the eligibility and the designation notice, 15 calendar days for a certification. From 29 CFR 825.300(b), 825.300(d) and 825.305(b)"
+use calendar "business_days.cal"
+
+# Each section adds "absent extenuating circumstances", or for a certification "unless it is not
+# practicable": these are the days when nothing of the kind applies. They are days and not moments: the
+# sections name no hour, and an employer may be in any of the country's time zones.
+inputs
+  counted_from : date  range >=2026-01-01 <=2030-12-01
+
+date notice = counted_from
+  + 5 business days     # 825.300(b)(1) and (d)(1): "within five business days"
+
+date certification = counted_from
+  + 15 days             # 825.305(b): "within 15 calendar days after the employer's request"
+
+claims
+  notice_on_a_business_day  : notice is open
+  later_day_later_notice    : notice is monotonic
+  certification_in_15_days  : certification >= counted_from + 15 days
+
+examples
+| counted_from | -> notice   | -> certification |
+| 2026-03-02   | 2026-03-09  | 2026-03-17       |
+| 2026-07-01   | 2026-07-09  | 2026-07-16       |
+| 2026-11-23   | 2026-12-01  | 2026-12-08       |
+| 2026-12-21   | 2026-12-29  | 2027-01-05       |

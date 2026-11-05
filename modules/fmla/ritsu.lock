@@ -1,0 +1,4 @@
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.42.0
+oci ghcr.io/i2y/ritsu-holidays 1.1.0 sha256:6b1809bd0a0a66199bb04eeb92109d97d7c30da86ce696d54cab468eb9333c94 files sha256:bed2c8908acd5f5b19e01ed25fd5ab678338d285bf04feb3a16b51070108fcc8

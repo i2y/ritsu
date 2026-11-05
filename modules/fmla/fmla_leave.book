@@ -1,0 +1,27 @@
+# The FMLA leave an employee has left in a 12-month period. It counts minutes because 825.205(a)(1) allows
+# an employer no increment over one hour, and lets it use a shorter one: minutes hold them all. The period
+# is a name the employer gives it, for the first three of the methods of 825.200(b). The fourth, a 12-month
+# period measured backward from each day of leave, moves every day and needs another shape.
+book fmla_leave v1
+description "The FMLA leave an employee has left in a 12-month period, in minutes: it starts at what the employee is entitled to, and a designation holds what will be taken"
+
+unit min
+
+account leave(employee: string, period: string) : min
+  description "what is left of the 12 or 26 workweeks of 29 CFR 825.200"
+  at least 0 refused as not_enough_leave
+account entitled : min outside
+  description "where what an employee is entitled to comes from"
+account taken : min outside
+  description "where the leave goes once it is taken"
+
+transfer entitle(employee: string, period: string, minutes: min)
+  description "what the employee is entitled to in the period, from the rule fmla_entitlement"
+  key employee, period
+  move minutes from entitled to leave(employee, period)
+
+transfer designate(request: string, employee: string, period: string, minutes: min)
+  description "held while the leave is designated: posted when it is taken, voided when it is not"
+  key request
+  pending never expires
+  move minutes from leave(employee, period) to taken

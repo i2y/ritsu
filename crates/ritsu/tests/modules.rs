@@ -1161,7 +1161,7 @@ fn every_seed_module_passes_and_says_how_it_is_added() {
     let empty = TempDir::new("modules-seeds");
     let mut dirs: Vec<String> = std::fs::read_dir(repo().join("modules")).unwrap().map(|e| e.unwrap()).filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
     dirs.sort();
-    assert_eq!(dirs, ["holidays", "japan-social-insurance", "japan-tax", "late-payment", "osha", "osha-penalties", "uk-rates", "us-income-tax"]);
+    assert_eq!(dirs, ["fmla", "holidays", "japan-social-insurance", "japan-tax", "late-payment", "osha", "osha-penalties", "uk-rates", "us-income-tax"]);
     for dir in &dirs {
         let (code, out, err) = ritsu_in(&repo(), empty.path(), &["check", &format!("modules/{dir}")]);
         assert_eq!((code, err.as_str()), (0, ""), "{dir}:\n{out}");
