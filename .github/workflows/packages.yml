@@ -3,7 +3,8 @@ name: packages
 # What a release hands out, built and tried on every push (DESIGN 13.2), so that a release is not
 # the first time it runs: the musl binary of ritsu, the archive with its nine links (unpacked, and
 # run under all ten names), and the .deb and the .rpm (each installed on Debian and on Fedora,
-# run, and removed). release.yml does the same on the four platforms, on a tag.
+# run, and removed). release.yml does the same on the four platforms, on a tag. The action a
+# workflow installs a release with runs here too, on the newest release.
 
 on:
   push:
@@ -65,3 +66,46 @@ jobs:
           set -eu
           bin=target/x86_64-unknown-linux-musl/release/ritsu
           sh packaging/linux.sh "$("$bin" --version | cut -d' ' -f2)" x86_64-unknown-linux-musl "$bin" "$RUNNER_TEMP/dist"
+
+  # The action as a workflow uses it (DESIGN 13.2), on the newest release, as a ref of this
+  # repository is not a release: what it puts on the PATH runs, and a list of a repository of its
+  # own has its signature checked and its pages written, with no credentials (DESIGN 17.17). The
+  # module is one of this repository's, on ghcr.io.
+  action:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: The newest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" >> "$GITHUB_OUTPUT"
+
+      - uses: ./
+        with:
+          version: ${{ steps.release.outputs.tag }}
+          cosign: true
+
+      - name: What the action put on the PATH
+        run: |
+          ritsu --version
+          rulec --version
+          cosign version
+
+      - name: A list of a repository of its own
+        working-directory: ${{ runner.temp }}
+        run: |
+          cat > modules.list <<'EOF'
+          module "ghcr.io/i2y/ritsu-holidays"
+          signature "ghcr.io/i2y/" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
+          EOF
+          ritsu mod site modules.list --out site
+          test -f site/index.html

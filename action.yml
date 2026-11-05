@@ -1,5 +1,5 @@
 name: ritsu
-description: Put one release of ritsu on the PATH, with the command of each of its nine languages, verified against the checksums published with it.
+description: Put one release of ritsu on the PATH, with the command of each of its nine languages, verified against the checksums published with it; and cosign, when asked.
 author: Yasushi Itoh
 
 # `uses: i2y/ritsu@v0.41.0` installs release v0.41.0: the ref the action is referenced with is the
@@ -7,6 +7,10 @@ author: Yasushi Itoh
 # is a few `run:` lines anyone can read. The release holds `ritsu` and a link to it for each of
 # the nine languages, so `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai`,
 # `sekisho` and `kaname` are on the PATH as well (DESIGN 2.3, 13.2).
+#
+# `cosign: true` puts cosign beside them, for a `signature` line of a `ritsu.mod` or of a list of
+# modules: the version ritsu's own workflows test with, each platform's binary held to its line of
+# the cosign_checksums.txt of that release. tests/release.rs holds it to what tools.yml installs.
 
 inputs:
   version:
@@ -17,6 +21,10 @@ inputs:
     description: The SHA-256 of the archive for this runner's platform, to pin it. Empty verifies against the release's SHA256SUMS alone.
     required: false
     default: ""
+  cosign:
+    description: Whether to put cosign on the PATH as well, which a `signature` line needs. true or false.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -25,17 +33,29 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         PIN: ${{ inputs.sha256 }}
+        COSIGN: ${{ inputs.cosign }}
         REF: ${{ github.action_ref }}
       run: |
         set -euo pipefail
         ver="${VERSION:-$REF}"
+        case "$COSIGN" in
+          true|false) ;;
+          *) echo "::error::cosign is true or false, not $COSIGN"; exit 2 ;;
+        esac
         case "$(uname -s)-$(uname -m)" in
-          Linux-x86_64)  target=x86_64-unknown-linux-musl ;;
-          Linux-aarch64) target=aarch64-unknown-linux-musl ;;
-          Darwin-x86_64) target=x86_64-apple-darwin ;;
-          Darwin-arm64)  target=aarch64-apple-darwin ;;
+          Linux-x86_64)  target=x86_64-unknown-linux-musl;  cosign=cosign-linux-amd64;  cosign_sum=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa ;;
+          Linux-aarch64) target=aarch64-unknown-linux-musl; cosign=cosign-linux-arm64;  cosign_sum=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2 ;;
+          Darwin-x86_64) target=x86_64-apple-darwin;        cosign=cosign-darwin-amd64; cosign_sum=9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f ;;
+          Darwin-arm64)  target=aarch64-apple-darwin;       cosign=cosign-darwin-arm64; cosign_sum=9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4 ;;
           *) echo "::error::no ritsu release is built for $(uname -s)-$(uname -m)"; exit 2 ;;
         esac
+        sum_of() {
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$1" | cut -d' ' -f1
+          else
+            shasum -a 256 "$1" | cut -d' ' -f1
+          fi
+        }
         name="ritsu-$ver-$target.tar.gz"
         base="https://github.com/i2y/ritsu/releases/download/$ver"
         dir="$RUNNER_TEMP/ritsu-$ver"
@@ -43,15 +63,19 @@ runs:
         cd "$dir"
         curl -fsSL --retry 3 -o "$name" "$base/$name"
         curl -fsSL --retry 3 -o SHA256SUMS "$base/SHA256SUMS"
-        if command -v sha256sum >/dev/null 2>&1; then
-          have=$(sha256sum "$name" | cut -d' ' -f1)
-        else
-          have=$(shasum -a 256 "$name" | cut -d' ' -f1)
-        fi
+        have=$(sum_of "$name")
         want=$(awk -v n="$name" '$2 == n { print $1 }' SHA256SUMS)
         if [ -z "$want" ]; then echo "::error::SHA256SUMS of $ver has no line for $name"; exit 1; fi
         if [ "$have" != "$want" ]; then echo "::error::$name: sha256 is $have, SHA256SUMS says $want"; exit 1; fi
         if [ -n "$PIN" ] && [ "$have" != "$PIN" ]; then echo "::error::$name: sha256 is $have, the workflow pins $PIN"; exit 1; fi
         tar -xzf "$name"
+        if [ "$COSIGN" = true ]; then
+          curl -fsSL --retry 3 -o cosign.fetched "https://github.com/sigstore/cosign/releases/download/v3.1.4/$cosign"
+          have=$(sum_of cosign.fetched)
+          if [ "$have" != "$cosign_sum" ]; then echo "::error::$cosign: sha256 is $have, this action pins $cosign_sum"; exit 1; fi
+          mv cosign.fetched cosign
+          chmod +x cosign
+        fi
         echo "$dir" >> "$GITHUB_PATH"
         "$dir/ritsu" --version
+        if [ "$COSIGN" = true ]; then "$dir/cosign" version; fi

@@ -282,6 +282,104 @@ fn the_workflows_run_the_scripts_and_the_action_unpacks_what_they_write() {
 
 /// Every crate takes the version of the workspace (DESIGN 13.1), and so every name says it, as
 /// the release checks the tag against each of them.
+/// `cosign: true` installs the cosign ritsu's workflows test with (DESIGN 13.2): the version and, on
+/// the one platform tools.yml installs, the checksum of tools.yml; on each platform one binary and a
+/// checksum of its own. packages.yml runs the action as a workflow does.
+#[test]
+fn the_action_installs_the_cosign_the_workflows_test_with() {
+    let tools = read(".github/workflows/tools.yml");
+    let action = read("action.yml");
+    let url = tools.lines().find_map(|l| l.split_whitespace().find(|w| w.starts_with("https://github.com/sigstore/cosign/releases/download/"))).expect("tools.yml installs cosign");
+    let (base, file) = url.rsplit_once('/').unwrap();
+    assert_eq!(file, "cosign-linux-amd64");
+    assert!(action.contains(&format!("\"{base}/$cosign\"")), "the action fetches another version of cosign than tools.yml: {base}");
+    let sum = tools.lines().find_map(|l| l.trim().strip_prefix("echo \"")?.strip_suffix("  $d/cosign\" | sha256sum -c -")).expect("tools.yml pins cosign");
+    let mut sums = Vec::new();
+    for (target, file) in TARGETS.iter().zip(["cosign-linux-amd64", "cosign-linux-arm64", "cosign-darwin-amd64", "cosign-darwin-arm64"]) {
+        let line = action.lines().find(|l| l.contains(&format!("target={target};"))).unwrap_or_else(|| panic!("the action has no line for {target}"));
+        assert!(line.contains(&format!("cosign={file};")), "{target} does not fetch {file}: {line}");
+        let pinned = line.split("cosign_sum=").nth(1).and_then(|r| r.split_whitespace().next()).unwrap_or_else(|| panic!("{target} pins no checksum: {line}"));
+        assert!(pinned.len() == 64 && pinned.chars().all(|c| c.is_ascii_hexdigit()), "{target}: {pinned}");
+        if file == "cosign-linux-amd64" {
+            assert_eq!(pinned, sum, "the action and tools.yml pin other binaries");
+        }
+        sums.push(pinned);
+    }
+    sums.sort_unstable();
+    sums.dedup();
+    assert_eq!(sums.len(), 4, "each platform has a checksum of its own");
+    let packages = read(".github/workflows/packages.yml");
+    assert!(packages.contains("      - uses: ./\n") && packages.contains("          cosign: true\n") && packages.contains("cosign version\n"), "packages.yml does not run the action");
+}
+
+/// The script of the action, run with a curl of its own: the PATH gains what was checked and nothing
+/// else, and what fails the check is left out of it.
+#[cfg(unix)]
+#[test]
+fn the_action_puts_on_the_path_only_what_it_has_checked() {
+    use std::os::unix::fs::PermissionsExt;
+    let t = TempDir::new("action");
+    let executable = |p: PathBuf| std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let action = read("action.yml");
+    let (_, body) = action.split_once("      run: |\n").expect("the action runs a script");
+    let script: Vec<&str> = body.lines().map(|l| l.strip_prefix("        ").unwrap_or(l)).collect();
+    t.write("action.sh", script.join("\n") + "\n");
+    // a release with one program, and a curl that hands it out and has no real cosign to give
+    executable(t.write("release/ritsu", "#!/bin/sh\necho ritsu 9.9.9\n"));
+    let archive = t.path().join("archive.tar.gz");
+    assert!(Command::new("tar").arg("-czf").arg(&archive).arg("-C").arg(t.path().join("release")).arg("ritsu").status().unwrap().success());
+    executable(t.write(
+        "bin/curl",
+        r#"#!/bin/sh
+while [ $# -gt 1 ]; do
+  if [ "$1" = -o ]; then out=$2; fi
+  shift
+done
+echo "$1" >> "$FETCHED"
+case "$1" in
+  */SHA256SUMS) (sha256sum ritsu-*.tar.gz 2>/dev/null || shasum -a 256 ritsu-*.tar.gz) > "$out" ;;
+  */sigstore/cosign/*) printf 'not cosign' > "$out" ;;
+  *.tar.gz) cp "$ARCHIVE" "$out" ;;
+  *) exit 22 ;;
+esac
+"#,
+    ));
+    let run = |case: &str, cosign: &str, pin: &str| {
+        let at = t.path().join(case);
+        std::fs::create_dir_all(at.join("runner")).unwrap();
+        let path = format!("{}:{}", t.path().join("bin").display(), std::env::var("PATH").unwrap());
+        let mut c = Command::new("bash");
+        c.arg(t.path().join("action.sh")).env("PATH", path).env("ARCHIVE", &archive).env("FETCHED", at.join("fetched"));
+        c.env("VERSION", "v9.9.9").env("REF", "").env("PIN", pin).env("COSIGN", cosign).env("RUNNER_TEMP", at.join("runner")).env("GITHUB_PATH", at.join("github-path"));
+        let o = c.output().expect("could not run bash");
+        let read_or_empty = |f: &str| std::fs::read_to_string(at.join(f)).unwrap_or_default();
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), read_or_empty("github-path"), read_or_empty("fetched"), at.join("runner/ritsu-v9.9.9"))
+    };
+    // no cosign asked for: the release, and nothing of cosign
+    let (code, out, path, fetched, dir) = run("plain", "false", "");
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("ritsu 9.9.9"), "{out}");
+    assert_eq!(path, format!("{}\n", dir.display()));
+    assert!(dir.join("ritsu").is_file() && !fetched.contains("cosign") && !dir.join("cosign").exists(), "{fetched}");
+    // cosign asked for, and what comes is not the binary the action pins
+    let (code, out, path, fetched, dir) = run("wrong-cosign", "true", "");
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains(": sha256 is ") && out.contains("this action pins"), "{out}");
+    assert!(fetched.contains("/sigstore/cosign/releases/download/"), "{fetched}");
+    assert_eq!(path, "", "the PATH gains nothing when a check fails");
+    assert!(!dir.join("cosign").exists(), "what failed the check is not there as cosign");
+    // an input that is neither
+    let (code, out, path, fetched, _) = run("wrong-input", "perhaps", "");
+    assert_eq!(code, 2, "{out}");
+    assert!(out.contains("cosign is true or false, not perhaps"), "{out}");
+    assert_eq!((path.as_str(), fetched.as_str()), ("", ""), "nothing is fetched");
+    // a workflow's pin that is not the archive
+    let (code, out, path, ..) = run("wrong-pin", "false", "0000");
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("the workflow pins 0000"), "{out}");
+    assert_eq!(path, "", "the PATH gains nothing when a check fails");
+}
+
 #[test]
 fn one_version_for_the_workspace_and_every_crate() {
     let top = read("Cargo.toml");
