@@ -28,11 +28,19 @@
 //! - The two-file form, with the spellings of DESIGN 17.9.1; a version against itself (exit 0); and
 //!   what stops a diff (exit 2): sides of two kinds; a directory in no module; a `--budget` that is
 //!   no positive integer; and one too small for a walk, when nothing else differs.
+//! - Two versions of a module with requirements (`common/fines.rs`), held to golden files in each
+//!   format and language: a `.req` has no interface and is said requirement by requirement, a copy a
+//!   record keeps is counted and not named, a decision alone moves a requirement, a person looking
+//!   again at the same ends does not, a link no record holds for is said, and a `.req` yuen cannot
+//!   read is said as such. The two-file form says the same.
 //! - What a diff reads, fetched from a registry the test starts (`ritsu_testkit::registry`: curl
 //!   asks it on the loopback, and nothing else) into an empty store: the same answer as with the
 //!   store full, each version fetched said on stderr, and nothing asked of the registry once the
 //!   store has it. A fetch that stops (an OCI manifest that is not its digest, a registry that does
 //!   not answer) stops the diff (exit 2), in each language.
+
+#[path = "common/fines.rs"]
+mod fines;
 
 use ritsu_base::modules::store::{self, Store};
 use ritsu_testkit::TempDir;
@@ -385,7 +393,7 @@ fn pricing_from_the_store_held_to_golden_files() {
         let (_, out, _) = ritsu_in(t.path(), &store, &["mod", "diff", &format!("{PRICING}@1.0.0"), &format!("{PRICING}@1.1.0"), "--format", "json"]);
         let v = json(&out);
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
-        assert_eq!(keys, ["ritsu", "old", "new", "files", "requires", "behavior", "interface", "differs"]);
+        assert_eq!(keys, ["ritsu", "old", "new", "files", "requires", "behavior", "interface", "why", "differs"]);
         assert_eq!((&v["old"]["module"], &v["old"]["version"], &v["new"]["version"]), (&serde_json::json!(PRICING), &serde_json::json!("1.0.0"), &serde_json::json!("1.1.0")));
         assert!(v["old"]["digest"].as_str().unwrap().starts_with("sha256:"));
         let fee = format!("{}/{}", n.rules, n.fee);
@@ -447,6 +455,86 @@ fn the_desk_and_the_book_held_to_golden_files() {
         assert!(v["behavior"].as_array().unwrap().is_empty());
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// What the requirements say moved, by the words of the `.req` and from the copies its records keep.
+#[test]
+fn what_the_requirements_say_moved() {
+    let t = TempDir::new("mod-diff-why");
+    let review = |dir: &str| fines::review(t.path(), dir);
+    fines::write(&t, "old", "example.com/acme/fines", &fines::OLD);
+    fines::write(&t, "new", "example.com/acme/fines", &fines::NEW);
+    review("old");
+    review("new");
+    let mut failures = Vec::new();
+    for lang in ["en", "ja"] {
+        for (format, ext) in [("text", "txt"), ("markdown", "md"), ("json", "json")] {
+            let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--format", format, "--lang", lang]);
+            assert_eq!((code, err.as_str()), (1, ""), "{format} {lang}:\n{out}");
+            golden(&format!("tests/golden/modules/diff-why.{lang}.{ext}"), &masked(&out), &mut failures);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+
+    let diff = |old: &str, new: &str| {
+        let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", old, new, "--format", "json"]);
+        assert_eq!(err, "", "{old} {new}:\n{out}");
+        (code, json(&out))
+    };
+    let (_, v) = diff("old", "new");
+    // no interface of the `.req`, and what its section's text says differently, from the records' copies
+    assert!(!v["interface"].as_array().unwrap().iter().any(|i| i["tool"] == "yuen"), "{}", v["interface"]);
+    assert_eq!(v["why"].as_array().unwrap().len(), 1);
+    let w = &v["why"][0];
+    assert_eq!((w["requirement"].as_str(), w["change"].as_str(), w["file"].as_str()), (Some("amounts"), Some("changed"), Some("fines.req")));
+    assert_eq!(w["in_force"]["new"], "2025-01-16..");
+    assert_eq!(w["decided"].as_array().unwrap().len(), 1);
+    assert_eq!(w["from"][0]["asof"]["old"], "2024-02-01");
+    let lines: Vec<&str> = w["from"][0]["lines"].as_array().unwrap().iter().filter(|l| l["op"] == "+").map(|l| l["text"].as_str().unwrap()).collect();
+    assert_eq!(lines[0], "(d) For penalties proposed after January 15, 2025, a penalty shall not exceed $200.");
+    assert_eq!(w["looked"][0]["date"], "2026-01-02");
+    // the copies are files in the JSON, and a count in the text
+    assert_eq!(v["files"]["added"].as_array().unwrap().iter().filter(|f| f.as_str().unwrap().starts_with("reviewed/")).count(), 4);
+    let (_, text, _) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new"]);
+    assert!(text.contains("8 moved in reviewed/") && !text.contains("added: reviewed/"), "{text}");
+
+    // a decision alone moves a requirement, and no caller reads it
+    fines::copy(&t, "new", "decided");
+    let req = t.read("decided/fines.req").replace("  satisfied by", "  decided 2026-03-04 by maintainer \"Reads paragraph (d) as written.\"\n  satisfied by");
+    t.write("decided/fines.req", req);
+    let (code, v) = diff("new", "decided");
+    assert_eq!((code, v["why"][0]["decided"][0]["why"].as_str()), (1, Some("Reads paragraph (d) as written.")));
+    assert_eq!(v["why"][0]["text"]["old"], v["why"][0]["text"]["new"]);
+    let (_, text, _) = ritsu_in(t.path(), t.path(), &["mod", "diff", "new", "decided"]);
+    assert!(text.ends_with("a requirement moved. No difference in behavior or in an interface.\n"), "{text}");
+
+    // a person looking again at the same ends moves nothing
+    fines::copy(&t, "new", "again");
+    let req = t.read("again/fines.req").replace("reviewed 2026-01-02", "reviewed 2026-05-06");
+    t.write("again/fines.req", req);
+    let (code, v) = diff("new", "again");
+    assert_eq!((code, v["why"].as_array().unwrap().len()), (0, 0), "{v}");
+
+    // what no record holds for is said: it is still read
+    fines::copy(&t, "new", "unlooked");
+    let req: String = t.read("unlooked/fines.req").lines().filter(|l| !l.trim_start().starts_with("reviewed ")).map(|l| format!("{l}\n")).collect();
+    t.write("unlooked/fines.req", req.replace("at most $200.", "at most $300."));
+    let (code, v) = diff("new", "unlooked");
+    assert_eq!((code, v["why"][0]["unsettled"].as_i64(), v["why"][0]["looked"].as_array().unwrap().len()), (1, Some(3), 0), "{v}");
+
+    // a `.req` yuen cannot read is said, and what else differs still is
+    fines::copy(&t, "new", "broken");
+    t.write("broken/fines.req", "requirements\n");
+    let (code, v) = diff("new", "broken");
+    let unread = v["interface"].as_array().unwrap().iter().find(|i| i["file"] == "fines.req").expect("the file that cannot be read");
+    assert_eq!((code, unread["how"].as_str(), v["why"].as_array().unwrap().len()), (0, Some("digest"), 0), "{v}");
+    assert!(unread["note"].as_str().unwrap().contains("the requirements files of `broken` cannot be read"), "{unread}");
+
+    // two files: the same words, the records' copies found beside each
+    let (code, v) = diff("old/fines.req", "new/fines.req");
+    assert_eq!((code, v["why"][0]["requirement"].as_str()), (1, Some("amounts")));
+    assert!(!v["why"][0]["from"][0]["lines"].as_array().unwrap().is_empty(), "{v}");
+    assert!(v["interface"].as_array().unwrap().is_empty(), "{v}");
 }
 
 /// A value of an enum whose number on the Connect wire moves (E310), in each language: pricing

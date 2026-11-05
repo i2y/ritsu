@@ -1,11 +1,13 @@
 //! The tab of what changed since the version before (DESIGN 17.17): what `ritsu mod diff` found, said
-//! first in a sentence, then in three tiles, then file by file: a table of what the two versions
-//! answer when the rule is small enough to have one, and the regions where they differ. The body of
-//! `ritsu mod diff --format markdown` stays under it, whole, as the same report on a machine reads.
+//! first in a sentence, then in tiles, then why, in the words of the module's requirements when it has
+//! them, then file by file: a table of what the two versions answer when the rule is small enough to
+//! have one, and the regions where they differ. The body of `ritsu mod diff --format markdown` stays
+//! under it, whole, as the same report on a machine reads.
 
 use super::holds::number;
 use super::markdown::md_html;
 use crate::modules::diff::{self, Behavior, How, ModDiff};
+use crate::modules::why::{self, Why};
 use ritsu_base::docpage::esc;
 use ritsu_base::json::Json;
 use ritsu_base::naming::Tool;
@@ -225,29 +227,272 @@ fn tiles(d: &ModDiff, lang: Lang) -> String {
     };
     let f = &d.files;
     let (changed, same) = (f.changed.len(), f.same);
+    let named = |l: &[String]| l.iter().filter(|x| !diff::is_record(x)).count();
+    let (added, removed) = (named(&f.added), named(&f.removed));
+    let records = f.added.len() + f.removed.len() - added - removed;
     let mut parts: Vec<Text> = Vec::new();
-    if !f.added.is_empty() {
-        let n = f.added.len();
-        parts.push(tr!("{n} 増えた", "{n} added"));
+    if added > 0 {
+        parts.push(tr!("{added} 増えた", "{added} added"));
     }
-    if !f.removed.is_empty() {
-        let n = f.removed.len();
-        parts.push(tr!("{n} 消えた", "{n} removed"));
+    if removed > 0 {
+        parts.push(tr!("{removed} 消えた", "{removed} removed"));
     }
     parts.push(tr!("{changed} 変わった", "{changed} changed"));
     parts.push(tr!("{same} 同じ", "{same} the same"));
+    if records > 0 {
+        parts.push(tr!("reviewed/ の入れ替わり {records}", "{records} moved in reviewed/"));
+    }
     let list = Text::join(&parts, "、", ", ");
     let req = &d.requires;
     let moved_req = req.added.len() + req.removed.len() + req.changed.len();
     let require = if moved_req == 0 { tr!("require は変わりません", "require: no change") } else { tr!("require は {moved_req} 行変わります", "require: {moved_req} changed") };
     let files = list.then(&tr!("。", ". ")).then(&require);
     let tile = |label: Text, v: Text| format!("<div><dt>{}</dt><dd>{}</dd></div>\n", esc(label.get(lang)), esc(v.get(lang)));
+    let requirements = if d.why.is_empty() { String::new() } else { tile(tr!("要件", "Requirements"), requirements_tile(d)) };
     format!(
-        "<dl class=\"tiles\">\n{}{}{}</dl>\n",
+        "<dl class=\"tiles\">\n{}{}{requirements}{}</dl>\n",
         tile(tr!("振る舞い", "Behavior"), behavior),
         tile(tr!("インターフェース", "Interface"), interface),
         tile(tr!("ファイル", "Files"), files)
     )
+}
+
+/// How many requirements moved, and how many decisions came with them.
+fn requirements_tile(d: &ModDiff) -> Text {
+    let (moved, decided) = (d.why.len(), d.why.iter().map(|w| w.decided.len()).sum::<usize>());
+    let r = if decided == 1 { "decision" } else { "decisions" };
+    match decided {
+        0 => tr!("{moved} 件変わり、新しく決めたことは書いていません", "{moved} moved, no new decision written"),
+        _ => tr!("{moved} 件変わり、新しく決めたこと {decided} 件", "{moved} moved, {decided} new {r}"),
+    }
+}
+
+/// The first reason a version gives for what moved, for a line of the list: the reasons of the
+/// requirements' files, and how many more.
+pub(super) fn reason_of(d: &ModDiff) -> Option<(String, usize)> {
+    let mut all = d.why.iter().flat_map(|w| w.decided.iter().map(|x| x.why.as_str()));
+    let first = all.next()?.to_string();
+    Some((first, all.count()))
+}
+
+/// The two texts, word by word: what is the same as it is, what went in `<del>`, what came in `<ins>`.
+fn words_html(old: &str, new: &str) -> String {
+    let (a, b) = (tokens(old), tokens(new));
+    let (n, m) = (a.len(), b.len());
+    // a text this long differs throughout, or is no sentence to read word by word
+    if n * m > 1_000_000 {
+        return format!("<del>{}</del><ins>{}</ins>", esc(old), esc(new));
+    }
+    let mut t = vec![0u32; (n + 1) * (m + 1)];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            t[i * (m + 1) + j] = if a[i] == b[j] { t[(i + 1) * (m + 1) + j + 1] + 1 } else { t[(i + 1) * (m + 1) + j].max(t[i * (m + 1) + j + 1]) };
+        }
+    }
+    let mut o = String::new();
+    let (mut del, mut ins) = (String::new(), String::new());
+    let flush = |del: &mut String, ins: &mut String, o: &mut String| {
+        if !del.is_empty() {
+            o.push_str(&format!("<del>{}</del>", esc(del)));
+        }
+        if !ins.is_empty() {
+            o.push_str(&format!("<ins>{}</ins>", esc(ins)));
+        }
+        del.clear();
+        ins.clear();
+    };
+    let (mut i, mut j) = (0, 0);
+    while i < n || j < m {
+        if i < n && j < m && a[i] == b[j] {
+            flush(&mut del, &mut ins, &mut o);
+            o.push_str(&esc(a[i]));
+            i += 1;
+            j += 1;
+        } else if j == m || (i < n && t[(i + 1) * (m + 1) + j] >= t[i * (m + 1) + j + 1]) {
+            del.push_str(a[i]);
+            i += 1;
+        } else {
+            ins.push_str(b[j]);
+            j += 1;
+        }
+    }
+    flush(&mut del, &mut ins, &mut o);
+    o
+}
+
+/// A text's words: a run of ASCII letters and digits, with the commas and points inside a number, and
+/// any other character alone (Japanese has no spaces to split at).
+fn tokens(s: &str) -> Vec<&str> {
+    let cs: Vec<(usize, char)> = s.char_indices().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < cs.len() {
+        let mut j = i + 1;
+        if cs[i].1.is_ascii_alphanumeric() {
+            while j < cs.len() {
+                let c = cs[j].1;
+                let inside = (c == ',' || c == '.') && cs[j - 1].1.is_ascii_digit() && cs.get(j + 1).is_some_and(|x| x.1.is_ascii_digit());
+                if c.is_ascii_alphanumeric() || inside {
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+        let end = cs.get(j).map_or(s.len(), |x| x.0);
+        out.push(&s[cs[i].0..end]);
+        i = j;
+    }
+    out
+}
+
+/// `a → b` of two values, the one that went struck out: the one value when they do not differ.
+fn pair_html(p: &why::Pair) -> Option<String> {
+    match p {
+        (Some(a), Some(b)) if a != b => Some(format!("<del>{}</del><ins>{}</ins>", esc(a), esc(b))),
+        (_, Some(x)) | (Some(x), None) => Some(esc(x)),
+        (None, None) => None,
+    }
+}
+
+/// What a thing a requirement stands on did, in a few words.
+fn how_note(how: Option<How>, lang: Lang) -> String {
+    let t = match how {
+        Some(How::Changed) => tr!("中身が変わりました", "its text changed"),
+        Some(How::Added) => tr!("新しく足しました", "new here"),
+        Some(How::Removed) => tr!("外しました", "no longer here"),
+        None => return String::new(),
+    };
+    format!(" <span class=\"small dim\">{}</span>", esc(t.get(lang)))
+}
+
+/// The lines of what a source's text says differently: a line that changed, word by word.
+fn lines_html(lines: &[(char, String)], more: usize, lang: Lang) -> String {
+    let mut o = String::new();
+    let mut k = 0;
+    while k < lines.len() {
+        let (op, text) = &lines[k];
+        match op {
+            '@' => k += 1,
+            ' ' => {
+                o.push_str(&format!("<p class=\"same\">{}</p>\n", esc(text)));
+                k += 1;
+            }
+            _ => {
+                let gone: Vec<&String> = lines[k..].iter().take_while(|(x, _)| *x == '-').map(|(_, t)| t).collect();
+                let came: Vec<&String> = lines[k + gone.len()..].iter().take_while(|(x, _)| *x == '+').map(|(_, t)| t).collect();
+                if gone.len() == came.len() {
+                    for (a, b) in gone.iter().zip(&came) {
+                        o.push_str(&format!("<p>{}</p>\n", words_html(a, b)));
+                    }
+                } else {
+                    for a in &gone {
+                        o.push_str(&format!("<p><del>{}</del></p>\n", esc(a)));
+                    }
+                    for b in &came {
+                        o.push_str(&format!("<p><ins>{}</ins></p>\n", esc(b)));
+                    }
+                }
+                k += gone.len() + came.len();
+            }
+        }
+    }
+    if more > 0 {
+        o.push_str(&format!("<p class=\"same\">{}</p>\n", esc(tr!("ほか {more} 行", "and {more} more lines").get(lang))));
+    }
+    o
+}
+
+/// One requirement that moved: its text word by word, then what it says of itself. A link goes to
+/// the file's page, given what `code` makes of a path from the module's root.
+fn requirement_html(w: &Why, lang: Lang, code: &dyn Fn(&str) -> Option<String>) -> String {
+    let (tag, word) = match w.how {
+        How::Changed => ("warnish", tr!("変わった", "Changed")),
+        How::Added => ("same", tr!("新しい", "New")),
+        How::Removed => ("unsettled", tr!("消えた", "Removed")),
+    };
+    let name = match (code(&w.file), w.line) {
+        (Some(h), Some(l)) => format!("<a href=\"{}#L{l}\">{}</a>", esc(&h), esc(&w.name)),
+        (Some(h), None) => format!("<a href=\"{}\">{}</a>", esc(&h), esc(&w.name)),
+        _ => esc(&w.name),
+    };
+    let mut o = format!("<div class=\"whyreq\">\n<div class=\"filehead\"><h4 class=\"mono\">{name}</h4><span class=\"tag {tag}\">{}</span></div>\n", esc(word.get(lang)));
+    match &w.text {
+        (Some(a), Some(b)) if a != b => o.push_str(&format!("<p class=\"whytext\">{}</p>\n", words_html(a, b))),
+        (_, Some(x)) | (Some(x), None) => o.push_str(&format!("<p class=\"whytext\">{}</p>\n", esc(x))),
+        (None, None) => {}
+    }
+    let mut rows = String::new();
+    let mut row = |label: &str, value: String| rows.push_str(&format!("<dt>{}</dt><dd>{value}</dd>\n", esc(&ritsu_base::text::capitalize(label))));
+    if let Some(v) = pair_html(&w.in_force) {
+        row(why::in_force_label().get(lang), format!("<span class=\"mono\">{v}</span>"));
+    }
+    if matches!(&w.owner, (Some(a), Some(b)) if a != b) {
+        row(why::owner_label().get(lang), pair_html(&w.owner).unwrap_or_default());
+    }
+    if w.how != How::Removed {
+        let label = tr!("決めたこと", "Decided");
+        if w.decided.is_empty() {
+            row(label.get(lang), format!("<span class=\"dim\">{}</span>", esc(tr!("この版では、新しく決めたことを書いていません", "This version writes no new decision").get(lang))));
+        } else {
+            let list: Vec<String> = w.decided.iter().map(|d| format!("{} <span class=\"small dim\">{}</span>", esc(&d.why), esc(&format!("{} · {}", d.date, d.by)))).collect();
+            row(label.get(lang), list.join("<br>"));
+        }
+    }
+    for f in &w.from {
+        let mut v = format!("<code>{}</code>", esc(&f.what));
+        if let Some(id) = &f.id {
+            v.push_str(&format!(" {}", esc(id)));
+        }
+        if let Some(a) = pair_html(&f.asof) {
+            let asof = match lang {
+                Lang::Ja => format!(" <span class=\"mono\">{a}</span> 時点"),
+                Lang::En => format!(" as of <span class=\"mono\">{a}</span>"),
+            };
+            v.push_str(&asof);
+        }
+        v.push_str(&how_note(f.how, lang));
+        if !f.lines.is_empty() {
+            v.push_str(&format!("<details class=\"whydiff\"><summary>{}</summary>\n{}</details>", esc(tr!("本文の違い", "What its text says differently").get(lang)), lines_html(&f.lines, f.more, lang)));
+        }
+        row(why::from_label().get(lang), v);
+    }
+    for l in &w.links {
+        let shown = format!("<code>{}</code>", esc(&l.artifact));
+        let v = match l.path.as_deref().and_then(code) {
+            Some(h) => format!("<a href=\"{}\">{shown}</a>", esc(&h)),
+            None => shown,
+        };
+        row(l.label().get(lang), format!("{v}{}", how_note(l.how, lang)));
+    }
+    for x in &w.waived {
+        row(x.label().get(lang), esc(&x.why));
+    }
+    if !w.looked.is_empty() {
+        let list: Vec<String> = w.looked.iter().map(|(d, b)| format!("<span class=\"mono\">{}</span> {}", esc(d), esc(b))).collect();
+        row(tr!("確認", "Looked at").get(lang), list.join("、"));
+    }
+    if w.unsettled > 0 {
+        row(tr!("確認", "Looked at").get(lang), format!("<span class=\"warn\">{}</span>", super::markdown::inline(why::unsettled_label(w.unsettled).get(lang))));
+    }
+    if !rows.is_empty() {
+        o.push_str(&format!("<dl class=\"whylines\">\n{rows}</dl>\n"));
+    }
+    o.push_str("</div>\n");
+    o
+}
+
+/// Why it changed, in the words of the module's requirements.
+fn why_html(d: &ModDiff, lang: Lang, code: &dyn Fn(&str) -> Option<String>) -> String {
+    if d.why.is_empty() {
+        return String::new();
+    }
+    let mut o = format!("<article class=\"fileblock why\">\n<h3>{}</h3>\n", esc(tr!("変わった理由", "Why it changed").get(lang)));
+    for w in &d.why {
+        o.push_str(&requirement_html(w, lang, code));
+    }
+    o.push_str(&format!("<p class=\"small dim whynote\">{}</p>\n</article>\n", esc(why::own_words().get(lang))));
+    o
 }
 
 /// A row's or a column's head in a map.
@@ -579,8 +824,8 @@ fn interface_html(d: &ModDiff, lang: Lang) -> String {
 }
 
 /// The tab's content: `from` and `to` are the two versions, `to_select` the control that moves to
-/// another version.
-pub(super) fn pane(d: &ModDiff, from: &str, to_select: &str, lang: Lang) -> String {
+/// another version, and `code` what a link to a file of the new version says, from the file's path.
+pub(super) fn pane(d: &ModDiff, from: &str, to_select: &str, lang: Lang, code: &dyn Fn(&str) -> Option<String>) -> String {
     let mut o = String::new();
     o.push_str(&format!(
         "<div class=\"fromto\"><div><span class=\"small dim\">{}</span><div class=\"ctl mono fixed\">{}</div></div>{to_select}</div>\n",
@@ -593,6 +838,7 @@ pub(super) fn pane(d: &ModDiff, from: &str, to_select: &str, lang: Lang) -> Stri
         esc(tr!("ritsu はすべての入力を比べるか、決められないと言います。一部を試すことはしません。", "ritsu compares every input, or says it cannot decide. It does not sample.").get(lang))
     ));
     o.push_str(&tiles(d, lang));
+    o.push_str(&why_html(d, lang, code));
     for b in d.behavior.iter().filter(|b| !matches!(&b.result, Ok(s) if !s.differs && s.total && !s.more)) {
         o.push_str(&behavior_html(b, lang));
     }
@@ -633,6 +879,65 @@ mod tests {
 
     fn outputs() -> Vec<MapOutput> {
         vec![MapOutput { name: "most".to_string(), unit: Some("USD".to_string()) }, MapOutput { name: "per".to_string(), unit: None }]
+    }
+
+    /// A sentence read word by word: a number moves whole, and the rest stays as it is.
+    #[test]
+    fn two_texts_read_word_by_word() {
+        assert_eq!(
+            words_html("not exceed $161,323. Proposed after January 15, 2024", "not exceed $165,514. Proposed after January 15, 2025"),
+            "not exceed $<del>161,323</del><ins>165,514</ins>. Proposed after January 15, <del>2024</del><ins>2025</ins>"
+        );
+        assert_eq!(words_html("a <b>", "a <c>"), "a &lt;<del>b</del><ins>c</ins>&gt;");
+        assert_eq!(words_html("税率は十パーセント", "税率は八パーセント"), "税率は<del>十</del><ins>八</ins>パーセント");
+    }
+
+    /// What a requirement says of itself, with a link to its line and to what meets it; what is not in
+    /// the module has no link, and the words of the file are escaped.
+    #[test]
+    fn a_requirement_that_moved_is_said_in_the_words_of_its_file() {
+        let w = Why {
+            file: "r.req".to_string(),
+            line: Some(9),
+            name: "amounts".to_string(),
+            how: How::Changed,
+            text: (Some("At most $1.".to_string()), Some("At most $2.".to_string())),
+            in_force: (Some("2024-01-16..".to_string()), Some("2025-01-16..".to_string())),
+            owner: (Some("m".to_string()), Some("m".to_string())),
+            decided: vec![why::Decided { date: "2026-11-05".to_string(), by: "m".to_string(), why: "Follows <the> amendment".to_string() }],
+            from: vec![why::Cited {
+                what: "@law §1".to_string(),
+                id: Some("29 CFR 1".to_string()),
+                asof: (Some("2024-02-01".to_string()), Some("2025-02-01".to_string())),
+                how: Some(How::Changed),
+                lines: vec![('@', "@@ -1,1 +1,1 @@".to_string()), (' ', "(c) Kept.".to_string()), ('-', "(d) Up to $1.".to_string()), ('+', "(d) Up to $2.".to_string())],
+                more: 0,
+            }],
+            links: vec![
+                why::Linked { role: "satisfied".to_string(), artifact: "rulec \"r.rule\" table t".to_string(), path: Some("r.rule".to_string()), how: Some(How::Changed) },
+                why::Linked { role: "verified".to_string(), artifact: "rulec \"@dep/x.rule\"".to_string(), path: Some("@dep/x.rule".to_string()), how: None },
+            ],
+            waived: Vec::new(),
+            looked: vec![("2026-11-05".to_string(), "m".to_string())],
+            unsettled: 0,
+        };
+        let code = |rel: &str| if rel.starts_with('@') { None } else { Some(format!("code/{rel}.html")) };
+        let html = requirement_html(&w, Lang::En, &code);
+        assert!(html.contains("<h4 class=\"mono\"><a href=\"code/r.req.html#L9\">amounts</a></h4><span class=\"tag warnish\">Changed</span>"), "{html}");
+        assert!(html.contains("<p class=\"whytext\">At most $<del>1</del><ins>2</ins>.</p>"), "{html}");
+        assert!(html.contains("<dt>In force</dt><dd><span class=\"mono\"><del>2024-01-16..</del><ins>2025-01-16..</ins></span></dd>"), "{html}");
+        assert!(html.contains("<dt>Decided</dt><dd>Follows &lt;the&gt; amendment <span class=\"small dim\">2026-11-05 · m</span></dd>"), "{html}");
+        assert!(html.contains("<code>@law §1</code> 29 CFR 1 as of <span class=\"mono\"><del>2024-02-01</del><ins>2025-02-01</ins></span>"), "{html}");
+        assert!(html.contains("<p class=\"same\">(c) Kept.</p>\n<p>(d) Up to $<del>1</del><ins>2</ins>.</p>"), "{html}");
+        assert!(html.contains("<dt>Met by</dt><dd><a href=\"code/r.rule.html\"><code>rulec &quot;r.rule&quot; table t</code></a> <span class=\"small dim\">its text changed</span></dd>"), "{html}");
+        assert!(html.contains("<dt>Checked by</dt><dd><code>rulec &quot;@dep/x.rule&quot;</code></dd>"), "{html}");
+        assert!(html.contains("<dt>Looked at</dt><dd><span class=\"mono\">2026-11-05</span> m</dd>"), "{html}");
+        assert!(!html.contains("<dt>Owner</dt>"), "{html}");
+        let none = Why { decided: Vec::new(), ..w.clone() };
+        assert!(requirement_html(&none, Lang::En, &code).contains("This version writes no new decision"));
+        let gone = Why { how: How::Removed, text: (Some("At most $1.".to_string()), None), decided: Vec::new(), from: Vec::new(), links: Vec::new(), looked: Vec::new(), ..w };
+        let html = requirement_html(&gone, Lang::Ja, &code);
+        assert!(html.contains("<span class=\"tag unsettled\">消えた</span>") && html.contains("<p class=\"whytext\">At most $1.</p>") && !html.contains("決めたこと"), "{html}");
     }
 
     /// A rule of one input: a row for each value, a column for each output with its unit, and the mark

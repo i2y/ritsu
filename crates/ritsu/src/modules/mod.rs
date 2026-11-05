@@ -26,6 +26,7 @@ mod vendor;
 // stage C
 pub mod diff;
 pub mod report;
+pub mod why;
 
 // stage D
 pub mod auth;

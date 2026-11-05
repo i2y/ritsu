@@ -369,13 +369,17 @@ and do not copy the files into the project to change them.
 **Raising a version** changes the answers of the files that read the module, so show what it changes
 before it is merged. `ritsu mod diff <module>@<old> <module>@<new>` compares two versions of a
 module: the files, the requires, every input of a rule, a date or a gate that gets another answer,
-and the interfaces (exit 1 when it shows a difference of behavior or of an interface, 2 when it
-cannot compare). A value of an enum, an input, an output or a field of an element added in the
+the interfaces, and each requirement of a `.req` that moved (exit 1 when it shows a difference of
+behavior, of an interface or of a requirement, 2 when it cannot compare). A value of an enum, an input, an output or a field of an element added in the
 middle of a rule moves the numbers of those after it on the Connect wire, which breaks a caller
 built on the old version whatever its check says (E310). A rule that writes
 `implements proto "<file>" <Service>` has a contract's numbers instead, which the rule's own order
 does not move; it is compared when a `.proto` of the module changed even if the rule did not, and
 E310 then says the contract moved a number. Without the line, add new ones at the end.
+A `.req` has no interface: it says why the answers are what they are, so the diff gives a requirement's
+text before and now, the `decided` lines the new version adds, what it is read from, what meets and
+checks it, and who looked (`why` in the JSON). These are the words of the module's file: ritsu checks
+that what they were written against has not moved since someone looked, not that they are right.
 `ritsu mod report --base origin/main --format markdown` writes what a pull request that changes
 the lock changes: the check with each lock, the diff of each module that
 changed, the answers of the person's rules, dates and gates that change, and the lines of their
@@ -397,7 +401,8 @@ and `ritsu mod fetch` fails when that commit is gone.
 
 **A site that lists modules**: `ritsu mod site <list> --out <dir>` writes static pages: a list that
 searches the modules and what they hold, and for each version of each module its README, the rules
-and calendars to try on the page, what changed from the version before, the steps that add it, and
+and calendars to try on the page, what changed from the version before and, when it has a requirements
+file, why, the steps that add it, and
 the pages and the code of its files. A line of the list starts with `title`, `description`, `playground` (the page
 that runs ritsu in the browser; `--playground <URL>` gives it too), `contribute` (an https URL the list
 links to, for those who want a module listed), `module` (`"<registry>/<repository>"`), `git`

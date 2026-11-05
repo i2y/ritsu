@@ -21,9 +21,11 @@
 //!   the same, is ritsu's E310: a message one version writes, the other reads as another value or
 //!   another field.
 //!
+//! - Requirements: a `.req` has no interface, and is said requirement by requirement ([`super::why`]).
+//!
 //! [`ModDiff`] is also what `ritsu mod report` (DESIGN 17.10) puts under each module that changed.
 
-use super::{Ctx, fetch, registry};
+use super::{Ctx, fetch, registry, why};
 use ritsu_base::cli::Args;
 use ritsu_base::fs::Files;
 use ritsu_base::json::Json;
@@ -419,7 +421,7 @@ pub enum How {
 }
 
 impl How {
-    fn word(self) -> &'static str {
+    pub(super) fn word(self) -> &'static str {
         match self {
             How::Added => "added",
             How::Removed => "removed",
@@ -491,14 +493,21 @@ pub struct ModDiff {
     pub requires: Requires,
     pub behavior: Vec<Behavior>,
     pub interface: Vec<Iface>,
+    /// The requirements that moved, and what the module says of them.
+    pub why: Vec<why::Why>,
 }
 
 impl ModDiff {
-    /// Whether a difference is shown in behavior or in an interface: answers that differ, a file of
-    /// a language added or removed (all it holds came or went), a change of an interface, a book's
-    /// E050 or E051, an E310. A file of no language (data, a document) whose bytes changed is
+    /// Whether a difference is shown: answers that differ, a file of a language added or removed
+    /// (all it holds came or went), a change of an interface, a book's E050 or E051, an E310, a
+    /// requirement that moved. A file of no language (data, a document) whose bytes changed is
     /// listed, and is no such difference.
     pub fn differs(&self) -> bool {
+        self.differs_for_a_caller() || !self.why.is_empty()
+    }
+
+    /// Whether a difference is shown in behavior or in an interface.
+    fn differs_for_a_caller(&self) -> bool {
         self.behavior_differs()
             || self.files.added.iter().chain(&self.files.removed).any(|f| tool_of(f).is_some())
             || self.interface.iter().any(|i| !i.changes.is_empty() || i.breaking())
@@ -608,8 +617,21 @@ pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: 
     }
     // `ritsu.mod` changes are said as the versions of the title and the `require` lines
     let at = |m: &Module, rel: &String, mark: Option<&str>| At { read: m.root.join(rel), files: m.through.clone(), root: m.root.clone(), rel: rel.clone(), label: m.label.clone(), shown: m.shown(rel, mark) };
-    for rel in d.files.changed.iter().filter(|r| r.as_str() != manifest::FILE) {
+    for rel in d.files.changed.iter().filter(|r| r.as_str() != manifest::FILE && tool_of(r) != Some(Tool::Yuen)) {
         d.interface.push(interface(rel, &at(o, rel, om.as_deref()), &at(n, rel, nm.as_deref()), lang, joined));
+    }
+    // What the requirements say moved, of all the `.req` of each side as one project: as a dates
+    // file does, a `.req` whose bytes are the same can stand on something that moved.
+    if moved {
+        let reqs = |m: &Module| m.files.keys().filter(|k| tool_of(k) == Some(Tool::Yuen)).map(|k| m.root.join(k)).collect::<Vec<_>>();
+        let (oa, na) = (at(o, &String::new(), om.as_deref()), at(n, &String::new(), nm.as_deref()));
+        match (why::project(&oa, &reqs(o), joined), why::project(&na, &reqs(n), joined)) {
+            (Ok(a), Ok(b)) => d.why = why::whys(&why::Side { at: &oa, api: a.as_ref() }, &why::Side { at: &na, api: b.as_ref() }),
+            (Err(t), _) | (_, Err(t)) => {
+                let changed: Vec<String> = d.files.changed.iter().filter(|r| tool_of(r) == Some(Tool::Yuen)).cloned().collect();
+                d.interface.extend(changed.into_iter().map(|file| unread_requirements(file, t.clone())));
+            }
+        }
     }
     // A rule whose bytes are the same and whose wire is a contract's: one that implements the service
     // of a `.proto` or reads an enum from one (rulec's §15.274, §15.59). When a `.proto` of the module
@@ -658,9 +680,22 @@ fn files(o: &FileSide, n: &FileSide, budget: Option<u64>, lang: Lang, joined: &J
             let rel = f.opened.with(|| ritsu_base::paths::from_root(&root, &read)).unwrap_or_else(|| f.opened.path.clone());
             At { read, files: f.opened.files.clone(), root, rel, label: f.spelled.clone(), shown: marked(f.spelled.clone(), mark.as_deref()) }
         };
-        d.interface.push(interface(&file, &at(o, &om), &at(n, &nm), lang, joined));
+        let (oa, na) = (at(o, &om), at(n, &nm));
+        if tool_of(&oa.rel).or_else(|| tool_of(&na.rel)) == Some(Tool::Yuen) {
+            match (why::project(&oa, std::slice::from_ref(&oa.read), joined), why::project(&na, std::slice::from_ref(&na.read), joined)) {
+                (Ok(a), Ok(b)) => d.why = why::whys(&why::Side { at: &oa, api: a.as_ref() }, &why::Side { at: &na, api: b.as_ref() }),
+                (Err(t), _) | (_, Err(t)) => d.interface.push(unread_requirements(file, t)),
+            }
+        } else {
+            d.interface.push(interface(&file, &oa, &na, lang, joined));
+        }
     }
     d
+}
+
+/// A `.req` whose requirements could not be read: all that is said is that its bytes changed.
+fn unread_requirements(file: String, note: Text) -> Iface {
+    Iface { file, tool: Some(Tool::Yuen), how: "digest", version: None, changes: Vec::new(), breaks: Vec::new(), note: Some(note) }
 }
 
 /// What one language's diff says of a file over two versions, each side read through its own files.
@@ -713,17 +748,17 @@ pub fn behavior(tool: Tool, old: &Spot, new: &Spot, budget: Option<u64>, lang: L
 
 /// Where one side's file is read: the path, the files it is read through, the root of its references
 /// and the path from it, the side's label, and the file as the output shows it.
-struct At {
-    read: PathBuf,
-    files: Option<Rc<dyn Files>>,
-    root: PathBuf,
-    rel: String,
-    label: String,
-    shown: String,
+pub(super) struct At {
+    pub(super) read: PathBuf,
+    pub(super) files: Option<Rc<dyn Files>>,
+    pub(super) root: PathBuf,
+    pub(super) rel: String,
+    pub(super) label: String,
+    pub(super) shown: String,
 }
 
 impl At {
-    fn with<R>(&self, f: impl FnOnce() -> R) -> R {
+    pub(super) fn with<R>(&self, f: impl FnOnce() -> R) -> R {
         match &self.files {
             Some(x) => ritsu_base::fs::with(x.clone(), f),
             None => f(),
@@ -1160,10 +1195,21 @@ fn title(d: &ModDiff, q: &str) -> String {
     }
 }
 
+/// A copy a record of yuen's keeps of what someone looked at, `reviewed/<16 hex digits>` beside a
+/// `.req` (yuen's DESIGN 4.4). Named by its hash, it is added and removed whenever an end moves, and
+/// what moved is said by the requirement: the lists a person reads count these and do not name them.
+/// The JSON holds them as it holds every file.
+pub fn is_record(rel: &str) -> bool {
+    let mut parts = rel.rsplit('/');
+    let (name, dir) = (parts.next().unwrap_or_default(), parts.next());
+    dir == Some("reviewed") && name.len() == 16 && name.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
 /// `2 changed, 1 the same`, of the files.
 fn files_line(f: &FileLists, lang: Lang) -> String {
+    let named = |l: &[String]| l.iter().filter(|x| !is_record(x)).count();
     let mut parts = Vec::new();
-    for (k, ja, en) in [(f.added.len(), "足した", "added"), (f.removed.len(), "消した", "removed"), (f.changed.len(), "変わった", "changed")] {
+    for (k, ja, en) in [(named(&f.added), "足した", "added"), (named(&f.removed), "消した", "removed"), (f.changed.len(), "変わった", "changed")] {
         if k > 0 {
             parts.push(if lang == Lang::Ja { format!("{ja} {}", n(k)) } else { format!("{} {en}", n(k)) });
         }
@@ -1171,13 +1217,17 @@ fn files_line(f: &FileLists, lang: Lang) -> String {
     if f.same > 0 {
         parts.push(if lang == Lang::Ja { format!("同じ {}", n(f.same)) } else { format!("{} the same", n(f.same)) });
     }
+    let records = f.added.len() + f.removed.len() - named(&f.added) - named(&f.removed);
+    if records > 0 {
+        parts.push(if lang == Lang::Ja { format!("reviewed/ の入れ替わり {}", n(records)) } else { format!("{} moved in reviewed/", n(records)) });
+    }
     if parts.is_empty() {
         return tr!("なし", "none").get(lang).to_string();
     }
     parts.join(if lang == Lang::Ja { "、" } else { ", " })
 }
 
-fn change_word(h: How, lang: Lang) -> &'static str {
+pub(super) fn change_word(h: How, lang: Lang) -> &'static str {
     match (h, lang) {
         (How::Added, Lang::Ja) => "足した",
         (How::Removed, Lang::Ja) => "消した",
@@ -1385,8 +1435,12 @@ fn quiet_line(d: &ModDiff, lang: Lang, q: &str) -> Option<String> {
 }
 
 fn closing(d: &ModDiff, lang: Lang) -> String {
-    if d.differs() {
+    if d.differs_for_a_caller() {
         tr!("振る舞いかインターフェースに違いが見つかりました。", "a difference is shown in behavior or in an interface.")
+    } else if d.differs() && !d.uncompared() && d.whole() {
+        tr!("要件が変わりました。振る舞いにもインターフェースにも、違いはありません。", "a requirement moved. No difference in behavior or in an interface.")
+    } else if d.differs() {
+        tr!("要件が変わりました。振る舞いは、調べきれていないところがあります。", "a requirement moved. The behavior was not all settled.")
     } else if d.uncompared() {
         tr!(
             "振る舞いを比べられなかったファイルがあるので、違いが無いとは言えません。",
@@ -1414,11 +1468,11 @@ pub(super) fn indent(s: &str, by: &str) -> String {
     s.lines().map(|l| if l.is_empty() { String::new() } else { format!("{by}{l}") }).collect::<Vec<_>>().join("\n") + "\n"
 }
 
-/// The lines of the files added, removed and changed.
+/// The lines of the files added, removed and changed, but for the copies records keep.
 fn file_rows(f: &FileLists) -> Vec<(How, &String)> {
     let mut rows = Vec::new();
     for (how, list) in [(How::Added, &f.added), (How::Removed, &f.removed), (How::Changed, &f.changed)] {
-        rows.extend(list.iter().map(|x| (how, x)));
+        rows.extend(list.iter().filter(|x| !is_record(x)).map(|x| (how, x)));
     }
     rows
 }
@@ -1499,6 +1553,10 @@ pub fn body_text(d: &ModDiff, lang: Lang) -> String {
         if d.interface.iter().any(|i| i.changes.iter().any(IChange::may_break)) {
             o.push_str(&format!("  {}\n", candidates(lang)));
         }
+    }
+    if !d.why.is_empty() {
+        o.push_str(&format!("\n{}{}\n", tr!("要件", "requirements").get(lang), ends(lang)));
+        o.push_str(&why::text(&d.why, lang));
     }
     o.push_str(&format!("\n{}\n", closing(d, lang)));
     o
@@ -1746,6 +1804,10 @@ pub fn body_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> Stri
             o.push_str(&format!("\n{}\n", ritsu_base::text::capitalize(&candidates(lang))));
         }
     }
+    if !d.why.is_empty() {
+        o.push_str(&format!("\n{h} {}\n", tr!("要件", "Requirements").get(lang)));
+        o.push_str(&why::markdown(&d.why, lang));
+    }
     o.push_str(&format!("\n{}\n", ritsu_base::text::capitalize(&closing(d, lang))));
     o
 }
@@ -1824,6 +1886,7 @@ pub fn json_fields(d: &ModDiff, lang: Lang) -> Vec<(&'static str, Json)> {
         ("requires", Json::obj([("added", Json::arr(d.requires.added.iter().map(req_json))), ("removed", Json::arr(d.requires.removed.iter().map(req_json))), ("changed", Json::arr(changed))])),
         ("behavior", Json::arr(d.behavior.iter().map(|b| behavior_json(b, lang)))),
         ("interface", Json::arr(d.interface.iter().map(|i| iface_json(i, lang)))),
+        ("why", why::json(&d.why)),
         ("differs", Json::Bool(d.differs())),
     ]
 }

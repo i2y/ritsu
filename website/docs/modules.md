@@ -318,7 +318,7 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
 stay where they are published, and the command fetches every version, checks its digests, its
 signature and `ritsu check`, and writes static pages. The list's page searches the modules and what
 they hold. A module's page has what it holds, its README, the rules and calendars to try on the page,
-what changed from the version before, its versions and files, each file's code with its lines numbered
+what changed from the version before and, when it has a requirements file, why, its versions and files, each file's code with its lines numbered
 and coloured, the steps that add it, what was checked, and a button that opens the version in the
 playground. The list file has these lines:
 
@@ -474,6 +474,13 @@ has a contract's numbers, which move only when the contract moves them, and it i
 changes of the interface, and `ritsu mod report` counts them as errors. `rulec diff`, `koyomi diff` and `sekisho diff` name a
 version in the same ways, and two more: `@<name>/<path>` is a file of a dependency at the version
 the lock pins, and `@<name>@<version>/<path>` the file at that version of the module.
+
+A `.req` has no interface: it answers nothing, and no file of a user reads it. It says why the
+answers are what they are, so `ritsu mod diff` says each requirement that moved: its text before and
+now, when it is in force, the `decided` lines the new version adds, what it is read from, what meets
+and checks it, and who looked. The difference in a source's text comes from the copies the records
+keep under `reviewed/`. These are the words of the module's file: ritsu checks that what they were
+written against has not moved since someone looked, not that they are right.
 
 `ritsu mod report --base <revision>` answers what a pull request that raises a dependency asks. It
 reads your files as the head has them, with the dependencies of the base and then with those of the

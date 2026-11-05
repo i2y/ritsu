@@ -15,7 +15,7 @@ ritsu のモジュールのコマンド。`ritsu.mod` を持つディレクト�
   ritsu mod clean                        置き場の項目を消す（全部か、--keep の lock が固定していないもの）
   ritsu mod where <@path>                `@` で始まるパスが、ディスクのどこにあるかを言う
   ritsu mod push                         モジュールを検査してレジストリに送り出す（--dry-run では、検査して組み立てるだけで送らない）
-  ritsu mod diff <old> [<new>]           モジュールの二つの版の差（ファイル、require、振る舞い、インターフェース）
+  ritsu mod diff <old> [<new>]           モジュールの二つの版の差（ファイル、require、振る舞い、インターフェース、要件）
   ritsu mod report                       依存を上げると何が変わるかの報告（PR 向け）。古い lock と新しい lock での検査と、変わったモジュールの差
   ritsu mod site <list>                  モジュールの一覧のサイトを書く（版、ファイルのページ、版のあいだの差）
 

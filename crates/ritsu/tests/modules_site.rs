@@ -18,9 +18,14 @@
 //!   `module.json`), one too big for a link (its button says so when pressed, which the Chrome test
 //!   of tests/playground.rs presses), and the playground the button opens: the command line's,
 //!   else the list's, else the site's in the language of the run.
+//! - A module with requirements (`common/fines.rs`): the reason of its newest version on the list, and
+//!   why it changed on its page, in the words of its `.req`, with links to the files.
 //! - What stops the command with nothing written (exit 2): a list that cannot be read, each of its
 //!   mistakes said at its line and column; a list that is not there; no `--out`; and a registry
 //!   that does not answer.
+
+#[path = "common/fines.rs"]
+mod fines;
 
 use ritsu_base::modules::store;
 use ritsu_testkit::registry::{self as reg, Registry};
@@ -739,6 +744,65 @@ fn what_a_list_and_the_command_line_add_to_the_pages() {
         assert_eq!((code, out.as_str(), err.as_str()), (2, "", "error: `--alternate` takes `ja=<path>` or `en=<path>`\n"), "{wrong}");
     }
     assert!(!a.path("bad").exists());
+}
+
+/// The words of a module's `.req` on its pages: the reason in a line of the list, and why it changed
+/// at the head of the changes, each thing with a link to its file; no interface of the `.req`, and the
+/// copies its records keep apart from the data.
+#[test]
+fn the_reasons_of_a_version_on_its_pages() {
+    let a = Acme::new("mod-site-why");
+    let host = a.host();
+    let name = format!("{host}/acme/fines");
+    fines::write(&a.t, "fines-1.0.0", &name, &fines::OLD);
+    fines::write(&a.t, "fines-1.1.0", &name, &fines::NEW);
+    let pushed = a.path("pushed");
+    for dir in ["fines-1.0.0", "fines-1.1.0"] {
+        fines::review(a.t.path(), dir);
+        let (code, out, err) = a.run_in(dir, &pushed, &["mod", "push"], &[]);
+        assert_eq!(code, 0, "{dir}:\n{out}{err}");
+    }
+    a.t.write("fines.list", format!("module \"{name}\"\n"));
+    let (code, out, err) = a.site("fines.list", "en", &[], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let (code, out, err) = a.site("fines.list", "ja", &["--lang", "ja"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let page = |dir: &str, rel: &str| std::fs::read_to_string(a.path(&format!("{dir}/{rel}"))).unwrap();
+
+    let reason = "Follows the amendment at 90 FR 1861 (January 10, 2025).";
+    let index = page("en", "index.html");
+    assert!(index.contains(&format!("<p class=\"latest reason\"><span class=\"dim\">Why:</span> {reason}</p>")), "{index}");
+
+    let module = page("en", &format!("{name}/index.html"));
+    let changes = &module[module.find("<section class=\"pane\" id=\"changes\">").unwrap()..];
+    let changes = &changes[..changes.find("</section>").unwrap()];
+    assert!(changes.contains("<dt>Requirements</dt><dd>1 moved, 1 new decision</dd>"), "{changes}");
+    assert!(changes.contains("<dd>1 added, 1 removed, 3 changed, 0 the same, 8 moved in reviewed/. require: no change</dd>"), "{changes}");
+    let why = changes.find("<h3>Why it changed</h3>").expect("why it changed");
+    assert!(why < changes.find("<h3 class=\"mono\">fine.rule</h3>").expect("the rule's difference"), "{changes}");
+    assert!(changes.contains("<a href=\"./1.1.0/code/fines.req.html#L10\">amounts</a></h4><span class=\"tag warnish\">Changed</span>"), "{changes}");
+    assert!(changes.contains("<p class=\"whytext\">For penalties proposed after January 15, <del>2024</del><ins>2025</ins>, a penalty is at most $<del>100</del><ins>200</ins>.</p>"), "{changes}");
+    assert!(changes.contains(&format!("<dt>Decided</dt><dd>{reason} <span class=\"small dim\">2026-01-01 · maintainer</span></dd>")), "{changes}");
+    assert!(changes.contains("<p>(d) For penalties proposed after January 15, <del>2024</del><ins>2025</ins>, a penalty shall not exceed $<del>100</del><ins>200</ins>.</p>"), "{changes}");
+    assert!(changes.contains("<dt>Met by</dt><dd><a href=\"./1.1.0/code/fine.rule.html\"><code>rulec &quot;fine.rule&quot; table amounts</code></a>"), "{changes}");
+    assert!(changes.contains("<dt>Looked at</dt><dd><span class=\"mono\">2026-01-02</span> maintainer</dd>"), "{changes}");
+    // the links reach the pages they name
+    let dir = a.path(&format!("en/{name}"));
+    for rel in ["1.1.0/code/fines.req.html", "1.1.0/code/fine.rule.html", "1.1.0/files/fines.req.html"] {
+        assert!(dir.join(rel).is_file(), "{rel}");
+    }
+    // the `.req` has no interface, and the report under them says the same as `ritsu mod diff` does
+    assert!(!changes.contains("<span class=\"mono\">fines.req</span>:"), "{changes}");
+    assert!(changes[why..].contains(&format!("Decided 2026-01-01 by maintainer: {reason}")), "{changes}");
+    // the copies the records keep are files, under a heading of their own
+    let files = &module[module.find("<section class=\"pane\" id=\"files\">").unwrap()..];
+    let (data, kept) = (files.find("Data and other files").unwrap(), files.find("What the records of who looked keep").unwrap());
+    assert!(data < kept && files[data..kept].contains("sources/law/") && !files[data..kept].contains("reviewed/") && files[kept..].contains("reviewed/"), "{files}");
+
+    let module = page("ja", &format!("{name}/index.html"));
+    assert!(module.contains("<h3>変わった理由</h3>") && module.contains("<span class=\"tag warnish\">変わった</span>") && module.contains("<dt>決めたこと</dt>"), "{module}");
+    assert!(module.contains("<dd>1 件変わり、新しく決めたこと 1 件</dd>") && module.contains("reviewed/ の入れ替わり 8"), "{module}");
+    assert!(page("ja", "index.html").contains(&format!("<span class=\"dim\">理由：</span> {reason}")));
 }
 
 /// What the pages do in a browser, in Chrome, from their files: a module's page picks a tab by the

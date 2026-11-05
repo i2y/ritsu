@@ -98,7 +98,9 @@ The whole language is in [reference.md](reference.md).
 Ask; do not guess:
 
 - **the sentence** of the requirement, and **which article** it is read from (and how to read it,
-  when the article can be read two ways: that is a `decided` line, with who and why);
+  when the article can be read two ways: that is a `decided` line, with who and why. In a module,
+  `ritsu mod diff` and the Changes tab of a list give the `decided` lines a new version adds as the
+  reason a requirement moved);
 - **the owner**, a declared role;
 - **the reason for a waiver** (`not satisfied` / `not verified`): who accepts that nothing meets or
   checks it, and why;

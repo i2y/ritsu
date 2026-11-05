@@ -1,0 +1,57 @@
+ritsu mod diff: example.com/acme/fines 1.0.0 → 1.1.0
+  old: old
+  new: new
+
+files: 1 added, 1 removed, 3 changed, 8 moved in reviewed/
+  added: sources/law/29-CFR-1903@2025-02-01/1903.15.xml
+  removed: sources/law/29-CFR-1903@2024-02-01/1903.15.xml
+  changed: fine.rule
+  changed: fines.req
+  changed: ritsu.mod
+require: no change
+
+behavior:
+  fine.rule (rulec): the answers differ
+    rule fine v1 → v1
+      an output changed range: most  100..100 → 200..200
+    2 cells, of which 2 are inputs that can occur: 0 same, 2 differ, 0 unsettled, 0 unrealized
+
+      violation = serious
+        most: 100 → 200
+        rows: table amounts row 1
+        example: violation=serious
+
+      violation = other
+        most: 100 → 200
+        rows: table amounts row 2
+        example: violation=other
+
+    outside this region the two versions answer alike.
+
+interface:
+  fine.rule (rulec, api): 24 changes, 22 of them may break a user
+    may break: changed: /{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/most/range/min: 100 → 200
+    may break: changed: /{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/most/range/max: 100 → 200
+    may break: changed: /go/output_fields/most/range/min: 100 → 200
+    may break: changed: /go/output_fields/most/range/max: 100 → 200
+    changed: /sources/osha/asof: "2024-02-01" → "2025-02-01"
+    changed: /sources/osha/pins/0/sha256: "8f4ff5b70afaa6f2" → "22b3990a87aafd3d"
+  a change that may break a user is a candidate: whether it does is for that user's check to say.
+
+requirements:
+  amounts (fines.req): changed
+    - For penalties proposed after January 15, 2024, a penalty is at most $100.
+    + For penalties proposed after January 15, 2025, a penalty is at most $200.
+    in force: 2024-01-16.. → 2025-01-16..
+    decided 2026-01-01 by maintainer: Follows the amendment at 90 FR 1861 (January 10, 2025).
+    from @osha §1903.15 (29 CFR 1903, as of 2024-02-01 → 2025-02-01): changed
+      - (d) For penalties proposed after January 15, 2024, a penalty shall not exceed $100.
+      - [36 FR 17850, as amended at 89 FR 1817, Jan. 11, 2024]
+      + (d) For penalties proposed after January 15, 2025, a penalty shall not exceed $200.
+      + [36 FR 17850, as amended at 89 FR 1817, Jan. 11, 2024; 90 FR 1861, Jan. 10, 2025]
+    met by rulec "fine.rule" table amounts: changed
+    checked by rulec "fine.rule": changed
+    looked at 2026-01-02 by maintainer
+  These are the words of the module's requirements file. ritsu checks that what they were written against has not moved since someone looked, not that they are right.
+
+a difference is shown in behavior or in an interface.

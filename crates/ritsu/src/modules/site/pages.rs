@@ -536,6 +536,10 @@ impl Writer<'_> {
         if let Some((r, (_, d))) = newest.and_then(|r| r.changes.as_ref().map(|c| (r, c))) {
             let line = self.say(changes::latest_line(d, &r.shown.version));
             o.push_str(&format!("<p class=\"latest\"><span class=\"dim\">{}</span> <a href=\"./{}/index.html#changes\">{}</a></p>\n", esc(&self.say(tr!("最新の変更：", "Latest change:"))), url_path(&s.name), esc(&line)));
+            if let Some((reason, more)) = changes::reason_of(d) {
+                let more = if more > 0 { format!(" <span class=\"dim\">{}</span>", esc(&self.say(tr!("ほか {more} 件", "and {more} more")))) } else { String::new() };
+                o.push_str(&format!("<p class=\"latest reason\"><span class=\"dim\">{}</span> {}{more}</p>\n", esc(&self.say(tr!("理由：", "Why:"))), esc(&reason)));
+            }
         }
         o.push_str("</div>\n<ul class=\"proofs side\">\n");
         if s.failed() {
@@ -812,7 +816,9 @@ impl Writer<'_> {
                     esc(&self.say(tr!("比べる先", "To"))),
                     self.version_menu(s, versions, &r.shown.version, place, "version-to")
                 );
-                o.push_str(&changes::pane(d, from, &to, self.lang));
+                let module = r.shown.module.as_ref();
+                let code = |rel: &str| module.filter(|m| m.files.contains_key(rel)).map(|m| self.code_link(place, m, rel));
+                o.push_str(&changes::pane(d, from, &to, self.lang, &code));
             }
             None => {
                 let v = &r.shown.version;
@@ -885,9 +891,13 @@ impl Writer<'_> {
             groups.push((self.say(k.many()), files));
         }
         let held: Vec<&String> = r.holds.iter().map(|h| &h.rel).collect();
-        let rest: Vec<&String> = m.files.keys().filter(|f| !held.contains(f) && !about(f)).collect();
+        let rest: Vec<&String> = m.files.keys().filter(|f| !held.contains(f) && !about(f) && !diff::is_record(f)).collect();
         if !rest.is_empty() {
             groups.push((self.say(tr!("データとそのほかのファイル", "Data and other files")), rest));
+        }
+        let records: Vec<&String> = m.files.keys().filter(|f| diff::is_record(f)).collect();
+        if !records.is_empty() {
+            groups.push((self.say(tr!("確認の記録が残した中身", "What the records of who looked keep")), records));
         }
         let own: Vec<&String> = m.files.keys().filter(|f| !held.contains(f) && about(f)).collect();
         if !own.is_empty() {

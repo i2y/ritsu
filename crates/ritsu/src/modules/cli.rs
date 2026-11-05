@@ -277,7 +277,7 @@ pub fn commands() -> Vec<Cmd> {
         cmd(
             "diff",
             "<old> [<new>]",
-            tr!("モジュールの二つの版の差（ファイル、require、振る舞い、インターフェース）", "the differences between two versions of a module: files, requires, behavior and interfaces"),
+            tr!("モジュールの二つの版の差（ファイル、require、振る舞い、インターフェース、要件）", "the differences between two versions of a module: files, requires, behavior, interfaces and requirements"),
             vec![
                 ("<old>", tr!("`<モジュールの名前>@<版>`、ディレクトリ、`.` のどれか", "`<module>@<version>`, a directory, or `.`")),
                 ("<new>", tr!("同じ形。無ければ `.`（作業ツリー）", "the same; else `.` (the working tree)")),
@@ -285,7 +285,7 @@ pub fn commands() -> Vec<Cmd> {
             vec![format_markdown(), budget()],
             vec![
                 (0, tr!("違いが無い", "no difference")),
-                (1, tr!("振る舞いかインターフェースに違いが見つかった", "a difference shown in behavior or in an interface")),
+                (1, tr!("振る舞い、インターフェース、要件のどれかに違いが見つかった", "a difference shown in behavior, in an interface or in a requirement")),
                 (2, tr!("比べられない", "cannot compare")),
             ],
             vec!["ritsu mod diff example.com/acme/pricing@1.0.0", "ritsu mod diff example.com/acme/pricing@1.0.0 example.com/acme/pricing@1.1.0 --format markdown"],

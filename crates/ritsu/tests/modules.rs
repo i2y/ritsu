@@ -1183,7 +1183,7 @@ fn every_seed_module_passes_and_says_how_it_is_added() {
             }
             let mut named = 0;
             for row in text.lines().filter(|l| l.starts_with("| `")) {
-                for file in row.split('`').skip(1).step_by(2).filter(|w| [".rule", ".cal", ".kn", ".book", ".flow", ".gate"].iter().any(|x| w.ends_with(x))) {
+                for file in row.split('`').skip(1).step_by(2).filter(|w| [".rule", ".cal", ".kn", ".book", ".flow", ".gate", ".req"].iter().any(|x| w.ends_with(x))) {
                     assert!(here.join(file).is_file(), "modules/{dir}/{readme} names {file}");
                     named += 1;
                 }

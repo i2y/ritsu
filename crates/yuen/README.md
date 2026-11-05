@@ -99,6 +99,11 @@ requirements touched:
 4 requirements touched; ask api
 ```
 
+In a module, these reasons reach whoever reads a new version: `ritsu mod diff` and the Changes tab of
+a list give a requirement's text before and now, the `decided` lines the new version adds, and who
+looked. They are the words of the file: the check says what they were written against has not moved
+since someone looked, not that they are right.
+
 ## Requirements from an OpenSpec spec
 
 OpenSpec keeps what a system does as specs in Markdown: requirements (`### Requirement:`), each with

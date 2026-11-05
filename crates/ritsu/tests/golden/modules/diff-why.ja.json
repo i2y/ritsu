@@ -1,0 +1,432 @@
+{
+  "ritsu": "0.42.0",
+  "old": {
+    "path": "old",
+    "module": "example.com/acme/fines",
+    "version": "1.0.0",
+    "digest": null,
+    "files_digest": "sha256:<digest>",
+    "commit": null
+  },
+  "new": {
+    "path": "new",
+    "module": "example.com/acme/fines",
+    "version": "1.1.0",
+    "digest": null,
+    "files_digest": "sha256:<digest>",
+    "commit": null
+  },
+  "files": {
+    "added": [
+      "reviewed/22b3990a87aafd3d",
+      "reviewed/2dc6c8cff8ed15bf",
+      "reviewed/3a9264ae25720843",
+      "reviewed/5516084a6a8e5977",
+      "sources/law/29-CFR-1903@2025-02-01/1903.15.xml"
+    ],
+    "removed": [
+      "reviewed/23040b77d73c03b6",
+      "reviewed/2ce198211f6b6bd5",
+      "reviewed/87c51e657d8fe109",
+      "reviewed/8f4ff5b70afaa6f2",
+      "sources/law/29-CFR-1903@2024-02-01/1903.15.xml"
+    ],
+    "changed": [
+      "fine.rule",
+      "fines.req",
+      "ritsu.mod"
+    ],
+    "same": 0
+  },
+  "requires": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "behavior": [
+    {
+      "file": "fine.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "fine",
+        "old": "old/fine.rule",
+        "new": "new/fine.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 2,
+        "feasible": 2,
+        "same": 0,
+        "differing": 2,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [
+          {
+            "what": "output_range",
+            "name": "most",
+            "old": "100..100",
+            "new": "200..200"
+          }
+        ],
+        "changes": [
+          {
+            "region": [
+              {
+                "column": "violation",
+                "kind": "input",
+                "accepts": [
+                  "serious"
+                ],
+                "text": "violation = serious"
+              }
+            ],
+            "text": "violation = serious",
+            "outputs": [
+              {
+                "output": "most",
+                "old": "100",
+                "new": "200"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "amounts",
+                "row": 1
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "amounts",
+                "row": 1
+              }
+            ],
+            "witness": [
+              {
+                "input": "violation",
+                "value": "serious"
+              }
+            ],
+            "cells": 1
+          },
+          {
+            "region": [
+              {
+                "column": "violation",
+                "kind": "input",
+                "accepts": [
+                  "other"
+                ],
+                "text": "violation = other"
+              }
+            ],
+            "text": "violation = other",
+            "outputs": [
+              {
+                "output": "most",
+                "old": "100",
+                "new": "200"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "amounts",
+                "row": 2
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "amounts",
+                "row": 2
+              }
+            ],
+            "witness": [
+              {
+                "input": "violation",
+                "value": "other"
+              }
+            ],
+            "cells": 1
+          }
+        ],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    }
+  ],
+  "interface": [
+    {
+      "file": "fine.rule",
+      "tool": "rulec",
+      "how": "api",
+      "version": null,
+      "changes": [
+        {
+          "at": "/sources/osha/asof",
+          "change": "changed",
+          "old": "2024-02-01",
+          "new": "2025-02-01",
+          "may_break": false
+        },
+        {
+          "at": "/sources/osha/pins/0/sha256",
+          "change": "changed",
+          "old": "8f4ff5b70afaa6f2",
+          "new": "22b3990a87aafd3d",
+          "may_break": false
+        },
+        {
+          "at": "/python/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/python/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/typescript/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/typescript/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/javascript/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/javascript/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/rust/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/rust/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/ruby/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/ruby/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/php/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/php/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/go/output_fields/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/go/output_fields/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/swift/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/swift/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/java/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/java/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/numpy/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/numpy/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/sql/outputs/most/range/min",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        },
+        {
+          "at": "/sql/outputs/most/range/max",
+          "change": "changed",
+          "old": 100,
+          "new": 200,
+          "may_break": true
+        }
+      ],
+      "breaks": [],
+      "note": null
+    }
+  ],
+  "why": [
+    {
+      "file": "fines.req",
+      "line": 10,
+      "requirement": "amounts",
+      "change": "changed",
+      "text": {
+        "old": "For penalties proposed after January 15, 2024, a penalty is at most $100.",
+        "new": "For penalties proposed after January 15, 2025, a penalty is at most $200."
+      },
+      "in_force": {
+        "old": "2024-01-16..",
+        "new": "2025-01-16.."
+      },
+      "owner": {
+        "old": "maintainer",
+        "new": "maintainer"
+      },
+      "decided": [
+        {
+          "date": "2026-01-01",
+          "by": "maintainer",
+          "why": "Follows the amendment at 90 FR 1861 (January 10, 2025)."
+        }
+      ],
+      "from": [
+        {
+          "what": "@osha §1903.15",
+          "id": "29 CFR 1903",
+          "asof": {
+            "old": "2024-02-01",
+            "new": "2025-02-01"
+          },
+          "change": "changed",
+          "lines": [
+            {
+              "op": "@",
+              "text": "@@ -1,4 +1,4 @@"
+            },
+            {
+              "op": " ",
+              "text": "§ 1903.15 Proposed penalties."
+            },
+            {
+              "op": " ",
+              "text": "(c) Kept from one version to the next."
+            },
+            {
+              "op": "-",
+              "text": "(d) For penalties proposed after January 15, 2024, a penalty shall not exceed $100."
+            },
+            {
+              "op": "-",
+              "text": "[36 FR 17850, as amended at 89 FR 1817, Jan. 11, 2024]"
+            },
+            {
+              "op": "+",
+              "text": "(d) For penalties proposed after January 15, 2025, a penalty shall not exceed $200."
+            },
+            {
+              "op": "+",
+              "text": "[36 FR 17850, as amended at 89 FR 1817, Jan. 11, 2024; 90 FR 1861, Jan. 10, 2025]"
+            }
+          ],
+          "more": 0
+        }
+      ],
+      "links": [
+        {
+          "role": "satisfied",
+          "artifact": "rulec \"fine.rule\" table amounts",
+          "path": "fine.rule",
+          "change": "changed"
+        },
+        {
+          "role": "verified",
+          "artifact": "rulec \"fine.rule\"",
+          "path": "fine.rule",
+          "change": "changed"
+        }
+      ],
+      "waivers": [],
+      "looked": [
+        {
+          "date": "2026-01-02",
+          "by": "maintainer"
+        }
+      ],
+      "unsettled": 0
+    }
+  ],
+  "differs": true
+}

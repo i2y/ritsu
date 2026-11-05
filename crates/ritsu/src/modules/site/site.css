@@ -171,6 +171,21 @@ table.map td.chg .same { font-weight: 400; color: var(--dim); }
 table.map td.new { background: var(--accentsoft); color: var(--accent); font-weight: 600; }
 table.map td.gone { color: var(--dim); }
 table.map td.none { color: var(--dim); }
+/* Why it changed: the words of the module's requirements */
+.whyreq { margin: 12px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; }
+.whyreq .filehead { margin-bottom: 8px; }
+.whyreq h4 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.fileblock p.whytext { margin: 0 0 12px; font-size: 15px; }
+.why del { color: var(--dim); }
+.why ins { margin-left: 3px; padding: 0 3px; border-radius: 3px; background: var(--warnsoft); color: var(--warn); font-weight: 600; text-decoration: none; }
+dl.whylines { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 14px; }
+dl.whylines dt { color: var(--dim); }
+dl.whylines dd { margin: 0; overflow-wrap: anywhere; }
+.whydiff { margin-top: 6px; }
+.whydiff summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+.whydiff p { margin: 6px 0 0; font-size: 13px; }
+.whydiff p.same { color: var(--dim); }
+.fileblock p.whynote { margin: 10px 0 0; font-size: 13px; }
 .langs { display: flex; flex-wrap: wrap; gap: 6px; }
 .lang { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 4px; background: var(--code); }
 .whole { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 14px; }
@@ -196,6 +211,8 @@ ul.plain li { margin-bottom: 6px; }
 .filetitle { margin: 0 0 16px; font-size: 20px; overflow-wrap: anywhere; }
 
 @media (max-width: 640px) {
+  dl.whylines { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  dl.whylines dd { margin-bottom: 8px; }
   .wrap { padding-left: 16px; padding-right: 16px; }
   .title h1 { font-size: 28px; }
   .listtitle { font-size: 28px; }
