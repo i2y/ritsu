@@ -4302,7 +4302,7 @@ signature "<レジストリ>/acme/" by matching "^https://github[.]com/acme/" is
 - 一覧は静的なページなので、使う人が自分のリポジトリから GitHub Pages に出せる。案内のページ（英日）が、一覧のファイルの例とワークフローを載せる。ワークフローは docs.yml と同じ形で、組むジョブは読むだけ、公開のジョブだけが Pages に書け、プルリクエストは組むところで止まる。
 - 足すのは根の `action.yml` の入力 `cosign` だけで、一覧のための Action は作らない。`ritsu mod site` の行は使う人のものなので、言語を増やす、Pages 以外へ出す、一覧を分けることは、その行を変えれば済む。英語と日本語を一つの根から出すときは `--out site --alternate ja=ja` と `--out site/ja --lang ja --alternate en=..` で、`tests/modules_site.rs` が両方向のリンクをたどる。
 - 一覧に `title` があれば、全部のページのヘッダーをその名前にする。無ければ `ritsu modules` である。使う人の一覧は ritsu のものではない。`title` は一覧のページの見出しと同じ文字で、長ければヘッダーでは省略記号で切る。
-- 出力の根に空の `.nojekyll` を書く。ブランチから公開すると Jekyll を通り、`_` で始まる `_site/` が出力されず、CSS と JS が届かなくなるからである。`_site` の名前は、モジュールの名前の最初の部分（レジストリのホスト）とぶつからないように変えない。
+- 出力の根に空の `.nojekyll` を書く。ブランチから公開すると Jekyll を通り、`_` で始まる `_site/` が出力されず、CSS と JS が届かなくなるからである。`_site` の名前は、モジュールの名前の最初の部分（レジストリのホスト）とぶつからないように変えない。本物の Pages で、`.nojekyll` があれば `_site/` が届き、消すと 404 になることを確かめた（2026-11-05）。
 - 案内に三つの注意を書く。ページにはモジュールの中身がコードまで全部載る（資格情報なしでは非公開のモジュールは読めずに止まり、資格情報を渡すと読める。Pages を非公開にできるのは GitHub Enterprise Cloud の組織だけである）。公開リポジトリは 60 日動きがないと定時の実行が止まる。`<owner>.github.io` はその持ち主のプロジェクトサイトで同じオリジンを使う（17.28）。
 - `crates/ritsu/tests/website.rs` が、ワークフローが英日で同じ文字であること、使う Action の版が docs.yml と同じであること、起動と権限、案内の一覧のファイルが読めてページが書けることを確かめる。`tests/readme.rs` が `i2y/ritsu` の版を確かめる。
 
@@ -4372,8 +4372,8 @@ modules/holidays/
   - 入力とジョブの出力は、`run` の中に `${{ }}` で書かず、環境変数で渡す。
   - `crates/ritsu/tests/modules.rs` の `the_workflow_that_publishes_the_seed_module_runs_by_hand_only` が、次を確かめる。始まりは `workflow_dispatch` だけ、`publish` は既定が false の真偽値、`packages: write` と `id-token: write` は `publish` のジョブだけ、cosign の URL とチェックサムは tools.yml と同じ。
   - 手元に actionlint が無かったので、YAML を読み直せることと、`run` の中を `bash -n` で確かめ、`check` のジョブの手順を祝日のモジュールで手元で走らせた（2026-10-29）。
-- **公開**（2026-10-30）：modules.yml を `publish` で走らせ、祝日のモジュールの 1.0.0 を ghcr.io に送り出して署名した。二つのジョブが通り、cosign と ritsu の二通りの確かめも通った。パッケージは、設定を変えずに資格情報なしで読めた（マニフェストの `org.opencontainers.image.source` は、公開のこのリポジトリを指す）。Docker の設定もモジュールの置き場も空にした手元で、`signature` の行だけを持つモジュールから `ritsu mod fetch ghcr.io/i2y/ritsu-holidays@1.0.0` が取り出して署名を確かめ、新しい一覧の `ritsu mod site` が英日のページを書いた（版の行は、ダイジェストと「ダイジェストと署名」を確かめたこと）。2026-11-05 に、祝日のモジュールの 1.1.0 と新しい 6 本を同じ手順で送り出した。どのパッケージも設定を変えずに資格情報なしで読め、署名を確かめられた。
-- **次の版**：データを新しくしたら、`ritsu.mod` の版を上げ（名前と版の決まりは上）、modules.yml を `publish` で走らせる。一覧は docs.yml が次に走るときに新しい版を載せる。**新しいモジュール**は、送り出して資格情報なしで読めることを確かめてから、`website/modules.list` に `module` の行を足す。行を先に足すと、版を読めないので一覧が止まる。git の依存として取るためのタグ（`modules/holidays/v…`）は作らない。`module` の行がレジストリの名前なので、git からは取れない（一つのモジュールは git とレジストリの両方からは配れない。17.12.1）。
+- **公開**（2026-10-30）：modules.yml を `publish` で走らせ、祝日のモジュールの 1.0.0 を ghcr.io に送り出して署名した。二つのジョブが通り、cosign と ritsu の二通りの確かめも通った。パッケージは、設定を変えずに資格情報なしで読めた（マニフェストの `org.opencontainers.image.source` は、公開のこのリポジトリを指す）。Docker の設定もモジュールの置き場も空にした手元で、`signature` の行だけを持つモジュールから `ritsu mod fetch ghcr.io/i2y/ritsu-holidays@1.0.0` が取り出して署名を確かめ、新しい一覧の `ritsu mod site` が英日のページを書いた（版の行は、ダイジェストと「ダイジェストと署名」を確かめたこと）。2026-11-05 に、祝日のモジュールの 1.1.0 と新しい 8 本（`osha-penalties` は 3 版）を同じ手順で送り出した。どのパッケージも設定を変えずに資格情報なしで読め、署名を確かめられた。
+- **次の版**：データを新しくしたら、`ritsu.mod` の版を上げ（名前と版の決まりは上）、modules.yml を `publish` で走らせる。一覧は docs.yml が次に走るときに新しい版を載せる。**前の版を後から出す**ときは、版ごとにコミットを積み、いちばん上を `main` に push し、前の版は一時のブランチ（`publish/<d>-<版>`）の上で modules.yml を走らせ、公開のあとでブランチを消す。`gh workflow run --ref` はブランチかタグを取り、SHA を取らない。署名の `^https://github[.]com/i2y/ritsu/` はリポジトリのどの ref でも通る。`osha-penalties` の 1.0.0 と 1.1.0 はこの形で出した（2026-11-05）。**新しいモジュール**は、送り出して資格情報なしで読めることを確かめてから、`website/modules.list` に `module` の行を足す。行を先に足すと、版を読めないので一覧が止まる。git の依存として取るためのタグ（`modules/holidays/v…`）は作らない。`module` の行がレジストリの名前なので、git からは取れない（一つのモジュールは git とレジストリの両方からは配れない。17.12.1）。
 
 ### 17.19 コマンドの表
 
