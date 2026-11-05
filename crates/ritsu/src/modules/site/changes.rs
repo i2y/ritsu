@@ -267,12 +267,25 @@ fn requirements_tile(d: &ModDiff) -> Text {
     }
 }
 
-/// The first reason a version gives for what moved, for a line of the list: the reasons of the
-/// requirements' files, and how many more.
-pub(super) fn reason_of(d: &ModDiff) -> Option<(String, usize)> {
-    let mut all = d.why.iter().flat_map(|w| w.decided.iter().map(|x| x.why.as_str()));
-    let first = all.next()?.to_string();
-    Some((first, all.count()))
+/// Whether the words of a module are in Japanese: a module may keep its requirements in English and
+/// in Japanese, as it keeps its rules, and a page puts first what is in its own language.
+fn in_japanese(text: &str) -> bool {
+    text.chars().any(|c| matches!(c, '\u{3040}'..='\u{30ff}' | '\u{3400}'..='\u{9fff}'))
+}
+
+/// Whether a text is in the language of the page.
+fn in_language(text: &str, lang: Lang) -> bool {
+    in_japanese(text) == matches!(lang, Lang::Ja)
+}
+
+/// The first reason a version gives for what moved, for a line of the list, and how many more: of the
+/// reasons in the page's language when there are any (the same reason in the other language is not
+/// one more), and else of all of them.
+pub(super) fn reason_of(d: &ModDiff, lang: Lang) -> Option<(String, usize)> {
+    let all: Vec<&str> = d.why.iter().flat_map(|w| w.decided.iter().map(|x| x.why.as_str())).collect();
+    let here: Vec<&str> = all.iter().copied().filter(|r| in_language(r, lang)).collect();
+    let (first, more) = if here.is_empty() { all.split_first()? } else { here.split_first()? };
+    Some((first.to_string(), more.len()))
 }
 
 /// The two texts, word by word: what is the same as it is, what went in `<del>`, what came in `<ins>`.
@@ -488,7 +501,10 @@ fn why_html(d: &ModDiff, lang: Lang, code: &dyn Fn(&str) -> Option<String>) -> S
         return String::new();
     }
     let mut o = format!("<article class=\"fileblock why\">\n<h3>{}</h3>\n", esc(tr!("変わった理由", "Why it changed").get(lang)));
-    for w in &d.why {
+    // what is in the page's language first, each language in the order of the files
+    let mut shown: Vec<&Why> = d.why.iter().collect();
+    shown.sort_by_key(|w| !in_language(w.text.1.as_deref().or(w.text.0.as_deref()).unwrap_or(&w.name), lang));
+    for w in shown {
         o.push_str(&requirement_html(w, lang, code));
     }
     o.push_str(&format!("<p class=\"small dim whynote\">{}</p>\n</article>\n", esc(why::own_words().get(lang))));

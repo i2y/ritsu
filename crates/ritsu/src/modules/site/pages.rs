@@ -536,7 +536,7 @@ impl Writer<'_> {
         if let Some((r, (_, d))) = newest.and_then(|r| r.changes.as_ref().map(|c| (r, c))) {
             let line = self.say(changes::latest_line(d, &r.shown.version));
             o.push_str(&format!("<p class=\"latest\"><span class=\"dim\">{}</span> <a href=\"./{}/index.html#changes\">{}</a></p>\n", esc(&self.say(tr!("最新の変更：", "Latest change:"))), url_path(&s.name), esc(&line)));
-            if let Some((reason, more)) = changes::reason_of(d) {
+            if let Some((reason, more)) = changes::reason_of(d, self.lang) {
                 let more = if more > 0 { format!(" <span class=\"dim\">{}</span>", esc(&self.say(tr!("ほか {more} 件", "and {more} more")))) } else { String::new() };
                 o.push_str(&format!("<p class=\"latest reason\"><span class=\"dim\">{}</span> {}{more}</p>\n", esc(&self.say(tr!("理由：", "Why:"))), esc(&reason)));
             }

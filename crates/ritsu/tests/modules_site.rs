@@ -805,6 +805,43 @@ fn the_reasons_of_a_version_on_its_pages() {
     assert!(page("ja", "index.html").contains(&format!("<span class=\"dim\">理由：</span> {reason}")));
 }
 
+/// A module that keeps its requirements in English and in Japanese says each reason twice. A page
+/// gives the reason in its own language, and does not count the other as one more; under the changes,
+/// what is in its language comes first. A reason in one language alone is on both pages (the test
+/// above).
+#[test]
+fn a_page_gives_the_reason_in_its_own_language() {
+    let a = Acme::new("mod-site-why-two");
+    let host = a.host();
+    let name = format!("{host}/acme/fines");
+    fines::write(&a.t, "fines-1.0.0", &name, &fines::OLD);
+    fines::write(&a.t, "fines-1.1.0", &name, &fines::NEW);
+    let pushed = a.path("pushed");
+    for (dir, amount, from, because) in [("fines-1.0.0", "100", "2024-01-16", "89 FR 1817 の改正に合わせる。"), ("fines-1.1.0", "200", "2025-01-16", "90 FR 1861 の改正に合わせる。")] {
+        a.t.write(
+            &format!("{dir}/\u{7f70}\u{91d1}.req"),
+            format!("requirements 罰金 v1\ndescription \"fine.rule の額がどこから来たか\"\n\nrole 保守 \"条と規則を読み合わせる\"\n\nrequirement 上限(amounts_ja)\n  text \"上限は {amount} ドルとする。\"\n  in force {from}..\n  owner 保守\n  decided 2026-01-01 by 保守 \"{because}\"\n  satisfied by rulec \"fine.rule\" table amounts\n  verified by rulec \"fine.rule\"\n"),
+        );
+        fines::review(a.t.path(), dir);
+        let (code, out, err) = a.run_in(dir, &pushed, &["yuen", "review", "\u{7f70}\u{91d1}.req", "--root", ".", "--all", "--by", "保守", "--date", "2026-01-02"], &[]);
+        assert_eq!(code, 0, "{dir}:\n{out}{err}");
+        let (code, out, err) = a.run_in(dir, &pushed, &["mod", "push"], &[]);
+        assert_eq!(code, 0, "{dir}:\n{out}{err}");
+    }
+    a.t.write("fines.list", format!("module \"{name}\"\n"));
+    for (dir, flags, label, reason) in [("en", vec![], "Why:", "Follows the amendment at 90 FR 1861 (January 10, 2025)."), ("ja", vec!["--lang", "ja"], "理由：", "90 FR 1861 の改正に合わせる。")] {
+        let (code, out, err) = a.site("fines.list", dir, &flags, &[]);
+        assert_eq!(code, 0, "{out}{err}");
+        let page = |rel: &str| std::fs::read_to_string(a.path(&format!("{dir}/{rel}"))).unwrap();
+        let index = page("index.html");
+        assert!(index.contains(&format!("<p class=\"latest reason\"><span class=\"dim\">{label}</span> {reason}</p>")), "{index}");
+        let module = page(&format!("{name}/index.html"));
+        let cards = &module[module.find("class=\"fileblock why\"").expect("why it changed")..];
+        let (english, japanese) = (cards.find(">amounts</a></h4>").expect("the requirement in English"), cards.find(">上限</a></h4>").expect("the requirement in Japanese"));
+        assert_eq!(japanese < english, dir == "ja", "{cards}");
+    }
+}
+
 /// What the pages do in a browser, in Chrome, from their files: a module's page picks a tab by the
 /// address and keeps the head in sight, the tab to try opens a file in its frame, the list narrows
 /// as it is asked, and a calendar's page answers about the day in its address (closed, open with the
