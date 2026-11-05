@@ -1,0 +1,2122 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<DIV8 N="1910.95" TYPE="SECTION" hierarchy_metadata="{&quot;path&quot;:&quot;/on/_SUBSTITUTE_DATE_/title-29/section-1910.95&quot;,&quot;citation&quot;:&quot;29 CFR 1910.95&quot;}">
+<HEAD>§ 1910.95 Occupational noise exposure.</HEAD>
+<P>(a) Protection against the effects of noise exposure shall be provided when the sound levels exceed those shown in Table G-16 when measured on the A scale of a standard sound level meter at slow response. When noise levels are determined by octave band analysis, the equivalent A-weighted sound level may be determined as follows:</P>
+<img src="/graphics/ec27oc91.023.gif"></img>
+<BCAP><E T="15">Figure G-9</E></BCAP>
+<EXTRACT>
+<FP>Equivalent sound level contours. Octave band sound pressure levels may be converted to the equivalent A-weighted sound level by plotting them on this graph and noting the A-weighted sound level corresponding to the point of highest penetration into the sound level contours. This equivalent A-weighted sound level, which may differ from the actual A-weighted sound level of the noise, is used to determine exposure limits from Table 1.G-16.</FP></EXTRACT>
+<P>(b)(1) When employees are subjected to sound exceeding those listed in Table G-16, feasible administrative or engineering controls shall be utilized. If such controls fail to reduce sound levels within the levels of Table G-16, personal protective equipment shall be provided and used to reduce sound levels within the levels of the table.</P>
+<P>(2) If the variations in noise level involve maxima at intervals of 1 second or less, it is to be considered continuous.</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table G-16—Permissible Noise Exposures <sup>1</sup></P></CAPTION>
+<THEAD>
+<TR>
+<TH class="center border-top-single border-bottom-single border-right-single">Duration per day, hours</TH>
+<TH class="center border-top-single border-bottom-single">Sound level dBA slow response</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left border-right-single">8</TD>
+<TD class="right">90</TD>
+</TR>
+<TR>
+<TD class="left border-right-single">6</TD>
+<TD class="right">92</TD>
+</TR>
+<TR>
+<TD class="left border-right-single">4</TD>
+<TD class="right">95</TD>
+</TR>
+<TR>
+<TD class="left border-right-single">3</TD>
+<TD class="right">97</TD>
+</TR>
+<TR>
+<TD class="left border-right-single">2</TD>
+<TD class="right">100</TD>
+</TR>
+<TR>
+<TD class="left border-right-single">1<sup>1</sup>⁄<sub>2</sub></TD>
+<TD class="right">102</TD>
+</TR>
+<TR>
+<TD class="left border-right-single">1</TD>
+<TD class="right">105</TD>
+</TR>
+<TR>
+<TD class="left border-right-single"><sup>1</sup>⁄<sub>2</sub></TD>
+<TD class="right">110</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single border-right-single"><sup>1</sup>⁄<sub>4</sub> or less</TD>
+<TD class="right border-bottom-single">115
+</TD>
+</TR>
+</TBODY>
+<TFOOT><TR><TD colspan="2"><sup>1</sup> When the daily noise exposure is composed of two or more periods of noise exposure of different levels, their combined effect should be considered, rather than the individual effect of each. If the sum of the following fractions: <E T="03">C</E><sub>1</sub>/<E T="03">T</E><sub>1</sub> + <E T="03">C</E><sub>2</sub>/<E T="03">T</E><sub>2</sub> <E T="03">C</E> <sub><em>n</em></sub>/<E T="03">T</E> <sub><em>n</em></sub> exceeds unity, then, the mixed exposure should be considered to exceed the limit value. <E T="03">Cn</E> indicates the total time of exposure at a specified noise level, and <E T="03">Tn</E> indicates the total time of exposure permitted at that level.
+</TD></TR><TR><TD colspan="2">Exposure to impulsive or impact noise should not exceed 140 dB peak sound pressure level.</TD></TR></TFOOT></TABLE>
+</DIV></DIV>
+<P>(c) <I>Hearing conservation program.</I> (1) The employer shall administer a continuing, effective hearing conservation program, as described in paragraphs (c) through (o) of this section, whenever employee noise exposures equal or exceed an 8-hour time-weighted average sound level (TWA) of 85 decibels measured on the A scale (slow response) or, equivalently, a dose of fifty percent. For purposes of the hearing conservation program, employee noise exposures shall be computed in accordance with appendix A and Table G-16a, and without regard to any attenuation provided by the use of personal protective equipment.</P>
+<P>(2) For purposes of paragraphs (c) through (n) of this section, an 8-hour time-weighted average of 85 decibels or a dose of fifty percent shall also be referred to as the action level.</P>
+<P>(d) <I>Monitoring.</I> (1) When information indicates that any employee's exposure may equal or exceed an 8-hour time-weighted average of 85 decibels, the employer shall develop and implement a monitoring program.</P>
+<P>(i) The sampling strategy shall be designed to identify employees for inclusion in the hearing conservation program and to enable the proper selection of hearing protectors.</P>
+<P>(ii) Where circumstances such as high worker mobility, significant variations in sound level, or a significant component of impulse noise make area monitoring generally inappropriate, the employer shall use representative personal sampling to comply with the monitoring requirements of this paragraph unless the employer can show that area sampling produces equivalent results.</P>
+<P>(2)(i) All continuous, intermittent and impulsive sound levels from 80 decibels to 130 decibels shall be integrated into the noise measurements.</P>
+<P>(ii) Instruments used to measure employee noise exposure shall be calibrated to ensure measurement accuracy.</P>
+<P>(3) Monitoring shall be repeated whenever a change in production, process, equipment or controls increases noise exposures to the extent that:</P>
+<P>(i) Additional employees may be exposed at or above the action level; or</P>
+<P>(ii) The attenuation provided by hearing protectors being used by employees may be rendered inadequate to meet the requirements of paragraph (j) of this section.</P>
+<P>(e) <I>Employee notification.</I> The employer shall notify each employee exposed at or above an 8-hour time-weighted average of 85 decibels of the results of the monitoring.</P>
+<P>(f) <I>Observation of monitoring.</I> The employer shall provide affected employees or their representatives with an opportunity to observe any noise measurements conducted pursuant to this section.</P>
+<P>(g) <I>Audiometric testing program.</I> (1) The employer shall establish and maintain an audiometric testing program as provided in this paragraph by making audiometric testing available to all employees whose exposures equal or exceed an 8-hour time-weighted average of 85 decibels.</P>
+<P>(2) The program shall be provided at no cost to employees.</P>
+<P>(3) Audiometric tests shall be performed by a licensed or certified audiologist, otolaryngologist, or other physician, or by a technician who is certified by the Council of Accreditation in Occupational Hearing Conservation, or who has satisfactorily demonstrated competence in administering audiometric examinations, obtaining valid audiograms, and properly using, maintaining and checking calibration and proper functioning of the audiometers being used. A technician who operates microprocessor audiometers does not need to be certified. A technician who performs audiometric tests must be responsible to an audiologist, otolaryngologist or physician.</P>
+<P>(4) All audiograms obtained pursuant to this section shall meet the requirements of appendix C: <I>Audiometric Measuring Instruments.</I></P>
+<P>(5) <I>Baseline audiogram.</I> (i) Within 6 months of an employee's first exposure at or above the action level, the employer shall establish a valid baseline audiogram against which subsequent audiograms can be compared.</P>
+<P>(ii) <I>Mobile test van exception.</I> Where mobile test vans are used to meet the audiometric testing obligation, the employer shall obtain a valid baseline audiogram within 1 year of an employee's first exposure at or above the action level. Where baseline audiograms are obtained more than 6 months after the employee's first exposure at or above the action level, employees shall wearing hearing protectors for any period exceeding six months after first exposure until the baseline audiogram is obtained.</P>
+<P>(iii) Testing to establish a baseline audiogram shall be preceded by at least 14 hours without exposure to workplace noise. Hearing protectors may be used as a substitute for the requirement that baseline audiograms be preceded by 14 hours without exposure to workplace noise.</P>
+<P>(iv) The employer shall notify employees of the need to avoid high levels of non-occupational noise exposure during the 14-hour period immediately preceding the audiometric examination.</P>
+<P>(6) <I>Annual audiogram.</I> At least annually after obtaining the baseline audiogram, the employer shall obtain a new audiogram for each employee exposed at or above an 8-hour time-weighted average of 85 decibels.</P>
+<P>(7) <I>Evaluation of audiogram.</I> (i) Each employee's annual audiogram shall be compared to that employee's baseline audiogram to determine if the audiogram is valid and if a standard threshold shift as defined in paragraph (g)(10) of this section has occurred. This comparison may be done by a technician.</P>
+<P>(ii) If the annual audiogram shows that an employee has suffered a standard threshold shift, the employer may obtain a retest within 30 days and consider the results of the retest as the annual audiogram.</P>
+<P>(iii) The audiologist, otolaryngologist, or physician shall review problem audiograms and shall determine whether there is a need for further evaluation. The employer shall provide to the person performing this evaluation the following information:</P>
+<P>(A) A copy of the requirements for hearing conservation as set forth in paragraphs (c) through (n) of this section;</P>
+<P>(B) The baseline audiogram and most recent audiogram of the employee to be evaluated;</P>
+<P>(C) Measurements of background sound pressure levels in the audiometric test room as required in appendix D: Audiometric Test Rooms.</P>
+<P>(D) Records of audiometer calibrations required by paragraph (h)(5) of this section.</P>
+<P>(8) <I>Follow-up procedures.</I> (i) If a comparison of the annual audiogram to the baseline audiogram indicates a standard threshold shift as defined in paragraph (g)(10) of this section has occurred, the employee shall be informed of this fact in writing, within 21 days of the determination.</P>
+<P>(ii) Unless a physician determines that the standard threshold shift is not work related or aggravated by occupational noise exposure, the employer shall ensure that the following steps are taken when a standard threshold shift occurs:</P>
+<P>(A) Employees not using hearing protectors shall be fitted with hearing protectors, trained in their use and care, and required to use them.</P>
+<P>(B) Employees already using hearing protectors shall be refitted and retrained in the use of hearing protectors and provided with hearing protectors offering greater attenuation if necessary.</P>
+<P>(C) The employee shall be referred for a clinical audiological evaluation or an otological examination, as appropriate, if additional testing is necessary or if the employer suspects that a medical pathology of the ear is caused or aggravated by the wearing of hearing protectors.</P>
+<P>(D) The employee is informed of the need for an otological examination if a medical pathology of the ear that is unrelated to the use of hearing protectors is suspected.</P>
+<P>(iii) If subsequent audiometric testing of an employee whose exposure to noise is less than an 8-hour TWA of 90 decibels indicates that a standard threshold shift is not persistent, the employer:</P>
+<P>(A) Shall inform the employee of the new audiometric interpretation; and</P>
+<P>(B) May discontinue the required use of hearing protectors for that employee.</P>
+<P>(9) <I>Revised baseline.</I> An annual audiogram may be substituted for the baseline audiogram when, in the judgment of the audiologist, otolaryngologist or physician who is evaluating the audiogram:</P>
+<P>(i) The standard threshold shift revealed by the audiogram is persistent; or</P>
+<P>(ii) The hearing threshold shown in the annual audiogram indicates significant improvement over the baseline audiogram.</P>
+<P>(10) <I>Standard threshold shift.</I> (i) As used in this section, a standard threshold shift is a change in hearing threshold relative to the baseline audiogram of an average of 10 dB or more at 2000, 3000, and 4000 Hz in either ear.</P>
+<P>(ii) In determining whether a standard threshold shift has occurred, allowance may be made for the contribution of aging (presbycusis) to the change in hearing level by correcting the annual audiogram according to the procedure described in appendix F: <I>Calculation and Application of Age Correction to Audiograms.</I></P>
+<P>(h) <I>Audiometric test requirements.</I> (1) Audiometric tests shall be pure tone, air conduction, hearing threshold examinations, with test frequencies including as a minimum 500, 1000, 2000, 3000, 4000, and 6000 Hz. Tests at each frequency shall be taken separately for each ear.</P>
+<P>(2) Audiometric tests shall be conducted with audiometers (including microprocessor audiometers) that meet the specifications of, and are maintained and used in accordance with, American National Standard Specification for Audiometers, S3.6-1969, which is incorporated by reference as specified in § 1910.6.</P>
+<P>(3) Pulsed-tone and self-recording audiometers, if used, shall meet the requirements specified in appendix C: <I>Audiometric Measuring Instruments.</I></P>
+<P>(4) Audiometric examinations shall be administered in a room meeting the requirements listed in appendix D: <I>Audiometric Test Rooms.</I></P>
+<P>(5) <I>Audiometer calibration.</I> (i) The functional operation of the audiometer shall be checked before each day's use by testing a person with known, stable hearing thresholds, and by listening to the audiometer's output to make sure that the output is free from distorted or unwanted sounds. Deviations of 10 decibels or greater require an acoustic calibration.</P>
+<P>(ii) Audiometer calibration shall be checked acoustically at least annually in accordance with appendix E: <I>Acoustic Calibration of Audiometers.</I> Test frequencies below 500 Hz and above 6000 Hz may be omitted from this check. Deviations of 15 decibels or greater require an exhaustive calibration.</P>
+<P>(iii) An exhaustive calibration shall be performed at least every two years in accordance with sections 4.1.2; 4.1.3.; 4.1.4.3; 4.2; 4.4.1; 4.4.2; 4.4.3; and 4.5 of the American National Standard Specification for Audiometers, S3.6-1969. Test frequencies below 500 Hz and above 6000 Hz may be omitted from this calibration.</P>
+<P>(i) <I>Hearing protectors.</I> (1) Employers shall make hearing protectors available to all employees exposed to an 8-hour time-weighted average of 85 decibels or greater at no cost to the employees. Hearing protectors shall be replaced as necessary.</P>
+<P>(2) Employers shall ensure that hearing protectors are worn:</P>
+<P>(i) By an employee who is required by paragraph (b)(1) of this section to wear personal protective equipment; and</P>
+<P>(ii) By any employee who is exposed to an 8-hour time-weighted average of 85 decibels or greater, and who:</P>
+<P>(A) Has not yet had a baseline audiogram established pursuant to paragraph (g)(5)(ii); or</P>
+<P>(B) Has experienced a standard threshold shift.</P>
+<P>(3) Employees shall be given the opportunity to select their hearing protectors from a variety of suitable hearing protectors provided by the employer.</P>
+<P>(4) The employer shall provide training in the use and care of all hearing protectors provided to employees.</P>
+<P>(5) The employer shall ensure proper initial fitting and supervise the correct use of all hearing protectors.</P>
+<P>(j) <I>Hearing protector attenuation.</I> (1) The employer shall evaluate hearing protector attenuation for the specific noise environments in which the protector will be used. The employer shall use one of the evaluation methods described in appendix B: <I>Methods for Estimating the Adequacy of Hearing Protection Attenuation.</I></P>
+<P>(2) Hearing protectors must attenuate employee exposure at least to an 8-hour time-weighted average of 90 decibels as required by paragraph (b) of this section.</P>
+<P>(3) For employees who have experienced a standard threshold shift, hearing protectors must attenuate employee exposure to an 8-hour time-weighted average of 85 decibels or below.</P>
+<P>(4) The adequacy of hearing protector attenuation shall be re-evaluated whenever employee noise exposures increase to the extent that the hearing protectors provided may no longer provide adequate attenuation. The employer shall provide more effective hearing protectors where necessary.</P>
+<P>(k) <I>Training program.</I> (1) The employer shall train each employee who is exposed to noise at or above an 8-hour time weighted average of 85 decibels in accordance with the requirements of this section. The employer shall institute a training program and ensure employee participation in the program.</P>
+<P>(2) The training program shall be repeated annually for each employee included in the hearing conservation program. Information provided in the training program shall be updated to be consistent with changes in protective equipment and work processes.</P>
+<P>(3) The employer shall ensure that each employee is informed of the following:</P>
+<P>(i) The effects of noise on hearing;</P>
+<P>(ii) The purpose of hearing protectors, the advantages, disadvantages, and attenuation of various types, and instructions on selection, fitting, use, and care; and</P>
+<P>(iii) The purpose of audiometric testing, and an explanation of the test procedures.</P>
+<P>(l) <I>Access to information and training materials.</I> (1) The employer shall make available to affected employees or their representatives copies of this standard and shall also post a copy in the workplace.</P>
+<P>(2) The employer shall provide to affected employees any informational materials pertaining to the standard that are supplied to the employer by the Assistant Secretary.</P>
+<P>(3) The employer shall provide, upon request, all materials related to the employer's training and education program pertaining to this standard to the Assistant Secretary and the Director.</P>
+<P>(m) <I>Recordkeeping</I>—(1) <I>Exposure measurements.</I> The employer shall maintain an accurate record of all employee exposure measurements required by paragraph (d) of this section.</P>
+<P>(2) <I>Audiometric tests.</I> (i) The employer shall retain all employee audiometric test records obtained pursuant to paragraph (g) of this section:</P>
+<P>(ii) This record shall include:</P>
+<P>(A) Name and job classification of the employee;</P>
+<P>(B) Date of the audiogram;</P>
+<P>(C) The examiner's name;</P>
+<P>(D) Date of the last acoustic or exhaustive calibration of the audiometer; and</P>
+<P>(E) Employee's most recent noise exposure assessment.</P>
+<P>(F) The employer shall maintain accurate records of the measurements of the background sound pressure levels in audiometric test rooms.</P>
+<P>(3) <I>Record retention.</I> The employer shall retain records required in this paragraph (m) for at least the following periods.</P>
+<P>(i) Noise exposure measurement records shall be retained for two years.</P>
+<P>(ii) Audiometric test records shall be retained for the duration of the affected employee's employment.</P>
+<P>(4) <I>Access to records.</I> All records required by this section shall be provided upon request to employees, former employees, representatives designated by the individual employee, and the Assistant Secretary. The provisions of 29 CFR 1910.1020 (a)-(e) and (g)-(i) apply to access to records under this section.</P>
+<P>(5) <I>Transfer of records.</I> If the employer ceases to do business, the employer shall transfer to the successor employer all records required to be maintained by this section, and the successor employer shall retain them for the remainder of the period prescribed in paragraph (m)(3) of this section.</P>
+<P>(n) <I>Appendices.</I> (1) Appendices A, B, C, D, and E to this section are incorporated as part of this section and the contents of these appendices are mandatory.</P>
+<P>(2) Appendices F and G to this section are informational and are not intended to create any additional obligations not otherwise imposed or to detract from any existing obligations.</P>
+<P>(o) <I>Exemptions.</I> Paragraphs (c) through (n) of this section shall not apply to employers engaged in oil and gas well drilling and servicing operations.</P>
+<EXTRACT>
+<HD1>Appendix A to § 1910.95—Noise Exposure Computation
+</HD1>
+<HD2>This appendix is Mandatory
+</HD2>
+<HD1>I. Computation of Employee Noise Exposure
+</HD1>
+<P>(1) Noise dose is computed using Table G-16a as follows:</P>
+<P>(i) When the sound level, L, is constant over the entire work shift, the noise dose, D, in percent, is given by: D = 100 C/T where C is the total length of the work day, in hours, and T is the reference duration corresponding to the measured sound level, L, as given in Table G-16a or by the formula shown as a footnote to that table.</P>
+<P>(ii) When the workshift noise exposure is composed of two or more periods of noise at different levels, the total noise dose over the work day is given by:</P>
+<FP-2>D = 100(C<E T="52">1</E> / T<E T="52">1</E> + C<E T="52">2</E> / T<E T="52">2</E> + C<E T="52">n</E> / T<E T="52">n</E>),
+</FP-2>
+<FP>where C<E T="52">n</E> indicates the total time of exposure at a specific noise level, and T<E T="52">n</E> indicates the reference duration for that level as given by Table G-16a.
+</FP>
+<P>(2) The eight-hour time-weighted average sound level (TWA), in decibels, may be computed from the dose, in percent, by means of the formula: TWA = 16.61 log<E T="52">10</E> (D/100) + 90. For an eight-hour workshift with the noise level constant over the entire shift, the TWA is equal to the measured sound level.</P>
+<P>(3) A table relating dose and TWA is given in Section II.</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table G-16a</P></CAPTION>
+<THEAD>
+<TR>
+<TH class="center border-top-single border-bottom-single">A-weighted sound level, L (decibel)</TH>
+<TH class="center border-top-single border-bottom-single">Reference duration, T (hour)</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">80</TD>
+<TD class="right">32</TD>
+</TR>
+<TR>
+<TD class="left">81</TD>
+<TD class="right">27.9</TD>
+</TR>
+<TR>
+<TD class="left">82</TD>
+<TD class="right">24.3</TD>
+</TR>
+<TR>
+<TD class="left">83</TD>
+<TD class="right">21.1</TD>
+</TR>
+<TR>
+<TD class="left">84</TD>
+<TD class="right">18.4</TD>
+</TR>
+<TR>
+<TD class="left">85</TD>
+<TD class="right">16</TD>
+</TR>
+<TR>
+<TD class="left">86</TD>
+<TD class="right">13.9</TD>
+</TR>
+<TR>
+<TD class="left">87</TD>
+<TD class="right">12.1</TD>
+</TR>
+<TR>
+<TD class="left">88</TD>
+<TD class="right">10.6</TD>
+</TR>
+<TR>
+<TD class="left">89</TD>
+<TD class="right">9.2</TD>
+</TR>
+<TR>
+<TD class="left">90</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">91</TD>
+<TD class="right">7.0</TD>
+</TR>
+<TR>
+<TD class="left">92</TD>
+<TD class="right">6.1</TD>
+</TR>
+<TR>
+<TD class="left">93</TD>
+<TD class="right">5.3</TD>
+</TR>
+<TR>
+<TD class="left">94</TD>
+<TD class="right">4.6</TD>
+</TR>
+<TR>
+<TD class="left">95</TD>
+<TD class="right">4</TD>
+</TR>
+<TR>
+<TD class="left">96</TD>
+<TD class="right">3.5</TD>
+</TR>
+<TR>
+<TD class="left">97</TD>
+<TD class="right">3.0</TD>
+</TR>
+<TR>
+<TD class="left">98</TD>
+<TD class="right">2.6</TD>
+</TR>
+<TR>
+<TD class="left">99</TD>
+<TD class="right">2.3</TD>
+</TR>
+<TR>
+<TD class="left">100</TD>
+<TD class="right">2</TD>
+</TR>
+<TR>
+<TD class="left">101</TD>
+<TD class="right">1.7</TD>
+</TR>
+<TR>
+<TD class="left">102</TD>
+<TD class="right">1.5</TD>
+</TR>
+<TR>
+<TD class="left">103</TD>
+<TD class="right">1.3</TD>
+</TR>
+<TR>
+<TD class="left">104</TD>
+<TD class="right">1.1</TD>
+</TR>
+<TR>
+<TD class="left">105</TD>
+<TD class="right">1</TD>
+</TR>
+<TR>
+<TD class="left">106</TD>
+<TD class="right">0.87</TD>
+</TR>
+<TR>
+<TD class="left">107</TD>
+<TD class="right">0.76</TD>
+</TR>
+<TR>
+<TD class="left">108</TD>
+<TD class="right">0.66</TD>
+</TR>
+<TR>
+<TD class="left">109</TD>
+<TD class="right">0.57</TD>
+</TR>
+<TR>
+<TD class="left">110</TD>
+<TD class="right">0.5</TD>
+</TR>
+<TR>
+<TD class="left">111</TD>
+<TD class="right">0.44</TD>
+</TR>
+<TR>
+<TD class="left">112</TD>
+<TD class="right">0.38</TD>
+</TR>
+<TR>
+<TD class="left">113</TD>
+<TD class="right">0.33</TD>
+</TR>
+<TR>
+<TD class="left">114</TD>
+<TD class="right">0.29</TD>
+</TR>
+<TR>
+<TD class="left">115</TD>
+<TD class="right">0.25</TD>
+</TR>
+<TR>
+<TD class="left">116</TD>
+<TD class="right">0.22</TD>
+</TR>
+<TR>
+<TD class="left">117</TD>
+<TD class="right">0.19</TD>
+</TR>
+<TR>
+<TD class="left">118</TD>
+<TD class="right">0.16</TD>
+</TR>
+<TR>
+<TD class="left">119</TD>
+<TD class="right">0.14</TD>
+</TR>
+<TR>
+<TD class="left">120</TD>
+<TD class="right">0.125</TD>
+</TR>
+<TR>
+<TD class="left">121</TD>
+<TD class="right">0.11</TD>
+</TR>
+<TR>
+<TD class="left">122</TD>
+<TD class="right">0.095</TD>
+</TR>
+<TR>
+<TD class="left">123</TD>
+<TD class="right">0.082</TD>
+</TR>
+<TR>
+<TD class="left">124</TD>
+<TD class="right">0.072</TD>
+</TR>
+<TR>
+<TD class="left">125</TD>
+<TD class="right">0.063</TD>
+</TR>
+<TR>
+<TD class="left">126</TD>
+<TD class="right">0.054</TD>
+</TR>
+<TR>
+<TD class="left">127</TD>
+<TD class="right">0.047</TD>
+</TR>
+<TR>
+<TD class="left">128</TD>
+<TD class="right">0.041</TD>
+</TR>
+<TR>
+<TD class="left">129</TD>
+<TD class="right">0.036</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">130</TD>
+<TD class="right border-bottom-single">0.031</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+<P>In the above table the reference duration, T, is computed by</P>
+<MATH BORDER="NODRAW" DEEP="27" HTYPE="CENTER" POSITION="NOFLOAT" ROTATION="P" SPAN="1" STRIP="YES">
+<img src="/graphics/er25se06.008.gif"></img></MATH>
+<FP>where L is the measured A-weighted sound level.
+</FP>
+<HD1>II. Conversion Between “Dose” and “8-Hour Time-Weighted Average” Sound Level
+</HD1>
+<P>Compliance with paragraphs (c)-(r) of this regulation is determined by the amount of exposure to noise in the workplace. The amount of such exposure is usually measured with an audiodosimeter which gives a readout in terms of “dose.” In order to better understand the requirements of the amendment, dosimeter readings can be converted to an “8-hour time-weighted average sound level.” (TWA).</P>
+<P>In order to convert the reading of a dosimeter into TWA, see Table A-1, below. This table applies to dosimeters that are set by the manufacturer to calculate dose or percent exposure according to the relationships in Table G-16a. So, for example, a dose of 91 percent over an eight hour day results in a TWA of 89.3 dB, and, a dose of 50 percent corresponds to a TWA of 85 dB.</P>
+<P>If the dose as read on the dosimeter is less than or greater than the values found in Table A-1, the TWA may be calculated by using the formula: TWA=16.61 log<E T="52">10</E> (D/100) + 90 where TWA = 8-hour time-weighted average sound level and D = accumulated dose in percent exposure.</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table A-1—Conversion From “Percent Noise Exposure” or “Dose” to “8-Hour Time-Weighted Average Sound Level” (TWA)</P></CAPTION>
+<THEAD>
+<TR>
+<TH class="center border-top-single border-bottom-single">Dose or percent noise exposure</TH>
+<TH class="center border-top-single border-bottom-single">TWA</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">10</TD>
+<TD class="right">73.4</TD>
+</TR>
+<TR>
+<TD class="left">15</TD>
+<TD class="right">76.3</TD>
+</TR>
+<TR>
+<TD class="left">20</TD>
+<TD class="right">78.4</TD>
+</TR>
+<TR>
+<TD class="left">25</TD>
+<TD class="right">80.0</TD>
+</TR>
+<TR>
+<TD class="left">30</TD>
+<TD class="right">81.3</TD>
+</TR>
+<TR>
+<TD class="left">35</TD>
+<TD class="right">82.4</TD>
+</TR>
+<TR>
+<TD class="left">40</TD>
+<TD class="right">83.4</TD>
+</TR>
+<TR>
+<TD class="left">45</TD>
+<TD class="right">84.2</TD>
+</TR>
+<TR>
+<TD class="left">50</TD>
+<TD class="right">85.0</TD>
+</TR>
+<TR>
+<TD class="left">55</TD>
+<TD class="right">85.7</TD>
+</TR>
+<TR>
+<TD class="left">60</TD>
+<TD class="right">86.3</TD>
+</TR>
+<TR>
+<TD class="left">65</TD>
+<TD class="right">86.9</TD>
+</TR>
+<TR>
+<TD class="left">70</TD>
+<TD class="right">87.4</TD>
+</TR>
+<TR>
+<TD class="left">75</TD>
+<TD class="right">87.9</TD>
+</TR>
+<TR>
+<TD class="left">80</TD>
+<TD class="right">88.4</TD>
+</TR>
+<TR>
+<TD class="left">81</TD>
+<TD class="right">88.5</TD>
+</TR>
+<TR>
+<TD class="left">82</TD>
+<TD class="right">88.6</TD>
+</TR>
+<TR>
+<TD class="left">83</TD>
+<TD class="right">88.7</TD>
+</TR>
+<TR>
+<TD class="left">84</TD>
+<TD class="right">88.7</TD>
+</TR>
+<TR>
+<TD class="left">85</TD>
+<TD class="right">88.8</TD>
+</TR>
+<TR>
+<TD class="left">86</TD>
+<TD class="right">88.9</TD>
+</TR>
+<TR>
+<TD class="left">87</TD>
+<TD class="right">89.0</TD>
+</TR>
+<TR>
+<TD class="left">88</TD>
+<TD class="right">89.1</TD>
+</TR>
+<TR>
+<TD class="left">89</TD>
+<TD class="right">89.2</TD>
+</TR>
+<TR>
+<TD class="left">90</TD>
+<TD class="right">89.2</TD>
+</TR>
+<TR>
+<TD class="left">91</TD>
+<TD class="right">89.3</TD>
+</TR>
+<TR>
+<TD class="left">92</TD>
+<TD class="right">89.4</TD>
+</TR>
+<TR>
+<TD class="left">93</TD>
+<TD class="right">89.5</TD>
+</TR>
+<TR>
+<TD class="left">94</TD>
+<TD class="right">89.6</TD>
+</TR>
+<TR>
+<TD class="left">95</TD>
+<TD class="right">89.6</TD>
+</TR>
+<TR>
+<TD class="left">96</TD>
+<TD class="right">89.7</TD>
+</TR>
+<TR>
+<TD class="left">97</TD>
+<TD class="right">89.8</TD>
+</TR>
+<TR>
+<TD class="left">98</TD>
+<TD class="right">89.9</TD>
+</TR>
+<TR>
+<TD class="left">99</TD>
+<TD class="right">89.9</TD>
+</TR>
+<TR>
+<TD class="left">100</TD>
+<TD class="right">90.0</TD>
+</TR>
+<TR>
+<TD class="left">101</TD>
+<TD class="right">90.1</TD>
+</TR>
+<TR>
+<TD class="left">102</TD>
+<TD class="right">90.1</TD>
+</TR>
+<TR>
+<TD class="left">103</TD>
+<TD class="right">90.2</TD>
+</TR>
+<TR>
+<TD class="left">104</TD>
+<TD class="right">90.3</TD>
+</TR>
+<TR>
+<TD class="left">105</TD>
+<TD class="right">90.4</TD>
+</TR>
+<TR>
+<TD class="left">106</TD>
+<TD class="right">90.4</TD>
+</TR>
+<TR>
+<TD class="left">107</TD>
+<TD class="right">90.5</TD>
+</TR>
+<TR>
+<TD class="left">108</TD>
+<TD class="right">90.6</TD>
+</TR>
+<TR>
+<TD class="left">109</TD>
+<TD class="right">90.6</TD>
+</TR>
+<TR>
+<TD class="left">110</TD>
+<TD class="right">90.7</TD>
+</TR>
+<TR>
+<TD class="left">111</TD>
+<TD class="right">90.8</TD>
+</TR>
+<TR>
+<TD class="left">112</TD>
+<TD class="right">90.8</TD>
+</TR>
+<TR>
+<TD class="left">113</TD>
+<TD class="right">90.9</TD>
+</TR>
+<TR>
+<TD class="left">114</TD>
+<TD class="right">90.9</TD>
+</TR>
+<TR>
+<TD class="left">115</TD>
+<TD class="right">91.1</TD>
+</TR>
+<TR>
+<TD class="left">116</TD>
+<TD class="right">91.1</TD>
+</TR>
+<TR>
+<TD class="left">117</TD>
+<TD class="right">91.1</TD>
+</TR>
+<TR>
+<TD class="left">118</TD>
+<TD class="right">91.2</TD>
+</TR>
+<TR>
+<TD class="left">119</TD>
+<TD class="right">91.3</TD>
+</TR>
+<TR>
+<TD class="left">120</TD>
+<TD class="right">91.3</TD>
+</TR>
+<TR>
+<TD class="left">125</TD>
+<TD class="right">91.6</TD>
+</TR>
+<TR>
+<TD class="left">130</TD>
+<TD class="right">91.9</TD>
+</TR>
+<TR>
+<TD class="left">135</TD>
+<TD class="right">92.2</TD>
+</TR>
+<TR>
+<TD class="left">140</TD>
+<TD class="right">92.4</TD>
+</TR>
+<TR>
+<TD class="left">145</TD>
+<TD class="right">92.7</TD>
+</TR>
+<TR>
+<TD class="left">150</TD>
+<TD class="right">92.9</TD>
+</TR>
+<TR>
+<TD class="left">155</TD>
+<TD class="right">93.2</TD>
+</TR>
+<TR>
+<TD class="left">160</TD>
+<TD class="right">93.4</TD>
+</TR>
+<TR>
+<TD class="left">165</TD>
+<TD class="right">93.6</TD>
+</TR>
+<TR>
+<TD class="left">170</TD>
+<TD class="right">93.8</TD>
+</TR>
+<TR>
+<TD class="left">175</TD>
+<TD class="right">94.0</TD>
+</TR>
+<TR>
+<TD class="left">180</TD>
+<TD class="right">94.2</TD>
+</TR>
+<TR>
+<TD class="left">185</TD>
+<TD class="right">94.4</TD>
+</TR>
+<TR>
+<TD class="left">190</TD>
+<TD class="right">94.6</TD>
+</TR>
+<TR>
+<TD class="left">195</TD>
+<TD class="right">94.8</TD>
+</TR>
+<TR>
+<TD class="left">200</TD>
+<TD class="right">95.0</TD>
+</TR>
+<TR>
+<TD class="left">210</TD>
+<TD class="right">95.4</TD>
+</TR>
+<TR>
+<TD class="left">220</TD>
+<TD class="right">95.7</TD>
+</TR>
+<TR>
+<TD class="left">230</TD>
+<TD class="right">96.0</TD>
+</TR>
+<TR>
+<TD class="left">240</TD>
+<TD class="right">96.3</TD>
+</TR>
+<TR>
+<TD class="left">250</TD>
+<TD class="right">96.6</TD>
+</TR>
+<TR>
+<TD class="left">260</TD>
+<TD class="right">96.9</TD>
+</TR>
+<TR>
+<TD class="left">270</TD>
+<TD class="right">97.2</TD>
+</TR>
+<TR>
+<TD class="left">280</TD>
+<TD class="right">97.4</TD>
+</TR>
+<TR>
+<TD class="left">290</TD>
+<TD class="right">97.7</TD>
+</TR>
+<TR>
+<TD class="left">300</TD>
+<TD class="right">97.9</TD>
+</TR>
+<TR>
+<TD class="left">310</TD>
+<TD class="right">98.2</TD>
+</TR>
+<TR>
+<TD class="left">320</TD>
+<TD class="right">98.4</TD>
+</TR>
+<TR>
+<TD class="left">330</TD>
+<TD class="right">98.6</TD>
+</TR>
+<TR>
+<TD class="left">340</TD>
+<TD class="right">98.8</TD>
+</TR>
+<TR>
+<TD class="left">350</TD>
+<TD class="right">99.0</TD>
+</TR>
+<TR>
+<TD class="left">360</TD>
+<TD class="right">99.2</TD>
+</TR>
+<TR>
+<TD class="left">370</TD>
+<TD class="right">99.4</TD>
+</TR>
+<TR>
+<TD class="left">380</TD>
+<TD class="right">99.6</TD>
+</TR>
+<TR>
+<TD class="left">390</TD>
+<TD class="right">99.8</TD>
+</TR>
+<TR>
+<TD class="left">400</TD>
+<TD class="right">100.0</TD>
+</TR>
+<TR>
+<TD class="left">410</TD>
+<TD class="right">100.2</TD>
+</TR>
+<TR>
+<TD class="left">420</TD>
+<TD class="right">100.4</TD>
+</TR>
+<TR>
+<TD class="left">430</TD>
+<TD class="right">100.5</TD>
+</TR>
+<TR>
+<TD class="left">440</TD>
+<TD class="right">100.7</TD>
+</TR>
+<TR>
+<TD class="left">450</TD>
+<TD class="right">100.8</TD>
+</TR>
+<TR>
+<TD class="left">460</TD>
+<TD class="right">101.0</TD>
+</TR>
+<TR>
+<TD class="left">470</TD>
+<TD class="right">101.2</TD>
+</TR>
+<TR>
+<TD class="left">480</TD>
+<TD class="right">101.3</TD>
+</TR>
+<TR>
+<TD class="left">490</TD>
+<TD class="right">101.5</TD>
+</TR>
+<TR>
+<TD class="left">500</TD>
+<TD class="right">101.6</TD>
+</TR>
+<TR>
+<TD class="left">510</TD>
+<TD class="right">101.8</TD>
+</TR>
+<TR>
+<TD class="left">520</TD>
+<TD class="right">101.9</TD>
+</TR>
+<TR>
+<TD class="left">530</TD>
+<TD class="right">102.0</TD>
+</TR>
+<TR>
+<TD class="left">540</TD>
+<TD class="right">102.2</TD>
+</TR>
+<TR>
+<TD class="left">550</TD>
+<TD class="right">102.3</TD>
+</TR>
+<TR>
+<TD class="left">560</TD>
+<TD class="right">102.4</TD>
+</TR>
+<TR>
+<TD class="left">570</TD>
+<TD class="right">102.6</TD>
+</TR>
+<TR>
+<TD class="left">580</TD>
+<TD class="right">102.7</TD>
+</TR>
+<TR>
+<TD class="left">590</TD>
+<TD class="right">102.8</TD>
+</TR>
+<TR>
+<TD class="left">600</TD>
+<TD class="right">102.9</TD>
+</TR>
+<TR>
+<TD class="left">610</TD>
+<TD class="right">103.0</TD>
+</TR>
+<TR>
+<TD class="left">620</TD>
+<TD class="right">103.2</TD>
+</TR>
+<TR>
+<TD class="left">630</TD>
+<TD class="right">103.3</TD>
+</TR>
+<TR>
+<TD class="left">640</TD>
+<TD class="right">103.4</TD>
+</TR>
+<TR>
+<TD class="left">650</TD>
+<TD class="right">103.5</TD>
+</TR>
+<TR>
+<TD class="left">660</TD>
+<TD class="right">103.6</TD>
+</TR>
+<TR>
+<TD class="left">670</TD>
+<TD class="right">103.7</TD>
+</TR>
+<TR>
+<TD class="left">680</TD>
+<TD class="right">103.8</TD>
+</TR>
+<TR>
+<TD class="left">690</TD>
+<TD class="right">103.9</TD>
+</TR>
+<TR>
+<TD class="left">700</TD>
+<TD class="right">104.0</TD>
+</TR>
+<TR>
+<TD class="left">710</TD>
+<TD class="right">104.1</TD>
+</TR>
+<TR>
+<TD class="left">720</TD>
+<TD class="right">104.2</TD>
+</TR>
+<TR>
+<TD class="left">730</TD>
+<TD class="right">104.3</TD>
+</TR>
+<TR>
+<TD class="left">740</TD>
+<TD class="right">104.4</TD>
+</TR>
+<TR>
+<TD class="left">750</TD>
+<TD class="right">104.5</TD>
+</TR>
+<TR>
+<TD class="left">760</TD>
+<TD class="right">104.6</TD>
+</TR>
+<TR>
+<TD class="left">770</TD>
+<TD class="right">104.7</TD>
+</TR>
+<TR>
+<TD class="left">780</TD>
+<TD class="right">104.8</TD>
+</TR>
+<TR>
+<TD class="left">790</TD>
+<TD class="right">104.9</TD>
+</TR>
+<TR>
+<TD class="left">800</TD>
+<TD class="right">105.0</TD>
+</TR>
+<TR>
+<TD class="left">810</TD>
+<TD class="right">105.1</TD>
+</TR>
+<TR>
+<TD class="left">820</TD>
+<TD class="right">105.2</TD>
+</TR>
+<TR>
+<TD class="left">830</TD>
+<TD class="right">105.3</TD>
+</TR>
+<TR>
+<TD class="left">840</TD>
+<TD class="right">105.4</TD>
+</TR>
+<TR>
+<TD class="left">850</TD>
+<TD class="right">105.4</TD>
+</TR>
+<TR>
+<TD class="left">860</TD>
+<TD class="right">105.5</TD>
+</TR>
+<TR>
+<TD class="left">870</TD>
+<TD class="right">105.6</TD>
+</TR>
+<TR>
+<TD class="left">880</TD>
+<TD class="right">105.7</TD>
+</TR>
+<TR>
+<TD class="left">890</TD>
+<TD class="right">105.8</TD>
+</TR>
+<TR>
+<TD class="left">900</TD>
+<TD class="right">105.8</TD>
+</TR>
+<TR>
+<TD class="left">910</TD>
+<TD class="right">105.9</TD>
+</TR>
+<TR>
+<TD class="left">920</TD>
+<TD class="right">106.0</TD>
+</TR>
+<TR>
+<TD class="left">930</TD>
+<TD class="right">106.1</TD>
+</TR>
+<TR>
+<TD class="left">940</TD>
+<TD class="right">106.2</TD>
+</TR>
+<TR>
+<TD class="left">950</TD>
+<TD class="right">106.2</TD>
+</TR>
+<TR>
+<TD class="left">960</TD>
+<TD class="right">106.3</TD>
+</TR>
+<TR>
+<TD class="left">970</TD>
+<TD class="right">106.4</TD>
+</TR>
+<TR>
+<TD class="left">980</TD>
+<TD class="right">106.5</TD>
+</TR>
+<TR>
+<TD class="left">990</TD>
+<TD class="right">106.5</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">999</TD>
+<TD class="right border-bottom-single">106.6</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+</EXTRACT>
+<EXTRACT>
+<HD1>Appendix B to § 1910.95—Methods for Estimating the Adequacy of Hearing Protector Attenuation
+</HD1>
+<HD2>This appendix is Mandatory
+</HD2>
+<P>For employees who have experienced a significant threshold shift, hearing protector attenuation must be sufficient to reduce employee exposure to a TWA of 85 dB. Employers must select one of the following methods by which to estimate the adequacy of hearing protector attenuation.</P>
+<P>The most convenient method is the Noise Reduction Rating (NRR) developed by the Environmental Protection Agency (EPA). According to EPA regulation, the NRR must be shown on the hearing protector package. The NRR is then related to an individual worker's noise environment in order to assess the adequacy of the attenuation of a given hearing protector. This appendix describes four methods of using the NRR to determine whether a particular hearing protector provides adequate protection within a given exposure environment. Selection among the four procedures is dependent upon the employer's noise measuring instruments.</P>
+<P>Instead of using the NRR, employers may evaluate the adequacy of hearing protector attenuation by using one of the three methods developed by the National Institute for Occupational Safety and Health (NIOSH), which are described in the “List of Personal Hearing Protectors and Attenuation Data,” HEW Publication No. 76-120, 1975, pages 21-37. These methods are known as NIOSH methods #1B1, #1B2 and #1B3. The NRR described below is a simplification of NIOSH method #1B2. The most complex method is NIOSH method #1B1, which is probably the most accurate method since it uses the largest amount of spectral information from the individual employee's noise environment. As in the case of the NRR method described below, if one of the NIOSH methods is used, the selected method must be applied to an individual's noise environment to assess the adequacy of the attenuation. Employers should be careful to take a sufficient number of measurements in order to achieve a representative sample for each time segment.</P>
+<NOTE>
+<HED>Note:</HED>
+<P>The employer must remember that calculated attenuation values reflect realistic values only to the extent that the protectors are properly fitted and worn.</P></NOTE>
+<P>When using the NRR to assess hearing protector adequacy, one of the following methods must be used:</P>
+<P>(i) When using a dosimeter that is capable of C-weighted measurements:</P>
+<P>(A) Obtain the employee's C-weighted dose for the entire workshift, and convert to TWA (see appendix A, II).</P>
+<P>(B) Subtract the NRR from the C-weighted TWA to obtain the estimated A-weighted TWA under the ear protector.</P>
+<P>(ii) When using a dosimeter that is not capable of C-weighted measurements, the following method may be used:</P>
+<P>(A) Convert the A-weighted dose to TWA (see appendix A).</P>
+<P>(B) Subtract 7 dB from the NRR.</P>
+<P>(C) Subtract the remainder from the A-weighted TWA to obtain the estimated A-weighted TWA under the ear protector.</P>
+<P>(iii) When using a sound level meter set to the A-weighting network:</P>
+<P>(A) Obtain the employee's A-weighted TWA.</P>
+<P>(B) Subtract 7 dB from the NRR, and subtract the remainder from the A-weighted TWA to obtain the estimated A-weighted TWA under the ear protector.</P>
+<P>(iv) When using a sound level meter set on the C-weighting network:</P>
+<P>(A) Obtain a representative sample of the C-weighted sound levels in the employee's environment.</P>
+<P>(B) Subtract the NRR from the C-weighted average sound level to obtain the estimated A-weighted TWA under the ear protector.</P>
+<P>(v) When using area monitoring procedures and a sound level meter set to the A-weighing network.</P>
+<P>(A) Obtain a representative sound level for the area in question.</P>
+<P>(B) Subtract 7 dB from the NRR and subtract the remainder from the A-weighted sound level for that area.</P>
+<P>(vi) When using area monitoring procedures and a sound level meter set to the C-weighting network:</P>
+<P>(A) Obtain a representative sound level for the area in question.</P>
+<P>(B) Subtract the NRR from the C-weighted sound level for that area.</P></EXTRACT>
+<EXTRACT>
+<HD1>Appendix C to § 1910.95—Audiometric Measuring Instruments
+</HD1>
+<HD2>This appendix is Mandatory
+</HD2>
+<P>1. In the event that pulsed-tone audiometers are used, they shall have a tone on-time of at least 200 milliseconds.</P>
+<P>2. Self-recording audiometers shall comply with the following requirements:</P>
+<P>(A) The chart upon which the audiogram is traced shall have lines at positions corresponding to all multiples of 10 dB hearing level within the intensity range spanned by the audiometer. The lines shall be equally spaced and shall be separated by at least
+<FR>1/4</FR> inch. Additional increments are optional. The audiogram pen tracings shall not exceed 2 dB in width.</P>
+<P>(B) It shall be possible to set the stylus manually at the 10-dB increment lines for calibration purposes.</P>
+<P>(C) The slewing rate for the audiometer attenuator shall not be more than 6 dB/sec except that an initial slewing rate greater than 6 dB/sec is permitted at the beginning of each new test frequency, but only until the second subject response.</P>
+<P>(D) The audiometer shall remain at each required test frequency for 30 seconds (±3 seconds). The audiogram shall be clearly marked at each change of frequency and the actual frequency change of the audiometer shall not deviate from the frequency boundaries marked on the audiogram by more than ±3 seconds.</P>
+<P>(E) It must be possible at each test frequency to place a horizontal line segment parallel to the time axis on the audiogram, such that the audiometric tracing crosses the line segment at least six times at that test frequency. At each test frequency the threshold shall be the average of the midpoints of the tracing excursions.</P></EXTRACT>
+<EXTRACT>
+<HD1>Appendix D to § 1910.95—Audiometric Test Rooms
+</HD1>
+<HD2>This appendix is Mandatory
+</HD2>
+<P>Rooms used for audiometric testing shall not have background sound pressure levels exceeding those in Table D-1 when measured by equipment conforming at least to the Type 2 requirements of American National Standard Specification for Sound Level Meters, S1.4-1971 (R1976), and to the Class II requirements of American National Standard Specification for Octave, Half-Octave, and Third-Octave Band Filter Sets, S1.11-1971 (R1976).</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table D-1—Maximum Allowable Octave-Band Sound Pressure Levels for Audiometric Test Rooms</P></CAPTION>
+<THEAD>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">Octave-band center frequency (Hz)</TD>
+<TD class="right">500</TD>
+<TD class="right">1000</TD>
+<TD class="right">2000</TD>
+<TD class="right">4000</TD>
+<TD class="right">8000</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">Sound pressure level (dB)</TD>
+<TD class="right border-bottom-single">40</TD>
+<TD class="right border-bottom-single">40</TD>
+<TD class="right border-bottom-single">47</TD>
+<TD class="right border-bottom-single">57</TD>
+<TD class="right border-bottom-single">62</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+</EXTRACT>
+<EXTRACT>
+<HD1>Appendix E to § 1910.95—Acoustic Calibration of Audiometers
+</HD1>
+<HD2>This appendix is Mandatory
+</HD2>
+<P>Audiometer calibration shall be checked acoustically, at least annually, according to the procedures described in this appendix. The equipment necessary to perform these measurements is a sound level meter, octave-band filter set, and a National Bureau of Standards 9A coupler. In making these measurements, the accuracy of the calibrating equipment shall be sufficient to determine that the audiometer is within the tolerances permitted by American Standard Specification for Audiometers, S3.6-1969.</P>
+<P>(1) <I>Sound Pressure Output Check</I></P>
+<P>A. Place the earphone coupler over the microphone of the sound level meter and place the earphone on the coupler.</P>
+<P>B. Set the audiometer's hearing threshold level (HTL) dial to 70 dB.</P>
+<P>C. Measure the sound pressure level of the tones at each test frequency from 500 Hz through 6000 Hz for each earphone.</P>
+<P>D. At each frequency the readout on the sound level meter should correspond to the levels in Table E-1 or Table E-2, as appropriate, for the type of earphone, in the column entitled “sound level meter reading.”</P>
+<P>(2) <I>Linearity Check</I></P>
+<P>A. With the earphone in place, set the frequency to 1000 Hz and the HTL dial on the audiometer to 70 dB.</P>
+<P>B. Measure the sound levels in the coupler at each 10-dB decrement from 70 dB to 10 dB, noting the sound level meter reading at each setting.</P>
+<P>C. For each 10-dB decrement on the audiometer the sound level meter should indicate a corresponding 10 dB decrease.</P>
+<P>D. This measurement may be made electrically with a voltmeter connected to the earphone terminals.</P>
+<P>(3) <I>Tolerances</I></P>
+<P>When any of the measured sound levels deviate from the levels in Table E-1 or Table E-2 by ±3 dB at any test frequency between 500 and 3000 Hz, 4 dB at 4000 Hz, or 5 dB at 6000 Hz, an exhaustive calibration is advised. An exhaustive calibration is required if the deviations are greater than 15 dB or greater at any test frequency.</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table E-1—Reference Threshold Levels for Telephonics—TDH-39 Earphones</P></CAPTION>
+<THEAD>
+<TR>
+<TH class="center border-top-single border-bottom-single">Frequency, Hz</TH>
+<TH class="center border-top-single border-bottom-single">Reference threshold level for TDH-39 earphones, dB</TH>
+<TH class="center border-top-single border-bottom-single">Sound level meter reading, dB</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">500</TD>
+<TD class="right">11.5</TD>
+<TD class="right">81.5</TD>
+</TR>
+<TR>
+<TD class="left">1000</TD>
+<TD class="right">7</TD>
+<TD class="right">77</TD>
+</TR>
+<TR>
+<TD class="left">2000</TD>
+<TD class="right">9</TD>
+<TD class="right">79</TD>
+</TR>
+<TR>
+<TD class="left">3000</TD>
+<TD class="right">10</TD>
+<TD class="right">80</TD>
+</TR>
+<TR>
+<TD class="left">4000</TD>
+<TD class="right">9.5</TD>
+<TD class="right">79.5</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">6000</TD>
+<TD class="right border-bottom-single">15.5</TD>
+<TD class="right border-bottom-single">85.5</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table E-2—Reference Threshold Levels for Telephonics—TDH-49 Earphones</P></CAPTION>
+<THEAD>
+<TR>
+<TH class="center border-top-single border-bottom-single">Frequency, Hz</TH>
+<TH class="center border-top-single border-bottom-single">Reference threshold level for TDH-49 earphones, dB</TH>
+<TH class="center border-top-single border-bottom-single">Sound level meter reading, dB</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">500</TD>
+<TD class="right">13.5</TD>
+<TD class="right">83.5</TD>
+</TR>
+<TR>
+<TD class="left">1000</TD>
+<TD class="right">7.5</TD>
+<TD class="right">77.5</TD>
+</TR>
+<TR>
+<TD class="left">2000</TD>
+<TD class="right">11</TD>
+<TD class="right">81.0</TD>
+</TR>
+<TR>
+<TD class="left">3000</TD>
+<TD class="right">9.5</TD>
+<TD class="right">79.5</TD>
+</TR>
+<TR>
+<TD class="left">4000</TD>
+<TD class="right">10.5</TD>
+<TD class="right">80.5</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">6000</TD>
+<TD class="right border-bottom-single">13.5</TD>
+<TD class="right border-bottom-single">83.5</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+</EXTRACT>
+<EXTRACT>
+<HD1>Appendix F to § 1910.95—Calculations and Application of Age Corrections to Audiograms
+</HD1>
+<HD2>This appendix Is Non-Mandatory
+</HD2>
+<P>In determining whether a standard threshold shift has occurred, allowance may be made for the contribution of aging to the change in hearing level by adjusting the most recent audiogram. If the employer chooses to adjust the audiogram, the employer shall follow the procedure described below. This procedure and the age correction tables were developed by the National Institute for Occupational Safety and Health in the criteria document entitled “Criteria for a Recommended Standard . . . Occupational Exposure to Noise,” ((HSM)-11001).</P>
+<P>For each audiometric test frequency;</P>
+<P>(i) Determine from Tables F-1 or F-2 the age correction values for the employee by:</P>
+<P>(A) Finding the age at which the most recent audiogram was taken and recording the corresponding values of age corrections at 1000 Hz through 6000 Hz;</P>
+<P>(B) Finding the age at which the baseline audiogram was taken and recording the corresponding values of age corrections at 1000 Hz through 6000 Hz.</P>
+<P>(ii) Subtract the values found in step (i)(B) from the value found in step (i)(A).</P>
+<P>(iii) The differences calculated in step (ii) represented that portion of the change in hearing that may be due to aging.</P>
+<EXAMPLE>
+<HED>Example:</HED><PSPACE>Employee is a 32-year-old male. The audiometric history for his right ear is shown in decibels below.</PSPACE></EXAMPLE>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<THEAD>
+<TR>
+<TH rowspan="2" class="center border-top-single border-bottom-single">Employee's age</TH>
+<TH colspan="5" class="center border-top-single border-bottom-single">Audiometric test frequency (Hz)</TH>
+</TR>
+<TR>
+<TH class="center border-bottom-single">1000</TH>
+<TH class="center border-bottom-single">2000</TH>
+<TH class="center border-bottom-single">3000</TH>
+<TH class="center border-bottom-single">4000</TH>
+<TH class="center border-bottom-single">6000</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">26</TD>
+<TD class="right">10</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">10</TD>
+<TD class="right">5</TD>
+</TR>
+<TR>
+<TD class="left">*27</TD>
+<TD class="right">0</TD>
+<TD class="right">0</TD>
+<TD class="right">0</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+</TR>
+<TR>
+<TD class="left">28</TD>
+<TD class="right">0</TD>
+<TD class="right">0</TD>
+<TD class="right">0</TD>
+<TD class="right">10</TD>
+<TD class="right">5</TD>
+</TR>
+<TR>
+<TD class="left">29</TD>
+<TD class="right">5</TD>
+<TD class="right">0</TD>
+<TD class="right">5</TD>
+<TD class="right">15</TD>
+<TD class="right">5</TD>
+</TR>
+<TR>
+<TD class="left">30</TD>
+<TD class="right">0</TD>
+<TD class="right">5</TD>
+<TD class="right">10</TD>
+<TD class="right">20</TD>
+<TD class="right">10</TD>
+</TR>
+<TR>
+<TD class="left">31</TD>
+<TD class="right">5</TD>
+<TD class="right">10</TD>
+<TD class="right">20</TD>
+<TD class="right">15</TD>
+<TD class="right">15</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">*32</TD>
+<TD class="right border-bottom-single">5</TD>
+<TD class="right border-bottom-single">10</TD>
+<TD class="right border-bottom-single">10</TD>
+<TD class="right border-bottom-single">25</TD>
+<TD class="right border-bottom-single">20</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+<P>The audiogram at age 27 is considered the baseline since it shows the best hearing threshold levels. Asterisks have been used to identify the baseline and most recent audiogram. A threshold shift of 20 dB exists at 4000 Hz between the audiograms taken at ages 27 and 32.</P>
+<P>(The threshold shift is computed by subtracting the hearing threshold at age 27, which was 5, from the hearing threshold at age 32, which is 25). A retest audiogram has confirmed this shift. The contribution of aging to this change in hearing may be estimated in the following manner:</P>
+<P>Go to Table F-1 and find the age correction values (in dB) for 4000 Hz at age 27 and age 32.</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<THEAD>
+<TR>
+<TH rowspan="2" class="center border-top-single border-bottom-single"> </TH>
+<TH colspan="5" class="center border-top-single border-bottom-single">Frequency (Hz)</TH>
+</TR>
+<TR>
+<TH class="center border-bottom-single">1000</TH>
+<TH class="center border-bottom-single">2000</TH>
+<TH class="center border-bottom-single">3000</TH>
+<TH class="center border-bottom-single">4000</TH>
+<TH class="center border-bottom-single">6000</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">Age 32</TD>
+<TD class="right">6</TD>
+<TD class="right">5</TD>
+<TD class="right">7</TD>
+<TD class="right">10</TD>
+<TD class="right">14</TD>
+</TR>
+<TR>
+<TD class="left">Age 27</TD>
+<TD class="right border-bottom-single">5</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+<TD class="right">7</TD>
+<TD class="right">11</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single primary-indent-hanging-2">Difference</TD>
+<TD class="right border-bottom-single">1</TD>
+<TD class="right border-bottom-single">1</TD>
+<TD class="right border-bottom-single">1</TD>
+<TD class="right border-bottom-single">3</TD>
+<TD class="right border-bottom-single">3</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+<P>The difference represents the amount of hearing loss that may be attributed to aging in the time period between the baseline audiogram and the most recent audiogram. In this example, the difference at 4000 Hz is 3 dB. This value is subtracted from the hearing level at 4000 Hz, which in the most recent audiogram is 25, yielding 22 after adjustment. Then the hearing threshold in the baseline audiogram at 4000 Hz (5) is subtracted from the adjusted annual audiogram hearing threshold at 4000 Hz (22). Thus the age-corrected threshold shift would be 17 dB (as opposed to a threshold shift of 20 dB without age correction).</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table F-1—Age Correction Values in Decibels for Males</P></CAPTION>
+<THEAD>
+<TR>
+<TH rowspan="2" class="center border-top-single border-bottom-single">Years</TH>
+<TH colspan="5" class="center border-top-single border-bottom-single">Audiometric Test Frequencies (Hz)</TH>
+</TR>
+<TR>
+<TH class="center border-bottom-single">1000</TH>
+<TH class="center border-bottom-single">2000</TH>
+<TH class="center border-bottom-single">3000</TH>
+<TH class="center border-bottom-single">4000</TH>
+<TH class="center border-bottom-single">6000</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">20 or younger</TD>
+<TD class="right">5</TD>
+<TD class="right">3</TD>
+<TD class="right">4</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">21</TD>
+<TD class="right">5</TD>
+<TD class="right">3</TD>
+<TD class="right">4</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">22</TD>
+<TD class="right">5</TD>
+<TD class="right">3</TD>
+<TD class="right">4</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">23</TD>
+<TD class="right">5</TD>
+<TD class="right">3</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+<TD class="right">9</TD>
+</TR>
+<TR>
+<TD class="left">24</TD>
+<TD class="right">5</TD>
+<TD class="right">3</TD>
+<TD class="right">5</TD>
+<TD class="right">6</TD>
+<TD class="right">9</TD>
+</TR>
+<TR>
+<TD class="left">25</TD>
+<TD class="right">5</TD>
+<TD class="right">3</TD>
+<TD class="right">5</TD>
+<TD class="right">7</TD>
+<TD class="right">10</TD>
+</TR>
+<TR>
+<TD class="left">26</TD>
+<TD class="right">5</TD>
+<TD class="right">4</TD>
+<TD class="right">5</TD>
+<TD class="right">7</TD>
+<TD class="right">10</TD>
+</TR>
+<TR>
+<TD class="left">27</TD>
+<TD class="right">5</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+<TD class="right">7</TD>
+<TD class="right">11</TD>
+</TR>
+<TR>
+<TD class="left">28</TD>
+<TD class="right">6</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+<TD class="right">8</TD>
+<TD class="right">11</TD>
+</TR>
+<TR>
+<TD class="left">29</TD>
+<TD class="right">6</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+<TD class="right">8</TD>
+<TD class="right">12</TD>
+</TR>
+<TR>
+<TD class="left">30</TD>
+<TD class="right">6</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+<TD class="right">9</TD>
+<TD class="right">12</TD>
+</TR>
+<TR>
+<TD class="left">31</TD>
+<TD class="right">6</TD>
+<TD class="right">4</TD>
+<TD class="right">7</TD>
+<TD class="right">9</TD>
+<TD class="right">13</TD>
+</TR>
+<TR>
+<TD class="left">32</TD>
+<TD class="right">6</TD>
+<TD class="right">5</TD>
+<TD class="right">7</TD>
+<TD class="right">10</TD>
+<TD class="right">14</TD>
+</TR>
+<TR>
+<TD class="left">33</TD>
+<TD class="right">6</TD>
+<TD class="right">5</TD>
+<TD class="right">7</TD>
+<TD class="right">10</TD>
+<TD class="right">14</TD>
+</TR>
+<TR>
+<TD class="left">34</TD>
+<TD class="right">6</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+<TD class="right">11</TD>
+<TD class="right">15</TD>
+</TR>
+<TR>
+<TD class="left">35</TD>
+<TD class="right">7</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+<TD class="right">11</TD>
+<TD class="right">15</TD>
+</TR>
+<TR>
+<TD class="left">36</TD>
+<TD class="right">7</TD>
+<TD class="right">5</TD>
+<TD class="right">9</TD>
+<TD class="right">12</TD>
+<TD class="right">16</TD>
+</TR>
+<TR>
+<TD class="left">37</TD>
+<TD class="right">7</TD>
+<TD class="right">6</TD>
+<TD class="right">9</TD>
+<TD class="right">12</TD>
+<TD class="right">17</TD>
+</TR>
+<TR>
+<TD class="left">38</TD>
+<TD class="right">7</TD>
+<TD class="right">6</TD>
+<TD class="right">9</TD>
+<TD class="right">13</TD>
+<TD class="right">17</TD>
+</TR>
+<TR>
+<TD class="left">39</TD>
+<TD class="right">7</TD>
+<TD class="right">6</TD>
+<TD class="right">10</TD>
+<TD class="right">14</TD>
+<TD class="right">18</TD>
+</TR>
+<TR>
+<TD class="left">40</TD>
+<TD class="right">7</TD>
+<TD class="right">6</TD>
+<TD class="right">10</TD>
+<TD class="right">14</TD>
+<TD class="right">19</TD>
+</TR>
+<TR>
+<TD class="left">41</TD>
+<TD class="right">7</TD>
+<TD class="right">6</TD>
+<TD class="right">10</TD>
+<TD class="right">14</TD>
+<TD class="right">20</TD>
+</TR>
+<TR>
+<TD class="left">42</TD>
+<TD class="right">8</TD>
+<TD class="right">7</TD>
+<TD class="right">11</TD>
+<TD class="right">16</TD>
+<TD class="right">20</TD>
+</TR>
+<TR>
+<TD class="left">43</TD>
+<TD class="right">8</TD>
+<TD class="right">7</TD>
+<TD class="right">12</TD>
+<TD class="right">16</TD>
+<TD class="right">21</TD>
+</TR>
+<TR>
+<TD class="left">44</TD>
+<TD class="right">8</TD>
+<TD class="right">7</TD>
+<TD class="right">12</TD>
+<TD class="right">17</TD>
+<TD class="right">22</TD>
+</TR>
+<TR>
+<TD class="left">45</TD>
+<TD class="right">8</TD>
+<TD class="right">7</TD>
+<TD class="right">13</TD>
+<TD class="right">18</TD>
+<TD class="right">23</TD>
+</TR>
+<TR>
+<TD class="left">46</TD>
+<TD class="right">8</TD>
+<TD class="right">8</TD>
+<TD class="right">13</TD>
+<TD class="right">19</TD>
+<TD class="right">24</TD>
+</TR>
+<TR>
+<TD class="left">47</TD>
+<TD class="right">8</TD>
+<TD class="right">8</TD>
+<TD class="right">14</TD>
+<TD class="right">19</TD>
+<TD class="right">24</TD>
+</TR>
+<TR>
+<TD class="left">48</TD>
+<TD class="right">9</TD>
+<TD class="right">8</TD>
+<TD class="right">14</TD>
+<TD class="right">20</TD>
+<TD class="right">25</TD>
+</TR>
+<TR>
+<TD class="left">49</TD>
+<TD class="right">9</TD>
+<TD class="right">9</TD>
+<TD class="right">15</TD>
+<TD class="right">21</TD>
+<TD class="right">26</TD>
+</TR>
+<TR>
+<TD class="left">50</TD>
+<TD class="right">9</TD>
+<TD class="right">9</TD>
+<TD class="right">16</TD>
+<TD class="right">22</TD>
+<TD class="right">27</TD>
+</TR>
+<TR>
+<TD class="left">51</TD>
+<TD class="right">9</TD>
+<TD class="right">9</TD>
+<TD class="right">16</TD>
+<TD class="right">23</TD>
+<TD class="right">28</TD>
+</TR>
+<TR>
+<TD class="left">52</TD>
+<TD class="right">9</TD>
+<TD class="right">10</TD>
+<TD class="right">17</TD>
+<TD class="right">24</TD>
+<TD class="right">29</TD>
+</TR>
+<TR>
+<TD class="left">53</TD>
+<TD class="right">9</TD>
+<TD class="right">10</TD>
+<TD class="right">18</TD>
+<TD class="right">25</TD>
+<TD class="right">30</TD>
+</TR>
+<TR>
+<TD class="left">54</TD>
+<TD class="right">10</TD>
+<TD class="right">10</TD>
+<TD class="right">18</TD>
+<TD class="right">26</TD>
+<TD class="right">31</TD>
+</TR>
+<TR>
+<TD class="left">55</TD>
+<TD class="right">10</TD>
+<TD class="right">11</TD>
+<TD class="right">19</TD>
+<TD class="right">27</TD>
+<TD class="right">32</TD>
+</TR>
+<TR>
+<TD class="left">56</TD>
+<TD class="right">10</TD>
+<TD class="right">11</TD>
+<TD class="right">20</TD>
+<TD class="right">28</TD>
+<TD class="right">34</TD>
+</TR>
+<TR>
+<TD class="left">57</TD>
+<TD class="right">10</TD>
+<TD class="right">11</TD>
+<TD class="right">21</TD>
+<TD class="right">29</TD>
+<TD class="right">35</TD>
+</TR>
+<TR>
+<TD class="left">58</TD>
+<TD class="right">10</TD>
+<TD class="right">12</TD>
+<TD class="right">22</TD>
+<TD class="right">31</TD>
+<TD class="right">36</TD>
+</TR>
+<TR>
+<TD class="left">59</TD>
+<TD class="right">11</TD>
+<TD class="right">12</TD>
+<TD class="right">22</TD>
+<TD class="right">32</TD>
+<TD class="right">37</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">60 or older</TD>
+<TD class="right border-bottom-single">11</TD>
+<TD class="right border-bottom-single">13</TD>
+<TD class="right border-bottom-single">23</TD>
+<TD class="right border-bottom-single">33</TD>
+<TD class="right border-bottom-single">38</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<CAPTION><P class="title">Table F-2—Age Correction Values in Decibels for Females</P></CAPTION>
+<THEAD>
+<TR>
+<TH rowspan="2" class="center border-top-single border-bottom-single">Years</TH>
+<TH colspan="5" class="center border-top-single border-bottom-single">Audiometric Test Frequencies (Hz)</TH>
+</TR>
+<TR>
+<TH class="center border-bottom-single">1000</TH>
+<TH class="center border-bottom-single">2000</TH>
+<TH class="center border-bottom-single">3000</TH>
+<TH class="center border-bottom-single">4000</TH>
+<TH class="center border-bottom-single">6000</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">20 or younger</TD>
+<TD class="right">7</TD>
+<TD class="right">4</TD>
+<TD class="right">3</TD>
+<TD class="right">3</TD>
+<TD class="right">6</TD>
+</TR>
+<TR>
+<TD class="left">21</TD>
+<TD class="right">7</TD>
+<TD class="right">4</TD>
+<TD class="right">4</TD>
+<TD class="right">3</TD>
+<TD class="right">6</TD>
+</TR>
+<TR>
+<TD class="left">22</TD>
+<TD class="right">7</TD>
+<TD class="right">4</TD>
+<TD class="right">4</TD>
+<TD class="right">4</TD>
+<TD class="right">6</TD>
+</TR>
+<TR>
+<TD class="left">23</TD>
+<TD class="right">7</TD>
+<TD class="right">5</TD>
+<TD class="right">4</TD>
+<TD class="right">4</TD>
+<TD class="right">7</TD>
+</TR>
+<TR>
+<TD class="left">24</TD>
+<TD class="right">7</TD>
+<TD class="right">5</TD>
+<TD class="right">4</TD>
+<TD class="right">4</TD>
+<TD class="right">7</TD>
+</TR>
+<TR>
+<TD class="left">25</TD>
+<TD class="right">8</TD>
+<TD class="right">5</TD>
+<TD class="right">4</TD>
+<TD class="right">4</TD>
+<TD class="right">7</TD>
+</TR>
+<TR>
+<TD class="left">26</TD>
+<TD class="right">8</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">4</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">27</TD>
+<TD class="right">8</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">28</TD>
+<TD class="right">8</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">8</TD>
+</TR>
+<TR>
+<TD class="left">29</TD>
+<TD class="right">8</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">9</TD>
+</TR>
+<TR>
+<TD class="left">30</TD>
+<TD class="right">8</TD>
+<TD class="right">6</TD>
+<TD class="right">5</TD>
+<TD class="right">5</TD>
+<TD class="right">9</TD>
+</TR>
+<TR>
+<TD class="left">31</TD>
+<TD class="right">8</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">5</TD>
+<TD class="right">9</TD>
+</TR>
+<TR>
+<TD class="left">32</TD>
+<TD class="right">9</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">10</TD>
+</TR>
+<TR>
+<TD class="left">33</TD>
+<TD class="right">9</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">10</TD>
+</TR>
+<TR>
+<TD class="left">34</TD>
+<TD class="right">9</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">6</TD>
+<TD class="right">10</TD>
+</TR>
+<TR>
+<TD class="left">35</TD>
+<TD class="right">9</TD>
+<TD class="right">6</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">11</TD>
+</TR>
+<TR>
+<TD class="left">36</TD>
+<TD class="right">9</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">11</TD>
+</TR>
+<TR>
+<TD class="left">37</TD>
+<TD class="right">9</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">12</TD>
+</TR>
+<TR>
+<TD class="left">38</TD>
+<TD class="right">10</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">7</TD>
+<TD class="right">12</TD>
+</TR>
+<TR>
+<TD class="left">39</TD>
+<TD class="right">10</TD>
+<TD class="right">7</TD>
+<TD class="right">8</TD>
+<TD class="right">8</TD>
+<TD class="right">12</TD>
+</TR>
+<TR>
+<TD class="left">40</TD>
+<TD class="right">10</TD>
+<TD class="right">7</TD>
+<TD class="right">8</TD>
+<TD class="right">8</TD>
+<TD class="right">13</TD>
+</TR>
+<TR>
+<TD class="left">41</TD>
+<TD class="right">10</TD>
+<TD class="right">8</TD>
+<TD class="right">8</TD>
+<TD class="right">8</TD>
+<TD class="right">13</TD>
+</TR>
+<TR>
+<TD class="left">42</TD>
+<TD class="right">10</TD>
+<TD class="right">8</TD>
+<TD class="right">9</TD>
+<TD class="right">9</TD>
+<TD class="right">13</TD>
+</TR>
+<TR>
+<TD class="left">43</TD>
+<TD class="right">11</TD>
+<TD class="right">8</TD>
+<TD class="right">9</TD>
+<TD class="right">9</TD>
+<TD class="right">14</TD>
+</TR>
+<TR>
+<TD class="left">44</TD>
+<TD class="right">11</TD>
+<TD class="right">8</TD>
+<TD class="right">9</TD>
+<TD class="right">9</TD>
+<TD class="right">14</TD>
+</TR>
+<TR>
+<TD class="left">45</TD>
+<TD class="right">11</TD>
+<TD class="right">8</TD>
+<TD class="right">10</TD>
+<TD class="right">10</TD>
+<TD class="right">15</TD>
+</TR>
+<TR>
+<TD class="left">46</TD>
+<TD class="right">11</TD>
+<TD class="right">9</TD>
+<TD class="right">10</TD>
+<TD class="right">10</TD>
+<TD class="right">15</TD>
+</TR>
+<TR>
+<TD class="left">47</TD>
+<TD class="right">11</TD>
+<TD class="right">9</TD>
+<TD class="right">10</TD>
+<TD class="right">11</TD>
+<TD class="right">16</TD>
+</TR>
+<TR>
+<TD class="left">48</TD>
+<TD class="right">12</TD>
+<TD class="right">9</TD>
+<TD class="right">11</TD>
+<TD class="right">11</TD>
+<TD class="right">16</TD>
+</TR>
+<TR>
+<TD class="left">49</TD>
+<TD class="right">12</TD>
+<TD class="right">9</TD>
+<TD class="right">11</TD>
+<TD class="right">11</TD>
+<TD class="right">16</TD>
+</TR>
+<TR>
+<TD class="left">50</TD>
+<TD class="right">12</TD>
+<TD class="right">10</TD>
+<TD class="right">11</TD>
+<TD class="right">12</TD>
+<TD class="right">17</TD>
+</TR>
+<TR>
+<TD class="left">51</TD>
+<TD class="right">12</TD>
+<TD class="right">10</TD>
+<TD class="right">12</TD>
+<TD class="right">12</TD>
+<TD class="right">17</TD>
+</TR>
+<TR>
+<TD class="left">52</TD>
+<TD class="right">12</TD>
+<TD class="right">10</TD>
+<TD class="right">12</TD>
+<TD class="right">13</TD>
+<TD class="right">18</TD>
+</TR>
+<TR>
+<TD class="left">53</TD>
+<TD class="right">13</TD>
+<TD class="right">10</TD>
+<TD class="right">13</TD>
+<TD class="right">13</TD>
+<TD class="right">18</TD>
+</TR>
+<TR>
+<TD class="left">54</TD>
+<TD class="right">13</TD>
+<TD class="right">11</TD>
+<TD class="right">13</TD>
+<TD class="right">14</TD>
+<TD class="right">19</TD>
+</TR>
+<TR>
+<TD class="left">55</TD>
+<TD class="right">13</TD>
+<TD class="right">11</TD>
+<TD class="right">14</TD>
+<TD class="right">14</TD>
+<TD class="right">19</TD>
+</TR>
+<TR>
+<TD class="left">56</TD>
+<TD class="right">13</TD>
+<TD class="right">11</TD>
+<TD class="right">14</TD>
+<TD class="right">15</TD>
+<TD class="right">20</TD>
+</TR>
+<TR>
+<TD class="left">57</TD>
+<TD class="right">13</TD>
+<TD class="right">11</TD>
+<TD class="right">15</TD>
+<TD class="right">15</TD>
+<TD class="right">20</TD>
+</TR>
+<TR>
+<TD class="left">58</TD>
+<TD class="right">14</TD>
+<TD class="right">12</TD>
+<TD class="right">15</TD>
+<TD class="right">16</TD>
+<TD class="right">21</TD>
+</TR>
+<TR>
+<TD class="left">59</TD>
+<TD class="right">14</TD>
+<TD class="right">12</TD>
+<TD class="right">16</TD>
+<TD class="right">16</TD>
+<TD class="right">21</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">60 or older</TD>
+<TD class="right border-bottom-single">14</TD>
+<TD class="right border-bottom-single">12</TD>
+<TD class="right border-bottom-single">16</TD>
+<TD class="right border-bottom-single">17</TD>
+<TD class="right border-bottom-single">22</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+</EXTRACT>
+<EXTRACT>
+<HD1>Appendix G to § 1910.95—Monitoring Noise Levels Non-Mandatory Informational Appendix
+</HD1>
+<P>This appendix provides information to help employers comply with the noise monitoring obligations that are part of the hearing conservation amendment.</P>
+<P><E T="04">What is the purpose of noise monitoring?</E></P>
+<P>This revised amendment requires that employees be placed in a hearing conservation program if they are exposed to average noise levels of 85 dB or greater during an 8 hour workday. In order to determine if exposures are at or above this level, it may be necessary to measure or monitor the actual noise levels in the workplace and to estimate the noise exposure or “dose” received by employees during the workday.</P>
+<P><E T="04">When is it necessary to implement a noise monitoring program?</E></P>
+<P>It is not necessary for every employer to measure workplace noise. Noise monitoring or measuring must be conducted only when exposures are at or above 85 dB. Factors which suggest that noise exposures in the workplace may be at this level include employee complaints about the loudness of noise, indications that employees are losing their hearing, or noisy conditions which make normal conversation difficult. The employer should also consider any information available regarding noise emitted from specific machines. In addition, actual workplace noise measurements can suggest whether or not a monitoring program should be initiated.</P>
+<P><E T="04">How is noise measured?</E></P>
+<P>Basically, there are two different instruments to measure noise exposures: the sound level meter and the dosimeter. A sound level meter is a device that measures the intensity of sound at a given moment. Since sound level meters provide a measure of sound intensity at only one point in time, it is generally necessary to take a number of measurements at different times during the day to estimate noise exposure over a workday. If noise levels fluctuate, the amount of time noise remains at each of the various measured levels must be determined.</P>
+<P>To estimate employee noise exposures with a sound level meter it is also generally necessary to take several measurements at different locations within the workplace. After appropriate sound level meter readings are obtained, people sometimes draw “maps” of the sound levels within different areas of the workplace. By using a sound level “map” and information on employee locations throughout the day, estimates of individual exposure levels can be developed. This measurement method is generally referred to as <I>area</I> noise monitoring.</P>
+<P>A dosimeter is like a sound level meter except that it stores sound level measurements and integrates these measurements over time, providing an average noise exposure reading for a given period of time, such as an 8-hour workday. With a dosimeter, a microphone is attached to the employee's clothing and the exposure measurement is simply read at the end of the desired time period. A reader may be used to read-out the dosimeter's measurements. Since the dosimeter is worn by the employee, it measures noise levels in those locations in which the employee travels. A sound level meter can also be positioned within the immediate vicinity of the exposed worker to obtain an individual exposure estimate. Such procedures are generally referred to as <I>personal</I> noise monitoring.</P>
+<P>Area monitoring can be used to estimate noise exposure when the noise levels are relatively constant and employees are not mobile. In workplaces where employees move about in different areas or where the noise intensity tends to fluctuate over time, noise exposure is generally more accurately estimated by the personal monitoring approach.</P>
+<P>In situations where personal monitoring is appropriate, proper positioning of the microphone is necessary to obtain accurate measurements. With a dosimeter, the microphone is generally located on the shoulder and remains in that position for the entire workday. With a sound level meter, the microphone is stationed near the employee's head, and the instrument is usually held by an individual who follows the employee as he or she moves about.</P>
+<P>Manufacturer's instructions, contained in dosimeter and sound level meter operating manuals, should be followed for calibration and maintenance. To ensure accurate results, it is considered good professional practice to calibrate instruments before and after each use.</P>
+<P><E T="04">How often is it necessary to monitor noise levels?</E></P>
+<P>The amendment requires that when there are significant changes in machinery or production processes that may result in increased noise levels, remonitoring must be conducted to determine whether additional employees need to be included in the hearing conservation program. Many companies choose to remonitor periodically (once every year or two) to ensure that all exposed employees are included in their hearing conservation programs.</P>
+<P><E T="04">Where can equipment and technical advice be obtained?</E></P>
+<P>Noise monitoring equipment may be either purchased or rented. Sound level meters cost about $500 to $1,000, while dosimeters range in price from about $750 to $1,500. Smaller companies may find it more economical to rent equipment rather than to purchase it. Names of equipment suppliers may be found in the telephone book (Yellow Pages) under headings such as: “Safety Equipment,” “Industrial Hygiene,” or “Engineers-Acoustical.” In addition to providing information on obtaining noise monitoring equipment, many companies and individuals included under such listings can provide professional advice on how to conduct a valid noise monitoring program. Some audiological testing firms and industrial hygiene firms also provide noise monitoring services. Universities with audiology, industrial hygiene, or acoustical engineering departments may also provide information or may be able to help employers meet their obligations under this amendment.</P>
+<P>Free, on-site assistance may be obtained from OSHA-supported state and private consultation organizations. These safety and health consultative entities generally give priority to the needs of small businesses.</P></EXTRACT>
+<EXTRACT>
+<HD1>Appendix H to § 1910.95—Availability of Referenced Documents
+</HD1>
+<P>Paragraphs (c) through (o) of 29 CFR 1910.95 and the accompanying appendices contain provisions which incorporate publications by reference. Generally, the publications provide criteria for instruments to be used in monitoring and audiometric testing. These criteria are intended to be mandatory when so indicated in the applicable paragraphs of § 1910.95 and appendices.</P>
+<P>It should be noted that OSHA does not require that employers purchase a copy of the referenced publications. Employers, however, may desire to obtain a copy of the referenced publications for their own information.</P>
+<P>The designation of the paragraph of the standard in which the referenced publications appear, the titles of the publications, and the availability of the publications are as follows:</P>
+<DIV width="100%"><DIV class="gpotbl_div">
+<TABLE border="1" cellpadding="1" cellspacing="1" class="gpo_table" frame="void" width="100%">
+<THEAD>
+<TR>
+<TH class="center border-top-single border-bottom-single">Paragraph designation</TH>
+<TH class="center border-top-single border-bottom-single">Referenced publication</TH>
+<TH class="center border-top-single border-bottom-single">Available from—</TH>
+</TR>
+</THEAD>
+<TBODY>
+<TR>
+<TD class="left">Appendix B</TD>
+<TD class="left">“List of Personal Hearing Protectors and Attenuation Data,” HEW Pub. No. 76-120, 1975. NTIS-PB267461</TD>
+<TD class="left">National Technical Information Service, Port Royal Road, Springfield, VA 22161.</TD>
+</TR>
+<TR>
+<TD class="left">Appendix D</TD>
+<TD class="left">“Specification for Sound Level Meters,” S1.4-1971 (R1976)</TD>
+<TD class="left">American National Standards Institute, Inc., 1430 Broadway, New York, NY 10018.</TD>
+</TR>
+<TR>
+<TD class="left">§ 1910.95(k)(2), appendix E</TD>
+<TD class="left">“Specifications for Audiometers,” S3.6-1969</TD>
+<TD class="left">American National Standards Institute, Inc., 1430 Broadway, New York, NY 10018.</TD>
+</TR>
+<TR>
+<TD class="left border-bottom-single">Appendix D</TD>
+<TD class="left border-bottom-single">“Specification for Octave, Half-Octave and Third-Octave Band Filter Sets,” S1.11-1971 (R1976)</TD>
+<TD class="left border-bottom-single">Back Numbers Department, Dept. STD, American Institute of Physics, 333 E. 45th St., New York, NY 10017; American National Standards Institute, Inc., 1430 Broadway, New York, NY 10018.</TD>
+</TR>
+</TBODY>
+</TABLE>
+</DIV></DIV>
+<P>The referenced publications (or a microfiche of the publications) are available for review at many universities and public libraries throughout the country. These publications may also be examined at the OSHA Technical Data Center, Room N2439, United States Department of Labor, 200 Constitution Avenue, NW., Washington, DC 20210, (202) 219-7500 or at any OSHA Regional Office (see telephone directories under United States Government—Labor Department).</P></EXTRACT>
+<EXTRACT>
+<HD1>Appendix I to § 1910.95—Definitions
+</HD1>
+<P>These definitions apply to the following terms as used in paragraphs (c) through (n) of 29 CFR 1910.95.</P>
+<FP-1>Action level—An 8-hour time-weighted average of 85 decibels measured on the A-scale, slow response, or equivalently, a dose of fifty percent.
+</FP-1>
+<FP-1>Audiogram—A chart, graph, or table resulting from an audiometric test showing an individual's hearing threshold levels as a function of frequency.
+</FP-1>
+<FP-1>Audiologist—A professional, specializing in the study and rehabilitation of hearing, who is certified by the American Speech-Language-Hearing Association or licensed by a state board of examiners.
+</FP-1>
+<FP-1>Baseline audiogram—The audiogram against which future audiograms are compared.
+</FP-1>
+<FP-1>Criterion sound level—A sound level of 90 decibels.
+</FP-1>
+<FP-1>Decibel (dB)—Unit of measurement of sound level.
+</FP-1>
+<FP-1>Hertz (Hz)—Unit of measurement of frequency, numerically equal to cycles per second.
+</FP-1>
+<FP-1>Medical pathology—A disorder or disease. For purposes of this regulation, a condition or disease affecting the ear, which should be treated by a physician specialist.
+</FP-1>
+<FP-1>Noise dose—The ratio, expressed as a percentage, of (1) the time integral, over a stated time or event, of the 0.6 power of the measured SLOW exponential time-averaged, squared A-weighted sound pressure and (2) the product of the criterion duration (8 hours) and the 0.6 power of the squared sound pressure corresponding to the criterion sound level (90 dB).
+</FP-1>
+<FP-1>Noise dosimeter—An instrument that integrates a function of sound pressure over a period of time in such a manner that it directly indicates a noise dose.
+</FP-1>
+<FP-1>Otolaryngologist—A physician specializing in diagnosis and treatment of disorders of the ear, nose and throat.
+</FP-1>
+<FP-1>Representative exposure—Measurements of an employee's noise dose or 8-hour time-weighted average sound level that the employers deem to be representative of the exposures of other employees in the workplace.
+</FP-1>
+<FP-1>Sound level—Ten times the common logarithm of the ratio of the square of the measured A-weighted sound pressure to the square of the standard reference pressure of 20 micropascals. Unit: decibels (dB). For use with this regulation, SLOW time response, in accordance with ANSI S1.4-1971 (R1976), is required.
+</FP-1>
+<FP-1>Sound level meter—An instrument for the measurement of sound level.
+</FP-1>
+<FP-1>Time-weighted average sound level—That sound level, which if constant over an 8-hour exposure, would result in the same noise dose as is measured.</FP-1></EXTRACT>
+<CITA TYPE="N">[39 FR 23502, June 27, 1974, as amended at 46 FR 4161, Jan. 16, 1981; 46 FR 62845, Dec. 29, 1981; 48 FR 9776, Mar. 8, 1983; 48 FR 29687, June 28, 1983; 54 FR 24333, June 7, 1989; 61 FR 9236, Mar. 7, 1996; 71 FR 16672, Apr. 3, 2006; 73 FR 75584, Dec. 12, 2008]
+</CITA>
+</DIV8>

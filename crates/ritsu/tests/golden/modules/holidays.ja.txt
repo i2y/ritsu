@@ -3,4 +3,5 @@ modules/holidays/japan/国民の祝日.cal: ok — カレンダー 国民の祝�
 modules/holidays/uk/england_and_wales.cal: ok — カレンダー england_and_wales。表 bank_holidays 83 行、データの範囲 2019-01-01〜2028-12-31
 modules/holidays/uk/northern_ireland.cal: ok — カレンダー northern_ireland。表 bank_holidays 103 行、データの範囲 2019-01-01〜2028-12-31
 modules/holidays/uk/scotland.cal: ok — カレンダー scotland。表 bank_holidays 94 行、データの範囲 2019-01-01〜2028-12-31
-ritsu check: ファイル 5 個（koyomi 5）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+modules/holidays/us/federal_holidays.cal: ok — カレンダー federal_holidays。表 federal_holidays 110 行、データの範囲 2021-01-01〜2030-12-31
+ritsu check: ファイル 6 個（koyomi 6）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所

@@ -1,0 +1,8 @@
+calendar federal_holidays v1
+description "The federal holidays of the United States, as the Office of Personnel Management lists them: the legal public holidays of 5 U.S.C. 6103, on the days an employee who works Monday to Friday has them. Inauguration Day, a holiday only around Washington, D.C., is left out. Weekends are left open: the calendar that uses this one closes its own. No offset: the country has several time zones and daylight saving time, so this calendar gives dates only"
+
+source federal_holidays = file "data/federal_holidays.csv" sha256:194cb4a1ff46ed4b
+  format csv
+  covers 2021-01-01..2030-12-31
+
+closed federal_holidays

@@ -1,11 +1,11 @@
 {
   "ritsu": "0.41.0",
   "module": "ghcr.io/i2y/ritsu-holidays",
-  "version": "1.0.0",
-  "digest": "sha256:63574d495cab7743d4d95357dad7af94d4e5753505ec59887055f36bc9cb48c1",
-  "files_digest": "sha256:60adefdcd89193f42e53b44edc8d03ab1c1056576ab4657436728ea14be776cf",
+  "version": "1.1.0",
+  "digest": "sha256:6b1809bd0a0a66199bb04eeb92109d97d7c30da86ce696d54cab468eb9333c94",
+  "files_digest": "sha256:bed2c8908acd5f5b19e01ed25fd5ab678338d285bf04feb3a16b51070108fcc8",
   "pushed": "dry-run",
-  "reference": "ghcr.io/i2y/ritsu-holidays@sha256:63574d495cab7743d4d95357dad7af94d4e5753505ec59887055f36bc9cb48c1",
-  "sign": "cosign sign --yes ghcr.io/i2y/ritsu-holidays@sha256:63574d495cab7743d4d95357dad7af94d4e5753505ec59887055f36bc9cb48c1",
+  "reference": "ghcr.io/i2y/ritsu-holidays@sha256:6b1809bd0a0a66199bb04eeb92109d97d7c30da86ce696d54cab468eb9333c94",
+  "sign": "cosign sign --yes ghcr.io/i2y/ritsu-holidays@sha256:6b1809bd0a0a66199bb04eeb92109d97d7c30da86ce696d54cab468eb9333c94",
   "error": null
 }

@@ -1,0 +1,40 @@
+rule receipt_stamp_duty v1
+description "The stamp duty on a receipt for money or securities received for the price of goods sold (a Class 17, item 1 document). Receipts under 50,000 yen and those not related to business are exempt"
+
+inputs
+  amount   : money[JPY]  range >=0JPY <=1_000_000_000_000JPY
+  stated   : bool
+  business : bool
+
+outputs
+  tax : money[JPY]  round down(1JPY)
+
+table tax_table  # Source: National Tax Agency, Tax Answer No. 7141, List of stamp duty amounts (part 2), Class 17 documents (laws and regulations as of 1 April 2026)
+policy unique
+| business | stated | amount                             | -> tax : money[JPY] |
+| false    | -      | -                                  | 0JPY                |  # Not related to business: exempt
+| true     | false  | -                                  | 200JPY              |  # No amount stated on the receipt
+| true     | true   | <50_000JPY                         | 0JPY                |  # Exempt
+| true     | true   | >=50_000JPY <=1_000_000JPY         | 200JPY              |
+| true     | true   | >1_000_000JPY <=2_000_000JPY       | 400JPY              |
+| true     | true   | >2_000_000JPY <=3_000_000JPY       | 600JPY              |
+| true     | true   | >3_000_000JPY <=5_000_000JPY       | 1000JPY             |
+| true     | true   | >5_000_000JPY <=10_000_000JPY      | 2000JPY             |
+| true     | true   | >10_000_000JPY <=20_000_000JPY     | 4000JPY             |
+| true     | true   | >20_000_000JPY <=30_000_000JPY     | 6000JPY             |
+| true     | true   | >30_000_000JPY <=50_000_000JPY     | 10_000JPY           |
+| true     | true   | >50_000_000JPY <=100_000_000JPY    | 20_000JPY           |
+| true     | true   | >100_000_000JPY <=200_000_000JPY   | 40_000JPY           |
+| true     | true   | >200_000_000JPY <=300_000_000JPY   | 60_000JPY           |
+| true     | true   | >300_000_000JPY <=500_000_000JPY   | 100_000JPY          |
+| true     | true   | >500_000_000JPY <=1_000_000_000JPY | 150_000JPY          |
+| true     | true   | >1_000_000_000JPY                  | 200_000JPY          |
+
+examples
+| amount       | stated | business | -> tax |
+| 49_999JPY    | true   | true     | 0JPY   |  # Under 50,000 yen is exempt
+| 50_000JPY    | true   | true     | 200JPY |
+| 1_000_000JPY | true   | true     | 200JPY |  # 1,000,000 yen or less
+| 1_000_001JPY | true   | true     | 400JPY |  # More than 1,000,000 yen
+| 0JPY         | false  | true     | 200JPY |  # No amount stated
+| 3_000_000JPY | true   | false    | 0JPY   |  # Not related to business

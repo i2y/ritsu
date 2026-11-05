@@ -1,0 +1,42 @@
+rule osha_noise v1
+description "The daily exposure to continuous noise a workplace may permit, from Table G-16 of 29 CFR 1910.95"
+
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.95" sha256:f83a1303a004b5ae
+
+inputs
+  level : sound[dB]  range >=90dB <=130dB
+
+outputs
+  permitted : duration[min]  round down(1min)
+
+# Table G-16 lists nine levels and the time permitted at each: 8 hours at 90 dBA, 6 at 92,
+# and so on down to a quarter of an hour at 115. A level between two of the listed ones is
+# read here as **the shorter of the two** — 91 dBA is given the 92 dBA row — and that is a
+# decision made here, not in the text. The appendix says the reference duration "is computed
+# by" a formula, but the formula is a picture in the document and no text of it comes out of
+# the copy; rounding the other way would permit longer exposure than the formula does, which
+# is the wrong direction to be wrong in.
+table exposure  @osha "§1910.95"
+policy first
+| level          | -> permitted : duration[min] |
+| <=90dB         | 480min                       |
+| >90dB <=92dB   | 360min                       |
+| >92dB <=95dB   | 240min                       |
+| >95dB <=97dB   | 180min                       |
+| >97dB <=100dB  | 120min                       |
+| >100dB <=102dB | 90min                        |
+| >102dB <=105dB | 60min                        |
+| >105dB <=110dB | 30min                        |
+| -              | 15min                        |
+
+examples
+| level | -> permitted |
+| 90dB  | 480min       |
+| 92dB  | 360min       |
+| 95dB  | 240min       |
+| 100dB | 120min       |
+| 105dB | 60min        |
+| 110dB | 30min        |
+| 115dB | 15min        |
+| 91dB  | 360min       |

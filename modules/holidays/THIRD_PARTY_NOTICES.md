@@ -3,6 +3,22 @@
 The module carries copies of public data, kept as their sources served them. Each keeps the terms
 of its source, as below. The calendars read the copies, and pin each by its SHA-256.
 
+## The federal holidays of the United States, from the Office of Personnel Management
+
+[us/data/opm-holidays.ics](us/data/opm-holidays.ics) is, byte for byte, the iCalendar file
+<https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/holidays.ics>, linked from the
+page Federal Holidays (<https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/>), taken
+on 2026-11-05. Its SHA-256 is
+`cdeffe3623a51a971cde823df0994864c84825a57dd2726d7ffe984e389a75c0`. The file is stamped as it is
+served, so a later download has another digest.
+
+[us/data/federal_holidays.csv](us/data/federal_holidays.csv) holds its dates and names as a table
+koyomi reads, from which Inauguration Day is left out: under 5 U.S.C. 6103(c) it is a holiday only
+around Washington, D.C. The dates are those 5 U.S.C. 6103(a) and (b) give for 2021 to 2030.
+
+Both are, or are made from, a work of the United States government, under no copyright in the United
+States (17 U.S.C. 105).
+
 ## The national holidays of Japan, from the Cabinet Office
 
 [japan/data/syukujitsu.csv](japan/data/syukujitsu.csv) is, byte for byte, the file

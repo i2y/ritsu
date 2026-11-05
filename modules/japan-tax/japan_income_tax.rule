@@ -1,0 +1,31 @@
+rule japan_income_tax v1
+description "The quick-calculation table of income tax. It multiplies the taxable income by the rate, subtracts the deduction, and adds the special income tax for reconstruction"
+
+inputs
+  taxable : money[JPY]  range >=1000JPY <=10_000_000_000JPY  # The amount after dropping the fraction below 1,000 yen. The table starts at 1,000 yen
+
+outputs
+  tax    : money[JPY]  round down(1JPY)  # Taxable income is in units of 1,000 yen and the rates are whole percents, so no fraction arises
+  surtax : money[JPY]  round down(1JPY)  # 2.1% of the base income tax amount. The page says nothing about a fraction below one yen, so round down is a placeholder
+
+# The table is written as "from 1,000 yen to 1,949,000 yen" and "from 1,950,000 yen". Taxable income is in units of 1,000 yen, so
+# the top of each band is the same as just before the start of the next. Here it is written as "below the start of the next band".
+table brackets  # Source: National Tax Agency, Tax Answer No. 2260, Income tax rates (laws and regulations as of 1 April 2026)
+policy unique
+| taxable                        | -> rate : rate[step 1%] | deduction : money[JPY] |
+| <1_950_000JPY                  | 5%                      | 0JPY                   |
+| >=1_950_000JPY <3_300_000JPY   | 10%                     | 97_500JPY              |
+| >=3_300_000JPY <6_950_000JPY   | 20%                     | 427_500JPY             |
+| >=6_950_000JPY <9_000_000JPY   | 23%                     | 636_000JPY             |
+| >=9_000_000JPY <18_000_000JPY  | 33%                     | 1_536_000JPY           |
+| >=18_000_000JPY <40_000_000JPY | 40%                     | 2_796_000JPY           |
+| >=40_000_000JPY                | 45%                     | 4_796_000JPY           |
+
+define tax : money[JPY] = taxable * rate - deduction
+define surtax : money[JPY] = tax * 2.1%  # Source: the same page, "2.1 percent of the base income tax amount"
+
+examples
+| taxable      | -> tax     | surtax    |
+| 7_000_000JPY | 974_000JPY | 20_454JPY |  # The same page's worked example: 7,000,000 yen * 0.23 - 636,000 yen = 974,000 yen
+| 1_949_000JPY | 97_450JPY  | 2046JPY   |  # The top of the 5% band. 2,046.45 yen, rounded down (a placeholder)
+| 1_950_000JPY | 97_500JPY  | 2047JPY   |  # The bottom of the 10% band. Thanks to the deduction it differs from the row above by only 50 yen

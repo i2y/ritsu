@@ -1,0 +1,60 @@
+rule pension_insurance_premium v1
+description "The employees' pension insurance premium. From the monthly pay it takes the standard monthly remuneration, multiplies by the rate and halves it, and gives the amount deducted from salary and the amount paid in cash"
+
+source agency = file "sources/nenkin/R08ryougaku.xlsx" sha256:462a199ad4f3b69c  # Japan Pension Service, premium table of employees' pension insurance from September 2020 (paid in October), fiscal 2026 edition
+  表1 sha256:09a23ce9620373c4
+
+inputs
+  monthly : money[JPY]  range >=0JPY <=10_000_000JPY
+  rate    : rate[step 0.1%]  range >=0% <=30%  # 18.3% for general members, miners and seamen. Members of an employees' pension fund pay 13.3% to 15.9% depending on the fund, so it is an input
+
+outputs
+  std    : money[JPY]  round down(1JPY)
+  deduct : money[JPY]  round half_down(1JPY)  # Source: note (1) of the premium table. Deducted from salary, 50 sen or less is rounded down and more than 50 sen up
+  cash   : money[JPY]  round half_up(1JPY)    # Source: note (2) of the premium table. Paid in cash, less than 50 sen is rounded down and 50 sen or more up
+
+table grade  @agency 表1  # Copied from grades 1 to 32 of the premium table as they are
+policy unique
+| monthly                  | -> std : money[JPY] |
+| <93_000JPY               | 88_000JPY           |
+| >=93_000JPY <101_000JPY  | 98_000JPY           |
+| >=101_000JPY <107_000JPY | 104_000JPY          |
+| >=107_000JPY <114_000JPY | 110_000JPY          |
+| >=114_000JPY <122_000JPY | 118_000JPY          |
+| >=122_000JPY <130_000JPY | 126_000JPY          |
+| >=130_000JPY <138_000JPY | 134_000JPY          |
+| >=138_000JPY <146_000JPY | 142_000JPY          |
+| >=146_000JPY <155_000JPY | 150_000JPY          |
+| >=155_000JPY <165_000JPY | 160_000JPY          |
+| >=165_000JPY <175_000JPY | 170_000JPY          |
+| >=175_000JPY <185_000JPY | 180_000JPY          |
+| >=185_000JPY <195_000JPY | 190_000JPY          |
+| >=195_000JPY <210_000JPY | 200_000JPY          |
+| >=210_000JPY <230_000JPY | 220_000JPY          |
+| >=230_000JPY <250_000JPY | 240_000JPY          |
+| >=250_000JPY <270_000JPY | 260_000JPY          |
+| >=270_000JPY <290_000JPY | 280_000JPY          |
+| >=290_000JPY <310_000JPY | 300_000JPY          |
+| >=310_000JPY <330_000JPY | 320_000JPY          |
+| >=330_000JPY <350_000JPY | 340_000JPY          |
+| >=350_000JPY <370_000JPY | 360_000JPY          |
+| >=370_000JPY <395_000JPY | 380_000JPY          |
+| >=395_000JPY <425_000JPY | 410_000JPY          |
+| >=425_000JPY <455_000JPY | 440_000JPY          |
+| >=455_000JPY <485_000JPY | 470_000JPY          |
+| >=485_000JPY <515_000JPY | 500_000JPY          |
+| >=515_000JPY <545_000JPY | 530_000JPY          |
+| >=545_000JPY <575_000JPY | 560_000JPY          |
+| >=575_000JPY <605_000JPY | 590_000JPY          |
+| >=605_000JPY <635_000JPY | 620_000JPY          |
+| >=635_000JPY             | 650_000JPY          |
+
+define half : money[JPY] = std * rate / 2  # Half of the full amount. The fraction below one yen is settled by the rounding of the two outputs above
+define deduct : money[JPY] = half
+define cash : money[JPY] = half
+
+examples
+| monthly    | rate  | -> std     | deduct    | cash      |
+| 90_000JPY  | 18.3% | 88_000JPY  | 8052JPY   | 8052JPY   |  # Grade 1 of the table. The full amount is 16,104.00 yen, half is 8,052.00 yen
+| 250_000JPY | 18.3% | 260_000JPY | 23_790JPY | 23_790JPY |  # Grade 17 of the table. 250,000 yen or more and less than 270,000 yen
+| 700_000JPY | 18.3% | 650_000JPY | 59_475JPY | 59_475JPY |  # Grade 32 of the table (the top). Half is 59,475.00 yen

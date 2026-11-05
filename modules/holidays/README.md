@@ -1,20 +1,21 @@
 # ritsu-holidays
 
-The public holidays of the United Kingdom and of Japan, as calendars of koyomi, for a module of
-ritsu to use. Each calendar closes the holidays and nothing else. Which other days a business is
+The public holidays of the United States, the United Kingdom and Japan, as calendars of koyomi, for
+a module of ritsu to use. Each calendar closes the holidays and nothing else. Which other days a business is
 closed (Saturdays and Sundays, the days between Christmas and the New Year) is for the calendar
 that uses it to say.
 
 | File | Calendar | Holidays | Known from the data |
 |---|---|---|---|
+| `us/federal_holidays.cal` | `federal_holidays` | The federal holidays of the United States, on the days an employee who works Monday to Friday has them | 2021-01-01 to 2030-12-31 |
 | `uk/england_and_wales.cal` | `england_and_wales` | The bank holidays of England and Wales | 2019-01-01 to 2028-12-31 |
 | `uk/scotland.cal` | `scotland` | The bank holidays of Scotland | 2019-01-01 to 2028-12-31 |
 | `uk/northern_ireland.cal` | `northern_ireland` | The bank holidays of Northern Ireland | 2019-01-01 to 2028-12-31 |
 | `japan/national_holidays.cal` | `national_holidays` | The national holidays of Japan and the other days off under the Act on National Holidays | 1955-01-01 to 2027-12-31 |
 | `japan/国民の祝日.cal` | `国民の祝日` | The same, in Japanese | 1955-01-01 to 2027-12-31 |
 
-The calendars of the United Kingdom have no offset: the three nations have daylight saving time,
-so they give dates only. The calendars of Japan have the offset `+09:00`. Whether a day outside
+The calendars of the United States and the United Kingdom have no offset: they have daylight saving
+time, so they give dates only. The calendars of Japan have the offset `+09:00`. Whether a day outside
 the range its data knows is a holiday is not known, and koyomi says so rather than guessing.
 
 ## Use
@@ -22,11 +23,11 @@ the range its data knows is a holiday is not known, and koyomi says so rather th
 Require the module, and the line that checks its signature:
 
 ```console
-$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
+$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.1.0
 ```
 
 ```
-require holidays oci "ghcr.io/i2y/ritsu-holidays" 1.0.0
+require holidays oci "ghcr.io/i2y/ritsu-holidays" 1.1.0
 signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
 ```
 
@@ -42,9 +43,14 @@ closed weekly sat, sun
 
 ## Data
 
-Each data file is, byte for byte, the file its publisher serves, and each calendar pins it by its
-SHA-256. `THIRD_PARTY_NOTICES.md` says where each was taken from, when, and under which terms.
+Each calendar pins its data file by its SHA-256. `THIRD_PARTY_NOTICES.md` says where each was taken
+from, when, and under which terms. The files of the United Kingdom and Japan are, byte for byte, the
+files their publishers serve.
 
+- `us/data/federal_holidays.csv`: the dates of the Office of Personnel Management's iCalendar file
+  (<https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/holidays.ics>), with
+  Inauguration Day left out, as koyomi reads a table in CSV. `us/data/opm-holidays.ics` is the file as
+  it was served. It is a work of the United States government.
 - `uk/data/bank-holidays.json`: GOV.UK's bank holidays (<https://www.gov.uk/bank-holidays.json>),
   under the Open Government Licence v3.0. Contains public sector information licensed under the
   Open Government Licence v3.0.

@@ -412,6 +412,31 @@ fn a_dry_run_gives_the_same_digest_every_time() {
     assert!(!t.exists("curl.log"), "the dry run called curl");
 }
 
+/// `push --dry-run` of each seed module of the repository (`modules/`, DESIGN 17.18), as the job of
+/// modules.yml that pushes nothing runs it: it passes, and says the name the module goes out under.
+#[test]
+fn every_seed_module_s_dry_run_passes() {
+    let t = TempDir::new("oci-seeds-dry-run");
+    executable(&t.write("bin/curl", format!("#!/bin/sh\necho called >> '{}'\nexit 7\n", t.path().join("curl.log").display())));
+    let path = format!("{}:{}", t.path().join("bin").display(), std::env::var("PATH").unwrap_or_default());
+    let mut seen = 0;
+    for e in std::fs::read_dir(here().join("../../modules")).unwrap() {
+        let dir = e.unwrap().path();
+        let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+        c.current_dir(&dir).args(["mod", "push", "--dry-run"]).env(store::VARIABLE, t.path().join("store")).env("DOCKER_CONFIG", t.path().join("docker")).env("PATH", &path);
+        for v in LANG_VARS {
+            c.env_remove(v);
+        }
+        let (code, out, err) = said(c.output().unwrap());
+        assert_eq!((code, err.as_str()), (0, ""), "{}:\n{out}", dir.display());
+        let name = format!("ghcr.io/i2y/ritsu-{}", dir.file_name().unwrap().to_string_lossy());
+        assert!(out.contains(&name), "{name}:\n{out}");
+        seen += 1;
+    }
+    assert_eq!(seen, 7);
+    assert!(!t.exists("curl.log"), "a dry run called curl");
+}
+
 /// `push --dry-run` of the seed module of the repository (`modules/holidays`, DESIGN 17.18), run
 /// where it is: the digest a publication would give, held to golden files written on macOS, which the
 /// platforms level holds Linux to. A change to a file of the module, or to its `ritsu >=` line, gives

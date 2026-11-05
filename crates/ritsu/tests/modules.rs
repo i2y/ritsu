@@ -13,10 +13,12 @@
 //! held to golden files, and stopped by a tree that cannot be read; `ritsu run --with` the root of a
 //! module, which merges the contributions of the whole tree; the page `ritsu rulec doc` draws of a
 //! dependency's rule, which names the module of the rule it applies; and the page each language draws
-//! of a file that names a dependency's, which names the module of that file. The seed module of the
-//! repository (`modules/holidays`, DESIGN 17.18): its data files and their pins, which are koyomi's
-//! example's, its check, held to golden files, and the workflow that publishes it, which runs by
-//! hand only.
+//! of a file that names a dependency's, which names the module of that file. The seed modules of the
+//! repository (`modules/`, DESIGN 17.18): the data files and pins of `modules/holidays`, which are
+//! koyomi's example's, and its table of the United States, which is the file of the Office of
+//! Personnel Management beside it; its check, held to golden files; the check of each module, what
+//! its `ritsu.mod` and its READMEs say of it, and the notices of what it copies; and the workflow that
+//! publishes them, which runs by hand only.
 
 use ritsu_base::modules::lock::{Lock, Locked};
 use ritsu_base::modules::semver::Version;
@@ -1086,7 +1088,7 @@ fn pins(dir: &Path) -> std::collections::BTreeSet<(String, String, String)> {
             } else if p.extension().is_some_and(|x| x == "cal") {
                 for line in std::fs::read_to_string(&p).unwrap().lines().filter(|l| l.starts_with("source ")) {
                     let quoted: Vec<&str> = line.split('"').collect();
-                    let (file, url) = (quoted[1], quoted[3]);
+                    let (file, url) = (quoted[1], quoted.get(3).copied().unwrap_or_default());
                     let sha = line.rsplit("sha256:").next().unwrap().trim();
                     let name = file.rsplit('/').next().unwrap();
                     out.insert((name.to_string(), url.to_string(), sha.to_string()));
@@ -1109,20 +1111,109 @@ fn the_seed_module_holds_the_data_and_the_pins_of_koyomi_s_example() {
         assert!(a == b, "modules/holidays/{ours} is not the bytes of crates/koyomi/examples/calendars/{theirs}");
     }
     let (ours, theirs) = (pins(&seed), pins(&koyomi));
+    assert_eq!(ours.len(), 3, "{ours:?}");
+    // the table of the United States is the module's own (the next test)
+    let ours: std::collections::BTreeSet<_> = ours.into_iter().filter(|(name, ..)| name != "federal_holidays.csv").collect();
     assert_eq!(ours.len(), 2, "{ours:?}");
     assert!(ours.is_subset(&theirs), "the seed module pins {ours:?}, and koyomi's example {theirs:?}");
-    // five calendars, which close the holidays and nothing else: no weekend
+    // six calendars, which close the holidays and nothing else: no weekend
     let mut cals = 0;
-    for f in ["uk/england_and_wales.cal", "uk/scotland.cal", "uk/northern_ireland.cal", "japan/national_holidays.cal", "japan/国民の祝日.cal"] {
+    for f in ["us/federal_holidays.cal", "uk/england_and_wales.cal", "uk/scotland.cal", "uk/northern_ireland.cal", "japan/national_holidays.cal", "japan/国民の祝日.cal"] {
         let text = std::fs::read_to_string(seed.join(f)).unwrap();
         assert!(!text.contains("closed weekly"), "{f} closes a day of the week");
         cals += 1;
     }
-    assert_eq!(cals, 5);
+    assert_eq!(cals, 6);
+}
+
+/// The table of the federal holidays of the United States holds the dates and the names of the
+/// iCalendar file of the Office of Personnel Management beside it, less Inauguration Day, which is a
+/// holiday only around Washington, D.C. koyomi reads a table in CSV, and the file is stamped as it
+/// is served, so its pin would not hold from one download to the next.
+#[test]
+fn the_federal_holidays_are_those_of_the_file_beside_them() {
+    let data = repo().join("modules/holidays/us/data");
+    let ics = std::fs::read_to_string(data.join("opm-holidays.ics")).unwrap().replace("\r\n", "\n").replace("\n ", "");
+    let mut want: Vec<(String, String)> = Vec::new();
+    let events = ics.split("BEGIN:VEVENT\n").skip(1);
+    assert_eq!(events.clone().count(), 112, "the file has another number of events");
+    for event in events {
+        let field = |head: &str| event.lines().find_map(|l| l.strip_prefix(head)).unwrap_or_else(|| panic!("an event has no {head}:\n{event}"));
+        let (date, name) = (field("DTSTART;VALUE=DATE:"), field("SUMMARY:").replace("\\,", ",").replace('\u{2019}', "'"));
+        if name != "Inauguration Day" {
+            want.push((format!("{}-{}-{}", &date[..4], &date[4..6], &date[6..]), name));
+        }
+    }
+    want.sort();
+    let csv = std::fs::read_to_string(data.join("federal_holidays.csv")).unwrap();
+    let got: Vec<(String, String)> = csv.lines().skip(1).map(|l| l.split_once(',').unwrap()).map(|(d, n)| (d.to_string(), n.trim_matches('"').to_string())).collect();
+    assert_eq!(got, want, "us/data/federal_holidays.csv is not the file beside it");
+    assert_eq!((got.len(), got[0].0.as_str(), got[got.len() - 1].0.as_str()), (110, "2021-01-01", "2030-12-25"));
+}
+
+/// Every module of `modules/`, which modules.yml publishes and the list of modules shows: its check
+/// passes; its `ritsu.mod` says what a list and a page show of it, under the name the list's line
+/// expects (website/modules.list); both its READMEs give the command that adds it, at its version,
+/// and the line that checks its signature, and the files their tables name are there; and its notices
+/// name each copy of a source it carries.
+#[test]
+fn every_seed_module_passes_and_says_how_it_is_added() {
+    let empty = TempDir::new("modules-seeds");
+    let mut dirs: Vec<String> = std::fs::read_dir(repo().join("modules")).unwrap().map(|e| e.unwrap()).filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    dirs.sort();
+    assert_eq!(dirs, ["holidays", "japan-social-insurance", "japan-tax", "late-payment", "osha", "uk-rates", "us-income-tax"]);
+    for dir in &dirs {
+        let (code, out, err) = ritsu_in(&repo(), empty.path(), &["check", &format!("modules/{dir}")]);
+        assert_eq!((code, err.as_str()), (0, ""), "{dir}:\n{out}");
+        let here = repo().join("modules").join(dir);
+        let read = |f: &str| std::fs::read_to_string(here.join(f)).unwrap_or_else(|e| panic!("modules/{dir}/{f}: {e}"));
+        let manifest = read("ritsu.mod");
+        let field = |head: &str| manifest.lines().find_map(|l| l.strip_prefix(head)).unwrap_or_else(|| panic!("modules/{dir}/ritsu.mod has no `{head}`"));
+        assert_eq!(field("module "), format!("ghcr.io/i2y/ritsu-{dir}"));
+        let version = field("version ");
+        for head in ["description \"", "ritsu >=", "license \""] {
+            field(head);
+        }
+        assert_eq!(field("source "), "\"https://github.com/i2y/ritsu\"");
+        let short = dir.replace('-', "_");
+        for readme in ["README.md", "README.ja.md"] {
+            let text = read(readme);
+            for says in [format!("ritsu mod add {short} ghcr.io/i2y/ritsu-{dir}@{version}"), format!("signature \"ghcr.io/i2y/ritsu-{dir}\" by matching ")] {
+                assert!(text.contains(&says), "modules/{dir}/{readme} does not say `{says}`");
+            }
+            let mut named = 0;
+            for row in text.lines().filter(|l| l.starts_with("| `")) {
+                for file in row.split('`').skip(1).step_by(2).filter(|w| [".rule", ".cal", ".kn"].iter().any(|x| w.ends_with(x))) {
+                    assert!(here.join(file).is_file(), "modules/{dir}/{readme} names {file}");
+                    named += 1;
+                }
+            }
+            assert!(named > 0, "modules/{dir}/{readme} has no table of its files");
+        }
+        // the copies of sources: what `sources` and `data` hold, less the tables taken out of a copy
+        // and the note of a law's revision, which the notices give in their text
+        let notices = read("THIRD_PARTY_NOTICES.md");
+        let mut stack = vec![here.clone()];
+        let mut copies = 0;
+        while let Some(d) = stack.pop() {
+            for p in std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().path()) {
+                let rel = p.strip_prefix(&here).unwrap().to_string_lossy().into_owned();
+                if p.is_dir() {
+                    if !rel.ends_with(".fragments") {
+                        stack.push(p);
+                    }
+                } else if rel.split('/').any(|c| c == "sources" || c == "data") && !rel.ends_with("revision.txt") {
+                    assert!(notices.contains(&rel), "modules/{dir}/THIRD_PARTY_NOTICES.md does not name {rel}");
+                    copies += 1;
+                }
+            }
+        }
+        assert!(copies > 0, "modules/{dir} carries no copy of a source");
+    }
 }
 
 /// `ritsu check modules/holidays`, from the root of the repository, in English and in Japanese and
-/// as JSON, held to golden files: the five calendars pass, and the module has no dependency.
+/// as JSON, held to golden files: the six calendars pass, and the module has no dependency.
 #[test]
 fn the_seed_module_passes_its_check() {
     let empty = TempDir::new("modules-seed");
@@ -1136,7 +1227,7 @@ fn the_seed_module_passes_its_check() {
     assert_eq!(code, 0, "{out}");
     golden("tests/golden/modules/holidays.json", &out, &mut failures);
     let v = json(&out);
-    assert_eq!((v["module"]["name"].as_str(), v["files"].as_array().map(Vec::len)), (Some("ghcr.io/i2y/ritsu-holidays"), Some(5)));
+    assert_eq!((v["module"]["name"].as_str(), v["files"].as_array().map(Vec::len)), (Some("ghcr.io/i2y/ritsu-holidays"), Some(6)));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
