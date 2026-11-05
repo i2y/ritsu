@@ -2,8 +2,8 @@
 
 A module is a directory with a `ritsu.mod`: a project that other projects require, from a directory
 beside them, a git repository or an OCI registry, and whose files they read by `@<name>/…` paths.
-The modules published from ritsu's repository are on [the list of modules](modules/list/), with
-their versions, the pages of their files and what changed between versions.
+The modules published from ritsu's repository are on [the list of modules](modules/list/), where you
+can search them, read and try what they hold, and see what changed between versions.
 
 A project checks the files it requires with its own files, with each language's check and the checks
 across the languages, so a proof does not stop at a module's edge. The examples on this page are the
@@ -81,15 +81,15 @@ version that is not a pre-release). It writes the `require` line after the last 
 
 ```console
 $ ritsu mod add pricing ../pricing
-$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
+$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.1.0
 $ ritsu mod add rates https://example.com/acme/rates@1.2.0
 $ ritsu mod get holidays@latest
 $ ritsu mod remove holidays
 ```
 
-The name is the requiring project's to choose: it is what the project's files write after `@`. The
-`ritsu mod add` line on [the list of modules](modules/list/) calls the module of holidays
-`ritsu_holidays`, after its repository; this page, like the module's README, calls it `holidays`.
+The name is the requiring project's to choose: it is what the project's files write after `@`.
+[The list of modules](modules/list/), this page and the module's README all call the module of
+holidays `holidays`.
 
 `ritsu mod get <name>@<version>` changes the version of a dependency from a registry or a git
 repository, and `ritsu mod remove <name>` removes its line. The three write `ritsu.mod` and
@@ -252,7 +252,7 @@ Run these in a step before ritsu's, and give the step that runs `ritsu mod fetch
 ```console
 $ cd modules/holidays
 $ ritsu mod push --dry-run
-built ghcr.io/i2y/ritsu-holidays 1.0.0, and pushed nothing (`--dry-run`)
+built ghcr.io/i2y/ritsu-holidays 1.1.0, and pushed nothing (`--dry-run`)
 …
 ```
 
@@ -272,20 +272,10 @@ built ghcr.io/i2y/ritsu-holidays 1.0.0, and pushed nothing (`--dry-run`)
    `cosign sign` command that signs it.
 
 Log in with `docker login` first: ritsu, like cosign, reads the credentials Docker keeps. The
-workflow that publishes this repository's module,
+workflow that publishes this repository's modules,
 [.github/workflows/modules.yml](https://github.com/i2y/ritsu/blob/main/.github/workflows/modules.yml),
-checks the module, pushes it to ghcr.io, signs it with cosign without a key, and checks the
-signature as a module that requires it would.
-
-`ritsu mod site <list> --out <dir>` writes a site that lists modules, as
-[the list of modules](modules/list/) on this site: a page for each module and each version, the
-page of each file, what changed from the version before, the `ritsu mod add` line, and a button
-that opens a version in the playground. The list file has the lines `title`, `description`,
-`playground`, `module` (a module on a registry, every version of which is fetched and checked),
-`git` (a module shared by git, as `git "<URL>"` or `git "<URL>" dir "<dir>"`, every tag of which is
-fetched and checked), `signature` (as in `ritsu.mod`) and `local` (a working tree not pushed yet).
-It exits 1 when a version does not pass its checks, and 2 when the list does not read or a registry
-or a repository cannot be reached.
+checks a module, pushes it to ghcr.io, signs it with cosign without a key, and checks the signature
+as a module that requires it would.
 
 ## Signatures
 
@@ -320,6 +310,123 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
   and says to run `ritsu mod fetch`.
 - ritsu checks the signatures of modules from registries alone. A line that covers a module from git
   is E309: narrow its start, or take the module from a registry.
+
+## A site that lists modules
+
+`ritsu mod site <list> --out <dir>` writes a site that lists modules, as
+[the list of modules](modules/list/) on this site. It holds no account and no server: the modules
+stay where they are published, and the command fetches every version, checks its digests, its
+signature and `ritsu check`, and writes static pages. The list's page searches the modules and what
+they hold. A module's page has what it holds, its README, the rules and calendars to try on the page,
+what changed from the version before, its versions and files, each file's code with its lines numbered
+and coloured, the steps that add it, what was checked, and a button that opens the version in the
+playground. The list file has these lines:
+
+| Line | What it says |
+|---|---|
+| `title`, `description` | The list's name, in the heading of its page and the header of every page, and the sentence under the heading; left out, each language has its own |
+| `playground` | The URL of the page that opens a version; left out, this site's |
+| `contribute` | An https URL the list's page links to, for those who want a module listed; left out, no link |
+| `module "<name>"` | A module on a registry, every version of which is fetched and checked |
+| `git "<URL>"`, `git "<URL>" dir "<dir>"` | A module shared by git, every tag of which is fetched and checked |
+| `local "<dir>"` | A working tree not pushed yet, from the list's directory |
+| `signature` | As in `ritsu.mod`: what checks the versions of the modules it covers, and not a module from git |
+
+A `module`, `git` or `local` line can end with `as "<name>"`: the steps on the page add the module
+under that name, and without it under the last part of its name. `--lang` picks the language of the
+pages, and `--alternate <lang>=<path>` links each page to the same page of the site in another
+language, by the path from this site's root. The command exits 1 when a version cannot be verified,
+which its page says, and 2 when the list does not read or a registry or a repository cannot be
+reached. A version that does not pass `ritsu check` is shown as it is, with what the check said.
+
+### A list of your own on GitHub Pages
+
+The site needs no server, so a list of your own modules can go out from your own repository. Put a
+list file in it, `modules.list` here, and this workflow beside it, set
+**Settings → Pages → Source** to **GitHub Actions**, and push them.
+
+```text
+# modules.list
+title "Acme's modules"
+description "The rules and calendars the Acme shop shares."
+module "ghcr.io/acme/ritsu-pricing" as "pricing"
+signature "ghcr.io/acme/" by matching "^https://github[.]com/acme/" issuer "https://token.actions.githubusercontent.com"
+```
+
+```yaml
+# .github/workflows/ritsu-modules.yml
+name: ritsu modules
+on:
+  push:
+    branches: [main]
+    paths: [modules.list, .github/workflows/ritsu-modules.yml]
+  pull_request:
+    paths: [modules.list]
+  schedule:
+    - cron: "17 21 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: i2y/ritsu@v0.41.0
+        with:
+          cosign: true
+      - run: ritsu mod site modules.list --out site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+```
+
+- It builds the site once a day as well, for the versions your modules have published since. A run
+  that cannot read the list or verify a version publishes nothing, and the site stays as it was. A
+  pull request builds the pages and stops there.
+- The job that builds can only read: it writes pages from what the modules hold. Only the job that
+  deploys can write to Pages.
+- `cosign: true` puts cosign on the PATH for the `signature` lines. A list with none can leave it
+  out.
+
+The `run:` line is yours. For both languages from one root, make it two:
+
+```text
+ritsu mod site modules.list --out site --lang en --alternate ja=ja
+ritsu mod site modules.list --out site/ja --lang ja --alternate en=..
+```
+
+To publish from a branch instead, commit what `--out` wrote at the root of what the branch publishes:
+the command writes a `.nojekyll` there, so that `_site/` gets through.
+
+Before you publish:
+
+- **The pages hold everything in a module, code included.** With no credentials, a private module
+  stops the command and nothing is written. A step that logs in to the registry makes it readable,
+  and then its code is on the pages. A site on GitHub Pages can be private only for an organization
+  on GitHub Enterprise Cloud.
+- **A schedule can stop.** In a public repository, GitHub disables scheduled workflows after 60 days
+  with no activity, and new versions stop showing. A list in the repository that publishes its
+  modules stays active; elsewhere, turn the workflow on again from the Actions tab.
+- **`<owner>.github.io` is one origin** for all of that owner's project sites. The pages write what a
+  module holds as text and run none of it, but to list other people's modules, give the site a domain
+  of its own, so that a mistake there cannot touch your other pages.
 
 ## What raising a version changes
 

@@ -1,6 +1,6 @@
 # モジュール
 
-モジュールは `ritsu.mod` を持つディレクトリです。ほかのプロジェクトが、横のディレクトリ、git のリポジトリ、OCI のレジストリのどれかから足して、そのファイルを `@<名前>/…` のパスで読みます。ritsu のリポジトリから配るモジュールは、[モジュールの一覧](modules/list/)に、版、ファイルごとのページ、版のあいだの差とともに載せています。
+モジュールは `ritsu.mod` を持つディレクトリです。ほかのプロジェクトが、横のディレクトリ、git のリポジトリ、OCI のレジストリのどれかから足して、そのファイルを `@<名前>/…` のパスで読みます。ritsu のリポジトリから配るモジュールは、[モジュールの一覧](modules/list/)に載せています。そこで検索し、持つものを読んで試し、版のあいだの差を見られます。
 
 プロジェクトは、依存のファイルを、自分のファイルと一緒に、各言語の検査と言語をまたぐ検査にかけます。そのため、証明はモジュールの境目でも切れません。このページの例は、ritsu のテストの三つのモジュール [crates/ritsu/tests/projects/modules.ja](https://github.com/i2y/ritsu/tree/main/crates/ritsu/tests/projects/modules.ja) です。`tax`（ディレクトリは `税`）は付加価値税の税率を、`pricing`（`価格`）は送料と注文の合計を持ちます。注文の合計は `tax` の税率を準用します。`shop`（`店`）は注文のフローとかごを持ち、その値段を `pricing` で決めます。
 
@@ -56,13 +56,13 @@ apply 付加価値税(vat) = "@tax/規則/付加価値税率.rule" meaning:35d5c
 
 ```console
 $ ritsu mod add pricing ../価格
-$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
+$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.1.0
 $ ritsu mod add rates https://example.com/acme/rates@1.2.0
 $ ritsu mod get holidays@latest
 $ ritsu mod remove holidays
 ```
 
-名前は、依存を足す側が決めます。プロジェクトのファイルが `@` のあとに書く名前です。このサイトの[モジュールの一覧](modules/list/)の `ritsu mod add` の行は、祝日のモジュールをリポジトリの名前から `ritsu_holidays` と呼びますが、このページは、モジュールの README と同じく `holidays` と呼びます。
+名前は、依存を足す側が決めます。プロジェクトのファイルが `@` のあとに書く名前です。このサイトの[モジュールの一覧](modules/list/)も、このページも、モジュールの README も、祝日のモジュールを `holidays` と呼びます。
 
 `ritsu mod get <名前>@<版>` はレジストリか git のリポジトリから取る依存の版を変え、`ritsu mod remove <名前>` は依存の行を消します。三つのコマンドは、`ritsu.mod` と `ritsu.lock` をそろって書くか、どちらも書かないかのどちらかで、`ritsu.mod` のほかの行と注はそのまま残します。
 
@@ -158,7 +158,7 @@ git config --global credential.https://example.com.helper '!f() { test "$1" = ge
 ```console
 $ cd modules/holidays
 $ ritsu mod push --dry-run --lang ja
-ghcr.io/i2y/ritsu-holidays 1.0.0 の成果物を作りました（`--dry-run` なので、送っていません）
+ghcr.io/i2y/ritsu-holidays 1.1.0 の成果物を作りました（`--dry-run` なので、送っていません）
 …
 ```
 
@@ -170,8 +170,6 @@ ghcr.io/i2y/ritsu-holidays 1.0.0 の成果物を作りました（`--dry-run` �
 6. レジストリに無いものを送り、参照（`<名前>@sha256:…`）と、署名する `cosign sign` のコマンドを出します。
 
 先に `docker login` でログインしておきます。ritsu も cosign も、Docker が持つ資格情報を読みます。このリポジトリのモジュールを公開するワークフロー [.github/workflows/modules.yml](https://github.com/i2y/ritsu/blob/main/.github/workflows/modules.yml) は、モジュールを検査し、ghcr.io に送り出し、鍵を持たずに cosign で署名し、使う側のモジュールと同じ形で署名を確かめます。
-
-`ritsu mod site <一覧のファイル> --out <ディレクトリ>` は、このサイトの[モジュールの一覧](modules/list/)のような、モジュールを並べるサイトを書きます。モジュールごと、版ごとのページ、ファイルごとのページ、一つ前の版からの差、`ritsu mod add` の行、版をブラウザで試すページで開くボタンを作ります。一覧のファイルに書く行は、`title`、`description`、`playground`、`module`（レジストリのモジュール。全部の版を取り出して確かめます）、`git`（git で共有するモジュール。`git "<URL>"` か `git "<URL>" dir "<ディレクトリ>"` と書き、全部のタグを取り出して確かめます）、`signature`（`ritsu.mod` と同じ）、`local`（まだ送り出していない作業ツリー）です。確かめを通らない版があれば exit 1、一覧のファイルが読めないか、レジストリかリポジトリに届かなければ exit 2 で終わります。
 
 ## 署名
 
@@ -198,6 +196,97 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
 - モジュールに効くのは、手元のモジュールの行と、そのモジュールを直に `require` しているモジュールの行です。効く行は全部通らなければなりません。
 - `ritsu mod fetch` は、モジュールを置き場に置く前に PATH の cosign を走らせ、確かめたことを置き場に記録します。`ritsu check` は cosign を走らせません。効く行が記録に無ければ、`ritsu mod fetch` を走らせるよう言って止まります。
 - ritsu が署名を確かめるのは、レジストリから取るモジュールだけです。git から取るモジュールに当たる行は E309 です。行の頭の部分を狭めるか、そのモジュールをレジストリから取ってください。
+
+## モジュールを並べるサイト
+
+`ritsu mod site <一覧のファイル> --out <ディレクトリ>` は、このサイトの[モジュールの一覧](modules/list/)のような、モジュールを並べるサイトを書きます。アカウントもサーバーも持ちません。モジュールは公開した場所に置いたままで、コマンドが全部の版を取ってきて、ダイジェスト、署名、`ritsu check` を確かめ、静的なページを書きます。一覧のページでは、モジュールとその持つものを検索できます。モジュールのページには、持つもの、README、その場で試せる規則とカレンダー、一つ前の版からの差、版とファイルの一覧、行番号と色の付いた各ファイルのコード、足し方の手順、確かめたこと、版をブラウザで試すページで開くボタンがあります。一覧のファイルには、次の行を書きます。
+
+| 行 | 言うこと |
+|---|---|
+| `title`、`description` | 一覧の名前（一覧のページの見出しと、全部のページのヘッダーに出ます）と、見出しの下の文。書かなければ、言語ごとの決まった文を使います |
+| `playground` | 版を開くページの URL。書かなければ、このサイトのものです |
+| `contribute` | 載せたい人のために一覧のページがリンクする、https の URL。書かなければリンクを出しません |
+| `module "<名前>"` | レジストリのモジュール。全部の版を取ってきて確かめます |
+| `git "<URL>"`、`git "<URL>" dir "<ディレクトリ>"` | git で共有するモジュール。全部のタグを取ってきて確かめます |
+| `local "<ディレクトリ>"` | まだ送り出していない作業ツリー。一覧のファイルのディレクトリから数えます |
+| `signature` | `ritsu.mod` と同じで、当てはまるモジュールの版を確かめます。git のモジュールには当てられません |
+
+`module`、`git`、`local` の行は、最後に `as "<名前>"` を付けられます。ページの手順は、モジュールをその名前で足します。付けなければ、モジュールの名前の最後の部分で足します。`--lang` でページの言語を決め、`--alternate <言語>=<パス>` で、別の言語のサイトの同じページへリンクします。パスはこのサイトのルートから数えます。確かめられない版があれば、そのページにそう書いて exit 1、一覧のファイルが読めないか、レジストリかリポジトリに届かなければ exit 2 で終わります。`ritsu check` に通らない版は、検査の出力を添えてそのまま見せます。
+
+### 自分の一覧を GitHub Pages に出す
+
+サーバーが要らないので、自分のモジュールの一覧を自分のリポジトリから出せます。一覧のファイル（ここでは `modules.list`）と次のワークフローを置き、**Settings → Pages → Source** を **GitHub Actions** にして、push します。
+
+```text
+# modules.list
+title "Acme のモジュール"
+description "Acme の店が共有する規則とカレンダーです。"
+module "ghcr.io/acme/ritsu-pricing" as "pricing"
+signature "ghcr.io/acme/" by matching "^https://github[.]com/acme/" issuer "https://token.actions.githubusercontent.com"
+```
+
+```yaml
+# .github/workflows/ritsu-modules.yml
+name: ritsu modules
+on:
+  push:
+    branches: [main]
+    paths: [modules.list, .github/workflows/ritsu-modules.yml]
+  pull_request:
+    paths: [modules.list]
+  schedule:
+    - cron: "17 21 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: i2y/ritsu@v0.41.0
+        with:
+          cosign: true
+      - run: ritsu mod site modules.list --out site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+```
+
+- 毎日一回、定時にも組み直すので、モジュールが出した新しい版が載ります。一覧を読めない回や、確かめられない版がある回は何も公開せず、サイトは前のままです。プルリクエストでは、ページを組むところまでで止まります。
+- 組むジョブは読むことしかできません。モジュールが持つものからページを書くからです。Pages に書けるのは、公開するジョブだけです。
+- `cosign: true` は、`signature` の行を確かめる cosign を PATH に足します。`signature` の行がなければ要りません。
+
+`run:` の行は自由に変えられます。一つのサイトで英語と日本語の両方を出すなら、次の二行にします。
+
+```text
+ritsu mod site modules.list --out site --lang en --alternate ja=ja
+ritsu mod site modules.list --out site/ja --lang ja --alternate en=..
+```
+
+ブランチから公開するなら、`--out` で書いたものを、そのブランチが公開する場所のルートに置いてコミットします。コマンドがそこに `.nojekyll` を書くので、`_site/` も公開されます。
+
+公開する前に、次の三つを確かめてください。
+
+- **ページにはモジュールの中身がコードまで全部載ります。** 資格情報なしでは、非公開のモジュールを読めずにコマンドが止まり、何も書きません。レジストリにログインするステップを足すと読めるようになり、コードがページに載ります。GitHub Pages のサイトを非公開にできるのは、GitHub Enterprise Cloud の組織だけです。
+- **定時の実行は止まることがあります。** 公開リポジトリでは、60 日動きがないと GitHub が定時のワークフローを無効にし、新しい版が載らなくなります。モジュールを公開するリポジトリに一覧を置けば止まりにくくなります。それ以外では、Actions のタブから有効に戻します。
+- **`<owner>.github.io` は、その持ち主のプロジェクトサイト全部で同じオリジンです。** ページはモジュールの持つものを文字として書き、そこから何も走らせません。それでも、ほかの人のモジュールを載せるなら、サイトに独自のドメインを付けてください。万一のときに、ほかのページに影響しないようにするためです。
 
 ## 版を上げると何が変わるか
 

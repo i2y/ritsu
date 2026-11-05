@@ -395,15 +395,21 @@ repository is published by pushing a tag `v<version>` (`<dir>/v<version>`) on a 
 `ritsu.mod` gives that version. Do not move a tag once pushed: the locks of others pin its commit,
 and `ritsu mod fetch` fails when that commit is gone.
 
-**A site that lists modules**: `ritsu mod site <list> --out <dir>` writes a page for each version of
-each module a list file names, with the pages of its files and what changed from the version
-before. A line of the list starts with `title`, `description`, `playground` (the page that runs
-ritsu in the browser; `--playground <URL>` gives it too), `module` (`"<registry>/<repository>"`),
-`git` (`"<URL>"`, then `dir "<dir>"` for a module in a directory of the repository), `signature`
-(as in `ritsu.mod`, checked on every version; it cannot cover a module from git) or `local` (a
-directory not pushed yet, from the list's directory). It exits 1 when a version cannot be verified
-(its page says so), and 2, writing nothing, when the list does not read (it names each wrong line),
-a registry or a repository cannot be reached, or cosign is needed and missing.
+**A site that lists modules**: `ritsu mod site <list> --out <dir>` writes static pages: a list that
+searches the modules and what they hold, and for each version of each module its README, the rules
+and calendars to try on the page, what changed from the version before, the steps that add it, and
+the pages and the code of its files. A line of the list starts with `title`, `description`, `playground` (the page
+that runs ritsu in the browser; `--playground <URL>` gives it too), `contribute` (an https URL the list
+links to, for those who want a module listed), `module` (`"<registry>/<repository>"`), `git`
+(`"<URL>"`, then `dir "<dir>"` for a module in a directory of the repository), `signature` (as in
+`ritsu.mod`, checked on every version; it cannot cover a module from git) or `local` (a directory not
+pushed yet, from the list's directory). `module`, `git` and `local` can end with `as "<name>"`, the
+name the steps add it under. `--alternate <lang>=<path>` links each page to the same page of the site
+in another language. It exits 1 when a version cannot be verified (its page says so), and 2, writing
+nothing, when the list does not read (it names each wrong line), a registry or a repository cannot be
+reached, or cosign is needed and missing. To publish your own list from GitHub Actions, install with the
+action `i2y/ritsu` and its input `cosign: true`, run the command, and deploy the directory; the guide to
+modules has the workflow.
 
 **In the npm package**, which reaches no network, the commands that reach a registry or run git or
 cosign (`add`, `get`, `fetch`, `versions`, `push`, `report` and `site`, and `lock`, `remove` and

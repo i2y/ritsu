@@ -664,12 +664,18 @@ keys, credential helpers and `url.<base>.insteadOf` work as they do for `git fet
 not let git ask for a password on the terminal.
 
 `ghcr.io/i2y/ritsu-holidays` is a module of this repository,
-[modules/holidays](modules/holidays/README.md): the public holidays of the United Kingdom and of
-Japan, as calendars of koyomi, with the data pinned to what GOV.UK and the Cabinet Office publish.
+[modules/holidays](modules/holidays/README.md): the public holidays of the United States, the United
+Kingdom and Japan, as calendars of koyomi, with the data pinned to what their governments publish.
 Its calendars close the holidays and nothing else. A calendar of your own reads one with
 `use calendar "@holidays/uk/england_and_wales.cal"` and closes your weekends itself, with
-`closed weekly sat, sun`. [The list of modules](https://i2y.github.io/ritsu/modules/list/) shows
-each version of it, with a page for each file and what changed from the version before.
+`closed weekly sat, sun`. The other modules under [modules/](modules) hold rules transcribed from the
+laws of those countries: limits on workplace safety, income tax, stamp duty, social insurance, the
+minimum wage and the charges on a late payment.
+[The list of modules](https://i2y.github.io/ritsu/modules/list/) searches them, and for each version
+shows what it holds, lets you try its rules and calendars on the page, and says what changed from the
+version before.
+`ritsu mod site` writes the same pages for a list of your own, and
+[the guide to modules](https://i2y.github.io/ritsu/modules/) has the workflow that publishes them to GitHub Pages.
 
 ### What raising a dependency changes
 

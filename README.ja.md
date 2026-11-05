@@ -553,7 +553,7 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
 
 レジストリの資格情報は、Docker の設定ファイル（`docker login` と資格情報のヘルパーが書くもの）から読み、どの出力にも出しません。git のリポジトリの資格情報は git のものです。ssh の鍵、資格情報のヘルパー、`url.<base>.insteadOf` が `git fetch` と同じく効きます。git が端末でパスワードを聞くことはありません。
 
-`ghcr.io/i2y/ritsu-holidays` は、このリポジトリのモジュール [modules/holidays](modules/holidays/README.ja.md) です。英国と日本の祝日を koyomi のカレンダーにしたもので、データは GOV.UK と内閣府が公表するファイルに固定しています。このカレンダーが閉じるのは祝日だけです。自分のカレンダーで `use calendar "@holidays/japan/国民の祝日.cal"` と書いて読み、土日は `closed weekly sat, sun` で自分で閉じます。[モジュールの一覧](https://i2y.github.io/ritsu/ja/modules/list/)には、版ごとに、ファイルごとのページと、一つ前の版からの差が載ります。
+`ghcr.io/i2y/ritsu-holidays` は、このリポジトリのモジュール [modules/holidays](modules/holidays/README.ja.md) です。米国、英国、日本の祝日を koyomi のカレンダーにしたもので、データは各国の政府が公表するものに固定しています。このカレンダーが閉じるのは祝日だけです。自分のカレンダーで `use calendar "@holidays/japan/国民の祝日.cal"` と書いて読み、土日は `closed weekly sat, sun` で自分で閉じます。[modules/](modules) のほかのモジュールは、これらの国の法令を書き写した規則です。労働安全の基準、所得税、印紙税、社会保険料、最低賃金、支払い遅延の請求があります。[モジュールの一覧](https://i2y.github.io/ritsu/ja/modules/list/)では、これらを検索でき、版ごとに、持つものを読み、規則とカレンダーをその場で試し、一つ前の版からの差を見られます。`ritsu mod site` は自分の一覧にも同じページを書き、[モジュールの案内](https://i2y.github.io/ritsu/ja/modules/)に GitHub Pages へ出すワークフローがあります。
 
 ### 依存を上げると何が変わるか
 

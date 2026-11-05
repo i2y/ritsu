@@ -211,8 +211,11 @@ fn the_workflow_of_the_report_is_one_and_installs_this_version() {
     let want = workflows(&readmes[0]);
     assert_eq!(want.len(), 1, "README.md shows one workflow");
     assert!(want[0].iter().any(|l| l.contains("ritsu mod report --base")), "the workflow runs `ritsu mod report`");
-    for p in readmes.iter().chain(&guide) {
-        assert_eq!(workflows(p), want, "{} shows another workflow than README.md", p.name);
+    assert_eq!(workflows(&readmes[1]), want, "README.ja.md shows another workflow than README.md");
+    // the guide has the workflow that publishes a list of modules beside it (tests/website.rs)
+    for p in &guide {
+        let report: Vec<Vec<String>> = workflows(p).into_iter().filter(|w| w.iter().any(|l| l.contains("ritsu mod report --base"))).collect();
+        assert_eq!(report, want, "{} shows another workflow than README.md", p.name);
     }
     let version = format!("i2y/ritsu@v{}", env!("CARGO_PKG_VERSION"));
     let mut wrong = Vec::new();

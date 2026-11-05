@@ -48,8 +48,9 @@
 //! - the configurations name the URL each site is published at, under /ritsu/, and ritsu's
 //!   repository;
 //! - .github/workflows/docs.yml runs on a push to main that changes what the site is built from,
-//!   and by hand, and installs the cosign tools.yml installs, which the list of modules checks the
-//!   seed module's signatures with;
+//!   once a day and by hand, and installs the cosign tools.yml installs, which the list of modules
+//!   checks the seed modules' signatures with; only its job that deploys writes anything, and
+//!   modules-list.yml, which checks a pull request on the list, holds no permission at all;
 //! - the nav and the home page of each language's site lead to ritsu's playground in the site's
 //!   language, on a project the playground lists in that language; and the pages the playgrounds of
 //!   rulec's and dandori's sites had (`playground.md` in each language) send a reader on to the same
@@ -457,21 +458,66 @@ fn the_configurations_name_where_each_site_is_published() {
 }
 
 #[test]
-fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_and_by_hand() {
+fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_once_a_day_and_by_hand() {
     let text = read(&root().join(".github/workflows/docs.yml"));
-    let mut lines = text.lines().skip_while(|l| *l != "on:");
-    assert_eq!(lines.next(), Some("on:"), "docs.yml has no `on:`");
-    let triggers: Vec<&str> = lines.take_while(|l| l.is_empty() || l.starts_with(' ')).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
-    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \"crates/chobo/docs/**\"", "- \"modules/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
-    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's and chobo's sync.sh copy in, the modules its list shows, and itself), and by hand");
+    let triggers = triggers_of(&text, "docs.yml");
+    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \"crates/chobo/docs/**\"", "- \"modules/**\"", "- \".github/workflows/docs.yml\"", "schedule:", "- cron: \"0 21 * * *\"", "workflow_dispatch:"];
+    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's and chobo's sync.sh copy in, the modules its list shows, and itself), once a day for the versions the list's modules have published since, and by hand");
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
-    // the list of modules checks the signatures of the seed module (DESIGN 17.17), with the cosign
+    // the list of modules checks the signatures of the seed modules (DESIGN 17.17), with the cosign
     // tools.yml installs
+    installs_the_cosign_of_tools(&text, "docs.yml");
+    // the job that builds reads what the modules of the list hold, and can write nothing
+    assert_eq!(permissions_of(&text, 0), ["contents: read"], "docs.yml's jobs read the repository, unless one says otherwise");
+    assert_eq!(permissions_of(&text, 4), ["pages: write", "id-token: write"], "the one job of docs.yml that writes is the one that deploys");
+    let before_deploy = text.split("\n  deploy:\n").next().unwrap();
+    assert!(!before_deploy.split("\njobs:\n").nth(1).unwrap().contains("permissions:"), "the job of docs.yml that builds asks for no permission of its own");
+}
+
+/// The list of modules takes changes by pull request (DESIGN 17.17): the workflow that checks one
+/// runs from a fork as it is, so it asks for no permission but to read, and it writes the pages as
+/// build.sh writes them.
+#[test]
+fn the_workflow_that_checks_a_pull_request_on_the_list_of_modules_holds_no_permission() {
+    let text = read(&root().join(".github/workflows/modules-list.yml"));
+    assert_eq!(triggers_of(&text, "modules-list.yml"), ["pull_request:", "paths:", "- \"website/modules.list\"", "- \".github/workflows/modules-list.yml\""], "modules-list.yml runs on a pull request that changes the list, and no other way");
+    assert_eq!(permissions_of(&text, 0), ["contents: read"], "modules-list.yml reads the repository");
+    assert_eq!(text.matches("permissions:").count(), 1, "no job of modules-list.yml asks for more");
+    assert!(!text.contains("secrets."), "modules-list.yml holds no secret");
+    assert!(!text.contains("pull_request_target"), "modules-list.yml runs with the permissions of a fork");
+    installs_the_cosign_of_tools(&text, "modules-list.yml");
+    let build = read(&website().join("build.sh"));
+    for (out, lang) in [("build/modules/list", "en"), ("build/ja/modules/list", "ja")] {
+        let line = |file: &str, prefix: &str| -> String {
+            let found = file.lines().map(str::trim).find(|l| l.starts_with(prefix) && l.contains(&format!("--out {out} --lang {lang}")));
+            found.unwrap_or_else(|| panic!("no `mod site` for {out}")).to_string()
+        };
+        assert_eq!(line(&text, "\"$RITSU\" mod site").replace("$RITSU", "$ritsu"), line(&build, "\"$ritsu\" mod site"), "modules-list.yml writes the list as build.sh does");
+    }
+}
+
+/// What starts a workflow, the lines under its `on:`.
+fn triggers_of<'a>(text: &'a str, file: &str) -> Vec<&'a str> {
+    let mut lines = text.lines().skip_while(|l| *l != "on:");
+    assert_eq!(lines.next(), Some("on:"), "{file} has no `on:`");
+    lines.take_while(|l| l.is_empty() || l.starts_with(' ')).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect()
+}
+
+/// The lines of the `permissions:` block a workflow has at an indentation.
+fn permissions_of(text: &str, indent: usize) -> Vec<&str> {
+    let head = format!("{}permissions:", " ".repeat(indent));
+    let inner = " ".repeat(indent + 2);
+    let lines = text.lines().skip_while(|l| *l != head).skip(1);
+    lines.take_while(|l| l.starts_with(&inner)).map(str::trim).collect()
+}
+
+/// A workflow installs the cosign tools.yml installs, the same URL and checksum.
+fn installs_the_cosign_of_tools(text: &str, file: &str) {
     let tools = read(&root().join(".github/workflows/tools.yml"));
     let pinned: Vec<&str> = text.lines().filter(|l| l.contains("/sigstore/cosign/releases/download/") || l.contains("| sha256sum -c -")).collect();
-    assert_eq!(pinned.len(), 2, "docs.yml does not install cosign as tools.yml does: {pinned:?}");
+    assert_eq!(pinned.len(), 2, "{file} does not install cosign as tools.yml does: {pinned:?}");
     for line in pinned {
-        assert!(tools.lines().any(|t| t == line), "tools.yml installs another cosign than docs.yml's\n{line}");
+        assert!(tools.lines().any(|t| t == line), "tools.yml installs another cosign than {file}'s\n{line}");
     }
 }
 
@@ -1121,8 +1167,64 @@ fn the_guide_to_modules_shows_the_files_and_what_the_commands_print() {
         (kinds, tables(&p.text).len(), headings)
     };
     let (en, ja) = (shown(&pages[0]), shown(&pages[1]));
-    assert_eq!(en.2, 8, "the guide has eight sections");
+    assert_eq!(en.2, 9, "the guide has nine sections");
     assert_eq!(en, ja, "the two pages show other kinds of blocks, or other numbers of blocks, tables or sections");
+}
+
+/// The workflow the guide gives for a list of one's own (DESIGN 17.17) is one text on both pages. It
+/// is the shape of docs.yml, which publishes ritsu's own list: the same actions at the same versions,
+/// a job that builds and can only read, and a job that deploys, which a pull request does not reach.
+/// The list beside it reads.
+#[test]
+fn the_guide_gives_the_workflow_that_publishes_a_list_of_ones_own() {
+    let pages: Vec<Page> = MODULE_PAGES.iter().map(|n| page(n)).collect();
+    let block = |p: &Page, info: &str, has: &str| -> String {
+        let found: Vec<_> = p.blocks.iter().filter(|b| b.info == info && b.lines.iter().any(|l| l.contains(has))).collect();
+        assert_eq!(found.len(), 1, "{}: one `{info}` block with `{has}`", p.name);
+        found[0].lines.join("\n") + "\n"
+    };
+    let run = "- run: ritsu mod site modules.list --out site";
+    let text = block(&pages[0], "yaml", run);
+    assert_eq!(block(&pages[1], "yaml", run), text, "the two pages show other workflows");
+    let file = "the guide's workflow";
+    let docs = read(&root().join(".github/workflows/docs.yml"));
+    for action in ["actions/checkout@", "actions/upload-pages-artifact@", "actions/deploy-pages@"] {
+        let used = |t: &str| t.lines().map(str::trim).find_map(|l| l.strip_prefix("uses: ").or_else(|| l.strip_prefix("- uses: ")).filter(|u| u.starts_with(action))).map(str::to_string);
+        assert!(used(&text).is_some(), "{file} does not use {action}");
+        assert_eq!(used(&text), used(&docs), "{file} and docs.yml use other versions of {action}");
+    }
+    assert_eq!(permissions_of(&text, 0), ["contents: read"], "{file}'s jobs read the repository, unless one says otherwise");
+    assert_eq!(permissions_of(&text, 4), ["pages: write", "id-token: write"], "the one job of {file} that writes is the one that deploys");
+    let before_deploy = text.split("\n  deploy:\n").next().unwrap();
+    assert!(!before_deploy.split("\njobs:\n").nth(1).unwrap().contains("permissions:"), "the job of {file} that builds asks for no permission of its own");
+    assert!(text.contains("  deploy:\n    if: github.event_name != 'pull_request'\n    needs: build\n"), "a pull request does not reach the job that deploys");
+    assert_eq!(triggers_of(&text, file), ["push:", "branches: [main]", "paths: [modules.list, .github/workflows/ritsu-modules.yml]", "pull_request:", "paths: [modules.list]", "schedule:", "- cron: \"17 21 * * *\"", "workflow_dispatch:"], "{file} runs on what changes the list, once a day and by hand");
+    // the input it gives is the action's
+    assert!(text.contains("      - uses: i2y/ritsu@") && text.contains("        with:\n          cosign: true\n"), "{file} asks the action for cosign");
+    assert!(read(&root().join("action.yml")).contains("\n  cosign:\n"), "the action has no input `cosign`");
+    // the list reads and the pages come out, with a working tree in the place of the module on a
+    // registry it names: a test does not reach the registry
+    for p in &pages {
+        let t = TempDir::new("guide-list");
+        ritsu_testkit::tmp::copy_dir(&root().join("modules/osha"), &t.path().join("osha"));
+        let list = block(p, "text", "module \"ghcr.io/acme/ritsu-pricing\" as \"pricing\"");
+        t.write("modules.list", list.replace("module \"ghcr.io/acme/ritsu-pricing\"", "local \"osha\""));
+        let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).args(["mod", "site", "modules.list", "--out", "site"]).current_dir(t.path()).output().expect("could not run ritsu");
+        assert!(o.status.success(), "{}: {}", p.name, String::from_utf8_lossy(&o.stderr));
+        assert!(t.read("site/index.html").contains("class=\"rm-own\" title=\"Acme"), "{}: the header goes by the list's title", p.name);
+        assert!(t.exists("site/.nojekyll"), "{}: the guide says the command writes .nojekyll", p.name);
+        // both languages from one root, by the lines the page gives
+        let both = block(p, "text", "--alternate ja=ja");
+        assert_eq!(both.lines().count(), 2, "{}: {both}", p.name);
+        for line in both.lines() {
+            let args: Vec<&str> = line.split(' ').collect();
+            assert_eq!(args[0], "ritsu", "{}: {line}", p.name);
+            let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).args(&args[1..]).current_dir(t.path()).output().expect("could not run ritsu");
+            assert!(o.status.success(), "{}: {line}: {}", p.name, String::from_utf8_lossy(&o.stderr));
+        }
+        assert!(t.read("site/index.html").contains("href=\"./ja/index.html\" lang=\"ja\""), "{}: the English list does not link to the Japanese", p.name);
+        assert!(t.read("site/ja/index.html").contains("href=\"./../index.html\" lang=\"en\""), "{}: the Japanese list does not link to the English", p.name);
+    }
 }
 
 /// The pages of kaname in a language, as paths from the root of the repository.
@@ -1283,15 +1385,29 @@ fn build_sh_builds_the_tree_that_is_published() {
     // rulec's sync.sh copies rulec's documents in from crates/rulec, beside website/, which it reads
     // and does not write.
     std::os::unix::fs::symlink(root().join("crates"), t.path().join("crates")).unwrap();
-    // The list of modules (modules.list) shows the seed module as it is on ghcr.io, and checks its
-    // signature. This test has no network: the copy of the list shows the module's working tree in
-    // its place, beside website/, with the ritsu of these tests (tests/modules_site.rs builds a list
-    // from a registry of its own, and checks the signatures).
+    // The list of modules (modules.list) shows the seed modules as they are on ghcr.io, and checks
+    // their signatures. This test has no network: the copy of the list shows each module's working
+    // tree in its place, beside website/, the directory named as the module is added, with the ritsu
+    // of these tests (tests/modules_site.rs builds a list from a registry of its own, and checks the
+    // signatures).
     let list = read(&website().join("modules.list"));
     let lines: Vec<&str> = list.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
-    assert!(lines.contains(&"module \"ghcr.io/i2y/ritsu-holidays\""), "website/modules.list shows the seed module as it is on ghcr.io:\n{list}");
-    assert!(lines.iter().any(|l| l.starts_with("signature \"ghcr.io/i2y/ritsu-holidays\" by matching ")), "website/modules.list checks the seed module's signature:\n{list}");
-    let local: Vec<&str> = lines.into_iter().filter(|l| !l.starts_with("module ") && !l.starts_with("signature ")).chain(["local \"../modules/holidays\""]).collect();
+    assert!(lines.contains(&"module \"ghcr.io/i2y/ritsu-holidays\" as \"holidays\""), "website/modules.list shows the seed module as it is on ghcr.io:\n{list}");
+    assert!(lines.iter().any(|l| l.starts_with("signature \"ghcr.io/i2y/\" by matching ")), "website/modules.list checks the seed modules' signatures:\n{list}");
+    let local: Vec<String> = lines
+        .iter()
+        .filter(|l| !l.starts_with("signature "))
+        .map(|l| match l.strip_prefix("module ") {
+            None => l.to_string(),
+            Some(rest) => {
+                let (name, short) = rest.rsplit_once(" as ").unwrap_or_else(|| panic!("a `module` line of website/modules.list says how it is added: {l}"));
+                let short = short.trim_matches('"');
+                let dir = short.replace('_', "-");
+                assert_eq!(name, format!("\"ghcr.io/i2y/ritsu-{dir}\""), "the seed module `{short}` is published as ritsu-{dir}, from modules/{dir}");
+                format!("local \"../modules/{dir}\" as \"{short}\"")
+            }
+        })
+        .collect();
     std::fs::write(copy.join("modules.list"), local.join("\n") + "\n").unwrap();
     std::os::unix::fs::symlink(root().join("modules"), t.path().join("modules")).unwrap();
     let o = Command::new("bash")
@@ -1334,8 +1450,10 @@ fn build_sh_builds_the_tree_that_is_published() {
         "ja/modules/index.html",
         "modules/list/index.html",
         "ja/modules/list/index.html",
-        "modules/list/ghcr.io/i2y/ritsu-holidays/1.0.0/index.html",
-        "ja/modules/list/ghcr.io/i2y/ritsu-holidays/1.0.0/module.json",
+        "modules/list/_site/frame.css",
+        "ja/modules/list/_site/site.js",
+        "modules/list/ghcr.io/i2y/ritsu-holidays/1.1.0/index.html",
+        "ja/modules/list/ghcr.io/i2y/ritsu-holidays/1.1.0/module.json",
     ]
     .map(String::from)
     .to_vec();

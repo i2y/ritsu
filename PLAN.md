@@ -2164,6 +2164,20 @@ rulec の README と入れ方のページ（英日）は、0.38.0 の出力の�
 
 確かめたこと：文書を読むテスト（rulec の `docs`・`mcp`・`readme`・`skill`・`website`・`library`、ritsu の `release`・`readme`・`sekisho`・`skill`・`website`）が全部通った。SKIP の行は 0 だった。
 
+### 7.88 モジュールの一覧を読むためのサイトにし、ほかの人も自分の一覧を出せるようにする（2026-11-05）
+
+`ritsu mod site` のページは版を並べるだけで、モジュールが何を持つかは、取ってきて読むしかなかった。裏側（アカウント、ストア、サーバー）は作らず、静的なページのまま読み手の側を作り直した（DESIGN 17.17）。一覧のページはモジュールとその持つものを検索でき、種別で絞れる。モジュールのページは、持つもの、README、その場で試せる規則とカレンダー、一つ前の版からの差、版とファイルの一覧、行番号と色の付いた各ファイルのコード、足し方の手順、確かめたことを見せる。そのために、版の公開日（`signed_at`、`committed_at`）、rulec の `map_of`（二つの版が答えるものの表）、koyomi の `Block::Try`、一覧の `as`・`contribute`、`--alternate` を足した。
+
+種のモジュールを 7 本にした（17.18）：holidays の 1.1.0（米国を足した）、osha、us-income-tax、uk-rates、late-payment、japan-tax、japan-social-insurance。docs.yml は一覧を毎日組み直し、modules-list.yml は一覧を変えるプルリクエストを権限なしで確かめる。
+
+ほかの人は、自分のモジュールの一覧を自分の Pages に出せる。専用の Action は作らず、根の `action.yml` に入力 `cosign` を足し、貼れるワークフローを案内のページ（英日）に載せた。`title` があれば全部のページのヘッダーにその名前を出し、出力のルートに `.nojekyll` を書く。
+
+確かめたこと：ritsu の試験が全部通った（390 件。SKIP は MySQL と `RITSU_TEST_REGISTRY` の 2 行）。Chrome の試験は、種別のフィルタと検索が描画の高さまで変えることと、ファイルのコードをページから読み戻せることを英日で確かめる。koyomi の `tests/doc.rs`、rulec の `tests/version_map.rs` も通った。action の本物のスクリプトを macOS で `VERSION=v0.41.0 COSIGN=true` で走らせ、0.41.0 と cosign 3.1.4 が入った。空のディレクトリに一覧だけを置き、資格情報なしで、ghcr.io の祝日のモジュールを署名まで確かめて 22 ページを書いた。cosign が無ければ exit 2 で何も書かない。案内のワークフローと `packages.yml` は actionlint 1.7.12 が何も言わない。`tests/website.rs` は、案内の一覧を実際に読み、英日の二行を走らせ、ワークフローの action の版を docs.yml と比べる。
+
+0.42.0 に上げた木で tools の段のワークスペース全体の試験を回し、3,639 件が通って 2 件が落ちた。どちらも `website/docs/playground/projects.json` を作り直していなかったためで（lock は ritsu の版を持つので、版を上げると lock のダイジェストが変わる。17.22）、生成物とコマンドの不具合ではない。`RITSU_BLESS=1` で書き直し、playground の 18 件を回し直して通った。許されない SKIP は MySQL の 6 行で、CI が回す。
+
+GitHub の上ではまだ確かめていないもの：ランナーでの `cosign: true`（packages のジョブ `action`）、本物の Pages への公開、ブランチから公開したときに `_site/` が届くこと。ほかの人のモジュールをこのサイトの一覧に載せることは、別のオリジンができるまでしない（17.28）。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
