@@ -1,11 +1,11 @@
 rule osha_penalty v1
-description "The most OSHA may propose for a violation, and the least for a willful one, for penalties proposed after January 15, 2025. Transcribed from 29 CFR 1903.15(d)"
+description "The most OSHA may propose for a violation, and the least for a willful one, for penalties proposed after January 15, 2023. Transcribed from 29 CFR 1903.15(d)"
 
 # The Department of Labor adjusts these amounts for inflation by an amendment of the section each
 # January. A new version of this module follows each amendment, so `ritsu mod diff` between two
 # versions says what it moved, and `rulec source outdated` asks the eCFR for a later one.
-source osha = law ecfr "29 CFR 1903" asof 2025-02-01
-  "§1903.15" sha256:c2ef04d3f2d87924
+source osha = law ecfr "29 CFR 1903" asof 2023-02-01
+  "§1903.15" sha256:f47488b427e1dc7c
 
 enum violation_kind = willful | repeated | serious | other_than_serious | failure_to_correct | posting
 enum counted_by = violation | day
@@ -25,18 +25,18 @@ outputs
 table amounts  @osha "§1903.15"
 policy unique
 | violation          | -> least : money[USD] | most : money[USD] | per : counted_by |
-| willful            | 11823USD              | 165514USD         | violation        |
-| repeated           | 0USD                  | 165514USD         | violation        |
-| serious            | 0USD                  | 16550USD          | violation        |
-| other_than_serious | 0USD                  | 16550USD          | violation        |
-| failure_to_correct | 0USD                  | 16550USD          | day              |
-| posting            | 0USD                  | 16550USD          | violation        |
+| willful            | 11162USD              | 156259USD         | violation        |
+| repeated           | 0USD                  | 156259USD         | violation        |
+| serious            | 0USD                  | 15625USD          | violation        |
+| other_than_serious | 0USD                  | 15625USD          | violation        |
+| failure_to_correct | 0USD                  | 15625USD          | day              |
+| posting            | 0USD                  | 15625USD          | violation        |
 
 examples
 | violation          | -> least  | most      | per       |
-| willful            | 11823USD  | 165514USD | violation |
-| repeated           | 0USD      | 165514USD | violation |
-| serious            | 0USD      | 16550USD  | violation |
-| other_than_serious | 0USD      | 16550USD  | violation |
-| failure_to_correct | 0USD      | 16550USD  | day       |
-| posting            | 0USD      | 16550USD  | violation |
+| willful            | 11162USD  | 156259USD | violation |
+| repeated           | 0USD      | 156259USD | violation |
+| serious            | 0USD      | 15625USD  | violation |
+| other_than_serious | 0USD      | 15625USD  | violation |
+| failure_to_correct | 0USD      | 15625USD  | day       |
+| posting            | 0USD      | 15625USD  | violation |

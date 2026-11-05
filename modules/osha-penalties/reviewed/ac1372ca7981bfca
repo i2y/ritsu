@@ -1,0 +1,42 @@
+rule osha_penalty v1
+description "The most OSHA may propose for a violation, and the least for a willful one, for penalties proposed after January 15, 2023. Transcribed from 29 CFR 1903.15(d)"
+
+# The Department of Labor adjusts these amounts for inflation by an amendment of the section each
+# January. A new version of this module follows each amendment, so `ritsu mod diff` between two
+# versions says what it moved, and `rulec source outdated` asks the eCFR for a later one.
+source osha = law ecfr "29 CFR 1903" asof 2023-02-01
+  "§1903.15" sha256:f47488b427e1dc7c
+
+enum violation_kind = willful | repeated | serious | other_than_serious | failure_to_correct | posting
+enum counted_by = violation | day
+
+inputs
+  violation : violation_kind
+
+# The section states whole dollars. It states a least only for a willful violation: `least` is
+# 0USD where it states none.
+outputs
+  least : money[USD]  round down(1USD)
+  most  : money[USD]  round down(1USD)
+  per   : counted_by
+
+# One row for each of paragraphs (d)(1) to (d)(6), in their order. Only (d)(5), the failure to correct a
+# violation, counts by the day.
+table amounts  @osha "§1903.15"
+policy unique
+| violation          | -> least : money[USD] | most : money[USD] | per : counted_by |
+| willful            | 11162USD              | 156259USD         | violation        |
+| repeated           | 0USD                  | 156259USD         | violation        |
+| serious            | 0USD                  | 15625USD          | violation        |
+| other_than_serious | 0USD                  | 15625USD          | violation        |
+| failure_to_correct | 0USD                  | 15625USD          | day              |
+| posting            | 0USD                  | 15625USD          | violation        |
+
+examples
+| violation          | -> least  | most      | per       |
+| willful            | 11162USD  | 156259USD | violation |
+| repeated           | 0USD      | 156259USD | violation |
+| serious            | 0USD      | 15625USD  | violation |
+| other_than_serious | 0USD      | 15625USD  | violation |
+| failure_to_correct | 0USD      | 15625USD  | day       |
+| posting            | 0USD      | 15625USD  | violation |

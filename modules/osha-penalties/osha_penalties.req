@@ -1,0 +1,20 @@
+requirements osha_penalties v1
+description "Where the amounts of osha_penalty.rule come from: 29 CFR 1903.15(d), the section the rule pins."
+
+role maintainer "Reads the section against the rule, and keeps the module"
+
+source osha = rulec "osha_penalty.rule" source osha
+
+scope rulec "osha_penalty.rule" table
+
+requirement penalty_amounts
+  text "For penalties proposed after January 15, 2023, the penalty for a willful violation is at least $11,162 and at most $156,259, and for a repeated violation at most $156,259. The penalty for a serious violation, an other-than-serious violation or a posting requirement violation is at most $15,625, and for a failure to correct a violation at most $15,625 per day."
+  in force 2023-01-16..
+  owner maintainer
+  from @osha "§1903.15"
+    reviewed 2026-11-05 by maintainer sha256:f47488b427e1dc7c -> sha256:ae63b29d67b4f4ac
+  decided 2026-11-05 by maintainer "Follows the amendment at 88 FR 2217 (January 13, 2023), which states the adjusted amounts for penalties proposed after January 15, 2023."
+  satisfied by rulec "osha_penalty.rule" table amounts
+    reviewed 2026-11-05 by maintainer sha256:ae63b29d67b4f4ac -> sha256:c9141dc63fe0b539
+  verified by rulec "osha_penalty.rule"
+    reviewed 2026-11-05 by maintainer sha256:ae63b29d67b4f4ac -> sha256:ac1372ca7981bfca
