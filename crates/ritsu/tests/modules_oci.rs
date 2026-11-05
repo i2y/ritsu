@@ -433,7 +433,7 @@ fn every_seed_module_s_dry_run_passes() {
         assert!(out.contains(&name), "{name}:\n{out}");
         seen += 1;
     }
-    assert_eq!(seen, 7);
+    assert_eq!(seen, 8);
     assert!(!t.exists("curl.log"), "a dry run called curl");
 }
 

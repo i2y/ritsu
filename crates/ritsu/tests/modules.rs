@@ -1161,7 +1161,7 @@ fn every_seed_module_passes_and_says_how_it_is_added() {
     let empty = TempDir::new("modules-seeds");
     let mut dirs: Vec<String> = std::fs::read_dir(repo().join("modules")).unwrap().map(|e| e.unwrap()).filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
     dirs.sort();
-    assert_eq!(dirs, ["holidays", "japan-social-insurance", "japan-tax", "late-payment", "osha", "uk-rates", "us-income-tax"]);
+    assert_eq!(dirs, ["holidays", "japan-social-insurance", "japan-tax", "late-payment", "osha", "osha-penalties", "uk-rates", "us-income-tax"]);
     for dir in &dirs {
         let (code, out, err) = ritsu_in(&repo(), empty.path(), &["check", &format!("modules/{dir}")]);
         assert_eq!((code, err.as_str()), (0, ""), "{dir}:\n{out}");
@@ -1183,7 +1183,7 @@ fn every_seed_module_passes_and_says_how_it_is_added() {
             }
             let mut named = 0;
             for row in text.lines().filter(|l| l.starts_with("| `")) {
-                for file in row.split('`').skip(1).step_by(2).filter(|w| [".rule", ".cal", ".kn"].iter().any(|x| w.ends_with(x))) {
+                for file in row.split('`').skip(1).step_by(2).filter(|w| [".rule", ".cal", ".kn", ".book", ".flow", ".gate"].iter().any(|x| w.ends_with(x))) {
                     assert!(here.join(file).is_file(), "modules/{dir}/{readme} names {file}");
                     named += 1;
                 }
@@ -1199,7 +1199,8 @@ fn every_seed_module_passes_and_says_how_it_is_added() {
             for p in std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().path()) {
                 let rel = p.strip_prefix(&here).unwrap().to_string_lossy().into_owned();
                 if p.is_dir() {
-                    if !rel.ends_with(".fragments") {
+                    // `.ritsu` is the copy of a dependency, which the dependency's own notices name
+                    if !rel.ends_with(".fragments") && rel != ".ritsu" {
                         stack.push(p);
                     }
                 } else if rel.split('/').any(|c| c == "sources" || c == "data") && !rel.ends_with("revision.txt") {
