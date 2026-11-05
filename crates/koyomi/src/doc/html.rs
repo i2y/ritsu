@@ -1,6 +1,8 @@
 //! The page as one HTML file: nothing is loaded from anywhere else (no script, no font, no
 //! stylesheet), it has a light and a dark palette (`prefers-color-scheme`, or
-//! `data-theme="light|dark"` on the root to choose one), and it prints. The frame — the head, the
+//! `data-theme="light|dark"` on the root to choose one), and it prints. A calendar's page holds the
+//! one script of these pages, inline: it asks about a day from the calendar's lines, in the page.
+//! Without it the section stays hidden and the page reads the same. The frame — the head, the
 //! palette's variables and how a page chooses between them — is ritsu-base's
 //! ([`ritsu_base::docpage`]); the colours koyomi adds and the rules are koyomi's.
 
@@ -10,6 +12,7 @@ use ritsu_base::text::{capitalize, ja_spacing};
 use crate::doc::months::{Cell, Grid, Named};
 use ritsu_base::docpage::{self, Palette, esc};
 use ritsu_base::text::{Lang, Text};
+use ritsu_base::tr;
 
 /// Words, in which what is between backticks is code, as in the diagnostics.
 fn words(s: &str, lang: Lang) -> String {
@@ -194,6 +197,29 @@ fn legend(l: &Legend, lang: Lang) -> String {
     o
 }
 
+/// What the section that asks about a day does, as a function of the calendar's lines.
+pub const TRY_LOGIC: &str = include_str!("try_it.js");
+/// The section itself.
+const TRY_UI: &str = include_str!("try_ui.js");
+
+/// The section that asks about a day. It starts hidden: without a script it could not answer.
+fn try_section(data: &str, knows_every_day: bool, lang: Lang) -> String {
+    let s = |t: Text| esc(t.get(lang));
+    let outside = if knows_every_day { String::new() } else { format!("<button type=\"button\" data-go=\"outside\">{}</button>", s(tr!("データの外", "Outside the data"))) };
+    format!(
+        "<section id=\"try\" hidden>\n<h2>{}</h2>\n<p>{}</p>\n<div class=\"tryform\"><label>{}<input id=\"try-date\" type=\"date\"></label><div class=\"presets\"><button type=\"button\" data-go=\"today\">{}</button><button type=\"button\" data-go=\"next\">{}</button>{outside}</div></div>\n<div id=\"try-answer\" class=\"ans\" role=\"status\"></div>\n<div id=\"try-next\" hidden>\n<h3>{}</h3>\n<div class=\"scroll\"><table class=\"data\"><tbody></tbody></table></div>\n</div>\n<script type=\"application/json\" id=\"try-data\">{data}</script>\n<script>\n{TRY_LOGIC}{TRY_UI}</script>\n</section>\n",
+        s(tr!("この日は休みですか？", "Is this day closed?")),
+        s(tr!(
+            "このファイルの行と、ファイルが固定した表から、このページの中で答えます。どこにも送りません。",
+            "Answered in this page, from the lines of this file and the tables it pins. Nothing is sent anywhere."
+        )),
+        s(tr!("日付", "Date")),
+        s(tr!("今日", "Today")),
+        s(tr!("次の休み", "Next closed day")),
+        s(tr!("このあとの休み", "The next closed days")),
+    )
+}
+
 pub fn render(p: &Page) -> String {
     let lang = p.lang;
     let css = format!("{}{RULES}", palette().css());
@@ -211,6 +237,13 @@ pub fn render(p: &Page) -> String {
             in_header = false;
         }
         match b {
+            Block::Try { data, knows_every_day } => {
+                if open_section {
+                    o.push_str("</section>\n");
+                    open_section = false;
+                }
+                o.push_str(&try_section(data, *knows_every_day, lang));
+            }
             Block::H2(s) => {
                 if open_section {
                     o.push_str("</section>\n");
@@ -293,6 +326,26 @@ fn palette() -> Palette {
 
 /// The rules, after the palette's variables.
 const RULES: &str = r#"* { box-sizing: border-box; }
+#try { margin: 1.5rem 0 2rem; }
+#try h2 { margin-top: 0; }
+.tryform { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; margin: 1rem 0; }
+.tryform label { display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; color: var(--dim); }
+.tryform input { min-height: 44px; padding: 0 .6rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; font-size: .95rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.presets { display: flex; flex-wrap: wrap; gap: .5rem; }
+.presets button { min-height: 44px; padding: 0 .75rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: .85rem; cursor: pointer; }
+.presets button:disabled { color: var(--dim); cursor: default; }
+.ans { padding: 1.1rem 1.3rem; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.ans.closed { background: var(--fg); color: var(--bg); border-color: transparent; }
+.ans.open { background: var(--soft); }
+.ans.unknown { background: var(--fail-bg); border-color: transparent; }
+.ans p { margin: 0; }
+.ans .head { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; }
+.ans .name { margin-top: .35rem; font-size: 1.1rem; }
+.ans .why { margin-top: .6rem; font-size: .9rem; max-width: 70ch; }
+.ans code { color: var(--fg); }
+#try-next td.d { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
+#try-next td.w { color: var(--dim); }
+@media print { #try { display: none; } }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
   font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;

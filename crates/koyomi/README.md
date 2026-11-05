@@ -136,8 +136,9 @@ is a test over every input of the range, not a proof.
 `koyomi doc` writes the page for the people who read the terms to understand and check what the
 code is to carry out: accounting, legal, whoever keeps the company calendar, the developers
 reviewing the code. It is Markdown, which a pull request shows as it is, or one HTML file
-that loads nothing from anywhere, in a light and a dark palette. Every operation is said in words,
-next to its line of the `.cal`; the article a line cites is quoted from its copy, with the date
+that loads nothing from anywhere, in a light and a dark palette. A calendar's page in HTML answers
+whether a day is closed, and why, from the calendar's own lines, with a script inside the page. Every
+operation is said in words, next to its line of the `.cal`; the article a line cites is quoted from its copy, with the date
 and the revision it is from; every claim's result is there, with the input it has the least room
 on; for each `else`, how often it is used, and how many inputs the other two ways would change;
 the edge cases koyomi picked (month ends, closed days and the days around them, the longest and

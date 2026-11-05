@@ -111,10 +111,13 @@ fn the_html_loads_nothing_and_shows_what_the_check_found() {
         let o = check(p).unwrap();
         for lang in [Lang::En, Lang::Ja] {
             let html = page(p, lang, Format::Html);
-            // One file: no script, no stylesheet, no font, no picture from anywhere.
-            for bad in ["<script", "<link", " src=", "@import", "url(", "<img", "<iframe"] {
+            // One file: no script, no stylesheet, no font, no picture from anywhere. The one script a
+            // calendar's page holds is in the page.
+            for bad in ["<link", " src=", "@import", "url(", "<img", "<iframe"] {
                 assert!(!html.contains(bad), "{p}: the HTML has {bad}");
             }
+            let scripts = html.matches("<script>").count();
+            assert_eq!(scripts, usize::from(matches!(o.checked, Some(Checked::Calendar(_)))), "{p}: its scripts");
             assert!(html.starts_with("<!doctype html>\n") && html.ends_with("</html>\n"), "{p}");
             let cells = attrs(&html, "td", "class");
             let fails = cells.iter().filter(|c| c.split(' ').any(|x| x == "fail")).count();
@@ -369,4 +372,63 @@ fn what_the_pages_say_in_english() {
     assert!(md.contains("With `else end_of_month` instead, last_day would differ on 57 of the 4,380 input combinations."), "{md}");
     let md = page("examples/period_of_months.cal", Lang::En, Format::Markdown);
     assert!(md.contains("With `else end_of_month` instead, last_day would differ on 57 of the 4,380 input combinations."), "{md}");
+}
+
+/// The section of a calendar's page that asks about a day answers as the calendar does, in node, with
+/// the script and the data the page holds: over every day a calendar knows (the last 20 years of the
+/// days, for one that knows every day), and the days just outside what it knows.
+#[test]
+fn the_page_of_a_calendar_answers_as_the_calendar_does() {
+    let node = Command::new("node").arg("--version").output();
+    if !node.is_ok_and(|o| o.status.success()) {
+        ritsu_testkit::skip("node is not found; the section of a calendar's page is its script");
+        return;
+    }
+    let mut files: Vec<String> = EXAMPLES.iter().map(|p| p.to_string()).collect();
+    for f in ["us/federal_holidays.cal", "uk/england_and_wales.cal", "uk/scotland.cal", "uk/northern_ireland.cal", "japan/national_holidays.cal"] {
+        files.push(format!("../../modules/holidays/{f}"));
+    }
+    let mut days = 0usize;
+    let mut looked = 0;
+    let t = TempDir::new("koyomi-try");
+    for p in &files {
+        let o = check(p).unwrap();
+        let Some(Checked::Calendar(c)) = o.checked.as_ref() else { continue };
+        looked += 1;
+        for lang in [Lang::En, Lang::Ja] {
+            let data = doc::try_data(c, lang);
+            let html = page(p, lang, Format::Html);
+            assert!(html.contains(&data) && html.contains(doc::TRY_LOGIC), "{p}: the page does not hold what this test runs");
+            let from = c.data.0.0.max(c.data.1.0.saturating_sub(7305));
+            let to = c.data.1.0;
+            let program = format!(
+                "const D = {data};\n{}\nconst c = tryCalendar(D);\nconst lines = [];\nfor (let z = {from} - 1; z <= {to} + 1; z++) {{\n  const a = c.answer(z);\n  lines.push(JSON.stringify([c.iso(z), c.weekday(z), c.parse(c.iso(z)) === z, a.known, a.open, a.reasons.map((r) => r.text), a.opened]));\n}}\nconsole.log(lines.join('\\n'));\n",
+                doc::TRY_LOGIC
+            );
+            let script = t.write("try.js", program);
+            let out = Command::new("node").arg(&script).output().expect("node");
+            assert!(out.status.success(), "{p}: {}", String::from_utf8_lossy(&out.stderr));
+            let said = String::from_utf8(out.stdout).unwrap();
+            let mut z = from - 1;
+            for line in said.lines() {
+                let got: serde_json::Value = serde_json::from_str(line).unwrap();
+                let d = koyomi::date::Day(z);
+                let known = c.is_open(d).is_ok();
+                let (open, reasons, opened): (bool, Vec<String>, Option<String>) = if known {
+                    let reasons = c.reasons(d).iter().map(|r| r.text().get(lang).to_string()).collect();
+                    let opened = c.opened_by(d).map(|o| o.name.clone().unwrap_or_else(|| o.text()));
+                    (c.is_open(d).unwrap(), reasons, opened)
+                } else {
+                    (false, Vec::new(), None)
+                };
+                let want = serde_json::json!([d.to_string(), d.weekday(), true, known, open, reasons, opened]);
+                assert_eq!(got, want, "{p} ({lang:?}) on {d}");
+                days += 1;
+                z += 1;
+            }
+            assert_eq!(z, to + 2, "{p}: node did not answer every day");
+        }
+    }
+    assert!(looked >= 5 && days > 100_000, "{looked} calendars, {days} days");
+    eprintln!("compared: {days} days of {looked} calendars, in the two languages, with what node answers from the page");
 }

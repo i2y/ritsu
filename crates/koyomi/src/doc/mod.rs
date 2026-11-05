@@ -26,6 +26,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub use edges::{Survey, ja_name, survey};
+pub use html::TRY_LOGIC;
 
 /// Markdown, which GitHub shows in a pull request, or one HTML file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +113,9 @@ pub enum Block {
     /// The files the page was made from, and their digests.
     Stamp(Vec<(String, Para)>),
     Months { grids: Vec<Grid>, legend: Legend },
+    /// The section of an HTML page that asks about a day: what it answers from, as JSON. A page in
+    /// Markdown has no such section.
+    Try { data: String, knows_every_day: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -1074,6 +1078,59 @@ fn fail_marks(m: &Model, rep: &Report, from: Day, to: Day) -> BTreeMap<Day, Vec<
 
 // ── The page of a calendar file ───────────────────────────────────────────
 
+/// What the section that asks about a day answers from: the calendar's lines and the words of the
+/// page, as JSON. `tryCalendar` (try_it.js) reads the lines as `Calendar::is_open` and
+/// `Calendar::reasons` read them.
+pub fn try_data(cal: &Calendar, lang: Lang) -> String {
+    use crate::calendar::Reason;
+    use serde_json::json;
+    let said = |r: Reason| r.text().get(lang).to_string();
+    let weekdays: Vec<String> = (0..7).map(|w| said(Reason::Weekday(w))).collect();
+    let short: Vec<&str> = (0..7).map(|w| if lang == Lang::Ja { date::WEEKDAY_JA[w] } else { date::WEEKDAY_EN[w] }).collect();
+    let every: Vec<_> = cal.every.iter().map(|e| json!([e.from.0, e.from.1, e.to.0, e.to.1, said(Reason::Every { name: e.name.clone(), text: e.text() })])).collect();
+    let days: Vec<_> = cal.days.iter().map(|d| json!([d.from.0, d.to.0, said(Reason::Day { name: d.name.clone(), text: d.text() })])).collect();
+    let opens: Vec<_> = cal.opens.iter().map(|o| json!([o.from.0, o.to.0, o.name.clone().unwrap_or_else(|| o.text())])).collect();
+    let tables: Vec<&str> = cal.tables.iter().map(|t| t.name.as_str()).collect();
+    let holidays: Vec<_> = cal.table_days().into_iter().map(|(d, t, r)| json!([d.0, t, said(r)])).collect();
+    let word = |x: Text| x.get(lang).to_string();
+    let words = json!({
+        "choose": word(tr!("日付を選んでください", "Choose a date")),
+        "closed": word(tr!("休み", "Closed")),
+        "open": word(tr!("営業日", "Open")),
+        "unknown": word(tr!("分かりません", "Not known")),
+        "and": word(tr!("、", ", ")),
+        "why_unknown": word(tr!(
+            "このカレンダーが知っているのは {{from}} 〜 {{to}} です。その外の日を聞く計算は、検査でも生成コードでも、推測せずに止まります。",
+            "This calendar knows {{from}} to {{to}}. A computation that asks about a day outside it stops, in the check and in the generated code alike, rather than guess."
+        )),
+        "why_opened": word(tr!("決まりでは休みですが、次の行が開けています：{{line}}", "The rules close this day, and this line opens it: {{line}}")),
+        "why_weekend": word(tr!(
+            "{{day}}ですが、このカレンダーは休みにしていません。読む側のカレンダーで休みにできます：",
+            "This is a {{day}}, and this calendar leaves it open. A calendar that reads this one can close it: "
+        )),
+        "why_open": word(tr!("このカレンダーのどの行も、この日を休みにしていません。", "No line of this calendar closes this day.")),
+        "why_weekly": word(tr!("毎週{{day}}は休みです。", "Every {{day}} is closed.")),
+        "why_table": word(tr!("表「{{table}}」の行です。", "It is a row of the table {{table}}.")),
+        "why_every": word(tr!("毎年の休みです。", "It is closed every year.")),
+        "why_day": word(tr!("このカレンダーの行が休みにしています。", "A line of this calendar closes it.")),
+    });
+    let data = json!({
+        "from": cal.data.0.0,
+        "to": cal.data.1.0,
+        "weekly": cal.weekly,
+        "weekdays": weekdays,
+        "short": short,
+        "every": every,
+        "days": days,
+        "opens": opens,
+        "tables": tables,
+        "holidays": holidays,
+        "words": words,
+    });
+    // the JSON goes inside a <script>, which only `</` could end
+    data.to_string().replace("</", "<\\/")
+}
+
 fn calendar_page(cal: &Calendar, lang: Lang, opts: &Options) -> Page {
     let s = |x: Text| say(x, lang);
     let mut b: Vec<Block> = Vec::new();
@@ -1100,6 +1157,8 @@ fn calendar_page(cal: &Calendar, lang: Lang, opts: &Options) -> Page {
             "Times are given at the UTC offset {off}."
         )))]));
     }
+
+    b.push(Block::Try { data: try_data(cal, lang), knows_every_day: cal.data == (date::MIN, date::MAX) });
 
     b.push(Block::H2(s(tr!("休みの決まり", "Closed days"))));
     rules_blocks(&files, &base, lang, &mut b);

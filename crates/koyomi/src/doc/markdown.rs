@@ -175,6 +175,7 @@ pub fn render(p: &Page) -> String {
     }
     for b in &p.blocks {
         match b {
+            Block::Try { .. } => {}
             Block::H2(s) => o.push_str(&format!("## {}\n\n", esc(s))),
             Block::H3(s) => o.push_str(&format!("### {}\n\n", esc(s))),
             Block::P(para) => o.push_str(&format!("{}\n\n", inline(para, lang))),

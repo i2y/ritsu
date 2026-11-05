@@ -192,6 +192,21 @@ impl Calendar {
         self.opens.iter().find(|o| o.from <= d && d <= o.to && self.closed_by_rules(d))
     }
 
+    /// The days the tables close, in order, each with the table it is a row of and why it reads as
+    /// [`Reason::text`] reads it.
+    pub fn table_days(&self) -> Vec<(Day, usize, Reason)> {
+        let mut out: Vec<(Day, usize, Reason)> = self
+            .holidays
+            .iter()
+            .map(|(d, (t, r))| {
+                let table = &self.tables[*t];
+                (*d, *t, Reason::Holiday { table: table.name.clone(), name: table.rows[*r].name.clone() })
+            })
+            .collect();
+        out.sort_by_key(|(d, ..)| *d);
+        out
+    }
+
     /// The first business day on or after `d`, or on or before it.
     fn seek(&self, d: Day, forward: bool) -> Result<Day, CalError> {
         let mut x = d;
