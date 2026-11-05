@@ -67,7 +67,7 @@
 <p class="dim">ritsu はすべての入力を比べるか、決められないと言います。一部を試すことはしません。</p>
 <dl class="tiles">
 <div><dt>振る舞い</dt><dd>規則 2 のうち 1 で答えが変わります</dd></div>
-<div><dt>インターフェース</dt><dd>変更 10 件、そのうち使う側を壊しうるもの 0 件</dd></div>
+<div><dt>インターフェース</dt><dd>変更 1 件、そのうち使う側を壊しうるもの 0 件</dd></div>
 <div><dt>ファイル</dt><dd>2 変わった、2 同じ。require は変わりません</dd></div>
 </dl>
 <article class="fileblock">
@@ -83,13 +83,6 @@
 <tr><th scope="row">eu <span class="note">（新しい値）</span></th><td class="new">1,250</td><td class="new">1,250</td><td class="new">1,950</td></tr>
 </tbody>
 </table></div>
-<div class="scroll"><table class="t">
-<thead><tr><th scope="col">違うところ</th><th scope="col">答え</th><th scope="col">例</th></tr></thead>
-<tbody>
-<tr><td class="mono">region = domestic  かつ  weight &gt;=2001g &lt;=2500g</td><td class="mono nowrap">fee: 695 → 395</td><td class="mono">region=domestic, weight=2001</td></tr>
-<tr><td class="mono">region = world  かつ  weight &gt;=2001g &lt;=2500g</td><td class="mono nowrap">fee: 2950 → 1850</td><td class="mono">region=world, weight=2001</td></tr>
-</tbody>
-</table></div>
 </article>
 <article class="fileblock sames">
 <div class="filehead"><h3 class="mono">rules/order_total.rule</h3><span class="tag same">同じ答え</span></div>
@@ -97,7 +90,6 @@
 <article class="fileblock">
 <h3>インターフェース</h3>
 <p><span class="mono">rules/shipping_fee.rule</span> の <code>enums/region/values/eu</code> が足されました</p>
-<p class="langs"><span class="lang mono">python</span> <span class="lang mono">typescript</span> <span class="lang mono">javascript</span> <span class="lang mono">rust</span> <span class="lang mono">ruby</span> <span class="lang mono">php</span> <span class="lang mono">go</span> <span class="lang mono">swift</span> <span class="lang mono">java</span> <span class="lang mono">connect</span></p>
 </article>
 <details class="whole"><summary>報告の全文（<code>ritsu mod diff --format markdown</code> と同じ）</summary>
 <ul>

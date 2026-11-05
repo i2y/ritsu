@@ -430,28 +430,28 @@
           "change": "changed",
           "old": "data/休み.csv",
           "new": "data/休み_二版.csv",
-          "may_break": true
+          "may_break": false
         },
         {
           "at": "/calendar/sources/休み/sha256",
           "change": "changed",
           "old": "35bb4ae3b17bde2d",
           "new": "3f3143cb93699e1e",
-          "may_break": true
+          "may_break": false
         },
         {
           "at": "/calendar/sources/休み/covers/to",
           "change": "changed",
           "old": "2026-12-31",
           "new": "2027-12-31",
-          "may_break": true
+          "may_break": false
         },
         {
           "at": "/calendar/sources/休み/rows",
           "change": "changed",
           "old": 3,
           "new": 7,
-          "may_break": true
+          "may_break": false
         },
         {
           "at": "/calendar/data_range/to",

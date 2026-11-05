@@ -61,10 +61,62 @@ fn word_of(d: &ModDiff) -> Text {
     }
 }
 
+/// One change of an interface as the page lists it: the places that say the same for each output,
+/// put together.
+struct Grouped {
+    how: How,
+    may_break: bool,
+    /// The place, after the output.
+    place: String,
+    /// The outputs it holds for; none for what a file says of itself.
+    outputs: Vec<String>,
+    /// The values, when each is a word or a number.
+    old: Option<String>,
+    new: Option<String>,
+}
+
+/// The changes of a file's interface, as the page lists and counts them: a change to every output
+/// of a rule is one change, not one for each language, and Go's `output_fields` are the `outputs` of
+/// the others.
+fn grouped(i: &diff::Iface) -> Vec<Grouped> {
+    let short = |v: &Option<Json>| {
+        v.as_ref().and_then(|j| match j.as_str() {
+            Some(s) => Some(s.to_string()),
+            None => Some(j.compact()).filter(|t| !t.starts_with(['{', '['])),
+        })
+    };
+    let mut out: Vec<Grouped> = Vec::new();
+    for c in &i.changes {
+        // `/python/enums/region/values/eu`: the part after the output, with the outputs it holds for
+        let at = c.at.trim_start_matches('/');
+        let (head, rest) = match at.split_once('/') {
+            Some(("sources", _)) | None => ("", at),
+            Some(parts) => parts,
+        };
+        let place = match rest.strip_prefix("output_fields/") {
+            Some(tail) if head == "go" => format!("outputs/{tail}"),
+            _ => rest.to_string(),
+        };
+        let (old, new) = (short(&c.old), short(&c.new));
+        let same = |g: &&mut Grouped| g.how == c.how && g.place == place && g.old == old && g.new == new;
+        let group = match out.iter_mut().find(same) {
+            Some(g) => g,
+            None => {
+                out.push(Grouped { how: c.how, may_break: c.may_break(), place, outputs: Vec::new(), old, new });
+                out.last_mut().expect("just pushed")
+            }
+        };
+        if !head.is_empty() {
+            group.outputs.push(head.to_string());
+        }
+    }
+    out
+}
+
 /// How many changes the interface has, and how many of them may break a user.
 fn interface_counts(d: &ModDiff) -> (usize, usize) {
-    let changes = d.interface.iter().map(|i| i.changes.len()).sum();
-    let breaks = d.interface.iter().map(|i| i.changes.iter().filter(|c| c.may_break()).count() + i.breaks.len()).sum();
+    let changes = d.interface.iter().map(|i| grouped(i).len()).sum();
+    let breaks = d.interface.iter().map(|i| grouped(i).iter().filter(|g| g.may_break).count() + i.breaks.len()).sum();
     (changes, breaks)
 }
 
@@ -243,25 +295,66 @@ fn answer_text(a: &[(String, String)]) -> String {
     a.iter().map(|(k, v)| format!("{}: {}", esc(k), esc(&number(v)))).collect::<Vec<_>>().join("<br>")
 }
 
+/// What a cell of a map says of two versions that answer differently: where it holds more than one
+/// output, each on a line, with only those that moved marked.
+fn moved_text(a: &[(String, String)], b: &[(String, String)]) -> String {
+    if a.len() == 1 && b.len() == 1 {
+        return format!("<s>{}</s> {}", answer_text(a), answer_text(b));
+    }
+    b.iter()
+        .map(|(k, v)| match a.iter().find(|(x, _)| x == k) {
+            Some((_, old)) if old != v => format!("{}: <s>{}</s> {}", esc(k), esc(&number(old)), esc(&number(v))),
+            _ => format!("<span class=\"same\">{}: {}</span>", esc(k), esc(&number(v))),
+        })
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+/// The table of a rule of one input: a row for each of its values and a column for each output, so
+/// that each column reads down and a row says which of its answers moved.
+fn by_output_html(m: &Map, lang: Lang) -> String {
+    let mut o = String::from("<div class=\"scroll\"><table class=\"map\">\n<thead><tr>");
+    o.push_str(&format!("<th scope=\"col\">{}</th>", esc(&m.cols.col)));
+    for out in &m.outputs {
+        let unit = out.unit.as_ref().map_or(String::new(), |u| format!(" <span class=\"note\">{}</span>", esc(u)));
+        o.push_str(&format!("<th scope=\"col\">{}{unit}</th>", esc(&out.name)));
+    }
+    o.push_str("</tr></thead>\n<tbody>\n");
+    let cells = m.cells.first().map_or(&[][..], Vec::as_slice);
+    for (c, cell) in m.cols.coords.iter().zip(cells) {
+        o.push_str(&format!("<tr><th scope=\"row\">{}{}</th>", coord_text(c, &m.cols.unit, m.cols.date, lang), side_note(c, lang)));
+        for out in &m.outputs {
+            // `-` is what a version without the output says
+            let of = |a: &Option<Vec<(String, String)>>| a.as_ref().and_then(|a| a.iter().find(|(k, v)| *k == out.name && v != "-")).map(|(_, v)| esc(&number(v)));
+            let html = match (of(&cell.old), of(&cell.new)) {
+                (Some(a), Some(b)) if cell.moved && a != b => format!("<td class=\"chg\"><s>{a}</s> {b}</td>"),
+                (Some(_), Some(b)) => format!("<td>{b}</td>"),
+                (None, Some(b)) => format!("<td class=\"new\">{b}</td>"),
+                (Some(a), None) => format!("<td class=\"gone\"><s>{a}</s></td>"),
+                (None, None) => "<td class=\"none\">—</td>".to_string(),
+            };
+            o.push_str(&html);
+        }
+        o.push_str("</tr>\n");
+    }
+    o.push_str("</tbody>\n</table></div>\n");
+    o
+}
+
 /// The table of what the two versions answer.
 fn map_html(m: &Map, lang: Lang) -> String {
+    let Some(rows) = &m.rows else { return by_output_html(m, lang) };
     let mut o = String::from("<div class=\"scroll\"><table class=\"map\">\n<thead><tr>");
-    let corner = m.rows.as_ref().map_or(String::new(), |r| esc(&r.col));
-    o.push_str(&format!("<th scope=\"col\">{corner}</th>"));
+    o.push_str(&format!("<th scope=\"col\">{}</th>", esc(&rows.col)));
     for c in &m.cols.coords {
         o.push_str(&format!("<th scope=\"col\">{}{}</th>", coord_text(c, &m.cols.unit, m.cols.date, lang), side_note(c, lang)));
     }
     o.push_str("</tr></thead>\n<tbody>\n");
-    let answers_label = tr!("答え", "Answer");
     for (y, row) in m.cells.iter().enumerate() {
-        let head = match &m.rows {
-            Some(r) => format!("{}{}", coord_text(&r.coords[y], &r.unit, r.date, lang), side_note(&r.coords[y], lang)),
-            None => esc(answers_label.get(lang)),
-        };
-        o.push_str(&format!("<tr><th scope=\"row\">{head}</th>"));
+        o.push_str(&format!("<tr><th scope=\"row\">{}{}</th>", coord_text(&rows.coords[y], &rows.unit, rows.date, lang), side_note(&rows.coords[y], lang)));
         for cell in row {
             let html = match (&cell.old, &cell.new) {
-                (Some(a), Some(b)) if cell.moved => format!("<td class=\"chg\"><s>{}</s> {}</td>", answer_text(a), answer_text(b)),
+                (Some(a), Some(b)) if cell.moved => format!("<td class=\"chg\">{}</td>", moved_text(a, b)),
                 (Some(_), Some(b)) => format!("<td>{}</td>", answer_text(b)),
                 (None, Some(b)) => format!("<td class=\"new\">{}</td>", answer_text(b)),
                 (Some(a), None) => format!("<td class=\"gone\"><s>{}</s></td>", answer_text(a)),
@@ -289,14 +382,16 @@ fn regions_html(j: &Json, lang: Lang) -> String {
     o.push_str("</tr></thead>\n<tbody>\n");
     for c in changes {
         let region = c.get("text").and_then(Json::as_str).unwrap_or("");
+        // the outputs that moved: a region says all of them
         let outs: Vec<String> = c
             .get("outputs")
             .and_then(Json::as_arr)
             .unwrap_or(&[])
             .iter()
-            .map(|x| {
+            .filter_map(|x| {
                 let s = |k: &str| x.get(k).and_then(Json::as_str).unwrap_or("").to_string();
-                format!("{}: {} → {}", s("output"), s("old"), s("new"))
+                let (a, b) = (s("old"), s("new"));
+                (a != b).then(|| format!("{}: {a} → {b}", s("output")))
             })
             .collect();
         let witness: Vec<String> = c
@@ -410,7 +505,10 @@ fn behavior_html(b: &Behavior, lang: Lang) -> String {
                 if let Some(m) = &s.map {
                     o.push_str(&map_html(m, lang));
                 }
-                o.push_str(&regions_html(&s.json, lang));
+                // a table says what the regions say, all but what could not be settled
+                if s.map.is_none() || s.json.get("unknown").and_then(Json::as_arr).is_some_and(|u| !u.is_empty()) {
+                    o.push_str(&regions_html(&s.json, lang));
+                }
                 if s.json.get("blocked").is_some_and(|x| !x.is_null()) || s.json.get("machine").is_some_and(|x| !x.is_null()) {
                     o.push_str(&format!("<details><summary>{}</summary>\n{}</details>\n", esc(tr!("規則の言語の出力", "What rulec said").get(lang)), md_html(&s.markdown)));
                 }
@@ -443,27 +541,31 @@ fn interface_html(d: &ModDiff, lang: Lang) -> String {
         for (tool, f) in &i.breaks {
             o.push_str(&format!("<p>{file} ({tool}): {}</p>\n", esc(&f.text)));
         }
-        // `/python/enums/region/values/eu`: the part after the output, with the outputs it holds for
-        let mut groups: Vec<(How, String, Vec<String>)> = Vec::new();
-        for c in &i.changes {
-            let at = c.at.trim_start_matches('/');
-            let (head, rest) = at.split_once('/').unwrap_or((at, ""));
-            match groups.iter_mut().find(|(h, r, _)| *h == c.how && r == rest) {
-                Some((_, _, heads)) => heads.push(head.to_string()),
-                None => groups.push((c.how, rest.to_string(), vec![head.to_string()])),
-            }
-        }
-        for (how, rest, heads) in groups.iter().take(ROWS) {
-            let verb = match how {
+        let mut groups = grouped(i);
+        groups.sort_by_key(|g| !g.may_break);
+        // the outputs are named only where a change holds for some of them
+        let mut every: Vec<&str> = groups.iter().flat_map(|g| g.outputs.iter().map(String::as_str)).collect();
+        every.sort_unstable();
+        every.dedup();
+        for g in groups.iter().take(ROWS) {
+            let verb = match g.how {
                 How::Added => tr!("足されました", "was added"),
                 How::Removed => tr!("消えました", "was removed"),
                 How::Changed => tr!("変わりました", "changed"),
             };
-            let (place, list) = if rest.is_empty() { (heads.join(", "), String::new()) } else { (rest.clone(), heads.iter().map(|h| format!("<span class=\"lang mono\">{}</span>", esc(h))).collect::<Vec<_>>().join(" ")) };
-            let code = esc(&place);
+            let some = g.outputs.len() < every.len();
+            let list = if some { g.outputs.iter().map(|h| format!("<span class=\"lang mono\">{}</span>", esc(h))).collect::<Vec<_>>().join(" ") } else { String::new() };
+            let code = esc(&g.place);
+            let colon = if lang == Lang::Ja { "：" } else { ": " };
+            let values = match (&g.old, &g.new) {
+                (Some(a), Some(b)) => format!("{colon}<code>{}</code> → <code>{}</code>", esc(a), esc(b)),
+                (Some(x), None) | (None, Some(x)) => format!("{colon}<code>{}</code>", esc(x)),
+                (None, None) => String::new(),
+            };
+            let warns = if g.may_break { format!(" <span class=\"small warn\">{}</span>", esc(tr!("（使う側を壊しえます）", "(may break a user)").get(lang))) } else { String::new() };
             let line = match lang {
-                Lang::Ja => format!("{file} の <code>{code}</code> が{}", esc(verb.get(lang))),
-                Lang::En => format!("In {file}, <code>{code}</code> {}", esc(verb.get(lang))),
+                Lang::Ja => format!("{file} の <code>{code}</code> が{}{values}{warns}", esc(verb.get(lang))),
+                Lang::En => format!("In {file}, <code>{code}</code> {}{values}{warns}", esc(verb.get(lang))),
             };
             if list.is_empty() {
                 o.push_str(&format!("<p>{line}</p>\n"));
@@ -509,4 +611,97 @@ pub(super) fn pane(d: &ModDiff, from: &str, to_select: &str, lang: Lang) -> Stri
         md_html(&diff::body_markdown(d, lang, 4, ROWS))
     ));
     o
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::modules::diff::{IChange, Iface};
+    use rulec::vdiff::{MapAxis, MapCell, MapOutput};
+
+    fn answers(a: &[(&str, &str)]) -> Option<Vec<(String, String)>> {
+        Some(a.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect())
+    }
+
+    fn word(w: &str, s: MapSide) -> MapCoord {
+        MapCoord::Word(w.to_string(), s)
+    }
+
+    fn axis(col: &str, coords: Vec<MapCoord>) -> MapAxis {
+        MapAxis { col: col.to_string(), unit: String::new(), date: false, coords }
+    }
+
+    fn outputs() -> Vec<MapOutput> {
+        vec![MapOutput { name: "most".to_string(), unit: Some("USD".to_string()) }, MapOutput { name: "per".to_string(), unit: None }]
+    }
+
+    /// A rule of one input: a row for each value, a column for each output with its unit, and the mark
+    /// only on the answers that moved; a value only one version takes says which.
+    #[test]
+    fn a_rule_of_one_input_reads_down_its_outputs() {
+        let cell = |old: Option<Vec<(String, String)>>, new: Option<Vec<(String, String)>>, moved| MapCell { old, new, moved };
+        let m = Map {
+            rows: None,
+            cols: axis("violation", vec![word("willful", MapSide::Both), word("posting", MapSide::Both), word("added", MapSide::NewOnly), word("gone", MapSide::OldOnly)]),
+            outputs: outputs(),
+            cells: vec![vec![
+                cell(answers(&[("most", "161323"), ("per", "violation")]), answers(&[("most", "165514"), ("per", "violation")]), true),
+                cell(answers(&[("most", "100"), ("per", "day")]), answers(&[("most", "100"), ("per", "day")]), false),
+                cell(None, answers(&[("most", "5"), ("per", "day")]), true),
+                cell(answers(&[("most", "7"), ("per", "day")]), None, true),
+            ]],
+        };
+        let html = map_html(&m, Lang::En);
+        assert!(html.contains("<thead><tr><th scope=\"col\">violation</th><th scope=\"col\">most <span class=\"note\">USD</span></th><th scope=\"col\">per</th></tr></thead>"), "{html}");
+        assert!(html.contains("<tr><th scope=\"row\">willful</th><td class=\"chg\"><s>161,323</s> 165,514</td><td>violation</td></tr>"), "{html}");
+        assert!(html.contains("<tr><th scope=\"row\">posting</th><td>100</td><td>day</td></tr>"), "{html}");
+        assert!(html.contains("added <span class=\"note\">(new)</span></th><td class=\"new\">5</td><td class=\"new\">day</td></tr>"), "{html}");
+        assert!(html.contains("gone <span class=\"note\">(removed)</span></th><td class=\"gone\"><s>7</s></td><td class=\"gone\"><s>day</s></td></tr>"), "{html}");
+    }
+
+    /// A rule of two inputs: the cell of two outputs marks the one that moved and leaves the other faint.
+    #[test]
+    fn a_cell_of_two_outputs_marks_the_one_that_moved() {
+        let m = Map {
+            rows: Some(axis("region", vec![word("uk", MapSide::Both)])),
+            cols: axis("kind", vec![word("a", MapSide::Both)]),
+            outputs: outputs(),
+            cells: vec![vec![MapCell { old: answers(&[("most", "1000"), ("per", "day")]), new: answers(&[("most", "2000"), ("per", "day")]), moved: true }]],
+        };
+        let html = map_html(&m, Lang::En);
+        assert!(html.contains("<td class=\"chg\">most: <s>1,000</s> 2,000<br><span class=\"same\">per: day</span></td>"), "{html}");
+    }
+
+    /// A change a rule says for each language it generates is one change, and what a file says of its
+    /// sources is said whole, and no candidate for what breaks a user.
+    #[test]
+    fn the_changes_of_an_interface_are_counted_as_they_are_listed() {
+        let change = |at: &str, old: &str, new: &str| IChange { at: at.to_string(), how: How::Changed, old: Some(Json::str(old)), new: Some(Json::str(new)) };
+        let i = Iface {
+            file: "a.rule".to_string(),
+            tool: Some(Tool::Rulec),
+            how: "api",
+            version: None,
+            changes: vec![
+                change("/sources/dol/asof", "2024-02-01", "2025-02-01"),
+                change("/python/outputs/most/range/max", "1", "2"),
+                change("/rust/outputs/most/range/max", "1", "2"),
+                change("/go/output_fields/most/range/max", "1", "2"),
+                change("/sql/outputs/most/range/max", "1", "3"),
+            ],
+            breaks: Vec::new(),
+            note: None,
+        };
+        let g = grouped(&i);
+        let got: Vec<(&str, bool, Vec<&str>)> = g.iter().map(|g| (g.place.as_str(), g.may_break, g.outputs.iter().map(String::as_str).collect())).collect();
+        assert_eq!(
+            got,
+            [
+                ("sources/dol/asof", false, vec![]),
+                ("outputs/most/range/max", true, vec!["python", "rust", "go"]),
+                ("outputs/most/range/max", true, vec!["sql"]),
+            ]
+        );
+        assert_eq!((g[0].old.as_deref(), g[0].new.as_deref()), (Some("2024-02-01"), Some("2025-02-01")));
+    }
 }

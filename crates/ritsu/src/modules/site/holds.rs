@@ -202,6 +202,36 @@ fn rule_facts(api: &Json, lang: Lang) -> Vec<(Text, Value)> {
     out
 }
 
+/// A file's path in the module, from the directory of the file that names it: a path of a dependency
+/// (`@holidays/…`) is its own.
+fn beside(dir: &str, file: &str) -> String {
+    if dir.is_empty() || file.is_empty() || file.starts_with('@') { file.to_string() } else { format!("{dir}/{file}") }
+}
+
+/// What a rule cites and the copies it pins, from `rulec api`.
+fn rule_sources(api: &Json, lang: Lang, held: &mut Held) {
+    let dir = held.rel.rsplit_once('/').map_or("", |(d, _)| d).to_string();
+    for s in api.get("sources").and_then(Json::as_arr).unwrap_or(&[]) {
+        let text = |k: &str| s.get(k).and_then(Json::as_str).unwrap_or("");
+        if text("kind") == "law" {
+            let (id, asof) = (text("id"), text("asof"));
+            held.facts.push((tr!("出典", "Source"), Value::Text(say(&tr!("{id}（{asof} 時点）", "{id}, as of {asof}"), lang))));
+            let Some(db) = ritsu_base::sources::LawDb::from_word(text("db")) else { continue };
+            for p in s.get("pins").and_then(Json::as_arr).unwrap_or(&[]) {
+                let of = |k: &str| p.get(k).and_then(Json::as_str);
+                let (Some(fragment), Some(sha)) = (of("fragment"), of("sha256")) else { continue };
+                let Some(file) = ritsu_base::sources::fragment_file(db, fragment) else { continue };
+                let file = format!("{}/{file}", ritsu_base::sources::copy_dir(id, asof));
+                held.pinned.push(Pinned { file: beside(&dir, &file), url: None, sha256: sha.to_string() });
+            }
+        } else if !text("path").is_empty() {
+            let (path, url) = (text("path"), text("url"));
+            held.facts.push((tr!("出典", "Source"), if url.is_empty() { Value::Code(path.to_string()) } else { Value::Link(url.to_string()) }));
+            held.pinned.push(Pinned { file: beside(&dir, path), url: Some(url.to_string()).filter(|u| !u.is_empty()), sha256: text("sha256").to_string() });
+        }
+    }
+}
+
 /// A calendar's days, tables and sources, from `koyomi api`.
 fn calendar_facts(api: &Json, lang: Lang, held: &mut Held) {
     let Some(cal) = api.get("calendar") else { return };
@@ -228,8 +258,7 @@ fn calendar_facts(api: &Json, lang: Lang, held: &mut Held) {
         }
         if let Some(sha) = s.get("sha256").and_then(Json::as_str) {
             held.facts.push((tr!("固定した版", "Pinned at"), Value::Code(format!("sha256:{sha}"))));
-            let joined = if dir.is_empty() || file.is_empty() { file.to_string() } else { format!("{dir}/{file}") };
-            held.pinned.push(Pinned { file: joined, url: url.map(str::to_string), sha256: sha.to_string() });
+            held.pinned.push(Pinned { file: beside(&dir, file), url: url.map(str::to_string), sha256: sha.to_string() });
         }
     }
     let uses: Vec<String> = cal.get("uses").and_then(Json::as_arr).unwrap_or(&[]).iter().filter_map(|u| u.get("name").and_then(Json::as_str).map(str::to_string)).collect();
@@ -293,7 +322,10 @@ pub(super) fn held(m: &diff::Module, rel: &str, lang: Lang, joined: &Joined) -> 
     };
     if let Some(api) = &api {
         match tool {
-            Tool::Rulec => h.facts = rule_facts(api, lang),
+            Tool::Rulec => {
+                h.facts = rule_facts(api, lang);
+                rule_sources(api, lang, &mut h);
+            }
             Tool::Koyomi => calendar_facts(api, lang, &mut h),
             Tool::Chobo => {
                 for (key, label) in [("accounts", tr!("勘定", "Accounts")), ("transfers", tr!("振替", "Transfers"))] {

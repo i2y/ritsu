@@ -404,28 +404,28 @@
                 "change": "changed",
                 "old": "data/days_off.csv",
                 "new": "data/days_off_v2.csv",
-                "may_break": true
+                "may_break": false
               },
               {
                 "at": "/calendar/sources/days_off/sha256",
                 "change": "changed",
                 "old": "db3a1d57457a1dd9",
                 "new": "a045e62eccc16e1f",
-                "may_break": true
+                "may_break": false
               },
               {
                 "at": "/calendar/sources/days_off/covers/to",
                 "change": "changed",
                 "old": "2026-12-31",
                 "new": "2027-12-31",
-                "may_break": true
+                "may_break": false
               },
               {
                 "at": "/calendar/sources/days_off/rows",
                 "change": "changed",
                 "old": 3,
                 "new": 7,
-                "may_break": true
+                "may_break": false
               },
               {
                 "at": "/calendar/data_range/to",

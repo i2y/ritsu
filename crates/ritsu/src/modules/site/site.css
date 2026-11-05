@@ -167,6 +167,7 @@ table.map .note { font: 400 12px system-ui, sans-serif; color: var(--dim); }
 table.map td { padding: 12px 10px; border-radius: 4px; background: var(--soft); font-variant-numeric: tabular-nums; }
 table.map td.chg { background: var(--warnsoft); color: var(--warn); font-weight: 700; }
 table.map td.chg s { font-weight: 400; opacity: 0.8; margin-right: 2px; }
+table.map td.chg .same { font-weight: 400; color: var(--dim); }
 table.map td.new { background: var(--accentsoft); color: var(--accent); font-weight: 600; }
 table.map td.gone { color: var(--dim); }
 table.map td.none { color: var(--dim); }

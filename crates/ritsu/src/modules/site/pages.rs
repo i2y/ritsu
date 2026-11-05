@@ -994,7 +994,12 @@ impl Writer<'_> {
             let w = plural(n, "source", "sources");
             let mut html = format!("{}<ul class=\"plain\">", esc(&self.say(tr!("{n} 件を SHA-256 で固定しています。", "{w}, pinned by SHA-256."))));
             for p in &pinned {
-                let file = format!("<a href=\"{}\"{}>{}</a>", esc(&self.file_link(place, &p.file)), lang_attr(&p.file, self.lang), esc(&p.file));
+                // a file of a dependency is on that module's page, not on this one's
+                let file = if p.file.starts_with('@') {
+                    format!("<code{}>{}</code>", lang_attr(&p.file, self.lang), esc(&p.file))
+                } else {
+                    format!("<a href=\"{}\"{}>{}</a>", esc(&self.file_link(place, &p.file)), lang_attr(&p.file, self.lang), esc(&p.file))
+                };
                 let url = p.url.as_ref().filter(|u| is_web(u)).map(|u| format!("<br><a class=\"small\" href=\"{0}\" rel=\"nofollow noopener\">{0}</a>", esc(u))).unwrap_or_default();
                 html.push_str(&format!("<li>{file}{url}</li>"));
             }
@@ -1015,6 +1020,17 @@ impl Writer<'_> {
 
     /// The step that says how a file names the module, for what it holds.
     fn use_snippet(&self, short: &str, r: &Read<'_>) -> Option<(Text, String)> {
+        // a module of more than one kind of thing to call: each of them, as a caller names them
+        let has = |k: Kind| r.holds.iter().any(|h| h.kind == k);
+        if has(Kind::Rule) && (has(Kind::Calendar) || has(Kind::Dates) || has(Kind::Book)) || has(Kind::Dates) && has(Kind::Book) {
+            let mut lines = String::new();
+            for (kind, word) in [(Kind::Rule, "rule"), (Kind::Dates, "dates"), (Kind::Book, "book")] {
+                for h in r.holds.iter().filter(|h| h.kind == kind) {
+                    lines.push_str(&format!("use {word} {} from \"@{short}/{}\"\n", h.name, h.rel));
+                }
+            }
+            return Some((tr!("ワークフローや kaname のモジュールから呼びます", "Call them from a workflow or a kaname module"), lines));
+        }
         if let Some(c) = r.holds.iter().find(|h| h.kind == Kind::Calendar) {
             let (name, rel) = (&c.name, &c.rel);
             return Some((

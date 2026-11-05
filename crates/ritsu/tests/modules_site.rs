@@ -556,7 +556,7 @@ fn steps_of(page: &str) -> Vec<String> {
 
 /// The steps a page tells a reader to take, taken as the page says them, in a project of the test's
 /// own: requiring the module under the name the list's `as` gives it, the `signature` line, and the
-/// lines that read a calendar of the module or call a rule of it. `ritsu check` passes what they
+/// lines that read a calendar of the module or call what it holds. `ritsu check` passes what they
 /// make. Without an `as`, the name is the last part of the module's.
 #[test]
 fn the_steps_on_a_page_can_be_taken() {
@@ -566,9 +566,16 @@ fn the_steps_on_a_page_can_be_taken() {
     edit(&a.t, "holidays/ritsu.mod", "module ghcr.io/i2y/ritsu-holidays", &format!("module {host}/acme/ritsu-holidays"));
     let (code, out, err) = a.run_in("holidays", &a.path("pushed"), &["mod", "push"], &[]);
     assert_eq!(code, 0, "{out}{err}");
+    // a module of more than one kind of thing to call
+    a.t.write("mixed/ritsu.mod", format!("module {host}/acme/mixed\nversion 1.0.0\nritsu >=0.41.0\n"));
+    a.t.write("mixed/fee.rule", "rule fee v1\ndescription \"A fee\"\n\ninputs\n  urgent : bool\n\noutputs\n  amount : money[GBP]  round down(1GBP)\n\ntable fees\npolicy unique\n| urgent | -> amount : money[GBP] |\n| true   | 5GBP                  |\n| false  | 1GBP                  |\n");
+    a.t.write("mixed/due.cal", "dates due v1\ndescription \"A week later\"\n\ninputs\n  given : date  range >=2026-01-01 <=2026-12-31\n\ndate last = given\n  + 7 days\n");
+    a.t.write("mixed/stock.book", "book stock v1\ndescription \"Stock\"\n\nunit each\n\naccount shelf(sku: string) : each\n  at least 0 refused as out_of_stock\naccount made : each outside\naccount sold : each outside\n\ntransfer stock_up(delivery: string, sku: string, count: each)\n  key delivery\n  move count from made to shelf(sku)\n\ntransfer sell(order: string, sku: string, count: each)\n  key order\n  move count from shelf(sku) to sold\n");
+    let (code, out, err) = a.run_in("mixed", &a.path("pushed"), &["mod", "push"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
     a.t.write(
         "modules.list",
-        format!("module \"{host}/acme/ritsu-holidays\" as \"holidays\"\nmodule \"{host}/acme/pricing\"\nsignature \"{host}/acme/\" by matching \"^https://github[.]com/acme/\" issuer \"https://token.actions.githubusercontent.com\"\n"),
+        format!("module \"{host}/acme/ritsu-holidays\" as \"holidays\"\nmodule \"{host}/acme/pricing\"\nmodule \"{host}/acme/mixed\"\nsignature \"{host}/acme/\" by matching \"^https://github[.]com/acme/\" issuer \"https://token.actions.githubusercontent.com\"\n"),
     );
     let (code, out, err) = a.site("modules.list", "site", &[], &[]);
     assert_eq!(code, 0, "{out}{err}");
@@ -580,7 +587,7 @@ fn the_steps_on_a_page_can_be_taken() {
             assert_eq!(code, 0, "`{line}` in {dir}:\n{out}{err}");
         }
     };
-    for (module, version, name, file) in [("ritsu-holidays", "1.1.0", "holidays", "office.cal"), ("pricing", "1.1.0", "pricing", "basket.kn")] {
+    for (module, version, name, file) in [("ritsu-holidays", "1.1.0", "holidays", "office.cal"), ("pricing", "1.1.0", "pricing", "basket.kn"), ("mixed", "1.0.0", "mixed", "order.kn")] {
         let page = std::fs::read_to_string(a.path(&format!("site/{host}/acme/{module}/index.html"))).unwrap();
         let steps = steps_of(&page);
         assert_eq!(steps.len(), 4 + 3 * usize::from(module == "pricing"), "{steps:#?}");
@@ -595,6 +602,10 @@ fn the_steps_on_a_page_can_be_taken() {
         run(&project, &steps[2]);
         let text = match file {
             "office.cal" => steps[3].clone(),
+            "order.kn" => {
+                assert_eq!(steps[3], "use rule fee from \"@mixed/fee.rule\"\nuse dates due from \"@mixed/due.cal\"\nuse book stock from \"@mixed/stock.book\"\n", "{steps:#?}");
+                format!("module order v1\ndescription \"An order\"\n\n{}\n\nfn charge(urgent: bool) -> money[GBP] total\n  description \"What an order pays\"\n  fee(urgent: urgent).amount\n", steps[3])
+            }
             // the line that calls a rule, in a module that calls it
             _ => format!("module basket v1\ndescription \"The total of a basket\"\n\n{}\nfn total(subtotal: money[GBPc] range >=0GBPc <=1_000GBPc) -> money[GBPc]\n  order_total(subtotal: subtotal, category: order_total.category.zero, shipping: 0GBPc).total\n", steps[3]),
         };

@@ -231,7 +231,7 @@ pub fn wire_exact(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
 
 /// The unit an amount of `name` is counted in, as the rule writes it after a number: `円`,
 /// `銭`, `kg`. None for anything but money and quantities.
-fn unit_of(c: &Checked, name: &str) -> Option<String> {
+pub(crate) fn unit_of(c: &Checked, name: &str) -> Option<String> {
     let ty = match c.ty_of(name)? {
         crate::types::Ty::Opt(t) => *t,
         t => t,

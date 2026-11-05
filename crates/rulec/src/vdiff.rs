@@ -3345,6 +3345,14 @@ pub struct MapCell {
     pub moved: bool,
 }
 
+/// An output a [`Map`] answers: its name, and the unit it is counted in when the two versions count
+/// it in one.
+#[derive(Debug, Clone)]
+pub struct MapOutput {
+    pub name: String,
+    pub unit: Option<String>,
+}
+
 /// What both versions answer over the whole of a small rule: a table with its rows the values of
 /// one input (none when the rule has one) and its columns the bands of the other. Each cell holds
 /// one answer for every input in it: a rule whose answer moves inside a cell has no map. An enum
@@ -3353,6 +3361,8 @@ pub struct MapCell {
 pub struct Map {
     pub rows: Option<MapAxis>,
     pub cols: MapAxis,
+    /// The outputs the cells hold, in their order.
+    pub outputs: Vec<MapOutput>,
     /// By row, then by column.
     pub cells: Vec<Vec<MapCell>>,
 }
@@ -3530,5 +3540,12 @@ pub fn map_of(d: &VDiff, o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> 
         return None;
     }
     let axis_of = |i: usize, coords: Vec<MapCoord>| MapAxis { col: axes[i].col.clone(), unit: axes[i].unit.clone(), date: axes[i].date, coords };
-    Some(Map { rows: r.map(|i| axis_of(i, row_coords)), cols: axis_of(c, col_coords), cells })
+    let mut outputs: Vec<MapOutput> = Vec::new();
+    for (name, _) in cells.iter().flatten().flat_map(|cell| cell.old.iter().chain(cell.new.iter()).flatten()) {
+        if !outputs.iter().any(|x| x.name == *name) {
+            let (a, b) = (crate::report::unit_of(o.1, name), crate::report::unit_of(n.1, name));
+            outputs.push(MapOutput { name: name.clone(), unit: if a == b { b } else { None } });
+        }
+    }
+    Some(Map { rows: r.map(|i| axis_of(i, row_coords)), cols: axis_of(c, col_coords), outputs, cells })
 }

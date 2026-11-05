@@ -440,9 +440,10 @@ pub struct IChange {
 
 impl IChange {
     /// A candidate for a change that breaks a user: a removal or a change, not of a description
-    /// (words for a person, which no caller reads).
+    /// (words for a person, which no caller reads) nor of what a file says of its sources (where its
+    /// numbers came from: no caller reads that, and what the numbers do is the behavior).
     pub fn may_break(&self) -> bool {
-        self.how != How::Added && self.at.rsplit('/').next() != Some("description")
+        self.how != How::Added && self.at.rsplit('/').next() != Some("description") && !self.at.starts_with("/sources/") && !self.at.starts_with("/calendar/sources/")
     }
 }
 

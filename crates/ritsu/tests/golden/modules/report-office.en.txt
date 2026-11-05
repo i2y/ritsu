@@ -72,15 +72,15 @@ behavior:
     for every other combination, every action is decided the same.
 
 interface:
-  calendars/office.cal (koyomi, api): 7 changes, 7 of them may break a user
+  calendars/office.cal (koyomi, api): 7 changes, 3 of them may break a user
     the version at the head of the file: 1 → 2
     may break: changed: /calendar/offset: null → "+01:00"
-    may break: changed: /calendar/sources/days_off/file: "data/days_off.csv" → "data/days_off_v2.csv"
-    may break: changed: /calendar/sources/days_off/sha256: "db3a1d57457a1dd9" → "a045e62eccc16e1f"
-    may break: changed: /calendar/sources/days_off/covers/to: "2026-12-31" → "2027-12-31"
-    may break: changed: /calendar/sources/days_off/rows: 3 → 7
     may break: changed: /calendar/data_range/to: "2026-12-31" → "2027-12-31"
     may break: changed: /wasm/package: "koyomi:office@1.0.0" → "koyomi:office@2.0.0"
+    changed: /calendar/sources/days_off/file: "data/days_off.csv" → "data/days_off_v2.csv"
+    changed: /calendar/sources/days_off/sha256: "db3a1d57457a1dd9" → "a045e62eccc16e1f"
+    changed: /calendar/sources/days_off/covers/to: "2026-12-31" → "2027-12-31"
+    changed: /calendar/sources/days_off/rows: 3 → 7
   gates/band.rule (rulec, api): 4 changes, 4 of them may break a user
     the version at the head of the file: 1 → 2
     may break: changed: /connect/proto: "proto/rulec/band/v1/band.proto" → "proto/rulec/band/v2/band.proto"
