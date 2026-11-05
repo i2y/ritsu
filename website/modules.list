@@ -7,4 +7,10 @@
 # modules-list.yml checks a pull request that changes this file, with no permissions.
 # crates/ritsu/tests/website.rs builds the site with no network, from the modules' working trees.
 module "ghcr.io/i2y/ritsu-holidays" as "holidays"
+module "ghcr.io/i2y/ritsu-osha" as "osha"
+module "ghcr.io/i2y/ritsu-us-income-tax" as "us_income_tax"
+module "ghcr.io/i2y/ritsu-uk-rates" as "uk_rates"
+module "ghcr.io/i2y/ritsu-late-payment" as "late_payment"
+module "ghcr.io/i2y/ritsu-japan-tax" as "japan_tax"
+module "ghcr.io/i2y/ritsu-japan-social-insurance" as "japan_social_insurance"
 signature "ghcr.io/i2y/" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"

@@ -4368,7 +4368,7 @@ modules/holidays/
   - 入力とジョブの出力は、`run` の中に `${{ }}` で書かず、環境変数で渡す。
   - `crates/ritsu/tests/modules.rs` の `the_workflow_that_publishes_the_seed_module_runs_by_hand_only` が、次を確かめる。始まりは `workflow_dispatch` だけ、`publish` は既定が false の真偽値、`packages: write` と `id-token: write` は `publish` のジョブだけ、cosign の URL とチェックサムは tools.yml と同じ。
   - 手元に actionlint が無かったので、YAML を読み直せることと、`run` の中を `bash -n` で確かめ、`check` のジョブの手順を祝日のモジュールで手元で走らせた（2026-10-29）。
-- **公開**（2026-10-30）：modules.yml を `publish` で走らせ、祝日のモジュールの 1.0.0 を ghcr.io に送り出して署名した。二つのジョブが通り、cosign と ritsu の二通りの確かめも通った。パッケージは、設定を変えずに資格情報なしで読めた（マニフェストの `org.opencontainers.image.source` は、公開のこのリポジトリを指す）。Docker の設定もモジュールの置き場も空にした手元で、`signature` の行だけを持つモジュールから `ritsu mod fetch ghcr.io/i2y/ritsu-holidays@1.0.0` が取り出して署名を確かめ、新しい一覧の `ritsu mod site` が英日のページを書いた（版の行は、ダイジェストと「ダイジェストと署名」を確かめたこと）。
+- **公開**（2026-10-30）：modules.yml を `publish` で走らせ、祝日のモジュールの 1.0.0 を ghcr.io に送り出して署名した。二つのジョブが通り、cosign と ritsu の二通りの確かめも通った。パッケージは、設定を変えずに資格情報なしで読めた（マニフェストの `org.opencontainers.image.source` は、公開のこのリポジトリを指す）。Docker の設定もモジュールの置き場も空にした手元で、`signature` の行だけを持つモジュールから `ritsu mod fetch ghcr.io/i2y/ritsu-holidays@1.0.0` が取り出して署名を確かめ、新しい一覧の `ritsu mod site` が英日のページを書いた（版の行は、ダイジェストと「ダイジェストと署名」を確かめたこと）。2026-11-05 に、祝日のモジュールの 1.1.0 と新しい 6 本を同じ手順で送り出した。どのパッケージも設定を変えずに資格情報なしで読め、署名を確かめられた。
 - **次の版**：データを新しくしたら、`ritsu.mod` の版を上げ（名前と版の決まりは上）、modules.yml を `publish` で走らせる。一覧は docs.yml が次に走るときに新しい版を載せる。**新しいモジュール**は、送り出して資格情報なしで読めることを確かめてから、`website/modules.list` に `module` の行を足す。行を先に足すと、版を読めないので一覧が止まる。git の依存として取るためのタグ（`modules/holidays/v…`）は作らない。`module` の行がレジストリの名前なので、git からは取れない（一つのモジュールは git とレジストリの両方からは配れない。17.12.1）。
 
 ### 17.19 コマンドの表
