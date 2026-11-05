@@ -480,7 +480,9 @@ answers are what they are, so `ritsu mod diff` says each requirement that moved:
 now, when it is in force, the `decided` lines the new version adds, what it is read from, what meets
 and checks it, and who looked. The difference in a source's text comes from the copies the records
 keep under `reviewed/`. These are the words of the module's file: ritsu checks that what they were
-written against has not moved since someone looked, not that they are right.
+written against has not moved since someone looked, not that they are right. The Changes tab of
+[`osha-penalties` 1.2.0](modules/list/ghcr.io/i2y/ritsu-osha-penalties/1.2.0/) shows one, for
+the amendment of 2025.
 
 `ritsu mod report --base <revision>` answers what a pull request that raises a dependency asks. It
 reads your files as the head has them, with the dependencies of the base and then with those of the
