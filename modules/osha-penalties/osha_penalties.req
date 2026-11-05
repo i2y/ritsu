@@ -8,13 +8,13 @@ source osha = rulec "osha_penalty.rule" source osha
 scope rulec "osha_penalty.rule" table
 
 requirement penalty_amounts
-  text "For penalties proposed after January 15, 2024, the penalty for a willful violation is at least $11,524 and at most $161,323, and for a repeated violation at most $161,323. The penalty for a serious violation, an other-than-serious violation or a posting requirement violation is at most $16,131, and for a failure to correct a violation at most $16,131 per day."
-  in force 2024-01-16..
+  text "For penalties proposed after January 15, 2025, the penalty for a willful violation is at least $11,823 and at most $165,514, and for a repeated violation at most $165,514. The penalty for a serious violation, an other-than-serious violation or a posting requirement violation is at most $16,550, and for a failure to correct a violation at most $16,550 per day."
+  in force 2025-01-16..
   owner maintainer
   from @osha "§1903.15"
-    reviewed 2026-11-05 by maintainer sha256:b8b38d7b2786bc9a -> sha256:339f29f8a2a98a9e
-  decided 2026-11-05 by maintainer "Follows the amendment at 89 FR 1817 (January 11, 2024), which states the adjusted amounts for penalties proposed after January 15, 2024."
+    reviewed 2026-11-05 by maintainer sha256:c2ef04d3f2d87924 -> sha256:791488765f4d15c2
+  decided 2026-11-05 by maintainer "Follows the amendment at 90 FR 1861 (January 10, 2025), which states the adjusted amounts for penalties proposed after January 15, 2025."
   satisfied by rulec "osha_penalty.rule" table amounts
-    reviewed 2026-11-05 by maintainer sha256:339f29f8a2a98a9e -> sha256:b165de089838f476
+    reviewed 2026-11-05 by maintainer sha256:791488765f4d15c2 -> sha256:ef59be5c0a9bd563
   verified by rulec "osha_penalty.rule"
-    reviewed 2026-11-05 by maintainer sha256:339f29f8a2a98a9e -> sha256:93fea094d0b3049d
+    reviewed 2026-11-05 by maintainer sha256:791488765f4d15c2 -> sha256:3ece81750c6fc1bb

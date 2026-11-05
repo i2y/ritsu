@@ -9,7 +9,7 @@ section is kept beside the rule as the eCFR served it, and the rule pins it by i
 | `osha_penalty.rule` | `osha_penalty` | For a kind of violation, the most and the least of a penalty, and whether it counts by the violation or by the day | 29 CFR 1903.15(d) |
 | `osha_penalties.req` | `penalty_amounts` | The amounts in a sentence, the amendment this version follows, and who read each link | 29 CFR 1903.15(d) |
 
-This version transcribes the section as of 2024-02-01, for penalties proposed after January 15, 2024. It is to be
+This version transcribes the section as of 2025-02-01, for penalties proposed after January 15, 2025. It is to be
 read against the section, and is not legal advice. The section states what may be proposed: what is
 proposed for a violation also turns on the matters of 1903.15(b), such as the size of the business.
 
@@ -18,7 +18,7 @@ proposed for a violation also turns on the matters of 1903.15(b), such as the si
 Add the module, add the line that checks its signature to your `ritsu.mod`, and fetch it:
 
 ```console
-$ ritsu mod add osha_penalties ghcr.io/i2y/ritsu-osha-penalties@1.1.0
+$ ritsu mod add osha_penalties ghcr.io/i2y/ritsu-osha-penalties@1.2.0
 ```
 
 ```
@@ -63,3 +63,4 @@ changes the inputs or outputs of the rule, raises the major version.
 |---|---|---|---|---|---|
 | 1.0.0 | January 15, 2023 | 156,259 USD | 15,625 USD | 11,162 USD | 88 FR 2217 |
 | 1.1.0 | January 15, 2024 | 161,323 USD | 16,131 USD | 11,524 USD | 89 FR 1817 |
+| 1.2.0 | January 15, 2025 | 165,514 USD | 16,550 USD | 11,823 USD | 90 FR 1861 |

@@ -1,0 +1,9 @@
+table amounts  @osha "§1903.15"
+policy unique
+| violation          | -> least : money[USD] | most : money[USD] | per : counted_by |
+| willful            | 11823USD              | 165514USD         | violation        |
+| repeated           | 0USD                  | 165514USD         | violation        |
+| serious            | 0USD                  | 16550USD          | violation        |
+| other_than_serious | 0USD                  | 16550USD          | violation        |
+| failure_to_correct | 0USD                  | 16550USD          | day              |
+| posting            | 0USD                  | 16550USD          | violation        |
