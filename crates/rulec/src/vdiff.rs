@@ -2475,7 +2475,7 @@ fn witness_text(c: &Checked, w: &BTreeMap<String, Val>) -> String {
 /// even when the two cannot be compared at all — it is often the whole answer.
 /// One change to what the rule accepts, in words. The key stays English in the JSON; this
 /// is the half a person reads.
-fn domain_word(what: &str) -> String {
+pub fn domain_word(what: &str) -> String {
     match what {
         "input_added" => tr!("入力が増えた", "an input was added"),
         "input_removed" => tr!("入力が消えた", "an input was removed"),
@@ -3297,4 +3297,238 @@ impl<'a> Walker<'a> {
         }
         out
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// The two versions as one table
+// ---------------------------------------------------------------------------------------
+
+/// The most combinations of coordinates a [`Map`] is worked out over.
+const MAP_CELLS: usize = 2_000;
+/// The most columns and rows a [`Map`] has once coordinates that answer alike are put together:
+/// past these a table is harder to read than the regions.
+const MAP_COLUMNS: usize = 8;
+const MAP_ROWS: usize = 16;
+
+/// Which versions take a row or a column of a [`Map`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapSide {
+    Both,
+    OldOnly,
+    NewOnly,
+}
+
+/// A row or a column of a [`Map`]: a word, or a band of an input (the ends as the rule writes them,
+/// with no unit, and an end the band runs on from is `None`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MapCoord {
+    Word(String, MapSide),
+    Band(Option<String>, Option<String>),
+}
+
+/// An input a [`Map`] lays out.
+#[derive(Debug, Clone)]
+pub struct MapAxis {
+    pub col: String,
+    pub unit: String,
+    /// Whether the ends of its bands are dates.
+    pub date: bool,
+    pub coords: Vec<MapCoord>,
+}
+
+/// One cell of a [`Map`]: each version's answers, an output a line, as a person reads them; `None`
+/// for a version that does not take the input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapCell {
+    pub old: Option<Vec<(String, String)>>,
+    pub new: Option<Vec<(String, String)>>,
+    pub moved: bool,
+}
+
+/// What both versions answer over the whole of a small rule: a table with its rows the values of
+/// one input (none when the rule has one) and its columns the bands of the other. Each cell holds
+/// one answer for every input in it: a rule whose answer moves inside a cell has no map. An enum
+/// value only one version takes gets a row of its own, which the regions do not say.
+#[derive(Debug, Clone)]
+pub struct Map {
+    pub rows: Option<MapAxis>,
+    pub cols: MapAxis,
+    /// By row, then by column.
+    pub cells: Vec<Vec<MapCell>>,
+}
+
+/// The table of what two versions answer, for a rule of one or two inputs with few coordinates;
+/// `None` for every other: a rule with a computed column, a walk or a machine, one whose answer
+/// moves inside a coordinate, and one whose table would be too wide to read.
+pub fn map_of(d: &VDiff, o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Option<Map> {
+    if d.blocked.is_some() || d.over_budget || d.machine.is_some() || d.axes.is_empty() || d.axes.len() > 2 || d.cells > MAP_CELLS {
+        return None;
+    }
+    if d.axes.iter().any(|a| a.kind != Kind::Input) {
+        return None;
+    }
+    // an input no column names reads as one value here, and the cells would not hold for the others
+    let named = |x: &RuleFile| x.inputs.iter().all(|i| d.axes.iter().any(|a| a.col == i.name.text));
+    if !named(o.0) || !named(n.0) {
+        return None;
+    }
+    let axes = &d.axes;
+    let menu = element_menu(n.0, n.1, 24);
+    let input_names: BTreeSet<String> = o.0.inputs.iter().map(|i| i.name.text.clone()).collect();
+    let scalars = scalar_derives(o.0, &input_names);
+    let cone = cone_of(axes, o.0, o.1, &scalars);
+    let mut memo: HashMap<Vec<usize>, Solved> = HashMap::new();
+    // The rows: the input of words, or the shorter; the columns: the other (a table of one input
+    // has only them).
+    let word = |a: &Axis| a.coords.iter().all(|c| matches!(c, Coord::Word(_) | Coord::OtherStr));
+    let (r, c) = match axes.len() {
+        1 => (None, 0),
+        _ => match (word(&axes[0]), word(&axes[1])) {
+            (false, true) => (Some(1), 0),
+            (true, true) if axes[1].len() > axes[0].len() => (Some(1), 0),
+            _ => (Some(0), 1),
+        },
+    };
+    let answers = |a: &Answer, f: &Checked| -> Vec<(String, String)> {
+        a.outs.iter().map(|(k, v)| (k.clone(), v.as_ref().map_or_else(|| "-".to_string(), |v| crate::vectors::show_named(f, k, v)))).collect()
+    };
+    let names = |a: &Answer, b: &Answer| -> Vec<String> {
+        let mut out: Vec<String> = a.outs.iter().map(|(k, _)| k.clone()).collect();
+        for (k, _) in &b.outs {
+            if !out.contains(k) {
+                out.push(k.clone());
+            }
+        }
+        out
+    };
+    // what each version answers at a combination of the axes' coordinates
+    let mut at = |cell: &[usize]| -> Result<MapCell, ()> {
+        let Some((inputs, ao)) = realize(axes, cell, o.0, o.1, &menu, &scalars, &cone, &mut memo, None) else {
+            return Ok(MapCell { old: None, new: None, moved: false });
+        };
+        let an = run(n.0, n.1, inputs);
+        if !constant_here(o.0, o.1, axes, cell, &ao) || !constant_here(n.0, n.1, axes, cell, &an) {
+            return Err(());
+        }
+        let keys = names(&ao, &an);
+        let (mut old, mut new) = (Vec::new(), Vec::new());
+        for k in &keys {
+            let a = ao.outs.iter().find(|(x, _)| x == k).and_then(|(_, v)| v.as_ref());
+            let b = an.outs.iter().find(|(x, _)| x == k).and_then(|(_, v)| v.as_ref());
+            let (so, sn) = crate::report::shown_pair(k, a, o.1, b, n.1);
+            old.push((k.clone(), so.unwrap_or_else(|| "-".to_string())));
+            new.push((k.clone(), sn.unwrap_or_else(|| "-".to_string())));
+        }
+        let moved = !answers_alike(o.1, &ao.outs, n.1, &an.outs);
+        Ok(MapCell { old: Some(old), new: Some(new), moved })
+    };
+    let (rows_n, cols_n) = (r.map_or(1, |i| axes[i].len()), axes[c].len());
+    let mut grid: Vec<Vec<MapCell>> = Vec::with_capacity(rows_n);
+    for y in 0..rows_n {
+        let mut row = Vec::with_capacity(cols_n);
+        for x in 0..cols_n {
+            let mut cell = vec![0usize; axes.len()];
+            cell[c] = x;
+            if let Some(i) = r {
+                cell[i] = y;
+            }
+            row.push(at(&cell).ok()?);
+        }
+        grid.push(row);
+    }
+    // the values of an enum only one version takes, each a row (or a column, for a rule of one
+    // input): the answers of that version over the other input's coordinates
+    let only = |ax: &Axis, x: &Checked, y: &Checked, side: MapSide| -> Vec<(String, MapSide)> {
+        let Ty::Enum(en) = ax.ty.present() else { return Vec::new() };
+        let (Some(mine), Some(theirs)) = (x.enums.get(en), y.enums.get(en)) else { return Vec::new() };
+        mine.iter().filter(|v| !theirs.contains(v) && x.enum_ranges.get(&ax.col).is_none_or(|r| r.contains(v))).map(|v| (v.clone(), side)).collect()
+    };
+    let word_axis = r.unwrap_or(c);
+    let mut extra = only(&axes[word_axis], o.1, n.1, MapSide::OldOnly);
+    extra.extend(only(&axes[word_axis], n.1, o.1, MapSide::NewOnly));
+    let mut extra_cells: Vec<Vec<MapCell>> = Vec::new();
+    for (value, s) in &extra {
+        let (f, g) = if *s == MapSide::NewOnly { n } else { o };
+        let others = if r.is_some() { cols_n } else { 1 };
+        let mut row = Vec::with_capacity(others);
+        for x in 0..others {
+            let mut cell = vec![0usize; axes.len()];
+            if r.is_some() {
+                cell[c] = x;
+            }
+            let Some((mut inputs, _)) = realize(axes, &cell, o.0, o.1, &menu, &scalars, &cone, &mut memo, None) else {
+                row.push(MapCell { old: None, new: None, moved: false });
+                continue;
+            };
+            inputs.insert(axes[word_axis].col.clone(), Val::Enum(value.clone()));
+            let a = run(f, g, inputs);
+            if !constant_here(f, g, axes, &cell, &a) {
+                return None;
+            }
+            let out = answers(&a, g);
+            row.push(if *s == MapSide::NewOnly { MapCell { old: None, new: Some(out), moved: false } } else { MapCell { old: Some(out), new: None, moved: false } });
+        }
+        extra_cells.push(row);
+    }
+    // coordinates side by side that answer alike, in every row, are one band
+    let band = |ax: &Axis, from: usize, to: usize| -> MapCoord {
+        let (lo, _) = ival(&ax.coords[from], ax.step);
+        let (_, hi) = ival(&ax.coords[to], ax.step);
+        let end = |x: Option<Rat>| {
+            x.map(|v| {
+                if ax.date {
+                    let (y, m, d) = crate::types::ord_to_date(v);
+                    format!("{y:04}-{m:02}-{d:02}")
+                } else if ax.shown == 100 {
+                    v.mul(Rat::int(100)).to_string()
+                } else {
+                    v.to_string()
+                }
+            })
+        };
+        MapCoord::Band(end(lo), end(hi))
+    };
+    let coord = |ax: &Axis, i: usize| match &ax.coords[i] {
+        Coord::Word(w) => MapCoord::Word(w.clone(), MapSide::Both),
+        Coord::OtherStr => MapCoord::Word("*".to_string(), MapSide::Both),
+        _ => band(ax, i, i),
+    };
+    let numeric = |ax: &Axis| ax.coords.iter().all(|x| matches!(x, Coord::Point(_) | Coord::Open(..)));
+    // the runs of an axis's coordinates that `same` says answer alike
+    let runs = |len: usize, same: &dyn Fn(usize, usize) -> bool| -> Vec<(usize, usize)> {
+        let mut out: Vec<(usize, usize)> = Vec::new();
+        for i in 0..len {
+            match out.last_mut() {
+                Some((a, b)) if same(*a, i) => *b = i,
+                _ => out.push((i, i)),
+            }
+        }
+        out
+    };
+    let col_runs = if numeric(&axes[c]) { runs(cols_n, &|a, b| grid.iter().all(|row| row[a] == row[b]) && extra_cells.iter().all(|row| r.is_none() || row[a] == row[b])) } else { (0..cols_n).map(|i| (i, i)).collect() };
+    let row_runs = match r {
+        Some(i) if numeric(&axes[i]) => runs(rows_n, &|a, b| col_runs.iter().all(|&(x, _)| grid[a][x] == grid[b][x])),
+        _ => (0..rows_n).map(|i| (i, i)).collect(),
+    };
+    let mut col_coords: Vec<MapCoord> = col_runs.iter().map(|&(a, b)| if a == b { coord(&axes[c], a) } else { band(&axes[c], a, b) }).collect();
+    let mut cells: Vec<Vec<MapCell>> = row_runs.iter().map(|&(y, _)| col_runs.iter().map(|&(x, _)| grid[y][x].clone()).collect()).collect();
+    let mut row_coords: Vec<MapCoord> = match r {
+        Some(i) => row_runs.iter().map(|&(a, b)| if a == b { coord(&axes[i], a) } else { band(&axes[i], a, b) }).collect(),
+        None => Vec::new(),
+    };
+    for ((value, s), row) in extra.iter().zip(&extra_cells) {
+        if r.is_some() {
+            row_coords.push(MapCoord::Word(value.clone(), *s));
+            cells.push(col_runs.iter().map(|&(x, _)| row[x].clone()).collect());
+        } else {
+            // a rule of one input: its only row runs on with the value
+            col_coords.push(MapCoord::Word(value.clone(), *s));
+            cells[0].push(row[0].clone());
+        }
+    }
+    if col_coords.len() > MAP_COLUMNS || cells.len() > MAP_ROWS {
+        return None;
+    }
+    let axis_of = |i: usize, coords: Vec<MapCoord>| MapAxis { col: axes[i].col.clone(), unit: axes[i].unit.clone(), date: axes[i].date, coords };
+    Some(Map { rows: r.map(|i| axis_of(i, row_coords)), cols: axis_of(c, col_coords), cells })
 }

@@ -1929,6 +1929,8 @@ pub struct WholeDiff {
     /// Whether "every other input gets the same answer" was earned: no cell over the budget,
     /// unsettled or unrealized.
     pub total: bool,
+    /// What the two versions answer as one table, for a rule small enough to have one.
+    pub map: Option<crate::vdiff::Map>,
 }
 
 /// `rulec diff <old> <new>` over the whole input space, `old` and `new` read as `diff` reads them
@@ -1948,6 +1950,7 @@ pub fn diff_whole_through(old: (&str, Through), new: (&str, Through), shown: (&s
         json: crate::vdiff::render_json(&d, &nc, shown.0, shown.1),
         differs: d.any(),
         total: d.total(),
+        map: crate::vdiff::map_of(&d, (&of, &oc), (&nf, &nc)),
     })
 }
 
