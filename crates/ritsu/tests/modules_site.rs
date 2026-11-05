@@ -23,13 +23,17 @@
 //!   that does not answer.
 
 use ritsu_base::modules::store;
-use ritsu_testkit::TempDir;
 use ritsu_testkit::registry::{self as reg, Registry};
+use ritsu_testkit::{Need, TempDir, need, skip};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn root() -> PathBuf {
+    here().join("../..")
 }
 
 const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
@@ -203,10 +207,10 @@ fn masked(page: &str, host: &str) -> String {
     let text = digests_masked(&text);
     let mut out = String::new();
     for line in text.split_inclusive('\n') {
-        if line.contains("<code>ritsu.mod</code></a></td>") || line.contains("<code>ritsu.lock</code></a></td>") {
+        if line.contains(">ritsu.mod</a></td>") || line.contains(">ritsu.lock</a></td>") {
             let cut = line.trim_end_matches('\n').trim_end_matches("</td></tr>");
-            let cell = cut.rfind("<td>").unwrap();
-            out.push_str(&format!("{}<td>&lt;bytes&gt;</td></tr>\n", &cut[..cell]));
+            let cell = cut.rfind(">").unwrap();
+            out.push_str(&format!("{}>&lt;bytes&gt;</td></tr>\n", &cut[..cell]));
         } else {
             out.push_str(line);
         }
@@ -249,6 +253,14 @@ fn opened(json: &str) -> Vec<(String, Vec<u8>)> {
         .collect()
 }
 
+/// The text of a file's code on its page: the element's, with its tags gone and its characters as
+/// they are.
+fn code_text(page: &str) -> String {
+    let inner = page.split("<pre class=\"source lines").nth(1).expect("a page with code").split_once("<code>").unwrap().1.split("</code></pre>").next().unwrap();
+    let bare: String = inner.split('<').enumerate().map(|(i, part)| if i == 0 { part } else { part.split_once('>').unwrap().1 }).collect();
+    bare.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+}
+
 /// The list of the three modules on the registry `host`, each version checked by the line for the
 /// registry's acme/.
 fn list_of_three(host: &str) -> String {
@@ -269,7 +281,7 @@ fn the_site_of_the_example_held_to_golden_files() {
     a.t.write("modules.list", list_of_three(&host));
     let mut failures = Vec::new();
     let mut written: Option<Vec<String>> = None;
-    for (lang, said_out) in [("en", "ritsu mod site: wrote 34 pages of 3 modules in site-en\n"), ("ja", "ritsu mod site: モジュール 3 個のページを 34 枚、site-ja に書きました\n")] {
+    for (lang, said_out) in [("en", "ritsu mod site: wrote 44 pages of 3 modules in site-en\n"), ("ja", "ritsu mod site: モジュール 3 個のページを 44 枚、site-ja に書きました\n")] {
         let out = format!("site-{lang}");
         let (code, stdout, err) = a.site("modules.list", &out, &["--lang", lang], &[]);
         assert_eq!((code, stdout.as_str(), err.as_str()), (0, said_out, ""), "{lang}");
@@ -299,9 +311,24 @@ fn the_site_of_the_example_held_to_golden_files() {
             let p = page(&format!("<registry>/acme/shop/0.2.0/files/{rel}.html"));
             assert!(p.starts_with("<!doctype html>"), "{rel} ({lang})");
             let up = "../".repeat(rel.matches('/').count() + 1);
-            assert!(p.contains(&format!("<a href=\"{up}index.html\">0.2.0</a></nav>\n")), "{rel} ({lang}) has no way back to its version:\n{}", &p[..p.len().min(3000)]);
+            assert!(p.contains(&format!("<a href=\"{up}index.html\">0.2.0</a></span>")), "{rel} ({lang}) has no way back to its version:\n{}", &p[..p.len().min(3000)]);
+            assert!(p.contains(&format!("{up}files/{}.html\" selected>", rel)), "{rel} ({lang}) is not chosen in its menu of files");
             assert!(p.contains(&format!("{tool} ")) || p.contains(tool), "{rel} ({lang})");
+            // the switch to its code, whose page says the file, and whose menu stays with code
+            assert!(p.contains(&format!("{up}files/{rel}.html\" aria-current=\"page\">")) && p.contains(&format!("{up}code/{rel}.html\">")), "{rel} ({lang}) has no switch");
+            let c = page(&format!("<registry>/acme/shop/0.2.0/code/{rel}.html"));
+            assert!(c.contains(&format!("{up}code/{rel}.html\" aria-current=\"page\">")) && c.contains(&format!("{up}files/{rel}.html\">")), "{rel} ({lang}): the code has no switch");
+            assert!(c.contains(&format!("{up}code/{rel}.html\" selected>")) && c.contains(&format!("{up}files/ritsu.mod.html\">ritsu.mod</option>")), "{rel} ({lang}): its menu of files");
+            let module_json: serde_json::Value = serde_json::from_str(&page("<registry>/acme/shop/0.2.0/module.json")).unwrap();
+            let file = module_json.as_array().unwrap().iter().find(|i| i[0] == rel).expect("the file is in module.json")[1].as_str().unwrap().to_string();
+            assert_eq!(code_text(&c), file, "{rel} ({lang}): the text of its code is the file");
+            assert!(page("<registry>/acme/shop/0.2.0/index.html").contains(&format!("href=\"./code/{rel}.html\"")) || page("<registry>/acme/shop/0.2.0/index.html").contains(&format!("href=\"code/{rel}.html\"")), "{rel} ({lang}): the tab of files leads to its code");
         }
+        // a file with no page but its code has no switch, and nothing under code/
+        let data = "orders/scenarios/charged.json";
+        assert!(!page(&format!("<registry>/acme/shop/0.2.0/files/{data}.html")).contains("rm-switch"), "{lang}");
+        assert!(page(&format!("<registry>/acme/shop/0.2.0/files/{data}.html")).contains("<pre class=\"source lines"), "{lang}");
+        assert!(!site.join(host.replace(':', "%3A")).join(format!("acme/shop/0.2.0/code/{data}.html")).exists() && !site.join(&host).join(format!("acme/shop/0.2.0/code/{data}.html")).exists(), "{lang}");
     }
     // every version checked against the list's line, once in each run
     let refs: Vec<String> = [("tax", "1.0.0"), ("tax", "1.1.0"), ("pricing", "1.0.0"), ("pricing", "1.1.0"), ("shop", "0.1.0"), ("shop", "0.2.0")]
@@ -370,7 +397,7 @@ fn a_version_that_cannot_be_verified_exits_1() {
         assert_eq!(err.lines().filter(|l| l.starts_with(head.split('`').next().unwrap())).count(), 6, "{err}");
         let site = a.path(&out);
         let files = files_under(&site);
-        assert_eq!(files.len(), 4, "{files:#?}");
+        assert_eq!(files.len(), 8, "{files:#?}");
         let index = std::fs::read_to_string(site.join("index.html")).unwrap();
         let bad = if lang == "en" { "<span class=\"bad\">a version could not be verified</span>" } else { "<span class=\"bad\">確かめられない版があります</span>" };
         assert_eq!(index.matches(bad).count(), 3, "{index}");
@@ -422,7 +449,7 @@ fn working_trees_and_the_playground_they_open_in() {
         (code, stdout.as_str(), err.as_str()),
         (
             0,
-            "ritsu mod site: wrote 35 pages of 3 modules in local\n",
+            "ritsu mod site: wrote 43 pages of 3 modules in local\n",
             format!(
                 "fetched {host}/acme/pricing 1.1.0 ({pricing})\nfetched {host}/acme/tax 1.0.0 ({tax})\nnote: `{host}/acme/shop` 0.1.0 is on its registry already, so the site shows the registry's and not the working tree's\n"
             )
@@ -433,12 +460,12 @@ fn working_trees_and_the_playground_they_open_in() {
     let page = |rel: &str| std::fs::read_to_string(site.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"));
     // shop: the registry's two versions and the working tree's, newest first
     let shop = page(&format!("{host}/acme/shop/index.html"));
-    let rows: Vec<&str> = shop.lines().filter(|l| l.starts_with("<tr><td><a href=\"./")).collect();
+    let rows: Vec<&str> = shop.lines().filter(|l| l.contains("<a href=\"./0.") && l.starts_with("<tr><td class=\"mono nowrap\">")).collect();
     assert_eq!(rows.len(), 3, "{shop}");
     assert!(rows[0].contains(">0.3.0</a>") && rows[0].contains("<span class=\"warn\">not published yet</span>"), "{shop}");
     assert!(rows[1].contains(">0.2.0</a>") && rows[2].contains(">0.1.0</a>"), "{shop}");
     let next = page(&format!("{host}/acme/shop/0.3.0/index.html"));
-    assert!(next.contains("<h2>Changes since 0.2.0</h2>"), "{next}");
+    assert!(next.contains("<div class=\"ctl mono fixed\">0.2.0</div>"), "the changes are from the version before:\n{next}");
     assert!(next.contains("data-playground=\"https://example.com/play/\""), "{next}");
     // module.json: the file in Shift_JIS as its bytes, and the copy of the store
     let files = opened(&page(&format!("{host}/acme/shop/0.3.0/module.json")));
@@ -456,11 +483,12 @@ fn working_trees_and_the_playground_they_open_in() {
     // the tree of paths: no button, no module.json
     let paths = page("example.com/acme/shop/0.1.0/index.html");
     assert!(paths.contains("This working tree requires a module by a path, so the playground cannot open it"), "{paths}");
-    assert!(!paths.contains("<button") && !site.join("example.com/acme/shop/0.1.0/module.json").exists());
+    assert!(!paths.contains("id=\"open\"") && !site.join("example.com/acme/shop/0.1.0/module.json").exists());
     // the big module: the button, and what it says when the link would be too long
     let big = page("example.com/acme/big/0.1.0/index.html");
     assert!(big.contains("data-big=\"Too big to open in the playground\""), "{big}");
-    assert!(big.contains("if (packed.length > 1000000) {"), "{big}");
+    assert!(big.contains("data-max=\"1000000\""), "{big}");
+    assert!(std::fs::read_to_string(site.join("_site/site.js")).unwrap().contains("packed.length > Number(open.dataset.max)"));
     assert!(site.join("example.com/acme/big/0.1.0/module.json").metadata().unwrap().len() > 1_300_000);
     // the command line's playground over the list's
     let (code, _, err) = a.site("work/modules.list", "local-flag", &["--playground", "http://127.0.0.1:9/ritsu/play/", "--lang", "ja"], &[]);
@@ -518,4 +546,245 @@ fn what_stops_the_site_writes_nothing() {
     assert!(err.starts_with(&head) && err.ends_with("; nothing was written\n"), "{err}");
     assert!(!t.path().join("out").exists());
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The text of the `<code>` of each step of a page's side, as a reader copies it.
+fn steps_of(page: &str) -> Vec<String> {
+    let unescape = |s: &str| s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&");
+    page.split("<div class=\"step\">").skip(1).map(|s| s.split("<pre class=\"code\"><code>").nth(1).and_then(|c| c.split("</code></pre>").next()).map(unescape).expect("a step has its code")).collect()
+}
+
+/// The steps a page tells a reader to take, taken as the page says them, in a project of the test's
+/// own: requiring the module under the name the list's `as` gives it, the `signature` line, and the
+/// lines that read a calendar of the module or call a rule of it. `ritsu check` passes what they
+/// make. Without an `as`, the name is the last part of the module's.
+#[test]
+fn the_steps_on_a_page_can_be_taken() {
+    let a = Acme::new("mod-site-steps");
+    let host = a.host();
+    ritsu_testkit::tmp::copy_dir(&root().join("modules/holidays"), &a.path("holidays"));
+    edit(&a.t, "holidays/ritsu.mod", "module ghcr.io/i2y/ritsu-holidays", &format!("module {host}/acme/ritsu-holidays"));
+    let (code, out, err) = a.run_in("holidays", &a.path("pushed"), &["mod", "push"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    a.t.write(
+        "modules.list",
+        format!("module \"{host}/acme/ritsu-holidays\" as \"holidays\"\nmodule \"{host}/acme/pricing\"\nsignature \"{host}/acme/\" by matching \"^https://github[.]com/acme/\" issuer \"https://token.actions.githubusercontent.com\"\n"),
+    );
+    let (code, out, err) = a.site("modules.list", "site", &[], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let store = a.path("store-steps");
+    let run = |dir: &str, command: &str| {
+        for line in command.lines() {
+            let words: Vec<&str> = line.split(' ').skip(1).collect();
+            let (code, out, err) = a.run_in(dir, &store, &words, &[]);
+            assert_eq!(code, 0, "`{line}` in {dir}:\n{out}{err}");
+        }
+    };
+    for (module, version, name, file) in [("ritsu-holidays", "1.1.0", "holidays", "office.cal"), ("pricing", "1.1.0", "pricing", "basket.kn")] {
+        let page = std::fs::read_to_string(a.path(&format!("site/{host}/acme/{module}/index.html"))).unwrap();
+        let steps = steps_of(&page);
+        assert_eq!(steps.len(), 4 + 3 * usize::from(module == "pricing"), "{steps:#?}");
+        let project = format!("app-{module}");
+        a.t.write(&format!("{project}/ritsu.mod"), format!("module example.com/me/{name}-user\nversion 0.1.0\n"));
+        assert_eq!(steps[0], format!("ritsu mod add {name} {host}/acme/{module}@{version}"));
+        run(&project, &steps[0]);
+        assert!(steps[1].starts_with(&format!("signature \"{host}/acme/\" by matching ")), "{steps:#?}");
+        let manifest = a.t.read(&format!("{project}/ritsu.mod"));
+        a.t.write(&format!("{project}/ritsu.mod"), format!("{manifest}\n{}\n", steps[1]));
+        assert_eq!(steps[2], "ritsu mod fetch");
+        run(&project, &steps[2]);
+        let text = match file {
+            "office.cal" => steps[3].clone(),
+            // the line that calls a rule, in a module that calls it
+            _ => format!("module basket v1\ndescription \"The total of a basket\"\n\n{}\nfn total(subtotal: money[GBPc] range >=0GBPc <=1_000GBPc) -> money[GBPc]\n  order_total(subtotal: subtotal, category: order_total.category.zero, shipping: 0GBPc).total\n", steps[3]),
+        };
+        a.t.write(&format!("{project}/{file}"), text);
+        run(&project, "ritsu check .");
+    }
+    // the steps before moving a project up to 1.1.0, from 1.0.0, in a repository whose main has it
+    let page = std::fs::read_to_string(a.path(&format!("site/{host}/acme/pricing/index.html"))).unwrap();
+    let steps = steps_of(&page);
+    a.t.write("up/ritsu.mod", "module example.com/me/up\nversion 0.1.0\n");
+    run("up", &format!("ritsu mod add pricing {host}/acme/pricing@1.0.0"));
+    let manifest = a.t.read("up/ritsu.mod");
+    a.t.write("up/ritsu.mod", format!("{manifest}\n{}\n", steps[1]));
+    run("up", "ritsu mod fetch");
+    a.t.write("up/basket.kn", a.t.read("app-pricing/basket.kn"));
+    let git = |args: &[&str]| {
+        let o = Command::new("git").current_dir(a.path("up")).args(["-c", "user.name=t", "-c", "user.email=t@example.com"]).args(args).env_remove("GIT_DIR").output().expect("git");
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    };
+    git(&["init", "--quiet", "-b", "main"]);
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "on 1.0.0"]);
+    assert_eq!(steps[4], "ritsu mod get pricing@1.1.0\nritsu mod fetch");
+    run("up", &steps[4]);
+    assert_eq!(steps[5], "ritsu check .");
+    run("up", &steps[5]);
+    assert_eq!(steps[6], "ritsu mod report --base main --format markdown");
+    run("up", &steps[6]);
+}
+
+/// A module whose records of a signature are on its registry says the day it was published: the
+/// earliest time of the records of the bundle, as `cosign` leaves them under the tag `sha256-<hex>`
+/// (a registry with no referrers API, the older way) and only with a `signature` line that checks
+/// it. A version with no such record says no date.
+#[test]
+fn the_records_of_a_signature_say_when_a_version_was_published() {
+    let a = Acme::new("mod-site-dates");
+    let host = a.host();
+    let digest = a.digest("acme/tax", "1.1.0");
+    let bundle = a.r.put_blob("acme/tax", br#"{"verificationMaterial":{"tlogEntries":[{"integratedTime":"1793312527"},{"integratedTime":1793399999}]}}"#);
+    let kind = "application/vnd.dev.sigstore.bundle.v0.3+json";
+    let manifest = format!(r#"{{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","artifactType":"{kind}","config":{{"mediaType":"application/vnd.oci.empty.v1+json","digest":"{bundle}","size":2}},"layers":[{{"mediaType":"{kind}","digest":"{bundle}","size":3}}]}}"#);
+    let entry = a.r.put_manifest("acme/tax", None, "application/vnd.oci.image.manifest.v1+json", manifest.as_bytes());
+    let index = format!(r#"{{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{{"mediaType":"application/vnd.oci.image.manifest.v1+json","artifactType":"{kind}","digest":"{entry}","size":{}}}]}}"#, manifest.len());
+    a.r.put_manifest("acme/tax", Some(&format!("sha256-{}", &digest[7..])), "application/vnd.oci.image.index.v1+json", index.as_bytes());
+    a.t.write("modules.list", list_of_three(&host));
+    a.t.write("unsigned.list", format!("module \"{host}/acme/tax\"\n"));
+    for (lang, said, how) in [("en", "Published 2026-10-29", "The day its signature went into the transparency log (UTC)"), ("ja", "公開 2026-10-29", "署名が透明性ログに入った日（UTC）")] {
+        let out = format!("site-{lang}");
+        let (code, stdout, err) = a.site("modules.list", &out, &["--lang", lang], &[]);
+        assert_eq!(code, 0, "{stdout}{err}");
+        let page = |rel: &str| std::fs::read_to_string(a.path(&format!("{out}/{rel}"))).unwrap();
+        assert_eq!(page("index.html").matches(said).count(), 1, "{lang}: the list says it of tax, and of no other");
+        let newest = page(&format!("{host}/acme/tax/1.1.0/index.html"));
+        assert!(newest.contains(said) && newest.contains("<code>2026-10-29</code>") && newest.contains(how), "{lang}: {newest}");
+        assert!(page(&format!("{host}/acme/tax/index.html")).contains(said), "{lang}");
+        assert!(!page(&format!("{host}/acme/tax/1.0.0/index.html")).contains(said), "{lang}: a version with no record says no date");
+    }
+    // no line checks it, and the site does not read what no line has checked
+    a.r.clear_log();
+    let (code, stdout, err) = a.site("unsigned.list", "unsigned", &[], &[]);
+    assert_eq!(code, 0, "{stdout}{err}");
+    assert!(!std::fs::read_to_string(a.path("unsigned/index.html")).unwrap().contains("Published"));
+    assert!(!a.r.log().iter().any(|s| s.target.contains("sha256-")), "the site asked for the records of a signature no line checks");
+}
+
+/// The lines and the flag that change what the pages say: `as` (the name a page tells a reader to
+/// require a module by), `contribute` (how to add to the list, only when the list says where), the
+/// wording the pages have with no `title` and no `description`, and `--alternate` (the same page in
+/// the other language, from every kind of page). What is wrong with them stops the command.
+#[test]
+fn what_a_list_and_the_command_line_add_to_the_pages() {
+    let a = Acme::new("mod-site-lines");
+    let host = a.host();
+    a.t.write("plain.list", format!("module \"{host}/acme/pricing\"\n"));
+    a.t.write("full.list", format!("contribute \"https://example.com/acme/edit/main/modules.list\"\nmodule \"{host}/acme/pricing\" as \"prices\"\n"));
+    let (code, out, err) = a.site("plain.list", "plain", &["--alternate", "ja=../plain-ja"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let page = |dir: &str, rel: &str| std::fs::read_to_string(a.path(&format!("{dir}/{rel}"))).unwrap();
+    let index = page("plain", "index.html");
+    assert!(index.contains("<title>Modules</title>") && index.contains("Rules, calendars and workflows you can read, try and check before you depend on them."), "{index}");
+    assert!(!index.contains("List your module"), "{index}");
+    assert!(index.contains("href=\"./../plain-ja/index.html\" lang=\"ja\" hreflang=\"ja\">日本語</a>"), "{index}");
+    let module = page("plain", &format!("{host}/acme/pricing/index.html"));
+    assert!(module.contains(&format!("ritsu mod add pricing {host}/acme/pricing@1.1.0")), "{module}");
+    let back = "../".repeat(host.split('/').count() + 2);
+    assert!(module.contains(&format!("href=\"{back}../plain-ja/{}/acme/pricing/index.html\"", host.replace(':', "%3A"))), "{module}");
+    let file = page("plain", &format!("{host}/acme/pricing/1.1.0/files/ritsu.mod.html"));
+    assert!(file.contains(&format!("{}/acme/pricing/1.1.0/files/ritsu.mod.html\" lang=\"ja\"", host.replace(':', "%3A"))), "{file}");
+    let (code, out, err) = a.site("full.list", "full", &["--lang", "ja", "--alternate", "en=../full-en"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let index = page("full", "index.html");
+    assert!(index.contains("<title>モジュール</title>") && index.contains("モジュールを載せる") && index.contains("href=\"https://example.com/acme/edit/main/modules.list\""), "{index}");
+    assert!(index.contains("lang=\"en\" hreflang=\"en\">English</a>"), "{index}");
+    let module = page("full", &format!("{host}/acme/pricing/index.html"));
+    assert!(module.contains(&format!("ritsu mod add prices {host}/acme/pricing@1.1.0")) && module.contains("ritsu mod get prices@1.1.0\nritsu mod fetch"), "{module}");
+    // the header: ritsu's word, or the name of a list that has one, on every page
+    assert!(page("plain", "index.html").contains("<span class=\"rm-word\">ritsu</span><span class=\"rm-sub\">modules</span>"), "a list with no name");
+    a.t.write("named.list", format!("title \"Acme & <sons>\"\nmodule \"{host}/acme/pricing\"\n"));
+    let (code, out, err) = a.site("named.list", "named", &[], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    for rel in ["index.html".to_string(), format!("{host}/acme/pricing/index.html"), format!("{host}/acme/pricing/1.1.0/files/ritsu.mod.html")] {
+        let p = page("named", &rel);
+        assert!(p.contains("<span class=\"rm-own\" title=\"Acme &amp; &lt;sons&gt;\">Acme &amp; &lt;sons&gt;</span>") && !p.contains("rm-word"), "{rel}: {p}");
+    }
+    // published from a branch, Jekyll would leave out `_site/`
+    assert_eq!(page("named", ".nojekyll"), "");
+    // both languages from one root, as the guide writes them: each page links to the other's
+    let (code, out, err) = a.site("plain.list", "both", &["--alternate", "ja=ja"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let (code, out, err) = a.site("plain.list", "both/ja", &["--lang", "ja", "--alternate", "en=.."], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    for (from, lang, to) in [("both", "ja", "both/ja"), ("both/ja", "en", "both")] {
+        for rel in ["index.html".to_string(), format!("{host}/acme/pricing/index.html"), format!("{host}/acme/pricing/1.1.0/files/ritsu.mod.html")] {
+            let p = page(from, &rel);
+            let end = p.find(&format!("\" lang=\"{lang}\" hreflang=\"{lang}\"")).unwrap_or_else(|| panic!("{from}/{rel} has no link to {lang}"));
+            let href = p[p[..end].rfind("href=\"").unwrap() + 6..end].replace("%3A", ":");
+            let there = a.path(from).join(&rel).parent().unwrap().join(&href).canonicalize().unwrap_or_else(|e| panic!("{from}/{rel}: {href}: {e}"));
+            assert_eq!(there, a.path(to).join(&rel).canonicalize().unwrap(), "{from}/{rel}: {href}");
+        }
+    }
+    // what is wrong with them
+    a.t.write("bad.list", format!("contribute \"http://example.com/\"\nmodule \"{host}/acme/pricing\" as \"Not A Name\"\nmodule \"{host}/acme/tax\" as prices\n"));
+    let (code, out, err) = a.site("bad.list", "bad", &[], &[]);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.contains("bad.list:1:12: `contribute` takes an https URL"), "{err}");
+    assert!(err.contains("`as \"Not A Name\"` is not a dependency's name"), "{err}");
+    assert!(err.contains("bad.list:3:") && err.contains("`as` takes a string"), "{err}");
+    for wrong in ["frob", "fr=x", "ja=", "ja=/abs", "ja=https://example.com/"] {
+        let (code, out, err) = a.site("plain.list", "bad", &["--alternate", wrong], &[]);
+        assert_eq!((code, out.as_str(), err.as_str()), (2, "", "error: `--alternate` takes `ja=<path>` or `en=<path>`\n"), "{wrong}");
+    }
+    assert!(!a.path("bad").exists());
+}
+
+/// What the pages do in a browser, in Chrome, from their files: a module's page picks a tab by the
+/// address and keeps the head in sight, the tab to try opens a file in its frame, the list narrows
+/// as it is asked, and a calendar's page answers about the day in its address (closed, open with the
+/// line a calendar that reads it could write, and not known), also when a file's page is shown alone
+/// inside the tab.
+#[test]
+fn the_pages_in_chrome() {
+    if !need(Need::Chrome) {
+        return;
+    }
+    let Some(chrome) = ritsu_testkit::chrome::find() else {
+        skip("Chrome is not found; set RITSU_CHROME to run this test");
+        return;
+    };
+    let a = Acme::new("mod-site-chrome");
+    let host = a.host();
+    ritsu_testkit::tmp::copy_dir(&root().join("modules/holidays"), &a.path("holidays"));
+    edit(&a.t, "holidays/ritsu.mod", "module ghcr.io/i2y/ritsu-holidays", &format!("module {host}/acme/ritsu-holidays"));
+    let (code, out, err) = a.run_in("holidays", &a.path("pushed"), &["mod", "push"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let list = list_of_three(&host);
+    a.t.write("modules.list", format!("{list}module \"{host}/acme/ritsu-holidays\"\n"));
+    let (code, out, err) = a.site("modules.list", "site", &[], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    let dom = |rel: &str| ritsu_testkit::chrome::dump_dom(&chrome, &format!("file://{}/{rel}", a.path("site").display()), 2000, std::time::Duration::from_secs(60));
+    let root_tag = |d: &str| d[d.find("<html").unwrap()..].split('>').next().unwrap().to_string();
+    let pricing = format!("{host}/acme/pricing/index.html");
+    // the tabs
+    for (hash, tab) in [("", "overview"), ("#changes", "changes"), ("#nowhere", "overview"), ("#files", "files")] {
+        let d = dom(&format!("{pricing}{hash}"));
+        assert!(root_tag(&d).contains(&format!(" data-tab=\"{tab}\"")), "{hash}: {}", root_tag(&d));
+        assert!(d.contains(&format!("data-tab=\"{tab}\" aria-current=\"page\"")), "{hash}: the tab is not marked");
+    }
+    // the tab to try, and the file the address names
+    let d = dom(&format!("{pricing}#try:rules/shipping_fee.rule"));
+    assert!(d.contains("files/rules/shipping_fee.rule.html?view=try\""), "{d}");
+    // the list narrows: the rule's name finds its module, and marks it
+    let d = dom("index.html?q=shipping_fee");
+    let shown: Vec<&str> = d.split("<article ").skip(1).filter(|r| !r.split('>').next().unwrap().contains(" hidden")).collect();
+    assert_eq!(shown.len(), 1, "{d}");
+    assert!(shown[0].contains("class=\"item hit\" data-name=\"shipping_fee\""), "{}", shown[0]);
+    let d = dom("index.html?q=nowhere-at-all");
+    assert_eq!(d.split("<article ").skip(1).filter(|r| !r.split('>').next().unwrap().contains(" hidden")).count(), 0, "{d}");
+    assert!(d.contains("Nothing matches “nowhere-at-all”."), "{d}");
+    // a calendar's page, and the three answers
+    let calendar = format!("{host}/acme/ritsu-holidays/1.1.0/files/uk/england_and_wales.cal.html");
+    let d = dom(&format!("{calendar}?date=2026-12-25"));
+    assert!(d.contains("class=\"ans closed\"") && d.contains("<p class=\"name\">Christmas Day</p>") && d.contains("It is a row of the table bank_holidays."), "{d}");
+    assert!(d.contains("<td class=\"d\">2026-12-28</td><td class=\"w\">Mon</td><td>Boxing Day (Substitute day)</td>"), "{d}");
+    let d = dom(&format!("{calendar}?date=2026-11-07"));
+    assert!(d.contains("class=\"ans open\"") && d.contains("This is a Saturday, and this calendar leaves it open.") && d.contains("<code>closed weekly sat, sun</code>"), "{d}");
+    let d = dom(&format!("{calendar}?date=2031-01-01"));
+    assert!(d.contains("class=\"ans unknown\"") && d.contains("This calendar knows 2019-01-01 to 2028-12-31."), "{d}");
+    // a file's page alone: only the section to try
+    let d = dom(&format!("{calendar}?date=2026-12-25&view=try"));
+    assert!(root_tag(&d).contains("rm-bare") && root_tag(&d).contains("rm-ready"), "{}", root_tag(&d));
+    assert!(d.contains("<header hidden") , "the rest of the page is hidden:\n{d}");
 }

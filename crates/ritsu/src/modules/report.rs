@@ -1327,7 +1327,7 @@ mod tests {
         // every module compared: no such line
         assert!(!report_of(vec![pricing(None)], 0).text(Lang::En, 0).contains("not compared"));
         // a difference shown in a file of yours: 1 with `--fail-on-change`, else still 2
-        let said = diff::Said { text: String::new(), markdown: String::new(), json: Json::Null, differs: true, total: true, more: false };
+        let said = diff::Said { text: String::new(), markdown: String::new(), json: Json::Null, differs: true, total: true, more: false, map: None };
         let mut shown = pricing(not());
         shown.yours = vec![Behavior { file: "orders/total.rule".into(), tool: ritsu_base::naming::Tool::Rulec, result: Ok(said) }];
         let r = report_of(vec![shown], 0);

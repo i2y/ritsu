@@ -1,61 +1,159 @@
 <main>
-<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/shop</a></nav>
-<h1><code><registry>/acme/shop</code> 0.2.0</h1>
+<div class="head"><div class="wrap">
+<p class="crumbs"><a href="../../../../index.html">Modules</a> / <registry> / acme</p>
+<div class="title"><h1>shop</h1><label class="vermenu"><span class="rm-vh">Version</span><select class="ctl mono" id="version" data-go=""><option value="../0.2.0/index.html" selected>0.2.0 (latest)</option><option value="../0.1.0/index.html">0.1.0</option></select></label></div>
 <p class="lead">The order flow and the checkout of the Acme shop</p>
-<p>Reference: <code><registry>/acme/shop@sha256:<digest></code></p>
-<pre><code>require shop oci &quot;<registry>/acme/shop&quot; 0.2.0</code></pre>
-<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/play/" data-big="Too big to open in the playground" data-failed="Could not hand the files to the playground">Open in the playground</button></p>
-<p class="lead">The files go in the link, after its <code>#</code>, which a browser does not send to a server.</p>
-<script>
-document.getElementById("open").addEventListener("click", async (e) => {
-  const b = e.currentTarget;
-  b.disabled = true;
-  try {
-    const files = await (await fetch("module.json")).json();
-    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    if (packed.length > 1000000) {
-      b.textContent = b.dataset.big;
-      return;
-    }
-    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
-  } catch (err) {
-    b.textContent = b.dataset.failed;
-  }
-});
-</script>
-<h2>Files</h2>
-<div class="scroll"><table>
-<tr><th>File</th><th>Language</th><th>Bytes</th></tr>
-<tr><td><a href="./files/checkout/basket.kn.html"><code>checkout/basket.kn</code></a></td><td>kaname</td><td>1,453</td></tr>
-<tr><td><a href="./files/orders/place_order.flow.html"><code>orders/place_order.flow</code></a></td><td>dandori</td><td>1,960</td></tr>
-<tr><td><a href="./files/orders/scenarios/charged.json.html"><code>orders/scenarios/charged.json</code></a></td><td>—</td><td>394</td></tr>
-<tr><td><a href="./files/orders/scenarios/not_charged.json.html"><code>orders/scenarios/not_charged.json</code></a></td><td>—</td><td>425</td></tr>
-<tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
-<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<ul class="proofs inline">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Signed by acme</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Digests match</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Passes <code>ritsu check</code></span></li>
+<li class="dim"><span>Needs ritsu 0.36.0 or later</span></li>
+</ul>
+<nav class="tabs" aria-label="Module sections">
+<a class="tab" href="#overview" data-tab="overview">Overview</a>
+<a class="tab" href="#contents" data-tab="contents">Contents<span class="count">2</span></a>
+<a class="tab" href="#changes" data-tab="changes">Changes</a>
+<a class="tab" href="#versions" data-tab="versions">Versions<span class="count">2</span></a>
+<a class="tab" href="#files" data-tab="files">Files<span class="count">6</span></a>
+</nav>
+</div></div>
+<div class="wrap body"><div class="cols">
+<div class="primary">
+<section class="pane" id="overview">
+<h2>What it holds</h2>
+<div class="scroll"><table class="t holds">
+<thead><tr><th scope="col">Name</th><th scope="col">What it is</th><th scope="col"><span class="rm-vh">Try it, or read its code</span></th></tr></thead>
+<tbody>
+<tr><td class="mono strong nowrap"><a href="./files/orders/place_order.flow.html">place_order</a></td><td>Prices an order by the rules of the module pricing, holds its goods and charges its total; when the charge does not go through, the goods are put back</td><td class="right nowrap rowlinks"><a class="codelink" href="./code/orders/place_order.flow.html">Code</a></td></tr>
+<tr><td class="mono strong nowrap"><a href="./files/checkout/basket.kn.html">basket</a></td><td>The subtotal of a basket, and its total with the VAT of its category and the shipping fee, as the rule order_total of the module pricing gives it</td><td class="right nowrap rowlinks"><a class="codelink" href="./code/checkout/basket.kn.html">Code</a></td></tr>
+</tbody>
 </table></div>
-<h2>Changes since 0.1.0</h2>
+</section>
+<section class="pane" id="contents">
+<h2>1 workflow, 1 kaname module</h2>
+<p class="dim">Each page is drawn by its language from the file at this version.</p>
+<article class="card">
+<div class="cardhead"><h3 class="mono">place_order</h3><span class="path"><a href="./files/orders/place_order.flow.html">orders/place_order.flow</a></span><span class="tag">workflow</span></div>
+<p>Prices an order by the rules of the module pricing, holds its goods and charges its total; when the charge does not go through, the goods are put back</p>
+<p class="small cardlinks"><a class="codelink" href="./code/orders/place_order.flow.html">Read the code</a></p>
+</article>
+<article class="card">
+<div class="cardhead"><h3 class="mono">basket</h3><span class="path"><a href="./files/checkout/basket.kn.html">checkout/basket.kn</a></span><span class="tag">kaname module</span></div>
+<p>The subtotal of a basket, and its total with the VAT of its category and the shipping fee, as the rule order_total of the module pricing gives it</p>
+<dl class="facts">
+<dt>Functions</dt><dd><code>subtotal</code> <code>total</code></dd>
+</dl>
+<p class="small cardlinks"><a class="codelink" href="./code/checkout/basket.kn.html">Read the code</a></p>
+</article>
+</section>
+<section class="pane" id="changes">
+<div class="fromto"><div><span class="small dim">From</span><div class="ctl mono fixed">0.1.0</div></div><div class="to"><span class="small dim">To</span><label class="vermenu"><span class="rm-vh">Version</span><select class="ctl mono" id="version-to" data-go=""><option value="../0.2.0/index.html" selected>0.2.0 (latest)</option><option value="../0.1.0/index.html">0.1.0</option></select></label></div></div>
+<h2 class="headline">1 change to the interface, 1 that may break a user.</h2>
+<p class="dim">ritsu compares every input, or says it cannot decide. It does not sample.</p>
+<dl class="tiles">
+<div><dt>Behavior</dt><dd>Nothing to compare</dd></div>
+<div><dt>Interface</dt><dd>1 change, 1 of them may break a user</dd></div>
+<div><dt>Files</dt><dd>2 changed, 4 the same. require: no change</dd></div>
+</dl>
+<article class="fileblock">
+<h3>Interface</h3>
+<p>In <span class="mono">checkout/basket.kn</span>, <code>Line/fields/qty/range</code> changed</p>
+<p class="langs"><span class="lang mono">records</span></p>
+</article>
+<details class="whole"><summary>The whole report, as <code>ritsu mod diff --format markdown</code> writes it</summary>
 <ul>
 <li>Files: 2 changed, 4 the same</li>
 <li>require: no change</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>Change</th><th>File</th></tr>
 <tr><td>changed</td><td><code>checkout/basket.kn</code></td></tr>
 <tr><td>changed</td><td><code>ritsu.mod</code></td></tr>
 </table></div>
-<h3>Interface</h3>
+<h4>Interface</h4>
 <ul>
 <li><code>checkout/basket.kn</code> (kaname, api): 1 change, 1 of them may break a user</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>Change</th><th>Where</th><th>Old → new</th></tr>
 <tr><td>may break: changed</td><td><code>/records/Line/fields/qty/range</code></td><td><code>&quot;&gt;=1 &lt;=10&quot; → &quot;&gt;=1 &lt;=5&quot;</code></td></tr>
 </table></div>
 <p>A change that may break a user is a candidate: whether it does is for that user&#39;s check to say.</p>
 <p>A difference is shown in behavior or in an interface.</p>
-<footer>Written by <code>ritsu mod site</code> <version></footer>
+</details>
+</section>
+<section class="pane" id="versions">
+<h2>2 versions</h2>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">Version</th><th scope="col">Published</th><th scope="col">Digest</th><th scope="col">Files</th><th scope="col">Checked</th></tr></thead>
+<tbody>
+<tr><td class="mono nowrap"><strong><a href="../0.2.0/index.html">0.2.0</a> <span class="dim">latest</span></strong></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>6</td><td>its digests and its signature; passes <code>ritsu check</code></td></tr>
+<tr><td class="mono nowrap"><a href="../0.1.0/index.html">0.1.0</a></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>6</td><td>its digests and its signature; passes <code>ritsu check</code></td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="pane" id="files">
+<h2 class="h3">Workflows</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./code/orders/place_order.flow.html">orders/place_order.flow</a></td><td class="right dim small nowrap">1,960 B</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">kaname modules</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./code/checkout/basket.kn.html">checkout/basket.kn</a></td><td class="right dim small nowrap">1,453 B</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">Data and other files</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./files/orders/scenarios/charged.json.html">orders/scenarios/charged.json</a></td><td class="right dim small nowrap">394 B</td></tr>
+<tr><td class="mono small"><a href="./files/orders/scenarios/not_charged.json.html">orders/scenarios/not_charged.json</a></td><td class="right dim small nowrap">425 B</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">About the module</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./files/ritsu.lock.html">ritsu.lock</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+<tr><td class="mono small"><a href="./files/ritsu.mod.html">ritsu.mod</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+</tbody>
+</table></div>
+</section>
+</div>
+<aside class="side">
+<div class="only-use">
+<h2>Use it</h2>
+<div class="step"><div class="stephead"><p>1. Require it</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod add shop <registry>/acme/shop@0.2.0</code></pre></div>
+<div class="step"><div class="stephead"><p>2. Check its signature, in <code>ritsu.mod</code></p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></div>
+<div class="step"><div class="stephead"><p>3. Fetch it</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod fetch</code></pre></div>
+<p><button type="button" class="primarybtn" id="open" data-module="./module.json" data-playground="https://i2y.github.io/ritsu/play/" data-max="1000000" data-big="Too big to open in the playground" data-failed="Could not hand the files to the playground">Open in the playground</button></p>
+<p class="small dim">The files go in the link, after its <code>#</code>, which a browser does not send to a server.</p>
+<h2 class="later">What was checked</h2>
+<p class="small dim">By ritsu <version>, when this site was built.</p>
+<dl class="checked">
+<dt>Signature</dt><dd>Signed by a GitHub Actions workflow of acme. Checked with cosign.
+<details><summary>The rule it was checked against</summary><pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></details></dd>
+<dt>Digest</dt><dd><code title="sha256:<digest>">sha256:<head></code></dd>
+<dt>Check</dt><dd><code>ritsu check .</code>: all 2 files pass.</dd>
+<dt>License</dt><dd>No license line in ritsu.mod</dd>
+</dl>
+</div>
+<div class="only-changes">
+<h2>Before you upgrade</h2>
+<div class="step"><div class="stephead"><p>1. Move your project to this version</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod get shop@0.2.0
+ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>2. Let your own files say whether it breaks them</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu check .</code></pre></div>
+<div class="step"><div class="stephead"><p>3. See what it changes for your files, for the pull request</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod report --base main --format markdown</code></pre></div>
+<p class="small dim">This page says what the module changes. Whether that breaks your project is for your own check to say: a new value can reach a table of yours that does not read it.</p>
+</div>
+</aside>
+</div></div>
+<footer class="wrap foot">Built by <code>ritsu mod site</code> <version>. These pages load nothing from other servers.</footer>
 </main>

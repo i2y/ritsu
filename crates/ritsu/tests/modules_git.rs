@@ -1127,7 +1127,8 @@ fn a_site_lists_a_module_from_git() {
     let text = |p: &str| std::fs::read_to_string(w.path("out").join(p)).unwrap_or_default();
     let all: String = pages.iter().map(|p| text(p)).collect();
     assert!(all.contains(&tagged(&pricing, "v1.0.0")) && all.contains(&tagged(&pricing, "v1.1.0")), "{pages:#?}");
-    assert!(all.contains(&format!("require pricing git &quot;{url}&quot; 1.1.0")) || all.contains(&format!("require pricing git \"{url}\" 1.1.0")), "{pages:#?}");
+    assert!(all.contains(&format!("ritsu mod add pricing {url}@1.1.0")), "{pages:#?}");
+    assert!(text("127.0.0.1/acme/pricing/1.1.0/index.html").contains("Published 2"), "the page of a version from git says the date of its commit");
     // a signature line over it
     w.t.write("cosign.pub", "-----BEGIN PUBLIC KEY-----\n-----END PUBLIC KEY-----\n");
     w.t.write("signed.list", format!("git \"{url}\"\nsignature \"127.0.0.1/acme/\" key \"cosign.pub\"\n"));

@@ -282,6 +282,27 @@ impl Git {
         }
     }
 
+    /// The time of `commit` of the repository `url`, in seconds since the epoch; None when it cannot
+    /// be read. It stops nothing: a site says a date only when it knows one.
+    pub fn committed_at(&mut self, url: &str, commit: &str) -> Option<i64> {
+        let u = base::parse(url).ok()?;
+        let repo = self.repo(url, commit.len() == 64).ok()?;
+        // the commit alone: a server that refuses gets the commit asked for whole
+        if fetch(&repo, &u, url, &["--depth=1", "--filter=tree:0"], commit, None).ok()?.is_err() {
+            fetch(&repo, &u, url, &["--depth=1", "--no-filter"], commit, None).ok()?.ok()?;
+        }
+        let mut c = Git::command(&repo, &u);
+        c.args(["cat-file", "commit", commit]);
+        let ran = run(c, None).ok()?;
+        if !ran.ok {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&ran.stdout);
+        // `committer <name> <<email>> <seconds> <zone>`
+        let line = text.lines().take_while(|l| !l.is_empty()).find(|l| l.starts_with("committer "))?;
+        line.rsplit(' ').nth(1)?.parse().ok()
+    }
+
     /// The version `version` of `name` made from `commit` of the repository `url` (its module at
     /// `dir`), checked as the steps of DESIGN 17.12.1 check it. Nothing is put in the store.
     pub fn make(&mut self, name: &ModuleName, version: &Version, url: &str, dir: Option<&str>, commit: &str) -> Result<Made, Failed> {

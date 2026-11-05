@@ -1,51 +1,115 @@
 <main>
-<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/pricing</a></nav>
-<h1><code><registry>/acme/pricing</code> 1.1.0</h1>
+<div class="head"><div class="wrap">
+<p class="crumbs"><a href="../../../../index.html">Modules</a> / <registry> / acme</p>
+<div class="title"><h1>pricing</h1><label class="vermenu"><span class="rm-vh">Version</span><select class="ctl mono" id="version" data-go=""><option value="../1.1.0/index.html" selected>1.1.0 (latest)</option><option value="../1.0.0/index.html">1.0.0</option></select></label></div>
 <p class="lead">Shipping fees and order totals of the Acme shop</p>
-<p>Reference: <code><registry>/acme/pricing@sha256:<digest></code></p>
-<pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0</code></pre>
-<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/play/" data-big="Too big to open in the playground" data-failed="Could not hand the files to the playground">Open in the playground</button></p>
-<p class="lead">The files go in the link, after its <code>#</code>, which a browser does not send to a server.</p>
-<script>
-document.getElementById("open").addEventListener("click", async (e) => {
-  const b = e.currentTarget;
-  b.disabled = true;
-  try {
-    const files = await (await fetch("module.json")).json();
-    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    if (packed.length > 1000000) {
-      b.textContent = b.dataset.big;
-      return;
-    }
-    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
-  } catch (err) {
-    b.textContent = b.dataset.failed;
-  }
-});
-</script>
-<h2>Files</h2>
-<div class="scroll"><table>
-<tr><th>File</th><th>Language</th><th>Bytes</th></tr>
-<tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
-<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
-<tr><td><a href="./files/rules/order_total.rule.html"><code>rules/order_total.rule</code></a></td><td>rulec</td><td>997</td></tr>
-<tr><td><a href="./files/rules/shipping_fee.rule.html"><code>rules/shipping_fee.rule</code></a></td><td>rulec</td><td>1,050</td></tr>
+<ul class="proofs inline">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Signed by acme</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Digests match</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Passes <code>ritsu check</code></span></li>
+<li class="dim"><span>Needs ritsu 0.36.0 or later</span></li>
+</ul>
+<nav class="tabs" aria-label="Module sections">
+<a class="tab" href="#overview" data-tab="overview">Overview</a>
+<a class="tab" href="#contents" data-tab="contents">Contents<span class="count">2</span></a>
+<a class="tab" href="#try" data-tab="try">Try</a>
+<a class="tab" href="#changes" data-tab="changes">Changes</a>
+<a class="tab" href="#versions" data-tab="versions">Versions<span class="count">2</span></a>
+<a class="tab" href="#files" data-tab="files">Files<span class="count">4</span></a>
+</nav>
+</div></div>
+<div class="wrap body"><div class="cols">
+<div class="primary">
+<section class="pane" id="overview">
+<h2>What it holds</h2>
+<div class="scroll"><table class="t holds">
+<thead><tr><th scope="col">Name</th><th scope="col">What it is</th><th scope="col"><span class="rm-vh">Try it, or read its code</span></th></tr></thead>
+<tbody>
+<tr><td class="mono strong nowrap"><a href="./files/rules/order_total.rule.html">order_total</a></td><td>The total of an order: its subtotal, the VAT of its category at the rate of the rule vat_rate of the module tax, and the shipping fee</td><td class="right nowrap rowlinks"><a class="trylink" href="#try:rules/order_total.rule">Try</a><a class="codelink" href="./code/rules/order_total.rule.html">Code</a></td></tr>
+<tr><td class="mono strong nowrap"><a href="./files/rules/shipping_fee.rule.html">shipping_fee</a></td><td>The fee for shipping a parcel, by its weight and the region it goes to: one fee up to 2,500 g and another above. The fees are the example&#39;s own</td><td class="right nowrap rowlinks"><a class="trylink" href="#try:rules/shipping_fee.rule">Try</a><a class="codelink" href="./code/rules/shipping_fee.rule.html">Code</a></td></tr>
+</tbody>
 </table></div>
-<h2>Changes since 1.0.0</h2>
+</section>
+<section class="pane" id="contents">
+<h2>2 rules</h2>
+<p class="dim">Each page is drawn by its language from the file at this version.</p>
+<article class="card">
+<div class="cardhead"><h3 class="mono">order_total</h3><span class="path"><a href="./files/rules/order_total.rule.html">rules/order_total.rule</a></span><span class="tag">rule</span></div>
+<p>The total of an order: its subtotal, the VAT of its category at the rate of the rule vat_rate of the module tax, and the shipping fee</p>
+<dl class="facts">
+<dt>Inputs</dt><dd>subtotal (0 to 2,000,000 GBPc); category (standard, reduced, zero); shipping (0 to 10,000 GBPc)</dd>
+<dt>Outputs</dt><dd>total (0 to 2,410,000 GBPc)</dd>
+</dl>
+<p class="small cardlinks"><a class="trylink" href="#try:rules/order_total.rule">Try it</a><a class="codelink" href="./code/rules/order_total.rule.html">Read the code</a></p>
+</article>
+<article class="card">
+<div class="cardhead"><h3 class="mono">shipping_fee</h3><span class="path"><a href="./files/rules/shipping_fee.rule.html">rules/shipping_fee.rule</a></span><span class="tag">rule</span></div>
+<p>The fee for shipping a parcel, by its weight and the region it goes to: one fee up to 2,500 g and another above. The fees are the example&#39;s own</p>
+<dl class="facts">
+<dt>Inputs</dt><dd>weight (1 to 30,000 g); region (domestic, world, eu)</dd>
+<dt>Outputs</dt><dd>fee (395 to 2,950 GBPc)</dd>
+</dl>
+<p class="small cardlinks"><a class="trylink" href="#try:rules/shipping_fee.rule">Try it</a><a class="codelink" href="./code/rules/shipping_fee.rule.html">Read the code</a></p>
+</article>
+</section>
+<section class="pane" id="try">
+<h2 class="rm-vh">Try</h2>
+<label class="tryfile"><span class="small dim">File</span><select class="ctl mono" id="try-file"><option value="./files/rules/order_total.rule.html" data-rel="rules/order_total.rule">order_total</option><option value="./files/rules/shipping_fee.rule.html" data-rel="rules/shipping_fee.rule">shipping_fee</option></select></label>
+<iframe class="tryframe" id="try-frame" title="Try the file" hidden></iframe>
+<noscript><ul>
+<li><a href="./files/rules/order_total.rule.html#try">order_total</a></li>
+<li><a href="./files/rules/shipping_fee.rule.html#try">shipping_fee</a></li>
+</ul></noscript>
+</section>
+<section class="pane" id="changes">
+<div class="fromto"><div><span class="small dim">From</span><div class="ctl mono fixed">1.0.0</div></div><div class="to"><span class="small dim">To</span><label class="vermenu"><span class="rm-vh">Version</span><select class="ctl mono" id="version-to" data-go=""><option value="../1.1.0/index.html" selected>1.1.0 (latest)</option><option value="../1.0.0/index.html">1.0.0</option></select></label></div></div>
+<h2 class="headline">shipping_fee answers differently in 2 places. Of the inputs both versions accept, everything else gets the same answer.</h2>
+<p class="dim">ritsu compares every input, or says it cannot decide. It does not sample.</p>
+<dl class="tiles">
+<div><dt>Behavior</dt><dd>1 of 2 rules answers differently</dd></div>
+<div><dt>Interface</dt><dd>10 changes, 0 of them may break a user</dd></div>
+<div><dt>Files</dt><dd>2 changed, 2 the same. require: no change</dd></div>
+</dl>
+<article class="fileblock">
+<div class="filehead"><h3 class="mono">rules/shipping_fee.rule</h3><span class="tag differ">Answers differ</span></div>
+<ul class="domain">
+<li><code>region.eu</code>: an enum gained a value</li>
+</ul>
+<div class="scroll"><table class="map">
+<thead><tr><th scope="col">region</th><th scope="col">1 to 2,000 g</th><th scope="col">2,001 to 2,500 g</th><th scope="col">2,501 to 30,000 g</th></tr></thead>
+<tbody>
+<tr><th scope="row">domestic</th><td>395</td><td class="chg"><s>695</s> 395</td><td>695</td></tr>
+<tr><th scope="row">world</th><td>1,850</td><td class="chg"><s>2,950</s> 1,850</td><td>2,950</td></tr>
+<tr><th scope="row">eu <span class="note">(new)</span></th><td class="new">1,250</td><td class="new">1,250</td><td class="new">1,950</td></tr>
+</tbody>
+</table></div>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">Where they differ</th><th scope="col">Answer</th><th scope="col">Example</th></tr></thead>
+<tbody>
+<tr><td class="mono">region = domestic  and  weight &gt;=2001g &lt;=2500g</td><td class="mono nowrap">fee: 695 → 395</td><td class="mono">region=domestic, weight=2001</td></tr>
+<tr><td class="mono">region = world  and  weight &gt;=2001g &lt;=2500g</td><td class="mono nowrap">fee: 2950 → 1850</td><td class="mono">region=world, weight=2001</td></tr>
+</tbody>
+</table></div>
+</article>
+<article class="fileblock sames">
+<div class="filehead"><h3 class="mono">rules/order_total.rule</h3><span class="tag same">Same answers</span></div>
+</article>
+<article class="fileblock">
+<h3>Interface</h3>
+<p>In <span class="mono">rules/shipping_fee.rule</span>, <code>enums/region/values/eu</code> was added</p>
+<p class="langs"><span class="lang mono">python</span> <span class="lang mono">typescript</span> <span class="lang mono">javascript</span> <span class="lang mono">rust</span> <span class="lang mono">ruby</span> <span class="lang mono">php</span> <span class="lang mono">go</span> <span class="lang mono">swift</span> <span class="lang mono">java</span> <span class="lang mono">connect</span></p>
+</article>
+<details class="whole"><summary>The whole report, as <code>ritsu mod diff --format markdown</code> writes it</summary>
 <ul>
 <li>Files: 2 changed, 2 the same</li>
 <li>require: no change</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>Change</th><th>File</th></tr>
 <tr><td>changed</td><td><code>ritsu.mod</code></td></tr>
 <tr><td>changed</td><td><code>rules/shipping_fee.rule</code></td></tr>
 </table></div>
-<h3>Behavior</h3>
+<h4>Behavior</h4>
 <ul>
 <li><code>rules/order_total.rule</code> (rulec): the same answers</li>
 </ul>
@@ -55,21 +119,87 @@ document.getElementById("open").addEventListener("click", async (e) => {
 <ul>
 <li><code>region.eu</code> — an enum gained a value</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>where they differ</th><th>answer</th><th>example</th><th>cells</th></tr>
 <tr><td>region = domestic  and  weight &gt;=2001g &lt;=2500g</td><td>fee: 695 → 395</td><td>region=domestic, weight=2001</td><td>2</td></tr>
 <tr><td>region = world  and  weight &gt;=2001g &lt;=2500g</td><td>fee: 2950 → 1850</td><td>region=world, weight=2001</td><td>2</td></tr>
 </table></div>
 <p>Of the inputs both versions accept, those outside this region get the same answer.</p>
 </details>
-<h3>Interface</h3>
+<h4>Interface</h4>
 <ul>
 <li><code>rules/shipping_fee.rule</code> (rulec, api): 10 changes, 0 of them may break a user</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>Change</th><th>Where</th><th>Old → new</th></tr>
 <tr><td>added</td><td><code>/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu</code></td><td></td></tr>
 </table></div>
 <p>A difference is shown in behavior or in an interface.</p>
-<footer>Written by <code>ritsu mod site</code> <version></footer>
+</details>
+</section>
+<section class="pane" id="versions">
+<h2>2 versions</h2>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">Version</th><th scope="col">Published</th><th scope="col">Digest</th><th scope="col">Files</th><th scope="col">Checked</th></tr></thead>
+<tbody>
+<tr><td class="mono nowrap"><strong><a href="../1.1.0/index.html">1.1.0</a> <span class="dim">latest</span></strong></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td>its digests and its signature; passes <code>ritsu check</code></td></tr>
+<tr><td class="mono nowrap"><a href="../1.0.0/index.html">1.0.0</a></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td>its digests and its signature; passes <code>ritsu check</code></td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="pane" id="files">
+<h2 class="h3">Rules</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./code/rules/order_total.rule.html">rules/order_total.rule</a></td><td class="right dim small nowrap">997 B</td></tr>
+<tr><td class="mono small"><a href="./code/rules/shipping_fee.rule.html">rules/shipping_fee.rule</a></td><td class="right dim small nowrap">1,050 B</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">About the module</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./files/ritsu.lock.html">ritsu.lock</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+<tr><td class="mono small"><a href="./files/ritsu.mod.html">ritsu.mod</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+</tbody>
+</table></div>
+</section>
+</div>
+<aside class="side">
+<div class="only-use">
+<h2>Use it</h2>
+<div class="step"><div class="stephead"><p>1. Require it</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod add pricing <registry>/acme/pricing@1.1.0</code></pre></div>
+<div class="step"><div class="stephead"><p>2. Check its signature, in <code>ritsu.mod</code></p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></div>
+<div class="step"><div class="stephead"><p>3. Fetch it</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>4. Call a rule from a workflow or a kaname module</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>use rule order_total from &quot;@pricing/rules/order_total.rule&quot;
+</code></pre></div>
+<p><button type="button" class="primarybtn" id="open" data-module="./module.json" data-playground="https://i2y.github.io/ritsu/play/" data-max="1000000" data-big="Too big to open in the playground" data-failed="Could not hand the files to the playground">Open in the playground</button></p>
+<p class="small dim">The files go in the link, after its <code>#</code>, which a browser does not send to a server.</p>
+<h2 class="later">What was checked</h2>
+<p class="small dim">By ritsu <version>, when this site was built.</p>
+<dl class="checked">
+<dt>Signature</dt><dd>Signed by a GitHub Actions workflow of acme. Checked with cosign.
+<details><summary>The rule it was checked against</summary><pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></details></dd>
+<dt>Digest</dt><dd><code title="sha256:<digest>">sha256:<head></code></dd>
+<dt>Check</dt><dd><code>ritsu check .</code>: all 2 files pass.</dd>
+<dt>License</dt><dd><code>MIT OR Apache-2.0</code></dd>
+</dl>
+</div>
+<div class="only-changes">
+<h2>Before you upgrade</h2>
+<div class="step"><div class="stephead"><p>1. Move your project to this version</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod get pricing@1.1.0
+ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>2. Let your own files say whether it breaks them</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu check .</code></pre></div>
+<div class="step"><div class="stephead"><p>3. See what it changes for your files, for the pull request</p><button class="copy" type="button" data-copy="Copy" data-copied="Copied" data-failed="Copy failed">Copy</button></div>
+<pre class="code"><code>ritsu mod report --base main --format markdown</code></pre></div>
+<p class="small dim">This page says what the module changes. Whether that breaks your project is for your own check to say: a new value can reach a table of yours that does not read it.</p>
+</div>
+</aside>
+</div></div>
+<footer class="wrap foot">Built by <code>ritsu mod site</code> <version>. These pages load nothing from other servers.</footer>
 </main>

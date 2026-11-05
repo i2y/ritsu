@@ -1,61 +1,159 @@
 <main>
-<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/shop</a></nav>
-<h1><code><registry>/acme/shop</code> 0.2.0</h1>
+<div class="head"><div class="wrap">
+<p class="crumbs"><a href="../../../../index.html">モジュール</a> / <registry> / acme</p>
+<div class="title"><h1>shop</h1><label class="vermenu"><span class="rm-vh">版</span><select class="ctl mono" id="version" data-go=""><option value="../0.2.0/index.html" selected>0.2.0（最新）</option><option value="../0.1.0/index.html">0.1.0</option></select></label></div>
 <p class="lead">The order flow and the checkout of the Acme shop</p>
-<p>参照: <code><registry>/acme/shop@sha256:<digest></code></p>
-<pre><code>require shop oci &quot;<registry>/acme/shop&quot; 0.2.0</code></pre>
-<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/ja/play/" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
-<p class="lead">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
-<script>
-document.getElementById("open").addEventListener("click", async (e) => {
-  const b = e.currentTarget;
-  b.disabled = true;
-  try {
-    const files = await (await fetch("module.json")).json();
-    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    if (packed.length > 1000000) {
-      b.textContent = b.dataset.big;
-      return;
-    }
-    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
-  } catch (err) {
-    b.textContent = b.dataset.failed;
-  }
-});
-</script>
-<h2>ファイル</h2>
-<div class="scroll"><table>
-<tr><th>ファイル</th><th>言語</th><th>バイト</th></tr>
-<tr><td><a href="./files/checkout/basket.kn.html"><code>checkout/basket.kn</code></a></td><td>kaname</td><td>1,453</td></tr>
-<tr><td><a href="./files/orders/place_order.flow.html"><code>orders/place_order.flow</code></a></td><td>dandori</td><td>1,960</td></tr>
-<tr><td><a href="./files/orders/scenarios/charged.json.html"><code>orders/scenarios/charged.json</code></a></td><td>—</td><td>394</td></tr>
-<tr><td><a href="./files/orders/scenarios/not_charged.json.html"><code>orders/scenarios/not_charged.json</code></a></td><td>—</td><td>425</td></tr>
-<tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
-<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<ul class="proofs inline">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>acme の署名を確かめました</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>ダイジェストが一致</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span><code>ritsu check</code> を通ります</span></li>
+<li class="dim"><span>ritsu 0.36.0 以降が要ります</span></li>
+</ul>
+<nav class="tabs" aria-label="モジュールの中の節">
+<a class="tab" href="#overview" data-tab="overview">概要</a>
+<a class="tab" href="#contents" data-tab="contents">中身<span class="count">2</span></a>
+<a class="tab" href="#changes" data-tab="changes">変更点</a>
+<a class="tab" href="#versions" data-tab="versions">版<span class="count">2</span></a>
+<a class="tab" href="#files" data-tab="files">ファイル<span class="count">6</span></a>
+</nav>
+</div></div>
+<div class="wrap body"><div class="cols">
+<div class="primary">
+<section class="pane" id="overview">
+<h2>入っているもの</h2>
+<div class="scroll"><table class="t holds">
+<thead><tr><th scope="col">名前</th><th scope="col">説明</th><th scope="col"><span class="rm-vh">試す、コードを読む</span></th></tr></thead>
+<tbody>
+<tr><td class="mono strong nowrap"><a href="./files/orders/place_order.flow.html">place_order</a></td><td>Prices an order by the rules of the module pricing, holds its goods and charges its total; when the charge does not go through, the goods are put back</td><td class="right nowrap rowlinks"><a class="codelink" href="./code/orders/place_order.flow.html">コード</a></td></tr>
+<tr><td class="mono strong nowrap"><a href="./files/checkout/basket.kn.html">basket</a></td><td>The subtotal of a basket, and its total with the VAT of its category and the shipping fee, as the rule order_total of the module pricing gives it</td><td class="right nowrap rowlinks"><a class="codelink" href="./code/checkout/basket.kn.html">コード</a></td></tr>
+</tbody>
 </table></div>
-<h2>0.1.0 からの差</h2>
+</section>
+<section class="pane" id="contents">
+<h2>ワークフロー 1 本、kaname のモジュール 1 個</h2>
+<p class="dim">ページは、この版のファイルからそれぞれの言語が描きました。</p>
+<article class="card">
+<div class="cardhead"><h3 class="mono">place_order</h3><span class="path"><a href="./files/orders/place_order.flow.html">orders/place_order.flow</a></span><span class="tag">ワークフロー</span></div>
+<p>Prices an order by the rules of the module pricing, holds its goods and charges its total; when the charge does not go through, the goods are put back</p>
+<p class="small cardlinks"><a class="codelink" href="./code/orders/place_order.flow.html">コードを読む</a></p>
+</article>
+<article class="card">
+<div class="cardhead"><h3 class="mono">basket</h3><span class="path"><a href="./files/checkout/basket.kn.html">checkout/basket.kn</a></span><span class="tag">kaname のモジュール</span></div>
+<p>The subtotal of a basket, and its total with the VAT of its category and the shipping fee, as the rule order_total of the module pricing gives it</p>
+<dl class="facts">
+<dt>関数</dt><dd><code>subtotal</code> <code>total</code></dd>
+</dl>
+<p class="small cardlinks"><a class="codelink" href="./code/checkout/basket.kn.html">コードを読む</a></p>
+</article>
+</section>
+<section class="pane" id="changes">
+<div class="fromto"><div><span class="small dim">比べる元</span><div class="ctl mono fixed">0.1.0</div></div><div class="to"><span class="small dim">比べる先</span><label class="vermenu"><span class="rm-vh">版</span><select class="ctl mono" id="version-to" data-go=""><option value="../0.2.0/index.html" selected>0.2.0（最新）</option><option value="../0.1.0/index.html">0.1.0</option></select></label></div></div>
+<h2 class="headline">インターフェースの変更が 1 件あり、そのうち 1 件は使う側を壊しえます。</h2>
+<p class="dim">ritsu はすべての入力を比べるか、決められないと言います。一部を試すことはしません。</p>
+<dl class="tiles">
+<div><dt>振る舞い</dt><dd>比べるものはありません</dd></div>
+<div><dt>インターフェース</dt><dd>変更 1 件、そのうち使う側を壊しうるもの 1 件</dd></div>
+<div><dt>ファイル</dt><dd>2 変わった、4 同じ。require は変わりません</dd></div>
+</dl>
+<article class="fileblock">
+<h3>インターフェース</h3>
+<p><span class="mono">checkout/basket.kn</span> の <code>Line/fields/qty/range</code> が変わりました</p>
+<p class="langs"><span class="lang mono">records</span></p>
+</article>
+<details class="whole"><summary>報告の全文（<code>ritsu mod diff --format markdown</code> と同じ）</summary>
 <ul>
 <li>ファイル：変わった 2、同じ 4</li>
 <li>require：変わりません</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>変わり方</th><th>ファイル</th></tr>
 <tr><td>変わった</td><td><code>checkout/basket.kn</code></td></tr>
 <tr><td>変わった</td><td><code>ritsu.mod</code></td></tr>
 </table></div>
-<h3>インターフェース</h3>
+<h4>インターフェース</h4>
 <ul>
 <li><code>checkout/basket.kn</code> (kaname、api)：差が 1 件、うち使う側を壊しうるもの 1 件</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>変わり方</th><th>場所</th><th>古い値 → 新しい値</th></tr>
 <tr><td>変わった（壊しうる）</td><td><code>/records/Line/fields/qty/range</code></td><td><code>&quot;&gt;=1 &lt;=10&quot; → &quot;&gt;=1 &lt;=5&quot;</code></td></tr>
 </table></div>
 <p>壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。</p>
 <p>振る舞いかインターフェースに違いが見つかりました。</p>
-<footer><code>ritsu mod site</code> <version> が書きました</footer>
+</details>
+</section>
+<section class="pane" id="versions">
+<h2>版 2 個</h2>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">版</th><th scope="col">公開</th><th scope="col">ダイジェスト</th><th scope="col">ファイル</th><th scope="col">確かめたこと</th></tr></thead>
+<tbody>
+<tr><td class="mono nowrap"><strong><a href="../0.2.0/index.html">0.2.0</a> <span class="dim">最新</span></strong></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>6</td><td>ダイジェストと署名、<code>ritsu check</code> を通過</td></tr>
+<tr><td class="mono nowrap"><a href="../0.1.0/index.html">0.1.0</a></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>6</td><td>ダイジェストと署名、<code>ritsu check</code> を通過</td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="pane" id="files">
+<h2 class="h3">ワークフロー</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./code/orders/place_order.flow.html">orders/place_order.flow</a></td><td class="right dim small nowrap">1,960 バイト</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">kaname のモジュール</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./code/checkout/basket.kn.html">checkout/basket.kn</a></td><td class="right dim small nowrap">1,453 バイト</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">データとそのほかのファイル</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./files/orders/scenarios/charged.json.html">orders/scenarios/charged.json</a></td><td class="right dim small nowrap">394 バイト</td></tr>
+<tr><td class="mono small"><a href="./files/orders/scenarios/not_charged.json.html">orders/scenarios/not_charged.json</a></td><td class="right dim small nowrap">425 バイト</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">モジュールについて</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./files/ritsu.lock.html">ritsu.lock</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+<tr><td class="mono small"><a href="./files/ritsu.mod.html">ritsu.mod</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+</tbody>
+</table></div>
+</section>
+</div>
+<aside class="side">
+<div class="only-use">
+<h2>使い方</h2>
+<div class="step"><div class="stephead"><p>1. 依存に足します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod add shop <registry>/acme/shop@0.2.0</code></pre></div>
+<div class="step"><div class="stephead"><p>2. 署名を確かめる行を <code>ritsu.mod</code> に足します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></div>
+<div class="step"><div class="stephead"><p>3. 取り出します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod fetch</code></pre></div>
+<p><button type="button" class="primarybtn" id="open" data-module="./module.json" data-playground="https://i2y.github.io/ritsu/ja/play/" data-max="1000000" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
+<p class="small dim">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
+<h2 class="later">確かめたこと</h2>
+<p class="small dim">このサイトをビルドしたときに ritsu <version> が確かめました。</p>
+<dl class="checked">
+<dt>署名</dt><dd>acme の GitHub Actions のワークフローの署名です。cosign で確かめました。
+<details><summary>確かめた決まり</summary><pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></details></dd>
+<dt>ダイジェスト</dt><dd><code title="sha256:<digest>">sha256:<head></code></dd>
+<dt>検査</dt><dd><code>ritsu check .</code>：ファイル 2 個がすべて通りました。</dd>
+<dt>ライセンス</dt><dd>ritsu.mod に license の行がありません</dd>
+</dl>
+</div>
+<div class="only-changes">
+<h2>上げる前に</h2>
+<div class="step"><div class="stephead"><p>1. プロジェクトをこの版に上げます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod get shop@0.2.0
+ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>2. 自分のファイルが壊れないかを確かめます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu check .</code></pre></div>
+<div class="step"><div class="stephead"><p>3. プルリクエストのために、自分のファイルに何が変わるかを見ます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod report --base main --format markdown</code></pre></div>
+<p class="small dim">このページが言うのは、モジュールが何を変えるかです。自分のプロジェクトが壊れるかは、自分の <code>ritsu check</code> が言います。新しい値は、自分の表の外に出ることがあります。</p>
+</div>
+</aside>
+</div></div>
+<footer class="wrap foot"><code>ritsu mod site</code> <version> が書きました。ほかのサーバーからは何も読み込みません。</footer>
 </main>

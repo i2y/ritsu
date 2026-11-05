@@ -320,6 +320,7 @@ pub fn commands() -> Vec<Cmd> {
             vec![
                 flag("--out", Some("<dir>"), tr!("サイトを書く先（要る）", "where the site goes (required)")),
                 flag("--playground", Some("<URL>"), tr!("ブラウザで試すページの URL", "the URL of the page that runs ritsu in the browser")),
+                flag("--alternate", Some("<lang>=<path>"), tr!("同じサイトのほかの言語の版（このサイトのルートからのパス）", "the same site in another language, by the path from this site's root")),
             ],
             vec![
                 (0, tr!("書いた", "written")),

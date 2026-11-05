@@ -1472,16 +1472,17 @@ fn respond(mut s: std::net::TcpStream, pages: &[(String, String)]) {
     let n = s.read(&mut buf).unwrap_or(0);
     let head = String::from_utf8_lossy(&buf[..n]);
     let asked = head.split_whitespace().nth(1).unwrap_or("/").split(['?', '#']).next().unwrap_or("/").to_string();
+    let kind_of = |other: &'static str| match asked.rsplit('.').next() {
+        Some("js") => "text/javascript",
+        Some("css") => "text/css",
+        Some("wasm") => "application/wasm",
+        Some("json") => "application/json",
+        _ => other,
+    };
     let found = if let Some((_, page)) = pages.iter().find(|(at, _)| *at == asked) {
-        Some((page.as_bytes().to_vec(), if asked.ends_with(".json") { "application/json" } else { "text/html; charset=utf-8" }))
+        Some((page.as_bytes().to_vec(), kind_of("text/html; charset=utf-8")))
     } else {
-        let kind = match asked.rsplit('.').next() {
-            Some("js") => "text/javascript",
-            Some("css") => "text/css",
-            Some("wasm") => "application/wasm",
-            Some("json") => "application/json",
-            _ => "application/octet-stream",
-        };
+        let kind = kind_of("application/octet-stream");
         PUBLISHED
             .iter()
             .find_map(|at| asked.strip_prefix(at))
@@ -2555,12 +2556,14 @@ fn a_version_on_a_site_of_modules_opens_in_the_playground() {
   const v = EditorView.findFromDOM(document.querySelector(".pg .cm-editor"));
   return { open: document.querySelector('.pg-file[aria-selected="true"]').dataset.path, readOnly: v.state.readOnly, editable: v.contentDOM.getAttribute("contenteditable"), text: v.state.doc.toString() };
 })()"#;
+    // its stylesheets applied and its script run: the place of the button, and what it does
+    let loaded = "document.readyState === \"complete\"";
     for (tag, play, big) in [("en", "/ritsu/play/", "Too big to open in the playground"), ("ja", "/ritsu/ja/play/", "大きすぎて、ブラウザで試すページでは開けません")] {
         let at = |m: &str| format!("/site-{tag}/example.com/acme/{m}/0.1.0/index.html");
         let pressed = format!("document.getElementById(\"open\").textContent === {}", json!(big));
         let visits = vec![
-            Visit::to(format!("{base}{}", at("shop"))).click("#open").ready().state().run(&press(&format!(".pg-file[data-path=\"{csv}\"]"))).get(read_only),
-            Visit::to(format!("{base}{}", at("big"))).click("#open").wait(&pressed).get("[location.pathname, document.getElementById(\"open\").disabled]"),
+            Visit::to(format!("{base}{}", at("shop"))).wait(loaded).click("#open").ready().state().run(&press(&format!(".pg-file[data-path=\"{csv}\"]"))).get(read_only),
+            Visit::to(format!("{base}{}", at("big"))).wait(loaded).click("#open").wait(&pressed).get("[location.pathname, document.getElementById(\"open\").disabled]"),
         ];
         let got = drive(&chrome, visits);
         // shop: the page alone, on the empty project with the files of module.json, and its check
@@ -2582,6 +2585,117 @@ fn a_version_on_a_site_of_modules_opens_in_the_playground() {
         // the big module: the button says so, and the page stays
         assert_eq!(got[1][0], json!([at("big"), true]), "{tag}");
     }
+}
+
+/// The list of a site of modules narrows on the screen, and a file's code reads as the file (DESIGN
+/// 17.17), in each language, on the sites `ritsu mod site` writes of two of the seed modules. A
+/// button of what modules hold and the search leave the rows they say with a height, and the others
+/// with none, and a search that finds nothing says so. The tab of files leads to a rule's code, whose
+/// text is the file to the byte, so the numbers of its lines are not in it. A click on a number marks
+/// the line in the address, and a click on the text does not; an address that names a line marks it
+/// when the page opens. The switch leads to the page the language drew and back; the menu of files
+/// stays with the code of a file that has a page of its own, and goes to the page of one whose page
+/// is its code, which has no switch.
+#[test]
+fn the_list_of_a_site_of_modules_narrows_and_a_file_s_code_reads_as_the_file() {
+    let Some(chrome) = chrome() else {
+        return;
+    };
+    let t = TempDir::new("playground-site");
+    for m in ["holidays", "osha"] {
+        ritsu_testkit::tmp::copy_dir(&repo().join("modules").join(m), &t.path().join(m));
+    }
+    t.write("modules.list", "local \"holidays\"\nlocal \"osha\"\n");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let mut pages = Vec::new();
+    for tag in ["en", "ja"] {
+        let out = format!("site-{tag}");
+        ritsu_with_store(t.path(), &t.path().join("store"), &["mod", "site", "modules.list", "--out", &out, "--lang", tag]);
+        let mut stack = vec![t.path().join(&out)];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    let rel = p.strip_prefix(t.path()).unwrap().to_string_lossy().into_owned();
+                    pages.push((format!("/{rel}"), std::fs::read_to_string(&p).unwrap()));
+                }
+            }
+        }
+    }
+    serve_on(listener, pages);
+    let rows = r#"[...document.querySelectorAll(".row")].filter((r) => r.getBoundingClientRect().height > 0).map((r) => r.querySelector("h2 a").textContent)"#;
+    let nothing = r#"document.querySelector(".empty").getBoundingClientRect().height > 0"#;
+    let loaded = "document.readyState === \"complete\"";
+    let opened = |dir: &str, file: &str| format!("location.pathname.endsWith(\"/{dir}/{file}.html\") && document.readyState === \"complete\"");
+    let click_at = |line: &str, x: u32| format!("const l = document.getElementById(\"{line}\"); const r = document.querySelector(\"pre.lines\").getBoundingClientRect(); l.dispatchEvent(new MouseEvent(\"click\", {{ bubbles: true, clientX: r.left + {x}, clientY: l.getBoundingClientRect().top + 2 }}));");
+    let go_to = |file: &str| format!("const s = document.querySelector(\"select[data-go]\"); s.value = [...s.options].find((o) => o.textContent === \"{file}\").value; s.dispatchEvent(new Event(\"change\"));");
+    let rule = "osha_noise.rule";
+    let text = read_repo(&format!("modules/osha/{rule}"));
+    let marked = "[location.hash, document.querySelectorAll(\".l.on\").length, document.querySelector(\".l.on\").id]";
+    for (tag, page_word) in [("en", "Page"), ("ja", "ページ")] {
+        let site = format!("{base}/site-{tag}");
+        let version = format!("{site}/ghcr.io/i2y/ritsu-osha/1.0.0");
+        let visits = vec![
+            Visit::to(format!("{site}/index.html"))
+                .wait(loaded)
+                .get(rows)
+                .click(".fil[data-kind=\"calendar\"]")
+                .get(rows)
+                .click(".fil[data-kind=\"rule\"]")
+                .get(rows)
+                .click(".fil[data-kind=\"\"]")
+                .get(rows)
+                .click("#rm-q")
+                .step(json!({ "type": "noise" }))
+                .get(rows)
+                .get(nothing)
+                .step(json!({ "type": "zzz" }))
+                .get(rows)
+                .get(nothing),
+            Visit::to(format!("{version}/index.html#files"))
+                .wait(loaded)
+                .click(&format!("#files a[href$=\"code/{rule}.html\"]"))
+                .wait(&opened("code", rule))
+                .get("document.querySelector(\"pre.lines\").textContent")
+                .run(&click_at("L5", 4))
+                .get(marked)
+                .run(&click_at("L6", 300))
+                .get(marked)
+                .click(".rm-switch a:not([aria-current])")
+                .wait(&opened("files", rule))
+                .get("document.querySelector(\".rm-switch a[aria-current]\").textContent")
+                .click(".rm-switch a:not([aria-current])")
+                .wait(&opened("code", rule))
+                .get("document.querySelector(\".rm-switch a[aria-current]\").getAttribute(\"href\").includes(\"/code/\") || document.querySelector(\".rm-switch a[aria-current]\").getAttribute(\"href\").startsWith(\"code/\")"),
+            Visit::to(format!("{version}/code/{rule}.html#L12")).wait(loaded).get(marked),
+            Visit::to(format!("{version}/code/{rule}.html"))
+                .wait(loaded)
+                .run(&go_to("osha_excavation.rule"))
+                .wait(&opened("code", "osha_excavation.rule"))
+                .run(&go_to("ritsu.mod"))
+                .wait(&opened("files", "ritsu.mod"))
+                .get("[document.querySelector(\"pre.lines\").textContent, document.querySelector(\".rm-switch\") === null]"),
+        ];
+        let got = drive(&chrome, visits);
+        let both = json!(["ritsu-holidays", "ritsu-osha"]);
+        assert_eq!(got[0][0], both, "{tag}: the list at first");
+        assert_eq!(got[0][1], json!(["ritsu-holidays"]), "{tag}: the calendars");
+        assert_eq!(got[0][2], json!(["ritsu-osha"]), "{tag}: the rules");
+        assert_eq!(got[0][3], both, "{tag}: all of them again");
+        assert_eq!((&got[0][4], &got[0][5]), (&json!(["ritsu-osha"]), &json!(false)), "{tag}: a search");
+        assert_eq!((&got[0][6], &got[0][7]), (&json!([]), &json!(true)), "{tag}: a search that finds nothing");
+        assert_eq!(got[1][0], json!(text), "{tag}: the text of the code is the file");
+        assert_eq!(got[1][1], json!(["#L5", 1, "L5"]), "{tag}: a number marks its line");
+        assert_eq!(got[1][2], json!(["#L5", 1, "L5"]), "{tag}: a click on the text marks nothing");
+        assert_eq!(got[1][3], json!(page_word), "{tag}: the switch");
+        assert_eq!(got[1][4], json!(true), "{tag}: the switch back");
+        assert_eq!(got[2][0], json!(["#L12", 1, "L12"]), "{tag}: an address that names a line");
+        assert_eq!(got[3][0], json!([read_repo("modules/osha/ritsu.mod"), true]), "{tag}: a file whose page is its code");
+    }
+    eprintln!("compared: the list of a site of modules narrowed in Chrome, and a file's code read back from the page, in 2 languages");
 }
 
 /// A dependency from a git repository in the module's copy of the store (DESIGN 17.12.1, 17.22):

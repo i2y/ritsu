@@ -125,6 +125,54 @@ impl Remote {
         Ok(r.body)
     }
 
+    /// The time a signature of the manifest `digest` went into the transparency log, in seconds since
+    /// the epoch: the earliest the records beside the manifest say. The records are found as cosign
+    /// leaves them, through the OCI referrers API or the tag a registry without it holds the same
+    /// list under, and, in the older way, under the `.sig` tag. A record that is not there or
+    /// cannot be read says nothing.
+    pub fn signed_at(&self, digest: &str) -> Option<i64> {
+        const RECORD_MAX: u64 = 4 * 1024 * 1024;
+        let hex = digest.strip_prefix("sha256:")?;
+        let index_type = "application/vnd.oci.image.index.v1+json";
+        let json = |bytes: &[u8]| ritsu_base::json::parse(std::str::from_utf8(bytes).ok()?).ok();
+        let get = |rest: String, accept: &str| -> Option<Vec<u8>> {
+            let r = self.send(Request::new("GET", self.url(&rest), artifact::MAX_MANIFEST).header("Accept", accept)).ok()?;
+            (r.status == 200).then_some(r.body)
+        };
+        let accepted = |v: &Json| v.get("integratedTime").and_then(|t| t.as_int().map(|n| n as i64).or_else(|| t.as_str().and_then(|s| s.parse().ok())));
+        let mut times: Vec<i64> = Vec::new();
+        // a registry with the API can answer it with nothing, and hold the records under the tag
+        for rest in [format!("referrers/{digest}"), format!("manifests/sha256-{hex}")] {
+            if !times.is_empty() {
+                break;
+            }
+            let Some(index) = get(rest, index_type).as_deref().and_then(json) else { continue };
+            for m in index.get("manifests").and_then(Json::as_arr).unwrap_or(&[]) {
+                let is_bundle = |k: &str| m.get(k).and_then(Json::as_str).is_some_and(|t| t.starts_with("application/vnd.dev.sigstore.bundle"));
+                if !is_bundle("artifactType") {
+                    continue;
+                }
+                let Some(d) = m.get("digest").and_then(Json::as_str) else { continue };
+                let Some(manifest) = get(format!("manifests/{d}"), artifact::MANIFEST_TYPE).as_deref().and_then(json) else { continue };
+                for l in manifest.get("layers").and_then(Json::as_arr).unwrap_or(&[]) {
+                    let Some(b) = l.get("digest").and_then(Json::as_str) else { continue };
+                    let Some(bundle) = self.blob(b, RECORD_MAX).ok().as_deref().and_then(json) else { continue };
+                    let entries = bundle.get("verificationMaterial").and_then(|v| v.get("tlogEntries")).and_then(Json::as_arr);
+                    times.extend(entries.unwrap_or(&[]).iter().filter_map(accepted));
+                }
+            }
+        }
+        if times.is_empty()
+            && let Some(sig) = get(format!("manifests/sha256-{hex}.sig"), artifact::MANIFEST_TYPE).as_deref().and_then(json)
+        {
+            for l in sig.get("layers").and_then(Json::as_arr).unwrap_or(&[]) {
+                let bundle = l.get("annotations").and_then(|a| a.get("dev.sigstore.cosign/bundle")).and_then(Json::as_str).and_then(|t| ritsu_base::json::parse(t).ok());
+                times.extend(bundle.as_ref().and_then(|b| b.get("Payload")).and_then(accepted));
+            }
+        }
+        times.into_iter().min()
+    }
+
     /// Whether the registry has a blob.
     pub fn has_blob(&self, digest: &str) -> Result<bool, Text> {
         let r = self.send(Request::new("HEAD", self.url(&format!("blobs/{digest}")), SMALL))?;

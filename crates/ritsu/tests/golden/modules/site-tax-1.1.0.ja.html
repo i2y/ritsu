@@ -1,62 +1,167 @@
 <main>
-<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/tax</a></nav>
-<h1><code><registry>/acme/tax</code> 1.1.0</h1>
+<div class="head"><div class="wrap">
+<p class="crumbs"><a href="../../../../index.html">モジュール</a> / <registry> / acme</p>
+<div class="title"><h1>tax</h1><label class="vermenu"><span class="rm-vh">版</span><select class="ctl mono" id="version" data-go=""><option value="../1.1.0/index.html" selected>1.1.0（最新）</option><option value="../1.0.0/index.html">1.0.0</option></select></label></div>
 <p class="lead">The VAT rates of the Acme shop</p>
-<p>参照: <code><registry>/acme/tax@sha256:<digest></code></p>
-<pre><code>require tax oci &quot;<registry>/acme/tax&quot; 1.1.0</code></pre>
-<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/ja/play/" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
-<p class="lead">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
-<script>
-document.getElementById("open").addEventListener("click", async (e) => {
-  const b = e.currentTarget;
-  b.disabled = true;
-  try {
-    const files = await (await fetch("module.json")).json();
-    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    if (packed.length > 1000000) {
-      b.textContent = b.dataset.big;
-      return;
-    }
-    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
-  } catch (err) {
-    b.textContent = b.dataset.failed;
-  }
-});
-</script>
-<h2>ファイル</h2>
-<div class="scroll"><table>
-<tr><th>ファイル</th><th>言語</th><th>バイト</th></tr>
-<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
-<tr><td><a href="./files/rules/vat_rate.rule.html"><code>rules/vat_rate.rule</code></a></td><td>rulec</td><td>655</td></tr>
+<ul class="proofs inline">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>acme の署名を確かめました</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>ダイジェストが一致</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span><code>ritsu check</code> を通ります</span></li>
+<li class="dim"><span>ritsu 0.36.0 以降が要ります</span></li>
+</ul>
+<nav class="tabs" aria-label="モジュールの中の節">
+<a class="tab" href="#overview" data-tab="overview">概要</a>
+<a class="tab" href="#contents" data-tab="contents">中身<span class="count">1</span></a>
+<a class="tab" href="#try" data-tab="try">試す</a>
+<a class="tab" href="#changes" data-tab="changes">変更点</a>
+<a class="tab" href="#versions" data-tab="versions">版<span class="count">2</span></a>
+<a class="tab" href="#files" data-tab="files">ファイル<span class="count">2</span></a>
+</nav>
+</div></div>
+<div class="wrap body"><div class="cols">
+<div class="primary">
+<section class="pane" id="overview">
+<h2>入っているもの</h2>
+<div class="scroll"><table class="t holds">
+<thead><tr><th scope="col">名前</th><th scope="col">説明</th><th scope="col"><span class="rm-vh">試す、コードを読む</span></th></tr></thead>
+<tbody>
+<tr><td class="mono strong nowrap"><a href="./files/rules/vat_rate.rule.html">vat_rate</a></td><td>The rate of VAT for a category of goods: standard 20%, reduced 6%, zero 0%. The rates are the example&#39;s own</td><td class="right nowrap rowlinks"><a class="trylink" href="#try:rules/vat_rate.rule">試す</a><a class="codelink" href="./code/rules/vat_rate.rule.html">コード</a></td></tr>
+</tbody>
 </table></div>
-<h2>1.0.0 からの差</h2>
+</section>
+<section class="pane" id="contents">
+<h2>規則 1 本</h2>
+<p class="dim">ページは、この版のファイルからそれぞれの言語が描きました。</p>
+<article class="card">
+<div class="cardhead"><h3 class="mono">vat_rate</h3><span class="path"><a href="./files/rules/vat_rate.rule.html">rules/vat_rate.rule</a></span><span class="tag">規則</span></div>
+<p>The rate of VAT for a category of goods: standard 20%, reduced 6%, zero 0%. The rates are the example&#39;s own</p>
+<dl class="facts">
+<dt>入力</dt><dd>category (standard, reduced, zero)</dd>
+<dt>出力</dt><dd>rate (0〜20 %)</dd>
+</dl>
+<p class="small cardlinks"><a class="trylink" href="#try:rules/vat_rate.rule">試す</a><a class="codelink" href="./code/rules/vat_rate.rule.html">コードを読む</a></p>
+</article>
+</section>
+<section class="pane" id="try">
+<h2 class="rm-vh">試す</h2>
+<label class="tryfile" hidden><span class="small dim">ファイル</span><select class="ctl mono" id="try-file"><option value="./files/rules/vat_rate.rule.html" data-rel="rules/vat_rate.rule">vat_rate</option></select></label>
+<iframe class="tryframe" id="try-frame" title="ファイルを試す" hidden></iframe>
+<noscript><ul>
+<li><a href="./files/rules/vat_rate.rule.html#try">vat_rate</a></li>
+</ul></noscript>
+</section>
+<section class="pane" id="changes">
+<div class="fromto"><div><span class="small dim">比べる元</span><div class="ctl mono fixed">1.0.0</div></div><div class="to"><span class="small dim">比べる先</span><label class="vermenu"><span class="rm-vh">版</span><select class="ctl mono" id="version-to" data-go=""><option value="../1.1.0/index.html" selected>1.1.0（最新）</option><option value="../1.0.0/index.html">1.0.0</option></select></label></div></div>
+<h2 class="headline">vat_rate の答えが 1 か所で変わります。両方の版が受け取る入力のうち、それ以外は同じ答えです。</h2>
+<p class="dim">ritsu はすべての入力を比べるか、決められないと言います。一部を試すことはしません。</p>
+<dl class="tiles">
+<div><dt>振る舞い</dt><dd>規則 1 のうち 1 で答えが変わります</dd></div>
+<div><dt>インターフェース</dt><dd>変わりません</dd></div>
+<div><dt>ファイル</dt><dd>2 変わった、0 同じ。require は変わりません</dd></div>
+</dl>
+<article class="fileblock">
+<div class="filehead"><h3 class="mono">rules/vat_rate.rule</h3><span class="tag differ">答えが変わります</span></div>
+<div class="scroll"><table class="map">
+<thead><tr><th scope="col"></th><th scope="col">standard</th><th scope="col">reduced</th><th scope="col">zero</th></tr></thead>
+<tbody>
+<tr><th scope="row">答え</th><td>20%</td><td class="chg"><s>5%</s> 6%</td><td>0%</td></tr>
+</tbody>
+</table></div>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">違うところ</th><th scope="col">答え</th><th scope="col">例</th></tr></thead>
+<tbody>
+<tr><td class="mono">category = reduced</td><td class="mono nowrap">rate: 5 → 6</td><td class="mono">category=reduced</td></tr>
+</tbody>
+</table></div>
+</article>
+<details class="whole"><summary>報告の全文（<code>ritsu mod diff --format markdown</code> と同じ）</summary>
 <ul>
 <li>ファイル：変わった 2</li>
 <li>require：変わりません</li>
 </ul>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>変わり方</th><th>ファイル</th></tr>
 <tr><td>変わった</td><td><code>ritsu.mod</code></td></tr>
 <tr><td>変わった</td><td><code>rules/vat_rate.rule</code></td></tr>
 </table></div>
-<h3>振る舞い</h3>
+<h4>振る舞い</h4>
 <details><summary><code>rules/vat_rate.rule</code> (rulec)：答えが変わります</summary>
 <p><strong>版の差分（入力の全体で比べたもの）</strong></p>
 <p><code><registry>/acme/tax@1.0.0/rules/vat_rate.rule</code> → <code><registry>/acme/tax@1.1.0/rules/vat_rate.rule</code></p>
-<div class="scroll"><table>
+<div class="scroll"><table class="t">
 <tr><th>違いが出る入力</th><th>答え</th><th>例</th><th>通り</th></tr>
 <tr><td>category = reduced</td><td>rate: 5% → 6%</td><td>category=reduced</td><td>1</td></tr>
 </table></div>
 <p>ここに挙げた入力のほかでは、二つの版は同じ答えを返します。</p>
 </details>
-<h3>インターフェース</h3>
+<h4>インターフェース</h4>
 <ul>
 <li><code>rules/vat_rate.rule</code> のインターフェースは変わりません</li>
 </ul>
 <p>振る舞いかインターフェースに違いが見つかりました。</p>
-<footer><code>ritsu mod site</code> <version> が書きました</footer>
+</details>
+</section>
+<section class="pane" id="versions">
+<h2>版 2 個</h2>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">版</th><th scope="col">公開</th><th scope="col">ダイジェスト</th><th scope="col">ファイル</th><th scope="col">確かめたこと</th></tr></thead>
+<tbody>
+<tr><td class="mono nowrap"><strong><a href="../1.1.0/index.html">1.1.0</a> <span class="dim">最新</span></strong></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>2</td><td>ダイジェストと署名、<code>ritsu check</code> を通過</td></tr>
+<tr><td class="mono nowrap"><a href="../1.0.0/index.html">1.0.0</a></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>2</td><td>ダイジェストと署名、<code>ritsu check</code> を通過</td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="pane" id="files">
+<h2 class="h3">規則</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./code/rules/vat_rate.rule.html">rules/vat_rate.rule</a></td><td class="right dim small nowrap">655 バイト</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">モジュールについて</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./files/ritsu.mod.html">ritsu.mod</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+</tbody>
+</table></div>
+</section>
+</div>
+<aside class="side">
+<div class="only-use">
+<h2>使い方</h2>
+<div class="step"><div class="stephead"><p>1. 依存に足します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod add tax <registry>/acme/tax@1.1.0</code></pre></div>
+<div class="step"><div class="stephead"><p>2. 署名を確かめる行を <code>ritsu.mod</code> に足します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></div>
+<div class="step"><div class="stephead"><p>3. 取り出します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>4. ワークフローや kaname のモジュールから呼びます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>use rule vat_rate from &quot;@tax/rules/vat_rate.rule&quot;
+</code></pre></div>
+<p><button type="button" class="primarybtn" id="open" data-module="./module.json" data-playground="https://i2y.github.io/ritsu/ja/play/" data-max="1000000" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
+<p class="small dim">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
+<h2 class="later">確かめたこと</h2>
+<p class="small dim">このサイトをビルドしたときに ritsu <version> が確かめました。</p>
+<dl class="checked">
+<dt>署名</dt><dd>acme の GitHub Actions のワークフローの署名です。cosign で確かめました。
+<details><summary>確かめた決まり</summary><pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></details></dd>
+<dt>ダイジェスト</dt><dd><code title="sha256:<digest>">sha256:<head></code></dd>
+<dt>検査</dt><dd><code>ritsu check .</code>：ファイル 1 個がすべて通りました。</dd>
+<dt>ライセンス</dt><dd><code>MIT OR Apache-2.0</code></dd>
+</dl>
+</div>
+<div class="only-changes">
+<h2>上げる前に</h2>
+<div class="step"><div class="stephead"><p>1. プロジェクトをこの版に上げます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod get tax@1.1.0
+ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>2. 自分のファイルが壊れないかを確かめます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu check .</code></pre></div>
+<div class="step"><div class="stephead"><p>3. プルリクエストのために、自分のファイルに何が変わるかを見ます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod report --base main --format markdown</code></pre></div>
+<p class="small dim">このページが言うのは、モジュールが何を変えるかです。自分のプロジェクトが壊れるかは、自分の <code>ritsu check</code> が言います。新しい値は、自分の表の外に出ることがあります。</p>
+</div>
+</aside>
+</div></div>
+<footer class="wrap foot"><code>ritsu mod site</code> <version> が書きました。ほかのサーバーからは何も読み込みません。</footer>
 </main>

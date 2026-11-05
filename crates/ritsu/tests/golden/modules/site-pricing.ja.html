@@ -1,21 +1,205 @@
 <main>
-<nav class="crumbs"><a href="../../../index.html">Acme modules</a></nav>
-<h1><code><registry>/acme/pricing</code></h1>
+<div class="head"><div class="wrap">
+<p class="crumbs"><a href="../../../index.html">モジュール</a> / <registry> / acme</p>
+<div class="title"><h1>pricing</h1><label class="vermenu"><span class="rm-vh">版</span><select class="ctl mono" id="version" data-go=""><option value="./1.1.0/index.html" selected>1.1.0（最新）</option><option value="./1.0.0/index.html">1.0.0</option></select></label></div>
 <p class="lead">Shipping fees and order totals of the Acme shop</p>
-<h2>版</h2>
-<div class="scroll"><table>
-<tr><th>版</th><th>ダイジェスト</th><th>ファイル</th><th>確かめたこと</th></tr>
-<tr><td><a href="./1.1.0/index.html">1.1.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">ダイジェストと署名</span></td></tr>
-<tr><td><a href="./1.0.0/index.html">1.0.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">ダイジェストと署名</span></td></tr>
-</table></div>
-<h2>依存に足す書き方</h2>
-<pre><code>ritsu mod add pricing <registry>/acme/pricing@1.1.0</code></pre>
-<p>このコマンドが <code>ritsu.mod</code> に次の <code>require</code> の行を書き、ファイルからは <code>@pricing/…</code> で指せるようになります。署名を確かめるなら、<code>signature</code> の行も書いてください。</p>
-<pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0
-signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
-<h2>ソースとライセンス</h2>
-<ul>
-<li>ライセンス: <code>MIT OR Apache-2.0</code></li>
+<ul class="proofs inline">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>acme の署名を確かめました</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>ダイジェストが一致</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span><code>ritsu check</code> を通ります</span></li>
+<li class="dim"><span>ritsu 0.36.0 以降が要ります</span></li>
 </ul>
-<footer><code>ritsu mod site</code> <version> が書きました</footer>
+<nav class="tabs" aria-label="モジュールの中の節">
+<a class="tab" href="#overview" data-tab="overview">概要</a>
+<a class="tab" href="#contents" data-tab="contents">中身<span class="count">2</span></a>
+<a class="tab" href="#try" data-tab="try">試す</a>
+<a class="tab" href="#changes" data-tab="changes">変更点</a>
+<a class="tab" href="#versions" data-tab="versions">版<span class="count">2</span></a>
+<a class="tab" href="#files" data-tab="files">ファイル<span class="count">4</span></a>
+</nav>
+</div></div>
+<div class="wrap body"><div class="cols">
+<div class="primary">
+<section class="pane" id="overview">
+<h2>入っているもの</h2>
+<div class="scroll"><table class="t holds">
+<thead><tr><th scope="col">名前</th><th scope="col">説明</th><th scope="col"><span class="rm-vh">試す、コードを読む</span></th></tr></thead>
+<tbody>
+<tr><td class="mono strong nowrap"><a href="./1.1.0/files/rules/order_total.rule.html">order_total</a></td><td>The total of an order: its subtotal, the VAT of its category at the rate of the rule vat_rate of the module tax, and the shipping fee</td><td class="right nowrap rowlinks"><a class="trylink" href="#try:rules/order_total.rule">試す</a><a class="codelink" href="./1.1.0/code/rules/order_total.rule.html">コード</a></td></tr>
+<tr><td class="mono strong nowrap"><a href="./1.1.0/files/rules/shipping_fee.rule.html">shipping_fee</a></td><td>The fee for shipping a parcel, by its weight and the region it goes to: one fee up to 2,500 g and another above. The fees are the example&#39;s own</td><td class="right nowrap rowlinks"><a class="trylink" href="#try:rules/shipping_fee.rule">試す</a><a class="codelink" href="./1.1.0/code/rules/shipping_fee.rule.html">コード</a></td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="pane" id="contents">
+<h2>規則 2 本</h2>
+<p class="dim">ページは、この版のファイルからそれぞれの言語が描きました。</p>
+<article class="card">
+<div class="cardhead"><h3 class="mono">order_total</h3><span class="path"><a href="./1.1.0/files/rules/order_total.rule.html">rules/order_total.rule</a></span><span class="tag">規則</span></div>
+<p>The total of an order: its subtotal, the VAT of its category at the rate of the rule vat_rate of the module tax, and the shipping fee</p>
+<dl class="facts">
+<dt>入力</dt><dd>subtotal (0〜2,000,000 GBPc); category (standard, reduced, zero); shipping (0〜10,000 GBPc)</dd>
+<dt>出力</dt><dd>total (0〜2,410,000 GBPc)</dd>
+</dl>
+<p class="small cardlinks"><a class="trylink" href="#try:rules/order_total.rule">試す</a><a class="codelink" href="./1.1.0/code/rules/order_total.rule.html">コードを読む</a></p>
+</article>
+<article class="card">
+<div class="cardhead"><h3 class="mono">shipping_fee</h3><span class="path"><a href="./1.1.0/files/rules/shipping_fee.rule.html">rules/shipping_fee.rule</a></span><span class="tag">規則</span></div>
+<p>The fee for shipping a parcel, by its weight and the region it goes to: one fee up to 2,500 g and another above. The fees are the example&#39;s own</p>
+<dl class="facts">
+<dt>入力</dt><dd>weight (1〜30,000 g); region (domestic, world, eu)</dd>
+<dt>出力</dt><dd>fee (395〜2,950 GBPc)</dd>
+</dl>
+<p class="small cardlinks"><a class="trylink" href="#try:rules/shipping_fee.rule">試す</a><a class="codelink" href="./1.1.0/code/rules/shipping_fee.rule.html">コードを読む</a></p>
+</article>
+</section>
+<section class="pane" id="try">
+<h2 class="rm-vh">試す</h2>
+<label class="tryfile"><span class="small dim">ファイル</span><select class="ctl mono" id="try-file"><option value="./1.1.0/files/rules/order_total.rule.html" data-rel="rules/order_total.rule">order_total</option><option value="./1.1.0/files/rules/shipping_fee.rule.html" data-rel="rules/shipping_fee.rule">shipping_fee</option></select></label>
+<iframe class="tryframe" id="try-frame" title="ファイルを試す" hidden></iframe>
+<noscript><ul>
+<li><a href="./1.1.0/files/rules/order_total.rule.html#try">order_total</a></li>
+<li><a href="./1.1.0/files/rules/shipping_fee.rule.html#try">shipping_fee</a></li>
+</ul></noscript>
+</section>
+<section class="pane" id="changes">
+<div class="fromto"><div><span class="small dim">比べる元</span><div class="ctl mono fixed">1.0.0</div></div><div class="to"><span class="small dim">比べる先</span><label class="vermenu"><span class="rm-vh">版</span><select class="ctl mono" id="version-to" data-go=""><option value="./1.1.0/index.html" selected>1.1.0（最新）</option><option value="./1.0.0/index.html">1.0.0</option></select></label></div></div>
+<h2 class="headline">shipping_fee の答えが 2 か所で変わります。両方の版が受け取る入力のうち、それ以外は同じ答えです。</h2>
+<p class="dim">ritsu はすべての入力を比べるか、決められないと言います。一部を試すことはしません。</p>
+<dl class="tiles">
+<div><dt>振る舞い</dt><dd>規則 2 のうち 1 で答えが変わります</dd></div>
+<div><dt>インターフェース</dt><dd>変更 10 件、そのうち使う側を壊しうるもの 0 件</dd></div>
+<div><dt>ファイル</dt><dd>2 変わった、2 同じ。require は変わりません</dd></div>
+</dl>
+<article class="fileblock">
+<div class="filehead"><h3 class="mono">rules/shipping_fee.rule</h3><span class="tag differ">答えが変わります</span></div>
+<ul class="domain">
+<li><code>region.eu</code>：列挙に値が増えた</li>
+</ul>
+<div class="scroll"><table class="map">
+<thead><tr><th scope="col">region</th><th scope="col">1〜2,000 g</th><th scope="col">2,001〜2,500 g</th><th scope="col">2,501〜30,000 g</th></tr></thead>
+<tbody>
+<tr><th scope="row">domestic</th><td>395</td><td class="chg"><s>695</s> 395</td><td>695</td></tr>
+<tr><th scope="row">world</th><td>1,850</td><td class="chg"><s>2,950</s> 1,850</td><td>2,950</td></tr>
+<tr><th scope="row">eu <span class="note">（新しい値）</span></th><td class="new">1,250</td><td class="new">1,250</td><td class="new">1,950</td></tr>
+</tbody>
+</table></div>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">違うところ</th><th scope="col">答え</th><th scope="col">例</th></tr></thead>
+<tbody>
+<tr><td class="mono">region = domestic  かつ  weight &gt;=2001g &lt;=2500g</td><td class="mono nowrap">fee: 695 → 395</td><td class="mono">region=domestic, weight=2001</td></tr>
+<tr><td class="mono">region = world  かつ  weight &gt;=2001g &lt;=2500g</td><td class="mono nowrap">fee: 2950 → 1850</td><td class="mono">region=world, weight=2001</td></tr>
+</tbody>
+</table></div>
+</article>
+<article class="fileblock sames">
+<div class="filehead"><h3 class="mono">rules/order_total.rule</h3><span class="tag same">同じ答え</span></div>
+</article>
+<article class="fileblock">
+<h3>インターフェース</h3>
+<p><span class="mono">rules/shipping_fee.rule</span> の <code>enums/region/values/eu</code> が足されました</p>
+<p class="langs"><span class="lang mono">python</span> <span class="lang mono">typescript</span> <span class="lang mono">javascript</span> <span class="lang mono">rust</span> <span class="lang mono">ruby</span> <span class="lang mono">php</span> <span class="lang mono">go</span> <span class="lang mono">swift</span> <span class="lang mono">java</span> <span class="lang mono">connect</span></p>
+</article>
+<details class="whole"><summary>報告の全文（<code>ritsu mod diff --format markdown</code> と同じ）</summary>
+<ul>
+<li>ファイル：変わった 2、同じ 2</li>
+<li>require：変わりません</li>
+</ul>
+<div class="scroll"><table class="t">
+<tr><th>変わり方</th><th>ファイル</th></tr>
+<tr><td>変わった</td><td><code>ritsu.mod</code></td></tr>
+<tr><td>変わった</td><td><code>rules/shipping_fee.rule</code></td></tr>
+</table></div>
+<h4>振る舞い</h4>
+<ul>
+<li><code>rules/order_total.rule</code> (rulec)：同じ答えです</li>
+</ul>
+<details><summary><code>rules/shipping_fee.rule</code> (rulec)：答えが変わります</summary>
+<p><strong>版の差分（入力の全体で比べたもの）</strong></p>
+<p><code><registry>/acme/pricing@1.0.0/rules/shipping_fee.rule</code> → <code><registry>/acme/pricing@1.1.0/rules/shipping_fee.rule</code></p>
+<ul>
+<li><code>region.eu</code> — 列挙に値が増えた</li>
+</ul>
+<div class="scroll"><table class="t">
+<tr><th>違いが出る入力</th><th>答え</th><th>例</th><th>通り</th></tr>
+<tr><td>region = domestic  かつ  weight &gt;=2001g &lt;=2500g</td><td>fee: 695 → 395</td><td>region=domestic, weight=2001</td><td>2</td></tr>
+<tr><td>region = world  かつ  weight &gt;=2001g &lt;=2500g</td><td>fee: 2950 → 1850</td><td>region=world, weight=2001</td><td>2</td></tr>
+</table></div>
+<p>両方の版が受け付ける入力のうち、ここに挙げたほかは同じ答えを返します。</p>
+</details>
+<h4>インターフェース</h4>
+<ul>
+<li><code>rules/shipping_fee.rule</code> (rulec、api)：差が 10 件、うち使う側を壊しうるもの 0 件</li>
+</ul>
+<div class="scroll"><table class="t">
+<tr><th>変わり方</th><th>場所</th><th>古い値 → 新しい値</th></tr>
+<tr><td>足した</td><td><code>/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu</code></td><td></td></tr>
+</table></div>
+<p>振る舞いかインターフェースに違いが見つかりました。</p>
+</details>
+</section>
+<section class="pane" id="versions">
+<h2>版 2 個</h2>
+<div class="scroll"><table class="t">
+<thead><tr><th scope="col">版</th><th scope="col">公開</th><th scope="col">ダイジェスト</th><th scope="col">ファイル</th><th scope="col">確かめたこと</th></tr></thead>
+<tbody>
+<tr><td class="mono nowrap"><strong><a href="./1.1.0/index.html">1.1.0</a> <span class="dim">最新</span></strong></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td>ダイジェストと署名、<code>ritsu check</code> を通過</td></tr>
+<tr><td class="mono nowrap"><a href="./1.0.0/index.html">1.0.0</a></td><td class="mono small nowrap">—</td><td class="small"><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td>ダイジェストと署名、<code>ritsu check</code> を通過</td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="pane" id="files">
+<h2 class="h3">規則</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./1.1.0/code/rules/order_total.rule.html">rules/order_total.rule</a></td><td class="right dim small nowrap">997 バイト</td></tr>
+<tr><td class="mono small"><a href="./1.1.0/code/rules/shipping_fee.rule.html">rules/shipping_fee.rule</a></td><td class="right dim small nowrap">1,050 バイト</td></tr>
+</tbody>
+</table></div>
+<h2 class="h3">モジュールについて</h2>
+<div class="scroll"><table class="t files">
+<tbody>
+<tr><td class="mono small"><a href="./1.1.0/files/ritsu.lock.html">ritsu.lock</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+<tr><td class="mono small"><a href="./1.1.0/files/ritsu.mod.html">ritsu.mod</a></td><td class="right dim small nowrap">&lt;bytes&gt;</td></tr>
+</tbody>
+</table></div>
+</section>
+</div>
+<aside class="side">
+<div class="only-use">
+<h2>使い方</h2>
+<div class="step"><div class="stephead"><p>1. 依存に足します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod add pricing <registry>/acme/pricing@1.1.0</code></pre></div>
+<div class="step"><div class="stephead"><p>2. 署名を確かめる行を <code>ritsu.mod</code> に足します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></div>
+<div class="step"><div class="stephead"><p>3. 取り出します</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>4. ワークフローや kaname のモジュールから呼びます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>use rule order_total from &quot;@pricing/rules/order_total.rule&quot;
+</code></pre></div>
+<p><button type="button" class="primarybtn" id="open" data-module="./1.1.0/module.json" data-playground="https://i2y.github.io/ritsu/ja/play/" data-max="1000000" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
+<p class="small dim">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
+<h2 class="later">確かめたこと</h2>
+<p class="small dim">このサイトをビルドしたときに ritsu <version> が確かめました。</p>
+<dl class="checked">
+<dt>署名</dt><dd>acme の GitHub Actions のワークフローの署名です。cosign で確かめました。
+<details><summary>確かめた決まり</summary><pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre></details></dd>
+<dt>ダイジェスト</dt><dd><code title="sha256:<digest>">sha256:<head></code></dd>
+<dt>検査</dt><dd><code>ritsu check .</code>：ファイル 2 個がすべて通りました。</dd>
+<dt>ライセンス</dt><dd><code>MIT OR Apache-2.0</code></dd>
+</dl>
+</div>
+<div class="only-changes">
+<h2>上げる前に</h2>
+<div class="step"><div class="stephead"><p>1. プロジェクトをこの版に上げます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod get pricing@1.1.0
+ritsu mod fetch</code></pre></div>
+<div class="step"><div class="stephead"><p>2. 自分のファイルが壊れないかを確かめます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu check .</code></pre></div>
+<div class="step"><div class="stephead"><p>3. プルリクエストのために、自分のファイルに何が変わるかを見ます</p><button class="copy" type="button" data-copy="コピー" data-copied="コピーしました" data-failed="コピーできませんでした">コピー</button></div>
+<pre class="code"><code>ritsu mod report --base main --format markdown</code></pre></div>
+<p class="small dim">このページが言うのは、モジュールが何を変えるかです。自分のプロジェクトが壊れるかは、自分の <code>ritsu check</code> が言います。新しい値は、自分の表の外に出ることがあります。</p>
+</div>
+</aside>
+</div></div>
+<footer class="wrap foot"><code>ritsu mod site</code> <version> が書きました。ほかのサーバーからは何も読み込みません。</footer>
 </main>

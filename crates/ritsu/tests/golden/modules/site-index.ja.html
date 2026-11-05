@@ -1,14 +1,67 @@
 <main>
-<h1>Acme modules</h1>
-<p class="lead">The modules the Acme shop publishes</p>
-<div class="scroll"><table>
-<tr><th>モジュール</th><th>説明</th><th>いちばん新しい版</th><th>署名</th></tr>
-<tr><td><a href="./<registry>/acme/tax/index.html"><code><registry>/acme/tax</code></a></td><td>The VAT rates of the Acme shop</td><td>1.1.0</td><td><span class="ok">一覧の <code>signature</code> の行で確かめました</span></td></tr>
-<tr><td><a href="./<registry>/acme/pricing/index.html"><code><registry>/acme/pricing</code></a></td><td>Shipping fees and order totals of the Acme shop</td><td>1.1.0</td><td><span class="ok">一覧の <code>signature</code> の行で確かめました</span></td></tr>
-<tr><td><a href="./<registry>/acme/shop/index.html"><code><registry>/acme/shop</code></a></td><td>The order flow and the checkout of the Acme shop</td><td>0.2.0</td><td><span class="ok">一覧の <code>signature</code> の行で確かめました</span></td></tr>
-</table></div>
-<h2>署名の決まり</h2>
-<p>このサイトは、載せたモジュールの署名を次の行で確かめました。使う側の <code>ritsu.mod</code> に同じ行を書くと、ritsu は取り出すときに同じように署名を確かめます。</p>
-<pre><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
-<footer><code>ritsu mod site</code> <version> が書きました</footer>
+<div class="wrap body"><div class="cols">
+<section class="primary" aria-labelledby="list-title">
+<h1 id="list-title" class="listtitle">Acme modules</h1>
+<p class="lead dim">The modules the Acme shop publishes</p>
+<div class="filters" role="group" aria-label="中身で絞り込む">
+<button class="fil on" type="button" data-kind="" aria-pressed="true">すべて<span class="count">3</span></button>
+<button class="fil" type="button" data-kind="rule" aria-pressed="false">規則<span class="count">2</span></button>
+<button class="fil" type="button" data-kind="workflow" aria-pressed="false">ワークフロー<span class="count">1</span></button>
+<button class="fil" type="button" data-kind="functions" aria-pressed="false">kaname のモジュール<span class="count">1</span></button>
+</div>
+<div class="empty" hidden data-text="「%s」に当てはまるものはありません。"><p class="emptyhead"></p><p class="dim">モジュールの名前と説明、中の規則やカレンダーの名前を探します。</p></div>
+<div class="rows">
+<article class="row" data-kinds="rule" data-text="<registry>/acme/tax the vat rates of the acme shop vat_rate">
+<div class="rowmain">
+<div class="rowhead"><h2><span class="prefix"><registry>/acme/</span><a href="./<registry>/acme/tax/index.html">tax</a></h2><span class="ver">1.1.0</span></div>
+<p class="desc">The VAT rates of the Acme shop</p>
+<div class="items"><span class="summary">規則 1 本</span><span class="item" data-name="vat_rate">vat_rate</span></div>
+<p class="latest"><span class="dim">最新の変更：</span> <a href="./<registry>/acme/tax/index.html#changes">1.1.0 で vat_rate の答えが 1 か所で変わります</a></p>
+</div>
+<ul class="proofs side">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>acme の署名を確かめました</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>ダイジェストが一致</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span><code>ritsu check</code> を通ります</span></li>
+<li class="license">MIT OR Apache-2.0</li>
+</ul>
+</article>
+<article class="row" data-kinds="rule" data-text="<registry>/acme/pricing shipping fees and order totals of the acme shop order_total shipping_fee">
+<div class="rowmain">
+<div class="rowhead"><h2><span class="prefix"><registry>/acme/</span><a href="./<registry>/acme/pricing/index.html">pricing</a></h2><span class="ver">1.1.0</span></div>
+<p class="desc">Shipping fees and order totals of the Acme shop</p>
+<div class="items"><span class="summary">規則 2 本</span><span class="item" data-name="order_total">order_total</span><span class="item" data-name="shipping_fee">shipping_fee</span></div>
+<p class="latest"><span class="dim">最新の変更：</span> <a href="./<registry>/acme/pricing/index.html#changes">1.1.0 で shipping_fee の答えが 2 か所で変わります</a></p>
+</div>
+<ul class="proofs side">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>acme の署名を確かめました</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>ダイジェストが一致</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span><code>ritsu check</code> を通ります</span></li>
+<li class="license">MIT OR Apache-2.0</li>
+</ul>
+</article>
+<article class="row" data-kinds="workflow functions" data-text="<registry>/acme/shop the order flow and the checkout of the acme shop place_order basket">
+<div class="rowmain">
+<div class="rowhead"><h2><span class="prefix"><registry>/acme/</span><a href="./<registry>/acme/shop/index.html">shop</a></h2><span class="ver">0.2.0</span></div>
+<p class="desc">The order flow and the checkout of the Acme shop</p>
+<div class="items"><span class="summary">ワークフロー 1 本、kaname のモジュール 1 個</span><span class="item" data-name="place_order">place_order</span><span class="item" data-name="basket">basket</span></div>
+<p class="latest"><span class="dim">最新の変更：</span> <a href="./<registry>/acme/shop/index.html#changes">0.2.0 でインターフェースが 1 か所変わります</a></p>
+</div>
+<ul class="proofs side">
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>acme の署名を確かめました</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>ダイジェストが一致</span></li>
+<li><svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span><code>ritsu check</code> を通ります</span></li>
+</ul>
+</article>
+</div>
+</section>
+<aside class="side">
+<h2>モジュールの置き場所</h2>
+<p class="small dim">モジュールは、作者が公開したところにあります。OCI のレジストリか、git のリポジトリのタグです。このサイトはビルドのときに版を一つずつ取り出し、ダイジェストと署名を確かめて、ファイルからこのページを描きます。<code>ritsu mod add</code> も同じところから取り出すので、このサイトが止まっても困りません。</p>
+<details class="small"><summary>一覧の署名の決まり</summary>
+<p class="dim">このサイトは、載せたモジュールの署名を次の行で確かめました。使う側の <code>ritsu.mod</code> に同じ行を書くと、ritsu は取り出すときに同じように署名を確かめます。</p>
+<pre class="code"><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
+</details>
+</aside>
+</div></div>
+<footer class="wrap foot"><code>ritsu mod site</code> <version> が書きました。ほかのサーバーからは何も読み込みません。</footer>
 </main>

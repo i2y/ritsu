@@ -1,0 +1,48 @@
+/* The frame of every page of `ritsu mod site`: the band at the top, and the way back on a file's
+   page. It names its own rm- classes, so a page a language drew keeps its look. */
+:root { --rm-bar: #0b0d0f; --rm-barfg: #f3f5f7; --rm-bardim: #a8b1ba; --rm-barline: #2a2f34; --rm-barfield: #1a1e22; --rm-accent: #0a7268; --rm-accentfg: #ffffff; --rm-focus: #5fdccb; --rm-trail: #f4f5f7; --rm-trailfg: #14171a; --rm-traildim: #59626d; --rm-trailline: #e2e5e9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --rm-bar: #000000; --rm-barline: #22272b; --rm-barfield: #15191c; --rm-accent: #4bd9c7; --rm-accentfg: #04201c; --rm-trail: #161b1f; --rm-trailfg: #e9ecef; --rm-traildim: #a3acb6; --rm-trailline: #2a3036; } }
+:root[data-theme="dark"] { --rm-bar: #000000; --rm-barline: #22272b; --rm-barfield: #15191c; --rm-accent: #4bd9c7; --rm-accentfg: #04201c; --rm-trail: #161b1f; --rm-trailfg: #e9ecef; --rm-traildim: #a3acb6; --rm-trailline: #2a3036; }
+.rm-bar, .rm-crumbs { margin: 0; }
+.rm-bar { background: var(--rm-bar); color: var(--rm-barfg); border-bottom: 1px solid var(--rm-barline); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+.rm-bar *, .rm-crumbs * { box-sizing: border-box; }
+.rm-barin { max-width: 1180px; margin: 0 auto; padding: 10px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.rm-brand { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; max-width: 100%; min-height: 44px; line-height: 44px; color: var(--rm-barfg); text-decoration: none; }
+.rm-word { font: 700 20px/44px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: -0.02em; }
+.rm-sub { font-size: 14px; color: var(--rm-bardim); }
+.rm-own { min-width: 0; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+.rm-search { flex: 1 1 320px; min-width: 200px; margin: 0; }
+.rm-search input { width: 100%; min-height: 44px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--rm-barline); background: var(--rm-barfield); color: var(--rm-barfg); font: inherit; }
+.rm-search input::placeholder { color: var(--rm-bardim); opacity: 1; }
+.rm-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.rm-link { color: var(--rm-barfg); display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; font-size: 14px; text-decoration: none; }
+.rm-link:hover { text-decoration: underline; }
+.rm-theme { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 6px; background: transparent; color: var(--rm-barfg); cursor: pointer; }
+.rm-bar a:focus-visible, .rm-bar input:focus-visible, .rm-bar button:focus-visible { outline: 2px solid var(--rm-focus); outline-offset: 2px; }
+.rm-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.rm-crumbs { background: var(--rm-trail); color: var(--rm-traildim); border-bottom: 1px solid var(--rm-trailline); font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.rm-crumbsin { max-width: 1180px; margin: 0 auto; padding: 8px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.rm-trail { overflow-wrap: anywhere; flex: 1 1 280px; }
+.rm-crumbs a { color: var(--rm-accent); text-decoration: none; }
+.rm-crumbs a:hover { text-decoration: underline; }
+.rm-switch { display: inline-flex; border: 1px solid var(--rm-trailline); border-radius: 6px; overflow: hidden; }
+.rm-crumbs .rm-switch a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; color: var(--rm-trailfg); }
+.rm-crumbs .rm-switch a:hover { text-decoration: none; background: var(--rm-trailline); }
+.rm-crumbs .rm-switch a[aria-current] { background: var(--rm-accent); color: var(--rm-accentfg); }
+.rm-pick { display: inline-flex; max-width: 100%; }
+.rm-select { max-width: 100%; min-height: 36px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--rm-trailline); background: transparent; color: var(--rm-trailfg); font: inherit; }
+.rm-bare .rm-bar, .rm-bare .rm-crumbs, .rm-bare [hidden] { display: none !important; }
+.rm-bare main { max-width: none; margin: 0; padding: 16px 20px; }
+.rm-bare body { visibility: hidden; }
+.rm-bare.rm-ready body { visibility: visible; }
+/* A page that lays itself out for the window (a rule's) gets the window less the frame. */
+@media (min-width: 720px) { body.boarded { display: flex; flex-direction: column; height: 100vh; } body.boarded > .app { flex: 1 1 auto; min-height: 0; height: auto; } }
+@media (max-width: 640px) {
+  .rm-barin, .rm-crumbsin { padding-left: 16px; padding-right: 16px; }
+  .rm-barin { padding-top: 4px; gap: 0 8px; }
+  .rm-sub { display: none; }
+  .rm-search { flex-basis: 100%; order: 3; }
+  .rm-nav { margin-left: auto; flex-wrap: nowrap; gap: 0 6px; }
+  .rm-link { padding: 0 2px; font-size: 13px; white-space: nowrap; }
+  .rm-theme { width: 36px; }
+}

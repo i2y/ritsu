@@ -389,6 +389,9 @@ pub struct Said {
     pub total: bool,
     /// Whether it says anything beyond "the same": the deciding policies of a gate changed, say.
     pub more: bool,
+    /// What the two versions answer as one table, for a rule small enough to have one (the page of a
+    /// module's version draws it).
+    pub map: Option<rulec::vdiff::Map>,
 }
 
 /// The behavior of one file both versions have.
@@ -668,7 +671,7 @@ pub fn behavior(tool: Tool, old: &Spot, new: &Spot, budget: Option<u64>, lang: L
             let w = rulec::i18n::with(rl, || rulec::cli::diff_whole_through((&old.read, old.through.clone()), (&new.read, new.through.clone()), (&old.shown, &new.shown), budget))
                 .map_err(Text::same)?;
             let json = ritsu_base::json::parse(&w.json).map_err(|_| Text::same(w.json.clone()))?;
-            Ok(Said { text: w.text, markdown: w.markdown, json, differs: w.differs, total: w.total, more: false })
+            Ok(Said { text: w.text, markdown: w.markdown, json, differs: w.differs, total: w.total, more: false, map: w.map })
         }
         Tool::Koyomi => {
             let budget = budget.unwrap_or(koyomi::check::DEFAULT_BUDGET);
@@ -683,7 +686,7 @@ pub fn behavior(tool: Tool, old: &Spot, new: &Spot, budget: Option<u64>, lang: L
             let (o, n) = (side(old)?, side(new)?);
             let d = koyomi::diff::diff(&o, &n, budget)?;
             let json = ritsu_base::json::parse(&serde_json::to_string(&koyomi::diff::to_json(&d, lang)).unwrap_or_default()).map_err(|_| Text::same("koyomi diff"))?;
-            Ok(Said { text: koyomi::diff::text(&d, lang), markdown: koyomi::diff::markdown(&d, lang), json, differs: d.differs(), total: true, more: false })
+            Ok(Said { text: koyomi::diff::text(&d, lang), markdown: koyomi::diff::markdown(&d, lang), json, differs: d.differs(), total: true, more: false, map: None })
         }
         Tool::Sekisho => {
             let suite: sekisho::suite::Suite = joined.sekisho().into();
@@ -701,7 +704,7 @@ pub fn behavior(tool: Tool, old: &Spot, new: &Spot, budget: Option<u64>, lang: L
             let (o, n) = (side(old)?, side(new)?);
             let d = sekisho::diff::diff(&o, &n, &suite, walk)?;
             let more = d.actions.iter().any(|a| !a.groups.is_empty());
-            Ok(Said { text: sekisho::diff::text(&d, lang), markdown: sekisho::diff::markdown(&d, lang), json: sekisho::diff::to_json(&d, lang), differs: d.differs(), total: d.unknown() == 0, more })
+            Ok(Said { text: sekisho::diff::text(&d, lang), markdown: sekisho::diff::markdown(&d, lang), json: sekisho::diff::to_json(&d, lang), differs: d.differs(), total: d.unknown() == 0, more, map: None })
         }
         _ => unreachable!("only rulec, koyomi and sekisho make a diff of behavior"),
     }
@@ -907,7 +910,7 @@ type Run<'a> = dyn Fn(&[String], &mut dyn Write, &mut dyn Write) -> u8 + 'a;
 
 /// What a language prints with `api` for the file at `path` (of the side `label`), asked in this
 /// process. Err, saying so, for a file that does not pass the language's check.
-fn api_of(tool: Tool, path: &Path, label: &str, joined: &Joined) -> Result<Json, Text> {
+pub(super) fn api_of(tool: Tool, path: &Path, label: &str, joined: &Joined) -> Result<Json, Text> {
     let p = path.to_string_lossy().into_owned();
     let word = tool.word();
     let not_passing = || {
