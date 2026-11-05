@@ -35,10 +35,11 @@ done
 # Japanese. It takes ritsu: $RITSU, else ritsu on the PATH (docs.yml builds it from the commit);
 # without either, the site is built without the list, and this says so. It fetches the seed module
 # from ghcr.io and checks its signatures with cosign, which is to be on the PATH (docs.yml installs it).
+# `--alternate` is where a page's link to its other language goes, from the root of the list it writes.
 ritsu="${RITSU:-$(command -v ritsu || true)}"
 if [ -n "$ritsu" ]; then
-  "$ritsu" mod site modules.list --out build/modules/list --lang en
-  "$ritsu" mod site modules.list --out build/ja/modules/list --lang ja
+  "$ritsu" mod site modules.list --out build/modules/list --lang en --alternate ja=../../ja/modules/list
+  "$ritsu" mod site modules.list --out build/ja/modules/list --lang ja --alternate en=../../../modules/list
 fi
 echo "site: build/ (en) + build/ja (ja) + build/zh (zh, the home page)"
 for site in "${sites[@]}"; do echo "  $site: build/$site (en) + build/$site/ja (ja)"; done

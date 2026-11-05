@@ -173,7 +173,8 @@ them); the pages of yuen's
 namespace have every word yuen's exporter writes (its list `TERMS`, which yuen's own tests hold to
 what it writes) and no other, and their example is what the command prints; the two
 configurations name ritsu's URLs; `.github/workflows/docs.yml` runs on a push to main that changes
-what the site is built from, and by hand; the nav and the home page of each language's site lead to
+what the site is built from, once a day and by hand; `.github/workflows/modules-list.yml` checks a
+pull request on the list of modules with no permissions; the nav and the home page of each language's site lead to
 the playground in the site's language, on a project the playground lists in it; the page each of
 rulec's and dandori's sites had for its playground sends a reader on to the same place; and
 the page of the playground alone leads to the page that explains it and to the playground's files,
@@ -201,7 +202,8 @@ how).
 
 `.github/workflows/docs.yml` builds the whole site with `build.sh` and deploys `build/` to GitHub
 Pages, on a push to main that changes what the site is built from (`website/`, the documents
-rulec's and chobo's `sync.sh` copy in, and the workflow itself), and by hand from the Actions tab. Pages
+rulec's and chobo's `sync.sh` copy in, the modules the list shows, and the workflow itself), once a
+day for the versions the list's modules have published since, and by hand from the Actions tab. Pages
 takes its source from "GitHub Actions" in the repository's settings. ritsu's site took over from
 the sites rulec's and dandori's own repositories published, at <https://i2y.github.io/rulec/> and
 <https://i2y.github.io/dandori/>.

@@ -1,9 +1,10 @@
 # The list of modules on ritsu's site (DESIGN 17.17): build.sh writes it with `ritsu mod site`, in
-# English under build/modules/list and in Japanese under build/ja/modules/list. It shows the seed
-# module as it is on ghcr.io, every version modules.yml has pushed, and checks each against the
-# signature modules.yml made, as this repository's workflow (cosign, which docs.yml installs).
-# crates/ritsu/tests/website.rs builds the site with no network, from the module's working tree.
-title "ritsu modules"
-description "Modules published from the ritsu repository"
-module "ghcr.io/i2y/ritsu-holidays"
-signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
+# English under build/modules/list and in Japanese under build/ja/modules/list, whenever docs.yml
+# runs, which is once a day at the least. It shows the modules of this repository as they are on
+# ghcr.io, every version modules.yml has pushed, and checks each against the signature modules.yml
+# made, as this repository's workflow (cosign, which docs.yml installs). A `module` line goes in once
+# a version of the module is on ghcr.io: a line that reads no versions stops the site.
+# modules-list.yml checks a pull request that changes this file, with no permissions.
+# crates/ritsu/tests/website.rs builds the site with no network, from the modules' working trees.
+module "ghcr.io/i2y/ritsu-holidays" as "holidays"
+signature "ghcr.io/i2y/" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"

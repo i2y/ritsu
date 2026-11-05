@@ -1,0 +1,69 @@
+name: modules-list
+
+# Check a pull request that changes the list of modules on ritsu's site (website/modules.list,
+# DESIGN 17.17). It builds ritsu, installs cosign as docs.yml does, and writes the list's pages in
+# both languages from the root build.sh writes them from. That fetches every version of every module
+# the list names and checks its digests and its signature: the run fails on a line it cannot read or
+# a module it cannot reach (ritsu says exit 2) and on a version it cannot verify (exit 1), and it
+# keeps the pages for the pull request's reviewer, as `pages` among the run's artifacts.
+#
+# It holds no secret and no permission but to read the repository, so a pull request from a fork
+# runs it as it is. Nothing a module holds is run: `ritsu mod site` reads it and writes pages.
+# crates/ritsu/tests/website.rs holds this file to that.
+
+on:
+  pull_request:
+    paths:
+      - "website/modules.list"
+      - ".github/workflows/modules-list.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modules-list-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build ritsu
+        run: cargo build --locked --release -p ritsu
+
+      - name: cosign 3.1.4
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cosign"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/cosign" https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  $d/cosign" | sha256sum -c -
+          chmod +x "$d/cosign"
+          echo "$d" >> "$GITHUB_PATH"
+
+      - name: Write the list's pages
+        env:
+          RITSU: ${{ github.workspace }}/target/release/ritsu
+        run: |
+          cd website
+          "$RITSU" mod site modules.list --out build/modules/list --lang en --alternate ja=../../ja/modules/list
+          "$RITSU" mod site modules.list --out build/ja/modules/list --lang ja --alternate en=../../../modules/list
+
+      - name: Keep the pages
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages
+          path: website/build
+          if-no-files-found: ignore

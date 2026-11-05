@@ -14,9 +14,11 @@ name: docs
 #   website/modules.list       -> https://i2y.github.io/ritsu/modules/list/ and …/ja/modules/list/
 #
 # It runs on a push to main that changes what the site is built from (website/, the documents
-# rulec's and chobo's sync.sh copy in, the modules the list shows, and this file), and by hand from
-# the Actions tab. Pages takes its source from "GitHub Actions" in the repository's settings.
-# crates/ritsu/tests/website.rs holds this file to those triggers.
+# rulec's and chobo's sync.sh copy in, the modules the list shows, and this file), once a day for
+# the versions the list's modules have published since, and by hand from the Actions tab. A run that
+# cannot read the list deploys nothing, and the site stays as it was. Pages takes its source from
+# "GitHub Actions" in the repository's settings. crates/ritsu/tests/website.rs holds this file to
+# those triggers.
 
 on:
   push:
@@ -28,12 +30,14 @@ on:
       - "crates/chobo/docs/**"
       - "modules/**"
       - ".github/workflows/docs.yml"
+  schedule:
+    - cron: "0 21 * * *"
   workflow_dispatch:
 
+# The job that builds reads the repository and nothing else: it writes pages from what the modules
+# of the list hold. Only the job that deploys what it built writes to Pages.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -133,6 +137,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
