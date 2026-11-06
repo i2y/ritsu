@@ -3254,9 +3254,9 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110), [E112](#e112)
 
 `error` — **Unit mismatch: values of different types are being mixed**
 
-**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else.
+**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else. And it is what the brackets of a type cannot hold: a unit the table of units does not have (`money[RUB]`, `money[JPYc]`), a unit of another dimension (`mass[cm]`), no unit on `money` or `mass`, a word after what the type reads (`mass[g, kg]`), and anything on a type with no brackets (`number[kg]`). It comes with no literal written in the unit anywhere.
 
-**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`.
+**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`. A unit is one the table has (`money[USD]`, `money[銭]`, `mass[g]`), and an amount in a currency it does not have is a `number`.
 
 **Smallest reproduction**:
 
@@ -3311,6 +3311,25 @@ policy unique
 | x     | -> r(r) : money[JPY, incl_tax] |
 | true  | 100JPY                         |
 | false | none                           |
+```
+
+**A type in a unit the table does not have**:
+
+```rule
+rule t(t) v1
+
+inputs
+  x(x) : bool
+  fee(fee) : money[RUB]  contract_only
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | 200JPY                         |
 ```
 
 Related codes: [E108](#e108), [E112](#e112)

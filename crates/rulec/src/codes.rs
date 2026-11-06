@@ -1896,6 +1896,36 @@ policy unique
 | true  | 100JPY                         |
 | false | none                           |
 "##;
+const X_E103_UNIT: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+  手数料(fee) : money[RUB]  contract_only
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[円, incl_tax] |
+| true  | 100円                         |
+| false | 200円                         |
+"##;
+const X_E103_UNIT_EN: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+  fee(fee) : money[RUB]  contract_only
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | 200JPY                         |
+"##;
 const X_E104: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]\n\n\
                       table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
@@ -3936,12 +3966,12 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。optional でない列（規則の出力、表が決める列、例の期待値）に `none` を書いたときと、値の無いことのある名前を書いたときにも出ます。値の無いことのある名前を式の中で使ったとき（`quoted * 2`）にも出ます。そういう値は、表のセルで確かめるか、optional の列にそのまま渡すことしかできません。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else."
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。optional でない列（規則の出力、表が決める列、例の期待値）に `none` を書いたときと、値の無いことのある名前を書いたときにも出ます。値の無いことのある名前を式の中で使ったとき（`quoted * 2`）にも出ます。そういう値は、表のセルで確かめるか、optional の列にそのまま渡すことしかできません。型の `[…]` に、型が読まないものを書いたときにも出ます。単位の表に無い単位（`money[RUB]`、`money[JPYc]`）、ほかの次元の単位（`mass[cm]`）、単位の無い `money` や `mass`、読む分のあとの語（`mass[g, kg]`）、`[…]` の無い型に書いたもの（`number[kg]`）です。その単位の数をどこにも書いていなくても出ます。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else. And it is what the brackets of a type cannot hold: a unit the table of units does not have (`money[RUB]`, `money[JPYc]`), a unit of another dimension (`mass[cm]`), no unit on `money` or `mass`, a word after what the type reads (`mass[g, kg]`), and anything on a type with no brackets (`number[kg]`). It comes with no literal written in the unit anywhere."
             ),
             tr!(
-                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。見出しの型が名前の型と違うなら、どちらが正しいかを決めて直してください。見出しの型は消してもかまいません。消せば、名前の型で読みます。値の無いことを答える列なら、その型を `T?` にしてください（規則の出力なら `outputs` の宣言、表が決める列なら見出しの型です）。そうでなければ、`none` の代わりに値を書いてください。",
-                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`."
+                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。見出しの型が名前の型と違うなら、どちらが正しいかを決めて直してください。見出しの型は消してもかまいません。消せば、名前の型で読みます。値の無いことを答える列なら、その型を `T?` にしてください（規則の出力なら `outputs` の宣言、表が決める列なら見出しの型です）。そうでなければ、`none` の代わりに値を書いてください。単位は、表にあるものを書いてください（`money[USD]`、`money[銭]`、`mass[g]`）。表に無い通貨の額は `number` で持てます。",
+                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`. A unit is one the table has (`money[USD]`, `money[銭]`, `mass[g]`), and an amount in a currency it does not have is a `number`."
             ),
             X_E103,
             &["E108", "E112"],
@@ -3952,7 +3982,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E103_HEADING,
             X_E103_HEADING_EN,
         )
-        .also(tr!("optional でない出力に書いた `none`", "`none` under an output that is not optional"), X_E103_NONE, X_E103_NONE_EN),
+        .also(tr!("optional でない出力に書いた `none`", "`none` under an output that is not optional"), X_E103_NONE, X_E103_NONE_EN)
+        .also(tr!("単位の表に無い単位の型", "A type in a unit the table does not have"), X_E103_UNIT, X_E103_UNIT_EN),
         err(
             "E104",
             tr!("数値の出力に丸めの宣言がありません", "A numeric output declares no rounding"),

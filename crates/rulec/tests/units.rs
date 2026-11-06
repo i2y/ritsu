@@ -678,6 +678,79 @@ fn 単位でない通貨の注は表の通貨を言い丸めの例は列の単�
     }
 }
 
+/// A type is held to the table of units where it is declared, with no literal written in its unit,
+/// and what its brackets hold past what it reads is said, not dropped (§15.280). Every unit the
+/// table has stays a type of its own dimension.
+#[test]
+fn 型の括弧は数を書かなくても単位の表で読む() {
+    let rule = |ty: &str| {
+        format!(
+            "rule t(t) v1\n\nenum tier = gold | silver\n\ninputs\n  a(a) : {ty}  contract_only\n  n(n) : number  range >=0 <=9\n\noutputs\n  b(b) : number  round down(1)\n\ntable j(j)\npolicy unique\n| n | -> b(b) : number |\n| - | 1 |\n"
+        )
+    };
+    let said = |ty: &str| -> Vec<String> {
+        rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(&rule(ty), "t.rule")).iter().filter(|d| d.code == "E103").map(|d| d.title.clone()).collect()
+    };
+    for (ty, title) in [
+        ("money[RUB]", "`RUB` is not a unit of money"),
+        ("money[JPYc]", "`JPYc` is not a unit of money"),
+        ("money[usd]", "`usd` is not a unit of money"),
+        ("money[kg]", "`kg` is not a unit of money"),
+        ("money[incl_tax]", "`incl_tax` is not a unit of money"),
+        ("money[RUB, incl_tax]", "`RUB` is not a unit of money"),
+        ("money[RUB]?", "`RUB` is not a unit of money"),
+        ("mass[JPY]", "`JPY` is not a unit of mass"),
+        ("mass[cm]", "`cm` is not a unit of mass"),
+        ("mass[lbs]", "`lbs` is not a unit of mass"),
+        ("temperature[C]", "`C` is not a unit of temperature"),
+        ("money", "`money` needs a unit"),
+        ("mass", "`mass` needs a unit"),
+        ("sound?", "`sound` needs a unit"),
+        ("money[USD, incl_tax, excl_tax]", "`money` takes no `excl_tax` in its brackets"),
+        ("money[USD, step 1USD]", "`money` takes no `step 1USD` in its brackets"),
+        ("mass[g, kg]", "`mass` takes no `kg` in its brackets"),
+        ("mass[g, step 1g]", "`mass` takes no `step 1g` in its brackets"),
+        ("rate[step 1%, step 2%]", "`rate` takes no `step 2%` in its brackets"),
+        ("number[kg]", "`number` takes no `kg` in its brackets"),
+        ("number[step 1]", "`number` takes no `step 1` in its brackets"),
+        ("bool[x]", "`bool` takes no `x` in its brackets"),
+        ("date[x]", "`date` takes no `x` in its brackets"),
+        ("string[x]", "`string` takes no `x` in its brackets"),
+        ("tier[x]", "`tier` takes no `x` in its brackets"),
+    ] {
+        let all = said(ty);
+        assert!(all.iter().any(|t| t == title), "{ty}: {all:?}");
+    }
+    let mut good: Vec<String> = ["rate[step 1%]", "rate[step 0.1%]", "money[USD, incl_tax]", "money[JPY, excl_tax]", "money[銭, incl_tax]", "number", "bool", "date", "string", "tier", "tier?"].map(String::from).to_vec();
+    for s in ritsu_units::table::spellings() {
+        let (dim, _) = ritsu_units::table::unit(&s).unwrap();
+        if dim != ritsu_units::Dim::Rate {
+            good.push(format!("{}[{s}]", dim.word()));
+        }
+    }
+    assert!(good.len() > 100, "{}", good.len());
+    for ty in &good {
+        assert_eq!(said(ty), Vec::<String>::new(), "{ty}");
+    }
+
+    // what is said, where a type is written anywhere in the rule
+    let everywhere = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=9\n\nelements xs(xs)\n  k(k) : money[AAA]  range >=0USD <=9USD\n\noutputs\n  b(b) : money[BBB]  round down(1USD)\n\ndefine d(d) : money[CCC] = 1USD\n\ntable j(j)\npolicy unique\n| n | -> b(b) : money[DDD] |\n| - | 1USD |\n";
+    let titles = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(everywhere, "t.rule")).iter().map(|d| d.title.clone()).collect::<Vec<_>>().join("\n");
+    for u in ["AAA", "BBB", "CCC", "DDD"] {
+        assert!(titles.contains(&format!("`{u}` is not a unit of money")), "{u}: {titles}");
+    }
+
+    // what is said to the reader, in both languages
+    let notes = |lang, ty: &str| rulec::i18n::with(lang, || rulec::check_source(&rule(ty), "t.rule")).iter().filter(|d| d.code == "E103").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join(" ");
+    assert!(notes(rulec::i18n::Lang::En, "money[RUB]").contains("The units of money are 円 (yen, the same as JPY) 銭 (a hundredth of 円), or one of the ISO 4217 codes USD EUR"), "{}", notes(rulec::i18n::Lang::En, "money[RUB]"));
+    assert!(notes(rulec::i18n::Lang::Ja, "money[RUB]").contains("金額の単位は 円（JPY と同じ）"), "{}", notes(rulec::i18n::Lang::Ja, "money[RUB]"));
+    assert!(notes(rulec::i18n::Lang::En, "mass[foo]").contains("The units of mass are mg g kg t oz lb."), "{}", notes(rulec::i18n::Lang::En, "mass[foo]"));
+    assert!(notes(rulec::i18n::Lang::Ja, "mass[foo]").contains("mass の単位は mg g kg t oz lb です。"), "{}", notes(rulec::i18n::Lang::Ja, "mass[foo]"));
+    assert!(notes(rulec::i18n::Lang::En, "mass[JPY]").contains("`JPY` is a unit of money (`money[JPY]`)."), "{}", notes(rulec::i18n::Lang::En, "mass[JPY]"));
+    assert!(notes(rulec::i18n::Lang::En, "money[incl_tax]").contains("`incl_tax` is a tax, and comes after the currency (`money[USD, incl_tax]`)."), "{}", notes(rulec::i18n::Lang::En, "money[incl_tax]"));
+    assert!(notes(rulec::i18n::Lang::Ja, "number[kg]").contains("`number` に単位はありません"), "{}", notes(rulec::i18n::Lang::Ja, "number[kg]"));
+}
+
 /// Every number a rule of the corpus declares is a unit of ritsu's table (ritsu's DESIGN 5.2),
 /// and spelled back it is the type the certificate prints; a rate carries the step its integer
 /// counts on the wire.

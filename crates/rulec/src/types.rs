@@ -152,20 +152,27 @@ pub fn compares_only(t: &Ty) -> bool {
     }
 }
 
-/// Every unit a literal may carry, for the message that names them when one is not known. The
-/// currencies are named one by one: "an ISO 4217 code" would tell a reader who wrote `1RUB` that
-/// it is one, and `JPYc` that it follows from `JPY`, in the sentence that says neither is a unit.
-pub fn units() -> String {
+/// The units of money, as a message names them. The currencies are named one by one: "an ISO 4217
+/// code" would tell a reader who wrote `1RUB` that it is one, and `JPYc` that it follows from
+/// `JPY`, in the sentence that says neither is a unit.
+fn currencies() -> String {
     let codes = ritsu_units::table::CURRENCIES.join(" ");
+    tr!(
+        "円（JPY と同じ） 銭（円の 1/100）、または ISO 4217 のコード {codes}（その 1/100 はコードに c を付ける。USD と USDc）",
+        "円 (yen, the same as JPY) 銭 (a hundredth of 円), or one of the ISO 4217 codes {codes} (its hundredth is the code plus c: USD and USDc)"
+    )
+}
+
+/// Every unit a literal may carry, for the message that names them when one is not known.
+pub fn units() -> String {
+    let money = currencies();
     tr!(
         "質量 mg g kg t oz lb · 長さ mm cm m km in ft yd mi · \
          面積 mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac · 体積 mm3 cm3 mL L m3 kL · \
-         時間 ms s min h d w · 温度 ℃ ℉ · 音量 dB · 率 % · 金額 円（JPY と同じ） 銭（円の 1/100）、\
-         または ISO 4217 のコード {codes}（その 1/100 はコードに c を付ける。USD と USDc）",
+         時間 ms s min h d w · 温度 ℃ ℉ · 音量 dB · 率 % · 金額 {money}",
         "mass mg g kg t oz lb · length mm cm m km in ft yd mi · \
          area mm2 cm2 m2 a ha km2 坪 (tsubo) in2 ft2 yd2 mi2 ac · volume mm3 cm3 mL L m3 kL · \
-         duration ms s min h d w · temperature ℃ ℉ · sound dB · rate % · money 円 (yen, the same as JPY) 銭 (a hundredth of 円), \
-         or one of the ISO 4217 codes {codes} (its hundredth is the code plus c: USD and USDc)"
+         duration ms s min h d w · temperature ℃ ℉ · sound dB · rate % · money {money}"
     )
 }
 
@@ -1798,6 +1805,15 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             "The second word of a money type is `incl_tax` for an amount with tax and `excl_tax` for one without. Any other word leaves it unsaid which the amount is."
                         )),
                 );
+            }
+            // E103: what the brackets of a type hold that the type does not take. `money[RUB]`
+            // passed as long as no literal was written in the unit (§15.280).
+            for (title, notes) in unreadable_brackets(t) {
+                let mut d = Diag::error("E103", title).at(at(t.span.line)).mark(t.span.clone(), "");
+                for n in notes {
+                    d = d.note(n);
+                }
+                c.diags.push(d);
             }
             for a in &t.args {
                 if let TypeArg::Scaled(w, n) = a
@@ -7435,6 +7451,78 @@ fn unreadable_tax(tr: &TypeRef) -> Option<String> {
         _ => None,
     }).collect();
     words.get(1).filter(|w| ritsu_units::Tax::parse(w).is_none()).map(|w| w.to_string())
+}
+
+/// What the brackets of a type hold that the type does not take, each with what to write instead
+/// (§15.280): a unit the table of units does not have, a unit of another dimension, no unit where
+/// the unit is part of the type, and whatever comes after what the type reads. `Checked::resolve`
+/// reads the first word of a quantity and the first two of a money type, and nothing of the other
+/// types, and a word the table does not have was held to the table only by a literal in it, so
+/// `a : money[RUB]`, `mass[g, kg]` and `number[kg]` all passed.
+fn unreadable_brackets(t: &TypeRef) -> Vec<(String, Vec<String>)> {
+    use crate::kw;
+    use ritsu_units::{Dim, Tax, table};
+    let base = t.base.as_str();
+    let money = base == kw::MONEY;
+    let quantity = Dim::of_word(base);
+    let mut said = Vec::new();
+    let mut words = t.args.iter().filter_map(|a| match a {
+        TypeArg::Word(w) => Some(w.as_str()),
+        TypeArg::Scaled(..) => None,
+    });
+    if money || quantity.is_some() {
+        let units = if money {
+            tr!("金額の単位は {} です。", "The units of money are {}.", currencies())
+        } else {
+            let of_it = table::spellings().into_iter().filter(|s| table::unit(s).is_some_and(|(d, _)| Some(d) == quantity)).collect::<Vec<_>>().join(" ");
+            tr!("{base} の単位は {of_it} です。", "The units of {base} are {of_it}.")
+        };
+        match words.next() {
+            None => said.push((tr!("`{base}` には単位が要ります", "`{base}` needs a unit"), vec![units])),
+            Some(u) => {
+                let read = table::unit(u).map(|(d, _)| d);
+                let its_own = read.as_ref().is_some_and(|d| if money { matches!(d, Dim::Money(_)) } else { Some(d) == quantity.as_ref() });
+                if !its_own {
+                    let mut notes = vec![units];
+                    if let Some(d) = read {
+                        let w = d.word();
+                        notes.push(tr!("`{u}` は {w} の単位です（`{w}[{u}]`）。", "`{u}` is a unit of {w} (`{w}[{u}]`)."));
+                    }
+                    if money && Tax::parse(u).is_some() {
+                        notes.push(tr!("`{u}` は税区分で、通貨のあとに書きます（`money[円, {u}]`）。", "`{u}` is a tax, and comes after the currency (`money[USD, {u}]`)."));
+                    }
+                    said.push((tr!("`{u}` は {base} の単位ではありません", "`{u}` is not a unit of {base}"), notes));
+                }
+            }
+        }
+        if money {
+            // the tax, which `unreadable_tax` reads
+            words.next();
+        }
+    }
+    let takes = match base {
+        kw::MONEY => tr!(
+            "金額の型の `[…]` に書けるのは、通貨と税区分（`incl_tax` か `excl_tax`）だけです。",
+            "The brackets of a money type hold its currency and its tax (`incl_tax` or `excl_tax`), and nothing else."
+        ),
+        kw::RATE => tr!("率の型は `rate` か `rate[step 1%]` です。", "A rate is `rate` or `rate[step 1%]`."),
+        kw::NUMBER => tr!(
+            "`number` に単位はありません。単位のある数は、その単位の型で書いてください（`mass[kg]` など）。",
+            "A `number` has no unit. A number with a unit takes the type of that unit (`mass[kg]`, say)."
+        ),
+        _ if quantity.is_some() => tr!("`{base}` の `[…]` に書けるのは、単位一つだけです。", "The brackets of `{base}` hold one unit, and nothing else."),
+        _ => tr!("`{base}` に `[…]` はありません。", "`{base}` has no brackets."),
+    };
+    let mut a_step_may_come = base == kw::RATE;
+    let stray = words.map(str::to_string).chain(t.args.iter().filter_map(|a| match a {
+        TypeArg::Scaled(w, _) if w == kw::STEP && std::mem::take(&mut a_step_may_come) => None,
+        TypeArg::Scaled(w, n) => Some(format!("{w} {}", n.raw)),
+        TypeArg::Word(_) => None,
+    }));
+    for w in stray {
+        said.push((tr!("`{base}` の `[…]` に `{w}` は書けません", "`{base}` takes no `{w}` in its brackets"), vec![takes.clone()]));
+    }
+    said
 }
 
 /// The step, when it is written and cannot be read as a value of the type it steps. It fell

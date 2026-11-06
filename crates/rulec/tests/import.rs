@@ -89,6 +89,25 @@ fn an_amount_in_jpy_stays_in_jpy() {
     assert!(out.contains("money[円, incl_tax]  round down(1円)"), "{out}");
 }
 
+/// A code the table of units does not have is no currency to a draft, as it is none to the check:
+/// the column is a number and says why, and the draft reads back. A code it has stays money.
+#[test]
+fn a_code_the_table_does_not_have_is_a_number_in_the_draft() {
+    let (_tmp, d) = dir("rub");
+    for (code, declared, row) in [("RUB", "fee : number", ["basic", "5"]), ("USD", "fee : money[USD]", ["basic", "5USD"])] {
+        let csv = d.join(format!("{code}.csv"));
+        std::fs::write(&csv, format!("plan,fee\nbasic,5{code}\npro,10{code}\n")).unwrap();
+        let (c, out, e) = run_lang("en", &["import", "csv", csv.to_str().unwrap(), "--name", "fee"]);
+        assert_eq!(c, 0, "{e}");
+        assert!(out.contains(declared) && has_row(&out, &row), "{out}");
+        assert_eq!(out.contains("the unit RUB is not one rulec knows"), code == "RUB", "{out}");
+        let rule = d.join(format!("{code}.rule"));
+        std::fs::write(&rule, &out).unwrap();
+        let (c, said, e) = run_lang("en", &["check", rule.to_str().unwrap()]);
+        assert_eq!(c, 0, "{out}{said}{e}");
+    }
+}
+
 #[test]
 fn 数値の列は範囲つきの入力になり_等値として転記したと注記する() {
     let (_tmp, d) = dir("numeric");

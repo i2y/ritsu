@@ -190,7 +190,7 @@ fn num_type(unit: &str, decimal: bool) -> (String, Option<String>) {
         "℃" | "℉" => (format!("temperature[{unit}]"), None),
         "dB" => (format!("sound[{unit}]"), None),
         "" => ("number".into(), Some(tr!("推定: 単位が無いので number にした", "guess: no unit was written, so it is a number"))),
-        u if u.len() == 3 && u.chars().all(|c| c.is_ascii_uppercase()) => (format!("money[{u}]"), None),
+        u if ritsu_units::table::CURRENCIES.contains(&u) => (format!("money[{u}]"), None),
         u => ("number".into(), Some(tr!("推定: 単位 {u} は rulec に無いので number にした", "guess: the unit {u} is not one rulec knows, so it is a number"))),
     }
 }

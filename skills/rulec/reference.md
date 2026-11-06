@@ -287,6 +287,12 @@ Fourteen, and no others.
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
 | optional | `member_kind?` | any of the above, plus the absent value, which the cell `none` tests. Its `range` and its step are those of the type it wraps and hold the value when there is one; it never appears in an expression or a `constraint` (an expression that works with one is E103; a `define` that only names one hands it on). A comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too. Completeness asks for a row for the absent value and for the whole declared range beside it (E101), and the generated code guards a value that is there as it guards the type it wraps. An output may be optional too: a row answers `none` for no value, or a value of the type it wraps, read in that type (`439USDc` under `money[USDc]?`), and an optional number declares its rounding like any other (E104) |
 
+The brackets hold what this table says and nothing else (E103), and a unit is read by the table of
+units whether or not a literal is written in it: `money[RUB]` and `money[JPYc]` name no unit,
+`mass[cm]` names a unit of another dimension, `money` and `mass` alone name none, and `mass[g, kg]`
+and `number[kg]` hold what the type does not read. An amount in a currency the table does not have
+is a `number`.
+
 Every quantity, money, rate, number and date is an **integer** internally. No floating point appears
 anywhere in the tool or in the generated code.
 
