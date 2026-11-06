@@ -33,7 +33,8 @@
 //!   link of the playground hold them (`[[path, text], …]`; a file that is not UTF-8 as `[path,
 //!   {"base64": "…"}]`). The button's script reads it from the same origin, packs it as the
 //!   playground packs its edits (raw DEFLATE, base64url) and opens `<playground>#project=empty&
-//!   edits=<…>`; past 1,000,000 characters it says that the version is too big to open in the page.
+//!   file=<…>&edits=<…>`, on the file the tab to try opens on; past 1,000,000 characters it says that
+//!   the version is too big to open in the page.
 //!   A working tree that requires a module by a path has no button: the directory is not among its
 //!   files.
 //!

@@ -120,6 +120,18 @@ fn lang_attr(s: &str, page: Lang) -> &'static str {
     if page == Lang::En && !s.is_ascii() { " lang=\"ja\"" } else { "" }
 }
 
+/// Whether a file of a module is in the language of the page, as its path says: a module in two
+/// languages has a file in each (`酒税.rule`, `README.ja.md`).
+fn of_language(rel: &str, page: Lang) -> bool {
+    (changes::in_japanese(rel) || rel.contains(".ja.")) == (page == Lang::Ja)
+}
+
+/// The README of a version that a page in this language reads.
+fn readme_of(m: &diff::Module, page: Lang) -> Option<&'static str> {
+    let names = if page == Lang::Ja { ["README.ja.md", "README.md"] } else { ["README.md", "README.en.md"] };
+    names.into_iter().find(|n| m.files.contains_key(*n))
+}
+
 /// A module's name, as its start and its last part.
 fn split_name(name: &str) -> (&str, &str) {
     match name.rfind('/') {
@@ -731,8 +743,7 @@ impl Writer<'_> {
             o.push_str("</tbody>\n</table></div>\n");
         }
         // the README, as its author wrote it
-        let (first, second) = if self.lang == Lang::Ja { ("README.ja.md", "README.md") } else { ("README.md", "README.en.md") };
-        if let Some(bytes) = m.files.get(first).or_else(|| m.files.get(second)).or_else(|| m.files.get("README.md"))
+        if let Some(bytes) = readme_of(m, self.lang).and_then(|p| m.files.get(p))
             && let Ok(text) = std::str::from_utf8(bytes)
         {
             let (_, last) = split_name(&s.name);
@@ -790,7 +801,9 @@ impl Writer<'_> {
 
     fn try_pane(&self, r: &Read<'_>, place: &Place) -> String {
         let mut o = format!("<section class=\"pane\" id=\"try\">\n<h2 class=\"rm-vh\">{}</h2>\n", esc(&self.say(tr!("試す", "Try"))));
-        let files: Vec<&Held> = r.holds.iter().filter(|h| h.can_try).collect();
+        let mut files: Vec<&Held> = r.holds.iter().filter(|h| h.can_try).collect();
+        // the page's language first: the first is the one the tab opens on
+        files.sort_by_key(|h| !of_language(&h.rel, self.lang));
         // one file has nothing to choose
         let hidden = if files.len() == 1 { " hidden" } else { "" };
         o.push_str(&format!("<label class=\"tryfile\"{hidden}><span class=\"small dim\">{}</span><select class=\"ctl mono\" id=\"try-file\">", esc(&self.say(tr!("ファイル", "File")))));
@@ -957,7 +970,7 @@ impl Writer<'_> {
         if let Some((label, code)) = self.use_snippet(&short, r) {
             o.push_str(&self.step(&format!("{n}. {}", self.say(label)), &code));
         }
-        o.push_str(&self.button(v, place));
+        o.push_str(&self.button(v, place, self.first_file(r)));
         // what was checked
         o.push_str(&format!("<h2 class=\"later\">{}</h2>\n", esc(&self.say(tr!("確かめたこと", "What was checked")))));
         let built = env!("CARGO_PKG_VERSION");
@@ -1041,14 +1054,16 @@ impl Writer<'_> {
             }
             return Some((tr!("ワークフローや kaname のモジュールから呼びます", "Call them from a workflow or a kaname module"), lines));
         }
-        if let Some(c) = r.holds.iter().find(|h| h.kind == Kind::Calendar) {
+        // one to show: the first of a kind, in the page's language when the module has one
+        let first = |k: Kind| r.holds.iter().filter(|h| h.kind == k).min_by_key(|h| !of_language(&h.rel, self.lang));
+        if let Some(c) = first(Kind::Calendar) {
             let (name, rel) = (&c.name, &c.rel);
             return Some((
                 tr!("自分のカレンダーから読み、自分の休みを足します", "Read a calendar from your own, and close what your business closes"),
                 format!("calendar office v1\ndescription \"Closed on Saturdays, Sundays and the days of {name}\"\nuse calendar \"@{short}/{rel}\"\n\nclosed weekly sat, sun\n"),
             ));
         }
-        if let Some(c) = r.holds.iter().find(|h| h.kind == Kind::Rule) {
+        if let Some(c) = first(Kind::Rule) {
             let (name, rel) = (&c.name, &c.rel);
             return Some((tr!("ワークフローや kaname のモジュールから呼びます", "Call a rule from a workflow or a kaname module"), format!("use rule {name} from \"@{short}/{rel}\"\n")));
         }
@@ -1075,8 +1090,15 @@ impl Writer<'_> {
         o
     }
 
-    /// The button that opens a version in the playground; or why it has none.
-    fn button(&self, v: &Shown, place: &Place) -> String {
+    /// The file the playground opens a version on: the one the tab to try opens on, or else the first
+    /// the version holds in the page's language, or else its README.
+    fn first_file<'a>(&self, r: &'a Read<'_>) -> Option<&'a str> {
+        let held = r.holds.iter().min_by_key(|h| (!h.can_try, !of_language(&h.rel, self.lang))).map(|h| h.rel.as_str());
+        held.or_else(|| readme_of(r.shown.module.as_ref()?, self.lang))
+    }
+
+    /// The button that opens a version in the playground, on a file if it names one; or why it has none.
+    fn button(&self, v: &Shown, place: &Place, file: Option<&str>) -> String {
         if v.paths {
             return format!(
                 "<p class=\"small warn\">{}</p>\n",
@@ -1093,8 +1115,9 @@ impl Writer<'_> {
             "ファイルはリンクの `#` のあとに入れて運びます。ブラウザはそこをサーバーに送りません。",
             "The files go in the link, after its `#`, which a browser does not send to a server."
         ));
+        let file = file.map(|f| format!(" data-file=\"{}\"", esc(f))).unwrap_or_default();
         format!(
-            "<p><button type=\"button\" class=\"primarybtn\" id=\"open\" data-module=\"{}module.json\" data-playground=\"{}\" data-max=\"{LINK_MAX}\" data-big=\"{}\" data-failed=\"{}\">{}</button></p>\n<p class=\"small dim\">{}</p>\n",
+            "<p><button type=\"button\" class=\"primarybtn\" id=\"open\" data-module=\"{}module.json\"{file} data-playground=\"{}\" data-max=\"{LINK_MAX}\" data-big=\"{}\" data-failed=\"{}\">{}</button></p>\n<p class=\"small dim\">{}</p>\n",
             esc(&place.version),
             esc(&self.playground),
             esc(&big),

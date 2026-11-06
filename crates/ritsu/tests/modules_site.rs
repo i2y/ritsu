@@ -842,6 +842,47 @@ fn a_page_gives_the_reason_in_its_own_language() {
     }
 }
 
+/// A version opens on a file in the language of its page: the tab to try lists those first, so it
+/// opens on the first, the button of the playground names the same file, and the line that shows how
+/// to use it reads that file. A version with nothing to try opens on what it holds in that language,
+/// and one that holds nothing on its README.
+#[test]
+fn a_version_opens_on_a_file_in_the_language_of_its_page() {
+    let t = TempDir::new("mod-site-first-file");
+    let rule = |name: &str| format!("rule {name} v1\n\ninputs\n  n(n) : number  range >=0 <=9\n\noutputs\n  fee(fee) : money[USD]  round down(1USD)\n\ntable fees(fees)\npolicy unique\n| n | -> fee(fee) : money[USD] |\n| - | 5USD                    |\n");
+    let core = |name: &str| format!("module {name} v1\n\nfn one(a: number range >=0 <=9) -> number\n  a\n");
+    for (dir, files) in [
+        ("rules", vec![("fee.rule", rule("fee(fee)")), ("\u{6599}\u{91d1}.rule", rule("\u{6599}\u{91d1}(fee_ja)")), ("README.md", "# Fees\n".to_string()), ("README.ja.md", "# \u{6599}\u{91d1}\n".to_string())]),
+        ("cores", vec![("core.kn", core("core")), ("core.ja.kn", core("core_ja"))]),
+        ("readme", vec![("README.md", "# Words\n".to_string()), ("README.ja.md", "# \u{8a00}\u{8449}\n".to_string())]),
+    ] {
+        t.write(&format!("{dir}/ritsu.mod"), format!("module example.com/acme/{dir}\nversion 0.1.0\n"));
+        for (name, text) in files {
+            t.write(&format!("{dir}/{name}"), text);
+        }
+    }
+    t.write("three.list", "local \"rules\"\nlocal \"cores\"\nlocal \"readme\"\n");
+    let (fee, ryokin) = ("fee.rule", "\u{6599}\u{91d1}.rule");
+    for (lang, first, second, core_file, readme) in [("en", fee, ryokin, "core.kn", "README.md"), ("ja", ryokin, fee, "core.ja.kn", "README.ja.md")] {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+        c.current_dir(t.path()).args(["mod", "site", "three.list", "--out", lang, "--lang", lang]).env(store::VARIABLE, t.path().join("store"));
+        for v in LANG_VARS {
+            c.env_remove(v);
+        }
+        let (code, out, err) = said(c.output().unwrap());
+        assert_eq!(code, 0, "{out}{err}");
+        let page = |dir: &str| t.read(&format!("{lang}/example.com/acme/{dir}/0.1.0/index.html"));
+        let rules = page("rules");
+        let name_of = |file: &str| file.trim_end_matches(".rule").to_string();
+        let at = |file: &str| rules.find(&format!(">{}</option>", name_of(file))).unwrap_or_else(|| panic!("{lang}: no option for {file}: {rules}"));
+        assert!(at(first) < at(second), "{lang}: the tab to try opens on another file: {rules}");
+        assert!(rules.contains(&format!(" data-file=\"{first}\" ")), "{lang}: the playground opens on another file: {rules}");
+        assert!(rules.contains(&format!("use rule {} from", name_of(first))), "{lang}: the line of how to use it reads another file: {rules}");
+        assert!(page("cores").contains(&format!(" data-file=\"{core_file}\" ")), "{lang}: {}", page("cores"));
+        assert!(page("readme").contains(&format!(" data-file=\"{readme}\" ")), "{lang}: {}", page("readme"));
+    }
+}
+
 /// What the pages do in a browser, in Chrome, from their files: a module's page picks a tab by the
 /// address and keeps the head in sight, the tab to try opens a file in its frame, the list narrows
 /// as it is asked, and a calendar's page answers about the day in its address (closed, open with the

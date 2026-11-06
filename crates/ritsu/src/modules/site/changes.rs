@@ -269,7 +269,7 @@ fn requirements_tile(d: &ModDiff) -> Text {
 
 /// Whether the words of a module are in Japanese: a module may keep its requirements in English and
 /// in Japanese, as it keeps its rules, and a page puts first what is in its own language.
-fn in_japanese(text: &str) -> bool {
+pub(super) fn in_japanese(text: &str) -> bool {
     text.chars().any(|c| matches!(c, '\u{3040}'..='\u{30ff}' | '\u{3400}'..='\u{9fff}'))
 }
 

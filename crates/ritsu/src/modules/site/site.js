@@ -191,7 +191,8 @@
 
   // Opening a version in the playground: module.json read from beside the page, packed as the
   // playground packs the edits of its links (its JSON compressed as raw DEFLATE by the browser's
-  // CompressionStream, in base64url with no padding), and the playground opened on it.
+  // CompressionStream, in base64url with no padding), and the playground opened on it, at the file
+  // the button names.
   var open = document.getElementById("open");
   if (open) {
     open.addEventListener("click", async function () {
@@ -207,7 +208,8 @@
           open.textContent = open.dataset.big;
           return;
         }
-        location.assign(open.dataset.playground + "#project=empty&edits=" + packed);
+        var file = open.dataset.file ? "&file=" + encodeURIComponent(open.dataset.file) : "";
+        location.assign(open.dataset.playground + "#project=empty" + file + "&edits=" + packed);
       } catch (err) {
         open.textContent = open.dataset.failed;
       }

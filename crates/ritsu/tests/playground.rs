@@ -2505,8 +2505,9 @@ fn the_pages_before_send_their_links_on() {
 /// in each language, the site of the example's shop (locked to pricing and tax in a store of the
 /// test's own, with a file in Shift_JIS among its files) and of a module too big for a link, for the
 /// playground alone on the test's server. The button of shop's page packs its `module.json` into a
-/// link of that page, which opens it in the empty project and answers its check as the library
-/// answers the same files; the file in Shift_JIS shows read only, a note in its place. The button
+/// link of that page, which opens it in the empty project, on the first file the version holds in the
+/// language of the page, and answers its check as the library answers the same files; the file in
+/// Shift_JIS shows read only, a note in its place. The button
 /// of the big module's page says that it is too big, and the page stays where it is.
 #[test]
 fn a_version_on_a_site_of_modules_opens_in_the_playground() {
@@ -2517,6 +2518,9 @@ fn a_version_on_a_site_of_modules_opens_in_the_playground() {
     let csv = "notes/holidays.csv";
     let sjis: &[u8] = b"\x93\xfa\x95\x74,\x8b\x78\x93\xfa\n2026-01-01,\x8c\xb3\x93\xfa\n";
     t.write(&format!("{shop}/{csv}"), sjis);
+    // a file for each language to open on
+    let ledger = "checkout/\u{52d8}\u{5b9a}.kn";
+    t.write(&format!("{shop}/{ledger}"), "module \u{52d8}\u{5b9a}(ledger) v1\n\nfn \u{5408}\u{8a08}(total)(\u{984d}(amount): number range >=0 <=9) -> number\n  \u{984d}\n");
     // a megabyte that does not compress
     let mut noise = Vec::with_capacity(1_000_000);
     let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
@@ -2575,7 +2579,9 @@ fn a_version_on_a_site_of_modules_opens_in_the_playground() {
         assert_eq!(want["code"], 0, "{tag}: {want}");
         let opened = &got[0][0];
         assert_eq!((text_of(opened, "path"), text_of(opened, "project")), (play, "empty"), "{tag}");
-        assert!(text_of(opened, "hash").starts_with("#project=empty&edits="), "{tag}: {}", text_of(opened, "hash"));
+        let (first, in_link) = if tag == "ja" { (ledger, "checkout%2F%E5%8B%98%E5%AE%9A.kn") } else { ("orders/place_order.flow", "orders%2Fplace_order.flow") };
+        assert!(text_of(opened, "hash").starts_with(&format!("#project=empty&file={in_link}&edits=")), "{tag}: {}", text_of(opened, "hash"));
+        assert_eq!(text_of(opened, "open"), first, "{tag}");
         assert_eq!(text_of(opened, "said"), said(&want), "{tag}: the page shows another check");
         assert!(text_of(opened, "status").ends_with(&counts_in(tag, &want)), "{tag}: {}", text_of(opened, "status"));
         let shown = &got[0][1];
