@@ -312,6 +312,49 @@ fn the_action_installs_the_cosign_the_workflows_test_with() {
     assert!(packages.contains("      - uses: ./\n") && packages.contains("          cosign: true\n") && packages.contains("cosign version\n"), "packages.yml does not run the action");
 }
 
+/// How the action fetches, on the real curl and a server of the test's own: 504s for a while do not
+/// stop it, and a 404 stops it at the first answer, so a version that does not exist does not wait.
+#[cfg(unix)]
+#[test]
+fn the_action_waits_out_504s_and_stops_at_a_404() {
+    use std::io::{Read, Write};
+    use std::sync::{Arc, Mutex};
+    if !ritsu_testkit::tools::runs("curl", &["--version"]) {
+        ritsu_testkit::skip("no curl to fetch with");
+        return;
+    }
+    let action = read("action.yml");
+    let (_, rest) = action.split_once("fetch() {\n").expect("the action fetches with a function");
+    let (body, _) = rest.split_once('}').unwrap();
+    let t = TempDir::new("action-fetch");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+    let log = asked.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut s = stream.unwrap();
+            let mut head = [0u8; 2048];
+            let n = s.read(&mut head).unwrap_or(0);
+            let path = String::from_utf8_lossy(&head[..n]).split_whitespace().nth(1).unwrap_or("").to_string();
+            let mut log = log.lock().unwrap();
+            log.push(path.clone());
+            let times = log.iter().filter(|p| **p == path).count();
+            let (status, text) = if path == "/missing" { ("404 Not Found", "") } else if times <= 3 { ("504 Gateway Timeout", "") } else { ("200 OK", "the file") };
+            let _ = write!(s, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}", text.len());
+        }
+    });
+    let fetch = |out: &str, path: &str| {
+        let script = format!("set -euo pipefail\nfetch() {{\n{body}}}\nfetch {out} {base}{path}\n");
+        Command::new("bash").arg("-c").arg(script).current_dir(t.path()).output().unwrap().status.code()
+    };
+    assert_eq!(fetch("waited", "/wave"), Some(0));
+    assert_eq!(t.read("waited"), "the file");
+    assert_eq!(fetch("missing", "/missing"), Some(22));
+    let log = asked.lock().unwrap();
+    assert_eq!((log.iter().filter(|p| *p == "/wave").count(), log.iter().filter(|p| *p == "/missing").count()), (4, 1), "{log:?}");
+}
+
 /// The script of the action, run with a curl of its own: the PATH gains what was checked and nothing
 /// else, and what fails the check is left out of it.
 #[cfg(unix)]

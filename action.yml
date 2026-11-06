@@ -56,13 +56,18 @@ runs:
             shasum -a 256 "$1" | cut -d' ' -f1
           fi
         }
+        # The downloads of a release can answer 504 for minutes on end. curl doubles its wait from a
+        # second, so ten tries last over eight minutes; what asking again cannot mend, a 404, stops at once.
+        fetch() {
+          curl -fsSL --connect-timeout 30 --retry 10 --retry-max-time 600 --retry-connrefused -o "$1" "$2"
+        }
         name="ritsu-$ver-$target.tar.gz"
         base="https://github.com/i2y/ritsu/releases/download/$ver"
         dir="$RUNNER_TEMP/ritsu-$ver"
         mkdir -p "$dir"
         cd "$dir"
-        curl -fsSL --retry 3 -o "$name" "$base/$name"
-        curl -fsSL --retry 3 -o SHA256SUMS "$base/SHA256SUMS"
+        fetch "$name" "$base/$name"
+        fetch SHA256SUMS "$base/SHA256SUMS"
         have=$(sum_of "$name")
         want=$(awk -v n="$name" '$2 == n { print $1 }' SHA256SUMS)
         if [ -z "$want" ]; then echo "::error::SHA256SUMS of $ver has no line for $name"; exit 1; fi
@@ -70,7 +75,7 @@ runs:
         if [ -n "$PIN" ] && [ "$have" != "$PIN" ]; then echo "::error::$name: sha256 is $have, the workflow pins $PIN"; exit 1; fi
         tar -xzf "$name"
         if [ "$COSIGN" = true ]; then
-          curl -fsSL --retry 3 -o cosign.fetched "https://github.com/sigstore/cosign/releases/download/v3.1.4/$cosign"
+          fetch cosign.fetched "https://github.com/sigstore/cosign/releases/download/v3.1.4/$cosign"
           have=$(sum_of cosign.fetched)
           if [ "$have" != "$cosign_sum" ]; then echo "::error::$cosign: sha256 is $have, this action pins $cosign_sum"; exit 1; fi
           mv cosign.fetched cosign
