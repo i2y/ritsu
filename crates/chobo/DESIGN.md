@@ -161,7 +161,7 @@ unit 円 incl_tax
 
 | 単位 | ritsu の単位の型 |
 |---|---|
-| 通貨の名前（`円`、`JPY`、ISO 4217 のコード、`銭`、`USDc`）で `scale 0` | その通貨のお金（`money[円]`、税込か税抜を書けば `money[円, incl_tax]`） |
+| 通貨の名前（`円`、`JPY`、rulec の `money` が受け取る ISO 4217 のコード、`銭`、`USDc`）で `scale 0` | その通貨のお金（`money[円]`、税込か税抜を書けば `money[円, incl_tax]`） |
 | `円` と `JPY` のほかの通貨の名前で `scale 2` | その通貨の百分の一のお金（`unit USD scale 2` は `money[USDc]`） |
 | 質量、長さ、面積、体積、時間の単位の綴り（`g`、`kg`、`L`、`h`）で `scale 0` | その単位（`mass[kg]`） |
 | それ以外（`個`、`席`、`pt`、`scale 2` の円、`scale 3` の通貨、温度と音の大きさの単位 `℃`・`℉`・`dB`） | 名前だけの数え方（`Dim::Count`）。自分とだけ同じ |

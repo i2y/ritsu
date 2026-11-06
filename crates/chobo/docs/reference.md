@@ -70,7 +70,7 @@ units rulec writes:
 
 | Unit | As the other languages see it |
 |---|---|
-| a currency's name (`円`, `JPY`, an ISO 4217 code, `銭`, `USDc`) with scale 0 | that money: `money[円]`, or with its tax `money[円, incl_tax]` |
+| a currency's name (`円`, `JPY`, an ISO 4217 code rulec's `money` takes, `銭`, `USDc`) with scale 0 | that money: `money[円]`, or with its tax `money[円, incl_tax]` |
 | a currency's name other than `円` and `JPY`, with scale 2 | its hundredth: `unit USD scale 2` is `money[USDc]` |
 | a unit of mass, length, area, volume or time (`g`, `kg`, `L`, `h`) with scale 0 | that unit: `mass[kg]` |
 | anything else (`pcs`, `seats`, `pt`, yen with scale 2, and the units of temperature and of sound, `℃`, `℉` and `dB`, which do not add up) | a count with its name and nothing else, the same only as itself |

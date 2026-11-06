@@ -562,8 +562,8 @@ pub fn ledger() -> Vec<Entry> {
             "E014",
             tr!("お金でない単位に、税込か税抜を書いています", "A tax on a unit that is not money"),
             tr!(
-                "`unit` の行の最後の `incl_tax` か `excl_tax` が、お金の単位でない単位に付いているときに出ます。お金の単位は、通貨の名前（`円`、`JPY`、ISO 4217 のコード）の単位で、円と JPY は scale 0、ほかの通貨は scale 0 か 2 のものです。ほかの単位（`個`、`kg`、scale 2 の円）には、税込も税抜もありません。",
-                "A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without."
+                "`unit` の行の最後の `incl_tax` か `excl_tax` が、お金の単位でない単位に付いているときに出ます。お金の単位は、通貨の名前（`円`、`JPY`、rulec の `money` が受け取る ISO 4217 のコード）の単位で、円と JPY は scale 0、ほかの通貨は scale 0 か 2 のものです。ほかの単位（`個`、`kg`、scale 2 の円）には、税込も税抜もありません。",
+                "A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code rulec's `money` takes): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without."
             ),
             tr!(
                 "`incl_tax` か `excl_tax` を外すか、通貨の名前の単位にしてください（`unit 円 incl_tax`、`unit USD scale 2 excl_tax`）。税込か税抜かは、規則やワークフローから額を受け取るときに、同じ区別の額だけを受け取るために書くものです。",

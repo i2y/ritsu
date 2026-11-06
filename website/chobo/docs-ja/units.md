@@ -56,7 +56,7 @@ unit 円 incl_tax
 
 | 帳簿の単位 | rulec と dandori から見た型 |
 |---|---|
-| 通貨の名前（`円`、`JPY`、ISO 4217 のコード、`銭`、`USDc`）で scale 0 | そのお金。`money[円]`、税込か税抜を書けば `money[円, incl_tax]` |
+| 通貨の名前（`円`、`JPY`、rulec の `money` が受け取る ISO 4217 のコード、`銭`、`USDc`）で scale 0 | そのお金。`money[円]`、税込か税抜を書けば `money[円, incl_tax]` |
 | `円` と `JPY` のほかの通貨の名前で scale 2 | その 100 分の 1 の単位。`unit USD scale 2` は `money[USDc]` |
 | 質量、長さ、面積、体積、時間の単位（`g`、`kg`、`L`、`h`）で scale 0 | その単位。たとえば `mass[kg]` |
 | それ以外（`個`、`席`、`pt`、scale 2 の円、`℃`、`℉`、`dB`） | 名前を付けた数え方。同じ名前の単位とだけ同じになる |

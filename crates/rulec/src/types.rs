@@ -152,19 +152,20 @@ pub fn compares_only(t: &Ty) -> bool {
     }
 }
 
-/// Every unit a literal may carry, for the message that names them when one is not known.
-/// The currencies are given as the rule rather than as thirty-one codes: a list that long
-/// in a diagnostic is skipped, and the rule is what the reader has to know anyway.
+/// Every unit a literal may carry, for the message that names them when one is not known. The
+/// currencies are named one by one: "an ISO 4217 code" would tell a reader who wrote `1RUB` that
+/// it is one, and `JPYc` that it follows from `JPY`, in the sentence that says neither is a unit.
 pub fn units() -> String {
+    let codes = ritsu_units::table::CURRENCIES.join(" ");
     tr!(
         "質量 mg g kg t oz lb · 長さ mm cm m km in ft yd mi · \
          面積 mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac · 体積 mm3 cm3 mL L m3 kL · \
-         時間 ms s min h d w · 温度 ℃ ℉ · 音量 dB · 率 % · 金額 円 銭、\
-         または ISO 4217 のコード（その 1/100 はコードに c を付ける。USD と USDc）",
+         時間 ms s min h d w · 温度 ℃ ℉ · 音量 dB · 率 % · 金額 円（JPY と同じ） 銭（円の 1/100）、\
+         または ISO 4217 のコード {codes}（その 1/100 はコードに c を付ける。USD と USDc）",
         "mass mg g kg t oz lb · length mm cm m km in ft yd mi · \
          area mm2 cm2 m2 a ha km2 坪 (tsubo) in2 ft2 yd2 mi2 ac · volume mm3 cm3 mL L m3 kL · \
          duration ms s min h d w · temperature ℃ ℉ · sound dB · rate % · money 円 (yen, the same as JPY) 銭 (a hundredth of 円), \
-         or an ISO 4217 code (its hundredth is the code plus c: USD and USDc)"
+         or one of the ISO 4217 codes {codes} (its hundredth is the code plus c: USD and USDc)"
     )
 }
 
@@ -1740,15 +1741,19 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at(rd.span.line))
                         .mark(rd.span.clone(), tr!("この列を丸める刻みです", "this is the grid this column is rounded to"))
                         .maybe_note(unit_note(&rd.grid))
-                        .note({
-                            // The English example is written in the column's own unit (`1JPY`, `1g`),
-                            // as the fix of E104 is, so it is not a yen amount on a column of grams.
+                        .maybe_note({
+                            // The example is written in the column's own unit (`1JPY`, `1g`), as the
+                            // fix of E104 is, so it is not a yen amount on a column of grams. A column
+                            // in a spelling the table does not have (`money[JPYc]`) has no such unit.
                             let one = unit_one(&ty);
-                            tr!(
-                                "刻みは丸める列と同じ単位で書いてください（`{}` なら `round down(1円)`）。",
-                                "Write the grid in the unit of the column it rounds (`{}` takes `round down({one})`).",
-                                ty
-                            )
+                            let spelled = !matches!(ty.present(), Ty::Money { .. } | Ty::Qty { .. }) || ty.present().unit(None).is_some();
+                            spelled.then(|| {
+                                tr!(
+                                    "刻みは丸める列と同じ単位で書いてください（`{}` なら `round down({one})`）。",
+                                    "Write the grid in the unit of the column it rounds (`{}` takes `round down({one})`).",
+                                    ty
+                                )
+                            })
                         }),
                 ),
                 _ => {}

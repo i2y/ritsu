@@ -630,20 +630,52 @@ fn 率の出力のe104は百分率で言う() {
 }
 
 /// The sentence that lists the units when a literal carries one that is not a unit names every
-/// spelling of the table, which is ritsu's (`ritsu_units::table`) since the table moved there.
-/// The currencies are named as the rule (`ISO 4217 のコード`), not code by code. Both languages
-/// spell the units the same, so the language the test runs in does not matter.
+/// spelling of the table, which is ritsu's (`ritsu_units::table`) since the table moved there,
+/// but for the hundredths of the codes, which it gives as the rule. Both languages spell the units
+/// the same, so the language the test runs in does not matter.
 #[test]
 fn 単位を挙げる文は表のすべての綴りを挙げる() {
     let said = rulec::types::units();
     let words: Vec<&str> = said.split([' ', '、', '（', '）', ',', '(', ')']).collect();
     for s in ritsu_units::table::spellings() {
-        if ritsu_units::table::CURRENCIES.iter().any(|c| *c == s || format!("{c}c") == s) || s == "JPY" {
+        if s != "USDc" && ritsu_units::table::CURRENCIES.iter().any(|c| format!("{c}c") == s) {
             continue;
         }
         assert!(words.contains(&s.as_str()), "`{s}` is not named in: {said}");
     }
     assert!(said.contains("ISO 4217"), "{said}");
+}
+
+/// The reference names the currencies of the table, in the row of money, as the message does: a
+/// reader can tell a code the table does not have from a typo. `JPY` is another spelling of `円`,
+/// so it has no hundredth of its own to write with a `c`.
+#[test]
+fn 参照は表の通貨を挙げ円の百分の一を銭と言う() {
+    let reference = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/reference.md")).unwrap();
+    let row = reference.lines().find(|l| l.starts_with("| money |")).expect("the row of money");
+    let named: Vec<&str> = row.split('`').filter(|w| w.len() == 3 && *w != "JPY" && w.chars().all(|c| c.is_ascii_uppercase())).collect();
+    assert_eq!(named, ritsu_units::table::CURRENCIES, "{row}");
+    assert!(ritsu_units::table::money("JPYc").is_none() && row.contains("`銭`") && row.contains("`JPYc`"), "{row}");
+}
+
+/// A value that is no unit of the table is told what the table has, in both languages, and the
+/// example of the rounding is in the column's own unit, not in yen.
+#[test]
+fn 単位でない通貨の注は表の通貨を言い丸めの例は列の単位で書く() {
+    let rule = |unit: &str, grid: &str| format!("rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=9\n\noutputs\n  b(b) : {unit}  round down({grid})\n\ntable j(j)\npolicy unique\n| a | -> b(b) : {unit} |\n| - | 5{grid} |\n");
+    for (lang, hundredth, example) in [(rulec::i18n::Lang::Ja, "銭（円の 1/100）", "`mass[g]` なら `round down(1g)`"), (rulec::i18n::Lang::En, "銭 (a hundredth of 円)", "`mass[g]` takes `round down(1g)`")] {
+        let notes = |unit: &str, grid: &str| {
+            rulec::i18n::with(lang, || rulec::check_source(&rule(unit, grid), "t.rule")).iter().filter(|d| d.code == "E103").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join(" ")
+        };
+        for unknown in ["JPYc", "RUB"] {
+            let said = notes(&format!("money[{unknown}]"), &format!("1{unknown}"));
+            assert!(said.contains(&format!("`{unknown}`")) && said.contains(hundredth) && said.contains("USD EUR GBP"), "{said}");
+            assert!(!said.split([' ', '（', '(']).any(|w| w == unknown), "`{unknown}` is among the units: {said}");
+            assert!(!said.contains("round down("), "the note gives an example in `{unknown}`: {said}");
+        }
+        let said = notes("mass[g]", "1円");
+        assert!(said.contains(example), "{said}");
+    }
 }
 
 /// Every number a rule of the corpus declares is a unit of ritsu's table (ritsu's DESIGN 5.2),

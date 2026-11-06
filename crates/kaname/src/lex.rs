@@ -490,9 +490,10 @@ fn number(cs: &[char], j: usize, end: usize) -> Result<(Tok, usize), Text> {
     let too_large = || tr!("数 `{raw}` が大きすぎます", "The number `{raw}` is too large");
     let value = number_value(&whole, &frac).and_then(|v| v.checked_mul(Rat::int(mult))).ok_or_else(too_large)?;
     if !unit.is_empty() && unit != "%" && ritsu_units::table::unit(&unit).is_none() {
+        let codes = ritsu_units::table::CURRENCIES.join(" ");
         return Err(tr!(
-            "`{raw}` を読めません。`{unit}` は単位の表にありません（通貨は ISO 4217 のコードか `円`、その 100 分の 1 はコードに `c` を付けて `USDc` のように書きます）",
-            "`{raw}` cannot be read: `{unit}` is not a unit of the table (a currency is an ISO 4217 code or `円`, and its hundredth is the code with a `c`, as in `USDc`)"
+            "`{raw}` を読めません。`{unit}` は単位の表にありません（通貨は `円` か ISO 4217 のコード {codes} で、100 分の 1 は `円` なら `銭`、コードなら `USDc` のように `c` を付けます）",
+            "`{raw}` cannot be read: `{unit}` is not a unit of the table (a currency is `円` or one of the ISO 4217 codes {codes}; the hundredth of `円` is `銭`, and of a code the code with a `c`, as in `USDc`)"
         ));
     }
     Ok((Tok::Num(Num { value, unit, raw }), k))

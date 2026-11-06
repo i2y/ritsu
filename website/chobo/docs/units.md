@@ -69,7 +69,7 @@ A book hands its units to ritsu's other languages as the units rulec writes:
 
 | The unit | As rulec and dandori see it |
 |---|---|
-| a currency's name (`円`, `JPY`, an ISO 4217 code, `銭`, `USDc`) with scale 0 | that money: `money[JPY]`, or with its tax `money[JPY, incl_tax]` |
+| a currency's name (`円`, `JPY`, an ISO 4217 code rulec's `money` takes, `銭`, `USDc`) with scale 0 | that money: `money[JPY]`, or with its tax `money[JPY, incl_tax]` |
 | a currency's name other than `円` and `JPY`, with scale 2 | its hundredth: `unit USD scale 2` is `money[USDc]` |
 | a unit of mass, length, area, volume or time (`g`, `kg`, `L`, `h`) with scale 0 | that unit: `mass[kg]` |
 | anything else (`pcs`, `seats`, `pt`, yen with scale 2, `℃`, `℉`, `dB`) | a count with its name, the same only as itself |

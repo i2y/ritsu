@@ -227,7 +227,7 @@ optionally followed by a multiplier and then a unit:
 | part | values |
 |---|---|
 | multiplier | `万` (10⁴), `億` (10⁸), `兆` (10¹²) |
-| unit | mass `mg` `g` `kg` `t` `oz` `lb` · length `mm` `cm` `m` `km` `in` `ft` `yd` `mi` · rate `%` · money `円` `銭`, or an ISO 4217 code, whose hundredth is that code plus `c` (`USD` and `USDc`). **Two currencies never convert**: there is no exchange rate here, so mixing them is E103 |
+| unit | mass `mg` `g` `kg` `t` `oz` `lb` · length `mm` `cm` `m` `km` `in` `ft` `yd` `mi` · rate `%` · money `円` (`JPY` is the same) and its hundredth `銭`, or an ISO 4217 code of the list under [Types](#3-types), whose hundredth is that code plus `c` (`USD` and `USDc`). **Two currencies never convert**: there is no exchange rate here, so mixing them is E103 |
 
 `1000万円` is 10,000,000 yen, which `10_000_000JPY` writes as well. **A number in a cell must carry its unit**: a bare `2000` where
 a quantity is expected is an error. `2kg` and `2000g` are the same value; the stored integer
@@ -280,7 +280,7 @@ Fourteen, and no others.
 | duration | `duration[h]`, `duration[min]`, … | `ms` `s` `min` `h` `d` `w`. A minute is `min`, because `m` is the metre. This is a span of time; a calendar day is `date` |
 | temperature | `temperature[℃]`, `temperature[℉]` | `℃` `℉`. **Ordered, not arithmetic**: comparison and `range` only (E048). 41℉ is exactly 5℃, and a literal converts between them; a difference of two temperatures is not written at all |
 | sound | `sound[dB]` | `dB`, a sound pressure level. **Ordered, not arithmetic** (E048): a decibel is a logarithm, so adding two of them is not two sounds' worth |
-| money | `money[JPY, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. Any ISO 4217 code, or `円`; the hundredth of a currency is its code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
+| money | `money[JPY, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. The currency is `円` (`JPY` is the same) or one of the ISO 4217 codes `USD` `EUR` `GBP` `CHF` `CAD` `AUD` `NZD` `CNY` `HKD` `SGD` `KRW` `INR` `TWD` `THB` `SEK` `NOK` `DKK` `PLN` `CZK` `HUF` `TRY` `BRL` `MXN` `ZAR` `AED` `SAR` `ILS` `PHP` `IDR` `MYR` `VND`. The hundredth of a code is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents; the hundredth of yen is `銭`, and there is no `JPYc`. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate[step 1%]`, `rate[step 0.1%]`, `rate` | the stored integer counts steps. **An input declares its step** (E103 without one): what the caller passes is that integer, and its meaning cannot change when a row is added. **An output travels at the step it declares**, or with none declared at its rounding grid, which every answer sits on — never at whatever its rows happen to write, so no row can change what the integer counts. A rounding grid that is not a whole number of the declared step is E114. A computed rate that is not an output may leave the step out; it is held at whatever its literals need |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** (E048) |

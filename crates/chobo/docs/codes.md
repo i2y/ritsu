@@ -234,7 +234,7 @@ transfer count(note: string)
 
 `error` — **A tax on a unit that is not money**
 
-**When.** A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without.
+**When.** A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code rulec's `money` takes): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without.
 
 **Fix.** Take `incl_tax` or `excl_tax` off, or name the unit for a currency (`unit JPY incl_tax`, `unit USD scale 2 excl_tax`). Whether it is with tax or without is written so that an amount handed over from a rule or a workflow is taken only when it says the same.
 
