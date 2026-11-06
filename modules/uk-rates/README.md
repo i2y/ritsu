@@ -18,7 +18,7 @@ the duty, as the tax is worked out slice by slice and the pages tabulate no tota
 Add the module, add the line that checks its signature to your `ritsu.mod`, and fetch it:
 
 ```console
-$ ritsu mod add uk_rates ghcr.io/i2y/ritsu-uk-rates@1.0.0
+$ ritsu mod add uk_rates ghcr.io/i2y/ritsu-uk-rates@1.0.1
 ```
 
 ```
@@ -46,3 +46,4 @@ The rules are under the MIT License or the Apache License, version 2.0, at your 
 
 A version that follows a change in the law raises the minor version. A version that renames a file
 or removes one, or changes the inputs or outputs of a rule, raises the major version.
+A version that changes only the words of this README raises the patch version.

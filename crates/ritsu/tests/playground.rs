@@ -2637,7 +2637,7 @@ fn the_list_of_a_site_of_modules_narrows_and_a_file_s_code_reads_as_the_file() {
     let marked = "[location.hash, document.querySelectorAll(\".l.on\").length, document.querySelector(\".l.on\").id]";
     for (tag, page_word) in [("en", "Page"), ("ja", "ページ")] {
         let site = format!("{base}/site-{tag}");
-        let version = format!("{site}/ghcr.io/i2y/ritsu-osha/1.0.0");
+        let version = format!("{site}/ghcr.io/i2y/ritsu-osha/1.0.1");
         let visits = vec![
             Visit::to(format!("{site}/index.html"))
                 .wait(loaded)

@@ -19,7 +19,7 @@ advice. Where a section leaves something open, a comment in the rule says how it
 Add the module, add the line that checks its signature to your `ritsu.mod`, and fetch it:
 
 ```console
-$ ritsu mod add osha ghcr.io/i2y/ritsu-osha@1.0.0
+$ ritsu mod add osha ghcr.io/i2y/ritsu-osha@1.0.1
 ```
 
 ```
@@ -47,3 +47,4 @@ The rules are under the MIT License or the Apache License, version 2.0, at your 
 
 A version that follows a change in the law raises the minor version. A version that renames a file
 or removes one, or changes the inputs or outputs of a rule, raises the major version.
+A version that changes only the words of this README raises the patch version.

@@ -7,14 +7,14 @@
 | `health_insurance_premium.rule` | `健康保険料.rule` | 協会けんぽ（全国健康保険協会）の健康保険 | 協会の保険料額表、令和 8 年 3 月分（4 月納付分）から、東京支部 |
 | `pension_insurance_premium.rule` | `厚生年金保険料.rule` | 厚生年金保険 | 日本年金機構の保険料額表、令和 2 年 9 月分（10 月納付分）から、令和 8 年度版（固定あり） |
 
-料率は入力です。健康保険料率は都道府県と年度で変わり、厚生年金は基金によって違うので、規則には持たせていません。当てはまる料率を渡してください。規則は表を書き写したもので、原文と見比べて読むためのものです。法律や税の助言ではありません。
+料率は入力です。健康保険料率は都道府県と年度で変わり、厚生年金は基金によって違うので、規則には持たせていません。当てはまる料率を渡してください。規則は表を転記したもので、原文と見比べて読むためのものです。法律や税の助言ではありません。
 
 ## 使い方
 
 モジュールを依存に足し、署名を確かめる行を `ritsu.mod` に書いて、取ってきます。
 
 ```console
-$ ritsu mod add japan_social_insurance ghcr.io/i2y/ritsu-japan-social-insurance@1.0.0
+$ ritsu mod add japan_social_insurance ghcr.io/i2y/ritsu-japan-social-insurance@1.0.1
 ```
 
 ```
@@ -40,3 +40,4 @@ use rule pension from "@japan_social_insurance/pension_insurance_premium.rule"
 ## 版
 
 法令の変更に合わせる版は、マイナーの版を上げます。ファイルの名前を変える版、ファイルを消す版、規則の入力や出力を変える版は、メジャーの版を上げます。
+この README の言葉だけを直す版は、パッチの版を上げます。
