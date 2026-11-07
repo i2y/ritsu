@@ -1,0 +1,9 @@
+{"claim":"the variable is not set","event":"error","line":8,"code":"E038","message":"`keep` cannot read the environment variable `GEAS_TEST_NOT_SET`: it is not set"}
+{"claim":"under a when","event":"when","line":14,"target":"api","call":"get(\"/a\")","obs":{"status":200,"headers":{"content-length":"58","content-type":"application/json"},"body":"{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"}}
+{"claim":"under a when","event":"check","line":15,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"under a when","event":"error","line":16,"code":"E038","message":"`keep` cannot read the environment variable `GEAS_TEST_NOT_SET`: it is not set"}
+{"claim":"while waiting","event":"when","line":21,"target":"api","call":"get(\"/a\")","within":30,"obs":{"status":200,"headers":{"content-length":"58","content-type":"application/json"},"body":"{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"}}
+{"claim":"while waiting","event":"check","line":22,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"while waiting","event":"error","line":23,"code":"E038","message":"`keep` cannot read the environment variable `GEAS_TEST_NOT_SET`: it is not set"}
+{"claim":"another claim goes on","event":"when","line":27,"target":"api","call":"get(\"/a\")","obs":{"status":200,"headers":{"content-length":"58","content-type":"application/json"},"body":"{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"}}
+{"claim":"another claim goes on","event":"check","line":28,"check":"status is","expected":"200","actual":"200","ok":true}

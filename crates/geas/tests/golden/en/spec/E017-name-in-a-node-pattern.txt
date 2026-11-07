@@ -1,0 +1,3 @@
+error[E017]: E017-name-in-a-node-pattern.geas:10:42: a pattern is read before anything runs, so it cannot hold `{title}`, which the run finds out
+    10 |   then screen contains heading matching "{title}"
+  = compare with `is` or `contains`

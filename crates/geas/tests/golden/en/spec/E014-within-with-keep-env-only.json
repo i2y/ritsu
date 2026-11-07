@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E014-within-with-keep-env-only.geas","diagnostics":[{"code":"E014","severity":"error","file":"E014-within-with-keep-env-only.geas","line":7,"col":21,"message":"`within` waits until the checks under this `when` hold, and it has none","notes":["write under it, with `then` or `keep`, what to wait for, or leave out `within`"],"path":[]}]}

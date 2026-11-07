@@ -27,9 +27,11 @@ service with no `contract` line.
 **Work out how to drive the service from outside.** The existing claims, the README and the OpenAPI
 document say how. Write down, for yourself, three small tables:
 
-- **Who.** Each kind of caller the gate speaks of, and the token or login that plays it.
+- **Who.** Each kind of caller the gate speaks of, and the token or login that plays it, which a call
+  sends with `header "authorization": "Bearer …"`. A real secret is read with `keep env` and is in no file.
 - **Which state.** Each state a resource can be in, and the calls that reach it from the start of a
-  claim, on a fresh service.
+  claim, on a fresh service. A number the service chooses is held with `keep`, and the next call uses it
+  ([language.md](language.md)).
 - **Where it shows.** Each answer a rule or a book gives, and the member of which response shows it.
 
 What a fresh service starts with (its invoices, its users) can be read through its API as set-up: run a
@@ -65,6 +67,8 @@ entry. Group the entries by what differs, and write one claim per group:
 - **A function:** where a rule's inputs are state that earlier calls build up, `kaname run` gives the
   answer along the same chain: feed each call's result into the next input.
 
+Calling is not what limits a list: `put`, `patch`, `delete`, headers and values kept from an answer all work.
+
 An entry says what should come back, in the words of its spec. A claim also says what must not have
 changed: after a refusal, read what the refused call would have moved.
 
@@ -79,7 +83,7 @@ target api {
 }
 
 claim "gate approve_refund: an auditor is refused" {
-  when api.post("/refund-requests/R-1/approve?access_token=demo-auditor")
+  when api.post("/refund-requests/R-1/approve", header "authorization": "Bearer demo-auditor")
   then status is 403
 }
 ```
@@ -134,5 +138,5 @@ without them, and said nothing of six harmless changes.
 It holds what the specs say. A mistake no spec speaks of (a call a gate never sees, a value read without
 the lock that protects it, a tool that passes the wrong argument to the right call) gets past these
 claims as it gets past the specs. And the claims choose what they exercise: a thing no entry led you to
-is not held, and what needs a clock or two callers at once is out of reach. Say so when you hand them
-over.
+is not held, and what needs a clock or two callers at once is out of reach. A request's body is not held to the
+document. Say so when you hand them over.

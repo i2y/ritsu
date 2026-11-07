@@ -1,0 +1,94 @@
+# What the ticket service answers. tickets.geas holds every answer to it.
+openapi: 3.1.0
+info:
+  title: Tickets
+  version: "1"
+paths:
+  /tickets:
+    post:
+      responses:
+        "201":
+          description: The ticket made
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "401":
+          $ref: "#/components/responses/NoToken"
+  /tickets/{id}:
+    get:
+      responses:
+        "200":
+          $ref: "#/components/responses/TheTicket"
+        "401":
+          $ref: "#/components/responses/NoToken"
+        "404":
+          $ref: "#/components/responses/NotThere"
+    put:
+      responses:
+        "200":
+          $ref: "#/components/responses/TheTicket"
+        "401":
+          $ref: "#/components/responses/NoToken"
+        "404":
+          $ref: "#/components/responses/NotThere"
+    patch:
+      responses:
+        "200":
+          $ref: "#/components/responses/TheTicket"
+        "401":
+          $ref: "#/components/responses/NoToken"
+        "404":
+          $ref: "#/components/responses/NotThere"
+    delete:
+      responses:
+        "204":
+          description: The ticket is gone
+        "401":
+          $ref: "#/components/responses/NoToken"
+        "404":
+          $ref: "#/components/responses/NotThere"
+components:
+  responses:
+    TheTicket:
+      description: The ticket
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Ticket"
+    NoToken:
+      description: The call did not show the token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotThere:
+      description: There is no such ticket
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Ticket:
+      type: object
+      required: [id, title, state]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          type: string
+          enum: [open, closed]
+    Problem:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

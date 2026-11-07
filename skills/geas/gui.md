@@ -67,8 +67,9 @@ action yet; reach it with `press`.
 ## A page in Chrome (live)
 
 A `serve` target can be driven in a headless Chrome: `open("/path")` loads
-`http://127.0.0.1:<port>/path`, and the other actions act on that page. `get` and `post` still
-reach the same service in the same claim.
+`http://127.0.0.1:<port>/path`, and the other actions act on that page. The HTTP calls still
+reach the same service in the same claim, and a value `keep` holds from one of them goes into an action and a
+screen check: `open("/orders/{id}")`, `screen contains heading "Order {id}"`.
 
 - Chrome is found through `GEAS_CHROME` (then the only one looked at), the macOS application, or
   `google-chrome`, `chromium` or `chromium-browser` on PATH; without it, the claims that need it end
@@ -130,6 +131,8 @@ script with the tree read after each action, and hands each `when` its screen.
 
 - Within one claim, no other target's `when` may come between two actions on a pixie app (E012):
   the app is not running between them. Before the first and after the last is fine.
+- A call on a pixie app cannot use a name `keep` holds (E017): the script is made before the claim's
+  actions run, and the screen checks read the screens afterwards, with the name as usual.
 - The app starts once per claim, so `open()` after another action on it is E013, and so is a path.
 - Text fields are reached by position only: `input("Ada", field: 2)`; `into:` is E013.
 - `click("x", nth: n)`, `input`, `submit`, `press("k")` and `advance(ms)` become pixie's steps

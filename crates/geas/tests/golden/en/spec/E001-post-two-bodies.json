@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-post-two-bodies.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-post-two-bodies.geas","line":7,"col":35,"message":"expected `)`, found `body`","notes":[],"path":[]}]}

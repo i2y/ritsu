@@ -1,0 +1,15 @@
+not ok 1 - a check that fails on a value
+    k/told.geas:14: body json ".id" is "{qty}{id}" のはずが、実際は "1"（{qty} は "1"、{id} は "1"）
+        14 |   then body json ".id" is "{qty}{id}"
+    k/told.geas:15: body json ".note" does not contain "{id}" のはずが、実際は "thing 1 of v1"（{id} は "1"）
+        15 |   and  body json ".note" does not contain "{id}"
+    k/told.geas:17: body json ".id" is "{id}{id}" のはずが、実際は "1"（{id} は "1"）
+        17 |   then body json ".id" is "{id}{id}"
+    k/told.geas:18: status is "{qty}" のはずが、実際は 200（{qty} は "1"）
+        18 |   and  status is "{qty}"
+      ここまでの実行:
+          11  when api.post("/text")  →  201, body "{\"id\": \"1\", \"qty\": 1, \"note\": \"thing 1 of v1\"}"
+          12  keep body json ".id" as id  →  "1"
+          13  keep body json ".qty" as qty  →  "1"
+          16  when api.get("/small/{id}")  →  200, body "{\"id\": \"1\", \"qty\": 1, \"note\": \"thing 1 of v1\"}"
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: k/.geas/told.journal.jsonl

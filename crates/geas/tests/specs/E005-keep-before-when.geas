@@ -1,0 +1,10 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a keep reads what came before it" {
+  keep body json ".id" as id
+  when api.get("/orders/{id}")
+  then status is 200
+}

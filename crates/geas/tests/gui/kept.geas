@@ -1,0 +1,19 @@
+# A value kept from a command goes to a driver, and to the checks of its screen.
+
+target app {
+  driver "python3 fake_driver.py greeter.json"
+}
+
+target echo {
+  run "python3 echo.py"
+}
+
+claim "greets the name a command printed" {
+  when echo.run("Ada", "", "0")
+  keep stdout as name
+  when app.input("{name}")
+  then screen contains textbox "type here" with value "{name}"
+  when app.click("greet")
+  then screen contains text "Hello, {name}!"
+  and  screen does not contain text "Hello, !"
+}

@@ -1,0 +1,2 @@
+エラー[E001]: E001-keep-name-in-quotes.geas:8:16: 値につける名前を書くところに `"whole"` があります
+     8 |   keep body as "whole"

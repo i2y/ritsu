@@ -4,5 +4,5 @@ target api {
 }
 
 claim "resets" {
-  when api.put("/reset")
+  when api.head("/reset")
 }

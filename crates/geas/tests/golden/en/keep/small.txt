@@ -1,0 +1,5 @@
+ok 1 - a number
+ok 2 - a string of digits
+ok 3 - a status and an exit compared with a kept value
+ok 4 - a path kept from a member
+4 claims · 4 ok · 0 failed · journal: k/.geas/small.journal.jsonl

@@ -1,0 +1,29 @@
+# `keep env` of a variable that is not set ends its claim as an error; another claim goes on.
+target api {
+  serve "python3 mirror.py {port}"
+  port auto
+}
+
+claim "the variable is not set" {
+  keep env "GEAS_TEST_NOT_SET" as key
+  when api.get("/a", header "authorization": "Bearer {key}")
+  then status is 200
+}
+
+claim "under a when" {
+  when api.get("/a")
+  then status is 200
+  keep env "GEAS_TEST_NOT_SET" as key
+  when api.get("/b", header "authorization": "Bearer {key}")
+}
+
+claim "while waiting" {
+  when api.get("/a") within 30 seconds
+  then status is 200
+  keep env "GEAS_TEST_NOT_SET" as key
+}
+
+claim "another claim goes on" {
+  when api.get("/a")
+  then status is 200
+}

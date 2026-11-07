@@ -1,0 +1,9 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a put takes its path, its body and headers" {
+  when api.put("/", data: "1")
+  then status is 200
+}

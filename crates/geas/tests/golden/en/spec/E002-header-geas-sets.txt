@@ -1,0 +1,8 @@
+error[E002]: E002-header-geas-sets.geas:7:28: the header `Host` is geas's to set: geas only calls the service it started, and sends `Host: 127.0.0.1`
+     7 |   when api.get("/", header "Host": "example.com")
+error[E002]: E002-header-geas-sets.geas:8:29: the header `connection` is geas's to set: geas makes one request on each connection, and sends `Connection: close`
+     8 |   when api.post("/", header "connection": "keep-alive")
+error[E002]: E002-header-geas-sets.geas:9:28: the header `Content-Length` is geas's to set: geas counts the body and sends its length
+     9 |   when api.put("/", header "Content-Length": "1")
+error[E002]: E002-header-geas-sets.geas:10:30: the header `TRANSFER-ENCODING` is geas's to set: geas sends the body whole, with its length
+    10 |   when api.patch("/", header "TRANSFER-ENCODING": "chunked")

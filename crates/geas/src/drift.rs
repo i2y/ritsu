@@ -4,6 +4,7 @@
 use crate::diag::count;
 use ritsu_base::text::{Lang, Text};
 use crate::json::{self, J};
+use crate::keep::{Held, View};
 use crate::model::*;
 use crate::run::{ClaimResult, Obs};
 use std::collections::{HashMap, HashSet};
@@ -31,12 +32,18 @@ pub enum BaselineError {
 /// What a masked value is written as, in the journal and the baseline.
 pub const MASKED: &str = "<masked>";
 
-/// An observation as the journal and the baseline record it: the value of a masked
-/// header, and of a masked JSON path in a body that is JSON, written as
+/// An observation as the journal and the baseline record it: first the values the spec masks, then
+/// the values the claim holds at that point written `{name}` (DESIGN §22). Checks see the
+/// observation itself.
+pub fn recorded(obs: &Obs, masks: &[Mask], held: &Held) -> Obs {
+    held.obs(&masked(obs, masks), View::Record)
+}
+
+/// The value of a masked header, and of a masked JSON path in a body that is JSON, written as
 /// `<masked>` (the body then written back compactly). A mask declares a value to be
 /// noise, so a record that kept it would differ from run to run where the spec says
-/// nothing changed. Checks see the observation itself.
-pub fn recorded(obs: &Obs, masks: &[Mask]) -> Obs {
+/// nothing changed.
+fn masked(obs: &Obs, masks: &[Mask]) -> Obs {
     if let Obs::Screen(screen) = obs {
         let patterns: Vec<&crate::screen::Pattern> = masks
             .iter()
@@ -114,7 +121,7 @@ pub fn write_baseline(path: &Path, spec: &Spec, results: &[ClaimResult]) -> std:
     let mut lines = Vec::new();
     for r in results {
         for o in &r.observations {
-            let obs_s = match recorded(&o.obs, &spec.masks) {
+            let obs_s = match recorded(&o.obs, &spec.masks, &o.held) {
                 Obs::Proc { stdout, stderr, exit } => format!(
                     "{{\"kind\":\"proc\",\"stdout\":{},\"stderr\":{},\"exit\":{}}}",
                     json::quote(&stdout),
@@ -253,7 +260,8 @@ pub fn read_baseline(path: &Path) -> Result<Baseline, BaselineError> {
 
 // ---------- claimed-subject map ----------
 
-/// The checks of each `when`, by its place in the claim.
+/// The checks of each `when`, by its place in the claim. A `keep` of its answer counts as a check of
+/// what it reads: the claim goes on from that value, so a change to it is the claim's to decide.
 fn claimed_map(claim: &Claim) -> HashMap<usize, Vec<Check>> {
     let mut m: HashMap<usize, Vec<Check>> = HashMap::new();
     let mut idx: isize = -1;
@@ -265,6 +273,10 @@ fn claimed_map(claim: &Claim) -> HashMap<usize, Vec<Check>> {
                     m.entry(idx as usize).or_default().push(c.clone());
                 }
             }
+            Step::Keep(Keep { from: KeepFrom::Answer(subject), pos, .. }) if idx >= 0 => {
+                m.entry(idx as usize).or_default().push(Check { subject: subject.clone(), matcher: Matcher::Exists, pos: *pos });
+            }
+            Step::Keep(_) => {}
         }
     }
     m
@@ -623,7 +635,7 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
             r.compared += 1;
             let empty: Vec<Check> = Vec::new();
             let checks = claimed_by.get(res.name.as_str()).and_then(|m| m.get(&o.idx)).unwrap_or(&empty);
-            let diffs = compare(&b.obs, &recorded(&o.obs, &spec.masks), checks, &masks);
+            let diffs = compare(&b.obs, &recorded(&o.obs, &spec.masks, &o.held), checks, &masks);
             if diffs.is_empty() {
                 continue;
             }
@@ -735,5 +747,21 @@ impl Report {
             notes.join(","),
             diagnostics.join(",")
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A claim goes on from what it keeps, so a change there is the claim's to decide.
+    #[test]
+    fn a_keep_counts_as_a_check_of_what_it_reads() {
+        let src = "target api {\n  serve \"python3 s.py {port}\"\n  port auto\n}\n\nclaim \"a\" {\n  keep env \"K\" as k\n  when api.get(\"/\", header \"x\": \"{k}\")\n  keep body json \".id\" as id\n  when api.get(\"/{id}\")\n  then status is 200\n  keep header \"etag\" as tag\n}\n";
+        let spec = crate::parse::parse(src).expect("it parses");
+        let m = claimed_map(&spec.claims[0]);
+        let subjects = |i: usize| -> Vec<Subject> { m.get(&i).map(|c| c.iter().map(|c| c.subject.clone()).collect()).unwrap_or_default() };
+        assert_eq!(subjects(0), [Subject::BodyJson(".id".into())]);
+        assert_eq!(subjects(1), [Subject::Status, Subject::Header("etag".into())]);
     }
 }

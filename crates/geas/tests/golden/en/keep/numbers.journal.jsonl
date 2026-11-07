@@ -1,0 +1,22 @@
+{"claim":"a thing can be read back, changed and taken away","event":"when","line":12,"target":"api","call":"post(\"/things\", body: \"a chair\")","obs":{"status":201,"headers":{"content-length":"75","content-type":"application/json","location":"/things/{id}"},"body":"{\"id\":\"{id}\",\"name\":\"a chair\",\"qty\":1}"}}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":13,"check":"status is","expected":"201","actual":"201","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":14,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":15,"check":"header \"location\" is","expected":"\"/things/{id}\"","actual":"\"/things/{id}\"","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":16,"check":"body contains","expected":"\"{id}\"","actual":"\"{\\\"id\\\": \\\"{id}\\\", \\\"name\\\": \\\"a chair\\\", \\\"qty\\\": 1}\"","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"when","line":17,"target":"api","call":"get(\"/things/{id}\")","obs":{"status":200,"headers":{"content-length":"75","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a chair\",\"qty\":1}"}}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":18,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":19,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"when","line":20,"target":"api","call":"put(\"/things/{id}\", body: \"a table\", header \"x-about\": \"{id}\")","obs":{"status":200,"headers":{"content-length":"75","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a table\",\"qty\":1}"}}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":21,"check":"body json \".name\" is","expected":"\"a table\"","actual":"\"a table\"","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"when","line":22,"target":"api","call":"patch(\"/things/{id}\")","obs":{"status":200,"headers":{"content-length":"92","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a table\",\"qty\":1,\"patched\":true}"}}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":23,"check":"body json \".patched\" is","expected":"true","actual":"true","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"when","line":24,"target":"api","call":"delete(\"/things/{id}\")","obs":{"status":204,"headers":{"content-length":"0"},"body":""}}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":25,"check":"status is","expected":"204","actual":"204","ok":true}
+{"claim":"a thing can be read back, changed and taken away","event":"when","line":26,"target":"api","call":"get(\"/things/{id}\")","obs":{"status":404,"headers":{"content-length":"26","content-type":"application/json"},"body":"{\"error\": \"no such thing\"}"}}
+{"claim":"a thing can be read back, changed and taken away","event":"check","line":27,"check":"status is","expected":"404","actual":"404","ok":true}
+{"claim":"another claim numbers its own","event":"when","line":31,"target":"api","call":"post(\"/things\", body: \"a lamp\")","obs":{"status":201,"headers":{"content-length":"74","content-type":"application/json","location":"{at}"},"body":"{\"id\":\"{id}\",\"name\":\"a lamp\",\"qty\":1}"}}
+{"claim":"another claim numbers its own","event":"check","line":32,"check":"keep header \"location\"","expected":"as at","actual":"{at}","ok":true}
+{"claim":"another claim numbers its own","event":"check","line":33,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"another claim numbers its own","event":"when","line":34,"target":"api","call":"get(\"{at}\")","obs":{"status":200,"headers":{"content-length":"74","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a lamp\",\"qty\":1}"}}
+{"claim":"another claim numbers its own","event":"check","line":35,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"another claim numbers its own","event":"check","line":36,"check":"body json \".name\" is","expected":"\"a lamp\"","actual":"\"a lamp\"","ok":true}

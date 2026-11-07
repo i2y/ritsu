@@ -1,0 +1,12 @@
+error[E017]: E017-name-in-a-pattern.geas:9:33: a pattern is read before anything runs, so it cannot hold `{id}`, which the run finds out
+     9 |   then body json ".id" matches "{id}"
+  = compare with `is` or `contains`
+error[E017]: E017-name-in-a-pattern.geas:10:41: a pattern is read before anything runs, so it cannot hold `{id}`, which the run finds out
+    10 |   and  body json ".id" does not match "x{id}y"
+  = compare with `is` or `contains`
+error[E009]: E017-name-in-a-pattern.geas:16:34: the pattern does not parse: `{` starts a count such as `{2}`, `{2,}` or `{2,5}`; write `\{` for a brace
+    16 |   then body json ".id" matches "x{later}"
+  = a pattern takes literals, `.`, classes such as `[a-z]` and `[^0-9]`, `\d`, `\w`, `\s` and their capitals, groups, `|`, `*`, `+`, `?`, `{n}`, `{n,}` and `{n,m}`, and matches the whole value
+error[E017]: E017-name-in-a-pattern.geas:16:34: a pattern is read before anything runs, so it cannot hold `{later}`, which the run finds out
+    16 |   then body json ".id" matches "x{later}"
+  = compare with `is` or `contains`

@@ -1,0 +1,2 @@
+エラー[E005]: E005-keep-env-alone.geas:6:1: 主張 "nothing to check" に `when` がありません。`keep env` で読むだけでは、確かめることがありません
+     6 | claim "nothing to check" {

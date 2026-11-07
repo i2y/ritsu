@@ -1,0 +1,10 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "the port is geas's" {
+  when api.post("/a")
+  keep body json ".port" as port
+  then status is 200
+}

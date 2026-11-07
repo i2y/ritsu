@@ -1,0 +1,8 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "a command is not called with put" {
+  when calc.put("/a")
+  then exit is 0
+}

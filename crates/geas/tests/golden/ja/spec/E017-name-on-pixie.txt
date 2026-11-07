@@ -1,0 +1,4 @@
+エラー[E017]: E017-name-on-pixie.geas:9:19: pixie のアプリへの呼び出しに `{name}` は使えません。pixie は主張の操作を、走らせる前に一つのスクリプトにします
+     9 |   when app.input("{name}")
+エラー[E017]: E017-name-on-pixie.geas:10:19: pixie のアプリへの呼び出しに `{name}` は使えません。pixie は主張の操作を、走らせる前に一つのスクリプトにします
+    10 |   when app.click("{name}")

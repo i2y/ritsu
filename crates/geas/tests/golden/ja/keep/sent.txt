@@ -1,0 +1,7 @@
+ok 1 - a path holds what a request line can
+ok 2 - a body and a header go as they are
+ok 3 - the arguments of a command go as they are
+ok 4 - the absolute address is called as a path
+ok 5 - an address without its port is on this machine too
+ok 6 - a value with {port} in it goes to the service with its real port
+主張 6 件 · 成り立った 6 件 · 成り立たなかった 0 件 · ジャーナル: k/.geas/sent.journal.jsonl

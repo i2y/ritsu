@@ -1,0 +1,12 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a name is used before it is kept" {
+  when api.get("/orders/{id}", header "x-for": "{id}")
+  then body contains "{id}"
+  keep body json ".id" as id
+  when api.get("/orders/{id}")
+  then status is 200
+}

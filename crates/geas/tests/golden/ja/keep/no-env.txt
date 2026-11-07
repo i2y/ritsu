@@ -1,0 +1,22 @@
+not ok 1 - the variable is not set（エラー）
+    エラー[E038]: k/no-env.geas:8:3: `keep` が読む環境変数 `GEAS_TEST_NOT_SET` がありません
+         8 |   keep env "GEAS_TEST_NOT_SET" as key
+      = geas を走らせる環境に設定してください
+      ここまでの実行:
+           8  keep env "GEAS_TEST_NOT_SET" as key
+not ok 2 - under a when（エラー）
+    エラー[E038]: k/no-env.geas:16:3: `keep` が読む環境変数 `GEAS_TEST_NOT_SET` がありません
+        16 |   keep env "GEAS_TEST_NOT_SET" as key
+      = geas を走らせる環境に設定してください
+      ここまでの実行:
+          14  when api.get("/a")  →  200, body "{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"
+          16  keep env "GEAS_TEST_NOT_SET" as key
+not ok 3 - while waiting（エラー）
+    エラー[E038]: k/no-env.geas:23:3: `keep` が読む環境変数 `GEAS_TEST_NOT_SET` がありません
+        23 |   keep env "GEAS_TEST_NOT_SET" as key
+      = geas を走らせる環境に設定してください
+      ここまでの実行:
+          21  when api.get("/a") within 30 seconds  →  200, body "{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"
+          23  keep env "GEAS_TEST_NOT_SET" as key
+ok 4 - another claim goes on
+主張 4 件 · 成り立った 1 件 · 成り立たなかった 3 件 · ジャーナル: k/.geas/no-env.journal.jsonl

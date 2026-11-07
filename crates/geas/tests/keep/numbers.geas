@@ -1,0 +1,37 @@
+# A service that numbers what it makes with a new uuid on every run: the claim goes on from what it
+# answered, and the journal and the baseline write the same bytes.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "a thing can be read back, changed and taken away" {
+  when api.post("/things", body: "a chair")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/things/{id}"
+  and  body contains "{id}"
+  when api.get("/things/{id}")
+  then status is 200
+  and  body json ".id" is "{id}"
+  when api.put("/things/{id}", body: "a table", header "x-about": "{id}")
+  then body json ".name" is "a table"
+  when api.patch("/things/{id}")
+  then body json ".patched" is true
+  when api.delete("/things/{id}")
+  then status is 204
+  when api.get("/things/{id}")
+  then status is 404
+}
+
+claim "another claim numbers its own" {
+  when api.post("/things", body: "a lamp")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.get("{at}")
+  then body json ".id" is "{id}"
+  and  body json ".name" is "a lamp"
+}

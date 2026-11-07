@@ -1,0 +1,11 @@
+warning[W901]: k/key.geas:7:53: a Google API key is written here (AIza…, 39 characters)
+  = a key in a file reaches everyone who can read the repository, its history and its builds; keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there
+  = a key that a call sends can be read from the environment with `keep env "NAME" as key`, and no journal or report shows its value
+  = if this key is real, revoke it with Google first: taking it out of the file leaves it in the history of the repository
+  = if it is a value for tests, write `ritsu: test secret` in a comment on the same line
+not ok 1 - sends the key
+    k/key.geas:8: body json ".headers[0][1]" is "not it" — got "Bearer AIza…"
+         8 |   then body json ".headers[0][1]" is "not it"
+      the run that gets there:
+           7  when api.get("/", header "authorization": "Bearer AIza…")  →  200, body "{\"method\": \"GET\", \"path\": \"/\", \"headers\": [[\"authorization\", \"Bearer AIzaSy…
+1 claim · 0 ok · 1 failed · journal: k/.geas/key.journal.jsonl

@@ -1,0 +1,2 @@
+エラー[E017]: E017-keep-screen.geas:8:8: `keep` は `screen` を読めません。画面はノードの木で、一つの値ではありません。サービスの結果から値を持っておくか、画面は `contains` で比べてください
+     8 |   keep screen as whole

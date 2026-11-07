@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-keep-name-in-quotes.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-keep-name-in-quotes.geas","line":8,"col":16,"message":"expected the name to keep it as, found `\"whole\"`","notes":[],"path":[]}]}

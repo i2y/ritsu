@@ -1,0 +1,10 @@
+target page {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a screen is not one value" {
+  when page.open("/")
+  keep screen as whole
+  then screen contains text "{whole}"
+}

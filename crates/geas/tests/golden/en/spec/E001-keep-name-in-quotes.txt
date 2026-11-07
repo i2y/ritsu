@@ -1,0 +1,2 @@
+error[E001]: E001-keep-name-in-quotes.geas:8:16: expected the name to keep it as, found `"whole"`
+     8 |   keep body as "whole"

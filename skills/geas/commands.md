@@ -104,7 +104,9 @@ One JSON object a line, in claim order:
   `{"stdout","stderr","exit"}`, `{"status","headers","body"}` (headers in lower case, sorted), or
   `{"screen":<node>}`; a `when` that waits adds `"within"` after `call`, and `"tries"` and `"ms"`
   when its time ran out, the observation being the answer its checks read;
-- `{"claim","event":"check","line","check","expected","actual","ok"}`;
+- `{"claim","event":"check","line","check","expected","actual","ok"}`; a `keep` is one as well, with
+  `"check":"keep body json \".id\""`, `"expected":"as id"` and `"actual":"{id}"`, the raw reason when it
+  could not read;
 - `{"claim","event":"error","line","code","message"}`.
 
 ```text
@@ -118,6 +120,10 @@ out writes them, since they are what happened:
 ```text
 {"claim":"a job finishes in the background","event":"when","line":20,"target":"api","call":"get(\"/jobs/1\")","within":3,"tries":30,"ms":3005,"obs":{"status":200,"headers":{"content-length":"47","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"finished\", \"result\": 144}"}}
 ```
+
+A value a `keep` holds is written `{name}` from the record of the answer it came from on, in the journal, the
+baseline and drift, for the same reason, and `actual` goes the same way: `"location":"/tickets/{id}"`.
+What `keep env` read is written so wherever it stands, and is shown nowhere else.
 
 ### The baseline
 
@@ -152,7 +158,9 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   `status` is `ok`, `fail` or `error`; `error` is null or `{"code","line","col","message","notes"}`;
   `run`, the run that gets there, comes only with a claim that is not ok; an entry of a `when` that
   waits adds `"within"`, and `"tries"` and `"ms"` when its time ran out or one of its calls failed.
-  A failed `screen` check carries `screen`, the screen it saw. `check` adds `"diagnostics"`, the
+  A failed `screen` check carries `screen`, the screen it saw, and a failed check that uses a name
+  a `keep` holds carries `values`, `{"<name>":"<value>"}` (never what came from the environment). A
+  `keep` is an entry of `run`, its `call` being `keep body json ".id" as id`. `check` adds `"diagnostics"`, the
   keys written in the spec (W901), `[]` when it has none; `map` adds
   `"map":{"record","files","code","ran"}` and `"diagnostics"`. Several specs print one object a
   line.

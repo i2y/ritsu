@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E017-keep-screen.geas","diagnostics":[{"code":"E017","severity":"error","file":"E017-keep-screen.geas","line":8,"col":8,"message":"`keep` does not read `screen`: a screen is a tree of nodes and not one value; keep a value from a service's answer, or compare the screen with `contains`","notes":[],"path":[]}]}

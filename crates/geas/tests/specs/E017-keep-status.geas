@@ -1,0 +1,10 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a status is written as it is" {
+  when api.post("/a")
+  keep status as code
+  then status is "{code}"
+}

@@ -1,0 +1,43 @@
+# What a kept value cannot do goes wrong when the claim runs, with E038.
+target api {
+  serve "python3 mirror.py {port}"
+  port auto
+}
+
+target things {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+claim "a line break cannot go in a header" {
+  when api.post("/plain", body: "one\ntwo")
+  keep body as lines
+  when api.get("/a", header "x-lines": "see {lines}")
+  then status is 200
+}
+
+claim "a control character cannot go in a header" {
+  when api.post("/plain", body: "one\ttwo")
+  keep body as tabbed
+  when api.get("/a", header "x-tabbed": "{tabbed}")
+  then status is 200
+}
+
+claim "another host cannot be called" {
+  when things.post("/elsewhere", body: "a chair")
+  keep header "location" as at
+  when things.get("{at}")
+  then status is 200
+}
+
+claim "a path starts with a slash" {
+  when api.post("/plain", body: "orders/1")
+  keep body as at
+  when api.get("{at}")
+  then status is 200
+}
+
+claim "the rest goes on" {
+  when api.get("/a")
+  then status is 200
+}

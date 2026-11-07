@@ -1,0 +1,9 @@
+{"claim":"it waits for the value to come","event":"when","line":12,"target":"api","call":"get(\"/later/3\")","within":5,"obs":{"status":200,"headers":{"content-length":"79","content-type":"application/json"},"body":"{\"calls\":3,\"result\":\"{result}\",\"state\":\"done\"}"}}
+{"claim":"it waits for the value to come","event":"check","line":13,"check":"keep body json \".result\"","expected":"as result","actual":"{result}","ok":true}
+{"claim":"it waits for the value to come","event":"when","line":14,"target":"api","call":"get(\"/seen/{result}\")","obs":{"status":200,"headers":{"content-length":"54","content-type":"application/json"},"body":"{\"path\":\"/seen/{result}\"}"}}
+{"claim":"it waits for the value to come","event":"check","line":15,"check":"body json \".path\" contains","expected":"\"{result}\"","actual":"\"/seen/{result}\"","ok":true}
+{"claim":"with a check that reads the value","event":"when","line":19,"target":"api","call":"get(\"/later/2\")","within":5,"obs":{"status":200,"headers":{"content-length":"79","content-type":"application/json"},"body":"{\"calls\":2,\"result\":\"{result}\",\"state\":\"done\"}"}}
+{"claim":"with a check that reads the value","event":"check","line":20,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"with a check that reads the value","event":"check","line":21,"check":"keep body json \".result\"","expected":"as result","actual":"{result}","ok":true}
+{"claim":"with a check that reads the value","event":"check","line":22,"check":"body contains","expected":"\"{result}\"","actual":"\"{\\\"calls\\\": 2, \\\"result\\\": \\\"{result}\\\", \\\"state\\\": \\\"done\\\"}\"","ok":true}
+{"claim":"with a check that reads the value","event":"check","line":23,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"done\"","ok":true}

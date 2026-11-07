@@ -1,0 +1,12 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "what geas sets itself" {
+  when api.get("/", header "Host": "example.com")
+  when api.post("/", header "connection": "keep-alive")
+  when api.put("/", header "Content-Length": "1")
+  when api.patch("/", header "TRANSFER-ENCODING": "chunked")
+  then status is 200
+}

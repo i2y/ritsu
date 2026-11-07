@@ -1,0 +1,33 @@
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":15,"check":"keep env \"TICKETS_TOKEN\"","expected":"as token","actual":"{token}","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"when","line":16,"target":"api","call":"post(\"/tickets\", body: \"{\"title\":\"プリンター\"}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":201,"headers":{"content-length":"106","content-type":"application/json","location":"/tickets/{id}"},"body":"{\"id\":\"{id}\",\"state\":\"open\",\"title\":\"プリンター\"}"}}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":16,"check":"contract","expected":"POST /tickets","actual":"201","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":17,"check":"status is","expected":"201","actual":"201","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":18,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":19,"check":"header \"location\" is","expected":"\"/tickets/{id}\"","actual":"\"/tickets/{id}\"","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"when","line":20,"target":"api","call":"get(\"/tickets/{id}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":200,"headers":{"content-length":"106","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"state\":\"open\",\"title\":\"プリンター\"}"}}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":20,"check":"contract","expected":"GET /tickets/{id}","actual":"200","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":21,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":22,"check":"body json \".state\" is","expected":"\"open\"","actual":"\"open\"","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"when","line":23,"target":"api","call":"put(\"/tickets/{id}\", body: \"{\"title\":\"大きなプリンター\",\"state\":\"open\"}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":200,"headers":{"content-length":"124","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"title\":\"大きなプリンター\",\"state\":\"open\"}"}}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":23,"check":"contract","expected":"PUT /tickets/{id}","actual":"200","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":24,"check":"body json \".title\" is","expected":"\"大きなプリンター\"","actual":"\"大きなプリンター\"","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"when","line":25,"target":"api","call":"patch(\"/tickets/{id}\", body: \"{\"state\":\"closed\"}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":200,"headers":{"content-length":"126","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"title\":\"大きなプリンター\",\"state\":\"closed\"}"}}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":25,"check":"contract","expected":"PATCH /tickets/{id}","actual":"200","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":26,"check":"body json \".state\" is","expected":"\"closed\"","actual":"\"closed\"","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"when","line":27,"target":"api","call":"delete(\"/tickets/{id}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":204,"headers":{"content-length":"0"},"body":""}}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":27,"check":"contract","expected":"DELETE /tickets/{id}","actual":"204","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":28,"check":"status is","expected":"204","actual":"204","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"when","line":29,"target":"api","call":"get(\"/tickets/{id}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":404,"headers":{"content-length":"27","content-type":"application/json"},"body":"{\"error\": \"no such ticket\"}"}}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":29,"check":"contract","expected":"GET /tickets/{id}","actual":"404","ok":true}
+{"claim":"チケットは読み返せて、変えられて、消せる","event":"check","line":30,"check":"status is","expected":"404","actual":"404","ok":true}
+{"claim":"新しいチケットのアドレスをたどれる","event":"check","line":34,"check":"keep env \"TICKETS_TOKEN\"","expected":"as token","actual":"{token}","ok":true}
+{"claim":"新しいチケットのアドレスをたどれる","event":"when","line":35,"target":"api","call":"post(\"/tickets\", body: \"{\"title\":\"ドア\"}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":201,"headers":{"content-length":"88","content-type":"application/json","location":"{at}"},"body":"{\"id\":\"{id}\",\"state\":\"open\",\"title\":\"ドア\"}"}}
+{"claim":"新しいチケットのアドレスをたどれる","event":"check","line":35,"check":"contract","expected":"POST /tickets","actual":"201","ok":true}
+{"claim":"新しいチケットのアドレスをたどれる","event":"check","line":36,"check":"keep header \"location\"","expected":"as at","actual":"{at}","ok":true}
+{"claim":"新しいチケットのアドレスをたどれる","event":"check","line":37,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"新しいチケットのアドレスをたどれる","event":"when","line":38,"target":"api","call":"get(\"{at}\", header \"authorization\": \"Bearer {token}\")","obs":{"status":200,"headers":{"content-length":"88","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"state\":\"open\",\"title\":\"ドア\"}"}}
+{"claim":"新しいチケットのアドレスをたどれる","event":"check","line":38,"check":"contract","expected":"GET /tickets/{id}","actual":"200","ok":true}
+{"claim":"新しいチケットのアドレスをたどれる","event":"check","line":39,"check":"body json \".title\" is","expected":"\"ドア\"","actual":"\"ドア\"","ok":true}
+{"claim":"トークンのない呼び出しは 401 になる","event":"when","line":43,"target":"api","call":"post(\"/tickets\", body: \"{\"title\":\"ドア\"}\")","obs":{"status":401,"headers":{"content-length":"27","content-type":"application/json"},"body":"{\"error\": \"show the token\"}"}}
+{"claim":"トークンのない呼び出しは 401 になる","event":"check","line":43,"check":"contract","expected":"POST /tickets","actual":"401","ok":true}
+{"claim":"トークンのない呼び出しは 401 になる","event":"check","line":44,"check":"status is","expected":"401","actual":"401","ok":true}

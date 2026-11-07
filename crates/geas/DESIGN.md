@@ -219,17 +219,24 @@ tprop   := "run" STR | "serve" STR | "port" (NUM | "auto")
 pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
          | "tz" STR | "locale" STR
          | "clock" STR ["env" STR] | "seed" NUM ["env" STR]
-claim   := "claim" STR "{" step* "}"            ; first step must be `when`
+claim   := "claim" STR "{" step* "}"            ; a `when` first, or a `keep env` (§22)
 step    := "when" IDENT "." call [wait] | ("then" | "and") check
-wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run, get, post (§18)
+         | "keep" source "as" IDENT             ; §22
+wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run and the HTTP calls (§18)
+source  := "stdout" | "stderr" | "header" STR | "body" | "body" "json" STR
+         | "env" STR
 call    := "run" "(" [STR ("," STR)*] ")"
-         | "get" "(" STR ")" | "post" "(" STR ["," "body" ":" STR] ")"
+         | "get" "(" STR ("," header)* ")"
+         | ("post" | "put" | "patch" | "delete") "(" STR ("," (body | header))* ")"
+                                                ; one `body` at most
          | "open" "(" [STR] ")"
          | "click" "(" STR ["," "nth" ":" NUM] ")"
          | "input" "(" STR ["," place] ")"
          | "submit" "(" [place] ")"
          | "press" "(" STR ")" | "advance" "(" NUM ")"
 place   := "field" ":" NUM | "into" ":" STR ["," "nth" ":" NUM]
+body    := "body" ":" STR
+header  := "header" STR ":" STR
 check   := subject matcher
 subject := "stdout" | "stderr" | "exit" | "status" | "header" STR
          | "body" | "body" "json" STR | "screen"
@@ -259,7 +266,7 @@ What each call observes, which decides the subjects its `then`s may name:
 | call | on a target with | observes |
 |---|---|---|
 | `run` | `run` | stdout, stderr, exit |
-| `get`, `post` | `serve` | status, header, body, body json |
+| `get`, `post`, `put`, `patch`, `delete` | `serve` | status, header, body, body json |
 | `open`, `click`, `input`, `submit`, `press`, `advance` | `pixie`, `driver`, or `serve` (in a browser) | screen |
 
 Rules beyond the grammar, each new in v1:
@@ -769,7 +776,7 @@ As built:
 
 A `serve` target can be driven in headless Chrome: `open("/path")` loads
 `http://127.0.0.1:<port>/path`, and the other actions act on that page.
-`get` and `post` still reach the same service, in the same claim.
+The HTTP calls still reach the same service, in the same claim.
 
 - Chrome is found through `GEAS_CHROME`, then the macOS application, then
   `google-chrome`, `chromium` or `chromium-browser` on PATH. Not found,
@@ -1521,7 +1528,8 @@ As built:
   `when`s and can be run and replayed alone (§2). A claim that relied on
   another's run would make one verdict depend on another, would break the
   isolation `--jobs` (§10) and the per-claim record (§7.3) rest on, and
-  would hide from the reader the setup that makes the claim true.
+  would hide from the reader the setup that makes the claim true. A value
+  a `keep` holds stays in its claim (§22), for the same reason.
 - **macOS accessibility.** The permission (§8.5).
 - **Recording pixie apps and page scripts.** A pixie app is Rust that pixie
   generated, and its lines are not the `.pix` source anyone wrote. A
@@ -1808,7 +1816,7 @@ For each scenario no claim answers, `--draft` prints a claim to fill in:
 comments that quote the spec, the requirement and the scenario's lines,
 then `claim "<the scenario's name>" { … }` whose body is only comments.
 geas refuses such a claim (E005: the claim has no steps, and a claim
-starts with a `when`), so a draft pasted and left as it is fails `geas
+needs a `when`), so a draft pasted and left as it is fails `geas
 check` instead of passing.
 A person writes the steps, or reads the ones an agent proposes; the
 draft only saves copying the names and keeps the scenario beside the
@@ -1902,7 +1910,7 @@ claim "answers the health check" {
 ```
 
 A claim pasted from the draft as it is gives E005 (the claim has no
-steps, and a claim starts with a `when`), and `geas check` exits 2
+steps, and a claim needs a `when`), and `geas check` exits 2
 (`tests/scenarios.rs`).
 
 ## 18. Waiting for an answer: `within`
@@ -1941,7 +1949,9 @@ claim "a job finishes in the background" {
   interval or a longer limit can be added later without changing a claim.
 - The checks a wait holds each answer to are the `then` under its `when`
   and the `and`s after it, up to the next `when` or the end of the claim:
-  the group drift counts as claimed. On the first answer all of them hold
+  the group drift counts as claimed. A `keep` of the answer under the
+  `when` is held with them (§22): an answer that it cannot read is not the
+  one the step ends with. On the first answer all of them hold
   on, the step ends with that answer: the checks read it, the journal and
   the baseline write it, and the claim goes on. When the time runs out,
   the step's answer is the last one: the checks read it, those that do not
@@ -1966,12 +1976,16 @@ claim "a job finishes in the background" {
   programs it started and exits with 128 and the signal's number. When it
   has Chrome's profiles to remove first, and so goes on for a moment, the
   wait makes no call after the signal.
-- `get`, `post` and `run` can wait. `post` can because an RPC-style API,
-  such as Connect, calls its reads with POST too; `run`, because a command
-  may be how a state is read. A call is made again as it is written, so
-  whatever a `post` or a `run` does is done again on every call; the
-  language guide and the skill say so, and a claim waits on a read where
-  there is one.
+- `run` and the five HTTP calls can wait. `post` can because an RPC-style
+  API, such as Connect, calls its reads with POST too; `run`, because a
+  command may be how a state is read; `put`, `patch` and `delete`, because
+  each is a call like the others, and a rule for one word of the five would
+  be one more thing to remember. A call is made again as it is written, so
+  whatever it does is done again on every call: a second `post` makes a
+  second thing, a second `put` or `patch` writes again, and a `delete` that
+  took the thing away answers 404 the next time, so a wait on it for 204
+  can see its one success and never see it again. The language guide and
+  the skill say so, and a claim waits on a read where there is one.
 - A screen action cannot wait (E014). A screen settles after each action
   (Chrome in virtual time, §8.4; pixie by its replay, §8.3), `advance(ms)`
   gives it more time, and a `click` made again would be a second click.
@@ -2019,7 +2033,7 @@ claim "a job finishes in the background" {
 |---|---|
 | `within` after an action on a screen | E014 |
 | `within 0 seconds`, `within -5 seconds`, `within 90 seconds` | E014 |
-| `within` on a `when` with no check under it: nothing to wait for | E014 |
+| `within` on a `when` with no check and no `keep` of its answer under it: nothing to wait for | E014 |
 | `within 1.5 seconds`; `within seconds`; `within 10` with no unit | E001 |
 | `within 1 minute`, and any unit but seconds | E001, with a note: seconds, up to 60 |
 | `within` after a check | E001, or E002 after a node (a state geas does not know), with a note on where `within` goes |
@@ -2084,8 +2098,6 @@ Not fixed:
   check.
 - A screen that needs more than its settling and `advance(ms)` has no
   wait.
-- geas's calls have no request headers yet; one added would be made again
-  with the call.
 
 ## 19. The object of a spec that `ritsu check` hands on (2026-10-31)
 
@@ -2115,7 +2127,7 @@ OpenAPI document, and a change that renames a member or returns a value the docu
 goes by as long as no claim reads it. The document already says what every answer may be, so the
 question is how to use it without asking for anything per claim.
 
-`contract "<file>"` on a `serve` target holds every `get` and `post` of that target to the document.
+`contract "<file>"` on a `serve` target holds every `get`, `post`, `put`, `patch` and `delete` of that target to the document.
 The path is from the spec's directory and, in a module, what any path written in a file is (ritsu's
 DESIGN 17.6): under the module's root, or in a dependency by `@<name>/`. It is the only path a claims
 file writes, and it follows the one rule so a module's claims mean the same in another tree. The
@@ -2124,7 +2136,7 @@ by the one reader of such documents (`ritsu_base::openapi::responses`, beside wh
 operation is sent).
 
 **Before anything runs.** A file that cannot be read, a path a module refuses, a document that is
-AsyncAPI or Swagger 2.0, or one in which a `$ref` a response reaches cannot be followed is E015. A `get` or `post` whose path or method the
+AsyncAPI or Swagger 2.0, or one in which a `$ref` a response reaches cannot be followed is E015. A call whose path or method the
 document does not have is E016. What the document says and geas does not hold is W015, once for each
 word: `$dynamicRef`, `$recursiveRef`, `patternProperties`, `propertyNames`, `dependentRequired`, `dependentSchemas`, `dependencies`,
 `if`, `then`, `else`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`,
@@ -2136,7 +2148,9 @@ a target that is not `serve`, is E004. `ritsu check` and `ritsu impact` read the
 characters within a segment, and a segment is compared as written and with its `%XX` read back. The
 path a `servers` URL adds may be in front or not, since a service under test may be reached either
 way, with the operation's servers over its path item's over the document's. Of the operations that
-fit, the one with the most segments written out wins, and the first written on a tie.
+fit, the one with the most segments written out wins, and the first written on a tie. A name a `keep`
+holds (§22) is compared as the characters it is, so `/orders/{id}` fits within a segment; a path that
+starts with one is known only when it runs, and is held where it comes to.
 
 **What an answer is held to.**
 
@@ -2256,3 +2270,274 @@ number of claims to aim for: the agent's 49 caught almost as much as 203, and a 
 **Left.** The expected answers of a split came from `kaname run` along a chain of earlier refunds, which only
 the agent's reading found; a rule whose inputs are state has no list of its own. Whether the same page holds
 for a project with no spec of a given kind has not been tried, and neither has a second sample.
+
+## 22. Going on from what a service answers: `put`, `patch`, `delete`, headers and `keep` (2026-11-07)
+
+Writing claims from a project's specs (§21) showed three things geas could not say. It could call no
+`PUT`, `PATCH` or `DELETE`. It could send no header, so the sample refund service took its token in the
+query as well, for geas alone. And it could not go on from what a service chooses: `POST /orders`
+answers a number no claim can write, and the `GET /orders/<number>` after it had nothing to go on. The
+first two are small. The third has a question in it, because the journal and the baseline are made to
+be the same bytes for the same behavior (§10, §18.2), and a number that differs on every run is what
+they have no way to write.
+
+**Decided.** Five HTTP calls, headers on each, and one more step:
+
+```geas
+claim "a ticket can be read back, changed and taken away" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/tickets/{id}"
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+}
+```
+
+### 22.1 The calls
+
+The model has one `Call::Http { method, path, body, headers }`. `display()` writes `get("/x")` and
+`post("/x", body: "b")` as it always did, byte for byte, because a baseline's `call` is compared with
+it and a baseline written before must still read. Headers come after, as `, header "a": "b"`, in the
+order path, body, headers as written. A `get` takes no body (E002). All five wait (§18.1) and are held
+to a contract (§20).
+
+### 22.2 Headers
+
+`header "authorization": "Bearer t"` is the form of the subject `header "x"`. One name can be written
+several times, and is sent as many times, in the order written. A name is sent as it is written.
+
+| Written | Code |
+|---|---|
+| a name that is not an HTTP token (`"x y"`, `""`, `"{name}"`) | E002 |
+| a value with a line break or a control character, a tab among them | E002 |
+| `host`, `connection`, `content-length`, `transfer-encoding`, in any case | E002, saying what geas sends and why |
+
+A `content-type` is what it was: geas adds none, and sends one that is written. There is no default
+header on a target (below).
+
+### 22.3 `keep`
+
+`keep <source> as <name>` reads `stdout`, `stderr`, `header "<name>"`, `body`, `body json "<path>"` or
+`env "<name>"`. It reads the answer of the `when` before it, or the one a wait kept. `keep env` reads
+geas's own environment, and is the one step that can come before the first `when`.
+
+The value is a string: a string as it is, a number by `json::render_num`, `true` or `false`, an array or
+an object by `json::render`. `stdout`, `stderr` and `body` drop one trailing line break, as a comparison
+does. A header sent several times is joined by `, `, as `got` does.
+
+What cannot be read fails the claim: a header or a path that is not there, a body that is not JSON, a
+`null`, an empty string. The claim stops there, since what follows rests on the value, and its status is
+a failure, not an error: a service that stops answering a member is what a claim is for. It is a
+`CheckResult` like any other, `label: "keep body json \".id\""`, `expected: "as id"`, in the report,
+in `--json` and in the journal, and a `keep` that read is one too, with `ok: true` and `{id}` as its
+`actual`:
+
+```text
+not ok 1 - a ticket can be read back, changed and taken away
+    examples/tickets/tickets.geas:17: contract POST /tickets — got $: the required id is missing
+        17 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+    examples/tickets/tickets.geas:19: keep body json ".id" as id — got <no key `id` in JSON object>
+        19 |   keep body json ".id" as id
+      the run that gets there:
+          16  keep env "TICKETS_TOKEN" as token  →  {token}
+          17  when api.post("/tickets", body: "{"title":"the printer"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+```
+
+The environment is another matter: no answer of the service is wrong when a variable is not set, nor can
+a wait bring one about. It is an error (E038), at once, as when a program does not start, and an empty
+variable or one that is not UTF-8 is the same.
+
+### 22.4 Names
+
+`{name}` is the value only where a `keep` above it in the claim holds that name. Any other `{…}` stays the
+characters it is, so a JSON body's `{"a":1}` is not touched and no escape is needed. It is replaced once:
+a `{x}` inside a value is not read again.
+
+It works in the strings of a call (the arguments of a `run`, a path, a body, a header's value, `open`,
+`click`, `input`, `into:`; a key `press` names is known without a run) and in the value of a check (`is`,
+`is not`, `contains`, `does not contain`, and of a node on the screen its label, `containing`, `with value`
+and `in`). It does not work in a header's name or a `body json` path, which say where to look, nor in the
+strings of a target, whose values are not the claim's.
+
+An `is "…"` with a kept name in it compares as text: the number 7 and `"{id}"` when `id` is `7` are equal,
+and so is a status. A value with no kept name in it compares as it always did. The model holds this as
+`Value::Filled`, and `status is "{code}"` is not E008 when `code` is kept.
+
+What cannot work is E017, before anything runs:
+
+| Written | Why |
+|---|---|
+| one name kept twice in a claim | a name holds one value |
+| `keep … as port` | `{port}` is the port geas gives a service |
+| `keep status`, `keep exit` | a number the spec writes as it is, and nothing differs from run to run |
+| `keep screen` | a tree of nodes, not one value |
+| a `{name}` in a step before the `keep` that holds it | the value does not exist yet |
+| a kept name in `matches`, `does not match` or `matching` | a pattern is read before anything runs |
+| a kept name in a call on a `pixie` target | pixie makes a claim's actions one script before they run (§8.3) |
+
+`keep body` after a `run` is E007, and a `keep` of an answer before any `when` is E005, each with the
+word of that code. A claim that has nothing but `keep env` is E005 too. `within` with no check under it is
+not E014 when a `keep` of the answer is there, since the value is what it waits for; a `keep env` does not
+count, since no answer brings it about.
+
+A `{name}` in the shape of an identifier that no `keep` holds, in a claim that has a `keep`, is W016: it
+is usually a slip. `{port}` is not said, and a claim without a `keep` says nothing, so no file that exists
+means anything else now.
+
+```text
+warning[W016]: k/typo.geas:14:25: `{idd}` is not a name this claim keeps, so it stays as written
+    14 |   when api.post("/saved/{idd}", body: "{other} {port} {\"a\":1} {1} {}")
+  = the names it keeps: id
+```
+
+### 22.5 How a value goes out
+
+Each place takes the form it takes:
+
+- **A path with a kept name in it**: what a request line cannot hold (bytes up to 0x20, from 0x7F, and
+  `"<>\^` and the backtick and `{|}`) is written `%XX`; `/`, `?`, `&` and `%` stay. A path with no kept
+  name goes as written, as it always did.
+- **An address on this machine**: a filled path that starts with `http://` or `https://` on `127.0.0.1`,
+  `localhost` or `[::1]`, with a port or none, goes as the path it holds, so a `Location` can be the next
+  call. geas sends `Host: 127.0.0.1`, so a service may answer an address with no port at all.
+- **Another host, or a path with no `/` in front**: E038. geas only calls what it started, and a claim
+  that wanted to read such an address compares it with `is`.
+- **A header's value**: E038 if the value holds a line break or a control character, since a header
+  cannot carry one.
+- **A body, the arguments of a command, what a screen is given**: as they are.
+- **`{port}` in a value**: an answer's port is already written `{port}` (§10). Sent to a `port auto`
+  service, it is that service's real port: the port a value holds is its destination's, not where it came
+  from.
+
+### 22.6 Waiting
+
+A `keep` under a `when` that waits is part of what the wait holds: the step ends on the first answer on
+which every check holds and every `keep` can read. Each answer tried is read again, so a check can use a
+name kept from that same answer, and a value from an answer that was not the last is not left behind. The
+checks and the `keep`s are the steps up to the next `when`, whichever order they are in. When the time
+runs out, the `keep` fails on the last answer like the checks, and stops the claim.
+
+### 22.7 What is written: the value as its name
+
+The journal, the baseline and drift write a kept value as `{name}`, as they write a port as `{port}` and a
+masked value as `<masked>`, in that order: port, masks, `keep`. Checks read the raw answer. `recorded`
+is the one function for all three, and an `ObsRec` holds what the claim held at that point. The rewriting
+starts at the record of the answer the value came from, the `when` line included, and earlier lines are not
+gone back to.
+
+A value is written as its name where it stands as a word: the characters before and after it are not
+ASCII letters or digits. `/v1/orders/1` keeps its `v1` when `id` is `1`. A JSON body is parsed, and its
+strings and keys follow the same rule; a number becomes `"{id}"` when the whole number is the value, so
+that it stays JSON. A body that is not JSON is text. Headers, `stdout`, `stderr`, and the names and
+values of a screen's nodes are text too. The longest value goes first, and `{id}` written once is not read
+again. `actual` in the journal goes through the same function; `expected` and `call` are as written, so
+they read `{id}`.
+
+```text
+{"claim":"a ticket can be read back, changed and taken away","event":"check","line":19,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"a ticket can be read back, changed and taken away","event":"check","line":20,"check":"header \"location\" is","expected":"\"/tickets/{id}\"","actual":"\"/tickets/{id}\"","ok":true}
+```
+
+`claimed_map` counts a `keep` as a check of its subject: a claim goes on from it, so a change there is the
+claim's to decide, and drift says `claimed`.
+
+The limit is that the rule is about bytes and not about what they mean:
+
+- A small number can be another value too. With `id` `1`, `{"qty":1}` is written `{"qty":"{id}"}`. Unless
+  the ID changes from run to run the bytes agree; a `mask` is there when they do not.
+- A `content-length` counts the real body, so IDs that differ in length change its bytes. Drift already
+  does not compare it; `mask header "content-length"` takes it out of the journal.
+- `x/orders/1` does not hold the value `/orders/1` as a word.
+- A value a claim did not keep stays what it was: a service that numbers what it makes and a claim that
+  keeps only its `Location` still differs in `.id` from run to run. Keep it or mask it.
+
+### 22.8 What comes from the environment
+
+A value `keep env` reads goes where the claim sends it and is shown nowhere: not in the journal, the baseline
+or `--json`, not in a report or a run line, not in a diagnostic or a program's stderr that a failure
+quotes, and not in the words `map` keeps. It is written `{name}` wherever it stands, with no regard to word
+boundaries, in the view reports use as well as in the one records use, and so is its `%XX` form, which a service
+that answers with the path it was sent can send back. In a JSON answer it need not be one string: a number, a
+truth value or a whole object that writes it becomes a string with `{name}` in it, so the answer stays JSON. A
+value kept from an answer that holds it is told with it hidden: a service that sends the token back cannot say
+it through `{sent} is "…"`. geas hides what it can recognize: a service that sends it back changed in any other
+way (in base64, say) is quoted as it answered.
+
+W901 says a key written in a file with what to do instead: a key a call sends can be read with `keep env`.
+
+### 22.9 What a report says
+
+A failed check that uses a kept name says the values it goes by, from what was kept and never from the
+environment, in the report and in `--json`'s `values` (only when it failed):
+
+```text
+not ok 1 - a check that fails on a value
+    k/told.geas:14: body json ".id" is "{qty}{id}" — got "1" ({qty} is "1", {id} is "1")
+        14 |   then body json ".id" is "{qty}{id}"
+```
+
+The run of a failed claim holds what it kept in order, in the tone of its `when` lines:
+
+```text
+      the run that gets there:
+          11  when api.post("/text")  →  201, body "{\"id\": \"1\", \"qty\": 1, \"note\": \"thing 1 of v1\"}"
+          12  keep body json ".id" as id  →  "1"
+          13  keep body json ".qty" as qty  →  "1"
+```
+
+### 22.10 The contract
+
+`request(call)` gives all five, and `ritsu_base::openapi` reads `put`, `patch` and `delete` as it reads the
+others. A `{id}` in a call's path is characters within a segment, and fits by the comparison §20 has. A path
+that starts with a kept name (`{at}`, `{at}/items`) cannot be known before it runs, so E016 does not look at
+it. `held_to` finds the operation by the path actually sent, and when there is none the check fails, in
+E016's words, with the name written and the place it came to:
+
+```text
+not ok 1 - the value leads outside the document
+    k/at-run.geas:15: contract GET {at}/parts — got the contract things.yaml has no GET /things/<uuid>/parts
+        15 |   when api.get("{at}/parts")
+```
+
+### 22.11 Forms passed over
+
+1. **A default header on a target** (`target api { header "authorization": "Bearer {token}" }`). A claim
+   would no longer say what it sends, and a name in it would have to mean something before any step. It can
+   be added later without changing a claim.
+2. **`keep … matching "(\d+)"`**. `src/regex.rs` has no captures, and a `body json` path or a whole
+   value has been enough. It can be added later.
+3. **Handing a value to another claim.** Claims are isolated (§15).
+4. **`head` and `options`.** Nothing has asked for them.
+5. **A status one of several, the length of a JSON array, calls at the same time.** Each is its own
+   question, and none is what the three gaps were.
+6. **Holding a request's body to the contract.** What a claim sends is its own business (§20).
+7. **Writing the value in the journal.** It would break "same behavior, same bytes" for every service that
+   numbers what it makes, and a report says the value when a check fails.
+8. **A new string syntax for a kept name (`${id}`, an escape for a literal `{id}`).** The braces are what
+   `{port}` already is. A name means itself only where a `keep` holds it, so no file already written changes
+   meaning, and W016 says the slip.
+9. **Running a kept value through a pixie script at the moment it is known.** pixie takes one script before
+   the claim's actions run (§8.3), and replaying it would run the actions twice.
+
+### 22.12 Checked
+
+`tests/keep.rs`, with `tests/impl/mirror.py`, which answers with what it was sent, and `tests/impl/things.py`,
+which numbers with a new uuid every run: the five calls and their headers reach the service; a `POST`, a
+`keep`, then `GET`, `PUT`, `PATCH` and `DELETE` hold; the journal and the baseline are the same bytes over
+runs with `-j1` and `-j4` and hold no uuid; drift after a snap is quiet on new numbers and says a change no
+claim reads; `id` `1` is compared as a number and as text, and written where it stands alone; a `keep` that
+cannot read fails its claim and runs nothing after it, in both languages and `--json`; a wait goes on until
+the value is there, and fails and stops when it does not come; a value from the environment goes out in a
+header, a body and a path and appears in no journal, baseline, `--json`, drift or report, in either language,
+even when the service sends it back or a failed program's stderr holds it; a variable that is not set is
+E038, also under a `within 30 seconds`, at once; a blank in a path is `%20`, a line break in a header is E038,
+a `Location` with its origin is the next call; `put`, `patch` and `delete` are held to the contract, a `{id}`
+path that is not in the document is E016, and a path that starts with a name is found out when it runs; W901
+says a key in a header and shows none of it. `tests/spec.rs` holds each refusal of 22.2 and 22.4 in both
+languages and `--json`, `src/model.rs` holds the old forms of `display()` to their bytes, `src/keep.rs` the
+rewriting, `tests/browser.rs` `open("/orders/{id}")` and the screen in Chrome (a journal of the same bytes
+twice), `tests/gui.rs` a driver, and `tests/readme.rs` the story of `examples/tickets`.

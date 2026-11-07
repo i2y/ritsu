@@ -1,0 +1,22 @@
+# A name that looks kept and is not: `geas check` says it, and the claim runs with the string as it
+# is written. `{port}` is geas's, and a claim that keeps nothing is not read for this at all.
+target api {
+  serve "python3 mirror.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "a name that is not kept" {
+  when api.post("/plain", body: "1")
+  keep body as id
+  when api.post("/saved/{idd}", body: "{other} {port} {\"a\":1} {1} {}")
+  then body json ".path" is "/saved/{idd}"
+  and  body json ".body" contains "{other}"
+}
+
+claim "a claim that keeps nothing" {
+  when api.post("/a", body: "{id}")
+  then body json ".body" is "{id}"
+}

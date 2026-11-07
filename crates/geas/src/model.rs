@@ -138,11 +138,57 @@ impl Pins {
     }
 }
 
+/// The five HTTP methods a call can use (DESIGN §22).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Method {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+impl Method {
+    /// The word a spec writes it with: `get`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Method::Get => "get",
+            Method::Post => "post",
+            Method::Put => "put",
+            Method::Patch => "patch",
+            Method::Delete => "delete",
+        }
+    }
+
+    /// As a request line and a contract name it: `GET`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Method::Get => "GET",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Patch => "PATCH",
+            Method::Delete => "DELETE",
+        }
+    }
+
+    /// The method a call's word stands for.
+    pub fn of(word: &str) -> Option<Method> {
+        match word {
+            "get" => Some(Method::Get),
+            "post" => Some(Method::Post),
+            "put" => Some(Method::Put),
+            "patch" => Some(Method::Patch),
+            "delete" => Some(Method::Delete),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Call {
     Run(Vec<String>),
-    Get(String),
-    Post { path: String, body: Option<String> },
+    /// A request to a service. `get` has no body; the headers go in the order they are written.
+    Http { method: Method, path: String, body: Option<String>, headers: Vec<(String, String)> },
     /// The app's first screen; in a browser, that path of the target (`/` when
     /// none is written).
     Open(Option<String>),
@@ -191,11 +237,19 @@ impl Call {
                 let a: Vec<String> = args.iter().map(|s| format!("\"{}\"", s)).collect();
                 format!("run({})", a.join(", "))
             }
-            Call::Get(p) => format!("get(\"{}\")", p),
-            Call::Post { path, body } => match body {
-                Some(b) => format!("post(\"{}\", body: \"{}\")", path, b),
-                None => format!("post(\"{}\")", path),
-            },
+            // a baseline compares this text with what it keeps, so a call without headers stays
+            // what it has always been: its path and its body as written, not escaped
+            Call::Http { method, path, body, headers } => {
+                let mut s = format!("{}(\"{}\"", method.word(), path);
+                if let Some(b) = body {
+                    s.push_str(&format!(", body: \"{}\"", b));
+                }
+                for (name, value) in headers {
+                    s.push_str(&format!(", header {}: {}", quote(name), quote(value)));
+                }
+                s.push(')');
+                s
+            }
             Call::Open(None) => "open()".into(),
             Call::Open(Some(p)) => format!("open({})", quote(p)),
             Call::Click { name, nth: None } => format!("click({})", quote(name)),
@@ -214,8 +268,7 @@ impl Call {
     pub fn word(&self) -> &'static str {
         match self {
             Call::Run(_) => "run",
-            Call::Get(_) => "get",
-            Call::Post { .. } => "post",
+            Call::Http { method, .. } => method.word(),
             Call::Open(_) => "open",
             Call::Click { .. } => "click",
             Call::Input { .. } => "input",
@@ -230,7 +283,7 @@ impl Call {
     pub fn observes(&self) -> Observes {
         match self {
             Call::Run(_) => Observes::Process,
-            Call::Get(_) | Call::Post { .. } => Observes::Http,
+            Call::Http { .. } => Observes::Http,
             _ => Observes::Screen,
         }
     }
@@ -311,13 +364,16 @@ pub enum Value {
     N(f64),
     Bool(bool),
     Null,
+    /// A string with the values a claim kept in it (DESIGN §22): compared as text with whatever
+    /// the subject gives, so `"{id}"` holds of the number 7 when the value kept is 7.
+    Filled(String),
 }
 
 impl Value {
     /// As the spec writes it: `"5"`, `5`, `true`, `null`.
     pub fn shown(&self) -> String {
         match self {
-            Value::S(s) => crate::json::quote(s),
+            Value::S(s) | Value::Filled(s) => crate::json::quote(s),
             Value::N(n) => crate::json::render_num(*n),
             Value::Bool(b) => b.to_string(),
             Value::Null => "null".into(),
@@ -413,11 +469,45 @@ impl Wait {
     }
 }
 
+/// Where a `keep` reads its value (DESIGN §22).
+#[derive(Debug, Clone, PartialEq)]
+pub enum KeepFrom {
+    /// What the `when` before it observed: stdout, stderr, a header, the body, a JSON path.
+    Answer(Subject),
+    /// geas's own environment. The value is told to nobody (DESIGN §22).
+    Env(String),
+}
+
+/// `keep <source> as <name>`.
+#[derive(Debug, Clone)]
+pub struct Keep {
+    pub from: KeepFrom,
+    pub name: String,
+    /// Where `keep` is written.
+    pub pos: Pos,
+}
+
+impl Keep {
+    /// The source as the spec writes it: `keep body json ".id"`.
+    pub fn label(&self) -> String {
+        match &self.from {
+            KeepFrom::Answer(s) => format!("keep {}", s.label()),
+            KeepFrom::Env(var) => format!("keep env {}", crate::json::quote(var)),
+        }
+    }
+
+    /// As the spec writes it: `keep body json ".id" as id`.
+    pub fn display(&self) -> String {
+        format!("{} as {}", self.label(), self.name)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Step {
     /// `pos` is where `when` is written; `wait`, what its `within` says.
     When { target: String, call: Call, pos: Pos, wait: Option<Wait> },
     Then(Check),
+    Keep(Keep),
 }
 
 #[derive(Debug, Clone)]
@@ -441,6 +531,8 @@ pub struct Spec {
     pub targets: Vec<Target>,
     pub claims: Vec<Claim>,
     pub masks: Vec<Mask>,
+    /// What the parser says of a spec that runs all the same: `geas check` shows it.
+    pub warnings: Vec<crate::diag::Diag>,
 }
 
 impl Spec {
@@ -457,5 +549,54 @@ impl Spec {
                 _ => None,
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn http(method: Method, path: &str, body: Option<&str>, headers: &[(&str, &str)]) -> Call {
+        Call::Http { method, path: path.into(), body: body.map(str::to_string), headers: headers.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() }
+    }
+
+    /// A baseline compares this text with what it keeps: a call without headers is the bytes it has
+    /// always been, its path and its body not escaped, so an old baseline still reads.
+    #[test]
+    fn a_call_is_written_as_it_always_was() {
+        assert_eq!(http(Method::Get, "/x", None, &[]).display(), r#"get("/x")"#);
+        assert_eq!(http(Method::Post, "/x", None, &[]).display(), r#"post("/x")"#);
+        assert_eq!(http(Method::Post, "/x", Some("b"), &[]).display(), r#"post("/x", body: "b")"#);
+        assert_eq!(http(Method::Post, "/x\"y", Some("{\"a\":\"b\"}"), &[]).display(), "post(\"/x\"y\", body: \"{\"a\":\"b\"}\")");
+        assert_eq!(http(Method::Post, "/x", Some("a\nb"), &[]).display(), "post(\"/x\", body: \"a\nb\")");
+    }
+
+    #[test]
+    fn the_new_calls_and_the_headers_come_after_the_rest() {
+        assert_eq!(http(Method::Put, "/x", Some("b"), &[]).display(), r#"put("/x", body: "b")"#);
+        assert_eq!(http(Method::Patch, "/x", None, &[]).display(), r#"patch("/x")"#);
+        assert_eq!(http(Method::Delete, "/x", None, &[("a", "b")]).display(), r#"delete("/x", header "a": "b")"#);
+        assert_eq!(http(Method::Get, "/x", None, &[("b", "1"), ("a", "2"), ("b", "3")]).display(), r#"get("/x", header "b": "1", header "a": "2", header "b": "3")"#);
+        assert_eq!(http(Method::Post, "/x", Some("b"), &[("a", "say \"c\"")]).display(), r#"post("/x", body: "b", header "a": "say \"c\"")"#);
+    }
+
+    #[test]
+    fn the_five_methods_by_their_words() {
+        for (word, name, m) in [("get", "GET", Method::Get), ("post", "POST", Method::Post), ("put", "PUT", Method::Put), ("patch", "PATCH", Method::Patch), ("delete", "DELETE", Method::Delete)] {
+            assert_eq!(Method::of(word), Some(m));
+            assert_eq!((m.word(), m.name()), (word, name));
+        }
+        for word in ["head", "options", "GET", ""] {
+            assert_eq!(Method::of(word), None);
+        }
+    }
+
+    #[test]
+    fn a_keep_as_its_spec_writes_it() {
+        let keep = |from| Keep { from, name: "id".into(), pos: Pos::default() };
+        assert_eq!(keep(KeepFrom::Answer(Subject::BodyJson(".id".into()))).display(), r#"keep body json ".id" as id"#);
+        assert_eq!(keep(KeepFrom::Answer(Subject::Stdout)).display(), "keep stdout as id");
+        assert_eq!(keep(KeepFrom::Env("KEY".into())).display(), r#"keep env "KEY" as id"#);
+        assert_eq!(keep(KeepFrom::Env("KEY".into())).label(), r#"keep env "KEY""#);
     }
 }

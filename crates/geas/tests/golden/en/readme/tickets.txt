@@ -1,0 +1,32 @@
+$ export TICKETS_TOKEN=a-token-of-yours
+$ geas check examples/tickets/tickets.geas
+ok 1 - a ticket can be read back, changed and taken away
+ok 2 - the address of a new ticket can be followed
+ok 3 - a call without the token is refused
+3 claims · 3 ok · 0 failed · journal: examples/tickets/.geas/tickets.journal.jsonl
+$ geas snap examples/tickets/tickets.geas
+3 claims · 3 ok · 0 failed · baseline: 9 interactions → examples/tickets/.geas/tickets.baseline.jsonl
+$ geas drift examples/tickets/tickets.geas
+drift: 9 interactions compared · 0 drifted · 0 unclaimed change(s) · 0 claimed
+$ geas check examples/tickets/tickets.geas
+not ok 1 - a ticket can be read back, changed and taken away
+    examples/tickets/tickets.geas:17: contract POST /tickets — got $: the required id is missing
+        17 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+    examples/tickets/tickets.geas:19: keep body json ".id" as id — got <no key `id` in JSON object>
+        19 |   keep body json ".id" as id
+      the run that gets there:
+          16  keep env "TICKETS_TOKEN" as token  →  {token}
+          17  when api.post("/tickets", body: "{"title":"the printer"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+not ok 2 - the address of a new ticket can be followed
+    examples/tickets/tickets.geas:36: contract POST /tickets — got $: the required id is missing
+        36 |   when api.post("/tickets", body: "{\"title\":\"the door\"}", header "authorization": "Bearer {token}")
+    examples/tickets/tickets.geas:38: keep body json ".id" as id — got <no key `id` in JSON object>
+        38 |   keep body json ".id" as id
+      the run that gets there:
+          35  keep env "TICKETS_TOKEN" as token  →  {token}
+          36  when api.post("/tickets", body: "{"title":"the door"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+          37  keep header "location" as at  →  "/tickets/<uuid>"
+ok 3 - a call without the token is refused
+3 claims · 1 ok · 2 failed · journal: examples/tickets/.geas/tickets.journal.jsonl
+$ echo $?
+1

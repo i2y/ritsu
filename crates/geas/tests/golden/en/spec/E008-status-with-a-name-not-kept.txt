@@ -1,0 +1,5 @@
+error[E008]: E008-status-with-a-name-not-kept.geas:10:18: `status` is a number; write the value without quotes: `status is 0`
+    10 |   and  status is "{other}"
+warning[W016]: E008-status-with-a-name-not-kept.geas:10:19: `{other}` is not a name this claim keeps, so it stays as written
+    10 |   and  status is "{other}"
+  = the names it keeps: whole

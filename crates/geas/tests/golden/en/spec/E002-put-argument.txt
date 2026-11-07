@@ -1,0 +1,2 @@
+error[E002]: E002-put-argument.geas:7:21: `put` takes no argument named `data`; it takes the path, `body:` and `header "<name>": "<value>"`
+     7 |   when api.put("/", data: "1")

@@ -1,0 +1,14 @@
+# A command's output, kept for the next command, and its record.
+target echo {
+  run "python3 echo.py"
+}
+
+claim "stdout and stderr" {
+  when echo.run("first\n", "second", "0")
+  keep stdout as out
+  keep stderr as err
+  then stdout contains "first"
+  when echo.run("{out}", "{err}", "0")
+  then stdout contains "first"
+  and  stderr is "{err}"
+}

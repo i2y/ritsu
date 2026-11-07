@@ -1,8 +1,8 @@
 //! The HTTP adapter: one request over a fresh connection to 127.0.0.1, with
-//! `Connection: close`, read to the end within 5 s. What comes back is the
-//! observation of a `get` or a `post`: the status, the headers (names lower-cased,
-//! sorted) and the body, read through `Transfer-Encoding: chunked` when the answer
-//! is sent that way.
+//! `Connection: close`, read to the end within 5 s, with the headers the spec writes
+//! after geas's own. What comes back is the observation of a `get`, a `post`, a `put`,
+//! a `patch` or a `delete`: the status, the headers (names lower-cased, sorted) and the
+//! body, read through `Transfer-Encoding: chunked` when the answer is sent that way.
 
 use ritsu_base::text::Text;
 use crate::diag;
@@ -19,7 +19,7 @@ fn exchange_failed(en: String, ja: String) -> Failure {
 
 /// One request to a service on 127.0.0.1. `auto` says that its port came from
 /// `port auto`, which a message then names without its number.
-pub fn exchange(target: &str, port: u16, auto: bool, method: &str, path: &str, body: Option<&str>) -> Result<Obs, Failure> {
+pub fn exchange(target: &str, port: u16, auto: bool, method: &str, path: &str, body: Option<&str>, headers: &[(String, String)]) -> Result<Obs, Failure> {
     use std::io::ErrorKind::{TimedOut, WouldBlock};
     let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("addr");
     let closed = || {
@@ -54,11 +54,13 @@ pub fn exchange(target: &str, port: u16, auto: bool, method: &str, path: &str, b
     let _ = s.set_read_timeout(Some(STEP_TIMEOUT));
     let _ = s.set_write_timeout(Some(STEP_TIMEOUT));
     let b = body.unwrap_or("");
+    let written: String = headers.iter().map(|(name, value)| format!("{name}: {value}\r\n")).collect();
     let req = format!(
-        "{} {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
+        "{} {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: {}\r\n{}\r\n{}",
         method,
         path,
         b.len(),
+        written,
         b
     );
     s.write_all(req.as_bytes()).map_err(|_| closed())?;

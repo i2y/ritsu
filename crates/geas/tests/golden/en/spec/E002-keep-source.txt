@@ -1,0 +1,2 @@
+error[E002]: E002-keep-source.geas:8:8: `keep` cannot read `answer`; it reads stdout, stderr, header, body, body json or env
+     8 |   keep answer as whole

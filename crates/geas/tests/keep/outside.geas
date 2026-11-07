@@ -1,0 +1,24 @@
+# What the document does not have, known without running anything.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+  contract "things.yaml"
+}
+
+claim "a method it does not have" {
+  when api.post("/things", body: "a chair")
+  keep body json ".id" as id
+  when api.delete("/things")
+  when api.post("/things/{id}")
+  when api.get("/nothing/{id}")
+  when api.get("/things/{id}/parts")
+  then status is 200
+}
+
+claim "a path that starts with a value is not looked at" {
+  when api.post("/things", body: "a chair")
+  keep header "location" as at
+  when api.get("{at}")
+  when api.get("{at}/parts")
+  then status is 200
+}

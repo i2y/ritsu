@@ -1,12 +1,13 @@
 //! A target's `contract` (DESIGN §20): the OpenAPI document of what the service answers. The spec
 //! is held to it before anything runs (a file that cannot be read is E015, a call the document does
-//! not have is E016, what it says and geas does not read is W015), and each `get` and `post` of a
-//! run is held to it as one more check of what its `when` observed: the status, the headers the
-//! response must send, the media type, and the body against the schema.
+//! not have is E016, what it says and geas does not read is W015), and each `get`, `post`, `put`,
+//! `patch` and `delete` of a run is held to it as one more check of what its `when` observed: the
+//! status, the headers the response must send, the media type, and the body against the schema.
 
 use crate::check::CheckResult;
 use crate::diag::{self, Diag, Severity};
 use crate::json::{self, J};
+use crate::keep::{self, View};
 use crate::model::{Call, Contract, Pos, Spec, Step};
 use crate::regex::Pattern;
 use crate::run::Obs;
@@ -49,10 +50,18 @@ pub fn read(spec: &mut Spec, dir: &Path) -> Vec<Diag> {
         }
     }
     for claim in &spec.claims {
+        // the names kept so far: a path that starts with one is not known until it runs
+        let mut kept: Vec<&str> = Vec::new();
         for step in &claim.steps {
+            if let Step::Keep(k) = step {
+                kept.push(&k.name);
+            }
             let Step::When { target, call, pos, .. } = step else { continue };
             let Some(c) = spec.target(target).and_then(|t| t.contract.as_ref()) else { continue };
             let (Some(held), Some((method, path))) = (&c.held, request(call)) else { continue };
+            if keep::names_in(path).first().is_some_and(|(at, name)| *at == 0 && kept.contains(name)) {
+                continue;
+            }
             if let Some(d) = outside(c, held, method, path, *pos) {
                 out.push(d);
             }
@@ -87,8 +96,7 @@ pub fn files(src: &str, dir: &Path) -> Vec<PathBuf> {
 /// The method and the path of a call a service answers with HTTP.
 fn request(call: &Call) -> Option<(&'static str, &str)> {
     match call {
-        Call::Get(path) => Some(("GET", path)),
-        Call::Post { path, .. } => Some(("POST", path)),
+        Call::Http { method, path, .. } => Some((method.name(), path)),
         _ => None,
     }
 }
@@ -287,15 +295,27 @@ fn outside(c: &Contract, held: &Held, method: &str, path: &str, at: Pos) -> Opti
 }
 
 /// A `when`'s answer held to the target's contract: one more check of what it observed, on the
-/// `when`'s line. None when the target has no contract, or the call is not one HTTP answers.
-pub fn held_to(contract: Option<&Contract>, call: &Call, line: usize, obs: &Obs) -> Option<CheckResult> {
-    let held = contract?.held.as_ref()?;
-    let (method, path) = request(call)?;
+/// `when`'s line. None when the target has no contract, or the call is not one HTTP answers. `sent`
+/// is the path as it went out, which is where the operation is looked for: a path with a kept value
+/// in it is only known now, and when the document does not have it the check fails, in E016's words.
+pub fn held_to(contract: Option<&Contract>, call: &Call, sent: Option<&str>, kept: &keep::Held, line: usize, obs: &Obs) -> Option<CheckResult> {
+    let c = contract?;
+    let held = c.held.as_ref()?;
+    let (method, written) = request(call)?;
     let Obs::Http { status, headers, body } = obs else { return None };
-    let (Some(op), _) = find(&held.responses, method, path) else { return None };
+    let path = sent.unwrap_or(written);
+    let label = "contract".to_string();
+    let (Some(op), _) = find(&held.responses, method, path) else {
+        let file = &c.file;
+        let told = kept.told(written);
+        let shown = told.split(['?', '#']).next().unwrap_or(&told);
+        let actual = tr!("契約 {file} に {method} {shown} はありません", "the contract {file} has no {method} {shown}");
+        return Some(CheckResult { line, label, expected: format!("{method} {written}"), recorded: kept.text(&actual.en, View::Record), actual, ok: false, screen: None, values: vec![] });
+    };
     let problems = held.problems(op, *status, headers, body);
     let ok = problems.is_empty();
-    Some(CheckResult { line, label: "contract".to_string(), expected: format!("{method} {}", op.path), actual: if ok { Text::same(status.to_string()) } else { together(&problems) }, ok, screen: None })
+    let actual = if ok { Text::same(status.to_string()) } else { together(&problems) };
+    Some(CheckResult { line, label, expected: format!("{method} {}", op.path), recorded: kept.text(&actual.en, View::Record), actual: kept.words(&actual, View::Report), ok, screen: None, values: vec![] })
 }
 
 /// The problems of an answer as one line: the first few, and how many more.

@@ -1,0 +1,46 @@
+# Claims for a small ticket service, which numbers what it makes itself and asks for a token.
+# `keep` holds a value for the steps below it: the token from geas's own environment, which geas
+# never shows or writes, and the number the service gave the ticket, which differs on every run. The
+# journal and the baseline write them as {token} and {id}, so two runs write the same bytes.
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+
+mask header "date"
+mask header "server"
+
+claim "a ticket can be read back, changed and taken away" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/tickets/{id}"
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  and  body json ".state" is "open"
+  when api.put("/tickets/{id}", body: "{\"title\":\"the big printer\",\"state\":\"open\"}", header "authorization": "Bearer {token}")
+  then body json ".title" is "the big printer"
+  when api.patch("/tickets/{id}", body: "{\"state\":\"closed\"}", header "authorization": "Bearer {token}")
+  then body json ".state" is "closed"
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 404
+}
+
+claim "the address of a new ticket can be followed" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"the door\"}", header "authorization": "Bearer {token}")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.get("{at}", header "authorization": "Bearer {token}")
+  then body json ".title" is "the door"
+}
+
+claim "a call without the token is refused" {
+  when api.post("/tickets", body: "{\"title\":\"the door\"}")
+  then status is 401
+}

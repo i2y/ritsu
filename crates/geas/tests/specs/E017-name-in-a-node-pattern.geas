@@ -1,0 +1,12 @@
+target page {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a node's name by a pattern" {
+  when page.get("/a")
+  keep body as title
+  when page.open("/")
+  then screen contains heading matching "{title}"
+  and  screen does not contain heading matching "a{2}"
+}

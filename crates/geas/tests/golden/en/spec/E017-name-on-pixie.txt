@@ -1,0 +1,4 @@
+error[E017]: E017-name-on-pixie.geas:9:19: a call on a pixie app cannot use `{name}`: pixie makes a claim's actions one script before they run
+     9 |   when app.input("{name}")
+error[E017]: E017-name-on-pixie.geas:10:19: a call on a pixie app cannot use `{name}`: pixie makes a claim's actions one script before they run
+    10 |   when app.click("{name}")

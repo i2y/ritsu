@@ -1,0 +1,2 @@
+error[E001]: E001-header-without-a-colon.geas:7:34: expected `:`, found `"b"`
+     7 |   when api.get("/", header "x-a" "b")

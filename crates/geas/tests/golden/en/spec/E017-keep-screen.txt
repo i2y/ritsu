@@ -1,0 +1,2 @@
+error[E017]: E017-keep-screen.geas:8:8: `keep` does not read `screen`: a screen is a tree of nodes and not one value; keep a value from a service's answer, or compare the screen with `contains`
+     8 |   keep screen as whole

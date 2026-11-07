@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E005-keep-env-alone.geas","diagnostics":[{"code":"E005","severity":"error","file":"E005-keep-env-alone.geas","line":6,"col":1,"message":"the claim \"nothing to check\" has no `when`; `keep env` alone leaves nothing to check","notes":[],"path":[]}]}

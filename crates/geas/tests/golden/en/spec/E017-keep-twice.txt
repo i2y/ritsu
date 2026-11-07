@@ -1,0 +1,3 @@
+error[E017]: E017-keep-twice.geas:10:27: this claim keeps `id` twice; a name holds one value
+    10 |   keep body json ".id" as id
+  = the first is on line 8

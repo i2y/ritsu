@@ -42,7 +42,7 @@ claim "answers on its own port" {
 | `run "<command>"` | a command: geas starts it once for each `when`, with the call's arguments after its words |
 | `serve "<command>"` and `port <n>` | a service: geas starts it once per claim that touches it, waits up to 5 s for the port to open, and stops it when the claim ends |
 | `port auto` | geas picks a free port on 127.0.0.1 for each instance and writes it where the command, or an `env` value, says `{port}` |
-| `contract "<file>"` | on a `serve` target: every `get` and `post` is held to this OpenAPI document (below), the path from the spec's directory |
+| `contract "<file>"` | on a `serve` target: every HTTP call is held to this OpenAPI document (below), the path from the spec's directory |
 | `serial` | claims that touch this target never run at the same time, for state geas cannot see |
 | `pixie "<app>"` | a pixie app, driven headless ([gui.md](gui.md)) |
 | `driver "<command>"` | any other GUI, through a program that speaks geas's driver protocol ([gui.md](gui.md)) |
@@ -90,20 +90,21 @@ claim "totals accumulate across requests" {
 }
 ```
 
-A claim is a name in quotes and a block of steps. The first step is a `when`: an action on a target,
-written `<target>.<call>(…)`. A `then` checks what the last `when` observed; `and` is the same word
-for another check. A failed check marks the claim as failed, and the claim goes on, so every
-divergence is reported. A `when` that cannot run (the program does not start, the port never opens,
-the screen has no such button) ends the claim as an error, with a diagnostic. A `when` can wait
-for an answer that comes later, with `within <n> seconds` (below). Names of targets and of claims
-are unique in a file (E003).
+A claim is a name in quotes and a block of steps. The first step is a `when` (or a `keep env`,
+below): an action on a target, written `<target>.<call>(…)`. A `then` checks what the last `when`
+observed; `and` is the same word for another check. A failed check marks the claim as failed, and
+the claim goes on, so every divergence is reported. A `when` that cannot run (the program does not
+start, the port never opens, the screen has no such button) ends the claim as an error, with a
+diagnostic. A `when` can wait for an answer that comes later, with `within <n> seconds` (below), and
+`keep` holds a value of an answer for the steps after it (below). Names of targets and of claims are
+unique in a file (E003).
 
 ## Calls and what they observe
 
 | Call | On a target with | Observes |
 |---|---|---|
 | `run("a", "b", …)` | `run` | `stdout`, `stderr`, `exit` |
-| `get("/path")`, `post("/path", body: "…")` | `serve` | `status`, `header "<name>"`, `body`, `body json "<path>"` |
+| `get("/path")`, `post("/path", body: "…")`, `put("/path", body: "…")`, `patch("/path", body: "…")`, `delete("/path")` | `serve` | `status`, `header "<name>"`, `body`, `body json "<path>"` |
 | `open()`, `open("/path")` | `pixie`, `driver`, or `serve` (a page in Chrome) | `screen` |
 | `click("<name>")`, `click("<name>", nth: n)` | the same | `screen` |
 | `input("<text>")`, `input("<text>", field: n)`, `input("<text>", into: "<name>")` | the same | `screen` |
@@ -114,6 +115,12 @@ are unique in a file (E003).
 A call a target does not take is E006, and a check of something its `when` does not observe is
 E007, both before anything runs. `nth:` and `field:` count from 1. [gui.md](gui.md) says what each
 GUI action does.
+
+`post`, `put`, `patch` and `delete` take `body:` or not, and `get` does not (E002). Each of the five
+takes any number of `header "<name>": "<value>"` after the path, sent in the order written, the name as
+it is written. A name that is not an HTTP token, a value with a line break or a control character, and
+`host`, `connection`, `content-length` and `transfer-encoding`, which geas sets itself, are E002. geas
+adds no `content-type`; one written is sent.
 
 HTTP is HTTP/1.1 over 127.0.0.1, one connection a request; a chunked answer is read as the body it
 carries. On a `port auto` service, `127.0.0.1:<port>`, `localhost:<port>` and `[::1]:<port>` in
@@ -152,10 +159,11 @@ after a `when`'s call makes geas call again, 100 ms after each answer, until eve
   5 s limit.
 - A call that fails (E030 to E033) ends the claim at once, as in any `when`; a note says which call
   of the wait it was.
-- `get`, `post` and `run` can wait, since an RPC-style API (Connect, say) reads with POST too, and
-  a command may be how a state is read. A call is made again exactly as it is written, so **a
-  `post` or a `run` that waits does what it does on every call**: a `post` that creates something
-  creates it again, and one that charges charges again. Wait on a read where there is one, as above.
+- A `run` and all five HTTP calls can wait, since an RPC-style API (Connect, say) reads with POST too,
+  and a command may be how a state is read. A call is made again exactly as it is written, so **a
+  call that waits does what it does on every call**: a `post` that creates something creates it again,
+  one that charges charges again, a `put` or a `patch` writes again, and a `delete` that took the thing
+  away answers 404 the next time. Wait on a read where there is one, as above.
 - A `run` starts the command again for each call, with the same pins: a pinned `clock` is the same
   in every call, so a wait is for work that goes on elsewhere, never for the pinned clock to move.
 - A screen action cannot wait (E014): a screen settles after each action, and `advance(ms)` gives
@@ -176,7 +184,7 @@ target api {
 …
 ```
 
-Each answer of a `get` or a `post` on that target is one more check, on its `when`'s line, with no
+Each answer of an HTTP call on that target is one more check, on its `when`'s line, with no
 line of its own in the claim: the status is one the document lists (the exact one, then `NXX`, then
 `default`), the headers its response marks `required` are there, the media type is one it lists, and a
 JSON body fits the schema. It fails its claim like any check, says the first three problems, and
@@ -188,7 +196,9 @@ writes `"check":"contract"` in the journal.
 - A call the document does not have stops the spec before anything runs (E016). The path is compared
   up to its `?`; a `{id}` stands for one or more characters of a segment; what a `servers` URL adds may
   be there or not. A claim that means to call outside the document (an unknown path answers 404) calls
-  through a second target with no `contract` line.
+  through a second target with no `contract` line. A `{id}` that `keep` holds is characters in a
+  segment like any other. A path that starts with a kept name (`{at}`, `{at}/items`) is known only when it
+  runs: it is held where it comes to, and if the document does not have that, the check fails in E016's words.
 - A keyword geas does not read, or a `pattern` it cannot say the same, is W015; the rest still holds.
   `format` is held for `date`, `date-time`, `uuid`, `int32` and `int64`. A `writeOnly` member that
   comes back is a violation. A body of a media type that is not JSON is not read.
@@ -196,6 +206,67 @@ writes `"check":"contract"` in the journal.
   are not seen.
 - The claims choose the calls, so an answer no claim brings about is not held: this adds to claims and
   does not stand for them.
+
+## Going on from what an answer says: `keep`
+
+A service chooses the numbers of what it makes, and a claim cannot write them. `keep` holds a value for the
+steps below it, and `{name}` uses it:
+
+```geas
+claim "a ticket can be read back, changed and taken away" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/tickets/{id}"
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  and  body json ".state" is "open"
+…
+```
+
+**What it reads.** `stdout`, `stderr`, `header "<name>"`, `body` or `body json "<path>"` of the `when` above
+it, or the answer a wait kept; `env "<name>"` reads geas's own environment, and is the one step that can come
+before a `when`. A string stays as it is, a number and `true` or `false` are written out, an array or an
+object is its JSON. `stdout`, `stderr` and `body` drop one trailing line break, and a header sent several
+times is joined with `, `.
+
+**What it cannot read** fails the claim and stops it, since the rest goes on from the value: a header or a path
+that is not there, a body that is not JSON, a `null`, an empty string. A variable that is not set or is empty
+is an error (E038), since no answer brought it about.
+
+**Where a name works.** In the strings of a call (the arguments of a `run`, a path, a body, a header's value,
+`open`, `click`, `input`, `into:`) and in the value of a check (`is`, `is not`, `contains`, `does not contain`,
+and a node's label, `containing`, `with value` and `in`). Not in a header's name, a `body json` path or a
+target's strings. It is replaced once, and any other `{…}` stays what it is, so a JSON body needs no escape.
+In a claim with a `keep`, a `{name}` no `keep` holds is W016, for a slip of the fingers. An `is` that holds a name
+compares as text, so `body json ".id" is "{id}"` fits a number as well, and `status is "{code}"` is allowed.
+
+**What E017 says.** One name kept twice in a claim; the name `port`; `keep status`, `keep exit` and `keep screen`;
+a `{name}` above its `keep`; a kept name in `matches`, `does not match` or `matching`, which are read before
+anything runs; a kept name in a call on a pixie app, which is one script before it runs.
+
+**How it goes out.** A path with a name in it has what a request line cannot hold written `%XX`, with `/`, `?`, `&`
+and `%` left as they are. A filled path that is an address on `127.0.0.1`, `localhost` or `[::1]`, with a port or
+without, goes as its path, so a whole `Location` can be the next call; another host, or a path with no `/` in
+front, is E038. A line break or a control character in a value that reaches a header is E038. A body, the
+arguments of a command and what a screen is given go as they are.
+
+**A wait.** A `keep` under a `when` that waits is part of it: the step ends on the first answer on which the
+checks hold and the `keep`s can read, and a check there can use a name kept from the same answer. `within`
+with only a `keep` under it waits for the value.
+
+**The records.** The journal, the baseline and drift write a kept value as `{name}` from that answer on, so two
+runs write the same bytes when a service numbers things differently each time. It is written so where it
+stands as a word (`/v1/orders/1` keeps its `v1`), and a number in a JSON body becomes `"{id}"` when the whole
+number is the value. So a small number can be two things: with an `id` of `1`, `{"qty":1}` is written
+`{"qty":"{id}"}`. A `content-length` counts the real body, so IDs of varying length change it: `mask` it.
+A value no `keep` holds stays what it is, so **keep or mask whatever differs from run to run, used or not**.
+Drift counts a `keep` as a check of what it reads.
+
+**What came from the environment** is written `{name}` wherever it stands, and geas shows it nowhere: not in the
+journal, the baseline, `--json`, a report, or a program's stderr that a failure quotes, even when the service
+sends it back. A failed check that uses a name otherwise says its value, in the report and in `--json`'s `values`.
 
 ## Subjects and matchers
 
@@ -363,17 +434,24 @@ tprop   := "run" STR | "serve" STR | "port" (NUM | "auto")
 pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
          | "tz" STR | "locale" STR
          | "clock" STR ["env" STR] | "seed" NUM ["env" STR]
-claim   := "claim" STR "{" step* "}"            ; first step must be `when`
+claim   := "claim" STR "{" step* "}"            ; a `when` first, or a `keep env`
 step    := "when" IDENT "." call [wait] | ("then" | "and") check
-wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run, get, post
+         | "keep" source "as" IDENT
+wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run and the HTTP calls
+source  := "stdout" | "stderr" | "header" STR | "body" | "body" "json" STR
+         | "env" STR
 call    := "run" "(" [STR ("," STR)*] ")"
-         | "get" "(" STR ")" | "post" "(" STR ["," "body" ":" STR] ")"
+         | "get" "(" STR ("," header)* ")"
+         | ("post" | "put" | "patch" | "delete") "(" STR ("," (body | header))* ")"
+                                                ; one `body` at most
          | "open" "(" [STR] ")"
          | "click" "(" STR ["," "nth" ":" NUM] ")"
          | "input" "(" STR ["," place] ")"
          | "submit" "(" [place] ")"
          | "press" "(" STR ")" | "advance" "(" NUM ")"
 place   := "field" ":" NUM | "into" ":" STR ["," "nth" ":" NUM]
+body    := "body" ":" STR
+header  := "header" STR ":" STR
 check   := subject matcher
 subject := "stdout" | "stderr" | "exit" | "status" | "header" STR
          | "body" | "body" "json" STR | "screen"

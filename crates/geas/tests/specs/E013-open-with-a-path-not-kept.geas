@@ -1,0 +1,12 @@
+target page {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a page's path starts with `/`, or with a kept value" {
+  when page.get("/")
+  keep header "location" as at
+  when page.open("{at}")
+  when page.open("{other}")
+  then screen contains text "x"
+}

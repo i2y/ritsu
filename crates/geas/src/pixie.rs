@@ -65,7 +65,7 @@ fn step(call: &Call) -> String {
         Call::Submit(place) => format!("submit{}", at(place)),
         Call::Press(k) => format!("key:{}", esc(k)),
         Call::Advance(ms) => format!("advance:{ms}"),
-        Call::Run(_) | Call::Get(_) | Call::Post { .. } => unreachable!("E006 refuses these on pixie"),
+        Call::Run(_) | Call::Http { .. } => unreachable!("E006 refuses these on pixie"),
     }
 }
 

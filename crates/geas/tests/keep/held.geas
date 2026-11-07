@@ -1,0 +1,32 @@
+# Every answer of the five calls is held to the document, a path with a kept value in it too.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+  contract "things.yaml"
+}
+
+mask header "date"
+mask header "server"
+
+claim "each call is held" {
+  when api.post("/things", body: "a chair")
+  keep body json ".id" as id
+  when api.get("/things/{id}")
+  then status is 200
+  when api.put("/things/{id}", body: "a table")
+  then status is 200
+  when api.patch("/things/{id}")
+  then status is 200
+  when api.delete("/things/{id}")
+  then status is 204
+  when api.get("/things/{id}")
+  then status is 404
+}
+
+claim "a path that starts with a value is held where it comes to" {
+  when api.post("/absolute", body: "a chair")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.get("{at}")
+  then status is 200
+}

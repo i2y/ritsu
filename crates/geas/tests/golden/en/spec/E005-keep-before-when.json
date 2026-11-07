@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E005-keep-before-when.geas","diagnostics":[{"code":"E005","severity":"error","file":"E005-keep-before-when.geas","line":7,"col":3,"message":"`keep body` comes before any `when`; a `keep` reads what the `when` before it observed, and only `keep env` can come first","notes":[],"path":[]}]}

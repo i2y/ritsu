@@ -237,7 +237,9 @@ program — a command line, an HTTP service, a page in a browser — and, given 
 claims it touches. Given an OpenSpec spec, `geas scenarios` lists the scenarios that no claim of the
 same name checks. A claim can wait for an answer that comes later, such as a job a service finishes
 after it answers, for as long as the claim says. One line on a target holds every answer of a service to
-its OpenAPI document, whatever the claims look at.
+its OpenAPI document, whatever the claims look at. A claim can call with `put`, `patch` and `delete`, send
+headers, and go on from what a service answers (`keep body json ".id" as id`, then `{id}`), and the records
+stay the same from run to run.
 
 ```geas
 # The human-auditable half. The implementation (calc.py) is agent-written;

@@ -1,0 +1,16 @@
+{"claim":"a path that is not there","event":"when","line":11,"target":"api","call":"post(\"/things\", body: \"a chair\")","obs":{"status":201,"headers":{"content-length":"75","content-type":"application/json","location":"/things/<uuid>"},"body":"{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"}}
+{"claim":"a path that is not there","event":"check","line":12,"check":"status is","expected":"201","actual":"201","ok":true}
+{"claim":"a path that is not there","event":"check","line":13,"check":"keep body json \".number\"","expected":"as id","actual":"<no key `number` in JSON object>","ok":false}
+{"claim":"a header that was not sent","event":"when","line":20,"target":"api","call":"get(\"/gaps\")","obs":{"status":200,"headers":{"content-length":"27","content-type":"application/json","x-empty":""},"body":"{\"none\": null, \"empty\": \"\"}"}}
+{"claim":"a header that was not sent","event":"check","line":21,"check":"keep header \"x-nothing\"","expected":"as a","actual":"<no header \"x-nothing\">","ok":false}
+{"claim":"a body that is not JSON","event":"when","line":26,"target":"api","call":"get(\"/plain\")","obs":{"status":200,"headers":{"content-length":"5"},"body":"plain"}}
+{"claim":"a body that is not JSON","event":"check","line":27,"check":"keep body json \".a\"","expected":"as a","actual":"<body is not JSON: unexpected character `p` in JSON>","ok":false}
+{"claim":"a null","event":"when","line":32,"target":"api","call":"get(\"/gaps\")","obs":{"status":200,"headers":{"content-length":"27","content-type":"application/json","x-empty":""},"body":"{\"none\": null, \"empty\": \"\"}"}}
+{"claim":"a null","event":"check","line":33,"check":"keep body json \".none\"","expected":"as a","actual":"null","ok":false}
+{"claim":"an empty string","event":"when","line":38,"target":"api","call":"get(\"/gaps\")","obs":{"status":200,"headers":{"content-length":"27","content-type":"application/json","x-empty":""},"body":"{\"none\": null, \"empty\": \"\"}"}}
+{"claim":"an empty string","event":"check","line":39,"check":"keep body json \".empty\"","expected":"as a","actual":"\"\"","ok":false}
+{"claim":"an empty header","event":"when","line":44,"target":"api","call":"get(\"/gaps\")","obs":{"status":200,"headers":{"content-length":"27","content-type":"application/json","x-empty":""},"body":"{\"none\": null, \"empty\": \"\"}"}}
+{"claim":"an empty header","event":"check","line":45,"check":"keep header \"x-empty\"","expected":"as a","actual":"\"\"","ok":false}
+{"claim":"the values read before it are told","event":"when","line":50,"target":"api","call":"get(\"/gaps\")","obs":{"status":200,"headers":{"content-length":"27","content-type":"application/json","x-empty":""},"body":"{\"none\": null, \"empty\": \"\"}"}}
+{"claim":"the values read before it are told","event":"check","line":51,"check":"keep body","expected":"as whole","actual":"{whole}","ok":true}
+{"claim":"the values read before it are told","event":"check","line":52,"check":"keep body json \".none\"","expected":"as a","actual":"null","ok":false}

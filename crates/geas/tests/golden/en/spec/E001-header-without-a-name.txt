@@ -1,0 +1,2 @@
+error[E001]: E001-header-without-a-name.geas:7:27: expected the header's name, in quotes, found `:`
+     7 |   when api.get("/", header: "b")

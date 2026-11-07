@@ -1,0 +1,2 @@
+ok 1 - stdout and stderr
+1 claim · 1 ok · 0 failed · journal: k/.geas/run.journal.jsonl

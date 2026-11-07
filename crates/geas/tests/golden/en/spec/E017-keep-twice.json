@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E017-keep-twice.geas","diagnostics":[{"code":"E017","severity":"error","file":"E017-keep-twice.geas","line":10,"col":27,"message":"this claim keeps `id` twice; a name holds one value","notes":["the first is on line 8"],"path":[]}]}

@@ -1,0 +1,2 @@
+エラー[E005]: E005-keep-before-when.geas:7:3: `when` より前に `keep body` があります。`keep` は直前の `when` の結果を読みます。`when` より前に書けるのは `keep env` だけです
+     7 |   keep body json ".id" as id

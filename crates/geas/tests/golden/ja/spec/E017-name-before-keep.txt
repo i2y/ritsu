@@ -1,0 +1,6 @@
+エラー[E017]: E017-name-before-keep.geas:7:25: `{id}` を持っておくのは 9 行目で、その前には使えません
+     7 |   when api.get("/orders/{id}", header "x-for": "{id}")
+エラー[E017]: E017-name-before-keep.geas:7:49: `{id}` を持っておくのは 9 行目で、その前には使えません
+     7 |   when api.get("/orders/{id}", header "x-for": "{id}")
+エラー[E017]: E017-name-before-keep.geas:8:23: `{id}` を持っておくのは 9 行目で、その前には使えません
+     8 |   then body contains "{id}"

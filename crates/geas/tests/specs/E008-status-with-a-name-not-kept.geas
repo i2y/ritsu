@@ -1,0 +1,11 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a status is a number, unless the string holds a kept value" {
+  when api.get("/")
+  keep body as whole
+  then status is "{whole}"
+  and  status is "{other}"
+}

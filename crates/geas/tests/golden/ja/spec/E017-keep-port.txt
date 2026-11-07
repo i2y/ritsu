@@ -1,0 +1,2 @@
+エラー[E017]: E017-keep-port.geas:8:29: `port` という名前では持っておけません。`{port}` は、geas がサービスに渡したポートです
+     8 |   keep body json ".port" as port

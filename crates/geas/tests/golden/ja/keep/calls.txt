@@ -1,0 +1,7 @@
+ok 1 - a get has no body, and its headers go
+ok 2 - a post has its body
+ok 3 - a put has its body and its headers
+ok 4 - a patch has its headers and its body, whichever comes first
+ok 5 - a delete can have nothing, or a body
+ok 6 - a call can wait, with its headers
+主張 6 件 · 成り立った 6 件 · 成り立たなかった 0 件 · ジャーナル: k/.geas/calls.journal.jsonl

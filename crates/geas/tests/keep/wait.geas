@@ -1,0 +1,24 @@
+# A `keep` under a `when` that waits: the call is made again until every check under it holds and
+# every `keep` under it can read its value, and the checks read what is kept above them.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "it waits for the value to come" {
+  when api.get("/later/3") within 5 seconds
+  keep body json ".result" as result
+  when api.get("/seen/{result}")
+  then body json ".path" contains "{result}"
+}
+
+claim "with a check that reads the value" {
+  when api.get("/later/2") within 5 seconds
+  then status is 200
+  keep body json ".result" as result
+  and  body contains "{result}"
+  and  body json ".state" is "done"
+}

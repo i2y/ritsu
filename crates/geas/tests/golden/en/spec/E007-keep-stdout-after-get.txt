@@ -1,0 +1,3 @@
+error[E007]: E007-keep-stdout-after-get.geas:8:3: a `get` observes status, header, body and body json, not `stdout`
+     8 |   keep stdout as printed
+  = the `when` it reads is on line 7

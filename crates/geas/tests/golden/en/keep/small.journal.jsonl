@@ -1,0 +1,30 @@
+{"claim":"a number","event":"when","line":20,"target":"api","call":"post(\"/small\")","obs":{"status":201,"headers":{"content-length":"44","content-type":"application/json","location":"/small/{id}"},"body":"{\"id\":\"{id}\",\"qty\":\"{id}\",\"note\":\"thing {id} of v1\"}"}}
+{"claim":"a number","event":"check","line":21,"check":"status is","expected":"201","actual":"201","ok":true}
+{"claim":"a number","event":"check","line":22,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"a number","event":"check","line":23,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"a number","event":"check","line":24,"check":"body json \".id\" is","expected":"1","actual":"\"{id}\"","ok":true}
+{"claim":"a number","event":"check","line":25,"check":"body json \".id\" is not","expected":"\"2\"","actual":"\"{id}\"","ok":true}
+{"claim":"a number","event":"when","line":26,"target":"api","call":"get(\"/small/{id}\")","obs":{"status":200,"headers":{"content-length":"44","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"qty\":\"{id}\",\"note\":\"thing {id} of v1\"}"}}
+{"claim":"a number","event":"check","line":27,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"a number","event":"check","line":28,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"a number","event":"check","line":29,"check":"body json \".note\" contains","expected":"\"thing {id}\"","actual":"\"thing {id} of v1\"","ok":true}
+{"claim":"a string of digits","event":"when","line":33,"target":"api","call":"post(\"/text\")","obs":{"status":201,"headers":{"content-length":"46","content-type":"application/json","location":"/small/{id}"},"body":"{\"id\":\"{id}\",\"qty\":\"{id}\",\"note\":\"thing {id} of v1\"}"}}
+{"claim":"a string of digits","event":"check","line":34,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"a string of digits","event":"check","line":35,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"a string of digits","event":"check","line":36,"check":"body json \".id\" is","expected":"\"1\"","actual":"\"{id}\"","ok":true}
+{"claim":"a string of digits","event":"when","line":37,"target":"api","call":"get(\"/small/{id}\")","obs":{"status":200,"headers":{"content-length":"46","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"qty\":\"{id}\",\"note\":\"thing {id} of v1\"}"}}
+{"claim":"a string of digits","event":"check","line":38,"check":"body json \".id\" is","expected":"\"{id}\"","actual":"\"{id}\"","ok":true}
+{"claim":"a status and an exit compared with a kept value","event":"when","line":42,"target":"mirror","call":"post(\"/plain\", body: \"200\")","obs":{"status":200,"headers":{"content-length":"3","content-type":"application/json"},"body":"\"{code}\""}}
+{"claim":"a status and an exit compared with a kept value","event":"check","line":43,"check":"keep body","expected":"as code","actual":"{code}","ok":true}
+{"claim":"a status and an exit compared with a kept value","event":"check","line":44,"check":"status is","expected":"\"{code}\"","actual":"200","ok":true}
+{"claim":"a status and an exit compared with a kept value","event":"check","line":45,"check":"status is not","expected":"\"{code}{code}\"","actual":"200","ok":true}
+{"claim":"a status and an exit compared with a kept value","event":"when","line":46,"target":"echo","call":"run(\"0\", \"\", \"0\")","obs":{"stdout":"{zero}\n","stderr":"","exit":0}}
+{"claim":"a status and an exit compared with a kept value","event":"check","line":47,"check":"keep stdout","expected":"as zero","actual":"{zero}","ok":true}
+{"claim":"a status and an exit compared with a kept value","event":"check","line":48,"check":"exit is","expected":"\"{zero}\"","actual":"0","ok":true}
+{"claim":"a path kept from a member","event":"when","line":52,"target":"api","call":"post(\"/small\")","obs":{"status":201,"headers":{"content-length":"44","content-type":"application/json","location":"/small/1"},"body":"{\"id\": 1, \"qty\": 1, \"note\": \"thing 1 of v1\"}"}}
+{"claim":"a path kept from a member","event":"check","line":53,"check":"status is","expected":"201","actual":"201","ok":true}
+{"claim":"a path kept from a member","event":"when","line":54,"target":"api","call":"get(\"/seen/201\")","obs":{"status":200,"headers":{"content-length":"21","content-type":"application/json"},"body":"{\"path\":\"{path}\"}"}}
+{"claim":"a path kept from a member","event":"check","line":55,"check":"keep body json \".path\"","expected":"as path","actual":"{path}","ok":true}
+{"claim":"a path kept from a member","event":"check","line":56,"check":"body json \".path\" is","expected":"\"{path}\"","actual":"\"{path}\"","ok":true}
+{"claim":"a path kept from a member","event":"when","line":57,"target":"api","call":"get(\"{path}\")","obs":{"status":200,"headers":{"content-length":"21","content-type":"application/json"},"body":"{\"path\":\"{path}\"}"}}
+{"claim":"a path kept from a member","event":"check","line":58,"check":"status is","expected":"200","actual":"200","ok":true}

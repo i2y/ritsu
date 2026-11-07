@@ -1,0 +1,9 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "a command has no body" {
+  when calc.run("1")
+  keep body as whole
+  then exit is 0
+}

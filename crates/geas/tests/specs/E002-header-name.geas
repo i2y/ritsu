@@ -1,0 +1,11 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "what cannot be a header's name" {
+  when api.get("/", header "x y": "1")
+  when api.post("/", header "": "1")
+  when api.put("/", header "{name}": "1")
+  then status is 200
+}

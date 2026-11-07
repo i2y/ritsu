@@ -1,0 +1,45 @@
+# 小さなチケットのサービスの主張（tickets.geas の日本語版）。チケットの番号はサービスが決め、呼び出しにはトークンが要る。
+# `keep` は値を下の手順のために持っておく。トークンは geas 自身の環境から読み、どこにも出さない。サービスが決めた番号は
+# 実行ごとに変わるので、ジャーナルとベースラインでは {token} と {id} と書き、二度走らせても同じバイトになる。
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+
+mask header "date"
+mask header "server"
+
+claim "チケットは読み返せて、変えられて、消せる" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/tickets/{id}"
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  and  body json ".state" is "open"
+  when api.put("/tickets/{id}", body: "{\"title\":\"大きなプリンター\",\"state\":\"open\"}", header "authorization": "Bearer {token}")
+  then body json ".title" is "大きなプリンター"
+  when api.patch("/tickets/{id}", body: "{\"state\":\"closed\"}", header "authorization": "Bearer {token}")
+  then body json ".state" is "closed"
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 404
+}
+
+claim "新しいチケットのアドレスをたどれる" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"ドア\"}", header "authorization": "Bearer {token}")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.get("{at}", header "authorization": "Bearer {token}")
+  then body json ".title" is "ドア"
+}
+
+claim "トークンのない呼び出しは 401 になる" {
+  when api.post("/tickets", body: "{\"title\":\"ドア\"}")
+  then status is 401
+}

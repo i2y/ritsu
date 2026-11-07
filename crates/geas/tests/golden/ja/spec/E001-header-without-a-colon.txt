@@ -1,0 +1,2 @@
+エラー[E001]: E001-header-without-a-colon.geas:7:34: `:` を書くところに `"b"` があります
+     7 |   when api.get("/", header "x-a" "b")

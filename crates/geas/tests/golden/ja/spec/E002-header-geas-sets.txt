@@ -1,0 +1,8 @@
+エラー[E002]: E002-header-geas-sets.geas:7:28: ヘッダー `Host` は geas が決めます。geas は自分で起動したサービスだけを呼ぶので、`Host: 127.0.0.1` を送ります
+     7 |   when api.get("/", header "Host": "example.com")
+エラー[E002]: E002-header-geas-sets.geas:8:29: ヘッダー `connection` は geas が決めます。geas はリクエストごとに接続を作り直すので、`Connection: close` を送ります
+     8 |   when api.post("/", header "connection": "keep-alive")
+エラー[E002]: E002-header-geas-sets.geas:9:28: ヘッダー `Content-Length` は geas が決めます。geas が本文の長さを数えて送ります
+     9 |   when api.put("/", header "Content-Length": "1")
+エラー[E002]: E002-header-geas-sets.geas:10:30: ヘッダー `TRANSFER-ENCODING` は geas が決めます。geas は本文を長さをつけて一度に送ります
+    10 |   when api.patch("/", header "TRANSFER-ENCODING": "chunked")

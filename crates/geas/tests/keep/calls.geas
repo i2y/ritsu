@@ -1,0 +1,57 @@
+# Each of the five calls reaches the service, with its body and its headers in the order they are
+# written, and the names as they are written.
+target api {
+  serve "python3 mirror.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "a get has no body, and its headers go" {
+  when api.get("/a?b=c", header "X-One": "1", header "x-two": "two words", header "X-One": "3")
+  then status is 200
+  and  body json ".method" is "GET"
+  and  body json ".path" is "/a?b=c"
+  and  body json ".body" is ""
+  and  body json ".headers[0][0]" is "X-One"
+  and  body json ".headers[0][1]" is "1"
+  and  body json ".headers[1][0]" is "x-two"
+  and  body json ".headers[1][1]" is "two words"
+  and  body json ".headers[2][0]" is "X-One"
+  and  body json ".headers[2][1]" is "3"
+}
+
+claim "a post has its body" {
+  when api.post("/a", body: "made")
+  then body json ".method" is "POST"
+  and  body json ".body" is "made"
+  and  body json ".headers[0]" does not exist
+}
+
+claim "a put has its body and its headers" {
+  when api.put("/a", body: "whole", header "content-type": "text/plain")
+  then body json ".method" is "PUT"
+  and  body json ".body" is "whole"
+  and  body json ".headers[0][1]" is "text/plain"
+}
+
+claim "a patch has its headers and its body, whichever comes first" {
+  when api.patch("/a", header "x-part": "yes", body: "part")
+  then body json ".method" is "PATCH"
+  and  body json ".body" is "part"
+  and  body json ".headers[0][1]" is "yes"
+}
+
+claim "a delete can have nothing, or a body" {
+  when api.delete("/a")
+  then body json ".method" is "DELETE"
+  and  body json ".body" is ""
+  when api.delete("/a", body: "why")
+  then body json ".body" is "why"
+}
+
+claim "a call can wait, with its headers" {
+  when api.put("/a", header "x-part": "yes") within 2 seconds
+  then body json ".method" is "PUT"
+}

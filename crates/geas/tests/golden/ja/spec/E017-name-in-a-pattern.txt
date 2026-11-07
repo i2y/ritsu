@@ -1,0 +1,12 @@
+エラー[E017]: E017-name-in-a-pattern.geas:9:33: パターンは走らせる前に確かめるので、走らせて分かる `{id}` は使えません
+     9 |   then body json ".id" matches "{id}"
+  = `is` か `contains` で比べてください
+エラー[E017]: E017-name-in-a-pattern.geas:10:41: パターンは走らせる前に確かめるので、走らせて分かる `{id}` は使えません
+    10 |   and  body json ".id" does not match "x{id}y"
+  = `is` か `contains` で比べてください
+エラー[E009]: E017-name-in-a-pattern.geas:16:34: パターンとして読めません: `{` は `{2}`、`{2,}`、`{2,5}` のような回数を書き始める記号です。中かっこそのものは `\{` と書いてください
+    16 |   then body json ".id" matches "x{later}"
+  = パターンに書けるのは、文字そのもの、`.`、`[a-z]` や `[^0-9]` のような文字クラス、`\d`・`\w`・`\s` とその大文字、グループ、`|`、`*`・`+`・`?`、`{n}`・`{n,}`・`{n,m}` で、値の全体と照らし合わせます
+エラー[E017]: E017-name-in-a-pattern.geas:16:34: パターンは走らせる前に確かめるので、走らせて分かる `{later}` は使えません
+    16 |   then body json ".id" matches "x{later}"
+  = `is` か `contains` で比べてください

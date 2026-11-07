@@ -1,6 +1,6 @@
 # The examples
 
-The geas repository has nine examples under `examples/`, each a claims file beside a small program,
+The geas repository has ten examples under `examples/`, each a claims file beside a small program,
 with a README that says what it shows and how to run it. The programs were written the way an agent
 writes them; the claims are what a person reads.
 
@@ -14,6 +14,7 @@ writes them; the claims are what a person reads.
 | `web-greeter` | a page and its service in Python | a page in Chrome: typing, clicking, Enter, the screen's nodes, `into:`, states, `matching`, and claims on the same service's API; all four pins (`locale`, `tz`, `clock`, `seed`), since the page writes the date, greets by the time of day and draws a fortune at random |
 | `jobs` | an HTTP service in Python whose jobs finish after it answers | a claim that posts a job and waits for its result with `within 3 seconds`, on the read, not the post |
 | `orders` | an HTTP service in Python with an OpenAPI document | a `contract` line that holds every answer to the document, with the change that breaks it and no claim's check |
+| `tickets` | an HTTP service in Python that numbers what it makes and wants a token | `put`, `patch`, `delete`, headers, and `keep` of the number and of the token from the environment, with records that stay the same from run to run; `tickets.ja.geas` is the same claims, named in Japanese |
 | `pixie-greeter` | pixie's greeter, a desktop app | a pixie target driven headless: `open()`, `input`, `click`, `submit()`, `field: 2`; the app is built with pixie and put beside the claims file |
 
 For each example but `pixie-greeter`, `tests/changes/<example>/` in the repository holds an
@@ -23,7 +24,8 @@ before and after the change and `affected` on both diffs. The change to `web-gre
 Greet button into a `<div>` with a click handler, which the screen shows as text and the claims
 refuse. The change to `jobs` calls a finished job `"finished"` instead of `"done"`, and the claim
 that waits runs out of time. The change to `orders` makes the total a string and renames `placed`:
-every check the claims write still holds, and the `contract` line fails them.
+every check the claims write still holds, and the `contract` line fails them. The change to `tickets`
+renames `id` to `ticketId`, and the claims stop at the `keep` that had nothing to read.
 
 ## Running them
 
@@ -36,12 +38,17 @@ $ geas check examples/web-greeter/web-greeter.geas
 $ geas check examples/jobs/jobs.geas
 ```
 
+`tickets` needs its token: `export TICKETS_TOKEN=<anything>` first. The service asks for the same value.
+
 `tally-go` and `tally-rust` are built first (their READMEs give the commands), and `pixie-greeter`
 needs the app built with pixie. A claims file's commands run in its own directory, so each example
 runs from anywhere.
 
 ## Patterns worth copying
 
+- **A claim goes on from what the service chose.** `tickets` holds the number a `post` answers with
+  `keep body json ".id" as id`, and `{id}` is every path after it. It holds the token with `keep env`, so no
+  file has it. Its journal and its baseline write `{id}` and `{token}`, and drift on new numbers is quiet.
 - **A claim builds its own state.** `greeter`'s "totals accumulate across requests" resets, adds 5
   and 7, and reads 12, all in one claim; no claim depends on another having run.
 - **Volatile fields are masked, by name.** `mask header "date"` in the greeter: drift on unchanged

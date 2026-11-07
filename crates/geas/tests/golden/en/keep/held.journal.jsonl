@@ -1,0 +1,25 @@
+{"claim":"each call is held","event":"when","line":12,"target":"api","call":"post(\"/things\", body: \"a chair\")","obs":{"status":201,"headers":{"content-length":"75","content-type":"application/json","location":"/things/{id}"},"body":"{\"id\":\"{id}\",\"name\":\"a chair\",\"qty\":1}"}}
+{"claim":"each call is held","event":"check","line":12,"check":"contract","expected":"POST /things","actual":"201","ok":true}
+{"claim":"each call is held","event":"check","line":13,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"each call is held","event":"when","line":14,"target":"api","call":"get(\"/things/{id}\")","obs":{"status":200,"headers":{"content-length":"75","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a chair\",\"qty\":1}"}}
+{"claim":"each call is held","event":"check","line":14,"check":"contract","expected":"GET /things/{id}","actual":"200","ok":true}
+{"claim":"each call is held","event":"check","line":15,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"each call is held","event":"when","line":16,"target":"api","call":"put(\"/things/{id}\", body: \"a table\")","obs":{"status":200,"headers":{"content-length":"75","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a table\",\"qty\":1}"}}
+{"claim":"each call is held","event":"check","line":16,"check":"contract","expected":"PUT /things/{id}","actual":"200","ok":true}
+{"claim":"each call is held","event":"check","line":17,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"each call is held","event":"when","line":18,"target":"api","call":"patch(\"/things/{id}\")","obs":{"status":200,"headers":{"content-length":"92","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a table\",\"qty\":1,\"patched\":true}"}}
+{"claim":"each call is held","event":"check","line":18,"check":"contract","expected":"PATCH /things/{id}","actual":"200","ok":true}
+{"claim":"each call is held","event":"check","line":19,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"each call is held","event":"when","line":20,"target":"api","call":"delete(\"/things/{id}\")","obs":{"status":204,"headers":{"content-length":"0"},"body":""}}
+{"claim":"each call is held","event":"check","line":20,"check":"contract","expected":"DELETE /things/{id}","actual":"204","ok":true}
+{"claim":"each call is held","event":"check","line":21,"check":"status is","expected":"204","actual":"204","ok":true}
+{"claim":"each call is held","event":"when","line":22,"target":"api","call":"get(\"/things/{id}\")","obs":{"status":404,"headers":{"content-length":"26","content-type":"application/json"},"body":"{\"error\": \"no such thing\"}"}}
+{"claim":"each call is held","event":"check","line":22,"check":"contract","expected":"GET /things/{id}","actual":"404","ok":true}
+{"claim":"each call is held","event":"check","line":23,"check":"status is","expected":"404","actual":"404","ok":true}
+{"claim":"a path that starts with a value is held where it comes to","event":"when","line":27,"target":"api","call":"post(\"/absolute\", body: \"a chair\")","obs":{"status":201,"headers":{"content-length":"153","content-type":"application/json","location":"{at}"},"body":"{\"id\":\"{id}\",\"name\":\"a chair\",\"qty\":1,\"self\":\"{at}\"}"}}
+{"claim":"a path that starts with a value is held where it comes to","event":"check","line":27,"check":"contract","expected":"POST /absolute","actual":"201","ok":true}
+{"claim":"a path that starts with a value is held where it comes to","event":"check","line":28,"check":"keep header \"location\"","expected":"as at","actual":"{at}","ok":true}
+{"claim":"a path that starts with a value is held where it comes to","event":"check","line":29,"check":"keep body json \".id\"","expected":"as id","actual":"{id}","ok":true}
+{"claim":"a path that starts with a value is held where it comes to","event":"when","line":30,"target":"api","call":"get(\"{at}\")","obs":{"status":200,"headers":{"content-length":"75","content-type":"application/json"},"body":"{\"id\":\"{id}\",\"name\":\"a chair\",\"qty\":1}"}}
+{"claim":"a path that starts with a value is held where it comes to","event":"check","line":30,"check":"contract","expected":"GET /things/{id}","actual":"200","ok":true}
+{"claim":"a path that starts with a value is held where it comes to","event":"check","line":31,"check":"status is","expected":"200","actual":"200","ok":true}

@@ -28,6 +28,20 @@ fn run_logged(s: &Scratch, args: &[&str]) -> (String, String, i32) {
     r
 }
 
+/// A value kept from a command goes to the driver as it is, and the journal writes it as its name.
+#[test]
+fn a_kept_value_goes_to_a_driver() {
+    if !python3("the fake driver") {
+        return;
+    }
+    let s = with_driver("gui-kept", "kept.geas");
+    let (out, err, code) = run_logged(&s, &["check", "g/kept.geas"]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    let journal = s.read("g/.geas/kept.journal.jsonl");
+    assert!(journal.contains("Hello, {name}!") && !journal.contains("Hello, Ada!"), "{journal}");
+    assert!(journal.contains(r#""value":"{name}""#) && journal.contains(r#""call":"input(\"{name}\")""#), "{journal}");
+}
+
 #[test]
 fn screen_checks_hold_and_fail_with_the_screen_in_the_report() {
     if !python3("the fake driver") {

@@ -1,0 +1,2 @@
+error[E017]: E017-keep-status.geas:8:8: `keep` does not read `status`: it is a number the spec writes as it is, and nothing differs from run to run; compare it with `is`
+     8 |   keep status as code

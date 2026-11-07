@@ -1,0 +1,9 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a header's value follows a colon" {
+  when api.get("/", header "x-a" "b")
+  then status is 200
+}

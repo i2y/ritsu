@@ -1,0 +1,53 @@
+# What a `keep` cannot read fails its claim, which stops there: what is left goes on from that value.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "a path that is not there" {
+  when api.post("/things", body: "a chair")
+  then status is 201
+  keep body json ".number" as id
+  then status is 500
+  when api.get("/things/{id}")
+  then status is 200
+}
+
+claim "a header that was not sent" {
+  when api.get("/gaps")
+  keep header "x-nothing" as a
+  when api.get("/seen/{a}")
+}
+
+claim "a body that is not JSON" {
+  when api.get("/plain")
+  keep body json ".a" as a
+  when api.get("/seen/{a}")
+}
+
+claim "a null" {
+  when api.get("/gaps")
+  keep body json ".none" as a
+  when api.get("/seen/{a}")
+}
+
+claim "an empty string" {
+  when api.get("/gaps")
+  keep body json ".empty" as a
+  when api.get("/seen/{a}")
+}
+
+claim "an empty header" {
+  when api.get("/gaps")
+  keep header "x-empty" as a
+  when api.get("/seen/{a}")
+}
+
+claim "the values read before it are told" {
+  when api.get("/gaps")
+  keep body as whole
+  keep body json ".none" as a
+}

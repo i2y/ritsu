@@ -1,0 +1,5 @@
+エラー[E013]: E013-open-with-a-path-not-kept.geas:10:18: ページのパスは、`/` から始めてください（`open("/{other}")`）
+    10 |   when page.open("{other}")
+警告[W016]: E013-open-with-a-path-not-kept.geas:10:19: `{other}` はこの主張が持っている名前ではないので、書いたままになります
+    10 |   when page.open("{other}")
+  = この主張が持っている名前: at

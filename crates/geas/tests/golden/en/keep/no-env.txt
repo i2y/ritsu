@@ -1,0 +1,22 @@
+not ok 1 - the variable is not set (error)
+    error[E038]: k/no-env.geas:8:3: `keep` cannot read the environment variable `GEAS_TEST_NOT_SET`: it is not set
+         8 |   keep env "GEAS_TEST_NOT_SET" as key
+      = set it where geas runs
+      the run that gets there:
+           8  keep env "GEAS_TEST_NOT_SET" as key
+not ok 2 - under a when (error)
+    error[E038]: k/no-env.geas:16:3: `keep` cannot read the environment variable `GEAS_TEST_NOT_SET`: it is not set
+        16 |   keep env "GEAS_TEST_NOT_SET" as key
+      = set it where geas runs
+      the run that gets there:
+          14  when api.get("/a")  →  200, body "{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"
+          16  keep env "GEAS_TEST_NOT_SET" as key
+not ok 3 - while waiting (error)
+    error[E038]: k/no-env.geas:23:3: `keep` cannot read the environment variable `GEAS_TEST_NOT_SET`: it is not set
+        23 |   keep env "GEAS_TEST_NOT_SET" as key
+      = set it where geas runs
+      the run that gets there:
+          21  when api.get("/a") within 30 seconds  →  200, body "{\"method\": \"GET\", \"path\": \"/a\", \"headers\": [], \"body\": \"\"}"
+          23  keep env "GEAS_TEST_NOT_SET" as key
+ok 4 - another claim goes on
+4 claims · 1 ok · 3 failed · journal: k/.geas/no-env.journal.jsonl

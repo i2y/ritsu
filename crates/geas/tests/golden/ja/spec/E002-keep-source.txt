@@ -1,0 +1,2 @@
+エラー[E002]: E002-keep-source.geas:8:8: `keep` は `answer` を読めません。読めるのは stdout、stderr、header、body、body json、env です
+     8 |   keep answer as whole

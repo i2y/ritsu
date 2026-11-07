@@ -1,0 +1,8 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "a command has no headers" {
+  when calc.run("1", header "x-a": "b")
+  then exit is 0
+}

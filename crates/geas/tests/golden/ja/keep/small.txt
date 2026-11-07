@@ -1,0 +1,5 @@
+ok 1 - a number
+ok 2 - a string of digits
+ok 3 - a status and an exit compared with a kept value
+ok 4 - a path kept from a member
+主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: k/.geas/small.journal.jsonl

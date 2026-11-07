@@ -1,0 +1,2 @@
+エラー[E001]: E001-header-without-a-name.geas:7:27: `"` で囲んだヘッダーの名前を書くところに `:` があります
+     7 |   when api.get("/", header: "b")

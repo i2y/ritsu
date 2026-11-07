@@ -1,0 +1,18 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a pattern is read before anything runs" {
+  when api.post("/a")
+  keep body json ".id" as id
+  then body json ".id" matches "{id}"
+  and  body json ".id" does not match "x{id}y"
+  and  body json ".id" matches "\d+"
+}
+
+claim "and a name it keeps later" {
+  when api.post("/a")
+  then body json ".id" matches "x{later}"
+  keep body as later
+}

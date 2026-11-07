@@ -2330,6 +2330,22 @@ rulec の主張には穴が二つあった。`never`・`once`・`always` は悪�
 
 作っていないもの：`ritsu check` と一緒に走らせること（DESIGN 8.9）、dandori と kaname の `possible`、変更の絞り込みとスレッド数のフラグ。
 
+### 7.100 geas の `put`・`patch`・`delete`、リクエストのヘッダー、手順のあいだの値の受け渡し（2026-11-07）
+
+仕様から主張を書く手順（7.97）を測ったときに見つかった三つを作った（geas の DESIGN 22 章）。geas は `PUT`・`PATCH`・`DELETE` を呼べず、ヘッダーを送れず（返金の見本は geas のためだけにトークンをクエリでも受け取っていた）、サービスが決めた ID を次の手順で使えなかった。
+
+- **呼び出し**：`Call::Get` と `Call::Post` を `Call::Http { method, path, body, headers }` にまとめた。`display()` は `get("/x")`、`post("/x", body: "b")` を前とバイトまで同じに書き、ヘッダーはその後ろに書く。五つとも `within` で待て、契約と突き合わせる。
+- **ヘッダー**：`header "authorization": "Bearer t"`。token でない名前、改行や制御文字のある値、`host`・`connection`・`content-length`・`transfer-encoding` は E002。ターゲットの既定のヘッダーは作らない。
+- **`keep`**：`keep <読むもの> as <名前>`。読むのは `stdout`・`stderr`・`header`・`body`・`body json`・`env`。読めなければ主張の失敗で、そこで止める。`env` の変数が無ければ E038。`{name}` は、それより前の `keep` が持つ名前のときだけ値になり、ほかの `{…}` は文字のまま。JSON の本文に手を入れずに済み、今のファイルの意味は変わらない。
+- **記録**：ジャーナル、ベースライン、ドリフトでは値を `{name}` と書く（port → mask → keep の順）。語として立っているところだけを書き換え、JSON は parse して、数は全体が同じときに `"{id}"` にする。実行ごとに違う ID でも同じバイトになる。環境から読んだ値は語の境目を問わず書き換え、報告にも `--json` にもどこにも出さない。
+- **コード**：E017（`keep` の書き方）、E038（使えない値）、W016（持っていない `{name}`）。診断のコードは 43 種類になった。
+
+三つのコードは geas の台帳（`crates/geas/src/codes.rs`）にある。`crates/ritsu-cross/src/codes.rs` は ritsu 自身のコードの台帳で、言語のコードを持たない。
+
+小さい数が別の値と同じになること（`{"qty":1}` が `{"qty":"{id}"}` になる）、`content-length` が本文の長さを数えること、`keep` していない値はそのまま残ることは、限界として DESIGN に書いた。
+
+確かめたこと：`crates/geas/tests/keep.rs`（五つの呼び出し、uuid の ID で二回の実行と `-j1`・`-j4` が同じバイト、snap のあとのドリフト、小さい数、読めないときの失敗、`within`、`keep env` の値がどこにも出ないこと、値のエスケープ、Location の絶対 URL、契約、W016、W901）、`tests/spec.rs`（書けないものを英日と `--json` で）、`tests/explain.rs`（E017、E038、W016 の再現）、`tests/browser.rs` と `tests/gui.rs`（画面）、`tests/readme.rs`（`examples/tickets`）、`src/model.rs` のユニットテスト（古い `display()` のバイト）。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。

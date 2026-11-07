@@ -1,0 +1,12 @@
+target app {
+  pixie "./app"
+}
+
+claim "a pixie app's calls are one script before they run" {
+  keep env "APP_NAME" as name
+  when app.open()
+  then screen contains heading "{name}"
+  when app.input("{name}")
+  when app.click("{name}")
+  then screen contains text "{name}"
+}

@@ -1,0 +1,3 @@
+ok 1 - each call is held
+ok 2 - a path that starts with a value is held where it comes to
+主張 2 件 · 成り立った 2 件 · 成り立たなかった 0 件 · ジャーナル: k/.geas/held.journal.jsonl

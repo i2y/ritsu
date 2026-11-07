@@ -1,0 +1,2 @@
+error[E002]: E002-header-on-run.geas:6:22: `run` takes no argument named `header`; its arguments are strings
+     6 |   when calc.run("1", header "x-a": "b")

@@ -1,4 +1,4 @@
-//! The claims file into the model, with the checks that need no run (E001-E014).
+//! The claims file into the model, with the checks that need no run (E001-E014, E017).
 //!
 //! The first E001 stops the parse: what follows a token the grammar does not allow
 //! cannot be read reliably. Every other problem is collected, the parser skipping
@@ -61,6 +61,25 @@ enum RawStep {
     },
     /// `check` is None when its subject or its matcher is unknown.
     Then { check: Option<Check> },
+    /// `keep` is None when E002 or E017 refused what it reads.
+    Keep { keep: Option<Keep> },
+}
+
+/// Where a `{name}` is written in a claim, and what the string is.
+#[derive(Clone, Copy, PartialEq)]
+enum UseKind {
+    /// A string of a call: the place of its `when`.
+    Call(Pos),
+    /// A value a check compares with.
+    Check,
+    /// A pattern, which is read before anything runs.
+    Pattern,
+}
+
+struct Use {
+    name: String,
+    pos: Pos,
+    kind: UseKind,
 }
 
 struct RawClaim {
@@ -68,6 +87,10 @@ struct RawClaim {
     name_pos: Pos,
     pos: Pos,
     steps: Vec<RawStep>,
+    /// Every `{name}` in what can hold one, in the order written.
+    uses: Vec<Use>,
+    /// The names it keeps, each once, and where.
+    kept: Vec<(String, Pos)>,
 }
 
 struct RawSpec {
@@ -86,7 +109,27 @@ const GUI_CALLS: &[&str] = &["open", "click", "input", "submit", "press", "advan
 
 /// The words that start what can follow a check: the next step, or what the top
 /// level holds. A node pattern ends before them.
-const NEXT_WORDS: &[&str] = &["when", "then", "and", "target", "claim", "mask", "env", "tz", "locale", "clock", "seed"];
+const NEXT_WORDS: &[&str] = &["when", "then", "and", "keep", "target", "claim", "mask", "env", "tz", "locale", "clock", "seed"];
+
+/// The list of calls, as messages give it.
+const CALLS_EN: &str = "run, get, post, put, patch, delete, open, click, input, submit, press and advance";
+const CALLS_JA: &str = "run、get、post、put、patch、delete、open、click、input、submit、press、advance";
+
+/// The headers geas sets itself, in small letters, and why a spec cannot (DESIGN §22).
+fn header_geas_sets(name: &str) -> Option<Text> {
+    match name.to_ascii_lowercase().as_str() {
+        "host" => Some(tr!("geas は自分で起動したサービスだけを呼ぶので、`Host: 127.0.0.1` を送ります", "geas only calls the service it started, and sends `Host: 127.0.0.1`")),
+        "connection" => Some(tr!("geas はリクエストごとに接続を作り直すので、`Connection: close` を送ります", "geas makes one request on each connection, and sends `Connection: close`")),
+        "content-length" => Some(tr!("geas が本文の長さを数えて送ります", "geas counts the body and sends its length")),
+        "transfer-encoding" => Some(tr!("geas は本文を長さをつけて一度に送ります", "geas sends the body whole, with its length")),
+        _ => None,
+    }
+}
+
+/// Whether a header can have this name: an HTTP token (RFC 9110 §5.6.2).
+fn is_token(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
+}
 
 /// Units of time a wait is not counted in, for the note E001 gives after `within <n>`.
 const OTHER_UNITS: &[&str] = &["ms", "millisecond", "milliseconds", "s", "sec", "secs", "min", "mins", "minute", "minutes", "hour", "hours"];
@@ -105,9 +148,11 @@ struct Stop;
 /// Where a GUI call's arguments are written, by name.
 type ArgsAt = Vec<(&'static str, Pos)>;
 
-/// One argument of a call: `"5"`, or `body: "5"`.
+/// One argument of a call: `"5"`, `body: "5"`, or `header "a": "5"`, whose word is its `name` and
+/// whose name is its `header`.
 struct Arg {
     name: Option<Tok>,
+    header: Option<Tok>,
     value: Tok,
 }
 
@@ -129,6 +174,12 @@ struct P {
     toks: Vec<Tok>,
     pos: usize,
     diags: Vec<Diag>,
+    /// In a claim, what it has kept so far and every `{name}` it has written so far.
+    in_claim: bool,
+    kept: Vec<(String, Pos)>,
+    uses: Vec<Use>,
+    /// Where the `when` being read is written.
+    when_at: Pos,
 }
 
 impl P {
@@ -498,6 +549,7 @@ impl P {
         self.expect(Kind::LBrace, "`{`", "`{`")?;
         let mut steps = Vec::new();
         let mut seen_when = false;
+        self.in_claim = true;
         loop {
             let tk = self.next();
             match tk.kind {
@@ -523,8 +575,12 @@ impl P {
                     let check = self.check()?;
                     steps.push(RawStep::Then { check });
                 }
+                Kind::Ident if tk.text == "keep" => {
+                    let s = self.keep(&tk, seen_when)?;
+                    steps.push(s);
+                }
                 _ => {
-                    let stop = self.expected(&tk, "`when`, `then`, `and` or `}`", "`when`、`then`、`and`、`}` のどれか");
+                    let stop = self.expected(&tk, "`when`, `then`, `and`, `keep` or `}`", "`when`、`then`、`and`、`keep`、`}` のどれか");
                     if tk.kind == Kind::Ident && tk.text == "within" {
                         self.note_last(within_goes_after_a_call());
                     }
@@ -543,17 +599,160 @@ impl P {
                     name.text,
                 ),
             ));
+        } else if steps.iter().all(|s| matches!(s, RawStep::Keep { keep: Some(Keep { from: KeepFrom::Env(_), .. }) })) {
+            self.diags.push(diag::error(
+                "E005",
+                kw.line,
+                kw.col,
+                tr!(
+                    "主張 \"{}\" に `when` がありません。`keep env` で読むだけでは、確かめることがありません",
+                    "the claim \"{}\" has no `when`; `keep env` alone leaves nothing to check",
+                    name.text,
+                ),
+            ));
         }
-        Ok(RawClaim { name: name.text.clone(), name_pos: at(&name), pos: at(&kw), steps })
+        self.in_claim = false;
+        let (uses, kept) = (std::mem::take(&mut self.uses), std::mem::take(&mut self.kept));
+        Ok(RawClaim { name: name.text.clone(), name_pos: at(&name), pos: at(&kw), steps, uses, kept })
+    }
+
+    /// `keep <source> as <name>` (DESIGN §22). Only `keep env` can come before the first `when`.
+    fn keep(&mut self, kw: &Tok, seen_when: bool) -> Result<RawStep, Stop> {
+        let src = self.expect(
+            Kind::Ident,
+            "what to keep (stdout, stderr, header, body, body json or env)",
+            "持っておくもの（stdout、stderr、header、body、body json、env）",
+        )?;
+        let from = match src.text.as_str() {
+            "stdout" => Some(KeepFrom::Answer(Subject::Stdout)),
+            "stderr" => Some(KeepFrom::Answer(Subject::Stderr)),
+            "header" => {
+                let h = self.expect(Kind::Str, "the header's name, in quotes", "`\"` で囲んだヘッダーの名前")?;
+                Some(KeepFrom::Answer(Subject::Header(h.text.to_lowercase())))
+            }
+            "body" => {
+                if self.peek().kind == Kind::Ident && self.peek().text == "json" {
+                    self.next();
+                    let p = self.expect(Kind::Str, "a JSON path, in quotes", "`\"` で囲んだ JSON のパス")?;
+                    self.json_path(&p);
+                    Some(KeepFrom::Answer(Subject::BodyJson(p.text)))
+                } else {
+                    Some(KeepFrom::Answer(Subject::Body))
+                }
+            }
+            "env" => {
+                let v = self.expect(Kind::Str, "the environment variable's name, in quotes", "`\"` で囲んだ環境変数の名前")?;
+                Some(KeepFrom::Env(v.text))
+            }
+            word @ ("status" | "exit" | "screen") => {
+                let (why_en, why_ja) = if word == "screen" {
+                    ("a screen is a tree of nodes and not one value; keep a value from a service's answer, or compare the screen with `contains`", "画面はノードの木で、一つの値ではありません。サービスの結果から値を持っておくか、画面は `contains` で比べてください")
+                } else {
+                    ("it is a number the spec writes as it is, and nothing differs from run to run; compare it with `is`", "数は仕様にそのまま書けて、実行ごとに変わるものでもありません。`is` で比べてください")
+                };
+                self.diags.push(diag::error(
+                    "E017",
+                    src.line,
+                    src.col,
+                    tr!(
+                        "`keep` は `{word}` を読めません。{why_ja}",
+                        "`keep` does not read `{word}`: {why_en}",
+                    ),
+                ));
+                None
+            }
+            other => {
+                self.e002(
+                    &src,
+                    format!("`keep` cannot read `{other}`; it reads stdout, stderr, header, body, body json or env"),
+                    format!("`keep` は `{other}` を読めません。読めるのは stdout、stderr、header、body、body json、env です"),
+                );
+                self.skip_line(src.line);
+                return Ok(RawStep::Keep { keep: None });
+            }
+        };
+        if !seen_when && !matches!(from, Some(KeepFrom::Env(_))) {
+            self.diags.push(diag::error(
+                "E005",
+                kw.line,
+                kw.col,
+                tr!(
+                    "`when` より前に `keep {}` があります。`keep` は直前の `when` の結果を読みます。`when` より前に書けるのは `keep env` だけです",
+                    "`keep {}` comes before any `when`; a `keep` reads what the `when` before it observed, and only `keep env` can come first",
+                    src.text,
+                ),
+            ));
+        }
+        let word = self.next();
+        if !(word.kind == Kind::Ident && word.text == "as") {
+            return Err(self.expected(&word, "`as` and a name", "`as` と名前"));
+        }
+        let name = self.expect(Kind::Ident, "the name to keep it as", "値につける名前")?;
+        if name.text == "port" {
+            self.diags.push(diag::error(
+                "E017",
+                name.line,
+                name.col,
+                tr!(
+                    "`port` という名前では持っておけません。`{{port}}` は、geas がサービスに渡したポートです",
+                    "`port` cannot be kept: `{{port}}` is the port geas gives a service",
+                ),
+            ));
+        } else if let Some((_, first)) = self.kept.iter().find(|(n, _)| *n == name.text) {
+            let first_line = first.line;
+            self.diags.push(
+                diag::error(
+                    "E017",
+                    name.line,
+                    name.col,
+                    tr!(
+                        "この主張で `{}` を二度持っておこうとしています。値は一度だけ持てます",
+                        "this claim keeps `{}` twice; a name holds one value",
+                        name.text,
+                    ),
+                )
+                .note(first_on(first_line)),
+            );
+        } else {
+            self.kept.push((name.text.clone(), at(kw)));
+        }
+        Ok(RawStep::Keep { keep: from.map(|from| Keep { from, name: name.text, pos: at(kw) }) })
+    }
+
+    /// Notes each `{name}` in a string of a claim.
+    fn note_uses(&mut self, tok: &Tok, kind: UseKind) {
+        if !self.in_claim || tok.kind != Kind::Str {
+            return;
+        }
+        for (i, name) in crate::keep::names_in(&tok.text) {
+            let col = tok.cols.get(i).copied().unwrap_or(tok.col);
+            self.uses.push(Use { name: name.to_string(), pos: Pos { line: tok.line, col }, kind });
+        }
+    }
+
+    /// Whether a string has a name the claim has kept so far.
+    fn has_kept(&self, s: &str) -> bool {
+        crate::keep::names_in(s).iter().any(|(_, n)| self.kept.iter().any(|(k, _)| k == n))
+    }
+
+    /// A pattern in a string, noted for E017: a name the claim has kept has it said there, with no
+    /// E009 on top of it.
+    fn claim_pattern(&mut self, tok: &Tok) -> Pattern {
+        self.note_uses(tok, UseKind::Pattern);
+        if self.in_claim && self.has_kept(&tok.text) {
+            return Pattern::new("").expect("the empty pattern");
+        }
+        self.compile(tok)
     }
 
     fn when(&mut self, kw: &Tok) -> Result<RawStep, Stop> {
+        self.when_at = at(kw);
         let target = self.expect(Kind::Ident, "a target's name", "ターゲットの名前")?;
         self.expect(Kind::Dot, "`.`", "`.`")?;
         let method = self.expect(
             Kind::Ident,
-            "a call (run, get, post, open, click, input, submit, press or advance)",
-            "呼び出し（run、get、post、open、click、input、submit、press、advance）",
+            "a call (run, get, post, put, patch, delete, open, click, input, submit, press or advance)",
+            "呼び出し（run、get、post、put、patch、delete、open、click、input、submit、press、advance）",
         )?;
         self.expect(Kind::LParen, "`(`", "`(`")?;
         let (args, close) = self.args()?;
@@ -642,7 +841,13 @@ impl P {
             let arg = match tk.kind {
                 Kind::Str | Kind::Num => {
                     self.plain(&tk)?;
-                    Arg { name: None, value: tk }
+                    Arg { name: None, header: None, value: tk }
+                }
+                Kind::Ident if tk.text == "header" => {
+                    let name = self.expect(Kind::Str, "the header's name, in quotes", "`\"` で囲んだヘッダーの名前")?;
+                    self.expect(Kind::Colon, "`:`", "`:`")?;
+                    let value = self.expect(Kind::Str, "the header's value, in quotes", "`\"` で囲んだヘッダーの値")?;
+                    Arg { name: Some(tk), header: Some(name), value }
                 }
                 Kind::Ident => {
                     self.expect(Kind::Colon, "`:`", "`:`")?;
@@ -651,7 +856,7 @@ impl P {
                         return Err(self.expected(&v, "a string or a number", "文字列か数"));
                     }
                     self.plain(&v)?;
-                    Arg { name: Some(tk), value: v }
+                    Arg { name: Some(tk), header: None, value: v }
                 }
                 _ => return Err(self.expected(&tk, "a string", "文字列")),
             };
@@ -671,14 +876,20 @@ impl P {
         let word = method.text.as_str();
         let mut positional: Vec<Tok> = Vec::new();
         let mut body: Option<Tok> = None;
+        let mut headers: Vec<(Tok, Tok)> = Vec::new();
+        let http = Method::of(word);
         for a in args {
             let Some(n) = a.name else {
                 positional.push(a.value);
                 continue;
             };
+            if let (Some(_), Some(h)) = (http, a.header) {
+                headers.push((h, a.value));
+                continue;
+            }
             match word {
-                "post" if n.text == "body" && body.is_none() => body = Some(a.value),
-                "post" if n.text == "body" => return Err(self.expected(&n, "`)`", "`)`")),
+                "post" | "put" | "patch" | "delete" if n.text == "body" && body.is_none() => body = Some(a.value),
+                "post" | "put" | "patch" | "delete" if n.text == "body" => return Err(self.expected(&n, "`)`", "`)`")),
                 "run" => self.e002(
                     &n,
                     format!("`run` takes no argument named `{}`; its arguments are strings", n.text),
@@ -686,17 +897,18 @@ impl P {
                 ),
                 "get" => self.e002(
                     &n,
-                    format!("`get` takes no argument named `{}`; it takes the path", n.text),
-                    format!("`get` に `{}` という名前の引数はありません。書けるのはパスだけです", n.text),
+                    format!("`get` takes no argument named `{}`; it takes the path and `header \"<name>\": \"<value>\"`", n.text),
+                    format!("`get` に `{}` という名前の引数はありません。書けるのはパスと `header \"<名前>\": \"<値>\"` です", n.text),
                 ),
-                "post" => self.e002(
+                "post" | "put" | "patch" | "delete" => self.e002(
                     &n,
-                    format!("`post` takes no argument named `{}`; it takes the path and `body:`", n.text),
-                    format!("`post` に `{}` という名前の引数はありません。書けるのはパスと `body:` です", n.text),
+                    format!("`{word}` takes no argument named `{}`; it takes the path, `body:` and `header \"<name>\": \"<value>\"`", n.text),
+                    format!("`{word}` に `{}` という名前の引数はありません。書けるのはパス、`body:`、`header \"<名前>\": \"<値>\"` です", n.text),
                 ),
                 _ => {}
             }
         }
+        let call_at = UseKind::Call(self.when_at);
         match word {
             "run" => {
                 let mut words = Vec::new();
@@ -704,38 +916,80 @@ impl P {
                     if v.kind != Kind::Str {
                         return Err(self.expected(&v, "a string", "文字列"));
                     }
+                    self.note_uses(&v, call_at);
                     words.push(v.text);
                 }
                 Ok(Some(Call::Run(words)))
             }
-            "get" | "post" => {
+            "get" | "post" | "put" | "patch" | "delete" => {
+                let method_is = http.expect("one of the five");
                 let mut it = positional.into_iter();
                 let path = match it.next() {
-                    Some(p) if p.kind == Kind::Str => p.text,
+                    Some(p) if p.kind == Kind::Str => {
+                        self.note_uses(&p, call_at);
+                        p.text
+                    }
                     Some(p) => return Err(self.expected(&p, "the path, in quotes", "`\"` で囲んだパス")),
                     None => return Err(self.expected(close, "the path, in quotes", "`\"` で囲んだパス")),
                 };
                 if let Some(extra) = it.next() {
                     return Err(self.expected(&extra, "`)`", "`)`"));
                 }
-                if word == "get" {
-                    return Ok(Some(Call::Get(path)));
-                }
                 let body = match body {
-                    Some(b) if b.kind == Kind::Str => Some(b.text),
+                    Some(b) if b.kind == Kind::Str => {
+                        self.note_uses(&b, call_at);
+                        Some(b.text)
+                    }
                     Some(b) => return Err(self.expected(&b, "the body, in quotes", "`\"` で囲んだボディ")),
                     None => None,
                 };
-                Ok(Some(Call::Post { path, body }))
+                let mut sent = Vec::with_capacity(headers.len());
+                for (name, value) in headers {
+                    self.request_header(&name, &value);
+                    self.note_uses(&value, call_at);
+                    sent.push((name.text, value.text));
+                }
+                Ok(Some(Call::Http { method: method_is, path, body, headers: sent }))
             }
             other => {
                 self.e002(
                     method,
-                    format!("`{other}` is not a call; the calls are run, get, post, open, click, input, submit, press and advance"),
-                    format!("`{other}` という呼び出しはありません。呼び出しは run、get、post、open、click、input、submit、press、advance です"),
+                    format!("`{other}` is not a call; the calls are {CALLS_EN}"),
+                    format!("`{other}` という呼び出しはありません。呼び出しは {CALLS_JA} です"),
                 );
                 Ok(None)
             }
+        }
+    }
+
+    /// E002 for a header a request cannot send: a name that is not a token, one geas sets itself,
+    /// or a value with a line break or a control character in it.
+    fn request_header(&mut self, name: &Tok, value: &Tok) {
+        let n = &name.text;
+        if !is_token(n) {
+            self.e002(
+                name,
+                format!("{} cannot be a header's name: a name is letters, digits and any of ! # $ % & ' * + - . ^ _ ` | ~", crate::json::quote(n)),
+                format!("{} はヘッダーの名前にできません。名前に使えるのは英字、数字と ! # $ % & ' * + - . ^ _ ` | ~ です", crate::json::quote(n)),
+            );
+        } else if let Some(why) = header_geas_sets(n) {
+            self.e002(
+                name,
+                format!("the header `{n}` is geas's to set: {}", why.en),
+                format!("ヘッダー `{n}` は geas が決めます。{}", why.ja),
+            );
+        }
+        if let Some(i) = value.text.chars().position(char::is_control) {
+            let col = value.cols.get(i).copied().unwrap_or(value.col);
+            self.diags.push(diag::error(
+                "E002",
+                value.line,
+                col,
+                tr!(
+                    "ヘッダー `{n}` の値に、改行か制御文字があります。ヘッダーでは送れません",
+                    "the value of the header `{n}` has a line break or a control character, which cannot go in a header",
+                ),
+            ));
         }
     }
 
@@ -869,6 +1123,13 @@ impl P {
         } else {
             Place::First
         };
+        let call_at = UseKind::Call(self.when_at);
+        if let Some(f) = first.as_ref().filter(|_| matches!(word, "open" | "click" | "input")) {
+            self.note_uses(f, call_at);
+        }
+        if let Some((_, v)) = &into {
+            self.note_uses(v, call_at);
+        }
         if let Some(f) = &first {
             let key = match word {
                 "open" => "path",
@@ -980,7 +1241,7 @@ impl P {
         let Some(raw) = self.matcher()? else {
             return Ok(None);
         };
-        if let Some(d) = misfit(&subject, &raw) {
+        if let Some(d) = misfit(&subject, &raw, &|s| self.has_kept(s)) {
             self.diags.push(d);
         }
         let matcher = self.build(raw);
@@ -1073,6 +1334,11 @@ impl P {
                 return Ok(None);
             }
         };
+        if matches!(form, Form::Is | Form::IsNot | Form::Contains | Form::NotContains) {
+            for (_, tok) in &values {
+                self.note_uses(tok, UseKind::Check);
+            }
+        }
         Ok(Some(RawMatcher { form, word: m, values, node: None }))
     }
 
@@ -1106,11 +1372,13 @@ impl P {
             (Kind::Str, _) => {
                 self.next();
                 self.plain(&p)?;
+                self.note_uses(&p, UseKind::Check);
                 Ok(Some(Label::Is(p.text)))
             }
             (Kind::Ident, "containing") => {
                 self.next();
                 let s = self.expect(Kind::Str, "the part of the name, in quotes", "`\"` で囲んだ名前の一部")?;
+                self.note_uses(&s, UseKind::Check);
                 Ok(Some(Label::Containing(s.text)))
             }
             (Kind::Ident, "matching") => {
@@ -1119,7 +1387,7 @@ impl P {
                 if s.kind != Kind::Str {
                     return Err(self.expected(&s, "a pattern, in quotes", "`\"` で囲んだパターン"));
                 }
-                Ok(Some(Label::Matching(self.compile(&s))))
+                Ok(Some(Label::Matching(self.claim_pattern(&s))))
             }
             _ => Ok(None),
         }
@@ -1154,6 +1422,7 @@ impl P {
                 return Err(self.expected(&v, "`value`", "`value`"));
             }
             let s = self.expect(Kind::Str, "the value, in quotes", "`\"` で囲んだ値")?;
+            self.note_uses(&s, UseKind::Check);
             value = Some(s.text);
         }
         let mut state = None;
@@ -1275,7 +1544,7 @@ impl P {
             Form::NotContains => Matcher::NotContains(text(0)),
             Form::Matches | Form::NotMatches => {
                 let p = match raw.values.first() {
-                    Some((Value::S(_), tok)) => self.compile(&tok.clone()),
+                    Some((Value::S(_), tok)) => self.claim_pattern(&tok.clone()),
                     _ => Pattern::new("").expect("the empty pattern"),
                 };
                 if raw.form == Form::Matches { Matcher::Matches(p) } else { Matcher::NotMatches(p) }
@@ -1396,7 +1665,7 @@ struct RawMatcher {
 
 /// E008: the first way the matcher does not fit its subject or its value (DESIGN
 /// §9), at the word or the value that does not fit.
-fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
+fn misfit(subject: &Subject, raw: &RawMatcher, kept: &dyn Fn(&str) -> bool) -> Option<Diag> {
     let s = subject.word();
     let f = raw.form.words();
     let at_word = |en: String, ja: String| Some(diag::error("E008", raw.word.line, raw.word.col, Text::new(ja, en)));
@@ -1445,6 +1714,8 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
                 );
             }
             Form::Is | Form::IsNot => match first {
+                // a value the claim kept is compared as text, with a number too (DESIGN §22)
+                Some(Value::S(text)) if kept(text) => {}
                 Some(Value::S(text)) => {
                     let n = text.trim().parse::<f64>().map(crate::json::render_num).unwrap_or_else(|_| "0".into());
                     return at_value(
@@ -1538,7 +1809,7 @@ pub fn parse(src: &str) -> Result<Spec, Vec<Diag>> {
         Ok(t) => t,
         Err(d) => return Err(vec![d]),
     };
-    let mut p = P { toks, pos: 0, diags: Vec::new() };
+    let mut p = P { toks, pos: 0, diags: Vec::new(), in_claim: false, kept: Vec::new(), uses: Vec::new(), when_at: Pos::default() };
     let raw = p.file();
     let mut diags = p.diags;
     let spec = match raw {
@@ -1547,7 +1818,10 @@ pub fn parse(src: &str) -> Result<Spec, Vec<Diag>> {
     };
     diag::sort(&mut diags);
     match spec {
-        Some(spec) if !diag::has_errors(&diags) => Ok(spec),
+        Some(mut spec) if !diag::has_errors(&diags) => {
+            spec.warnings = diags;
+            Ok(spec)
+        }
         _ => Err(diags),
     }
 }
@@ -2065,6 +2339,7 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
         let mut steps = Vec::new();
         // the call of the last `when` and its line, for E007
         let mut last: Option<(Option<&Call>, usize)> = None;
+        keep_checks(c, &kinds, diags);
         for s in &c.steps {
             match s {
                 RawStep::When { target, target_pos, call, call_word, call_pos, pos, wait, .. } => {
@@ -2112,9 +2387,21 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                     if let Some((Some(call), when_line)) = last
                         && check.subject.observed_by() != call.observes()
                     {
-                        diags.push(not_observed(check, call, when_line));
+                        diags.push(not_observed(&check.subject, check.pos, call, when_line, false));
                     }
                     steps.push(Step::Then(check.clone()));
+                }
+                RawStep::Keep { keep } => {
+                    let Some(keep) = keep else {
+                        complete = false;
+                        continue;
+                    };
+                    if let (KeepFrom::Answer(subject), Some((Some(call), when_line))) = (&keep.from, last)
+                        && subject.observed_by() != call.observes()
+                    {
+                        diags.push(not_observed(subject, keep.pos, call, when_line, true));
+                    }
+                    steps.push(Step::Keep(keep.clone()));
                 }
             }
         }
@@ -2125,7 +2412,84 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
     if !complete || targets.len() != raw.targets.len() {
         return None;
     }
-    Some(Spec { targets, claims, masks: raw.masks })
+    Some(Spec { targets, claims, masks: raw.masks, warnings: Vec::new() })
+}
+
+/// E017 and W016 over a claim (DESIGN §22): a `{name}` written before the `keep` that holds it, a
+/// kept name in a pattern, which is read before anything runs, or in a call on a pixie app, which
+/// runs a claim's calls as one script before any of it is known; and a name that looks like one of
+/// these and that the claim does not keep, in a claim that keeps something.
+fn keep_checks(c: &RawClaim, kinds: &HashMap<&str, Option<TargetKind>>, diags: &mut Vec<Diag>) {
+    if c.kept.is_empty() {
+        return;
+    }
+    let on_pixie = |when: Pos| {
+        c.steps.iter().any(|s| match s {
+            RawStep::When { target, pos, .. } if *pos == when => matches!(kinds.get(target.as_str()), Some(Some(TargetKind::Pixie(_)))),
+            _ => false,
+        })
+    };
+    for u in &c.uses {
+        let shown = format!("{{{}}}", u.name);
+        let name = &u.name;
+        let Some((_, keep)) = c.kept.iter().find(|(n, _)| n == name) else {
+            if name == "port" || u.kind == UseKind::Pattern {
+                continue;
+            }
+            let names: Vec<&str> = c.kept.iter().map(|(n, _)| n.as_str()).collect();
+            let (en, ja) = (names.join(", "), names.join("、"));
+            let mut d = diag::error(
+                "W016",
+                u.pos.line,
+                u.pos.col,
+                tr!(
+                    "`{shown}` はこの主張が持っている名前ではないので、書いたままになります",
+                    "`{shown}` is not a name this claim keeps, so it stays as written",
+                ),
+            )
+            .note(tr!("この主張が持っている名前: {ja}", "the names it keeps: {en}"));
+            d.severity = diag::Severity::Warning;
+            diags.push(d);
+            continue;
+        };
+        if u.kind == UseKind::Pattern {
+            diags.push(
+                diag::error(
+                    "E017",
+                    u.pos.line,
+                    u.pos.col,
+                    tr!(
+                        "パターンは走らせる前に確かめるので、走らせて分かる `{shown}` は使えません",
+                        "a pattern is read before anything runs, so it cannot hold `{shown}`, which the run finds out",
+                    ),
+                )
+                .note(tr!("`is` か `contains` で比べてください", "compare with `is` or `contains`")),
+            );
+        } else if (u.pos.line, u.pos.col) < (keep.line, keep.col) {
+            let line = keep.line;
+            diags.push(diag::error(
+                "E017",
+                u.pos.line,
+                u.pos.col,
+                tr!(
+                    "`{shown}` を持っておくのは {line} 行目で、その前には使えません",
+                    "`{shown}` is kept on line {line}, and cannot be used before it",
+                ),
+            ));
+        } else if let UseKind::Call(when) = u.kind
+            && on_pixie(when)
+        {
+            diags.push(diag::error(
+                "E017",
+                u.pos.line,
+                u.pos.col,
+                tr!(
+                    "pixie のアプリへの呼び出しに `{shown}` は使えません。pixie は主張の操作を、走らせる前に一つのスクリプトにします",
+                    "a call on a pixie app cannot use `{shown}`: pixie makes a claim's actions one script before they run",
+                ),
+            ));
+        }
+    }
 }
 
 /// E014 (DESIGN §18): `within` after an action on a screen, which settles after each action
@@ -2152,7 +2516,13 @@ fn wait_checks(claims: &[RawClaim], diags: &mut Vec<Diag>) {
                 ));
                 continue;
             }
-            if !matches!(c.steps.get(i + 1), Some(RawStep::Then { .. })) {
+            // a check to hold, or a value to wait for
+            let waits_for = |s: &RawStep| match s {
+                RawStep::Then { .. } => true,
+                RawStep::Keep { keep } => !matches!(keep, Some(Keep { from: KeepFrom::Env(_), .. })),
+                RawStep::When { .. } => false,
+            };
+            if !c.steps[i + 1..].iter().take_while(|s| !matches!(s, RawStep::When { .. })).any(waits_for) {
                 diags.push(
                     diag::error(
                         "E014",
@@ -2164,8 +2534,8 @@ fn wait_checks(claims: &[RawClaim], diags: &mut Vec<Diag>) {
                         ),
                     )
                     .note(tr!(
-                        "待って確かめたいことを `then` で書くか、`within` を外してください",
-                        "write under it, with `then`, what to wait for, or leave out `within`",
+                        "待って確かめたいことを `then` か `keep` で書くか、`within` を外してください",
+                        "write under it, with `then` or `keep`, what to wait for, or leave out `within`",
                     )),
                 );
             }
@@ -2185,8 +2555,8 @@ fn call_fits(target: &str, kind: &TargetKind, call: &Call, word: &str, at: Pos) 
             format!("`{target}` はコマンドを走らせるターゲットなので、呼べるのは `run` で、`{word}` は呼べません"),
         ),
         TargetKind::Serve { .. } => (
-            format!("`{target}` is a service, so it takes `get` and `post`, and the actions on its page in a browser (open, click, input, submit, press, advance), not `{word}`"),
-            format!("`{target}` はサービスのターゲットなので、呼べるのは `get` と `post`、ブラウザーで開いたページへの操作（open、click、input、submit、press、advance）で、`{word}` は呼べません"),
+            format!("`{target}` is a service, so it takes `get`, `post`, `put`, `patch` and `delete`, and the actions on its page in a browser (open, click, input, submit, press, advance), not `{word}`"),
+            format!("`{target}` はサービスのターゲットなので、呼べるのは `get`、`post`、`put`、`patch`、`delete`、ブラウザーで開いたページへの操作（open、click、input、submit、press、advance）で、`{word}` は呼べません"),
         ),
         TargetKind::Pixie(_) => (
             format!("`{target}` is a pixie app, so it takes the actions open, click, input, submit, press and advance, not `{word}`"),
@@ -2200,9 +2570,9 @@ fn call_fits(target: &str, kind: &TargetKind, call: &Call, word: &str, at: Pos) 
     Some(diag::error("E006", at.line, at.col, Text::new(ja, en)))
 }
 
-/// E007: a check of something its `when` does not observe.
-fn not_observed(check: &Check, call: &Call, when_line: usize) -> Diag {
-    let s = check.subject.word();
+/// E007: a check or a `keep` of something its `when` does not observe.
+fn not_observed(subject: &Subject, at: Pos, call: &Call, when_line: usize, is_keep: bool) -> Diag {
+    let s = subject.word();
     let word = call.word();
     let (gives_en, gives_ja) = match call.observes() {
         Observes::Process => ("stdout, stderr and exit", "stdout、stderr、exit"),
@@ -2211,17 +2581,18 @@ fn not_observed(check: &Check, call: &Call, when_line: usize) -> Diag {
     };
     diag::error(
         "E007",
-        check.pos.line,
-        check.pos.col,
+        at.line,
+        at.col,
         tr!(
             "`{word}` の結果にあるのは {gives_ja} で、`{s}` はありません",
             "a `{word}` observes {gives_en}, not `{s}`",
         ),
     )
-    .note(tr!(
-        "このチェックが見るのは {when_line} 行目の `when` です",
-        "the `when` it reads is on line {when_line}",
-    ))
+    .note(if is_keep {
+        tr!("この `keep` が読むのは {when_line} 行目の `when` です", "the `when` it reads is on line {when_line}")
+    } else {
+        tr!("このチェックが見るのは {when_line} 行目の `when` です", "the `when` it reads is on line {when_line}")
+    })
 }
 
 /// The keys `press` sends to a page in Chrome (DESIGN §8.4), and the chords made
@@ -2371,13 +2742,14 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                     acted.push(tg);
                 }
                 TargetKind::Serve { .. } => match call {
-                    Call::Open(Some(p)) if !p.starts_with('/') => e013(
+                    // a path that starts with a kept value is known when it runs (E038 then)
+                    Call::Open(Some(p)) if !p.starts_with('/') && !crate::keep::names_in(p).first().is_some_and(|(at, n)| *at == 0 && c.kept.iter().any(|(k, _)| k == n)) => e013(
                         w.arg("path"),
                         format!("a page's path starts with `/`: `open(\"/{p}\")`"),
                         format!("ページのパスは、`/` から始めてください（`open(\"/{p}\")`）"),
                     ),
                     Call::Open(_) => opened.push(tg),
-                    Call::Get(_) | Call::Post { .. } | Call::Run(_) => {}
+                    Call::Http { .. } | Call::Run(_) => {}
                     _ if !opened.contains(&tg) => e013(
                         w.call_pos,
                         format!("the page of `{tg}` is not open in this claim yet: open it first, `when {tg}.open(\"/\")`"),
@@ -2445,8 +2817,8 @@ mod tests {
         assert!(matches!(&spec.masks[0], Mask::Header(h) if h == "date"));
         assert!(matches!(&spec.masks[1], Mask::BodyJson(p) if p == ".id"));
         let steps = &spec.claims[0].steps;
-        assert!(matches!(&steps[0], Step::When { call: Call::Post { path, body: Some(b) }, .. } if path == "/add" && b == "5"));
-        assert!(matches!(&steps[1], Step::When { call: Call::Get(p), .. } if p == "/total"));
+        assert!(matches!(&steps[0], Step::When { call: Call::Http { method: Method::Post, path, body: Some(b), headers }, .. } if path == "/add" && b == "5" && headers.is_empty()));
+        assert!(matches!(&steps[1], Step::When { call: Call::Http { method: Method::Get, path, body: None, .. }, .. } if path == "/total"));
         assert!(matches!(&steps[2], Step::Then(Check { subject: Subject::BodyJson(p), .. }) if p == ".total"));
     }
 
@@ -2648,7 +3020,7 @@ mod tests {
             .iter()
             .filter_map(|s| match s {
                 Step::When { wait, .. } => Some(wait.map(|w| (w.secs, w.pos.line, w.pos.col))),
-                Step::Then(_) => None,
+                _ => None,
             })
             .collect();
         assert_eq!(waits, [Some((10, 9, 27)), Some((1, 11, 19)), None]);

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-get-with-a-body.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-get-with-a-body.geas","line":7,"col":21,"message":"`get` takes no argument named `body`; it takes the path and `header \"<name>\": \"<value>\"`","notes":[],"path":[]}]}

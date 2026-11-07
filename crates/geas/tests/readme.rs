@@ -20,13 +20,15 @@ struct Session {
     chrome: ChromeTmp,
     text: String,
     log: PathBuf,
+    /// The variables a story has set with `$ export`.
+    env: Vec<(String, String)>,
 }
 
 impl Session {
     fn new(name: &str) -> Session {
         let s = Scratch::new(name);
         let log = pid_log(&s);
-        Session { s, chrome: ChromeTmp::new(), text: String::new(), log }
+        Session { s, chrome: ChromeTmp::new(), text: String::new(), log, env: Vec::new() }
     }
 
     fn path(&self) -> &Path {
@@ -44,6 +46,7 @@ impl Session {
         let log = self.log.to_string_lossy().into_owned();
         let mut env = vec![("GEAS_PID_LOG", log.as_str())];
         env.extend(self.chrome.vars());
+        env.extend(self.env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         let (out, err, code) = run_with_input(self.s.path(), &words[1..], &env, input);
         self.text.push_str(&format!("$ {line}\n{out}{err}"));
         code
@@ -61,6 +64,12 @@ impl Session {
     /// A `$ ` line for a command the test ran itself.
     fn typed(&mut self, line: &str) {
         self.text.push_str(&format!("$ {line}\n"));
+    }
+
+    /// `$ export NAME=value`, for the commands after it.
+    fn export(&mut self, name: &str, value: &str) {
+        self.typed(&format!("export {name}={value}"));
+        self.env.push((name.to_string(), value.to_string()));
     }
 
     /// Keeps the transcript so far as a golden, and starts the next.
@@ -316,6 +325,46 @@ fn orders_story(lang: &str, flag: &str) {
     t.status(1);
     let text = std::mem::take(&mut t.text);
     golden(&format!("{lang}/readme/orders.txt"), &text);
+}
+
+/// The story of the ticket service: it numbers what it makes, a claim goes on from the number, and
+/// the token comes from the environment. Neither is in the journal or the baseline, so a snap and a
+/// drift on new numbers are quiet. An agent's change takes away the number the claim goes on from.
+fn tickets_story(lang: &str, spec: &str, flag: &str) {
+    if !python3("the ticket service's story in the READMEs") {
+        return;
+    }
+    const TOKEN: &str = "a-token-of-yours";
+    let mut t = Session::new(&format!("readme-tickets-{lang}"));
+    copy_example("tickets", &t.s);
+    let stem = spec.trim_end_matches(".geas");
+    let spec = format!("examples/tickets/{spec}");
+    t.export("TICKETS_TOKEN", TOKEN);
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 0);
+    let journal = t.s.read(&format!("examples/tickets/.geas/{stem}.journal.jsonl"));
+    assert!(!journal.contains(TOKEN), "{journal}");
+    assert_eq!(uuid_steady(&journal), journal, "the numbers differ from run to run: {journal}");
+    golden(&format!("{lang}/readme/tickets.journal.jsonl"), &journal);
+    assert_eq!(t.geas(&format!("geas snap {spec}{flag}")), 0);
+    let baseline = t.s.read(&format!("examples/tickets/.geas/{stem}.baseline.jsonl"));
+    assert!(!baseline.contains(TOKEN), "{baseline}");
+    assert_eq!(t.geas(&format!("geas drift {spec}{flag}")), 0);
+    t.s.write("examples/tickets/server.py", &repo_file("tests/changes/tickets/after/server.py"));
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 1);
+    t.status(1);
+    let text = std::mem::take(&mut t.text);
+    assert!(!text.contains(TOKEN.to_string().as_str()) || text.matches(TOKEN).count() == 1, "the token is only on the line that sets it:\n{text}");
+    golden(&format!("{lang}/readme/tickets.txt"), &steady(&text));
+}
+
+#[test]
+fn the_tickets_in_english() {
+    tickets_story("en", "tickets.geas", "");
+}
+
+#[test]
+fn the_tickets_in_japanese() {
+    tickets_story("ja", "tickets.ja.geas", " --lang ja");
 }
 
 #[test]

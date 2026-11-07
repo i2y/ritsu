@@ -1,0 +1,5 @@
+エラー[E008]: E008-status-with-a-name-not-kept.geas:10:18: `status` は数です。値は `"` で囲まずに書いてください（`status is 0`）
+    10 |   and  status is "{other}"
+警告[W016]: E008-status-with-a-name-not-kept.geas:10:19: `{other}` はこの主張が持っている名前ではないので、書いたままになります
+    10 |   and  status is "{other}"
+  = この主張が持っている名前: whole

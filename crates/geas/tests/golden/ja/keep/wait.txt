@@ -1,0 +1,3 @@
+ok 1 - it waits for the value to come
+ok 2 - with a check that reads the value
+主張 2 件 · 成り立った 2 件 · 成り立たなかった 0 件 · ジャーナル: k/.geas/wait.journal.jsonl

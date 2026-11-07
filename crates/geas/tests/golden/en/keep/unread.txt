@@ -1,0 +1,37 @@
+not ok 1 - a path that is not there
+    k/unread.geas:13: keep body json ".number" as id — got <no key `number` in JSON object>
+        13 |   keep body json ".number" as id
+      the run that gets there:
+          11  when api.post("/things", body: "a chair")  →  201, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+not ok 2 - a header that was not sent
+    k/unread.geas:21: keep header "x-nothing" as a — got <no header "x-nothing">
+        21 |   keep header "x-nothing" as a
+      the run that gets there:
+          20  when api.get("/gaps")  →  200, body "{\"none\": null, \"empty\": \"\"}"
+not ok 3 - a body that is not JSON
+    k/unread.geas:27: keep body json ".a" as a — got <body is not JSON: unexpected character `p` in JSON>
+        27 |   keep body json ".a" as a
+      the run that gets there:
+          26  when api.get("/plain")  →  200, body "plain"
+not ok 4 - a null
+    k/unread.geas:33: keep body json ".none" as a — got null
+        33 |   keep body json ".none" as a
+      the run that gets there:
+          32  when api.get("/gaps")  →  200, body "{\"none\": null, \"empty\": \"\"}"
+not ok 5 - an empty string
+    k/unread.geas:39: keep body json ".empty" as a — got ""
+        39 |   keep body json ".empty" as a
+      the run that gets there:
+          38  when api.get("/gaps")  →  200, body "{\"none\": null, \"empty\": \"\"}"
+not ok 6 - an empty header
+    k/unread.geas:45: keep header "x-empty" as a — got ""
+        45 |   keep header "x-empty" as a
+      the run that gets there:
+          44  when api.get("/gaps")  →  200, body "{\"none\": null, \"empty\": \"\"}"
+not ok 7 - the values read before it are told
+    k/unread.geas:52: keep body json ".none" as a — got null
+        52 |   keep body json ".none" as a
+      the run that gets there:
+          50  when api.get("/gaps")  →  200, body "{\"none\": null, \"empty\": \"\"}"
+          51  keep body as whole  →  "{\"none\": null, \"empty\": \"\"}"
+7 claims · 0 ok · 7 failed · journal: k/.geas/unread.journal.jsonl

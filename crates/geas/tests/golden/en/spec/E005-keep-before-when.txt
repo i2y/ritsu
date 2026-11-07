@@ -1,0 +1,2 @@
+error[E005]: E005-keep-before-when.geas:7:3: `keep body` comes before any `when`; a `keep` reads what the `when` before it observed, and only `keep env` can come first
+     7 |   keep body json ".id" as id

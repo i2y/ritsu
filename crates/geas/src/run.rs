@@ -1,8 +1,9 @@
 //! One claim at a time: its `when`s through the adapters, its checks against what
-//! they observed, and the journal events. A `when` that gets no observation ends the
-//! claim as an error with a code (E030-E033), the command and its stderr as notes,
-//! and the run that gets there. In `map`, every process a claim starts gets the
-//! coverage switches and a directory of its own (DESIGN §7.3).
+//! they observed, what it keeps for later steps (DESIGN §22), and the journal events. A
+//! `when` that gets no observation ends the claim as an error with a code (E030-E033),
+//! the command and its stderr as notes, and the run that gets there. In `map`, every
+//! process a claim starts gets the coverage switches and a directory of its own
+//! (DESIGN §7.3).
 
 pub use crate::check::CheckResult;
 use ritsu_base::text::Text;
@@ -13,6 +14,7 @@ use crate::drift;
 use crate::gui;
 use crate::http;
 use crate::json;
+use crate::keep::{self, Held, NotRead, View};
 use crate::model::*;
 use crate::proc::{self, AutoPort, Env, Failure, Launch, Server};
 use crate::sched;
@@ -68,6 +70,9 @@ pub struct ObsRec {
     pub obs: Obs,
     /// How the `when` waited, when it has `within`.
     pub waited: Option<Waited>,
+    /// What the claim holds once the `keep`s under this `when` have read its answer: what the
+    /// journal, the baseline and drift write as `{name}` in it (DESIGN §22).
+    pub held: Held,
 }
 
 /// How a `when` with `within` waited (DESIGN §18): the time it was given, how many calls it
@@ -89,10 +94,15 @@ impl Waited {
     }
 }
 
-/// One `when` of the run that gets there: its line, `api.get("/")`, and what it
-/// observed, or None for the `when` the claim stopped at; and its `within`, if it waits.
+/// One step of the run that gets there: its line, `api.get("/")` or `keep body as b`, and what it
+/// observed or read, or None for the step the claim stopped at; and its `within`, if it waits.
+#[derive(Clone)]
 pub struct RunLine {
     pub line: usize,
+    /// `when` or `keep`.
+    pub word: &'static str,
+    /// What follows the word, as the spec writes it. What the `--json` of a run calls `call`, a
+    /// `keep` with its word.
     pub when: String,
     pub observed: Option<String>,
     pub waited: Option<Waited>,
@@ -101,9 +111,10 @@ pub struct RunLine {
 impl RunLine {
     pub fn step(&self) -> diag::Step {
         let wait = self.waited.as_ref().map(|w| format!(" {}", w.wait.display())).unwrap_or_default();
+        let head = if self.word == "keep" { self.when.clone() } else { format!("{} {}", self.word, self.when) };
         let text = match &self.observed {
-            Some(o) => format!("when {}{wait}  →  {}", self.when, o),
-            None => format!("when {}{wait}", self.when),
+            Some(o) => format!("{head}{wait}  →  {o}"),
+            None => format!("{head}{wait}"),
         };
         diag::Step { line: self.line, text: Text::same(text) }
     }
@@ -121,8 +132,10 @@ pub struct ClaimResult {
     pub status: ClaimStatus,
     pub checks: Vec<CheckResult>,
     pub observations: Vec<ObsRec>,
-    /// For a claim that is not ok: the `when`s up to the problem.
+    /// For a claim that is not ok: its steps up to the problem.
     pub run: Vec<RunLine>,
+    /// Every `when` that observed something and every `keep` that read a value, in order.
+    pub trail: Vec<RunLine>,
     /// Every process the claim started, in order.
     pub started: Vec<Started>,
 }
@@ -212,12 +225,17 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
     let term = opts.cover.is_some();
     let mut servers: HashMap<String, Instance> = HashMap::new();
     let mut checks: Vec<CheckResult> = Vec::new();
-    let mut error: Option<(Failure, Pos, String, String, Option<Waited>)> = None;
+    // a step that gets no observation: what it says, where, its target, and its line of the run
+    let mut error: Option<(Failure, Pos, String, RunLine)> = None;
     let mut obs: Option<Obs> = None;
     let mut observations: Vec<ObsRec> = Vec::new();
     let mut started: Vec<Started> = Vec::new();
     let mut when_idx = 0usize;
-    // how many observations the last failed check had seen: its run
+    // what the claim has kept so far (DESIGN §22)
+    let mut held = Held::default();
+    // the steps that observed or read something, in order
+    let mut trail: Vec<RunLine> = Vec::new();
+    // how far along that the last failed check had come: its run
     let mut failed_after: Option<usize> = None;
 
     // the targets this claim has used, for the journal's `env` event
@@ -239,19 +257,15 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                         ));
                     }
                 }
-                // the checks under this `when`, which a wait holds each observation to (DESIGN §18)
-                let under: Vec<&Check> = claim.steps[i + 1..]
-                    .iter()
-                    .map_while(|s| match s {
-                        Step::Then(c) => Some(c),
-                        Step::When { .. } => None,
-                    })
-                    .collect();
+                // the steps under this `when`, which a wait holds each observation to (DESIGN §18)
+                let under: Vec<&Step> = claim.steps[i + 1..].iter().take_while(|s| !matches!(s, Step::When { .. })).collect();
                 // a wait counts from its first call: the start of a service it is the first to use
                 // is not counted
                 let mut begun: Option<Instant> = None;
                 let mut tries = 0usize;
                 let mut waited: Option<Waited> = None;
+                // the path a request went out on, for its contract
+                let mut sent_path: Option<String> = None;
                 let result = loop {
                     tries += 1;
                     let k = started.len() + 1;
@@ -260,7 +274,8 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                         line: pos.line,
                         col: pos.col,
                         pid,
-                        words: words.to_vec(),
+                        // `map` shows them
+                        words: words.iter().map(|w| held.text(w, View::Report)).collect(),
                         program: opts.cover.and_then(|_| proc::resolve(&words[0], dir)),
                         dir: d,
                         killed: false,
@@ -272,7 +287,7 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                                 let launch = Launch { dir, env: &env, term };
                                 let mut s = None;
                                 begun.get_or_insert_with(Instant::now);
-                                let r = proc::run_process(target, base, args, &launch, &mut |pid, words| {
+                                let r = proc::run_process(target, base, &held.fill_args(args), &launch, &mut |pid, words| {
                                     s = Some(record(pid, words, d.clone()));
                                 });
                                 started.extend(s);
@@ -308,21 +323,25 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                                     let inst = &servers[target.as_str()];
                                     let auto = inst.auto.is_some();
                                     begun.get_or_insert_with(Instant::now);
-                                    let answer = match call {
-                                        Call::Get(path) => http::exchange(target, inst.port, auto, "GET", path, None),
-                                        Call::Post { path, body } => {
-                                            http::exchange(target, inst.port, auto, "POST", path, body.as_deref())
+                                    let answer = match held.sent(call, auto.then_some(inst.port)) {
+                                        Err(f) => Err(f),
+                                        Ok(Call::Http { method, path, body, headers }) => {
+                                            let a = http::exchange(target, inst.port, auto, method.name(), &path, body.as_deref(), &headers);
+                                            sent_path = Some(path);
+                                            a
                                         }
-                                        Call::Run(_) => unreachable!("E006 refuses `run` on a service"),
+                                        Ok(Call::Run(_)) => unreachable!("E006 refuses `run` on a service"),
                                         // an action on the service's page in Chrome
-                                        _ => gui.act(tg, call, Some((inst.port, auto))).map(Obs::Screen),
+                                        Ok(sent) => gui.act(tg, &sent, Some((inst.port, auto))).map(Obs::Screen),
                                     };
                                     // the port belongs to the run, not to the program (DESIGN §10)
                                     answer.map(|o| if auto { http::port_written(o, inst.port) } else { o })
                                 }
                             }
                         }
-                        (TargetKind::Pixie(_) | TargetKind::Driver(_), _) => gui.act(tg, call, None).map(Obs::Screen),
+                        // E017 keeps kept names out of a pixie app's calls, which run as one script
+                        (TargetKind::Pixie(_), _) => gui.act(tg, call, None).map(Obs::Screen),
+                        (TargetKind::Driver(_), _) => held.sent(call, None).and_then(|sent| gui.act(tg, &sent, None)).map(Obs::Screen),
                         _ => unreachable!("E006 refuses a call its target does not take"),
                     };
                     let Some(w) = wait else {
@@ -344,18 +363,34 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                             break Err(f);
                         }
                     };
-                    let held = under.iter().all(|c| check::eval(c, &o).ok);
+                    let settled = settles(&under, &o, &held);
                     let limit = Duration::from_secs(w.secs);
                     // the run is ending on a signal: nothing more is sent
-                    if held || spent >= limit || proc::signalled().is_some() {
-                        waited = Some(Waited { wait: *w, tries, ms: spent.as_millis() as u64, held });
+                    if settled == Some(true) || settled.is_none() || spent >= limit || proc::signalled().is_some() {
+                        waited = Some(Waited { wait: *w, tries, ms: spent.as_millis() as u64, held: settled != Some(false) });
                         break Ok(o);
                     }
                     std::thread::sleep(Wait::EVERY.min(limit - spent));
                 };
                 match result {
                     Ok(o) => {
-                        journal.push(journal_when(&claim.name, pos.line, target, call, waited.as_ref(), &drift::recorded(&o, &spec.masks)));
+                        // the record of this answer has the values kept from it (DESIGN §22): they
+                        // are read first, up to the first that cannot be
+                        for s in &under {
+                            let Step::Keep(k) = s else { continue };
+                            match keep::read(k, Some(&o)) {
+                                Ok((value, secret)) => held.push(&k.name, value, secret),
+                                Err(_) => break,
+                            }
+                        }
+                        journal.push(journal_when(&claim.name, pos.line, target, call, waited.as_ref(), &drift::recorded(&o, &spec.masks, &held)));
+                        trail.push(RunLine {
+                            line: pos.line,
+                            word: "when",
+                            when: format!("{}.{}", target, call.display()),
+                            observed: Some(held.obs(&o, View::Report).summary()),
+                            waited: waited.clone(),
+                        });
                         observations.push(ObsRec {
                             idx: when_idx,
                             line: pos.line,
@@ -363,40 +398,84 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                             call: call.display(),
                             obs: o.clone(),
                             waited,
+                            held: held.clone(),
                         });
                         when_idx += 1;
                         // what it answered, held to its contract as one more check (DESIGN §20);
                         // of a `when` that waits, what it kept
-                        if let Some(cr) = crate::contract::held_to(tg.contract.as_ref(), call, pos.line, &o) {
+                        if let Some(cr) = crate::contract::held_to(tg.contract.as_ref(), call, sent_path.as_deref(), &held, pos.line, &o) {
                             journal.push(journal_check(&claim.name, &cr));
                             if !cr.ok {
-                                failed_after = Some(observations.len());
+                                failed_after = Some(trail.len());
                             }
                             checks.push(cr);
                         }
                         obs = Some(o);
                     }
                     Err(f) => {
-                        journal.push(format!(
-                            "{{\"claim\":{},\"event\":\"error\",\"line\":{},\"code\":\"{}\",\"message\":{}}}",
-                            json::quote(&claim.name),
-                            pos.line,
-                            f.code,
-                            json::quote(&f.msg.en)
-                        ));
-                        error = Some((f, *pos, target.clone(), format!("{}.{}", target, call.display()), waited));
+                        journal.push(journal_error(&claim.name, pos.line, &f, &held));
+                        let line = RunLine { line: pos.line, word: "when", when: format!("{}.{}", target, call.display()), observed: None, waited };
+                        error = Some((f, *pos, target.clone(), line));
                         break;
                     }
                 }
             }
             Step::Then(check) => {
                 let o = obs.as_ref().expect("E005 refuses a check before any `when`");
-                let cr = check::eval(check, o);
+                let cr = check::eval(check, o, &held);
                 journal.push(journal_check(&claim.name, &cr));
                 if !cr.ok {
-                    failed_after = Some(observations.len());
+                    failed_after = Some(trail.len());
                 }
                 checks.push(cr);
+            }
+            Step::Keep(k) => {
+                // under a `when`, it was read with that `when`'s answer
+                if held.get(&k.name).is_none() {
+                    match keep::read(k, obs.as_ref()) {
+                        Ok((value, secret)) => held.push(&k.name, value, secret),
+                        // the rest of the claim goes on from this value, so it stops here
+                        Err(NotRead::Answer(why)) => {
+                            let cr = CheckResult {
+                                line: k.pos.line,
+                                label: k.label(),
+                                expected: format!("as {}", k.name),
+                                recorded: held.text(&why.en, View::Record),
+                                actual: held.words(&why, View::Report),
+                                ok: false,
+                                screen: None,
+                                values: vec![],
+                            };
+                            journal.push(journal_check(&claim.name, &cr));
+                            failed_after = Some(trail.len());
+                            checks.push(cr);
+                            break;
+                        }
+                        Err(NotRead::Env(f)) => {
+                            journal.push(journal_error(&claim.name, k.pos.line, &f, &held));
+                            let line = RunLine { line: k.pos.line, word: "keep", when: k.display(), observed: None, waited: None };
+                            error = Some((f, k.pos, String::new(), line));
+                            break;
+                        }
+                    }
+                }
+                let kept = held.get(&k.name).expect("kept above");
+                let placeholder = format!("{{{}}}", k.name);
+                // a value kept from an answer can hold what came from the environment
+                let told = if kept.secret { placeholder.clone() } else { json::quote(&held.text(&kept.value, View::Report)) };
+                let cr = CheckResult {
+                    line: k.pos.line,
+                    label: k.label(),
+                    expected: format!("as {}", k.name),
+                    actual: Text::same(told.clone()),
+                    recorded: placeholder,
+                    ok: true,
+                    screen: None,
+                    values: vec![],
+                };
+                journal.push(journal_check(&claim.name, &cr));
+                checks.push(cr);
+                trail.push(RunLine { line: k.pos.line, word: "keep", when: k.display(), observed: Some(diag::cut(&told, OBSERVED)), waited: None });
             }
         }
     }
@@ -417,36 +496,45 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
         drop(inst.auto);
     }
 
-    let seen = |upto: usize| -> Vec<RunLine> {
-        observations
-            .iter()
-            .take(upto)
-            .map(|o| RunLine {
-                line: o.line,
-                when: format!("{}.{}", o.target, o.call),
-                observed: Some(o.obs.summary()),
-                waited: o.waited.clone(),
-            })
-            .collect()
-    };
-    let (status, run) = if let Some((mut f, pos, target, when, waited)) = error {
+    let (status, run) = if let Some((mut f, pos, target, line)) = error {
         if f.code == "E033"
             && let Some(err) = server_stderr.get(&target)
         {
             f.notes.extend(proc::stderr_tail(err));
         }
-        // every observation came before the `when` that failed
-        let mut run = seen(observations.len());
-        run.push(RunLine { line: pos.line, when, observed: None, waited });
+        // what came from the environment is told to nobody, whatever the program did with it
+        let f = held.hide_failure(f);
+        // every step in the trail came before the one that failed
+        let mut run = trail.clone();
+        run.push(line);
         let mut d = diag::error(f.code, pos.line, pos.col, f.msg).with_path(run.iter().map(RunLine::step).collect());
         d.notes = f.notes;
         (ClaimStatus::Error(d), run)
     } else if let Some(upto) = failed_after {
-        (ClaimStatus::Fail, seen(upto))
+        (ClaimStatus::Fail, trail[..upto].to_vec())
     } else {
         (ClaimStatus::Ok, vec![])
     };
-    (ClaimResult { name: claim.name.clone(), line: claim.pos.line, status, checks, observations, run, started }, journal)
+    (ClaimResult { name: claim.name.clone(), line: claim.pos.line, status, checks, observations, run, trail, started }, journal)
+}
+
+/// Whether an answer settles a wait (DESIGN §18): every check under the `when` holds on it and every
+/// `keep` under it can read its value, each check with the values kept above it. None when no later
+/// answer can: a `keep` wants what geas's environment does not have.
+fn settles(under: &[&Step], o: &Obs, held: &Held) -> Option<bool> {
+    let mut trial = held.clone();
+    for s in under {
+        match s {
+            Step::Then(c) if !check::eval(c, o, &trial).ok => return Some(false),
+            Step::Keep(k) => match keep::read(k, Some(o)) {
+                Ok((value, secret)) => trial.push(&k.name, value, secret),
+                Err(NotRead::Answer(_)) => return Some(false),
+                Err(NotRead::Env(_)) => return None,
+            },
+            _ => {}
+        }
+    }
+    Some(true)
 }
 
 /// The port of a new instance: the one written in the spec, or a free one from the
@@ -470,16 +558,10 @@ fn take_port(target: &str, port: Port) -> Result<(u16, Option<AutoPort>), Failur
     }
 }
 
-/// The run of a claim up to and with the `when` on `line`, each `when` with what it
-/// observed: the path of a diagnostic about something that `when` started.
+/// The run of a claim up to and with the `when` on `line`, each step with what it
+/// observed or read: the path of a diagnostic about something that `when` started.
 pub fn run_up_to(r: &ClaimResult, line: usize) -> Vec<diag::Step> {
-    r.observations
-        .iter()
-        .filter(|o| o.line <= line)
-        .map(|o| {
-            RunLine { line: o.line, when: format!("{}.{}", o.target, o.call), observed: Some(o.obs.summary()), waited: o.waited.clone() }.step()
-        })
-        .collect()
+    r.trail.iter().filter(|s| s.line <= line).map(RunLine::step).collect()
 }
 
 /// A check in the journal.
@@ -490,8 +572,19 @@ fn journal_check(claim: &str, cr: &CheckResult) -> String {
         cr.line,
         json::quote(&cr.label),
         json::quote(&cr.expected),
-        json::quote(&cr.actual.en),
+        json::quote(&cr.recorded),
         cr.ok
+    )
+}
+
+/// An error in the journal, the values the claim holds written `{name}` in what it says.
+fn journal_error(claim: &str, line: usize, f: &Failure, held: &Held) -> String {
+    format!(
+        "{{\"claim\":{},\"event\":\"error\",\"line\":{},\"code\":\"{}\",\"message\":{}}}",
+        json::quote(claim),
+        line,
+        f.code,
+        json::quote(&held.text(&f.msg.en, View::Record))
     )
 }
 

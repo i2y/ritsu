@@ -1,0 +1,31 @@
+not ok 1 - a line break cannot go in a header（エラー）
+    エラー[E038]: k/wrong.geas:15:3: `lines` の値はヘッダー `x-lines` で送れません。改行か制御文字が入っています
+        15 |   when api.get("/a", header "x-lines": "see {lines}")
+      ここまでの実行:
+          13  when api.post("/plain", body: "one
+    two")  →  200, body "one\ntwo"
+          14  keep body as lines  →  "one\ntwo"
+          15  when api.get("/a", header "x-lines": "see {lines}")
+not ok 2 - a control character cannot go in a header（エラー）
+    エラー[E038]: k/wrong.geas:22:3: `tabbed` の値はヘッダー `x-tabbed` で送れません。改行か制御文字が入っています
+        22 |   when api.get("/a", header "x-tabbed": "{tabbed}")
+      ここまでの実行:
+          20  when api.post("/plain", body: "one	two")  →  200, body "one\ttwo"
+          21  keep body as tabbed  →  "one\ttwo"
+          22  when api.get("/a", header "x-tabbed": "{tabbed}")
+not ok 3 - another host cannot be called（エラー）
+    エラー[E038]: k/wrong.geas:29:3: 呼び出しのパスが `http://example.com/things/<uuid>` になりました。別のホストなので送れません。geas が呼ぶのは自分で起動したサービスだけです
+        29 |   when things.get("{at}")
+      ここまでの実行:
+          27  when things.post("/elsewhere", body: "a chair")  →  201, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+          28  keep header "location" as at  →  "http://example.com/things/<uuid>"
+          29  when things.get("{at}")
+not ok 4 - a path starts with a slash（エラー）
+    エラー[E038]: k/wrong.geas:36:3: 呼び出しのパスが `orders/1` になりました。`/` で始まっていないので送れません
+        36 |   when api.get("{at}")
+      ここまでの実行:
+          34  when api.post("/plain", body: "orders/1")  →  200, body "orders/1"
+          35  keep body as at  →  "orders/1"
+          36  when api.get("{at}")
+ok 5 - the rest goes on
+主張 5 件 · 成り立った 1 件 · 成り立たなかった 4 件 · ジャーナル: k/.geas/wrong.journal.jsonl

@@ -1,0 +1,2 @@
+error[E002]: E002-header-on-click.geas:8:25: `click` takes no argument named `header`; it takes the name and `nth:`
+     8 |   when page.click("go", header "x-a": "b")

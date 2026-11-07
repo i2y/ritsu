@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E017-keep-port.geas","diagnostics":[{"code":"E017","severity":"error","file":"E017-keep-port.geas","line":8,"col":29,"message":"`port` cannot be kept: `{port}` is the port geas gives a service","notes":[],"path":[]}]}

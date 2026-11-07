@@ -1,0 +1,59 @@
+# An id that is a small number, as a number and as a string.
+target mirror {
+  serve "python3 mirror.py {port}"
+  port auto
+}
+
+target echo {
+  run "python3 echo.py"
+}
+
+target api {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "a number" {
+  when api.post("/small")
+  then status is 201
+  keep body json ".id" as id
+  and  body json ".id" is "{id}"
+  and  body json ".id" is 1
+  and  body json ".id" is not "2"
+  when api.get("/small/{id}")
+  then status is 200
+  and  body json ".id" is "{id}"
+  and  body json ".note" contains "thing {id}"
+}
+
+claim "a string of digits" {
+  when api.post("/text")
+  keep body json ".id" as id
+  then body json ".id" is "{id}"
+  and  body json ".id" is "1"
+  when api.get("/small/{id}")
+  then body json ".id" is "{id}"
+}
+
+claim "a status and an exit compared with a kept value" {
+  when mirror.post("/plain", body: "200")
+  keep body as code
+  then status is "{code}"
+  and  status is not "{code}{code}"
+  when echo.run("0", "", "0")
+  keep stdout as zero
+  then exit is "{zero}"
+}
+
+claim "a path kept from a member" {
+  when api.post("/small")
+  then status is 201
+  when api.get("/seen/201")
+  keep body json ".path" as path
+  then body json ".path" is "{path}"
+  when api.get("{path}")
+  then status is 200
+}

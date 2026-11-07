@@ -1,0 +1,17 @@
+not ok 1 - the value leads outside the document
+    k/at-run.geas:15: contract GET {at}/parts — got the contract things.yaml has no GET /things/<uuid>/parts
+        15 |   when api.get("{at}/parts")
+      the run that gets there:
+          12  when api.post("/things", body: "a chair")  →  201, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+          13  keep header "location" as at  →  "/things/<uuid>"
+          14  keep body json ".id" as id  →  "<uuid>"
+          15  when api.get("{at}/parts")  →  404, body "{\"error\": \"no such thing\"}"
+not ok 2 - a kept value that holds a slash
+    k/at-run.geas:23: contract GET /things/{at} — got the contract things.yaml has no GET /things//things/<uuid>
+        23 |   when api.get("/things/{at}")
+      the run that gets there:
+          20  when api.post("/things", body: "a chair")  →  201, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+          21  keep header "location" as at  →  "/things/<uuid>"
+          22  keep body json ".id" as id  →  "<uuid>"
+          23  when api.get("/things/{at}")  →  200, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+2 claims · 0 ok · 2 failed · journal: k/.geas/at-run.journal.jsonl

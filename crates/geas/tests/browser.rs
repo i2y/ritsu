@@ -45,6 +45,29 @@ fn run_logged(s: &Scratch, args: &[&str], extra: &[(&str, &str)]) -> (String, St
     r
 }
 
+/// A value kept from an answer: the path of a page, what is typed into it, and the nodes looked
+/// for. The journal writes it as its name, however the service numbers the order.
+#[test]
+fn a_kept_value_goes_into_the_page() {
+    if !ready("the browser tests") {
+        return;
+    }
+    let s = with_page("browser-kept", "kept.geas");
+    let (out, err, code) = run_logged(&s, &["check", "w/kept.geas"], &[]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    golden("en/browser/kept.txt", &out);
+    let journal = s.read("w/.geas/kept.journal.jsonl");
+    assert_eq!(uuid_steady(&journal), journal, "{journal}");
+    assert!(journal.contains("Order {id}"), "{journal}");
+    assert!(journal.contains(r#"open(\"/orders/{id}\")"#), "the call as it is written: {journal}");
+    golden("en/browser/kept.journal.jsonl", &journal);
+    // another number, the same bytes
+    let (out, err, code) = run_logged(&s, &["check", "w/kept.geas", "--lang", "ja"], &[]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    golden("ja/browser/kept.txt", &out);
+    assert_eq!(s.read("w/.geas/kept.journal.jsonl"), journal);
+}
+
 #[test]
 fn the_page_in_chrome() {
     if !ready("the browser tests") {

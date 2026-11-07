@@ -1,0 +1,16 @@
+error[E016]: k/outside.geas:11:3: the contract things.yaml has no DELETE /things
+    11 |   when api.delete("/things")
+  = /things has POST
+  = add it to the contract, or call it through a target with no `contract` line
+error[E016]: k/outside.geas:12:3: the contract things.yaml has no POST /things/{id}
+    12 |   when api.post("/things/{id}")
+  = /things/{id} has GET, PUT, PATCH, DELETE
+  = add it to the contract, or call it through a target with no `contract` line
+error[E016]: k/outside.geas:13:3: the contract things.yaml has no GET /nothing/{id}
+    13 |   when api.get("/nothing/{id}")
+  = the contract's paths: /things, /absolute, /elsewhere, /things/{id}
+  = add it to the contract, or call it through a target with no `contract` line
+error[E016]: k/outside.geas:14:3: the contract things.yaml has no GET /things/{id}/parts
+    14 |   when api.get("/things/{id}/parts")
+  = the contract's paths: /things, /absolute, /elsewhere, /things/{id}
+  = add it to the contract, or call it through a target with no `contract` line

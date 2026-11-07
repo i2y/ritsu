@@ -1,0 +1,8 @@
+not ok 1 - the value does not come in time
+    k/wait-runs-out.geas:8: within 1 second — no answer held every check under it (<n> calls in <t> s); the checks below read the last one
+         8 |   when api.get("/gaps") within 1 second
+    k/wait-runs-out.geas:9: keep body json ".none" as result — got null
+         9 |   keep body json ".none" as result
+      the run that gets there:
+           8  when api.get("/gaps") within 1 second  →  200, body "{\"none\": null, \"empty\": \"\"}"
+1 claim · 0 ok · 1 failed · journal: k/.geas/wait-runs-out.journal.jsonl

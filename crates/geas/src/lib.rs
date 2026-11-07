@@ -27,6 +27,8 @@ pub mod map;
 pub mod model;
 pub mod parse;
 pub mod pins;
+/// What a claim keeps from one step for the next (DESIGN §22).
+pub mod keep;
 pub mod pixie;
 pub mod proc;
 pub mod regex;

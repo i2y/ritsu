@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E017-name-in-a-node-pattern.geas","diagnostics":[{"code":"E017","severity":"error","file":"E017-name-in-a-node-pattern.geas","line":10,"col":42,"message":"a pattern is read before anything runs, so it cannot hold `{title}`, which the run finds out","notes":["compare with `is` or `contains`"],"path":[]}]}

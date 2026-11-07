@@ -1,0 +1,11 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "keep env does not wait for anything" {
+  when api.get("/") within 5 seconds
+  keep env "TOKEN" as token
+  when api.get("/", header "x": "{token}")
+  then status is 200
+}

@@ -21,7 +21,7 @@ Repro
 error[E002]: a name geas does not know
 
 When it appears
-  A word that has to name something geas knows names nothing it knows: a target in a `when` that the file does not declare, a call other than `run`, `get`, `post`, `open`, `click`, `input`, `submit`, `press` and `advance`, an argument a call does not take (`nth:` without `into:` among them), something to check other than `stdout`, `stderr`, `exit`, `status`, `header`, `body`, `body json` and `screen`, a way to compare other than `is`, `is not`, `is above`, `is below`, `is at least`, `is at most`, `is between`, `contains`, `does not contain`, `matches`, `does not match`, `exists` and `does not exist`, a role in a node other than WAI-ARIA's and `text`, a state other than `disabled`, `enabled`, `checked` and `unchecked`, a line in a target other than `run`, `serve`, `pixie`, `driver`, `port`, `serial` and the pins (`env`, `tz`, `locale`, `clock`, `seed`), or a `mask` of something other than `header`, `body json` and `screen`.
+  A word that has to name something geas knows names nothing it knows: a target in a `when` that the file does not declare, a call other than `run`, `get`, `post`, `put`, `patch`, `delete`, `open`, `click`, `input`, `submit`, `press` and `advance`, an argument a call does not take (`nth:` without `into:` among them, and `body:` on a `get`), a header of an HTTP call whose name is not an HTTP token, whose value holds a line break or a control character, or that geas sets itself (`host`, `connection`, `content-length`, `transfer-encoding`), something to check other than `stdout`, `stderr`, `exit`, `status`, `header`, `body`, `body json` and `screen`, something for `keep` to read other than `stdout`, `stderr`, `header`, `body`, `body json`, `env`, `status`, `exit` and `screen`, a way to compare other than `is`, `is not`, `is above`, `is below`, `is at least`, `is at most`, `is between`, `contains`, `does not contain`, `matches`, `does not match`, `exists` and `does not exist`, a role in a node other than WAI-ARIA's and `text`, a state other than `disabled`, `enabled`, `checked` and `unchecked`, a line in a target other than `run`, `serve`, `pixie`, `driver`, `port`, `serial` and the pins (`env`, `tz`, `locale`, `clock`, `seed`), or a `mask` of something other than `header`, `body json` and `screen`.
 
 What usually fixes it
   Correct the word: the message lists the words that fit there. A target a `when` names is declared in the same file, with `target <name> { … }`.
@@ -86,10 +86,10 @@ Repro
 error[E005]: a claim that cannot run
 
 When it appears
-  A claim has no steps, or a `then` (or an `and`) comes before any `when`. A claim runs its `when`s in order, and each check reads what the `when` before it observed.
+  A claim has no steps, or no `when`, or a `then` (or an `and`) or a `keep` of an answer comes before any `when`. A claim runs its `when`s in order, and each check and each `keep` reads what the `when` before it observed. The one step that can come before a `when` is `keep env`, which reads geas's own environment.
 
 What usually fixes it
-  Start the claim with the `when` whose observation the check reads.
+  Write before the check, or the `keep`, the `when` whose observation it reads.
 
 Repro
   $ geas check e005.geas
@@ -106,10 +106,10 @@ Repro
 error[E006]: a call its target does not take
 
 When it appears
-  A `when` makes a call its target does not take: `get`, `post` or an action (`open`, `click`, `input`, `submit`, `press`, `advance`) on a `run` target; `run` on a `serve` target; anything but an action on a `pixie` or a `driver` target.
+  A `when` makes a call its target does not take: `get`, `post`, `put`, `patch`, `delete` or an action (`open`, `click`, `input`, `submit`, `press`, `advance`) on a `run` target; `run` on a `serve` target; anything but an action on a `pixie` or a `driver` target.
 
 What usually fixes it
-  Call a command with `run(…)`, a service with `get(…)`, `post(…)` or the actions on its page, and a pixie app or a GUI behind a driver with the actions; or point the `when` at the target meant.
+  Call a command with `run(…)`, a service with `get(…)`, `post(…)`, `put(…)`, `patch(…)`, `delete(…)` or the actions on its page, and a pixie app or a GUI behind a driver with the actions; or point the `when` at the target meant.
 
 Repro
   $ geas check e006.geas
@@ -126,10 +126,10 @@ Repro
 error[E007]: a check of something its `when` does not observe
 
 When it appears
-  A check names something the `when` before it does not observe: `status`, `header`, `body` or `screen` after a `run`; `stdout`, `stderr`, `exit` or `screen` after a `get` or a `post`; anything but `screen` after an action. geas finds this before it runs anything.
+  A check or a `keep` names something the `when` before it does not observe: `status`, `header`, `body` or `screen` after a `run`; `stdout`, `stderr`, `exit` or `screen` after a `get`, `post`, `put`, `patch` or `delete`; anything but `screen` after an action. geas finds this before it runs anything.
 
 What usually fixes it
-  Check what that call gives (a `run`: stdout, stderr, exit; a `get` or a `post`: status, header, body, body json; an action: screen), or move the check after the `when` that gives it.
+  Read what that call gives (a `run`: stdout, stderr, exit; any of the five HTTP calls: status, header, body, body json; an action: screen), or move the step after the `when` that gives it.
 
 Repro
   $ geas check e007.geas
@@ -274,10 +274,10 @@ Repro
 error[E014]: a wait geas cannot keep
 
 When it appears
-  A `when` waits in a way geas cannot keep: `within` after an action on a screen (`open`, `click`, `input`, `submit`, `press`, `advance`), which settles after each action instead; a time below 1 second or above 60; or a `when` with no `then` under it, which leaves nothing to wait for.
+  A `when` waits in a way geas cannot keep: `within` after an action on a screen (`open`, `click`, `input`, `submit`, `press`, `advance`), which settles after each action instead; a time below 1 second or above 60; or a `when` with neither a `then` nor a `keep` of its answer under it, which leaves nothing to wait for.
 
 What usually fixes it
-  Write `within` after a `run`, a `get` or a `post`, with a whole number of seconds from 1 to 60, and under it the checks to wait for. A screen is given more time with `advance(ms)`.
+  Write `within` after a `run` or one of the five HTTP calls (`get`, `post`, `put`, `patch`, `delete`), with a whole number of seconds from 1 to 60, and under it the checks to wait for, or a `keep` to wait for a value. A screen is given more time with `advance(ms)`.
 
 Repro
   $ geas check e014.geas
@@ -317,7 +317,7 @@ Repro
 error[E016]: a call the contract does not have
 
 When it appears
-  A `get` or a `post` on a target with a `contract` line calls a path or a method its document does not have. The path is compared up to its `?`, a `{id}` stands for one or more characters of a segment, and the path of a URL in `servers` may be in front or not. It is known without running anything, so no claim runs.
+  A `get`, `post`, `put`, `patch` or `delete` on a target with a `contract` line calls a path or a method its document does not have. The path is compared up to its `?`, a `{id}` stands for one or more characters of a segment, and the path of a URL in `servers` may be in front or not. It is known without running anything, so no claim runs. A path that starts with a name a `keep` holds (`{at}`, `{at}/items`) is not known until it runs, so it is not looked at here: when the call comes to a path the document does not have, the claim fails in the same words.
 
 What usually fixes it
   Correct the call, or add it to the contract. A claim that means to call outside the contract (an unknown path answers 404) calls through a target with no `contract` line.
@@ -344,6 +344,29 @@ Repro
           "get": { "responses": { "200": { "description": "The order" } } }
         }
       }
+    }
+
+error[E017]: a `keep`, or a use of the name it holds, that cannot work
+
+When it appears
+  A claim keeps one name twice; or the name is `port`, which `{port}` already means; or it says `keep status`, `keep exit` or `keep screen` (it can read `stdout`, `stderr`, `header`, `body`, `body json` and `env`: `status` and `exit` are compared with `is`, and a screen is no one string); or a `{id}` comes in a step before the `keep` that holds it; or a pattern of `matches`, `does not match` or `matching` holds a name the claim keeps, since a pattern is read before anything runs; or a call on a `pixie` target does, since pixie makes a claim's actions one script before they run. No claim runs.
+
+What usually fixes it
+  Choose another name, or write the `keep` before the step that uses it. Where a pattern would hold a value, compare with `is` or `contains`. A call on a pixie app is written with what is known before it runs.
+
+Repro
+  $ geas check e017.geas
+  e017.geas:
+    target orders {
+      serve "python3 server.py {port}"
+      port auto
+    }
+
+    claim "an order can be read back" {
+      when orders.get("/orders/{id}")
+      then status is 200
+      when orders.post("/orders")
+      keep body json ".id" as id
     }
 
 error[E030]: a program that could not be started
@@ -410,7 +433,7 @@ Repro
 error[E033]: an HTTP exchange that failed: refused, cut off, malformed, or no answer within 5 s
 
 When it appears
-  A `get` or a `post` reached the service's port and got no HTTP answer: the connection was refused, the service closed it without answering, what came back was not HTTP, or nothing came back within 5 s. The notes give the last lines of the service's stderr.
+  An HTTP call (`get`, `post`, `put`, `patch`, `delete`) reached the service's port and got no HTTP answer: the connection was refused, the service closed it without answering, what came back was not HTTP, or nothing came back within 5 s. The notes give the last lines of the service's stderr.
 
 What usually fixes it
   Make the service answer every request with an HTTP response. A service that fails on a request often closes the connection; its stderr says why.
@@ -561,6 +584,27 @@ Repro (needs python3)
             break
         else:
             print("ready", flush=True)
+
+error[E038]: a value a call cannot use
+
+When it appears
+  A value a claim holds turned out not to work when it ran: the variable of a `keep env` is not set, is empty or is not UTF-8; a header's value came to hold a line break or a control character; a path came to be a URL on a host geas did not start, or not to start with `/`. The claim ends as an error, and its remaining steps do not run. The other claims go on.
+
+What usually fixes it
+  Set the variable where geas runs (`export NAME=…`). Otherwise look at the service that gave the value, or compare the value with `is` or `contains` when the point is what it holds rather than where it leads.
+
+Repro
+  $ geas check e038.geas
+  e038.geas:
+    target say {
+      run "echo"
+    }
+
+    claim "passes the key on" {
+      keep env "GEAS_EXPLAIN_NOT_SET" as key
+      when say.run("{key}")
+      then exit is 0
+    }
 
 error[E050]: no baseline: run `geas snap` first
 
@@ -936,6 +980,28 @@ Repro
       }
     }
 
+warning[W016]: a `{name}` that a claim with a `keep` does not hold
+
+When it appears
+  A string of a call, or the value of a check, in a claim with a `keep` holds a `{name}` in the shape of an identifier, and no `keep` holds that name. It is usually a slip of the fingers. The string is sent, and compared, as it is written. `{port}` and what a pattern holds are not said, and a claim without a `keep` says nothing.
+
+What usually fixes it
+  Correct the name, or `keep` the value. If those characters are what is meant, leave them as they are.
+
+Repro
+  $ geas check w016.geas
+  w016.geas:
+    target say {
+      run "echo"
+    }
+
+    claim "says what it said" {
+      when say.run("hello")
+      keep stdout as said
+      when say.run("{sayd}")
+      then exit is 0
+    }
+
 warning[W060]: a target that gave no record at all in `map`
 
 When it appears
@@ -992,7 +1058,7 @@ When it appears
   In `geas check`, somewhere in the spec, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line. The claims run as they always do.
 
 What usually fixes it
-  Keep the key where the code runs (an environment variable, the platform's connection or secret store), and have the target's program read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+  Keep the key where the code runs (an environment variable, the platform's connection or secret store), and have the target's program read it from there. A key that a call sends can be read from the environment with `keep env "NAME" as key` (`header "authorization": "Bearer {key}"`), and no journal or report shows its value. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
 
 Repro
   $ geas check w901.geas

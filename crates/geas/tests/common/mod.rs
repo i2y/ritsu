@@ -113,7 +113,8 @@ pub fn golden(name: &str, actual: &str) {
 /// took, `27 calls in 3.0 s`, `3.0 秒で 27 回` and `"tries":27,"ms":3004`, and a call that
 /// failed while waiting says how long after the first it came. Those differ from one run
 /// to the next; the goldens hold `<n>` and `<t>`, and the pages are compared through this
-/// as well, so that they show the numbers of a real run.
+/// as well, so that they show the numbers of a real run. A uuid a service made differs too, and
+/// the goldens hold `<uuid>`.
 pub fn steady(text: &str) -> String {
     let mut s = text.replace(" call in ", " calls in ");
     s = number_before(&s, " calls in ", "<n>");
@@ -123,7 +124,43 @@ pub fn steady(text: &str) -> String {
     s = number_after(&s, "\"tries\":", "<n>");
     s = number_after(&s, "\"ms\":", "<t>");
     s = number_after(&s, " of the wait, ", "<t>");
-    number_after(&s, "一回目から ", "<t>")
+    uuid_steady(&number_after(&s, "一回目から ", "<t>"))
+}
+
+/// `text` with every uuid written `<uuid>`: what a service numbers with differs from run to run, and
+/// so does a report that shows it.
+pub fn uuid_steady(text: &str) -> String {
+    const SHAPE: [usize; 5] = [8, 4, 4, 4, 12];
+    let b = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    let uuid_at = |at: usize| -> bool {
+        let mut p = at;
+        for (k, len) in SHAPE.iter().enumerate() {
+            if p + len > b.len() || !b[p..p + len].iter().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c)) {
+                return false;
+            }
+            p += len;
+            if k < 4 {
+                if b.get(p) != Some(&b'-') {
+                    return false;
+                }
+                p += 1;
+            }
+        }
+        true
+    };
+    while i < b.len() {
+        if uuid_at(i) {
+            out.push_str("<uuid>");
+            i += 36;
+        } else {
+            let c = text[i..].chars().next().expect("not at the end");
+            out.push(c);
+            i += c.len_utf8();
+        }
+    }
+    out
 }
 
 fn is_number(c: char) -> bool {

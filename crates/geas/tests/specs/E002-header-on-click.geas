@@ -1,0 +1,10 @@
+target page {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "an action has no headers" {
+  when page.open("/")
+  when page.click("go", header "x-a": "b")
+  then screen contains text "gone"
+}

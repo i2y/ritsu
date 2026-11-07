@@ -410,8 +410,8 @@ not ok 2 - a job finishes in the background
 …
 ```
 
-A `post` or a `run` can wait too, for an API that reads with POST, but each call is made again as it
-is written, and so is what it does: wait on a read where there is one. A screen is not waited for
+The other calls and a `run` can wait too, for an API that reads with POST, but each call is made again
+as it is written, and so is what it does: wait on a read where there is one. A screen is not waited for
 this way (E014): geas lets it settle after each action, and `advance(ms)` gives it more time.
 
 ## Holding what a service answers to its contract
@@ -451,7 +451,7 @@ not ok 1 - a new order is open
 ```
 
 Each answer is one more check on its `when`'s line, in the report, in `--json` and in the journal.
-A wait holds only the answer it kept, and does not wait for the contract. Only `get` and `post` are
+A wait holds only the answer it kept, and does not wait for the contract. All five HTTP calls are
 held; the requests a page makes in Chrome are not seen. The claims choose the calls, so an answer no
 claim brings about is not held.
 
@@ -462,14 +462,98 @@ does not hold is said once (W015). The file is OpenAPI 3.0, 3.1 or 3.2, in JSON 
 the spec's directory, or from a dependency as `@<name>/…` in a module, and a `$ref` can reach another
 file on the disk.
 
+## Going on from what a service answers
+
+A service chooses the numbers of what it makes, and asks who is calling. `keep` holds a value for
+the steps below it, `{name}` uses it, and a call can send `header "<name>": "<value>"`. `put`, `patch`
+and `delete` are calls like `get` and `post`. [examples/tickets](examples/tickets) is a service that
+gives each ticket a new uuid and wants a token on every call:
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+…
+claim "a ticket can be read back, changed and taken away" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/tickets/{id}"
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  and  body json ".state" is "open"
+…
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 404
+}
+```
+
+`keep` reads `stdout`, `stderr`, `header "<name>"`, `body` or `body json "<path>"` of the `when` above
+it. `keep env "<name>"` reads geas's own environment, and is the one step that can come before a
+`when`. `{name}` is the value in a call's path, body, header values and arguments, in what an action
+opens, clicks or types, and in the value of a check, and a check that holds a name compares as text, so a
+number fits it too. Any other `{…}` stays what it is, so a JSON body needs no escape; in a claim with a
+`keep`, one that looks like a slip is said (W016).
+
+The numbers differ in every run, and the journal and the baseline do not:
+
+```console
+$ export TICKETS_TOKEN=a-token-of-yours
+$ geas check examples/tickets/tickets.geas
+ok 1 - a ticket can be read back, changed and taken away
+ok 2 - the address of a new ticket can be followed
+ok 3 - a call without the token is refused
+3 claims · 3 ok · 0 failed · journal: examples/tickets/.geas/tickets.journal.jsonl
+$ geas snap examples/tickets/tickets.geas
+3 claims · 3 ok · 0 failed · baseline: 9 interactions → examples/tickets/.geas/tickets.baseline.jsonl
+$ geas drift examples/tickets/tickets.geas
+drift: 9 interactions compared · 0 drifted · 0 unclaimed change(s) · 0 claimed
+```
+
+They write a kept value as its name, where it stands as a word, so the journal says
+`"location":"/tickets/{id}"`. What came from the environment is written so wherever it stands, and geas
+shows it nowhere: not in the journal, the baseline, a report or `--json`, even when the service sends it
+back. The rule is about bytes, so a small number can be two things: with an `id` of `1`, `{"qty":1}` is
+written `{"qty":"{id}"}`. A value no `keep` holds stays what it was, so a claim keeps or masks what it
+does not use and differs from run to run.
+
+What a `keep` cannot read fails its claim there, since the steps below it go on from the value. After an
+agent renamed `id` to `ticketId`:
+
+```text
+not ok 1 - a ticket can be read back, changed and taken away
+    examples/tickets/tickets.geas:17: contract POST /tickets — got $: the required id is missing
+        17 |   when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")
+    examples/tickets/tickets.geas:19: keep body json ".id" as id — got <no key `id` in JSON object>
+        19 |   keep body json ".id" as id
+      the run that gets there:
+          16  keep env "TICKETS_TOKEN" as token  →  {token}
+          17  when api.post("/tickets", body: "{"title":"the printer"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+…
+```
+
+A failed check that uses a name says its value too, unless it came from the environment. Under a `within`,
+a `keep` waits: the step ends on the first answer on which the checks hold and the `keep`s can read. In a
+path a value goes with what a request line cannot hold written `%XX`, and an address on this machine, such
+as a whole `Location`, goes as its path. A value a call cannot use (a variable that is not set, a line
+break in a header, an address on another host) ends the claim as an error (E038). A name cannot go in a
+pattern or a call on a pixie app, nor be used above its `keep` (E017): those are read before the run knows
+it. A path that starts with a name is held to a contract when it runs, not before.
+
 ## The language
 
-A `when` is an action on a target; `then` and `and` check what it observed.
+A `when` is an action on a target; `then` and `and` check what it observed; `keep … as <name>` holds a
+value of it for the steps below.
 
 | Target | Actions | Checks |
 |---|---|---|
 | `run "<command>"`, a command run for each `when` | `run("a", "b")` | `stdout`, `stderr`, `exit` |
-| `serve "<command>"` and `port <n>` or `port auto`, a service started for each claim | `get("/path")`, `post("/path", body: "…")` | `status`, `header "<name>"`, `body`, `body json ".a[0].b"` |
+| `serve "<command>"` and `port <n>` or `port auto`, a service started for each claim | `get("/path")`, `post("/path", body: "…")`, `put`, `patch`, `delete`, each with any number of `header "<name>": "<value>"` | `status`, `header "<name>"`, `body`, `body json ".a[0].b"` |
 | a `serve` target in Chrome, `pixie "<app>"`, `driver "<command>"` | `open`, `click`, `input`, `submit`, `press`, `advance` | `screen` |
 
 The matchers read as English: `is`, `is not`, `is above`, `is below`, `is at least`, `is at most`,
@@ -489,7 +573,7 @@ error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` 
 
 Every diagnostic has a code, the place, and what leads to it: a claim that could not run carries the
 run that gets there, as E035 above. `geas explain <code>` says when a code appears, what usually
-fixes it, and the smallest claims file that gives it; there are 40 codes, and `--lang ja` prints
+fixes it, and the smallest claims file that gives it; there are 43 codes, and `--lang ja` prints
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.
@@ -587,6 +671,7 @@ and JSON geas writes.
 | [web-greeter](examples/web-greeter) | a page in Chrome and its service, every pin |
 | [jobs](examples/jobs) | a service whose jobs finish after it answers, and a claim that waits for one with `within` |
 | [orders](examples/orders) | a service with an OpenAPI document, and a `contract` line that holds every answer to it |
+| [tickets](examples/tickets) | a service that numbers what it makes and asks for a token: `put`, `patch`, `delete`, headers and `keep`, with records that stay the same from run to run |
 | [pixie-greeter](examples/pixie-greeter) | a pixie desktop app, built with pixie and put beside the claims |
 
 Each has a README saying what it shows, how to run it, and what to look for.

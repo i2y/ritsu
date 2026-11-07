@@ -1,0 +1,12 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a name holds one value" {
+  when api.post("/a")
+  keep body json ".id" as id
+  when api.post("/b")
+  keep body json ".id" as id
+  then status is 200
+}

@@ -1,0 +1,5 @@
+error[E013]: E013-open-with-a-path-not-kept.geas:10:18: a page's path starts with `/`: `open("/{other}")`
+    10 |   when page.open("{other}")
+warning[W016]: E013-open-with-a-path-not-kept.geas:10:19: `{other}` is not a name this claim keeps, so it stays as written
+    10 |   when page.open("{other}")
+  = the names it keeps: at

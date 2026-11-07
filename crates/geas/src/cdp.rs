@@ -615,7 +615,7 @@ impl Pages<'_> {
                 self.key(&session, key, m)?;
             }
             Call::Advance(n) => ms = *n,
-            Call::Open(_) | Call::Run(_) | Call::Get(_) | Call::Post { .. } => unreachable!("handled apart"),
+            Call::Open(_) | Call::Run(_) | Call::Http { .. } => unreachable!("handled apart"),
         }
         self.settle(tg, &session, ms)?;
         self.screen(&session, port, auto)

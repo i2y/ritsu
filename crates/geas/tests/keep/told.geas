@@ -1,0 +1,19 @@
+# A failed check says the values it goes by, and the run says what was kept, in order.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "a check that fails on a value" {
+  when api.post("/text")
+  keep body json ".id" as id
+  keep body json ".qty" as qty
+  then body json ".id" is "{qty}{id}"
+  and  body json ".note" does not contain "{id}"
+  when api.get("/small/{id}")
+  then body json ".id" is "{id}{id}"
+  and  status is "{qty}"
+}

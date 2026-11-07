@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E017-keep-exit.geas","diagnostics":[{"code":"E017","severity":"error","file":"E017-keep-exit.geas","line":7,"col":8,"message":"`keep` does not read `exit`: it is a number the spec writes as it is, and nothing differs from run to run; compare it with `is`","notes":[],"path":[]}]}

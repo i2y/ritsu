@@ -1,0 +1,2 @@
+エラー[E001]: E001-keep-without-as.geas:9:3: `as` と名前を書くところに `then` があります
+     9 |   then status is 200

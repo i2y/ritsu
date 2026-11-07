@@ -1,0 +1,9 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "an exit is written as it is" {
+  when calc.run("1")
+  keep exit as code
+  then stdout contains "{code}"
+}

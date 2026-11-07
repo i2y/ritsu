@@ -1,0 +1,3 @@
+error[E007]: E007-keep-body-after-run.geas:7:3: a `run` observes stdout, stderr and exit, not `body`
+     7 |   keep body as whole
+  = the `when` it reads is on line 6

@@ -1,0 +1,2 @@
+error[E002]: E002-header-value.geas:7:39: the value of the header `x-a` has a line break or a control character, which cannot go in a header
+     7 |   when api.get("/", header "x-a": "one\ntwo")

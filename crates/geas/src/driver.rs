@@ -57,7 +57,7 @@ pub fn action_line(call: &Call) -> String {
         Call::Submit(p) => format!("{{\"do\":\"submit\"{}}}", place(p)),
         Call::Press(k) => format!("{{\"do\":\"press\",\"key\":{}}}", quote(k)),
         Call::Advance(ms) => format!("{{\"do\":\"advance\",\"ms\":{ms}}}"),
-        Call::Run(_) | Call::Get(_) | Call::Post { .. } => unreachable!("E006 refuses these on a driver"),
+        Call::Run(_) | Call::Http { .. } => unreachable!("E006 refuses these on a driver"),
     }
 }
 

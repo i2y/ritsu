@@ -1,0 +1,84 @@
+# What tests/impl/things.py answers, as far as the claims of tests/keep/held.geas go.
+openapi: 3.1.0
+info:
+  title: Things
+  version: "1"
+paths:
+  /things:
+    post:
+      responses:
+        "201":
+          description: The thing made
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+  /absolute:
+    post:
+      responses:
+        "201":
+          description: The thing made
+          content:
+            application/json:
+              schema:
+                type: object
+  /elsewhere:
+    post:
+      responses:
+        "201":
+          description: The thing made
+  /things/{id}:
+    get:
+      responses:
+        "200":
+          description: The thing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+        "404":
+          description: There is no such thing
+    put:
+      responses:
+        "200":
+          description: The thing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+    patch:
+      responses:
+        "200":
+          description: The thing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patched"
+    delete:
+      responses:
+        "204":
+          description: The thing is gone
+components:
+  schemas:
+    Thing:
+      type: object
+      required: [id, name, qty]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        qty:
+          type: integer
+    Patched:
+      type: object
+      required: [patched]
+      properties:
+        patched:
+          type: boolean

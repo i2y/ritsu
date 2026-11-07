@@ -1,0 +1,2 @@
+error[E017]: E017-keep-exit.geas:7:8: `keep` does not read `exit`: it is a number the spec writes as it is, and nothing differs from run to run; compare it with `is`
+     7 |   keep exit as code

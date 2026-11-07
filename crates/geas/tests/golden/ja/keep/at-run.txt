@@ -1,0 +1,17 @@
+not ok 1 - the value leads outside the document
+    k/at-run.geas:15: contract GET {at}/parts のはずが、実際は契約 things.yaml に GET /things/<uuid>/parts はありません
+        15 |   when api.get("{at}/parts")
+      ここまでの実行:
+          12  when api.post("/things", body: "a chair")  →  201, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+          13  keep header "location" as at  →  "/things/<uuid>"
+          14  keep body json ".id" as id  →  "<uuid>"
+          15  when api.get("{at}/parts")  →  404, body "{\"error\": \"no such thing\"}"
+not ok 2 - a kept value that holds a slash
+    k/at-run.geas:23: contract GET /things/{at} のはずが、実際は契約 things.yaml に GET /things//things/<uuid> はありません
+        23 |   when api.get("/things/{at}")
+      ここまでの実行:
+          20  when api.post("/things", body: "a chair")  →  201, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+          21  keep header "location" as at  →  "/things/<uuid>"
+          22  keep body json ".id" as id  →  "<uuid>"
+          23  when api.get("/things/{at}")  →  200, body "{\"id\": \"<uuid>\", \"name\": \"a chair\", \"qty\": 1}"
+主張 2 件 · 成り立った 0 件 · 成り立たなかった 2 件 · ジャーナル: k/.geas/at-run.journal.jsonl

@@ -1,0 +1,11 @@
+# The value never comes: the time runs out, and the claim fails on the last answer.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+claim "the value does not come in time" {
+  when api.get("/gaps") within 1 second
+  keep body json ".none" as result
+  when api.get("/seen/{result}")
+}

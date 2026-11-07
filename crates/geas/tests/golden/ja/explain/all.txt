@@ -21,7 +21,7 @@
 エラー[E002]: geas が知らない名前
 
 いつ出るか
-  名前を書くところに、geas の知らない語があるとき。ファイルに宣言していないターゲット（`when` の後ろ）、`run`・`get`・`post`・`open`・`click`・`input`・`submit`・`press`・`advance` 以外の呼び出し、呼び出しが受け付けない引数（`into:` のない `nth:` も）、`stdout`・`stderr`・`exit`・`status`・`header`・`body`・`body json`・`screen` 以外のチェックするもの、`is`・`is not`・`is above`・`is below`・`is at least`・`is at most`・`is between`・`contains`・`does not contain`・`matches`・`does not match`・`exists`・`does not exist` 以外の比べ方、WAI-ARIA のロールと `text` 以外のノードのロール、`disabled`・`enabled`・`checked`・`unchecked` 以外の状態、`run`・`serve`・`pixie`・`driver`・`port`・`serial` と固定（`env`・`tz`・`locale`・`clock`・`seed`）以外のターゲットの行、`header`・`body json`・`screen` 以外の `mask` が、これに当たります。
+  名前を書くところに、geas の知らない語があるとき。ファイルに宣言していないターゲット（`when` の後ろ）、`run`・`get`・`post`・`put`・`patch`・`delete`・`open`・`click`・`input`・`submit`・`press`・`advance` 以外の呼び出し、呼び出しが受け付けない引数（`into:` のない `nth:` も、`get` の `body:` も）、HTTP の呼び出しのヘッダーのうち、名前が HTTP の token でないもの、値に改行や制御文字があるもの、geas が決めるもの（`host`、`connection`、`content-length`、`transfer-encoding`）、`stdout`・`stderr`・`exit`・`status`・`header`・`body`・`body json`・`screen` 以外のチェックするもの、`stdout`・`stderr`・`header`・`body`・`body json`・`env`・`status`・`exit`・`screen` 以外の `keep` の読むもの、`is`・`is not`・`is above`・`is below`・`is at least`・`is at most`・`is between`・`contains`・`does not contain`・`matches`・`does not match`・`exists`・`does not exist` 以外の比べ方、WAI-ARIA のロールと `text` 以外のノードのロール、`disabled`・`enabled`・`checked`・`unchecked` 以外の状態、`run`・`serve`・`pixie`・`driver`・`port`・`serial` と固定（`env`・`tz`・`locale`・`clock`・`seed`）以外のターゲットの行、`header`・`body json`・`screen` 以外の `mask` が、これに当たります。
 
 直し方
   メッセージに並ぶ語のどれかに直してください。`when` で使うターゲットは、同じファイルに `target <名前> { … }` で宣言してください。
@@ -86,10 +86,10 @@
 エラー[E005]: 実行できない主張
 
 いつ出るか
-  主張にステップが一つもないか、`when` より前に `then`（または `and`）があるとき。主張は `when` を上から順に実行し、チェックはそれぞれ直前の `when` の結果を見ます。
+  主張にステップが一つもないか、`when` が一つもないか、`when` より前に `then`（または `and`）か、答えを読む `keep` があるとき。主張は `when` を上から順に実行し、チェックと `keep` はそれぞれ直前の `when` の結果を見ます。`when` より前に書けるのは、geas の環境から読む `keep env` だけです。
 
 直し方
-  チェックが見る結果を返す `when` を、主張の最初に書いてください。
+  チェックや `keep` が見る結果を返す `when` を、その前に書いてください。
 
 再現
   $ geas check e005.geas
@@ -106,10 +106,10 @@
 エラー[E006]: ターゲットが受け付けない呼び出し
 
 いつ出るか
-  `when` の呼び出しを、そのターゲットが受け付けないとき。`run` のターゲットに `get`・`post`・操作（`open`・`click`・`input`・`submit`・`press`・`advance`）を使ったとき、`serve` のターゲットに `run` を使ったとき、`pixie` や `driver` のターゲットに操作以外を使ったときです。
+  `when` の呼び出しを、そのターゲットが受け付けないとき。`run` のターゲットに `get`・`post`・`put`・`patch`・`delete`・操作（`open`・`click`・`input`・`submit`・`press`・`advance`）を使ったとき、`serve` のターゲットに `run` を使ったとき、`pixie` や `driver` のターゲットに操作以外を使ったときです。
 
 直し方
-  コマンドは `run(…)` で、サービスは `get(…)`・`post(…)`・ページへの操作で、pixie のアプリとドライバーで動かす GUI は操作で呼んでください。別のターゲットのつもりだったなら、`when` のターゲットを直してください。
+  コマンドは `run(…)` で、サービスは `get(…)`・`post(…)`・`put(…)`・`patch(…)`・`delete(…)`・ページへの操作で、pixie のアプリとドライバーで動かす GUI は操作で呼んでください。別のターゲットのつもりだったなら、`when` のターゲットを直してください。
 
 再現
   $ geas check e006.geas
@@ -126,10 +126,10 @@
 エラー[E007]: 直前の `when` の結果にないもののチェック
 
 いつ出るか
-  チェックが、直前の `when` の結果にないものを見ているとき。`run` のあとの `status`・`header`・`body`・`screen`、`get` や `post` のあとの `stdout`・`stderr`・`exit`・`screen`、操作のあとの `screen` 以外です。geas はこれを、何かを実行する前に見つけます。
+  チェックか `keep` が、直前の `when` の結果にないものを見ているとき。`run` のあとの `status`・`header`・`body`・`screen`、`get`・`post`・`put`・`patch`・`delete` のあとの `stdout`・`stderr`・`exit`・`screen`、操作のあとの `screen` 以外です。geas はこれを、何かを実行する前に見つけます。
 
 直し方
-  その呼び出しの結果にあるもの（`run` なら stdout・stderr・exit、`get` と `post` なら status・header・body・body json、操作なら screen）をチェックするか、それを返す `when` のあとにチェックを移してください。
+  その呼び出しの結果にあるもの（`run` なら stdout・stderr・exit、HTTP の五つの呼び出しなら status・header・body・body json、操作なら screen）を読むか、それを返す `when` のあとに移してください。
 
 再現
   $ geas check e007.geas
@@ -274,10 +274,10 @@
 エラー[E014]: geas が待てない `within`
 
 いつ出るか
-  `within` が、geas の待てない形で書かれているときです。画面への操作（`open`、`click`、`input`、`submit`、`press`、`advance`）の後ろの `within`（画面は操作のたびに落ち着きます）、1 秒より短いか 60 秒より長い時間、下に `then` がなく待って確かめることのない `when` が、これに当たります。
+  `within` が、geas の待てない形で書かれているときです。画面への操作（`open`、`click`、`input`、`submit`、`press`、`advance`）の後ろの `within`（画面は操作のたびに落ち着きます）、1 秒より短いか 60 秒より長い時間、下に `then` も答えを読む `keep` もなく待つものがない `when` が、これに当たります。
 
 直し方
-  `within` は `run`・`get`・`post` の後ろに、1 から 60 までの秒の整数で書き、待って確かめるチェックをその下に書いてください。画面に時間が要るときは `advance(ms)` を使ってください。
+  `within` は `run` と HTTP の五つの呼び出し（`get`・`post`・`put`・`patch`・`delete`）の後ろに、1 から 60 までの秒の整数で書き、待って確かめるチェックか、値が出るまで待つ `keep` をその下に書いてください。画面に時間が要るときは `advance(ms)` を使ってください。
 
 再現
   $ geas check e014.geas
@@ -317,7 +317,7 @@
 エラー[E016]: 契約に無い呼び出し
 
 いつ出るか
-  `contract` の行があるターゲットの `get` か `post` が、その文書に無いパスやメソッドを呼んでいるときです。パスは `?` より前で比べ、`{id}` は一つの区切りの中の 1 文字以上に合います。`servers` の URL のパスは、前に付いていても無くてもかまいません。主張を走らせずに分かるので、どの主張も走りません。
+  `contract` の行があるターゲットの `get`・`post`・`put`・`patch`・`delete` が、その文書に無いパスやメソッドを呼んでいるときです。パスは `?` より前で比べ、`{id}` は一つの区切りの中の 1 文字以上に合います。`servers` の URL のパスは、前に付いていても無くてもかまいません。主張を走らせずに分かるので、どの主張も走りません。`keep` が持っている名前で始まるパス（`{at}`、`{at}/items`）は走らせるまで分からないので、ここでは見ません。走らせて文書に無ければ、同じ語でその主張の失敗になります。
 
 直し方
   呼び先を直すか、契約に足してください。契約の外をわざと呼ぶ主張（知らないパスが 404 になること）は、`contract` の行が無いターゲットから呼んでください。
@@ -344,6 +344,29 @@
           "get": { "responses": { "200": { "description": "The order" } } }
         }
       }
+    }
+
+エラー[E017]: 使えない `keep` か、持っている名前の使い方の誤り
+
+いつ出るか
+  同じ主張で同じ名前を二度 `keep` したとき、名前が `port` のとき（`{port}` はサービスのポートを指します）、`keep status`・`keep exit`・`keep screen` のとき（読めるのは `stdout`・`stderr`・`header`・`body`・`body json`・`env` です。`status` と `exit` は `is` で比べれば足り、`screen` は一つの文字列になりません）、`{id}` がその `keep` より前の手順にあるとき、`matches`・`does not match`・`matching` のパターンに持っている名前があるとき（パターンは走らせる前に確かめます）、`pixie` のターゲットの呼び出しに持っている名前があるとき（pixie は主張の操作を、走らせる前に一つのスクリプトにします）です。どの主張も走りません。
+
+直し方
+  名前を変えるか、`keep` を使う手順より前に書いてください。パターンに持っている名前を入れたいときは、`is` か `contains` で比べてください。pixie のアプリへの呼び出しは、走らせる前に決まる文字で書いてください。
+
+再現
+  $ geas check e017.geas
+  e017.geas:
+    target orders {
+      serve "python3 server.py {port}"
+      port auto
+    }
+
+    claim "an order can be read back" {
+      when orders.get("/orders/{id}")
+      then status is 200
+      when orders.post("/orders")
+      keep body json ".id" as id
     }
 
 エラー[E030]: 起動できないプログラム
@@ -410,7 +433,7 @@
 エラー[E033]: 失敗した HTTP のやりとり（接続の拒否、途中で閉じられた接続、HTTP でないレスポンス、5 秒のうちにレスポンスがない）
 
 いつ出るか
-  `get` や `post` がサービスのポートに届いたのに、HTTP のレスポンスを得られなかったとき。接続を拒否されたとき、サービスがレスポンスを返さずに接続を閉じたとき、返ってきたものが HTTP ではなかったとき、5 秒のうちに何も返ってこなかったときです。`=` の行に、サービスの stderr の最後の数行が出ます。
+  HTTP の呼び出し（`get`・`post`・`put`・`patch`・`delete`）がサービスのポートに届いたのに、HTTP のレスポンスを得られなかったとき。接続を拒否されたとき、サービスがレスポンスを返さずに接続を閉じたとき、返ってきたものが HTTP ではなかったとき、5 秒のうちに何も返ってこなかったときです。`=` の行に、サービスの stderr の最後の数行が出ます。
 
 直し方
   サービスがどのリクエストにも HTTP のレスポンスを返すようにしてください。リクエストの処理で失敗したサービスは、接続を閉じることがよくあります。理由は stderr に出ています。
@@ -561,6 +584,27 @@
             break
         else:
             print("ready", flush=True)
+
+エラー[E038]: 呼び出しに使えない値
+
+いつ出るか
+  走らせてみて、持っている値が使えなかったときです。`keep env` の環境変数が無いか、空か、UTF-8 でないとき、ヘッダーの値が改行か制御文字を含むようになったとき、パスが geas の起動していないホストの URL になったとき、`/` で始まらなくなったときが、これに当たります。主張はエラーで終わり、残りの手順は実行しません。ほかの主張は走ります。
+
+直し方
+  環境変数は geas を走らせる環境に設定してください（`export NAME=…`）。値を返したサービスが間違っていないか確かめてください。サービスの URL の組み立てを確かめたいだけなら、値を `is` か `contains` で比べてください。
+
+再現
+  $ geas check e038.geas
+  e038.geas:
+    target say {
+      run "echo"
+    }
+
+    claim "passes the key on" {
+      keep env "GEAS_EXPLAIN_NOT_SET" as key
+      when say.run("{key}")
+      then exit is 0
+    }
 
 エラー[E050]: ベースラインがない（先に `geas snap` を）
 
@@ -936,6 +980,28 @@
       }
     }
 
+警告[W016]: `keep` の主張で、持っていない `{name}`
+
+いつ出るか
+  `keep` のある主張の呼び出しの文字列かチェックの値に、識別子の形の `{name}` があって、その名前をどの `keep` も持っていないときです。打ち間違いのことがほとんどです。文字列は書いたまま送り、書いたまま比べます。`{port}` とパターンの中は言いません。`keep` の無い主張では何も言いません。
+
+直し方
+  名前を直すか、その値を `keep` してください。その文字のまま送りたいなら、そのままでかまいません。
+
+再現
+  $ geas check w016.geas
+  w016.geas:
+    target say {
+      run "echo"
+    }
+
+    claim "says what it said" {
+      when say.run("hello")
+      keep stdout as said
+      when say.run("{sayd}")
+      then exit is 0
+    }
+
 警告[W060]: `map` で記録が何も取れなかったターゲット
 
 いつ出るか
@@ -992,7 +1058,7 @@
   `geas check` で、仕様のどこか（文字列でもコメントでも）に鍵の形の値があったときです。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。主張はいつもどおり走ります。
 
 直し方
-  鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、ターゲットのプログラムがそこから読むようにしてください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+  鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、ターゲットのプログラムがそこから読むようにしてください。呼び出しで送る鍵は、環境から `keep env "NAME" as key` で読めます（`header "authorization": "Bearer {key}"`）。その値はジャーナルにも報告にも出ません。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
 
 再現
   $ geas check w901.geas

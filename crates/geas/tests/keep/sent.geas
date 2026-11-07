@@ -1,0 +1,72 @@
+# How a kept value goes out: a path holds what a request line can, an absolute address on this
+# machine goes as a path, and a body and the arguments of a command go as they are.
+target api {
+  serve "python3 mirror.py {port}"
+  port auto
+}
+
+target things {
+  serve "python3 things.py {port}"
+  port auto
+}
+
+target echo {
+  run "python3 echo.py"
+}
+
+mask header "date"
+mask header "server"
+
+claim "a path holds what a request line can" {
+  when api.post("/plain", body: "a b/c?d=e&f=%41\"<>\\^`{|}注")
+  keep body as weird
+  when api.get("/seen/{weird}")
+  then body json ".path" is "/seen/a%20b/c?d=e&f=%41%22%3C%3E%5C%5E%60%7B%7C%7D%E6%B3%A8"
+}
+
+claim "a body and a header go as they are" {
+  when api.post("/plain", body: "a b")
+  keep body as words
+  when api.post("/a", body: "{words}", header "x-words": "{words}")
+  then body json ".body" is "a b"
+  and  body json ".headers[0][1]" is "a b"
+}
+
+claim "the arguments of a command go as they are" {
+  when api.post("/plain", body: "a b")
+  keep body as words
+  when echo.run("{words}", "", "0")
+  then stdout is "a b"
+  keep stdout as printed
+  when echo.run("x{printed}", "", "0")
+  then exit is 0
+  and  stdout is "x{printed}"
+}
+
+claim "the absolute address is called as a path" {
+  when things.post("/absolute", body: "a chair")
+  keep header "location" as at
+  keep body json ".id" as id
+  and  header "location" is "{at}"
+  when things.get("{at}")
+  then status is 200
+  and  body json ".id" is "{id}"
+  when things.put("{at}", body: "a table", header "x-self": "{at}")
+  then body json ".name" is "a table"
+}
+
+claim "an address without its port is on this machine too" {
+  when things.post("/no-port", body: "a chair")
+  keep header "location" as at
+  keep body json ".id" as id
+  when things.get("{at}")
+  then status is 200
+}
+
+claim "a value with {port} in it goes to the service with its real port" {
+  when things.post("/absolute", body: "a chair")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.post("/saved/port", body: "at {at}", header "x-at": "{at}")
+  then status is 200
+}

@@ -1,0 +1,23 @@
+# A value kept from what the service answers goes into the page: the path it opens, what it types,
+# and what it looks for on the screen.
+target shop {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+mask header "date"
+mask header "server"
+
+claim "the page of an order the service numbers" {
+  when shop.post("/api/orders")
+  keep body json ".id" as id
+  then status is 201
+  when shop.open("/orders/{id}")
+  then screen contains heading "Order {id}"
+  and  screen contains heading containing "{id}"
+  and  screen does not contain heading "Order {id}{id}"
+  when shop.input("{id}", into: "Note")
+  then screen contains textbox "Note" with value "{id}"
+  when shop.click("Save {id}")
+  then screen contains text "{id}" in status
+}

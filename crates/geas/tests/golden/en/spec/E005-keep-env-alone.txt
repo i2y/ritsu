@@ -1,0 +1,2 @@
+error[E005]: E005-keep-env-alone.geas:6:1: the claim "nothing to check" has no `when`; `keep env` alone leaves nothing to check
+     6 | claim "nothing to check" {

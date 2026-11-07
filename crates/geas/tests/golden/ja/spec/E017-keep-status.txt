@@ -1,0 +1,2 @@
+エラー[E017]: E017-keep-status.geas:8:8: `keep` は `status` を読めません。数は仕様にそのまま書けて、実行ごとに変わるものでもありません。`is` で比べてください
+     8 |   keep status as code

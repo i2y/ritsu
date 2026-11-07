@@ -1,2 +1,2 @@
-error[E002]: E002-call.geas:7:12: `put` is not a call; the calls are run, get, post, open, click, input, submit, press and advance
-     7 |   when api.put("/reset")
+error[E002]: E002-call.geas:7:12: `head` is not a call; the calls are run, get, post, put, patch, delete, open, click, input, submit, press and advance
+     7 |   when api.head("/reset")

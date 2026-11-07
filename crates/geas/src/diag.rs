@@ -168,6 +168,10 @@ pub fn key_written(f: &ritsu_base::secrets::Found) -> Diag {
             "ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください",
             "a key in a file reaches everyone who can read the repository, its history and its builds; keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there"
         ))
+        .note(tr!(
+            "呼び出しで送る鍵は、環境から `keep env \"NAME\" as key` で読めます。その値はジャーナルにも報告にも出ません",
+            "a key that a call sends can be read from the environment with `keep env \"NAME\" as key`, and no journal or report shows its value"
+        ))
         .note(revoke)
         .note(test);
     d.extra.unquoted = true;

@@ -1,0 +1,5 @@
+error[E006]: E006-put-on-a-command.geas:6:13: `calc` runs a command, so it takes `run`, not `put`
+     6 |   when calc.put("/a")
+error[E007]: E006-put-on-a-command.geas:7:8: a `put` observes status, header, body and body json, not `exit`
+     7 |   then exit is 0
+  = the `when` it reads is on line 6

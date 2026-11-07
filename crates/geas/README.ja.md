@@ -341,7 +341,7 @@ not ok 2 - a job finishes in the background
 …
 ```
 
-読み出しも POST で呼ぶ API のために、`post` と `run` も待てます。ただ、呼び出しは書いたとおりに繰り返すので、その呼び出しがすることも繰り返されます。読み出しの呼び出しがあるなら、そちらで待ってください。画面はこの方法では待てません（E014）。geas は操作のたびに画面が落ち着くのを待ちます。時間が足りなければ `advance(ms)` で進めます。
+読み出しも POST で呼ぶ API のために、ほかの呼び出しと `run` も待てます。ただ、呼び出しは書いたとおりに繰り返すので、その呼び出しがすることも繰り返されます。読み出しの呼び出しがあるなら、そちらで待ってください。画面はこの方法では待てません（E014）。geas は操作のたびに画面が落ち着くのを待ちます。時間が足りなければ `advance(ms)` で進めます。
 
 ## サービスの答えを契約と突き合わせる
 
@@ -375,18 +375,81 @@ not ok 1 - a new order is open
 …
 ```
 
-答えごとに、その `when` の行のチェックが一つ増え、結果にも `--json` にもジャーナルにも載ります。`within` で待つ呼び出しは、待って得た答えだけを突き合わせます。契約に合うまで待つことはしません。突き合わせるのは `get` と `post` だけで、Chrome のページが送るリクエストは見えません。どの呼び出しをするかは主張が決めるので、どの主張も引き出さない答えは突き合わせません。
+答えごとに、その `when` の行のチェックが一つ増え、結果にも `--json` にもジャーナルにも載ります。`within` で待つ呼び出しは、待って得た答えだけを突き合わせます。契約に合うまで待つことはしません。HTTP の五つの呼び出しをどれも突き合わせます。Chrome のページが送るリクエストは見えません。どの呼び出しをするかは主張が決めるので、どの主張も引き出さない答えは突き合わせません。
 
 文書にない呼び出しがあると、何も走らせる前に止まります（E016）。文書を読めないときも同じです（E015）。文書の外を呼ぶつもりの主張（知らないパスが 404 を返す、など）は、`contract` の行のないターゲットから呼びます。文書に書かれていて geas が突き合わせないものは、一度だけ知らせます（W015）。ファイルは OpenAPI 3.0、3.1、3.2 の JSON か YAML で、パスは主張のファイルのディレクトリから書きます。モジュールの中なら `@<名前>/…` で依存の文書も指せます。`$ref` はディスクの別のファイルにも届きます。
 
+## サービスの答えを次の呼び出しに使う
+
+サービスは、作ったものの番号を自分で決め、誰が呼んでいるかを確かめます。`keep` は値を下の手順のために持っておき、`{name}` がそれを使います。呼び出しには `header "<名前>": "<値>"` を付けられます。`put`、`patch`、`delete` は、`get` と `post` と同じ呼び出しです。[examples/tickets](examples/tickets) は、チケットごとに新しい uuid を決め、どの呼び出しにもトークンを求めるサービスです。
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+…
+claim "チケットは読み返せて、変えられて、消せる" {
+  keep env "TICKETS_TOKEN" as token
+  when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")
+  then status is 201
+  keep body json ".id" as id
+  and  header "location" is "/tickets/{id}"
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then body json ".id" is "{id}"
+  and  body json ".state" is "open"
+…
+  when api.delete("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 204
+  when api.get("/tickets/{id}", header "authorization": "Bearer {token}")
+  then status is 404
+}
+```
+
+`keep` が読むのは、上の `when` の `stdout`、`stderr`、`header "<名前>"`、`body`、`body json "<パス>"` です。`keep env "<名前>"` は geas 自身の環境から読み、これだけは `when` より前に書けます。`{name}` は、呼び出しのパス、本文、ヘッダーの値、引数、画面の操作が開くものや押すものや打つもの、チェックの値の中で、持っている値になります。名前の入ったチェックは文字として比べるので、数でも合います。ほかの `{…}` は書いたままなので、JSON の本文にエスケープは要りません。`keep` のある主張で打ち間違いに見えるものは、そう言います（W016）。
+
+番号は実行ごとに変わりますが、ジャーナルとベースラインは変わりません。
+
+```console
+$ export TICKETS_TOKEN=a-token-of-yours
+$ geas check examples/tickets/tickets.ja.geas --lang ja
+ok 1 - チケットは読み返せて、変えられて、消せる
+ok 2 - 新しいチケットのアドレスをたどれる
+ok 3 - トークンのない呼び出しは 401 になる
+主張 3 件 · 成り立った 3 件 · 成り立たなかった 0 件 · ジャーナル: examples/tickets/.geas/tickets.ja.journal.jsonl
+$ geas snap examples/tickets/tickets.ja.geas --lang ja
+主張 3 件 · 成り立った 3 件 · 成り立たなかった 0 件 · ベースライン: やりとり 9 件 → examples/tickets/.geas/tickets.ja.baseline.jsonl
+$ geas drift examples/tickets/tickets.ja.geas --lang ja
+ドリフト: 比べたやりとり 9 件 · 変わったやりとり 0 件 · 主張なしの変化 0 件 · 主張ありの変化 0 件
+```
+
+持っている値は、語として立っているところで名前に書き換わるので、ジャーナルには `"location":"/tickets/{id}"` と書かれます。環境から読んだ値は、どこにあっても書き換わり、geas はどこにも出しません。サービスが送り返してきても、ジャーナル、ベースライン、報告、`--json` のどれにも出ません。この決まりはバイトの話なので、小さい数は別の値と同じになることがあります。`id` が `1` なら、`{"qty":1}` は `{"qty":"{id}"}` と書かれます。`keep` で持っていない値はそのままなので、使わなくても実行ごとに変わる値は、`keep` するか `mask` してください。
+
+`keep` が読めないときは、そこでその主張の失敗になります。下の手順はその値を前提にしているからです。エージェントが `id` を `ticketId` に変えたあとでは、次のようになります。
+
+```text
+not ok 1 - チケットは読み返せて、変えられて、消せる
+    examples/tickets/tickets.ja.geas:16: contract POST /tickets のはずが、実際は $: 必須の id がありません
+        16 |   when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")
+    examples/tickets/tickets.ja.geas:18: keep body json ".id" as id のはずが、実際は <JSON のオブジェクトに `id` というキーがありません>
+        18 |   keep body json ".id" as id
+      ここまでの実行:
+          15  keep env "TICKETS_TOKEN" as token  →  {token}
+          16  when api.post("/tickets", body: "{"title":"プリンター"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+…
+```
+
+名前を使ったチェックが成り立たないときは、その値も言います（環境から読んだ値は言いません）。`within` の下の `keep` は値が出るまで待ちます。チェックが全部成り立ち、`keep` が全部読めた最初の答えで止まります。パスでは、リクエスト行に載せられない文字を `%XX` にして送り、この機械のアドレス（`Location` の全体など）はパスとして送ります。呼び出しに使えない値（環境変数が無い、ヘッダーに改行がある、別のホストのアドレス）は、その主張のエラーです（E038）。パターンや pixie のアプリへの呼び出しに名前は書けず、`keep` より上でも使えません（E017）。どちらも値が分かる前に読むからです。名前で始まるパスは、走らせたときに契約と突き合わせます。
+
 ## 言語
 
-`when` はターゲットの呼び出しで、`then` と `and` がその結果をチェックします。
+`when` はターゲットの呼び出しで、`then` と `and` がその結果をチェックし、`keep … as <名前>` がその値を下の手順のために持っておきます。
 
 | ターゲット | 呼び出し | チェックするもの |
 |---|---|---|
 | `run "<コマンド>"`。`when` のたびにコマンドを起動する | `run("a", "b")` | `stdout`、`stderr`、`exit` |
-| `serve "<コマンド>"` と `port <番号>` か `port auto`。主張ごとにサービスを起動する | `get("/path")`、`post("/path", body: "…")` | `status`、`header "<名前>"`、`body`、`body json ".a[0].b"` |
+| `serve "<コマンド>"` と `port <番号>` か `port auto`。主張ごとにサービスを起動する | `get("/path")`、`post("/path", body: "…")`、`put`、`patch`、`delete`。どれにも `header "<名前>": "<値>"` をいくつでも付けられる | `status`、`header "<名前>"`、`body`、`body json ".a[0].b"` |
 | Chrome で開く `serve` のターゲット、`pixie "<アプリ>"`、`driver "<コマンド>"` | `open`、`click`、`input`、`submit`、`press`、`advance` | `screen` |
 
 比べ方は英語の文として読めるようにしてあり、`is`、`is not`、`is above`、`is below`、`is at least`、`is at most`、`is between 200 and 299`、`contains`、`does not contain`、`matches "\d+ items?"`（値の全体とパターンを照らし合わせる）、`exists`、`does not exist`、画面なら `contains exactly 2 listitem in list "Items"` のように書きます。コマンドは、シェルを通さず geas が語に分けます。空白を含む語は `'…'` で囲みます。
@@ -399,7 +462,7 @@ not ok 1 - a new order is open
   = その環境変数の名前を、同じ行に書いてください（`clock "2026-08-29T09:00:00+09:00" env "NOW"`）
 ```
 
-どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 40 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
+どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 43 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
 
 `--jobs 4` を付けると、主張を四つまで並列に走らせます。`port auto` のサービスはそれぞれ別のポートで動きます。報告もジャーナルもベースラインも主張の順に書くので、一つずつ走らせたときとバイト単位で同じです。あるターゲットを使う主張どうしが、geas から見えない状態（ファイルやデータベース）を共有しているなら、`serial` を書いて並列に走らないようにします。言語の全体は [skills/geas/language.md](../../skills/geas/language.md)（英語）にあります。
 
@@ -486,6 +549,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 | [web-greeter](examples/web-greeter) | Chrome で開くページとそのサービス。固定を全部使う |
 | [jobs](examples/jobs) | 答えを返したあとでジョブが終わるサービスと、`within` でそれを待つ主張 |
 | [orders](examples/orders) | OpenAPI の文書のあるサービスと、すべての答えをそれと突き合わせる `contract` の行 |
+| [tickets](examples/tickets) | 作ったものの番号を自分で決め、トークンを求めるサービス。`put`、`patch`、`delete`、ヘッダー、`keep`。実行ごとに変わらない記録 |
 | [pixie-greeter](examples/pixie-greeter) | pixie のデスクトップアプリ。pixie でビルドして、主張のファイルの横に置く |
 
 どの例にも、何を見せるか、どう走らせるか、出力のどこを見ればよいかを書いた README（英語）があります。

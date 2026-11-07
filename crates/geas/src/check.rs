@@ -6,6 +6,7 @@
 
 use ritsu_base::text::Text;
 use crate::json::{self, J};
+use crate::keep::{Held, View};
 use crate::model::{Check, Matcher, Subject, Value};
 use crate::run::Obs;
 
@@ -15,11 +16,17 @@ pub struct CheckResult {
     pub label: String,
     /// The matcher's value as written, or nothing: `200 and 299`.
     pub expected: String,
-    /// What came back; in words of either language when it is not a value.
+    /// What came back; in words of either language when it is not a value. A report shows this:
+    /// what the claim read from the environment is `{name}` in it (DESIGN §22).
     pub actual: Text,
+    /// What the journal writes of it: every value the claim kept written `{name}`.
+    pub recorded: String,
     pub ok: bool,
     /// For a `screen` check that failed: the screen it saw, cut for the report.
     pub screen: Option<Shown>,
+    /// For a check that failed: the names it uses that the claim kept, and their values. What came
+    /// from the environment is not among them.
+    pub values: Vec<(String, String)>,
 }
 
 /// A screen as a failed check shows it (DESIGN §8.6, PLAN C6): at most 40 nodes,
@@ -40,6 +47,7 @@ impl CheckResult {
 }
 
 /// What a subject gave.
+#[derive(Clone)]
 enum Got {
     /// stdout, stderr, a body, a header's values.
     Text(String),
@@ -159,7 +167,38 @@ fn same_num(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
+/// A value as the text a `{name}` compares with: a string as it is, a number as it is written, a
+/// truth value as its word, an array or an object as JSON. A null, or nothing, is no text.
+fn as_written(g: &Got) -> Option<String> {
+    match g {
+        Got::Text(s) => Some(trim_one_newline(s).to_string()),
+        Got::Num(x) => Some(json::render_num(*x)),
+        Got::Json(J::Null) => None,
+        Got::Json(J::Str(s)) => Some(s.clone()),
+        Got::Json(j) => Some(json::render(j)),
+        Got::Missing(_) | Got::Broken(_) | Got::Screen(_) => None,
+    }
+}
+
+/// The value a `keep` reads of what its `when` observed, or what stands in its place when it cannot
+/// read one: the words a check says, `null`, or `""`.
+pub fn keep_value(subject: &Subject, obs: &Obs) -> Result<String, Text> {
+    let g = got(subject, obs);
+    match &g {
+        Got::Missing(why) | Got::Broken(why) => return Err(why.clone()),
+        Got::Json(J::Null) => return Err(Text::same("null")),
+        _ => {}
+    }
+    match as_written(&g) {
+        Some(v) if !v.is_empty() => Ok(v),
+        _ => Err(Text::same("\"\"")),
+    }
+}
+
 fn is(g: &Got, v: &Value) -> bool {
+    if let Value::Filled(want) = v {
+        return as_written(g).is_some_and(|s| s == *want);
+    }
     match (g, v) {
         (Got::Text(s), Value::S(want)) => trim_one_newline(s) == want,
         (Got::Text(s), Value::N(n)) => trim_one_newline(s) == json::render_num(*n),
@@ -211,10 +250,23 @@ fn nodes_found(n: usize) -> Text {
     }
 }
 
+/// What a subject gave as a view reads it. It is read before it is cut, so a cut does not leave
+/// half of a value behind.
+fn seen(g: &Got, held: &Held, view: View) -> Got {
+    match g {
+        Got::Text(s) => Got::Text(held.text(s, view)),
+        Got::Json(j) => Got::Json(held.json(j, view)),
+        Got::Missing(why) => Got::Missing(held.words(why, view)),
+        Got::Broken(why) => Got::Broken(held.words(why, view)),
+        Got::Num(_) | Got::Screen(_) => g.clone(),
+    }
+}
+
 /// What came back, as a failed check shows it, with why it does not fit the
-/// matcher when the value is of another kind.
-fn shown(m: &Matcher, g: &Got) -> Text {
-    let value = match g {
+/// matcher when the value is of another kind. `g` is what the subject gave, and `read` the same as
+/// the reader of this text may read it.
+fn shown(m: &Matcher, g: &Got, read: &Got) -> Text {
+    let value = match read {
         Got::Text(s) => json::quote(&short(trim_one_newline(s))),
         Got::Num(x) => json::render_num(*x),
         Got::Json(j) => short(&json::render(j)),
@@ -237,13 +289,22 @@ fn shown(m: &Matcher, g: &Got) -> Text {
     }
 }
 
-pub fn eval(check: &Check, obs: &Obs) -> CheckResult {
+/// A check held to what its `when` observed, with the values the claim holds in its strings. Its
+/// label and its value stay as they are written.
+pub fn eval(check: &Check, obs: &Obs, held: &Held) -> CheckResult {
+    let filled = held.fill_matcher(&check.matcher);
     let g = got(&check.subject, obs);
-    let ok = holds(&check.matcher, &g);
-    let screen = match (&g, &check.matcher) {
-        (Got::Screen(s), Matcher::ContainsNode(p) | Matcher::NotContainsNode(p)) if !ok => {
-            let (lines, left) = crate::screen::cut_for(s, p);
-            Some(Shown { lines, left, json: s.json() })
+    let ok = holds(&filled, &g);
+    let screen = match (&g, &filled) {
+        (Got::Screen(s), Matcher::ContainsNode(_) | Matcher::NotContainsNode(_)) if !ok => {
+            let (hidden, told) = held.hidden_screen(s, &check.matcher);
+            match &told {
+                Matcher::ContainsNode(p) | Matcher::NotContainsNode(p) => {
+                    let (lines, left) = crate::screen::cut_for(&hidden, p);
+                    Some(Shown { lines, left, json: hidden.json() })
+                }
+                _ => None,
+            }
         }
         _ => None,
     };
@@ -251,9 +312,11 @@ pub fn eval(check: &Check, obs: &Obs) -> CheckResult {
         line: check.pos.line,
         label: format!("{} {}", check.subject.label(), check.matcher.words()),
         expected: check.matcher.value(),
-        actual: shown(&check.matcher, &g),
+        actual: shown(&filled, &g, &seen(&g, held, View::Report)),
+        recorded: shown(&filled, &g, &seen(&g, held, View::Record)).en,
         ok,
         screen,
+        values: if ok { vec![] } else { held.told_values(&check.matcher) },
     }
 }
 
@@ -276,7 +339,7 @@ mod tests {
     }
 
     fn ok(subject: Subject, matcher: Matcher, obs: &Obs) -> (bool, String) {
-        let r = eval(&Check { subject, matcher, pos: Pos::default() }, obs);
+        let r = eval(&Check { subject, matcher, pos: Pos::default() }, obs, &Held::default());
         (r.ok, r.actual.en)
     }
 
@@ -334,6 +397,63 @@ mod tests {
         // a body that is not JSON fails every `body json` check
         let broken = http("<html>");
         assert!(!ok(Subject::BodyJson(".a".into()), Matcher::NotExists, &broken).0);
+    }
+
+    #[test]
+    fn a_kept_value_is_compared_as_text() {
+        let mut held = Held::default();
+        held.push("id", "7".into(), false);
+        held.push("yes", "true".into(), false);
+        let o = http(r#"{"n":7,"s":"7","b":true,"none":null,"list":[7],"x":8}"#);
+        let holds_of = |path: &str, want: &str| {
+            let c = Check { subject: Subject::BodyJson(path.into()), matcher: Matcher::Is(Value::S(want.into())), pos: Pos::default() };
+            eval(&c, &o, &held).ok
+        };
+        assert!(holds_of(".n", "{id}") && holds_of(".s", "{id}") && holds_of(".b", "{yes}"));
+        assert!(!holds_of(".x", "{id}") && !holds_of(".none", "{id}") && !holds_of(".nope", "{id}"));
+        // a value without a held name in it is compared as it always is
+        assert!(!holds_of(".n", "7") && holds_of(".s", "7") && !holds_of(".n", "{other}"));
+        let status = Check { subject: Subject::Status, matcher: Matcher::Is(Value::S("{code}".into())), pos: Pos::default() };
+        let mut code = Held::default();
+        code.push("code", "201".into(), false);
+        assert!(eval(&status, &o, &code).ok);
+    }
+
+    #[test]
+    fn a_failed_check_tells_the_values_it_uses_and_the_journal_writes_their_names() {
+        let mut held = Held::default();
+        held.push("id", "a1".into(), false);
+        held.push("key", "k9".into(), true);
+        let o = Obs::Http { status: 200, headers: vec![], body: "a1 k9".into() };
+        let c = Check { subject: Subject::Body, matcher: Matcher::Is(Value::S("{id} {key}".into())), pos: Pos::default() };
+        assert!(eval(&c, &o, &held).ok);
+        let c = Check { subject: Subject::Body, matcher: Matcher::Contains("{id}{key}".into()), pos: Pos::default() };
+        let r = eval(&c, &o, &held);
+        assert!(!r.ok);
+        assert_eq!(r.expected, "\"{id}{key}\"");
+        assert_eq!(r.actual.en, "\"a1 {key}\"");
+        assert_eq!(r.recorded, "\"{id} {key}\"");
+        assert_eq!(r.values, vec![("id".to_string(), "a1".to_string())]);
+    }
+
+    #[test]
+    fn what_a_keep_reads() {
+        let o = http(r#"{"n":7,"f":1.5,"s":"a","b":false,"none":null,"e":"","list":[1,"x"],"o":{"a":1}}"#);
+        let of = |path: &str| keep_value(&Subject::BodyJson(path.into()), &o).map_err(|t| t.en);
+        assert_eq!(of(".n"), Ok("7".to_string()));
+        assert_eq!(of(".f"), Ok("1.5".to_string()));
+        assert_eq!(of(".s"), Ok("a".to_string()));
+        assert_eq!(of(".b"), Ok("false".to_string()));
+        assert_eq!(of(".list"), Ok(r#"[1,"x"]"#.to_string()));
+        assert_eq!(of(".o"), Ok(r#"{"a":1}"#.to_string()));
+        assert_eq!(of(".none"), Err("null".to_string()));
+        assert_eq!(of(".e"), Err("\"\"".to_string()));
+        assert!(of(".nope").is_err());
+        assert_eq!(keep_value(&Subject::Header("set-cookie".into()), &o), Ok("a=1, b=2".to_string()));
+        assert!(keep_value(&Subject::Header("etag".into()), &o).is_err());
+        assert_eq!(keep_value(&Subject::Stdout, &proc("a\n\n", 0)), Ok("a\n".to_string()));
+        assert!(keep_value(&Subject::Stdout, &proc("\n", 0)).is_err());
+        assert!(keep_value(&Subject::BodyJson(".a".into()), &http("<html>")).is_err());
     }
 
     #[test]

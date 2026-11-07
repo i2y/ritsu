@@ -561,6 +561,42 @@ claim \"adds two integers\" {
 ";
 const NOTES_MD: &str = "# Notes\n\nNothing here is a spec.\n";
 
+const X_E017: &str = "target orders {
+  serve \"python3 server.py {port}\"
+  port auto
+}
+
+claim \"an order can be read back\" {
+  when orders.get(\"/orders/{id}\")
+  then status is 200
+  when orders.post(\"/orders\")
+  keep body json \".id\" as id
+}
+";
+
+const X_E038: &str = "target say {
+  run \"echo\"
+}
+
+claim \"passes the key on\" {
+  keep env \"GEAS_EXPLAIN_NOT_SET\" as key
+  when say.run(\"{key}\")
+  then exit is 0
+}
+";
+
+const X_W016: &str = "target say {
+  run \"echo\"
+}
+
+claim \"says what it said\" {
+  when say.run(\"hello\")
+  keep stdout as said
+  when say.run(\"{sayd}\")
+  then exit is 0
+}
+";
+
 /// The one fake key the repro of W901 holds (ritsu's DESIGN 16.10): a Google API key that reads
 /// as a fake. It is put together from two pieces, so that no file of the source holds a key in one
 /// run; what `explain` prints holds it whole.
@@ -603,8 +639,8 @@ pub fn table() -> Vec<Entry> {
             code: "E002",
             summary: tr!("geas が知らない名前", "a name geas does not know"),
             when: tr!(
-                "名前を書くところに、geas の知らない語があるとき。ファイルに宣言していないターゲット（`when` の後ろ）、`run`・`get`・`post`・`open`・`click`・`input`・`submit`・`press`・`advance` 以外の呼び出し、呼び出しが受け付けない引数（`into:` のない `nth:` も）、`stdout`・`stderr`・`exit`・`status`・`header`・`body`・`body json`・`screen` 以外のチェックするもの、`is`・`is not`・`is above`・`is below`・`is at least`・`is at most`・`is between`・`contains`・`does not contain`・`matches`・`does not match`・`exists`・`does not exist` 以外の比べ方、WAI-ARIA のロールと `text` 以外のノードのロール、`disabled`・`enabled`・`checked`・`unchecked` 以外の状態、`run`・`serve`・`pixie`・`driver`・`port`・`serial` と固定（`env`・`tz`・`locale`・`clock`・`seed`）以外のターゲットの行、`header`・`body json`・`screen` 以外の `mask` が、これに当たります。",
-                "A word that has to name something geas knows names nothing it knows: a target in a `when` that the file does not declare, a call other than `run`, `get`, `post`, `open`, `click`, `input`, `submit`, `press` and `advance`, an argument a call does not take (`nth:` without `into:` among them), something to check other than `stdout`, `stderr`, `exit`, `status`, `header`, `body`, `body json` and `screen`, a way to compare other than `is`, `is not`, `is above`, `is below`, `is at least`, `is at most`, `is between`, `contains`, `does not contain`, `matches`, `does not match`, `exists` and `does not exist`, a role in a node other than WAI-ARIA's and `text`, a state other than `disabled`, `enabled`, `checked` and `unchecked`, a line in a target other than `run`, `serve`, `pixie`, `driver`, `port`, `serial` and the pins (`env`, `tz`, `locale`, `clock`, `seed`), or a `mask` of something other than `header`, `body json` and `screen`.",
+                "名前を書くところに、geas の知らない語があるとき。ファイルに宣言していないターゲット（`when` の後ろ）、`run`・`get`・`post`・`put`・`patch`・`delete`・`open`・`click`・`input`・`submit`・`press`・`advance` 以外の呼び出し、呼び出しが受け付けない引数（`into:` のない `nth:` も、`get` の `body:` も）、HTTP の呼び出しのヘッダーのうち、名前が HTTP の token でないもの、値に改行や制御文字があるもの、geas が決めるもの（`host`、`connection`、`content-length`、`transfer-encoding`）、`stdout`・`stderr`・`exit`・`status`・`header`・`body`・`body json`・`screen` 以外のチェックするもの、`stdout`・`stderr`・`header`・`body`・`body json`・`env`・`status`・`exit`・`screen` 以外の `keep` の読むもの、`is`・`is not`・`is above`・`is below`・`is at least`・`is at most`・`is between`・`contains`・`does not contain`・`matches`・`does not match`・`exists`・`does not exist` 以外の比べ方、WAI-ARIA のロールと `text` 以外のノードのロール、`disabled`・`enabled`・`checked`・`unchecked` 以外の状態、`run`・`serve`・`pixie`・`driver`・`port`・`serial` と固定（`env`・`tz`・`locale`・`clock`・`seed`）以外のターゲットの行、`header`・`body json`・`screen` 以外の `mask` が、これに当たります。",
+                "A word that has to name something geas knows names nothing it knows: a target in a `when` that the file does not declare, a call other than `run`, `get`, `post`, `put`, `patch`, `delete`, `open`, `click`, `input`, `submit`, `press` and `advance`, an argument a call does not take (`nth:` without `into:` among them, and `body:` on a `get`), a header of an HTTP call whose name is not an HTTP token, whose value holds a line break or a control character, or that geas sets itself (`host`, `connection`, `content-length`, `transfer-encoding`), something to check other than `stdout`, `stderr`, `exit`, `status`, `header`, `body`, `body json` and `screen`, something for `keep` to read other than `stdout`, `stderr`, `header`, `body`, `body json`, `env`, `status`, `exit` and `screen`, a way to compare other than `is`, `is not`, `is above`, `is below`, `is at least`, `is at most`, `is between`, `contains`, `does not contain`, `matches`, `does not match`, `exists` and `does not exist`, a role in a node other than WAI-ARIA's and `text`, a state other than `disabled`, `enabled`, `checked` and `unchecked`, a line in a target other than `run`, `serve`, `pixie`, `driver`, `port`, `serial` and the pins (`env`, `tz`, `locale`, `clock`, `seed`), or a `mask` of something other than `header`, `body json` and `screen`.",
             ),
             fix: tr!(
                 "メッセージに並ぶ語のどれかに直してください。`when` で使うターゲットは、同じファイルに `target <名前> {{ … }}` で宣言してください。",
@@ -645,12 +681,12 @@ pub fn table() -> Vec<Entry> {
             code: "E005",
             summary: tr!("実行できない主張", "a claim that cannot run"),
             when: tr!(
-                "主張にステップが一つもないか、`when` より前に `then`（または `and`）があるとき。主張は `when` を上から順に実行し、チェックはそれぞれ直前の `when` の結果を見ます。",
-                "A claim has no steps, or a `then` (or an `and`) comes before any `when`. A claim runs its `when`s in order, and each check reads what the `when` before it observed.",
+                "主張にステップが一つもないか、`when` が一つもないか、`when` より前に `then`（または `and`）か、答えを読む `keep` があるとき。主張は `when` を上から順に実行し、チェックと `keep` はそれぞれ直前の `when` の結果を見ます。`when` より前に書けるのは、geas の環境から読む `keep env` だけです。",
+                "A claim has no steps, or no `when`, or a `then` (or an `and`) or a `keep` of an answer comes before any `when`. A claim runs its `when`s in order, and each check and each `keep` reads what the `when` before it observed. The one step that can come before a `when` is `keep env`, which reads geas's own environment.",
             ),
             fix: tr!(
-                "チェックが見る結果を返す `when` を、主張の最初に書いてください。",
-                "Start the claim with the `when` whose observation the check reads.",
+                "チェックや `keep` が見る結果を返す `when` を、その前に書いてください。",
+                "Write before the check, or the `keep`, the `when` whose observation it reads.",
             ),
             repro: spec(&["check", "e005.geas"], &[("e005.geas", X_E005)], 2),
         },
@@ -658,12 +694,12 @@ pub fn table() -> Vec<Entry> {
             code: "E006",
             summary: tr!("ターゲットが受け付けない呼び出し", "a call its target does not take"),
             when: tr!(
-                "`when` の呼び出しを、そのターゲットが受け付けないとき。`run` のターゲットに `get`・`post`・操作（`open`・`click`・`input`・`submit`・`press`・`advance`）を使ったとき、`serve` のターゲットに `run` を使ったとき、`pixie` や `driver` のターゲットに操作以外を使ったときです。",
-                "A `when` makes a call its target does not take: `get`, `post` or an action (`open`, `click`, `input`, `submit`, `press`, `advance`) on a `run` target; `run` on a `serve` target; anything but an action on a `pixie` or a `driver` target.",
+                "`when` の呼び出しを、そのターゲットが受け付けないとき。`run` のターゲットに `get`・`post`・`put`・`patch`・`delete`・操作（`open`・`click`・`input`・`submit`・`press`・`advance`）を使ったとき、`serve` のターゲットに `run` を使ったとき、`pixie` や `driver` のターゲットに操作以外を使ったときです。",
+                "A `when` makes a call its target does not take: `get`, `post`, `put`, `patch`, `delete` or an action (`open`, `click`, `input`, `submit`, `press`, `advance`) on a `run` target; `run` on a `serve` target; anything but an action on a `pixie` or a `driver` target.",
             ),
             fix: tr!(
-                "コマンドは `run(…)` で、サービスは `get(…)`・`post(…)`・ページへの操作で、pixie のアプリとドライバーで動かす GUI は操作で呼んでください。別のターゲットのつもりだったなら、`when` のターゲットを直してください。",
-                "Call a command with `run(…)`, a service with `get(…)`, `post(…)` or the actions on its page, and a pixie app or a GUI behind a driver with the actions; or point the `when` at the target meant.",
+                "コマンドは `run(…)` で、サービスは `get(…)`・`post(…)`・`put(…)`・`patch(…)`・`delete(…)`・ページへの操作で、pixie のアプリとドライバーで動かす GUI は操作で呼んでください。別のターゲットのつもりだったなら、`when` のターゲットを直してください。",
+                "Call a command with `run(…)`, a service with `get(…)`, `post(…)`, `put(…)`, `patch(…)`, `delete(…)` or the actions on its page, and a pixie app or a GUI behind a driver with the actions; or point the `when` at the target meant.",
             ),
             repro: spec(&["check", "e006.geas"], &[("e006.geas", X_E006)], 2),
         },
@@ -674,12 +710,12 @@ pub fn table() -> Vec<Entry> {
                 "a check of something its `when` does not observe",
             ),
             when: tr!(
-                "チェックが、直前の `when` の結果にないものを見ているとき。`run` のあとの `status`・`header`・`body`・`screen`、`get` や `post` のあとの `stdout`・`stderr`・`exit`・`screen`、操作のあとの `screen` 以外です。geas はこれを、何かを実行する前に見つけます。",
-                "A check names something the `when` before it does not observe: `status`, `header`, `body` or `screen` after a `run`; `stdout`, `stderr`, `exit` or `screen` after a `get` or a `post`; anything but `screen` after an action. geas finds this before it runs anything.",
+                "チェックか `keep` が、直前の `when` の結果にないものを見ているとき。`run` のあとの `status`・`header`・`body`・`screen`、`get`・`post`・`put`・`patch`・`delete` のあとの `stdout`・`stderr`・`exit`・`screen`、操作のあとの `screen` 以外です。geas はこれを、何かを実行する前に見つけます。",
+                "A check or a `keep` names something the `when` before it does not observe: `status`, `header`, `body` or `screen` after a `run`; `stdout`, `stderr`, `exit` or `screen` after a `get`, `post`, `put`, `patch` or `delete`; anything but `screen` after an action. geas finds this before it runs anything.",
             ),
             fix: tr!(
-                "その呼び出しの結果にあるもの（`run` なら stdout・stderr・exit、`get` と `post` なら status・header・body・body json、操作なら screen）をチェックするか、それを返す `when` のあとにチェックを移してください。",
-                "Check what that call gives (a `run`: stdout, stderr, exit; a `get` or a `post`: status, header, body, body json; an action: screen), or move the check after the `when` that gives it.",
+                "その呼び出しの結果にあるもの（`run` なら stdout・stderr・exit、HTTP の五つの呼び出しなら status・header・body・body json、操作なら screen）を読むか、それを返す `when` のあとに移してください。",
+                "Read what that call gives (a `run`: stdout, stderr, exit; any of the five HTTP calls: status, header, body, body json; an action: screen), or move the step after the `when` that gives it.",
             ),
             repro: spec(&["check", "e007.geas"], &[("e007.geas", X_E007)], 2),
         },
@@ -777,12 +813,12 @@ pub fn table() -> Vec<Entry> {
             code: "E014",
             summary: tr!("geas が待てない `within`", "a wait geas cannot keep"),
             when: tr!(
-                "`within` が、geas の待てない形で書かれているときです。画面への操作（`open`、`click`、`input`、`submit`、`press`、`advance`）の後ろの `within`（画面は操作のたびに落ち着きます）、1 秒より短いか 60 秒より長い時間、下に `then` がなく待って確かめることのない `when` が、これに当たります。",
-                "A `when` waits in a way geas cannot keep: `within` after an action on a screen (`open`, `click`, `input`, `submit`, `press`, `advance`), which settles after each action instead; a time below 1 second or above 60; or a `when` with no `then` under it, which leaves nothing to wait for.",
+                "`within` が、geas の待てない形で書かれているときです。画面への操作（`open`、`click`、`input`、`submit`、`press`、`advance`）の後ろの `within`（画面は操作のたびに落ち着きます）、1 秒より短いか 60 秒より長い時間、下に `then` も答えを読む `keep` もなく待つものがない `when` が、これに当たります。",
+                "A `when` waits in a way geas cannot keep: `within` after an action on a screen (`open`, `click`, `input`, `submit`, `press`, `advance`), which settles after each action instead; a time below 1 second or above 60; or a `when` with neither a `then` nor a `keep` of its answer under it, which leaves nothing to wait for.",
             ),
             fix: tr!(
-                "`within` は `run`・`get`・`post` の後ろに、1 から 60 までの秒の整数で書き、待って確かめるチェックをその下に書いてください。画面に時間が要るときは `advance(ms)` を使ってください。",
-                "Write `within` after a `run`, a `get` or a `post`, with a whole number of seconds from 1 to 60, and under it the checks to wait for. A screen is given more time with `advance(ms)`.",
+                "`within` は `run` と HTTP の五つの呼び出し（`get`・`post`・`put`・`patch`・`delete`）の後ろに、1 から 60 までの秒の整数で書き、待って確かめるチェックか、値が出るまで待つ `keep` をその下に書いてください。画面に時間が要るときは `advance(ms)` を使ってください。",
+                "Write `within` after a `run` or one of the five HTTP calls (`get`, `post`, `put`, `patch`, `delete`), with a whole number of seconds from 1 to 60, and under it the checks to wait for, or a `keep` to wait for a value. A screen is given more time with `advance(ms)`.",
             ),
             repro: spec(&["check", "e014.geas"], &[("e014.geas", X_E014)], 2),
         },
@@ -803,14 +839,27 @@ pub fn table() -> Vec<Entry> {
             code: "E016",
             summary: tr!("契約に無い呼び出し", "a call the contract does not have"),
             when: tr!(
-                "`contract` の行があるターゲットの `get` か `post` が、その文書に無いパスやメソッドを呼んでいるときです。パスは `?` より前で比べ、`{{id}}` は一つの区切りの中の 1 文字以上に合います。`servers` の URL のパスは、前に付いていても無くてもかまいません。主張を走らせずに分かるので、どの主張も走りません。",
-                "A `get` or a `post` on a target with a `contract` line calls a path or a method its document does not have. The path is compared up to its `?`, a `{{id}}` stands for one or more characters of a segment, and the path of a URL in `servers` may be in front or not. It is known without running anything, so no claim runs.",
+                "`contract` の行があるターゲットの `get`・`post`・`put`・`patch`・`delete` が、その文書に無いパスやメソッドを呼んでいるときです。パスは `?` より前で比べ、`{{id}}` は一つの区切りの中の 1 文字以上に合います。`servers` の URL のパスは、前に付いていても無くてもかまいません。主張を走らせずに分かるので、どの主張も走りません。`keep` が持っている名前で始まるパス（`{{at}}`、`{{at}}/items`）は走らせるまで分からないので、ここでは見ません。走らせて文書に無ければ、同じ語でその主張の失敗になります。",
+                "A `get`, `post`, `put`, `patch` or `delete` on a target with a `contract` line calls a path or a method its document does not have. The path is compared up to its `?`, a `{{id}}` stands for one or more characters of a segment, and the path of a URL in `servers` may be in front or not. It is known without running anything, so no claim runs. A path that starts with a name a `keep` holds (`{{at}}`, `{{at}}/items`) is not known until it runs, so it is not looked at here: when the call comes to a path the document does not have, the claim fails in the same words.",
             ),
             fix: tr!(
                 "呼び先を直すか、契約に足してください。契約の外をわざと呼ぶ主張（知らないパスが 404 になること）は、`contract` の行が無いターゲットから呼んでください。",
                 "Correct the call, or add it to the contract. A claim that means to call outside the contract (an unknown path answers 404) calls through a target with no `contract` line.",
             ),
             repro: Repro { args: &["check", "e016.geas"], files: &[("e016.geas", X_E016), ("orders.json", ORDERS_JSON)], exit: 2, needs: &[], env: &[] },
+        },
+        Entry {
+            code: "E017",
+            summary: tr!("使えない `keep` か、持っている名前の使い方の誤り", "a `keep`, or a use of the name it holds, that cannot work"),
+            when: tr!(
+                "同じ主張で同じ名前を二度 `keep` したとき、名前が `port` のとき（`{{port}}` はサービスのポートを指します）、`keep status`・`keep exit`・`keep screen` のとき（読めるのは `stdout`・`stderr`・`header`・`body`・`body json`・`env` です。`status` と `exit` は `is` で比べれば足り、`screen` は一つの文字列になりません）、`{{id}}` がその `keep` より前の手順にあるとき、`matches`・`does not match`・`matching` のパターンに持っている名前があるとき（パターンは走らせる前に確かめます）、`pixie` のターゲットの呼び出しに持っている名前があるとき（pixie は主張の操作を、走らせる前に一つのスクリプトにします）です。どの主張も走りません。",
+                "A claim keeps one name twice; or the name is `port`, which `{{port}}` already means; or it says `keep status`, `keep exit` or `keep screen` (it can read `stdout`, `stderr`, `header`, `body`, `body json` and `env`: `status` and `exit` are compared with `is`, and a screen is no one string); or a `{{id}}` comes in a step before the `keep` that holds it; or a pattern of `matches`, `does not match` or `matching` holds a name the claim keeps, since a pattern is read before anything runs; or a call on a `pixie` target does, since pixie makes a claim's actions one script before they run. No claim runs.",
+            ),
+            fix: tr!(
+                "名前を変えるか、`keep` を使う手順より前に書いてください。パターンに持っている名前を入れたいときは、`is` か `contains` で比べてください。pixie のアプリへの呼び出しは、走らせる前に決まる文字で書いてください。",
+                "Choose another name, or write the `keep` before the step that uses it. Where a pattern would hold a value, compare with `is` or `contains`. A call on a pixie app is written with what is known before it runs.",
+            ),
+            repro: spec(&["check", "e017.geas"], &[("e017.geas", X_E017)], 2),
         },
         Entry {
             code: "E030",
@@ -861,8 +910,8 @@ pub fn table() -> Vec<Entry> {
                 "an HTTP exchange that failed: refused, cut off, malformed, or no answer within 5 s",
             ),
             when: tr!(
-                "`get` や `post` がサービスのポートに届いたのに、HTTP のレスポンスを得られなかったとき。接続を拒否されたとき、サービスがレスポンスを返さずに接続を閉じたとき、返ってきたものが HTTP ではなかったとき、5 秒のうちに何も返ってこなかったときです。`=` の行に、サービスの stderr の最後の数行が出ます。",
-                "A `get` or a `post` reached the service's port and got no HTTP answer: the connection was refused, the service closed it without answering, what came back was not HTTP, or nothing came back within 5 s. The notes give the last lines of the service's stderr.",
+                "HTTP の呼び出し（`get`・`post`・`put`・`patch`・`delete`）がサービスのポートに届いたのに、HTTP のレスポンスを得られなかったとき。接続を拒否されたとき、サービスがレスポンスを返さずに接続を閉じたとき、返ってきたものが HTTP ではなかったとき、5 秒のうちに何も返ってこなかったときです。`=` の行に、サービスの stderr の最後の数行が出ます。",
+                "An HTTP call (`get`, `post`, `put`, `patch`, `delete`) reached the service's port and got no HTTP answer: the connection was refused, the service closed it without answering, what came back was not HTTP, or nothing came back within 5 s. The notes give the last lines of the service's stderr.",
             ),
             fix: tr!(
                 "サービスがどのリクエストにも HTTP のレスポンスを返すようにしてください。リクエストの処理で失敗したサービスは、接続を閉じることがよくあります。理由は stderr に出ています。",
@@ -954,6 +1003,19 @@ pub fn table() -> Vec<Entry> {
                 needs: &["python3"],
                 env: &[],
             },
+        },
+        Entry {
+            code: "E038",
+            summary: tr!("呼び出しに使えない値", "a value a call cannot use"),
+            when: tr!(
+                "走らせてみて、持っている値が使えなかったときです。`keep env` の環境変数が無いか、空か、UTF-8 でないとき、ヘッダーの値が改行か制御文字を含むようになったとき、パスが geas の起動していないホストの URL になったとき、`/` で始まらなくなったときが、これに当たります。主張はエラーで終わり、残りの手順は実行しません。ほかの主張は走ります。",
+                "A value a claim holds turned out not to work when it ran: the variable of a `keep env` is not set, is empty or is not UTF-8; a header's value came to hold a line break or a control character; a path came to be a URL on a host geas did not start, or not to start with `/`. The claim ends as an error, and its remaining steps do not run. The other claims go on.",
+            ),
+            fix: tr!(
+                "環境変数は geas を走らせる環境に設定してください（`export NAME=…`）。値を返したサービスが間違っていないか確かめてください。サービスの URL の組み立てを確かめたいだけなら、値を `is` か `contains` で比べてください。",
+                "Set the variable where geas runs (`export NAME=…`). Otherwise look at the service that gave the value, or compare the value with `is` or `contains` when the point is what it holds rather than where it leads.",
+            ),
+            repro: spec(&["check", "e038.geas"], &[("e038.geas", X_E038)], 1),
         },
         Entry {
             code: "E050",
@@ -1197,6 +1259,19 @@ pub fn table() -> Vec<Entry> {
             repro: Repro { args: &["check", "w015.geas"], files: &[("w015.geas", X_W015), ("orders.json", ORDERS_OF_ANY_NAME_JSON)], exit: 0, needs: &[], env: &[] },
         },
         Entry {
+            code: "W016",
+            summary: tr!("`keep` の主張で、持っていない `{{name}}`", "a `{{name}}` that a claim with a `keep` does not hold"),
+            when: tr!(
+                "`keep` のある主張の呼び出しの文字列かチェックの値に、識別子の形の `{{name}}` があって、その名前をどの `keep` も持っていないときです。打ち間違いのことがほとんどです。文字列は書いたまま送り、書いたまま比べます。`{{port}}` とパターンの中は言いません。`keep` の無い主張では何も言いません。",
+                "A string of a call, or the value of a check, in a claim with a `keep` holds a `{{name}}` in the shape of an identifier, and no `keep` holds that name. It is usually a slip of the fingers. The string is sent, and compared, as it is written. `{{port}}` and what a pattern holds are not said, and a claim without a `keep` says nothing.",
+            ),
+            fix: tr!(
+                "名前を直すか、その値を `keep` してください。その文字のまま送りたいなら、そのままでかまいません。",
+                "Correct the name, or `keep` the value. If those characters are what is meant, leave them as they are.",
+            ),
+            repro: spec(&["check", "w016.geas"], &[("w016.geas", X_W016)], 0),
+        },
+        Entry {
             code: "W060",
             summary: tr!("`map` で記録が何も取れなかったターゲット", "a target that gave no record at all in `map`"),
             when: tr!(
@@ -1239,8 +1314,8 @@ pub fn table() -> Vec<Entry> {
                 "In `geas check`, somewhere in the spec, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line. The claims run as they always do.",
             ),
             fix: tr!(
-                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、ターゲットのプログラムがそこから読むようにしてください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
-                "Keep the key where the code runs (an environment variable, the platform's connection or secret store), and have the target's program read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.",
+                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、ターゲットのプログラムがそこから読むようにしてください。呼び出しで送る鍵は、環境から `keep env \"NAME\" as key` で読めます（`header \"authorization\": \"Bearer {{key}}\"`）。その値はジャーナルにも報告にも出ません。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
+                "Keep the key where the code runs (an environment variable, the platform's connection or secret store), and have the target's program read it from there. A key that a call sends can be read from the environment with `keep env \"NAME\" as key` (`header \"authorization\": \"Bearer {{key}}\"`), and no journal or report shows its value. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.",
             ),
             repro: spec(&["check", "w901.geas"], &[("w901.geas", X_W901)], 0),
         },

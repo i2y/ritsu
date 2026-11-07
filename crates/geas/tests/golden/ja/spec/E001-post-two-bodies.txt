@@ -1,0 +1,2 @@
+エラー[E001]: E001-post-two-bodies.geas:7:35: `)` を書くところに `body` があります
+     7 |   when api.delete("/", body: "a", body: "b")

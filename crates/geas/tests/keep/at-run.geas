@@ -1,0 +1,25 @@
+# What the document does not have, found out when the claim runs: the check fails, in E016's words.
+target api {
+  serve "python3 things.py {port}"
+  port auto
+  contract "things.yaml"
+}
+
+mask header "date"
+mask header "server"
+
+claim "the value leads outside the document" {
+  when api.post("/things", body: "a chair")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.get("{at}/parts")
+  then status is 404
+}
+
+claim "a kept value that holds a slash" {
+  when api.post("/things", body: "a chair")
+  keep header "location" as at
+  keep body json ".id" as id
+  when api.get("/things/{at}")
+  then status is 200
+}

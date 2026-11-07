@@ -1,0 +1,5 @@
+エラー[E006]: E006-put-on-a-command.geas:6:13: `calc` はコマンドを走らせるターゲットなので、呼べるのは `run` で、`put` は呼べません
+     6 |   when calc.put("/a")
+エラー[E007]: E006-put-on-a-command.geas:7:8: `put` の結果にあるのは status、header、body、body json で、`exit` はありません
+     7 |   then exit is 0
+  = このチェックが見るのは 6 行目の `when` です

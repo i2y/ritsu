@@ -1,0 +1,8 @@
+not ok 1 - the value does not come in time
+    k/wait-runs-out.geas:8: 1 秒のうちに、下のチェックがそろって成り立つ結果はありませんでした（<t> 秒で <n> 回呼びました）。下のチェックは最後の結果を見ています
+         8 |   when api.get("/gaps") within 1 second
+    k/wait-runs-out.geas:9: keep body json ".none" as result のはずが、実際は null
+         9 |   keep body json ".none" as result
+      ここまでの実行:
+           8  when api.get("/gaps") within 1 second  →  200, body "{\"none\": null, \"empty\": \"\"}"
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: k/.geas/wait-runs-out.journal.jsonl

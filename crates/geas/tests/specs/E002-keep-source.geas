@@ -1,0 +1,10 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "what a keep cannot read" {
+  when api.get("/")
+  keep answer as whole
+  then status is 200
+}

@@ -45,13 +45,21 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
                             out.push_str(&format!("      {:>4} | {}\n", o.line, mask(text)));
                         }
                     }
+                    // the values the check goes by, which its text writes `{name}`
+                    let told = |is: &str, sep: &str| -> Vec<String> {
+                        c.values.iter().map(|(n, v)| format!("{{{n}}}{is}{}{sep}", mask(&json::quote(v)))).collect()
+                    };
                     out.push_str(&match lang {
-                        Lang::En => format!("    {file}:{}: {} — got {}\n", c.line, mask(&c.text()), mask(c.actual.get(lang))),
+                        Lang::En => {
+                            let values = if c.values.is_empty() { String::new() } else { format!(" ({})", told(" is ", "").join(", ")) };
+                            format!("    {file}:{}: {} — got {}{values}\n", c.line, mask(&c.text()), mask(c.actual.get(lang)))
+                        }
                         Lang::Ja => {
                             // a value is set off by a space; words of Japanese are not
                             let a = mask(c.actual.get(lang));
                             let gap = if a.starts_with(|ch: char| ch.is_ascii()) { " " } else { "" };
-                            format!("    {file}:{}: {} のはずが、実際は{gap}{a}\n", c.line, mask(&c.text()))
+                            let values = if c.values.is_empty() { String::new() } else { format!("（{}）", told(" は ", "").join("、")) };
+                            format!("    {file}:{}: {} のはずが、実際は{gap}{a}{values}\n", c.line, mask(&c.text()))
                         }
                     });
                     if let Some(text) = src.lines().nth(c.line.saturating_sub(1)) {
@@ -204,13 +212,21 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
                 .iter()
                 .map(|c| {
                     let screen = c.screen.as_ref().map(|sc| format!(",\"screen\":{}", sc.json)).unwrap_or_default();
+                    // the values a failed check goes by, when it has any
+                    let values = if c.values.is_empty() {
+                        String::new()
+                    } else {
+                        let pairs: Vec<String> = c.values.iter().map(|(n, v)| format!("{}:{}", json::quote(n), json::quote(&mask(v)))).collect();
+                        format!(",\"values\":{{{}}}", pairs.join(","))
+                    };
                     format!(
-                        "{{\"line\":{},\"check\":{},\"expected\":{},\"actual\":{},\"ok\":{}{}}}",
+                        "{{\"line\":{},\"check\":{},\"expected\":{},\"actual\":{},\"ok\":{}{}{}}}",
                         c.line,
                         json::quote(&c.label),
                         json::quote(&mask(&c.expected)),
                         json::quote(&mask(c.actual.get(lang))),
                         c.ok,
+                        values,
                         screen
                     )
                 })

@@ -1,0 +1,15 @@
+警告[W016]: k/typo.geas:14:25: `{idd}` はこの主張が持っている名前ではないので、書いたままになります
+    14 |   when api.post("/saved/{idd}", body: "{other} {port} {\"a\":1} {1} {}")
+  = この主張が持っている名前: id
+警告[W016]: k/typo.geas:14:40: `{other}` はこの主張が持っている名前ではないので、書いたままになります
+    14 |   when api.post("/saved/{idd}", body: "{other} {port} {\"a\":1} {1} {}")
+  = この主張が持っている名前: id
+警告[W016]: k/typo.geas:15:37: `{idd}` はこの主張が持っている名前ではないので、書いたままになります
+    15 |   then body json ".path" is "/saved/{idd}"
+  = この主張が持っている名前: id
+警告[W016]: k/typo.geas:16:36: `{other}` はこの主張が持っている名前ではないので、書いたままになります
+    16 |   and  body json ".body" contains "{other}"
+  = この主張が持っている名前: id
+ok 1 - a name that is not kept
+ok 2 - a claim that keeps nothing
+主張 2 件 · 成り立った 2 件 · 成り立たなかった 0 件 · ジャーナル: k/.geas/typo.journal.jsonl

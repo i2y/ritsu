@@ -425,7 +425,9 @@ fn shown(p: &Path) -> String {
 /// with the warnings that leaves; or what stops it.
 fn with_contracts(src: &str, p: &Paths) -> Result<(model::Spec, Vec<Diag>), Vec<Diag>> {
     let mut spec = parse::parse(src)?;
-    let said = contract::read(&mut spec, &p.cwd);
+    let mut said = contract::read(&mut spec, &p.cwd);
+    said.append(&mut spec.warnings);
+    diag::sort(&mut said);
     if said.iter().any(Diag::is_error) { Err(said) } else { Ok((spec, said)) }
 }
 

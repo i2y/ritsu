@@ -1,0 +1,3 @@
+error[E014]: E014-within-with-keep-env-only.geas:7:21: `within` waits until the checks under this `when` hold, and it has none
+     7 |   when api.get("/") within 5 seconds
+  = write under it, with `then` or `keep`, what to wait for, or leave out `within`

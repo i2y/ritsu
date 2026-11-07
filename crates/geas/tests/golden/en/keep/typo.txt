@@ -1,0 +1,15 @@
+warning[W016]: k/typo.geas:14:25: `{idd}` is not a name this claim keeps, so it stays as written
+    14 |   when api.post("/saved/{idd}", body: "{other} {port} {\"a\":1} {1} {}")
+  = the names it keeps: id
+warning[W016]: k/typo.geas:14:40: `{other}` is not a name this claim keeps, so it stays as written
+    14 |   when api.post("/saved/{idd}", body: "{other} {port} {\"a\":1} {1} {}")
+  = the names it keeps: id
+warning[W016]: k/typo.geas:15:37: `{idd}` is not a name this claim keeps, so it stays as written
+    15 |   then body json ".path" is "/saved/{idd}"
+  = the names it keeps: id
+warning[W016]: k/typo.geas:16:36: `{other}` is not a name this claim keeps, so it stays as written
+    16 |   and  body json ".body" contains "{other}"
+  = the names it keeps: id
+ok 1 - a name that is not kept
+ok 2 - a claim that keeps nothing
+2 claims · 2 ok · 0 failed · journal: k/.geas/typo.journal.jsonl

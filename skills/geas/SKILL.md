@@ -137,13 +137,15 @@ each other's state and can run in any order. `#` starts a comment. The forms, at
 target calc { run "python3 calc.py" }           a command, run once per `when`
 target api  { serve "node server.ts {port}"     a service, started once per claim,
               port auto }                       on a free port geas picks; or `port 8123`
-contract "api.yaml"                             (in a serve target) every get and post is held to this OpenAPI document
+contract "api.yaml"                             (in a serve target) every HTTP call is held to this OpenAPI document
 target app  { pixie "greeter" }                 a pixie app, driven headless
 target ui   { driver "python3 my_driver.py" }   any other GUI, through a driver program
 serial                                          (in a target) its claims never run side by side
 
 when calc.run("2", "+", "3")                    arguments after the target's command
 when api.get("/path")   when api.post("/path", body: "5")
+when api.put("/a/1", body: "x")   when api.patch("/a/1", body: "y")   when api.delete("/a/1")
+when api.get("/a", header "authorization": "Bearer {token}")   headers on any of the five, as many as needed
 when api.get("/jobs/1") within 10 seconds       called again until its checks hold (1 to 60 s)
 when web.open("/")      when app.open()         a page of a serve target, or the app's first screen
 when app.click("Save")  when app.click("Save", nth: 2)
@@ -151,8 +153,12 @@ when app.input("Ada")   when app.input("Ada", field: 2)   when web.input("Ada", 
 when app.submit()       when app.press("cmd-s")           when app.advance(500)
 
 then stdout | stderr | exit                     after run
-then status | header "etag" | body | body json ".a[0].b"   after get or post
+then status | header "etag" | body | body json ".a[0].b"   after an HTTP call
 then screen                                     after a GUI action
+
+keep body json ".id" as id                      holds a value of the `when` above for the steps below: `{id}`
+keep stdout | stderr | header "etag" | body as x
+keep env "API_TOKEN" as token                   from geas's own environment, before a `when` if need be; shown nowhere
 
   is "5" | is 0 | is true | is null | is not "x"
   is above 1 | is below 10 | is at least 0 | is at most 3 | is between 200 and 299
@@ -184,8 +190,8 @@ A `when` on a command or a service can wait for an answer that comes later, such
 after the service accepted it: with `within <n> seconds` after its call, geas calls again, 100 ms
 after each answer, until every check under that `when` holds on one answer, for up to `n` seconds
 from the first call. When the time runs out, the checks read the last answer. A call is made again
-as it is written, so a `post` or a `run` that waits does what it does on every call, and a `post`
-that creates something creates it again: wait on a read where there is one.
+as it is written, so a call that waits does what it does on every call: a `post` that creates
+something creates it again, and a `put` or a `patch` writes again. Wait on a read where there is one.
 [language.md](language.md) has every form, with what each one means.
 
 ## 4. Reading the answers
@@ -207,6 +213,17 @@ as a diagnostic with its code, and the notes say what geas saw. A failed `screen
 screen it looked at, one node a line. With `--json`, the report is one object a spec:
 `{"geas":1,"ok":…,"file":…,"claims":[{"name","line","status","error","checks","run"}],"diagnostics":[…]}`,
 `diagnostics` holding the keys written in the spec (W901), `[]` when it has none.
+
+A check that uses a name a `keep` holds says the value too, and a `keep` that could not read fails the claim
+there and ends it; the run that gets there has what was kept, in order. What `keep env` read is `{name}`
+everywhere. The journal and the baseline write every kept value as `{name}`, so read a report for the value
+and `.geas/<stem>.journal.jsonl` for the shape:
+
+```text
+not ok 1 - a check that fails on a value
+    k/told.geas:14: body json ".id" is "{qty}{id}" — got "1" ({qty} is "1", {id} is "1")
+        14 |   then body json ".id" is "{qty}{id}"
+```
 
 A wait whose time ran out says so above the checks it failed, with how many calls geas made and how
 long they took, and the checks read the last answer:
@@ -248,24 +265,27 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 |---|---|---|
 | E001, E002 | a token the grammar does not take there; a word geas does not know | the message lists what fits |
 | E003 | two targets or two claims with one name; one thing pinned twice | rename one; keep one pin |
-| E004, E005 | a target whose lines do not fit; a claim with no step, or a `then` before any `when` | what the message says |
-| E006, E007 | a call the target does not take; a check of something the `when` does not observe | the forms in §3 |
+| E004, E005 | a target whose lines do not fit; a claim with no step, or a `then` or a `keep` of an answer before any `when` | what the message says |
+| E006, E007 | a call the target does not take; a check or a `keep` of something the `when` does not observe | the forms in §3 |
 | E008, E009 | a matcher that does not fit its subject or value; a pattern or JSON path that does not parse | the message points at the character |
 | E010 | a command that cannot be split into words; `{port}` on a target without a port | close the quote |
 | E011 | a pin geas cannot keep for that target | give `clock` and `seed` an `env "NAME"` on a process |
 | E012, E013 | another target's `when` between two pixie actions; an argument an action cannot take there | move the `when`; see [gui.md](gui.md) |
-| E014 | a `within` geas cannot keep: after a screen action, below 1 or above 60 seconds, or on a `when` with no check under it | `within` 1 to 60 seconds on a `run`, `get` or `post`, with the checks to wait for under it; `advance(ms)` for a screen |
+| E014 | a `within` geas cannot keep: after a screen action, below 1 or above 60 seconds, or on a `when` with no check and no `keep` of its answer under it | `within` 1 to 60 seconds on a `run` or an HTTP call, with the checks to wait for under it; `advance(ms)` for a screen |
 | E015, E016 | a `contract` file that cannot be read; a call the document does not have | write the path from the spec's directory; correct the call, add it to the document, or call through a target with no `contract` line |
+| E017 | a `keep`, or a use of its name, that cannot work: one name twice, the name `port`, `keep status`, `exit` or `screen`, a `{name}` above its `keep`, in a pattern, or in a call on a pixie app | what the message says; `is` or `contains` where a pattern would hold a value |
 | E030 to E033 | a program that would not start, a `run` over 5 s, a service that never opened its port, an HTTP exchange that failed | fix the program or the target's command; the notes hold its stderr |
 | E034 to E037 | no Chrome; an action the app refused; a page that did not load or settle; a GUI driver geas cannot read | the notes show the screen and what it could reach |
+| E038 | a value a call cannot use: the variable of a `keep env` is not set or empty, a line break in a header's value, a path that comes to another host or has no `/` in front | set the variable where geas runs; look at the service that gave the value |
 | E050, E051 | no baseline, or one that cannot be read | ask the person, then `ritsu geas snap` |
 | E060 to E064 | no record, a record of another spec, a stale record, added lines with only a record of the code before, a diff that fits neither side | `ritsu geas map` on the code the diff ends at |
 | E065, E066 | a coverage tool missing or failing; a service that stopped without writing its record | [map.md](map.md) |
 | E080, E081 | arguments the command does not take; a file that cannot be read or written | `geas --help` |
 | E090 | a file given to `scenarios` that is neither an OpenSpec spec nor a change's delta spec | give `openspec/specs/…` or `openspec/changes/<id>`; `openspec validate` says what is wrong |
 | W015 | what a contract says and geas does not hold | nothing is wrong; those keywords are not held, and the rest is |
+| W016 | a `{name}` no `keep` holds, in a claim that has a `keep` | correct the name, or leave it if those characters are meant |
 | W060, W061 | a target that gave `map` no record; a Rust profile from a program geas did not start | build it with coverage; start the binary itself |
-| W901 | a key written in the spec, in a string or a comment (`check`; the kind, its prefix and its length, never the key) | have the target's program read it from where it runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
+| W901 | a key written in the spec, in a string or a comment (`check`; the kind, its prefix and its length, never the key) | have the target's program read it from where it runs, or a call send it with `keep env`; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 
 `ritsu geas explain <code>` prints when a code appears, what usually fixes it, and the smallest spec that
 gives it; [codes.md](codes.md) has every one. `--lang ja` (or `GEAS_LANG=ja`) gives the messages in
@@ -300,7 +320,7 @@ says `click("Greet")` and the page made Greet a `<div>`, the page is what needs 
 - **A page in Chrome:** a `serve` target, then `open("/path")`. geas starts a headless Chrome (from
   `GEAS_CHROME`, the macOS application, or `google-chrome`, `chromium` or `chromium-browser` on
   PATH), gives each claim a fresh browser context, and settles the page on virtual time: a timer of
-  300 ms has fired by the next check, without the claim waiting for it. `get` and `post` reach the
+  300 ms has fired by the next check, without the claim waiting for it. The HTTP calls reach the
   same service in the same claim.
 - **A pixie app:** `pixie "<app>"`, the built app beside the spec. geas replays each claim's actions
   on it as one headless script, so no other target's `when` may come between two of them (E012).
