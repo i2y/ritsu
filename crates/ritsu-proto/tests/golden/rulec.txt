@@ -1147,6 +1147,9 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+message CancelOrderRequest
+  id string
+message CancelOrderResponse
 == ../sakai/examples/shop/proto/warehouse/v1/stock.proto
 package Some("warehouse.v1") imports ["buf/validate/validate.proto"]
 enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2 STOCK_CONFLICT=3
@@ -1235,6 +1238,9 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+message CancelOrderRequest
+  id string
+message CancelOrderResponse
 == ../sakai/examples/shop.ja/proto/warehouse/v1/stock.proto
 package Some("warehouse.v1") imports ["buf/validate/validate.proto"]
 enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2 STOCK_CONFLICT=3
@@ -1556,6 +1562,9 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+message CancelOrderRequest
+  id string
+message CancelOrderResponse
 == ../sakai/tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 package Some("shop.ordering.v1") imports ["buf/validate/validate.proto"]
 enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
@@ -1567,6 +1576,9 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+message CancelOrderRequest
+  id string
+message CancelOrderResponse
 == ../sakai/tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto
 package Some("shop.billing.v1") imports ["warehouse/v1/stock.proto"]
 enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
@@ -1702,16 +1714,19 @@ package Some("kernel") imports []
 message Days
   count int64
 == ../sakai/tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto
-package Some("shop.ordering.v1") imports []
+package Some("shop.ordering.v1") imports ["buf/validate/validate.proto"]
 enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
 message Order
   id string
   status OrderStatus
-  amount_jpy int64
+  amount_jpy int64 gte=0 lte=1000000
 message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+message CancelOrderRequest
+  id string
+message CancelOrderResponse
 == ../sakai/tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
 package Some("warehouse.v1") imports ["buf/validate/validate.proto"]
 enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2 STOCK_CONFLICT=3
@@ -1757,16 +1772,19 @@ message GetPackingRequest
 message GetPackingResponse
   status PackingStatus
 == ../sakai/tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto
-package Some("shop.ordering.v1") imports []
+package Some("shop.ordering.v1") imports ["buf/validate/validate.proto"]
 enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
 message Order
   id string
   status OrderStatus
-  amount_jpy int64
+  amount_jpy int64 gte=0 lte=1000000
 message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+message CancelOrderRequest
+  id string
+message CancelOrderResponse
 == ../sakai/tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto
 package Some("shop.billing.v1") imports ["google/type/money.proto"]
 enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3

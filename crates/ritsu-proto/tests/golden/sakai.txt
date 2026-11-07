@@ -2410,29 +2410,33 @@ message AnswerPackingResponse 68
 service FulfillmentService 18
   option (dandori.v1.workflow) = {name: "fulfillment", version: 1}
   method Fulfill FulfillRequest FulfillResponse false false 22
-    option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate", "PackingShort"]}
+    option (dandori.v1.start) = {fails: ["OutOfStock", "StockConflict", "DeliveryFailed", "PackingLate", "PackingShort"]}
   method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 27
     option (dandori.v1.answer) = {task: "wait_for_packing"}
 == examples/shop/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
 import buf/validate/validate.proto 5:1 public=false weak=false
-message Order 20
-  field id 1 None Scalar("string") json=None oneof=None line=21
-  field status 2 None Named("OrderStatus") json=None oneof=None line=22
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=23
-message GetOrderRequest 26
-  field id 1 None Scalar("string") json=None oneof=None line=27
-message GetOrderResponse 30
-  field order 1 None Named("Order") json=None oneof=None line=31
-enum OrderStatus 12
-  value ORDER_STATUS_UNSPECIFIED 0 13
-  value ORDER_STATUS_RECEIVED 1 14
-  value ORDER_STATUS_PAID 2 15
-  value ORDER_STATUS_SHIPPED 3 16
-  value ORDER_STATUS_CANCELLED 4 17
-service OrderService 8
-  method GetOrder GetOrderRequest GetOrderResponse false false 9
+message Order 22
+  field id 1 None Scalar("string") json=None oneof=None line=23
+  field status 2 None Named("OrderStatus") json=None oneof=None line=24
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=25
+message GetOrderRequest 28
+  field id 1 None Scalar("string") json=None oneof=None line=29
+message GetOrderResponse 32
+  field order 1 None Named("Order") json=None oneof=None line=33
+message CancelOrderRequest 36
+  field id 1 None Scalar("string") json=None oneof=None line=37
+message CancelOrderResponse 40
+enum OrderStatus 14
+  value ORDER_STATUS_UNSPECIFIED 0 15
+  value ORDER_STATUS_RECEIVED 1 16
+  value ORDER_STATUS_PAID 2 17
+  value ORDER_STATUS_SHIPPED 3 18
+  value ORDER_STATUS_CANCELLED 4 19
+service OrderService 9
+  method GetOrder GetOrderRequest GetOrderResponse false false 10
+  method CancelOrder CancelOrderRequest CancelOrderResponse false false 11
 == examples/shop/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
@@ -2543,29 +2547,33 @@ message AnswerPackingResponse 67
 service FulfillmentService 17
   option (dandori.v1.workflow) = {name: "引当と発送", version: 1}
   method Fulfill FulfillRequest FulfillResponse false false 21
-    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"]}
+    option (dandori.v1.start) = {fails: ["在庫不足", "明細の食い違い", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"]}
   method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 26
     option (dandori.v1.answer) = {task: "梱包を待つ"}
 == examples/shop.ja/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
 import buf/validate/validate.proto 5:1 public=false weak=false
-message Order 20
-  field id 1 None Scalar("string") json=None oneof=None line=21
-  field status 2 None Named("OrderStatus") json=None oneof=None line=22
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=23
-message GetOrderRequest 26
-  field id 1 None Scalar("string") json=None oneof=None line=27
-message GetOrderResponse 30
-  field order 1 None Named("Order") json=None oneof=None line=31
-enum OrderStatus 12
-  value ORDER_STATUS_UNSPECIFIED 0 13
-  value ORDER_STATUS_RECEIVED 1 14
-  value ORDER_STATUS_PAID 2 15
-  value ORDER_STATUS_SHIPPED 3 16
-  value ORDER_STATUS_CANCELLED 4 17
-service OrderService 8
-  method GetOrder GetOrderRequest GetOrderResponse false false 9
+message Order 22
+  field id 1 None Scalar("string") json=None oneof=None line=23
+  field status 2 None Named("OrderStatus") json=None oneof=None line=24
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=25
+message GetOrderRequest 28
+  field id 1 None Scalar("string") json=None oneof=None line=29
+message GetOrderResponse 32
+  field order 1 None Named("Order") json=None oneof=None line=33
+message CancelOrderRequest 36
+  field id 1 None Scalar("string") json=None oneof=None line=37
+message CancelOrderResponse 40
+enum OrderStatus 14
+  value ORDER_STATUS_UNSPECIFIED 0 15
+  value ORDER_STATUS_RECEIVED 1 16
+  value ORDER_STATUS_PAID 2 17
+  value ORDER_STATUS_SHIPPED 3 18
+  value ORDER_STATUS_CANCELLED 4 19
+service OrderService 9
+  method GetOrder GetOrderRequest GetOrderResponse false false 10
+  method CancelOrder CancelOrderRequest CancelOrderResponse false false 11
 == examples/shop.ja/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
@@ -3061,44 +3069,52 @@ service PackingService 13
 syntax proto3
 package shop.ordering.v1
 import buf/validate/validate.proto 5:1 public=false weak=false
-message Order 21
-  field id 1 None Scalar("string") json=None oneof=None line=22
-  field status 2 None Named("OrderStatus") json=None oneof=None line=23
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=24
-message GetOrderRequest 27
-  field id 1 None Scalar("string") json=None oneof=None line=28
-message GetOrderResponse 31
-  field order 1 None Named("Order") json=None oneof=None line=32
-enum OrderStatus 12
-  value ORDER_STATUS_UNSPECIFIED 0 13
-  value ORDER_STATUS_RECEIVED 1 14
-  value ORDER_STATUS_PAID 2 15
-  value ORDER_STATUS_SHIPPED 3 16
-  value ORDER_STATUS_CANCELLED 4 17
-  value ORDER_STATUS_RETURNED 5 18
-service OrderService 8
-  method GetOrder GetOrderRequest GetOrderResponse false false 9
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+  field status 2 None Named("OrderStatus") json=None oneof=None line=25
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=26
+message GetOrderRequest 29
+  field id 1 None Scalar("string") json=None oneof=None line=30
+message GetOrderResponse 33
+  field order 1 None Named("Order") json=None oneof=None line=34
+message CancelOrderRequest 37
+  field id 1 None Scalar("string") json=None oneof=None line=38
+message CancelOrderResponse 41
+enum OrderStatus 14
+  value ORDER_STATUS_UNSPECIFIED 0 15
+  value ORDER_STATUS_RECEIVED 1 16
+  value ORDER_STATUS_PAID 2 17
+  value ORDER_STATUS_SHIPPED 3 18
+  value ORDER_STATUS_CANCELLED 4 19
+  value ORDER_STATUS_RETURNED 5 20
+service OrderService 9
+  method GetOrder GetOrderRequest GetOrderResponse false false 10
+  method CancelOrder CancelOrderRequest CancelOrderResponse false false 11
 == tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
 import buf/validate/validate.proto 5:1 public=false weak=false
-message Order 21
-  field id 1 None Scalar("string") json=None oneof=None line=22
-  field status 2 None Named("OrderStatus") json=None oneof=None line=23
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=24
-message GetOrderRequest 27
-  field id 1 None Scalar("string") json=None oneof=None line=28
-message GetOrderResponse 31
-  field order 1 None Named("Order") json=None oneof=None line=32
-enum OrderStatus 12
-  value ORDER_STATUS_UNSPECIFIED 0 13
-  value ORDER_STATUS_RECEIVED 1 14
-  value ORDER_STATUS_PAID 2 15
-  value ORDER_STATUS_SHIPPED 3 16
-  value ORDER_STATUS_CANCELLED 4 17
-  value ORDER_STATUS_RETURNED 5 18
-service OrderService 8
-  method GetOrder GetOrderRequest GetOrderResponse false false 9
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+  field status 2 None Named("OrderStatus") json=None oneof=None line=25
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=26
+message GetOrderRequest 29
+  field id 1 None Scalar("string") json=None oneof=None line=30
+message GetOrderResponse 33
+  field order 1 None Named("Order") json=None oneof=None line=34
+message CancelOrderRequest 37
+  field id 1 None Scalar("string") json=None oneof=None line=38
+message CancelOrderResponse 41
+enum OrderStatus 14
+  value ORDER_STATUS_UNSPECIFIED 0 15
+  value ORDER_STATUS_RECEIVED 1 16
+  value ORDER_STATUS_PAID 2 17
+  value ORDER_STATUS_SHIPPED 3 18
+  value ORDER_STATUS_CANCELLED 4 19
+  value ORDER_STATUS_RETURNED 5 20
+service OrderService 9
+  method GetOrder GetOrderRequest GetOrderResponse false false 10
+  method CancelOrder CancelOrderRequest CancelOrderResponse false false 11
 == tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto
 error 11:1 `;` is expected where `}` is | `;` が要るところに `}` があります
 == tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto
@@ -3308,23 +3324,28 @@ message Days 6
 == tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
-message Order 19
-  field id 1 None Scalar("string") json=None oneof=None line=20
-  field status 2 None Named("OrderStatus") json=None oneof=None line=21
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
-message GetOrderRequest 25
-  field id 1 None Scalar("string") json=None oneof=None line=26
-message GetOrderResponse 29
-  field order 1 None Named("Order") json=None oneof=None line=30
-enum OrderStatus 10
-  value ORDER_STATUS_UNSPECIFIED 0 11
-  value ORDER_STATUS_RECEIVED 1 12
-  value ORDER_STATUS_PAID 2 13
-  value ORDER_STATUS_SHIPPED 3 14
-  value ORDER_STATUS_CANCELLED 4 15
-  value ORDER_STATUS_RETURNED 5 16
-service OrderService 6
-  method GetOrder GetOrderRequest GetOrderResponse false false 7
+import buf/validate/validate.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+  field status 2 None Named("OrderStatus") json=None oneof=None line=25
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=26
+message GetOrderRequest 29
+  field id 1 None Scalar("string") json=None oneof=None line=30
+message GetOrderResponse 33
+  field order 1 None Named("Order") json=None oneof=None line=34
+message CancelOrderRequest 37
+  field id 1 None Scalar("string") json=None oneof=None line=38
+message CancelOrderResponse 41
+enum OrderStatus 14
+  value ORDER_STATUS_UNSPECIFIED 0 15
+  value ORDER_STATUS_RECEIVED 1 16
+  value ORDER_STATUS_PAID 2 17
+  value ORDER_STATUS_SHIPPED 3 18
+  value ORDER_STATUS_CANCELLED 4 19
+  value ORDER_STATUS_RETURNED 5 20
+service OrderService 9
+  method GetOrder GetOrderRequest GetOrderResponse false false 10
+  method CancelOrder CancelOrderRequest CancelOrderResponse false false 11
 == tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
@@ -3406,23 +3427,28 @@ service PackingService 14
 == tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
-message Order 19
-  field id 1 None Scalar("string") json=None oneof=None line=20
-  field status 2 None Named("OrderStatus") json=None oneof=None line=21
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
-message GetOrderRequest 25
-  field id 1 None Scalar("string") json=None oneof=None line=26
-message GetOrderResponse 29
-  field order 1 None Named("Order") json=None oneof=None line=30
-enum OrderStatus 10
-  value ORDER_STATUS_UNSPECIFIED 0 11
-  value ORDER_STATUS_RECEIVED 1 12
-  value ORDER_STATUS_PAID 2 13
-  value ORDER_STATUS_SHIPPED 3 14
-  value ORDER_STATUS_CANCELLED 4 15
-  value ORDER_STATUS_RETURNED 5 16
-service OrderService 6
-  method GetOrder GetOrderRequest GetOrderResponse false false 7
+import buf/validate/validate.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+  field status 2 None Named("OrderStatus") json=None oneof=None line=25
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=26
+message GetOrderRequest 29
+  field id 1 None Scalar("string") json=None oneof=None line=30
+message GetOrderResponse 33
+  field order 1 None Named("Order") json=None oneof=None line=34
+message CancelOrderRequest 37
+  field id 1 None Scalar("string") json=None oneof=None line=38
+message CancelOrderResponse 41
+enum OrderStatus 14
+  value ORDER_STATUS_UNSPECIFIED 0 15
+  value ORDER_STATUS_RECEIVED 1 16
+  value ORDER_STATUS_PAID 2 17
+  value ORDER_STATUS_SHIPPED 3 18
+  value ORDER_STATUS_CANCELLED 4 19
+  value ORDER_STATUS_RETURNED 5 20
+service OrderService 9
+  method GetOrder GetOrderRequest GetOrderResponse false false 10
+  method CancelOrder CancelOrderRequest CancelOrderResponse false false 11
 == tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto
 syntax proto3
 package shop.billing.v1
@@ -3477,6 +3503,7 @@ examples/shop.ja/proto/shop/ordering/v1/order.proto sees
   Order.status: shop.ordering.v1.OrderStatus (examples/shop.ja/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (examples/shop.ja/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (examples/shop.ja/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (examples/shop.ja/proto/shop/ordering/v1/order.proto)
+  OrderService.CancelOrder: shop.ordering.v1.CancelOrderRequest (examples/shop.ja/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.CancelOrderResponse (examples/shop.ja/proto/shop/ordering/v1/order.proto)
 examples/shop.ja/proto/warehouse/v1/stock.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (examples/shop.ja/proto/warehouse/v1/stock.proto, enum)
   GetPackingResponse.status: warehouse.v1.PackingStatus (examples/shop.ja/proto/warehouse/v1/stock.proto, enum)
@@ -3503,6 +3530,7 @@ examples/shop/proto/shop/ordering/v1/order.proto sees
   Order.status: shop.ordering.v1.OrderStatus (examples/shop/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (examples/shop/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (examples/shop/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (examples/shop/proto/shop/ordering/v1/order.proto)
+  OrderService.CancelOrder: shop.ordering.v1.CancelOrderRequest (examples/shop/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.CancelOrderResponse (examples/shop/proto/shop/ordering/v1/order.proto)
 examples/shop/proto/warehouse/v1/stock.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (examples/shop/proto/warehouse/v1/stock.proto, enum)
   GetPackingResponse.status: warehouse.v1.PackingStatus (examples/shop/proto/warehouse/v1/stock.proto, enum)
@@ -3618,10 +3646,12 @@ tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.pr
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto)
+  OrderService.CancelOrder: shop.ordering.v1.CancelOrderRequest (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.CancelOrderResponse (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto)
 tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto sees 
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
+  OrderService.CancelOrder: shop.ordering.v1.CancelOrderRequest (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.CancelOrderResponse (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
 tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto sees 
   StockSeen.stock: unknown
 tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto sees 
@@ -3674,6 +3704,7 @@ tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto)
+  OrderService.CancelOrder: shop.ordering.v1.CancelOrderRequest (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.CancelOrderResponse (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto)
 tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto, enum)
   GetPackingResponse.status: warehouse.v1.PackingStatus (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto, enum)
@@ -3692,6 +3723,7 @@ tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/orde
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto)
+  OrderService.CancelOrder: shop.ordering.v1.CancelOrderRequest (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.CancelOrderResponse (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto)
 tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto sees 
 tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto sees 
 #### tests/fixtures

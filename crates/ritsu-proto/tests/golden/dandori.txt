@@ -2750,7 +2750,7 @@ enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONF
 service shop.ordering.v1.FulfillmentService imports_options=true
   option dandori.v1.workflow = {"name":"fulfillment","version":1}
   method Fulfill in=shop.ordering.v1.FulfillRequest out=shop.ordering.v1.FulfillResponse streams=false
-    option dandori.v1.start = {"fails":["OutOfStock","DeliveryFailed","PackingLate","PackingShort"]}
+    option dandori.v1.start = {"fails":["OutOfStock","StockConflict","DeliveryFailed","PackingLate","PackingShort"]}
   method AnswerPacking in=shop.ordering.v1.AnswerPackingRequest out=shop.ordering.v1.AnswerPackingResponse streams=false
     option dandori.v1.answer = {"task":"wait_for_packing"}
 service warehouse.v1.StockService imports_options=false
@@ -2762,6 +2762,9 @@ service warehouse.v1.PackingService imports_options=false
 unread
 == ../sakai/examples/shop/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
+message shop.ordering.v1.CancelOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.CancelOrderResponse
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message shop.ordering.v1.GetOrderResponse
@@ -2773,6 +2776,7 @@ message shop.ordering.v1.Order
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+  method CancelOrder in=shop.ordering.v1.CancelOrderRequest out=shop.ordering.v1.CancelOrderResponse streams=false
 unread
 == ../sakai/examples/shop/proto/warehouse/v1/stock.proto
 package warehouse.v1
@@ -2900,7 +2904,7 @@ enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONF
 service shop.ordering.v1.FulfillmentService imports_options=true
   option dandori.v1.workflow = {"name":"引当と発送","version":1}
   method Fulfill in=shop.ordering.v1.FulfillRequest out=shop.ordering.v1.FulfillResponse streams=false
-    option dandori.v1.start = {"fails":["在庫不足","配送の手配の失敗","梱包の遅れ","梱包の欠品"]}
+    option dandori.v1.start = {"fails":["在庫不足","明細の食い違い","配送の手配の失敗","梱包の遅れ","梱包の欠品"]}
   method AnswerPacking in=shop.ordering.v1.AnswerPackingRequest out=shop.ordering.v1.AnswerPackingResponse streams=false
     option dandori.v1.answer = {"task":"梱包を待つ"}
 service warehouse.v1.StockService imports_options=false
@@ -2912,6 +2916,9 @@ service warehouse.v1.PackingService imports_options=false
 unread
 == ../sakai/examples/shop.ja/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
+message shop.ordering.v1.CancelOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.CancelOrderResponse
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message shop.ordering.v1.GetOrderResponse
@@ -2923,6 +2930,7 @@ message shop.ordering.v1.Order
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+  method CancelOrder in=shop.ordering.v1.CancelOrderRequest out=shop.ordering.v1.CancelOrderResponse streams=false
 unread
 == ../sakai/examples/shop.ja/proto/warehouse/v1/stock.proto
 package warehouse.v1
@@ -3498,6 +3506,9 @@ service warehouse.v1.PackingService imports_options=false
 unread
 == ../sakai/tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
+message shop.ordering.v1.CancelOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.CancelOrderResponse
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message shop.ordering.v1.GetOrderResponse
@@ -3509,9 +3520,13 @@ message shop.ordering.v1.Order
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+  method CancelOrder in=shop.ordering.v1.CancelOrderRequest out=shop.ordering.v1.CancelOrderResponse streams=false
 unread
 == ../sakai/tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
+message shop.ordering.v1.CancelOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.CancelOrderResponse
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message shop.ordering.v1.GetOrderResponse
@@ -3523,6 +3538,7 @@ message shop.ordering.v1.Order
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+  method CancelOrder in=shop.ordering.v1.CancelOrderRequest out=shop.ordering.v1.CancelOrderResponse streams=false
 unread
 == ../sakai/tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto
 error: tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto:11:1: `;` is expected where `}` is
@@ -3704,6 +3720,9 @@ message kernel.Days
 unread
 == ../sakai/tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
+message shop.ordering.v1.CancelOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.CancelOrderResponse
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message shop.ordering.v1.GetOrderResponse
@@ -3711,10 +3730,11 @@ message shop.ordering.v1.GetOrderResponse
 message shop.ordering.v1.Order
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
-  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+  method CancelOrder in=shop.ordering.v1.CancelOrderRequest out=shop.ordering.v1.CancelOrderResponse streams=false
 unread
 == ../sakai/tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
 package warehouse.v1
@@ -3776,6 +3796,9 @@ service warehouse.v1.PackingService imports_options=false
 unread
 == ../sakai/tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
+message shop.ordering.v1.CancelOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.CancelOrderResponse
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message shop.ordering.v1.GetOrderResponse
@@ -3783,10 +3806,11 @@ message shop.ordering.v1.GetOrderResponse
 message shop.ordering.v1.Order
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
-  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+  method CancelOrder in=shop.ordering.v1.CancelOrderRequest out=shop.ordering.v1.CancelOrderResponse streams=false
 unread
 == ../sakai/tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto
 package shop.billing.v1
