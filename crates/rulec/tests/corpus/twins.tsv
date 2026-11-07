@@ -71,3 +71,5 @@ Claude利用料.rule	claude_api_usage_fee.rule
 注文の手数料.rule	order_fee.rule
 割れ物の明細の手数料.rule	fragile_lines_fee.rule
 小包の手数料.rule	parcel_fee.rule
+領地の収入.rule	province_income.rule
+領地の成長.rule	province_growth.rule

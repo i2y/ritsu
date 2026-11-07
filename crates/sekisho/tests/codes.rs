@@ -54,7 +54,7 @@ fn the_ledger_has_each_code_once() {
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
     // DESIGN 10: E001–E008, E101–E110, E201–E211 with W201, E301–E307, W301–W304, E401, W401, W402,
     // and the checks of security W901 and W910
-    assert_eq!(l.entries.len(), 46);
+    assert_eq!(l.entries.len(), 47);
 }
 
 #[test]

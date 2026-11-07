@@ -2434,7 +2434,7 @@ fn graph(files: &[&String]) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
             return ExitCode::from(1);
         };
-        print!("{}", crate::graph::json(&f, &c, &src, &crate::sha256::hex(src.as_bytes())));
+        print!("{}", crate::graph::json(&f, &c, &src, &ritsu_base::fed::hash(&src)));
     }
     ExitCode::from(0)
 }

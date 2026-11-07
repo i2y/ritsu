@@ -146,6 +146,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             source_file: file.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(),
             source_path: file.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(),
             source_sha256: String::new(),
+            fed: vec![],
             package: None,
             rules: vec![],
             books: vec![],

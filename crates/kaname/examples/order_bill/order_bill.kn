@@ -1,0 +1,17 @@
+module order_bill v1
+description "What the lines of an order come to. Hand-written code takes the lines and the price from the order the schema describes: each `fed by` says where a value comes from, `ritsu check` holds the range of its values, and the code that carries them is not checked"
+
+record Line
+  sku : string  fed by jsonschema "schemas/order.schema.json" def Line property sku
+  qty : number  range >=1 <=20  fed by jsonschema "schemas/order.schema.json" def Line property qty
+
+fn bill(
+  lines: list[Line] count >=1 <=30,
+  price: money[USDc] range >=1USDc <=1000USDc  fed by jsonschema "schemas/order.schema.json" def Product property price
+) -> money[USDc] total
+  description "The price times the quantity of every line"
+  sum(lines, l => price * l.qty)
+
+examples
+  bill(lines: [Line { sku: "book-1", qty: 2 }], price: 150USDc) = 300USDc
+  bill(lines: [Line { sku: "book-1", qty: 2 }, Line { sku: "mug-1", qty: 1 }], price: 150USDc) = 450USDc

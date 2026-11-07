@@ -1965,9 +1965,9 @@ kaname の呼び出しでの X2 は、`crates/ritsu-model/tests/cross.rs` が確
 | 参照インタプリタ | `tests/interp.rs` | 内側の層を本物の口（dev-dependency の rulec・koyomi・chobo）でつなぎ、例とテストのモジュールの答え、失敗の種類、評価の順 |
 | 範囲の解析 | `tests/ranges.rs` | 例とテストのモジュール（`tests/modules/` の全部）の全部の関数で、ベクタと、引数の宣言から決まった順で選んだ 200 件の入力を流し、見た値が、どの式でも抽象の値に入る（解析が上からの見積もりであること）。実行の失敗は、どれも関数のエフェクトが言う種類である（失敗しうる場所の見落としが無いこと）。5,009 の式の 3,452,025 の値、139,754 回の評価（失敗 1,617）で、外れるものは 0（式は、モジュールごとに数える。テストのモジュールはどれも `t.kn` として読むので、ファイルと式の番号だけでは、別のモジュールの式を一つに数える）。型の端の印のある端 646 のうち 200 を、実行がとる（22.7）。型の引数の値の引数には数を、`result` の引数には `ok` か `err` を引く。例の値と関係、答えたあとと分岐で狭めること、見つけた例がその場所で失敗すること、規則の列挙の入力の範囲（`tests/modules/lift.kn` と `lift.ja.kn`。6.1）、温度を別の単位で読むこと（`tests/modules/temps.kn` と `temps.ja.kn`、`bounds.kn` の `shifted`。3.10）、`match` の分岐の狭め方（`tests/modules/sums.kn`。23.7）、辞書と集合とリストの組み込みの関数（`tests/modules/dicts.kn`、`lists2.kn`。24.5）、文字列の組み込みの関数（`tests/modules/texts.kn`。25.6）、総称の関数と読み直しと `result`（`tests/modules/generic.kn`、`results.kn`、`gcalls.kn`。26.10）、関数の値と `private`（`tests/modules/hof.kn`。27.9）、自分を含む型（`tests/modules/trees.kn`。28.1） |
 | エフェクト | `tests/effects.rs` | 推論、伝わり方（ほかのモジュールからも）、輪、書いたエフェクトの確かめ（E401）、答えを待つ場所の数え方、言語をまたぐ判定の答えの当て方（16.5）、12 章の材料 |
-| 逃げ道の警告 | `tests/hatch.rs` | 7 章の警告にする形としない形の全部（`match` が数える定数。23.9）、例で確かめて直した形、例の 16 の `.kn` |
+| 逃げ道の警告 | `tests/hatch.rs` | 7 章の警告にする形としない形の全部（`match` が数える定数。23.9）、例で確かめて直した形、例の 18 の `.kn` |
 | 鍵（W901） | `tests/secrets.rs` | コメントと文字列の鍵が、見つけた場所ごとに種類と接頭辞と長さで出て、鍵も行も出ないこと。読めないモジュールにも出ること。`ritsu: test secret` の行は言わないこと。ほかの診断が見せる行の鍵が伏せられること（12 章） |
-| 例 | `tests/examples.rs` | 八つの例に英語と日本語の版がそろうこと、どの例も全部の言語をつないだ `check` を警告も無く通り、`examples` が成り立つこと、汎用の四つの例が `use` を持たず、ホストのプログラム（`host/`）を持つこと（17.5）、規則が転記した文書を、横に置いて固定したコピーから引用すること（八つの規則が固定する出典は 10）、日付のファイルが、規則の固定したコピーをコメントで名指すこと（17.11）。英語と日本語の版が同じ答えを返すことは `tests/vectors.rs`（16.6） |
+| 例 | `tests/examples.rs` | 九つの例に英語と日本語の版がそろうこと、どの例も全部の言語をつないだ `check` を警告も無く通り、`examples` が成り立つこと、汎用の四つの例が `use` を持たず、ホストのプログラム（`host/`）を持つこと（17.5）、規則が転記した文書を、横に置いて固定したコピーから引用すること（八つの規則が固定する出典は 10）、日付のファイルが、規則の固定したコピーをコメントで名指すこと（17.11）。英語と日本語の版が同じ答えを返すことは `tests/vectors.rs`（16.6） |
 | ベクタ、run、doc、api | `tests/vectors.rs`、`tests/run.rs`、`tests/cli.rs`、`tests/doc.rs`、`tests/api.rs` | golden（`tests/golden/vectors/`、`tests/golden/run/`、`tests/golden/doc/`、`tests/golden/api/`）。英語と日本語の版のベクタ（16.6）。ページが中に置く規則と日付のページが、rulec と koyomi の `doc` が描くものと一字も違わないこと、HTML が外から何も読まないこと、Chrome でページが描け、中のページがボタンと `#page=<n>` で開くこと（13 章）。コマンドと終了コード |
 | 口 | `tests/ports.rs` | `Programs` の答え（区間、出どころ、関係、並びの長さ、見た値）、`Items`、`References` |
 | 出力先の突き合わせ | `tests/typescript.rs`、`tests/python.rs`、`tests/go.rs`、`tests/rust.rs` | 16.4 |
@@ -2068,9 +2068,9 @@ golden は `crates/kaname/tests/golden/` に置き、`KANAME_BLESS=1` で取り�
 
 ## 17. 例
 
-例は `crates/kaname/examples/` の下の八つで、どれも英語の版が先にあり、日本語の版を `<名前>.ja.kn` として横に置く（17.10）。初めの四つ（17.1〜17.4）は、ほかの言語を読まない汎用のコアで、状態とイベント、辞書と集合、文字列と `result`、再帰する型と関数の値を一つずつ使う。どれも、生成したコードを TypeScript・Python・Go から呼ぶホストのプログラムを持つ（17.5）。あとの四つ（17.6〜17.9）は、規則・日付・帳簿を ritsu の型のまま呼ぶ例で、横に置いた内側のファイルを読む。
+例は `crates/kaname/examples/` の下の九つで、どれも英語の版が先にあり、日本語の版を `<名前>.ja.kn` として横に置く（17.10）。初めの四つ（17.1〜17.4）は、ほかの言語を読まない汎用のコアで、状態とイベント、辞書と集合、文字列と `result`、再帰する型と関数の値を一つずつ使う。どれも、生成したコードを TypeScript・Python・Go から呼ぶホストのプログラムを持つ（17.5）。あとの四つ（17.6〜17.9）は、規則・日付・帳簿を ritsu の型のまま呼ぶ例で、横に置いた内側のファイルを読む。
 
-16 の `.kn` は、どれも `ritsu kaname check`（構文、名前、読むファイル、型、範囲の解析、言語をまたぐ判定、エフェクト、逃げ道の警告）を警告も無く通り、`examples` も成り立つ（`tests/examples.rs`、`tests/types.rs`、`tests/ranges.rs`、`crates/ritsu/tests/kaname.rs`）。エフェクトは、木をたどる 17.4 の関数が `diverges`（再帰を持つ。P8）で、ほかの例の関数はどれも total である。`run` と `vectors` の実物は `tests/golden/run/` と `tests/golden/vectors/` に、`api` の実物は `tests/golden/api/` にある（`api` の golden は、ritsu-cross の答えを渡さない kaname のテストのものなので、言語をまたぐ判定の場所は `waiting` である。答えを渡した `api` は `crates/ritsu/tests/kaname.rs` が確かめる）。ページ（13 章）は `crates/ritsu/tests/golden/kaname-doc/` にある。規則・日付・帳簿を呼ぶ例は公開の文書（法令、公開の手引き、公開の料金表）を使い、規則が転記したところを、横に置いて固定したコピーから引用する（17.11）。内側のファイルは、ritsu 0.30.0 で `ritsu check` を通してある（下に貼った出力）。kaname が言うことは、どれも実物である。
+18 の `.kn` は、どれも `ritsu kaname check`（構文、名前、読むファイル、型、範囲の解析、言語をまたぐ判定、エフェクト、逃げ道の警告）を警告も無く通り、`examples` も成り立つ（`tests/examples.rs`、`tests/types.rs`、`tests/ranges.rs`、`crates/ritsu/tests/kaname.rs`）。エフェクトは、木をたどる 17.4 の関数が `diverges`（再帰を持つ。P8）で、ほかの例の関数はどれも total である。`run` と `vectors` の実物は `tests/golden/run/` と `tests/golden/vectors/` に、`api` の実物は `tests/golden/api/` にある（`api` の golden は、ritsu-cross の答えを渡さない kaname のテストのものなので、言語をまたぐ判定の場所は `waiting` である。答えを渡した `api` は `crates/ritsu/tests/kaname.rs` が確かめる）。ページ（13 章）は `crates/ritsu/tests/golden/kaname-doc/` にある。規則・日付・帳簿を呼ぶ例は公開の文書（法令、公開の手引き、公開の料金表）を使い、規則が転記したところを、横に置いて固定したコピーから引用する（17.11）。内側のファイルは、ritsu 0.30.0 で `ritsu check` を通してある（下に貼った出力）。kaname が言うことは、どれも実物である。
 
 ### 17.1 注文の状態とイベント（`examples/order_flow`）
 
@@ -2343,6 +2343,18 @@ ok rules/値引きの配分.rule
 | discount_split | `23vac10-210-250.md` | バージニア州の行政規則集の 23VAC10-210-250 の A〜C と Example 3 | 2026-10-18 |
 
 日付のファイルは、koyomi が e-Gov の法令しか固定しない（koyomi の E004）ので `source` の行を持たず、規則が固定した法令のコピー（`rules/sources/late-payment-act-1998.md`）をコメントで名指す。`tests/examples.rs` が、八つの規則の固定する 10 の出典のどれも、コピーのハッシュが固定と同じで、規則がそれを引用していることと、日付のファイルの名指すコピーがあることを確かめる。規則に転記した数は、コピーを取った日に、それぞれのページで確かめたものである。
+
+### 17.12 値の出どころを書く（`examples/order_bill`）
+
+注文の明細がいくらになるかを出す。明細と単価は、ホストの手書きのコードが JSON Schema の言う注文から運ぶ。`fed by`（37 章）が、レコードのフィールドと引数にその出どころを書く。ほかの言語を読まない汎用のコアだが、ホストは置かない。見せたいのは `ritsu check` が比べるところである。
+
+```console
+$ ritsu check order_bill.kn
+ok order_bill.kn: 1 function, total
+ritsu check: 1 file (kaname 1): all pass; borders between the languages: 3 checked, 0 undecided
+```
+
+- ファイル：`order_bill.kn`、`order_bill.ja.kn`、`schemas/order.schema.json`、`schemas/order.ja.schema.json`。
 
 ## 18. 捨てた形
 
@@ -5005,3 +5017,30 @@ open 2026-03-02: -1
 **確かめたこと**：`tests/codes.rs` が W001 と E008 の例を golden（英日）と比べ、E008 の例は `r#gen::stops` を通す。`crates/ritsu/tests/gen.rs` の `what_breaks_the_rust_stops_its_package` は、五つの名前を、名前そのものと別名で、`ritsu check` が警告で通し、`--target go --target rust` が何も書かずに止まり、TypeScript・Python・Go は書くことを確かめる。`the_packages_of_rust_build_with_no_warning` は kaname のモジュールを持つプロジェクトのクレートを警告をエラーにして組み、`crates/ritsu/tests/modules_gen.rs` の `a_dependencys_modules_and_books_are_in_the_crate` は、依存の kaname と帳簿を持つクレートの Wasm が、ネイティブと同じに答えることを確かめる。
 
 ホストから読む形は `docs/reference.md` に実物を貼ってある。`late_payment` を `ritsu gen --target rust` で書き、パスの依存で読むクレートを手で一度走らせた答えである（試験には入れていない）。
+
+## 37. フィールドと引数の値の出どころを書く `fed by`（2026-11-07）
+
+**きっかけ**：モジュールに値を渡すホストは、その値をほかの場所から取ってくる。JSON Schema の `Line.qty` の範囲を変えても、モジュールのレコードの範囲と合わなくなったことはどの検査にも見えなかった。
+
+**決定**：`record` のフィールドの行と、関数の引数の最後に `fed by <参照>` を書く。
+
+```kn
+record Line
+  sku : string  fed by jsonschema "schemas/order.schema.json" def Line property sku
+  qty : number  range >=1 <=20  fed by jsonschema "schemas/order.schema.json" def Line property qty
+```
+
+- **答えるのは `ritsu check`。** 値の比べ方と三つの答えは根の DESIGN 7.16 にあり、X17（`ritsu-cross`）が口だけを通して行う。単独の `kaname check` は形と場所の誤りだけを言う（E009）。kaname は口 `Feeds` で受け取る側の型と範囲を渡す。レコードのフィールドは `kaname "<ファイル>" record … field …` として、ほかの言語の `fed by` の出どころにもなる。
+- **引数は一行に一つ。** 参照は行の最後まで読むので、`fed by` のある引数はその行で終わる。`,` はそこで止め、同じ行の `)` は E009 にする（参照を行の最後まで読むので、閉じ括弧はその後ろに立てない）。
+- **読み方。** 字句の段で切り取り、`ritsu_base::naming` が読む。`fed` と `by` は字句の表に載せるが、二語が揃って初めて形になるので、名前を奪わない。
+- **嘘を隠さない。** `doc` のページに「フィールドの出どころ」の節と引数の注を出す。文は「出どころ: `…`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）」。
+- **ハッシュ。** `source_sha256`（`api`、生成コードの頭）はこの形を除いたものから取る。全部の出力先で、生成物は一字も変わらない。範囲の解析も、書いた `range` だけを読み、出どころを読まない。
+- `api` のフィールドと引数に `fed_by`。`Items` は本文からこの形を除き、`References` は `how: "fed by"` で返す。
+
+**捨てたもの**：(1) 出どころの範囲で範囲の解析を狭める：`fed by` は確かめていないコードの話なので、これを信じて解析すると、確かめていないことを証明の土台にすることになる。(2) `let` の値に書く：手書きのコードが渡すのは入口だけで、中の値はモジュールが計算する。
+
+**変わること**：フィールドと引数の最後の形が一つ増える。E009 の場合が一つ増える。例は九つ（17.12）。
+
+**確かめたこと**：ritsu の `tests/fed_by.rs`：JSON Schema を変えた場合、モジュールのレコードを出どころにした場合、書けない場所、全部の出力先で生成物が同じ、`doc` と `api`。kaname の `tests/codes.rs`、`tests/golden/codes/E009.*`、例の一覧（`tests/examples.rs`、`tests/run.rs`、`tests/vectors.rs`、`tests/api.rs`）。
+
+**残したこと**：`tests/mutants` は kaname に無い（壊す試しは `tests/modules` と台帳の再現）。

@@ -248,6 +248,19 @@ pub struct VarDecl {
     /// within what the `constraint` lines leave. The generated function is the same; what the mark
     /// adds is the claims of `chances` and the function that counts the answers.
     pub random: Option<Span>,
+    /// Where hand-written code takes this input's value from, when the line says (§15.285). Unlike
+    /// `from`, it changes nothing generated: `ritsu check` asks the other side what can come.
+    pub fed: Option<FedBy>,
+    pub span: Span,
+}
+
+/// `fed by rulec "province_income.rule" output food` at the end of an input's line (§15.285).
+#[derive(Debug, Clone)]
+pub struct FedBy {
+    /// The naming as written.
+    pub written: String,
+    /// What it names, with its path as written, from the rule's directory.
+    pub name: ritsu_base::naming::Name,
     pub span: Span,
 }
 

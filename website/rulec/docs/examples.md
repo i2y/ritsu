@@ -1258,6 +1258,80 @@ message QuoteRequest {
 - **There is no row for express above 5 kg.** The contract's `!this.express || this.weight_g <= 5000` never lets such a request through. Add one and it is W124: each cell alone asks for values the contract lets through, and the combination never passes.
 - **Of CEL, what can be read is read.** Comparisons of whole-number sums, `in`, `size()`, `has()`, `&&`, `||`, `!` and `? :`. A part that cannot be read, such as a remainder or a string function, is taken as true, so nothing is missed.
 
+## The food a province brings in each season
+
+This rule gives the value the next example takes. An output cell cannot hold arithmetic, so each calculation gets a name on a `define` line and the table holds the name.
+
+```rule
+rule province_income v1
+description "The food a province brings in each season, by how much farmland it has. province_growth.rule takes what this gives"
+
+enum season = spring | summer | autumn | winter
+
+inputs
+  farmland : number  range >=0 <=20
+  season   : season
+
+outputs
+  food : number  round down(1)
+
+define twice : number = farmland * 2
+define thrice : number = farmland * 3
+
+table income
+policy unique
+| season | -> food : number |
+| spring | farmland         |
+| summer | twice            |
+| autumn | thrice           |
+| winter | 0                |
+
+examples
+| farmland | season | -> food |
+| 10       | spring | 10      |
+| 10       | autumn | 30      |
+| 20       | autumn | 60      |
+| 10       | winter | 0       |
+```
+
+**What this one shows**
+
+- **rulec counts what an output can come to.** `farmland` goes from 0 to 20, so the autumn row reaches 60. The `fed by` in the next example holds this answer against the place that takes it.
+- **The rule that gives the value knows nothing of the one that takes it.** No name from the next example appears here.
+
+## Where an input's value comes from
+
+Hand-written code carries `food` from `province_income.rule` to this rule. The `fed by` at the end of the input's line writes that source down where the value is taken.
+
+```rule
+rule province_growth v1
+description "Whether a province grows this season, by the food it brought in. Hand-written code carries that food here from province_income.rule: `ritsu check` holds the range of its values, and the code that carries it is not checked"
+
+inputs
+  food : number  range >=0 <=60  fed by rulec "province_income.rule" output food
+
+outputs
+  grows : bool
+
+table growth
+policy unique
+| food | -> grows : bool |
+| <10  | false           |
+| >=10 | true            |
+
+examples
+| food | -> grows |
+| 9    | false    |
+| 10   | true     |
+| 60   | true     |
+```
+
+**What this one shows**
+
+- **`ritsu check` asks both rules.** It holds when the place takes everything the source can come to. Narrow the range to `<=30` and it stops at E207, with the example: 60 at `farmland = 20, season = autumn`. A place wider than its source is fine.
+- **The range of the values is what gets checked.** Whether the hand-written code really carries this value is not checked. The table of inputs in `rulec doc` says so.
+- **It is a form for checking only.** Generated code does not change by a character, and neither does the `meaning` hash.
+
 ## One event in an order that goes on (machine)
 
 Where an online order moves on an event — payment, shipment, delivery, a cancel request — and how much is refunded. The state lives with the caller, in the order's row of a database. The rule stays a pure function that takes the state and one event and answers the next state; the `machine` section says that calling it again and again cannot break.

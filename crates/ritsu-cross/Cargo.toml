@@ -14,6 +14,7 @@ ritsu-base = { path = "../ritsu-base" }
 ritsu-ports = { path = "../ritsu-ports" }
 ritsu-proto = { path = "../ritsu-proto" }
 ritsu-project = { path = "../ritsu-project" }
+ritsu-units = { path = "../ritsu-units" }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }

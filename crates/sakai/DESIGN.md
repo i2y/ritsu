@@ -586,7 +586,7 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 
 ### 2.2 ツール名と種類の語
 
-ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname` の十四である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。`sekisho` も同じ日に足した（17 章）。`kaname` は 2026-10-18 に足した（18 章）。
+ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`、`jsonschema` の十五である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。`sekisho` も同じ日に足した（17 章）。`kaname` は 2026-10-18 に足した（18 章）。`jsonschema` は 2026-11-07 に足した（32 章）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、二つの言語で使う種類を合わせた。表の右の列は、種類の語を取った元である。ritsu に取り込んでからは、どの言語の名前も、その言語の口（`Items`）が渡す（ritsu の DESIGN 6.4）。
 
@@ -2871,3 +2871,24 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 **確かめたこと**：ritsu の `tests/sakai.rs`（通販の例の英語と日本語）：配送のワークフローとゲートが請求の `enums` ファイルを読むと E201（二つ）、受注のものが配送の `enums` ファイルを読むと E202（二つ。注つき）、請求の `enums` ファイルを共有カーネルに並べると通り、`api` の `crossings` に `dandori` と `sekisho` の `import enum` が `shared_kernel` で出る。
 
 **残したこと**：kaname のモジュールは `import enum` を持たず、`References` も出さないので、この章では数えていない。
+
+## 32. `fed by` を境界の参照として数える（2026-11-07）
+
+**きっかけ**：五つの言語に、手書きのコードが運ぶ値の出どころを書く形 `fed by` ができた（根の DESIGN 7.16）。手書きのコードが境界をまたいで運ぶ値にも、関係が要る。数えなければ、関係の無いコンテキストの規則の出力を受け取ると書いても、黙って通る。
+
+**決定**：参照の種類 `Kind::FedBy` を足す。五つの言語の `References` が `how: "fed by"` で返すものを、ほかの参照と同じ決まりで確かめる。
+
+- 関係が無ければ E201。文に `fed by` と出る。
+- 上流の中の規則を指して、その規則が公表された言語に無ければ E202。注は、公表された言語に入れた規則や契約を出どころに書くか、出どころのファイルを二つの共有カーネルに並べることを勧める。
+- 公表された言語の中の規則や契約を指すなら通る。
+- 帳簿と日付のファイルは公表できない（20 章）ので、これらを指すと共有カーネルのほかは E202。
+
+ツール名に `jsonschema`（十五個目）と種類の語 `def` を足す。読むのは `ritsu_base::naming` で、種類の語はほかと同じく予約する。
+
+**捨てたもの**：(1) `fed by` を数えない：上のとおり穴が残る。(2) `use` と同じ「コードが呼ぶ」として共有カーネルだけに絞る：呼ばないので強すぎる。公表された規則を出どころにするのは、呼ぶのと違い、値を受け取るだけである。
+
+**変わること**：`crossings` に `fed by` が出る。
+
+**確かめたこと**：ritsu の `tests/fed_by.rs` の `sakai_holds_it_to_the_boundary`（関係なし、公表の外、公表の内、帳簿）と `a_json_schema_belongs_to_no_context`、`tests/naming.rs`（表の 58 と 34）。
+
+**残したこと**：JSON Schema はどのコンテキストの成果物でもない（JSON や Smithy のモデルと同じ）ので、別のコンテキストの `dir` の下の `.schema.json` を `fed by jsonschema` で指しても、境界をまたいだことにならない（`dir` は W101 と言う）。持ち主を決めるなら、`published language` に `jsonschema` を書けるようにする必要がある。

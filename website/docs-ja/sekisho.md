@@ -325,6 +325,21 @@ ritsu check: ファイル 6 個（rulec 2、dandori 2、sekisho 2）。どれも
 
 sakai の地図で、あるコンテキストがほかのコンテキストに操作を公開している（`open host service`）とき、`ritsu check` は、その操作を守る action がどこかのゲートにあるかを確かめます。だれでも呼べると契約に書いた操作は除きます。コンテキストのほかの操作には守る action があるのに、守る action の無い操作があればエラー（E907）、コンテキストのどの操作にもまだ守る action が無ければ警告（W907）です。この例には地図がありませんが、ブラウザで試すページの通販には地図があります。
 
+## 値の出どころ
+
+手書きのコードは、ほかの場所から取った値でゲートに尋ねます。属性の行と action の `input` の行の最後の `fed by` は、処理系全体の参照の書き方でその出どころを書く形で、`ritsu check` が相手のファイルに、とりうる値を尋ねます（[examples/order_desk](https://github.com/i2y/ritsu/tree/main/crates/sekisho/examples/order_desk)）。
+
+```console
+$ cd crates/sekisho/examples/order_desk
+$ ritsu check order_desk.ja.gate --lang ja
+order_desk.ja.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+ritsu check: ファイル 1 個（sekisho 1）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
+```
+
+スキーマの `金額` の `maximum` を 2000000 に上げると、E207 で止まります。属性が受け取るのは money[USDc] >=1 <=1000000 で、出どころは 1000001 になることがあります。
+
+確かめるのは値の範囲です。手書きのコードが本当にその値を運ぶかは何も確かめず、ページにもそう書きます。`gen` が書くものは変わりません。
+
 ## 手で書いた Cedar
 
 ritsu は、人が手で書いた Cedar も読みます。対象は、ポリシーのファイルとその横のスキーマ（`refunds.cedar` と `refunds.cedarschema`）の組で、地図の `owns` か yuen の要件が `cedar "…"` で指し、どの action がどの操作を守るかをスキーマの `@guards` に書いてあるものです。その action は、ゲートの action と同じく、地図が公開する操作と突き合わせます。sekisho は、自分の条件と同じ Cedar の部分（スコープ、役割、属性を定数と比べる条件、`has` など）でできたポリシーを数え、テストでは、数えたすべての組み合わせを公式の Cedar の CLI の答えと突き合わせています。その部分を超える式（`like`、算術、集合、拡張の関数）があれば、決められないと答え、どのポリシーのどの部分が理由かを言います。ワークフローの呼び出しを確かめる相手は、ゲートだけです。ワークフローがどのフローなのかを、Cedar では書けないからです。

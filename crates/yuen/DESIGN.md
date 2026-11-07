@@ -461,7 +461,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 ### 2.3 ツールと種類
 
-ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname` の十四である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。`kaname` は 2026-10-18 に足した（3.8）。
+ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`、`jsonschema` の十五である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。`kaname` は 2026-10-18 に足した（3.8）。`jsonschema` は 2026-11-07 に足した（23 章）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、yuen と sakai が使う種類を合わせたものにした。どちらの言語も、自分では使わない種類も参照として読み、JSON に出す。
 
@@ -2136,3 +2136,17 @@ requirements touched:
 `ritsu check --format json` の `files` の各項目は、`check` に、その言語の `check --format json` がそのファイルについて書くオブジェクトを持つ（ritsu の DESIGN 8.3）。yuen は、モジュールの `.req` を一つのプロジェクトとして確かめ、依存ごとにもう一つずつ確かめる。`yuen::ports::Engine::checked` は、そのプロジェクトごとに、診断と要約の行に加えて、`yuen check --format json` が書くオブジェクト（`{root, ok, summary, diagnostics}`）を、コマンドと同じ `check::to_json` で作り、ritsu-base の JSON に読み直して `ritsu_ports::Checked::json` で渡す。ritsu は `root` と `diagnostics` を除いた `{ok, summary}` を、そのプロジェクトのどの `.req` の項目にも入れる（同じモジュールのものか、同じ依存のものか、で組にする）。中の `ok` は要件の全体のもので、項目の `ok`（そのファイルにエラーがあるか）とは違うことがある。yuen のコマンドの出力は変えていない。
 
 確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、`tests/fixtures/rulec` の二つの `.req` の `check` が、どちらも `ritsu yuen check tests/fixtures/rulec --root tests/fixtures/rulec --format json` のオブジェクトから二つのキーを除いたものと同じであること。ritsu の `tests/modules.rs` の `each_requirements_file_holds_what_yuen_says_of_its_modules_requirements` で、`tests/modules/en/app` の `@lib/pricing.req` が `lib` の要件のオブジェクト（`ok` が真で、要約が `@lib: ok — ` で始まる）を持ち、モジュールの五つの `.req` が同じ一つのオブジェクト（`ok` が偽）を持ち、そのうち `billing.req` だけは項目の `ok` が真であること。
+
+## 23. JSON Schema を指す（2026-11-07）
+
+**きっかけ**：`fed by` のために、処理系の参照の書き方にツール名 `jsonschema` が増えた（十五個目。根の DESIGN 6.2）。yuen は名前の表を読むので、自分のファイルで読めないツールを E011 で止めるか、読むかを決める必要がある。
+
+**決定**：OpenAPI、AsyncAPI と同じく、yuen が自分で読む。`satisfied by jsonschema "<ファイル>" def <名前> property <名前>` と `pointer <ポインタ>` を書ける。名前が無ければ E202（`has no property …`、`has no pointer …`）、見ていなければ E301、中身が変われば E303。読むのは `ritsu_base::document` で、OpenAPI と同じ読み手である。`$ref` の先まで読むための `Loaded` は yuen から `ritsu_base::document` へ移した。五つの言語の `fed by` は `Item.text` から除くので、この形を書いても消しても yuen の版は動かない。
+
+**捨てたもの**：`jsonschema` を E011 で止める。契約を要件につなぐ先として OpenAPI と同じ値打ちがあり、読み手もすでにある。
+
+**変わること**：E011 の文のツールが十五になる。`docs/reference.md` の表に一行。
+
+**確かめたこと**：ritsu の `tests/fed_by.rs` の `a_requirement_on_a_json_schema`（E301、`review` のあと通る、範囲を変えると E303、改名で E202）。
+
+**残したこと**：yuen の影響のたどり方は `how: "fed by"` の参照を読まない。`fed by` は手書きのコードが運ぶ値の話で、要件の版の話ではないので、足す理由があるまで足さない。

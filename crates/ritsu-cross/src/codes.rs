@@ -11,8 +11,8 @@
 //! their dependencies (DESIGN 17.20), E9xx and W9xx for the checks of security (DESIGN 16) and of
 //! authorization (sekisho's DESIGN 4.6, which go on from them). The reproductions are small
 //! English projects (the ones of the modules hold their dependencies as paths and as a copy in the
-//! module, so none needs a registry); the ones of security and of authorization have their
-//! Japanese versions besides ([`Entry::english`]), which `explain` shows in Japanese. A code that
+//! module, so none needs a registry); the ones of security, of authorization and of `fed by` have
+//! their Japanese versions besides ([`Entry::english`]), which `explain` shows in Japanese. A code that
 //! is retired keeps its entry, and its number is given to nothing else (DESIGN 7.10).
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
@@ -20,6 +20,31 @@ use ritsu_base::tr;
 
 /// The command a reproduction is run with: in the directory the files are laid out in.
 const CHECK: [&str; 3] = ["ritsu", "check", "."];
+
+/// The rule of X17: how much food a province gives. E207's and E208's source.
+const FED_INCOME: &str = "rule income v1\ndescription \"The food a province gives, by its farms\"\n\ninputs\n  farms : number  range >=0 <=3\n\noutputs\n  food : number  round down(1)\n\ntable food_of\npolicy unique\n| farms | -> food : number |\n| 0     | 2                |\n| >=1   | 20               |\n";
+
+/// The rule of X17 that takes the food: at most 12, which is less than the rule above comes to.
+const FED_POPULATION: &str = "rule population v1\ndescription \"Whether a province grows on the food it gets\"\n\ninputs\n  food : number  range >=0 <=12  fed by rulec \"income.rule\" output food\n\noutputs\n  grows : bool\n\ntable grows_of\npolicy unique\n| food | -> grows : bool |\n| >=6  | true            |\n| <6   | false           |\n";
+
+/// The Japanese versions of the two.
+const FED_INCOME_JA: &str = "rule 収入(income) v1\ndescription \"農地の数で決まる、領地の食料\"\n\ninputs\n  農地(farms) : number  range >=0 <=3\n\noutputs\n  食料(food) : number  round down(1)\n\ntable 食料の表(food_of)\npolicy unique\n| 農地 | -> 食料 : number |\n| 0    | 2                |\n| >=1  | 20               |\n";
+const FED_POPULATION_JA: &str = "rule 人口(population) v1\ndescription \"受け取る食料で、領地の人口が増えるか\"\n\ninputs\n  食料(food) : number  range >=0 <=12  fed by rulec \"収入.rule\" output 食料\n\noutputs\n  増える(grows) : bool\n\ntable 増えるかの表(grows_of)\npolicy unique\n| 食料 | -> 増える : bool |\n| >=6  | true             |\n| <6   | false            |\n";
+
+/// The rule of W207: what is carried over is `total` where it is less than `cost`, which is at most
+/// 200, but rulec counts it from `total`'s own range alone.
+const FED_CARRY: &str = "rule carried_over v1\ndescription \"What is carried over to the next season\"\n\ninputs\n  total : number  range >=0 <=300\n  cost  : number  range >=1 <=200\n\noutputs\n  ahead : number  round down(1)\n\ndefine left : number = total - cost\n\ntable finish\npolicy unique\n| left | -> ahead : number |\n| >=0  | 0                 |\n| <0   | total             |\n";
+
+/// The rule of W207 that takes it back: the most it takes is less than rulec's count.
+const FED_RESEARCH: &str = "rule research v1\ndescription \"Whether the research has come far\"\n\ninputs\n  progress : number  range >=0 <=250  fed by rulec \"carried_over.rule\" output ahead\n\noutputs\n  far : bool\n\ntable far_of\npolicy unique\n| progress | -> far : bool |\n| >=100    | true          |\n| <100     | false         |\n";
+
+/// The Japanese versions of the two.
+const FED_CARRY_JA: &str = "rule 繰り越し(carried_over) v1\ndescription \"次の季節へ繰り越す量\"\n\ninputs\n  合計(total) : number  range >=0 <=300\n  費用(cost)  : number  range >=1 <=200\n\noutputs\n  次(ahead) : number  round down(1)\n\ndefine 残り(left) : number = 合計 - 費用\n\ntable 仕上げ(finish)\npolicy unique\n| 残り | -> 次 : number |\n| >=0  | 0              |\n| <0   | 合計           |\n";
+const FED_RESEARCH_JA: &str = "rule 研究(research) v1\ndescription \"研究がどこまで進んだか\"\n\ninputs\n  進み(progress) : number  range >=0 <=250  fed by rulec \"繰り越し.rule\" output 次\n\noutputs\n  遠い(far) : bool\n\ntable 遠いかの表(far_of)\npolicy unique\n| 進み  | -> 遠い : bool |\n| >=100 | true           |\n| <100  | false          |\n";
+
+/// The rule of E208: the output it names is not one the rule has.
+const FED_POPULATION_NOT_THERE: &str = "rule population v1\ndescription \"Whether a province grows on the food it gets\"\n\ninputs\n  food : number  range >=0 <=60  fed by rulec \"income.rule\" output wheat\n\noutputs\n  grows : bool\n\ntable grows_of\npolicy unique\n| food | -> grows : bool |\n| >=6  | true            |\n| <6   | false           |\n";
+const FED_POPULATION_NOT_THERE_JA: &str = "rule 人口(population) v1\ndescription \"受け取る食料で、領地の人口が増えるか\"\n\ninputs\n  食料(food) : number  range >=0 <=60  fed by rulec \"収入.rule\" output 小麦\n\noutputs\n  増える(grows) : bool\n\ntable 増えるかの表(grows_of)\npolicy unique\n| 食料 | -> 増える : bool |\n| >=6  | true             |\n| <6   | false            |\n";
 
 /// The rule of the reproductions of E201 and W201: a refund never asks for more than was paid.
 const REFUND_RULE: &str = "rule refund_check v1\ndescription \"Whether a refund is paid at once or reviewed. A refund never asks for more than was paid, which the rule takes for granted\"\n\nenum path = at_once | review\n\ninputs\n  paid  : number  range >=0 <=10000\n  asked : number  range >=0 <=10000\n\nconstraint asked <= paid\n\noutputs\n  route : path\n\ntable pick\npolicy unique\n| asked | -> route : path |\n| <=100 | at_once         |\n| >100  | review          |\n";
@@ -532,6 +557,52 @@ pub fn ledger() -> Ledger {
             Repro::Dir { files: vec![("weekdays.cal", WEEKDAYS_CAL), ("payment_terms.cal", TERMS_AT_CAL), ("stock.book", STOCK_BOOK_LONG), ("invoice.flow", INVOICE_FLOW)], command: CHECK.to_vec() },
             &["E206"],
         ),
+        // ── What hand-written code carries between the worlds (DESIGN 7.16) ──
+        Entry::new(
+            "E207",
+            tr!("出どころがとりうる値を、受け取る側が受け取りません", "What can come from a place's source is not what the place takes"),
+            tr!(
+                "入力やフィールドの行に `fed by <参照>` と書いてあり、出どころがとりうる値のどれかを、その行が受け取らないとき。比べるのは、数なら単位と刻みと範囲（単位が違えば成り立ちません）、列挙なら公開名の値、日付なら日、真偽と文字列なら型です。文には値の例と、規則や日付のファイルならそれを出す入力を書きます。契約（proto、OpenAPI、JSON Schema）の上限が無いときと帳簿の上限が無いとき（chobo の上限の 2⁶³ − 1 まで）も、その値は来るので例になります。契約のプロパティが省略でき、null を通すのに、受け取る側が `T?` でないときも同じです。受け取る側が書いていない端は比べません。`fed by` は生成コードを変えず、手書きのコードが本当にその値を運ぶかも確かめません。確かめるのは値の範囲です。",
+                "A line of an input or a field writes `fed by <naming>`, and the line does not take something that can come from there. A number is compared by its unit, its step and its range (another unit does not hold); an enum by the public names of its values, a date by its days, a bool and a string by their type. The message gives an example value and, from a rule or a dates file, the input that gives it. A contract (proto, OpenAPI, JSON Schema) with no upper end, and a book with none (up to chobo's limit of 2⁶³ − 1), let that value come, so they are examples too; so is a contract's property that can be left out or be null, where the place is not `T?`. An end the place does not write is not compared. `fed by` changes no generated code and does not check that the hand-written code carries the value: it checks the range of the values."
+            ),
+            tr!(
+                "受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。",
+                "Widen what the place takes, or narrow what the source gives. Which of the two is a person's decision."
+            ),
+            Repro::Dir { files: vec![("収入.rule", FED_INCOME_JA), ("人口.rule", FED_POPULATION_JA)], command: CHECK.to_vec() },
+            &["W207", "E208"],
+        )
+        .english(Repro::Dir { files: vec![("income.rule", FED_INCOME), ("population.rule", FED_POPULATION)], command: CHECK.to_vec() }),
+        Entry::new(
+            "W207",
+            tr!("出どころの値を受け取るかを決められません", "Whether a place takes what can come from its source cannot be decided"),
+            tr!(
+                "`fed by` の出どころが値の全部を言わないとき。rulec が規則の出力の端を数えられないとき、数えた範囲が受け取る側を外れるのに規則のベクタにその値になる入力が無いとき（rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます）、出どころのファイルをその言語が通さないとき（誤りはその言語が言います）、契約の日付に受け取る側が範囲を書いているとき（契約は日付を文字列として運ぶだけです）、レコードやリストどうしのときです。",
+                "The source of a `fed by` does not say all of its values: rulec does not count an end of a rule's output; what it counts lies outside what the place takes, and none of the rule's vectors comes to such a value (rulec bounds an output by moving each input over its own range); the source's language does not pass its file (which that language says); a contract's date where the place writes a range (a contract carries a date as a string); two records or lists."
+            ),
+            tr!(
+                "規則なら、出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げてください。契約なら、とりうる値を並べてください（JSON Schema の `enum`、Protovalidate の `in`）。ワークフローや kaname なら、出どころの行に範囲を書いてください。",
+                "For a rule, write it so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what the place takes. For a contract, list its values (`enum` in a schema, `in` in Protovalidate). For a workflow or a module of kaname, write the range on the source's line."
+            ),
+            Repro::Dir { files: vec![("繰り越し.rule", FED_CARRY_JA), ("研究.rule", FED_RESEARCH_JA)], command: CHECK.to_vec() },
+            &["E207"],
+        )
+        .english(Repro::Dir { files: vec![("carried_over.rule", FED_CARRY), ("research.rule", FED_RESEARCH)], command: CHECK.to_vec() }),
+        Entry::new(
+            "E208",
+            tr!("`fed by` の出どころがありません", "The source of a `fed by` is not there"),
+            tr!(
+                "`fed by` が指すファイルが無いとき、そのファイルに指すものが無いとき（規則の出力、勘定、日付、message のフィールド、スキーマのプロパティ、ワークフローの出力やレコードのフィールド）、文書や `.proto` を読めないとき。参照の形と、値の無いものを指していないことは、書いた言語の単独の検査が言います。単独の検査はほかのファイルを読まないので、先があるかは `ritsu check` が言います。",
+                "The file a `fed by` names is not there, or does not hold what it names (a rule's output, an account, a date, a field of a message, a property of a schema, a workflow's output or a field of its record), or a document or a `.proto` does not read. The form of the naming, and that it names something with a value, are said by the check of the language it is written in. That check reads no other file, so that the thing is there is said by `ritsu check`."
+            ),
+            tr!(
+                "パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。",
+                "A path goes from the directory of the file it is written in. Put the name right, or add what it names."
+            ),
+            Repro::Dir { files: vec![("収入.rule", FED_INCOME_JA), ("人口.rule", FED_POPULATION_NOT_THERE_JA)], command: CHECK.to_vec() },
+            &["E207"],
+        )
+        .english(Repro::Dir { files: vec![("income.rule", FED_INCOME), ("population.rule", FED_POPULATION_NOT_THERE)], command: CHECK.to_vec() }),
         // ── The modules and their dependencies (DESIGN 17.20) ──
         Entry::new(
             "E301",

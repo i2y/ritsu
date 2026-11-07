@@ -1,0 +1,29 @@
+rule 領地の収入(province_income_ja) v1
+description "領地が季節ごとに得る食料を、農地の広さから出す。領地の成長.rule がこの値を受け取る"
+
+enum 季節(season) = 春(spring) | 夏(summer) | 秋(autumn) | 冬(winter)
+
+inputs
+  農地(farmland) : number  range >=0 <=20
+  季節(season)   : 季節
+
+outputs
+  食料(food) : number  round down(1)
+
+define 二倍(twice) : number = 農地 * 2
+define 三倍(thrice) : number = 農地 * 3
+
+table 収入(income)
+policy unique
+| 季節 | -> 食料 : number |
+| 春   | 農地             |
+| 夏   | 二倍             |
+| 秋   | 三倍             |
+| 冬   | 0                |
+
+examples
+| 農地 | 季節 | -> 食料 |
+| 10   | 春   | 10      |
+| 10   | 秋   | 30      |
+| 20   | 秋   | 60      |
+| 10   | 冬   | 0       |

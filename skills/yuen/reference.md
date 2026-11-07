@@ -238,6 +238,7 @@ comes only right after its parent's pair (E012).
 | `dandori` | `.flow` | `task` `case` `record` (`field` below) `enum` (`value` below) `input` `output` |
 | `proto` | `.proto` | `service` (`method` below) `message` (`field` below) `enum` (`value` below) |
 | `openapi` | an OpenAPI document (`.yaml`, `.yml`, `.json`), or a part of one | `schema` (`property` and `value` below) `operation` `pointer` |
+| `jsonschema` | a JSON Schema (`.json`, `.yaml`, `.yml`), or a part of one | `def` (`property` below) `pointer` |
 | `asyncapi` | an AsyncAPI document, or a part of one | `channel` (`message` below) `message` `operation` `schema` (`property` and `value` below) `pointer` |
 | `cedar` | `.cedar`, `.cedarschema`, `.cedarschema.json` | `policy` `action` `entity` |
 | `file` | anything | none |

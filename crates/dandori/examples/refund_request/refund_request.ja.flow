@@ -1,0 +1,24 @@
+# 返金の申請。注文の残りから払う。手書きのコードが、API が受けた申請から金額を、帳簿から残りを取り、
+# それを持って実行を始める。`fed by` は、その値の出どころを言う。`ritsu check` は値の範囲を確かめ、
+# 運ぶコードは確かめない。どの出力先でも動く。
+workflow 返金の申請 v1
+description "注文の残りから返金を払う"
+
+record 残高
+  残り : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.ja.book" account 返金できる残り
+
+inputs
+  申請額 : money[USDc]  range >=1USDc <=1000000USDc  fed by openapi "specs/refunds.ja.json" schema 返金の申請 property 金額
+  理由   : string  fed by openapi "specs/refunds.ja.json" schema 返金の申請 property 理由
+  残高   : 残高
+
+outputs
+  支払い済み : bool
+
+task 払い出す(金額: money[USDc], 残り: money[USDc], 理由: string) -> bool
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:pay-out"
+  idempotent
+
+flow
+  let 済み = 払い出す(金額: 申請額, 残り: 残高.残り, 理由: 理由)
+  succeed 支払い済み = 済み

@@ -1,0 +1,3 @@
+error[E017]: tests/mutants/E017_日付の行の出どころ.cal:7:26: `fed by` can be written only on a line of `inputs`
+     7 | date 発送日(ship_by) = 注文日  fed by rulec "注文.rule" output 注文日
+  = `fed by` says where hand-written code takes the value of an input from. A date is what this file computes.

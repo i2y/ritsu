@@ -44,6 +44,10 @@
 //!   vectors gave there; and [`Verdicts`], what the checks across the borders came to at each of
 //!   those places, which kaname decides the effects of its functions with.
 //!
+//! - [`Feeds`]: the places a file says where their value comes from (`fed by`, [`Fed`]), and what a
+//!   place holds ([`Carried`]), for the check that holds what can come from a source to what the
+//!   place takes (X17).
+//!
 //! Every check across a border answers with an [`Answer`]: shown to hold, an example where it
 //! does not, or why it cannot be decided (P5). A question that asks for a value answers with a
 //! [`Found`]: the value, or why it cannot be had. Nothing undecided passes as decided.
@@ -52,6 +56,7 @@ mod books;
 mod check;
 mod claims;
 mod dates;
+mod feeds;
 mod flows;
 mod gates;
 mod index;
@@ -66,6 +71,7 @@ pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, Re
 pub use sources::{Source, SourceKind, Sources};
 pub use dates::{day_of, day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
 pub use dates::CalendarFacts;
+pub use feeds::{Carried, Fed, Feeds};
 pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
 pub use flows::{

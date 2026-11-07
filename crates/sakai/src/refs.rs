@@ -94,6 +94,10 @@ pub enum Kind {
     /// Cedar written by hand names: only a gate of the context that holds the operation's contract
     /// may guard it (E211).
     GateGuards,
+    /// An input's `fed by` (rulec's DESIGN 15.285): the value hand-written code carries from
+    /// another context. No code is generated for it, and the value still comes from over there,
+    /// so it needs what any reference across the boundary needs.
+    FedBy,
 }
 
 impl Kind {
@@ -120,6 +124,7 @@ impl Kind {
             Kind::GateUse { how } => how.clone(),
             Kind::ModuleUse { how } => how.clone(),
             Kind::GateGuards => "guards".into(),
+            Kind::FedBy => "fed by".into(),
         }
     }
 
@@ -331,6 +336,8 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 // a module's rules, dates and other modules; its books, as a gate's and a workflow's,
                 // are what the host applies its transfers to
                 (Tool::Kaname, h @ ("use rule" | "use dates" | "use module")) => Kind::ModuleUse { how: h.to_string() },
+                // a value hand-written code carries in from over there: a crossing like the others
+                (Tool::Rulec | Tool::Koyomi | Tool::Dandori | Tool::Sekisho | Tool::Kaname, "fed by") => Kind::FedBy,
                 _ => continue,
             };
             let to = r.target.path.clone();
@@ -671,6 +678,14 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
             // the operation a gate guards, of a document or a `.proto`
             Kind::GateGuards if matches!(c.target.tool, Tool::Openapi | Tool::Asyncapi) => contract_package(m, cs, arts, y, &q),
             k if k.to_contract() => contract_package(m, cs, arts, y, &q),
+            // a value is told by a contract, or by a rule its context publishes
+            Kind::FedBy if matches!(c.target.tool, Tool::Openapi | Tool::Jsonschema) => contract_package(m, cs, arts, y, &q),
+            Kind::FedBy if c.target.tool == Tool::Rulec => m.contexts[y]
+                .published
+                .iter()
+                .find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q))
+                .map(|pl| pl.package.clone())
+                .or_else(|| implemented(read, &q).and_then(|(pf, _)| published_package(m, y, &pf))),
             _ => published_package(m, y, &lands),
         };
         let to_what = match &pkg {
@@ -833,6 +848,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::RuleRangeFromKoyomi => tr!(
                     "`range from koyomi` は、日付のファイルの日付がとる日を、規則の入力の範囲にします。rulec はその日の上で規則を確かめ、規則から生成したコードもほかの日を受け付けません。使うのは日付のファイルそのもの（「{yn}」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
                     "A `range from koyomi` holds the rule's input to the days a date of the dates file comes to: rulec checks the rule on those days, and the code it is made into takes no other day. That is the dates file itself, inside {yn}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel."
+                ),
+                Kind::FedBy => tr!(
+                    "`fed by` は、手書きのコードが運ぶ値の出どころを書きます。生成するコードは変わりませんが、値は「{yn}」の内側から来ます。境界の向こうの値は、「{yn}」が公表された言語に入れた規則や契約を出どころに書くか、出どころのファイルを二つの共有カーネルに並べてください。",
+                    "A `fed by` says where the value hand-written code carries comes from. It changes no generated code, and the value still comes from inside {yn}. Across a boundary, name a rule or a contract {yn} puts in a published language, or put the file in the two's shared kernel."
                 ),
                 // an element of a document is said by its reference, not as a file
                 _ if c.pointer.is_some() => tr!(

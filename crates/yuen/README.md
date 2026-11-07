@@ -207,9 +207,9 @@ drafts the claim to write ([geas's README](../geas/README.md)).
 
 ## Contracts and policies
 
-A link can name one element of an OpenAPI or AsyncAPI document, or one policy, action or entity
-type of [Cedar](https://www.cedarpolicy.com/)'s written by hand: `openapi`, `asyncapi` and `cedar`
-are tools of a naming, as `proto` is, and yuen reads their files itself
+A link can name one element of an OpenAPI or AsyncAPI document or a JSON Schema, or one policy,
+action or entity type of [Cedar](https://www.cedarpolicy.com/)'s written by hand: `openapi`,
+`asyncapi`, `jsonschema` and `cedar` are tools of a naming, as `proto` is, and yuen reads their files itself
 ([examples/refund_contracts](examples/refund_contracts)).
 
 ```req

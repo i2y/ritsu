@@ -56,6 +56,11 @@ pub const STEP: &str = "step";
 pub const INCL_TAX: &str = "incl_tax";
 pub const EXCL_TAX: &str = "excl_tax";
 pub const RANGE: &str = "range";
+/// At the end of a field's line and of a parameter's: where hand-written code takes the value from
+/// (DESIGN 37). The two words together end the line or the parameter, and `ritsu_base::fed` cuts
+/// them off before the words are read; a name may go on being spelled like either.
+pub const FED: &str = "fed";
+pub const BY: &str = "by";
 pub const COUNT: &str = "count";
 
 // The end of a function's head: its effect (DESIGN 4).
@@ -91,6 +96,7 @@ pub const TABLE: &[(&str, &[&str])] = &[
     ("type parameter", &[KEY]),
     ("effect", &[TOTAL, FAILS, DIVERGES, "rule", "date", "range", "overflow", "zero"]),
     ("body", &[DESCRIPTION, LET, TRY, IF, THEN, ELSE, MATCH, SOME, NONE, TRUE, FALSE, AND, OR, NOT, IN]),
+    ("source", &[FED, BY]),
 ];
 
 /// The words a name cannot be (E002): the ones an expression or a block would read as something

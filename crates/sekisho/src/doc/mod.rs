@@ -132,6 +132,7 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang, format: Format, calls: Optio
     let mut b = Builder::new(o, scope, checked, suite, lang, format);
     b.head();
     b.enums();
+    b.fed();
     b.actions();
     b.policies();
     b.computed();
@@ -357,7 +358,7 @@ impl<'a> Builder<'a> {
             title,
             description: f.description.as_ref().map(|(d, _)| d.clone()),
             file: self.shown_path(&self.g.file),
-            sha: ritsu_base::sha256::short(f.src.as_bytes()),
+            sha: ritsu_base::sha256::short(ritsu_base::fed::without(&f.src).as_bytes()),
             blocks: self.blocks,
             embedded: self.embedded,
         }
@@ -531,6 +532,26 @@ impl<'a> Builder<'a> {
     }
 
     // -----------------------------------------------------------------------------------------
+    // 1a. Where the attributes come from
+
+    /// The attributes that say where hand-written code takes their values from (DESIGN 26): what
+    /// `ritsu check` holds, and what nothing holds. An input is said with its action.
+    fn fed(&mut self) {
+        let file = self.scope.file();
+        let mut items = Vec::new();
+        for (kind, owner, field) in crate::ast::fed_places(file) {
+            let Some(fb) = field.fed.as_ref().filter(|_| kind != "action") else { continue };
+            let note = ritsu_base::fed::page_note(&fb.written);
+            let at = code(&format!("{owner}.{}", field.name.text));
+            items.push(self.t(tr!("{at}：{}", "{at}: {}", note.ja; note.en)));
+        }
+        if !items.is_empty() {
+            self.heading(2, self.t(tr!("属性の出どころ", "Where the attributes come from")), "fed-by".into());
+            self.push(Block::List(items));
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
     // 1b. The enums read from other files
 
     /// The enums the gate brings in with `import enum`: each with its values and the file it is
@@ -596,8 +617,15 @@ impl<'a> Builder<'a> {
             Some((arg, _)) => self.t(tr!("principal の型：{ps}。resource の型：{rs}（ID は操作の引数 {} から読む）", "Principals: {ps}. Resources: {rs}, the id read from the operation's argument {}.", code(arg))),
             None => self.t(tr!("principal の型：{ps}。resource の型：{rs}", "Principals: {ps}. Resources: {rs}.")),
         });
+        let file = self.scope.file();
         for inp in &a.inputs {
             facts.push(self.t(tr!("input {}：{}", "Input {}: {}.", named(lang, &inp.named), field_type(lang, g, inp); named(lang, &inp.named), field_type(lang, g, inp))));
+            // Where hand-written code takes it from (DESIGN 26): what was held, and what was not.
+            let fed = crate::ast::fed_places(file).into_iter().find(|(k, o, fd)| *k == "action" && a.named.is(o) && inp.named.is(&fd.name.text)).and_then(|(_, _, fd)| fd.fed.as_ref());
+            if let Some(fb) = fed {
+                let note = ritsu_base::fed::page_note(&fb.written);
+                facts.push(self.t(tr!("input {}：{}", "Input {}: {}.", named(lang, &inp.named), note.ja; named(lang, &inp.named), note.en)));
+            }
         }
         if !a.computed.is_empty() {
             let cs: Vec<String> = a.computed.iter().map(|c| code(&c.named.name)).collect();

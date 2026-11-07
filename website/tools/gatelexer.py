@@ -70,6 +70,7 @@ TABLE = (
                    "deny", "allowed", "principal", "resource", "true", "false")),
     ("type and range", ("bool", "date", "number", "rate", "money", "mass", "length", "area",
                         "volume", "duration", "temperature", "sound", "range", "offset")),
+    ("source", ("fed", "by")),
 )
 
 # The words a name or an alias cannot be (E002): kw.rs's RESERVED, in its order. Being no name,
@@ -130,6 +131,7 @@ _of("block", ("resource", "guards"))
 _of("condition", ("open", "allow", "deny"))
 # The types, and the two words of a range: `range` after a field's type and after `today`, and
 # `offset` after the range of `today`.
+_of("source", ("fed", "by"))
 BOUNDS = _of("type and range", ("range", "offset"))
 TYPES = tuple(w for w in _PLACES["type and range"] if w not in BOUNDS)
 # The reserved words, by what they are: types, constants, the words written between values, and the
@@ -249,6 +251,7 @@ class GateLexer(RegexLexer):
             (r"#[^\n]*", Comment.Single),
             (r"\[", Punctuation, "type"),
             (r"[?]", Punctuation),
+            (rf"\bfed{_WS}by\b", Keyword, ("#pop", "fed")),
             (r"(range)\b", Keyword),
             (_COMPARE, Operator),
             (r"-", Operator),
@@ -256,6 +259,14 @@ class GateLexer(RegexLexer):
             include("literals"),
             (NAME, Name),
             (r"…", Punctuation),
+        ],
+        # Where the value comes from: a naming, to the end of the line.
+        "fed": [
+            (r"\n", Whitespace, "#pop"),
+            (r"[^\S\n]+", Whitespace),
+            (r"#[^\n]*", Comment.Single),
+            (r'"[^"\n]*"', String.Double),
+            (r'[^\s"#]+', Name),
         ],
         # What is between a type's brackets: `money[GBP, incl_tax]`, `rate[step 1%]`,
         # `temperature[℃]`.

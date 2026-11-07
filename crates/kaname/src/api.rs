@@ -104,7 +104,7 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
     let mut module = named(&m.name);
     module.push(("version".into(), Json::str(m.version.clone())));
     module.push(("description".into(), Json::opt_str(m.description.as_ref().map(|(d, _)| d.clone()))));
-    module.push(("sha256".into(), Json::str(ritsu_base::sha256::hex(c.src.as_bytes()))));
+    module.push(("sha256".into(), Json::str(ritsu_base::fed::hash(&c.src))));
     let uses = m.uses.iter().zip(&c.uses).map(|(u, t)| {
         let reached = ritsu_base::paths::from_root(root, t.canon()).unwrap_or_else(|| u.path.clone());
         Json::obj([("kind", Json::str(u.kind.word())), ("name", Json::str(u.name.clone())), ("path", Json::str(u.path.clone())), ("file", Json::str(reached)), ("line", Json::int(u.line as i128))])
@@ -152,6 +152,13 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
                 let mut x = named(&f.name);
                 x.extend(slot_json(&p, c, &f.slot));
                 x.push(("line".into(), Json::int(f.line as i128)));
+                // Where hand-written code takes it from (DESIGN 37): `ritsu check` holds the range
+                // of what can come from there, and nothing holds the code to carrying it. Written
+                // only for a place that says, so no other description changes.
+                let decl = m.records.iter().find(|d| d.name.text == r.name.text).and_then(|d| d.fields.iter().find(|d| d.name.text == f.name.text));
+                if let Some(fb) = decl.and_then(|d| d.fed.as_ref()) {
+                    x.push(("fed_by".into(), Json::str(fb.written.clone())));
+                }
                 Json::Obj(x)
             })),
         ));
@@ -177,6 +184,9 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
             Json::arr(info.params.iter().map(|prm| {
                 let mut x = named(&prm.name);
                 x.extend(slot_json(&p, c, &prm.slot));
+                if let Some(fb) = decl.params.iter().find(|d| d.name.text == prm.name.text).and_then(|d| d.fed.as_ref()) {
+                    x.push(("fed_by".into(), Json::str(fb.written.clone())));
+                }
                 Json::Obj(x)
             })),
         ));

@@ -78,6 +78,12 @@ pub const MONEY: &str = "money";
 pub const RANGE: &str = "range";
 pub const OFFSET: &str = "offset";
 
+// At the end of an attribute's line and of an input's: where hand-written code takes the value from
+// (DESIGN 26). The two words together end the line, and `ritsu_base::fed` cuts them off before its
+// words are read; a name may go on being spelled like either.
+pub const FED: &str = "fed";
+pub const BY: &str = "by";
+
 /// The words, by where they are written, as DESIGN 9.1 lists them. The words of the units are
 /// rulec's (`ritsu_units`): `money[…]`, `mass[…]`, `length[…]` and the rest.
 pub const TABLE: &[(&str, &[&str])] = &[
@@ -87,6 +93,7 @@ pub const TABLE: &[(&str, &[&str])] = &[
     ("block", &[DESCRIPTION, INCLUDES, CAN, ROLES, ATTRIBUTES, GUARDS, PRINCIPAL, RESOURCE, FROM, NOBODY, INPUT, CONTEXT, ACTION, ACTIONS, WHEN, UNLESS]),
     ("condition", &[IN, IS, NOT, AND, OR, ANY, WORKFLOW, OPEN, TODAY, ALLOW, DENY, ALLOWED, PRINCIPAL, RESOURCE, TRUE, FALSE]),
     ("type and range", &[BOOL, DATE, NUMBER, RATE, MONEY, "mass", "length", "area", "volume", "duration", "temperature", "sound", RANGE, OFFSET]),
+    ("source", &[FED, BY]),
 ];
 
 /// The words a name or an alias cannot be (E002): the ones that would let a condition, a computed

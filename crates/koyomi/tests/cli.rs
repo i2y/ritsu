@@ -125,7 +125,7 @@ fn check_exit_codes_and_formats() {
     // A directory: every .cal under it; the six that fail on purpose make it 1.
     let o = koyomi(&["check", "examples"]);
     assert_eq!(code(&o), 1);
-    assert_eq!(out(&o).matches(": ok — ").count(), 15, "{}", out(&o));
+    assert_eq!(out(&o).matches(": ok — ").count(), 17, "{}", out(&o));
     // The budget.
     let o = koyomi(&["check", "examples/closing_and_payment_days_as_inputs.ja.cal", "--budget", "1000"]);
     assert_eq!(code(&o), 1);
@@ -193,7 +193,7 @@ fn explain() {
     }
     let o = koyomi(&["explain", "--all", "--format", "markdown"]);
     assert!(out(&o).starts_with("# Diagnostic codes"));
-    assert_eq!(out(&o).matches("\n## ").count(), 42);
+    assert_eq!(out(&o).matches("\n## ").count(), 43);
     let o = koyomi(&["explain", "W202", "--format", "markdown"]);
     assert!(out(&o).starts_with("<a id=\"w202\"></a>"), "{}", out(&o));
 }

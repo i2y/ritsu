@@ -936,104 +936,15 @@ impl Contract {
 
 // --- What the contract lets through, held against what the input takes (§15.132) --------
 
-/// Integers as closed intervals, sorted and apart; `None` is an open end.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Ints(Vec<(Option<i128>, Option<i128>)>);
+pub(crate) use ritsu_proto::validate::{Ints, ignores_zero};
 
-impl Ints {
-    fn between(lo: Option<i128>, hi: Option<i128>) -> Ints {
-        match (lo, hi) {
-            (Some(a), Some(b)) if a > b => Ints(Vec::new()),
-            _ => Ints(vec![(lo, hi)]),
-        }
-    }
+/// [`Ints`] in words, for a message (the reader of the bounds is `ritsu_proto::validate`).
+pub(crate) trait InWords {
+    fn describe(&self) -> String;
+    fn describe_in(&self, unit: &str) -> String;
+}
 
-    fn points(vs: &[i128]) -> Ints {
-        Ints(vs.iter().map(|&x| (Some(x), Some(x))).collect()).normal()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    fn intersect(&self, o: &Ints) -> Ints {
-        let mut out = Vec::new();
-        for &(a1, b1) in &self.0 {
-            for &(a2, b2) in &o.0 {
-                let lo = match (a1, a2) {
-                    (None, x) | (x, None) => x,
-                    (Some(x), Some(y)) => Some(x.max(y)),
-                };
-                let hi = match (b1, b2) {
-                    (None, x) | (x, None) => x,
-                    (Some(x), Some(y)) => Some(x.min(y)),
-                };
-                out.push((lo, hi));
-            }
-        }
-        Ints(out).normal()
-    }
-
-    fn union(&self, o: &Ints) -> Ints {
-        let mut v = self.0.clone();
-        v.extend(o.0.iter().copied());
-        Ints(v).normal()
-    }
-
-    fn without(&self, x: i128) -> Ints {
-        let mut out = Vec::new();
-        for &(a, b) in &self.0 {
-            if a.is_some_and(|a| x < a) || b.is_some_and(|b| x > b) {
-                out.push((a, b));
-                continue;
-            }
-            if a != Some(x) {
-                out.push((a, Some(x - 1)));
-            }
-            if b != Some(x) {
-                out.push((Some(x + 1), b));
-            }
-        }
-        Ints(out).normal()
-    }
-
-    /// Sorted, the empty ones dropped, and merged where they meet.
-    fn normal(self) -> Ints {
-        let mut v: Vec<_> = self.0.into_iter().filter(|(a, b)| !matches!((a, b), (Some(a), Some(b)) if a > b)).collect();
-        v.sort_by(|x, y| match (x.0, y.0) {
-            (None, None) => std::cmp::Ordering::Equal,
-            (None, _) => std::cmp::Ordering::Less,
-            (_, None) => std::cmp::Ordering::Greater,
-            (Some(a), Some(b)) => a.cmp(&b),
-        });
-        let mut out: Vec<(Option<i128>, Option<i128>)> = Vec::new();
-        for (a, b) in v {
-            if let Some(last) = out.last_mut() {
-                let meets = match (last.1, a) {
-                    (None, _) | (_, None) => true,
-                    (Some(h), Some(a)) => a <= h.saturating_add(1),
-                };
-                if meets {
-                    last.1 = match (last.1, b) {
-                        (None, _) | (_, None) => None,
-                        (Some(x), Some(y)) => Some(x.max(y)),
-                    };
-                    continue;
-                }
-            }
-            out.push((a, b));
-        }
-        Ints(out)
-    }
-
-    fn min(&self) -> Option<i128> {
-        self.0.first().and_then(|(a, _)| *a)
-    }
-
-    fn max(&self) -> Option<i128> {
-        self.0.last().and_then(|(_, b)| *b)
-    }
-
+impl InWords for Ints {
     /// In words, for a message: `1〜50`, `0 以上`, `100、200`.
     fn describe(&self) -> String {
         self.describe_in("")
@@ -1226,80 +1137,13 @@ fn schema_count(n: &Json, filtered: bool) -> Ints {
     Ints::between(Some(if filtered { 0 } else { min }), max)
 }
 
-/// Whether Protovalidate lets an unset field of implicit presence through whatever the other
-/// rules say: `IGNORE_IF_ZERO_VALUE`, and the two names it had before.
-fn ignores_zero(r: &crate::proto::Rules) -> bool {
-    r.ignore.as_deref().is_some_and(|g| g.starts_with("IGNORE_IF"))
-}
-
-/// The integers Protovalidate lets through a field. An unset field of implicit presence is its
-/// zero value, and the rules are applied to it like to any other value — which is why a field
-/// with no rules at all lets 0 through.
+/// The integers Protovalidate lets through a field, as `ritsu_proto::validate` reads them.
 fn proto_ints(fd: &crate::proto::Field) -> Option<Ints> {
-    let (tmin, tmax) = crate::proto::int_bounds(&fd.ty)?;
-    let full = Ints::between(Some(tmin), Some(tmax));
-    let r = &fd.rules;
-    if r.ignore.as_deref() == Some("IGNORE_ALWAYS") {
-        return Some(open_ends(full, tmin, tmax));
-    }
-    let i = &r.int;
-    let lower = i.gt.map(|g| g + 1).or(i.gte);
-    let upper = i.lt.map(|l| l - 1).or(i.lte);
-    // Protovalidate reads a lower bound written above the upper one as the two ends of an
-    // excluded range: `gt: 10, lt: 5` lets through what is above 10 or below 5.
-    let reversed = matches!((i.gt.or(i.gte), i.lt.or(i.lte)), (Some(a), Some(b)) if a > b);
-    let mut s = if reversed {
-        Ints::between(None, upper).union(&Ints::between(lower, None))
-    } else {
-        Ints::between(lower, upper)
-    }
-    .intersect(&full);
-    if let Some(k) = i.konst {
-        s = s.intersect(&Ints::points(&[k]));
-    }
-    if !i.in_.is_empty() {
-        s = s.intersect(&Ints::points(&i.in_));
-    }
-    for x in &i.not_in {
-        s = s.without(*x);
-    }
-    // `required` rules 0 out only where the field has no presence of its own; on an `optional`
-    // field it asks that the field be set, and a set 0 passes it (§15.140).
-    if r.required && !fd.optional {
-        s = s.without(0);
-    }
-    if !fd.optional && ignores_zero(r) {
-        s = s.union(&Ints::points(&[0]));
-    }
-    Some(open_ends(s, tmin, tmax))
-}
-
-/// A bound that is only the kind's own limit is shown open: an `int64` with no rule reads as
-/// "any integer", not as nineteen digits. The 0 an unsigned kind starts at stays, because it
-/// says something.
-fn open_ends(s: Ints, tmin: i128, tmax: i128) -> Ints {
-    Ints(s.0.into_iter().map(|(a, b)| (a.filter(|&x| x != tmin || tmin == 0), b.filter(|&x| x != tmax))).collect())
+    ritsu_proto::validate::field_ints(&fd.ty, &fd.rules, fd.optional)
 }
 
 fn proto_strs(fd: &crate::proto::Field) -> Option<Vec<String>> {
-    let r = &fd.rules;
-    if r.ignore.as_deref() == Some("IGNORE_ALWAYS") {
-        return None;
-    }
-    let mut list = r.str_const.clone().map(|k| vec![k]);
-    if !r.str_in.is_empty() {
-        list = Some(match list {
-            Some(l) => l.into_iter().filter(|x| r.str_in.contains(x)).collect(),
-            None => r.str_in.clone(),
-        });
-    }
-    let mut list = list?;
-    list.retain(|x| !r.str_not_in.contains(x));
-    // The zero value of a string is "", and IGNORE_IF_ZERO_VALUE lets it through unchecked.
-    if !fd.optional && ignores_zero(r) && !list.iter().any(String::is_empty) {
-        list.push(String::new());
-    }
-    Some(list)
+    ritsu_proto::validate::field_strs(&fd.rules, fd.optional)
 }
 
 fn proto_count(fd: &crate::proto::Field, filtered: bool) -> Ints {

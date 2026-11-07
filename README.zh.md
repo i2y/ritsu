@@ -99,7 +99,7 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
 
 输出的意思是：`asked` 和 `paid` 都可能是 0 到 10000 之间的任何值，当 asked = 10000、paid = 0 时，前置条件 `asked <= paid` 不成立。规则生成的代码会在入口拒绝违反前置条件的调用，所以这样的调用要到工作流运行时才会失败。修正的方法是在调用之前加上分支，保证前置条件成立，或者缩小取值范围（输入的 `range`，或任务结果的 `range`）。
 
-每一项跨语言的检查都会得到三种答案之一：成立；给出一个不成立的例子；或者无法判定，并说明原因。没有任何检查会悄无声息地通过。跨语言的检查还包括：koyomi 的日期可能落在的日子与规则输入的范围、规则的输出作为 chobo 转账的金额、kaname 模块传给规则、日期和转账的每个值，以及在 rulec、dandori、chobo 和 kaname 之间通用的金额与单位类型。完整的列表见英文 README 的 [Where the languages meet](README.md#where-the-languages-meet)。
+每一项跨语言的检查都会得到三种答案之一：成立；给出一个不成立的例子；或者无法判定，并说明原因。没有任何检查会悄无声息地通过。跨语言的检查还包括：手写代码在语言之间传递的值（在接收处用 `fed by` 写明来源，检查来源可能取到的值接收方能否接受，但不检查传递它的代码本身）、koyomi 的日期可能落在的日子与规则输入的范围、规则的输出作为 chobo 转账的金额、kaname 模块传给规则、日期和转账的每个值，以及在 rulec、dandori、chobo 和 kaname 之间通用的金额与单位类型。完整的列表见英文 README 的 [Where the languages meet](README.md#where-the-languages-meet)。
 
 ## 供人阅读的页面
 

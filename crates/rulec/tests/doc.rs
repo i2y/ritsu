@@ -97,6 +97,10 @@ const CORPUS: &[&str] = &[
 "tests/corpus/最も早い期日.rule",
 "tests/corpus/料率の調整.rule",
 // The twins (tests/corpus/twins.tsv): every cell they show has to be in their own source too.
+"tests/corpus/province_income.rule",
+"tests/corpus/province_growth.rule",
+"tests/corpus/領地の収入.rule",
+"tests/corpus/領地の成長.rule",
 "tests/corpus/sku_prefix_handling.rule",
 "tests/corpus/cart_shipping_fee.rule",
 "tests/corpus/pro_rata_allocation.rule",

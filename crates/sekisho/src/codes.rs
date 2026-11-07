@@ -186,6 +186,21 @@ pub fn ledger() -> Ledger {
             &["E007"],
         ),
         e(
+            "E009",
+            tr!("`fed by` を読めないか、書けない場所にあります", "`fed by` does not read, or stands where it cannot"),
+            tr!(
+                "`fed by` の参照が処理系の書き方（`<ツール> \"<パス>\" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、属性の行と `input` の行でない場所に書いたとき（`context` の値は、ゲートが自分で計算する値です）。",
+                "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an attribute's or an `input`'s (a value of `context` is one the gate computes itself)."
+            ),
+            tr!(
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`."
+            ),
+            "gate t v1\n\nprincipal User\n  attributes\n    limit : number  range >=0 <=9  fed by sakai \"shop.ctx\" term limit\n",
+            "gate t v1\n\nprincipal 利用者(User)\n  attributes\n    上限(limit) : number  range >=0 <=9  fed by sakai \"店.ctx\" term 上限\n",
+            &[],
+        ),
+        e(
             "E101",
             tr!("知らない名前です", "A name names nothing"),
             tr!(

@@ -30,12 +30,15 @@
 //! flow sends a value a contract marks secret, against sakai's map ([`egress`], X14, E905 and
 //! W905). Two are of authorization, sekisho's (its DESIGN 4.6; [`gates`]): every operation a
 //! context of a map opens has an action of a gate to guard it (X15, E907 and W907), and what a
-//! workflow calls is what the gate that names it allows it (X16, E908, W908 and W909).
+//! workflow calls is what the gate that names it allows it (X16, E908, W908 and W909). What can
+//! come from where a place says its value comes from is what the place takes (`fed by`, X17, E207,
+//! W207 and E208).
 
 pub mod borders;
 pub mod codes;
 mod dates;
 pub mod egress;
+mod fed;
 pub mod gates;
 mod holds;
 mod preconditions;
@@ -56,7 +59,7 @@ use std::path::Path;
 
 /// Which of ritsu's checks a border is (DESIGN 7.2): the word `ritsu check --format json` writes
 /// it with. A word is never changed, nor given to another check; a new check takes a new word,
-/// after the others (the records are in this order). The marks of DESIGN (X2 to X16) are no
+/// after the others (the records are in this order). The marks of DESIGN (X2 to X17) are no
 /// words of the output (DESIGN 4.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Check {
@@ -85,11 +88,14 @@ pub enum Check {
     /// A call a workflow makes of an operation a gate guards, against what the gate allows it
     /// (X16: E908, W909).
     WorkflowPermission,
+    /// What can come from where a place says its value comes from, against what the place takes
+    /// (X17: E207, W207, E208).
+    FedBy,
 }
 
 impl Check {
     /// Every check, in the order of the records.
-    pub const ALL: [Check; 10] = [
+    pub const ALL: [Check; 11] = [
         Check::Precondition,
         Check::RuleDateInput,
         Check::RangeFromKoyomi,
@@ -100,6 +106,7 @@ impl Check {
         Check::SecretDestination,
         Check::OperationGuard,
         Check::WorkflowPermission,
+        Check::FedBy,
     ];
 
     pub fn word(self) -> &'static str {
@@ -114,6 +121,7 @@ impl Check {
             Check::SecretDestination => "secret_destination",
             Check::OperationGuard => "operation_guard",
             Check::WorkflowPermission => "workflow_permission",
+            Check::FedBy => "fed_by",
         }
     }
 
@@ -291,6 +299,7 @@ pub fn check_with(project: &Project, joined: &Joined, programs: &ProgramVerdicts
     findings.extend(secrets::keys(project, joined, lang));
     findings.extend(egress::check(project, joined, lang, &mut borders));
     findings.extend(gates::check(project, joined, lang, &mut borders));
+    findings.extend(fed::check(project, joined, lang, &mut borders));
     borders.sort();
     Crossed { findings, borders }
 }

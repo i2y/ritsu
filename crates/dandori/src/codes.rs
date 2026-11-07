@@ -234,6 +234,20 @@ pub fn ledger() -> Ledger {
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nrecord Door\n  id    : string\n  state : door.state\n\ninputs\n  hurry : bool\n\ntask open_door(id: string) -> Door\n  starts door.door\n  key\n\ntask shut(id: string) -> Door\n  sends shut_it\n\ncase d : Door follows door.door\n  refused when accepted = false\n\nflow\n  d <- open_door(id: \"x\")\n  match hurry\n    true => d <- shut(id: \"x\")\n    false => pass\n  d <- shut(id: \"x\")\n", beside: &[DOOR] },
             &["E021", "W102"],
         ),
+        Entry::new(
+            "E023",
+            tr!("`fed by` を読めないか、書けない場所にあります", "`fed by` does not read, or stands where it cannot"),
+            tr!(
+                "`fed by` の参照が処理系の書き方（`<ツール> \"<パス>\" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、`inputs` の行と `record` のフィールドの行でない場所に書いたとき。",
+                "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than one of `inputs` or a field of a `record`."
+            ),
+            tr!(
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`."
+            ),
+            Repro::File { body: "workflow w v1\n\ninputs\n  amount : int  range >=1 <=100  fed by sakai \"shop.ctx\" term order\n\nflow\n  wait 1 minutes\n", beside: &[] },
+            &[],
+        ),
         // ── Retries and platforms ──
         Entry::new(
             "E030",

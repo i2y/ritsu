@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "required": ["amount"],
+      "properties": {
+        "amount": { "type": "integer", "minimum": 1, "maximum": 1000000, "description": "in cents" }
+      }
+    },
+    "Refund": {
+      "type": "object",
+      "required": ["reason"],
+      "properties": {
+        "reason": { "type": "string", "enum": ["damaged", "late"] }
+      }
+    }
+  }
+}

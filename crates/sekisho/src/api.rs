@@ -70,6 +70,20 @@ fn field_json(g: &Gate, f: &Field, in_cedar: bool) -> Json {
     ])
 }
 
+/// Where hand-written code takes a field's value from (DESIGN 26): `ritsu check` holds the range
+/// of what can come from there, and nothing holds the code to carrying it. Written only for a field
+/// that says, so no other description changes.
+fn with_fed(f: &crate::ast::File, kind: &str, owner: &crate::model::Named, x: &Field, one: Json) -> Json {
+    let fed = crate::ast::fed_places(f).into_iter().find(|(k, o, fd)| *k == kind && owner.is(o) && x.named.is(&fd.name.text)).and_then(|(_, _, fd)| fd.fed.as_ref());
+    match (fed, one) {
+        (Some(fb), Json::Obj(mut m)) => {
+            m.push(("fed_by".to_string(), Json::str(fb.written.clone())));
+            Json::Obj(m)
+        }
+        (_, one) => one,
+    }
+}
+
 /// The JSON of `sekisho api` for a file that passes.
 pub fn json(scope: &Scope, checked: &Checked) -> Json {
     let g = &checked.gate;
@@ -117,7 +131,7 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
             ("entity_type", Json::str(cedar::type_name(g, &shape, ti).to_string())),
             ("roles", names(g, &t.roles, |g, x| &g.roles[x].named)),
             ("member_of", Json::arr(member_of.into_iter().map(Json::str))),
-            ("attributes", Json::arr(t.attrs.iter().enumerate().map(|(i, a)| field_json(g, a, ts.attrs.contains(&i))))),
+            ("attributes", Json::arr(t.attrs.iter().enumerate().map(|(i, a)| with_fed(f, kind(t.kind), &t.named, a, field_json(g, a, ts.attrs.contains(&i)))))),
         ])
     });
     let workflows = g.workflows.iter().enumerate().map(|(wi, w)| {
@@ -174,7 +188,7 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
             ("resources", names(g, &a.resources, |g, x| &g.types[x].named)),
             ("from", a.from.as_ref().map(|(x, _)| Json::str(x.clone())).unwrap_or(Json::Null)),
             ("nobody", a.nobody.as_ref().map(|(x, _)| Json::str(x.clone())).unwrap_or(Json::Null)),
-            ("inputs", Json::arr(a.inputs.iter().enumerate().map(|(i, x)| field_json(g, x, s.inputs.contains(&i))))),
+            ("inputs", Json::arr(a.inputs.iter().enumerate().map(|(i, x)| with_fed(f, "action", &a.named, x, field_json(g, x, s.inputs.contains(&i)))))),
             ("context", Json::arr(context)),
         ])
     });
@@ -203,7 +217,7 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
         ("name", Json::str(f.name.text.clone())),
         ("alias", Json::str(alias.clone())),
         ("version", Json::str(f.version.clone())),
-        ("source_sha256", Json::str(ritsu_base::sha256::hex(f.src.as_bytes()))),
+        ("source_sha256", Json::str(ritsu_base::fed::hash(&f.src))),
         ("description", Json::opt_str(f.description.as_ref().map(|(d, _)| d.clone()))),
         ("namespace", Json::str(g.namespace.clone())),
         ("uses", Json::arr(g.uses.iter().map(|u| Json::obj([("kind", Json::str(u.kind.word())), ("name", if u.name.is_empty() { Json::Null } else { Json::str(u.name.clone()) }), ("path", Json::str(u.path.clone())), ("line", line(u.line))])))),

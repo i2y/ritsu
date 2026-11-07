@@ -1086,6 +1086,159 @@ flow
 
 See also: [E206](#e206)
 
+<a id="e207"></a>
+
+## E207 — What can come from a place's source is not what the place takes
+
+**When**: A line of an input or a field writes `fed by <naming>`, and the line does not take something that can come from there. A number is compared by its unit, its step and its range (another unit does not hold); an enum by the public names of its values, a date by its days, a bool and a string by their type. The message gives an example value and, from a rule or a dates file, the input that gives it. A contract (proto, OpenAPI, JSON Schema) with no upper end, and a book with none (up to chobo's limit of 2⁶³ − 1), let that value come, so they are examples too; so is a contract's property that can be left out or be null, where the place is not `T?`. An end the place does not write is not compared. `fed by` changes no generated code and does not check that the hand-written code carries the value: it checks the range of the values.
+
+**Fix**: Widen what the place takes, or narrow what the source gives. Which of the two is a person's decision.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`income.rule`:
+
+```rule
+rule income v1
+description "The food a province gives, by its farms"
+
+inputs
+  farms : number  range >=0 <=3
+
+outputs
+  food : number  round down(1)
+
+table food_of
+policy unique
+| farms | -> food : number |
+| 0     | 2                |
+| >=1   | 20               |
+```
+
+`population.rule`:
+
+```rule
+rule population v1
+description "Whether a province grows on the food it gets"
+
+inputs
+  food : number  range >=0 <=12  fed by rulec "income.rule" output food
+
+outputs
+  grows : bool
+
+table grows_of
+policy unique
+| food | -> grows : bool |
+| >=6  | true            |
+| <6   | false           |
+```
+
+See also: [W207](#w207), [E208](#e208)
+
+<a id="w207"></a>
+
+## W207 — Whether a place takes what can come from its source cannot be decided
+
+**When**: The source of a `fed by` does not say all of its values: rulec does not count an end of a rule's output; what it counts lies outside what the place takes, and none of the rule's vectors comes to such a value (rulec bounds an output by moving each input over its own range); the source's language does not pass its file (which that language says); a contract's date where the place writes a range (a contract carries a date as a string); two records or lists.
+
+**Fix**: For a rule, write it so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what the place takes. For a contract, list its values (`enum` in a schema, `in` in Protovalidate). For a workflow or a module of kaname, write the range on the source's line.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`carried_over.rule`:
+
+```rule
+rule carried_over v1
+description "What is carried over to the next season"
+
+inputs
+  total : number  range >=0 <=300
+  cost  : number  range >=1 <=200
+
+outputs
+  ahead : number  round down(1)
+
+define left : number = total - cost
+
+table finish
+policy unique
+| left | -> ahead : number |
+| >=0  | 0                 |
+| <0   | total             |
+```
+
+`research.rule`:
+
+```rule
+rule research v1
+description "Whether the research has come far"
+
+inputs
+  progress : number  range >=0 <=250  fed by rulec "carried_over.rule" output ahead
+
+outputs
+  far : bool
+
+table far_of
+policy unique
+| progress | -> far : bool |
+| >=100    | true          |
+| <100     | false         |
+```
+
+See also: [E207](#e207)
+
+<a id="e208"></a>
+
+## E208 — The source of a `fed by` is not there
+
+**When**: The file a `fed by` names is not there, or does not hold what it names (a rule's output, an account, a date, a field of a message, a property of a schema, a workflow's output or a field of its record), or a document or a `.proto` does not read. The form of the naming, and that it names something with a value, are said by the check of the language it is written in. That check reads no other file, so that the thing is there is said by `ritsu check`.
+
+**Fix**: A path goes from the directory of the file it is written in. Put the name right, or add what it names.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`income.rule`:
+
+```rule
+rule income v1
+description "The food a province gives, by its farms"
+
+inputs
+  farms : number  range >=0 <=3
+
+outputs
+  food : number  round down(1)
+
+table food_of
+policy unique
+| farms | -> food : number |
+| 0     | 2                |
+| >=1   | 20               |
+```
+
+`population.rule`:
+
+```rule
+rule population v1
+description "Whether a province grows on the food it gets"
+
+inputs
+  food : number  range >=0 <=60  fed by rulec "income.rule" output wheat
+
+outputs
+  grows : bool
+
+table grows_of
+policy unique
+| food | -> grows : bool |
+| >=6  | true            |
+| <6   | false           |
+```
+
+See also: [E207](#e207)
+
 <a id="e301"></a>
 
 ## E301 — A `ritsu.mod` that does not read

@@ -101,6 +101,7 @@ pub fn page(o: &Outcome, suite: &Suite, root: &Path, lang: Lang, format: Format)
     let mut b = Builder { o, c, p: Program::of(c), suite, root, lang, format, blocks: Vec::new(), embedded: Vec::new() };
     b.head();
     b.tables();
+    b.fed();
     b.functions();
     b.in_code();
     b.examples();
@@ -180,7 +181,7 @@ impl<'a> Builder<'a> {
             title,
             description: m.description.as_ref().map(|(d, _)| d.clone()),
             file: self.shown_from_root(&self.c.canon, &self.c.path),
-            sha: ritsu_base::sha256::short(self.c.src.as_bytes()),
+            sha: ritsu_base::sha256::short(ritsu_base::fed::without(&self.c.src).as_bytes()),
             blocks: self.blocks,
             embedded: self.embedded,
         }
@@ -258,7 +259,7 @@ impl<'a> Builder<'a> {
         let m = &self.c.module;
         let version = env!("CARGO_PKG_VERSION");
         let file = self.shown_from_root(&self.c.canon, &self.c.path);
-        let sha = ritsu_base::sha256::short(self.c.src.as_bytes());
+        let sha = ritsu_base::sha256::short(ritsu_base::fed::without(&self.c.src).as_bytes());
         let (name, v) = (&m.name.text, &m.version);
         let mut facts = vec![self.t(tr!("ファイル：{}（module {name} {v}、sha256:{sha}）", "File: {} (module {name} {v}, sha256:{sha})", code(&file)))];
         let reads: Vec<String> = m
@@ -507,6 +508,24 @@ impl<'a> Builder<'a> {
     // -----------------------------------------------------------------------------------------
     // 3. The functions
 
+    /// The fields of the records that say where hand-written code takes their values from (DESIGN
+    /// 37): what `ritsu check` holds, and what nothing holds. A parameter is said with its function.
+    fn fed(&mut self) {
+        let mut items = Vec::new();
+        for r in &self.c.module.records {
+            for f in &r.fields {
+                let Some(fb) = &f.fed else { continue };
+                let note = ritsu_base::fed::page_note(&fb.written);
+                let at = code(&format!("{}.{}", r.name.text, f.name.text));
+                items.push(self.t(tr!("{at}：{}", "{at}: {}", note.ja; note.en)));
+            }
+        }
+        if !items.is_empty() {
+            self.heading(2, self.t(tr!("フィールドの出どころ", "Where the fields come from")), "fed-by".into());
+            self.push(Block::List(items));
+        }
+    }
+
     fn functions(&mut self) {
         self.heading(2, self.t(tr!("関数", "Functions")), "functions".into());
         let a = self.c.analysis.get().expect("analysed");
@@ -632,6 +651,12 @@ impl<'a> Builder<'a> {
         let end = decl.last.max(ritsu_base::definition::block_end(&lines, info.line)).min(lines.len());
         let body = lines.get(info.line.saturating_sub(1)..end).map(|ls| ls.join("\n")).unwrap_or_default();
         self.push(Block::Code { lang: "kn", caption: String::new(), text: body });
+        // Where hand-written code takes a parameter from (DESIGN 37): what was held, and what was
+        // not.
+        let fed: Vec<String> = decl.params.iter().filter_map(|prm| Some(format!("{}: {}", code(&prm.name.text), self.t(ritsu_base::fed::page_note(&prm.fed.as_ref()?.written))))).collect();
+        if !fed.is_empty() {
+            self.push(Block::List(fed));
+        }
         let mut items: Vec<String> = facts.places.iter().filter(|p| p.failing()).map(|p| self.place(p)).collect();
         for k in &facts.calls {
             let callee = a.fns.iter().zip(&self.c.decls.fns).find(|(_, i)| i.name.text == k.function && k.module == self.c.canon).map(|(x, _)| x.effect.clone());

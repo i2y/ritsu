@@ -119,6 +119,67 @@ warnings, unless the line or the URL says why. [Secrets](secrets.md)
 **The platform.** `dandori gen` also checks what only the platform decides: a run whose history
 could outgrow the platform's limit (E040), and what the platform needs or cannot do (E050).
 
+## Where a value comes from
+
+Hand-written code starts a run with values it took from somewhere else: the amount from the request
+the API took, what is left from the book. `fed by` at the end of an input's line, or of a field of a
+record, says where, in the form the toolchain names everything
+([examples/refund_request](https://github.com/i2y/ritsu/tree/main/crates/dandori/examples/refund_request)):
+
+```flow
+record Balance
+  left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.book" account remaining
+
+inputs
+  amount  : money[USDc]  range >=1USDc <=1000000USDc  fed by openapi "specs/refunds.json" schema RefundCreate property amount
+```
+
+The path goes from the directory of the `.flow`. A workflow names what it can be fed from as any
+other language does:
+
+| The value comes from | Named as |
+|---|---|
+| an output of a rule | `rulec "<file>" output <name>` |
+| an account of a book | `chobo "<file>" account <name>` |
+| a date of a dates file | `koyomi "<file>" date <name>` |
+| a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
+| a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
+| an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
+| a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+
+`ritsu check` asks the language on each side, and comes to one of three answers:
+
+- **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
+- **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+
+E208 says the source is not there: its file, or the name in it.
+
+Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+
+This is the book that lost its `at most`, which a run would otherwise find as `Dandori.BadResponse`:
+
+```console
+$ ritsu check refund_request.flow books/refunds.book
+books/refunds.book: ok
+  sell.do    may be refused: key_conflict
+  refund.do  may be refused: nothing_left (remaining(order) at least 0.00), key_conflict, already_refused
+  key: sell once per order; a second call that differs only in amount is refused with key_conflict
+  key: refund once per request; a second call that differs only in order or amount is refused with key_conflict
+refund_request.flow: ok
+error[ritsu E207]: refund_request.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "books/refunds.book" account remaining can be 10000001
+     9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.book" account remaining
+  = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 2 files (chobo 1, dandori 1): 1 fail (1 error); borders between the languages: 3 checked, 0 undecided
+```
+
+`dandori check` on its own says whether the form reads and stands where it can (E023), since the
+other file is another language's to read. **Nothing checks that the hand-written code really carries
+that value**, and the page of `dandori doc` says so. What dandori generates does not change on any
+platform.
+
 ## The size of a run
 
 A platform limits one run: Step Functions keeps 25,000 events of history, Temporal 51,200, and
@@ -141,4 +202,4 @@ write one of them (E051). Rename it, or leave that platform out of `--target`.
 
 ## Every code
 
-[Diagnostics](reference/codes.md) lists all 37, with what each one finds.
+[Diagnostics](reference/codes.md) lists all 38, with what each one finds.

@@ -85,6 +85,19 @@ impl Joined {
         Joined { rulec, koyomi, chobo, geas, dandori, kaname, sekisho, sakai, index: Rc::new(index) }
     }
 
+    /// The port of `fed by` of a language that has the form (DESIGN 7.16): rulec, koyomi, dandori,
+    /// sekisho and kaname.
+    pub fn feeds(&self, tool: Tool) -> Option<Rc<dyn ritsu_ports::Feeds>> {
+        match tool {
+            Tool::Rulec => Some(self.rulec.clone()),
+            Tool::Koyomi => Some(self.koyomi.clone()),
+            Tool::Dandori => Some(self.dandori.clone()),
+            Tool::Sekisho => Some(self.sekisho.clone()),
+            Tool::Kaname => Some(self.kaname.clone()),
+            _ => None,
+        }
+    }
+
     /// The port of dates, as rulec reads the days of `range from koyomi` with it (DESIGN 7.5
     /// (b)): koyomi's engine holds nothing, so one for each reader is the same one.
     pub fn dates() -> rulec::days::Port {

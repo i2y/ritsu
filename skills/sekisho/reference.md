@@ -539,9 +539,52 @@ them (ritsu's codes, which `ritsu explain` looks up):
   stands for a denial. An action that guards a transfer's operation holds where the service that
   keeps the book asks the gate before it moves the book.
 
+- **X17**: an attribute or an input with `fed by` takes what its source can come to ([below](#fed-by--where-a-value-comes-from)).
+  E207 for a value it refuses, W207 for what cannot be decided, E208 for a source that is not there.
+
 A file of Cedar written by hand, with its schema, takes part in the same checks when the map
 (`owns`) or a requirement names it, and its schema says with `@guards` which operation an action
 guards.
+
+### `fed by` — where a value comes from
+
+Hand-written code asks the gate with values it took from somewhere else. `fed by` at the end of an
+attribute's line, or of a line of an action's `input`, says where:
+
+```gate
+    amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+```
+
+The rest of the line is a naming, in the form the whole toolchain names things; the path goes from
+the directory of the file it is written in. A line of `context` cannot hold one, since what computes
+it says where it comes from: that, and a naming that does not read or names something that holds no
+value, is E009. `fed` and `by` are not reserved: they are the form only when the two stand together
+at the end of a line.
+
+| The value comes from | Named as |
+|---|---|
+| an output of a rule | `rulec "<file>" output <name>` |
+| an account of a book | `chobo "<file>" account <name>` |
+| a date of a dates file | `koyomi "<file>" date <name>` |
+| a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
+| a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
+| an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
+| a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+
+`ritsu check` asks the language on each side, and comes to one of three answers:
+
+- **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
+- **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+
+E208 says the source is not there: its file, or the name in it.
+
+Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+
+**What is not checked.** Nothing checks that the hand-written code really carries that value. The
+page of `sekisho doc` says so: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). Nothing `gen` writes changes, and `sekisho api` gives the
+naming as the attribute's or the input's `fed_by`.
 
 ## The keywords
 
@@ -553,6 +596,7 @@ guards.
 | in a block | `description` `includes` `can` `roles` `attributes` `guards` `principal` `resource` `from` `nobody` `input` `context` `action` `actions` `when` `unless` |
 | in a condition | `in` `is` `not` `and` `or` `any` `workflow` `open` `today` `allow` `deny` `allowed` `principal` `resource` `true` `false` |
 | types and ranges | `bool` `date` `number` `rate` `money` `mass` `length` `area` `volume` `duration` `temperature` `sound` `range` `offset` |
+| at the end of an attribute's or an input's line | `fed` `by` |
 
 The symbols are `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `?` `->`, and `#` for a comment. Cedar's
 `==`, `!=`, `&&`, `||` and `!` are not sekisho's: E001 says what to write instead (`is`, `is not`,
@@ -632,7 +676,7 @@ English) and `--help`.
 `api` prints what the gate declares, each with its line: `sekisho` (the version), `name`, `alias`,
 `version`, `source_sha256`, `description`, `namespace`, `uses`, `today`, `cedar` (the four files
 `gen` writes), `enums` (each enum's values, whether they are ordered where it was read from, and `from`, the `enums` file and the enum's name there, for one read with `import enum`), `roles` (each role's entity in Cedar, `includes`, `can`), `types` (each type's
-entity type, its roles, its attributes and whether each goes into Cedar), `workflows`, `actions`
+entity type, its roles, its attributes, whether each goes into Cedar and its `fed_by`), `workflows`, `actions`
 (the operations each guards, as references written from the root, the types it takes, its input,
 its context and how each computed value is computed, with `asks` for an `allowed`: the action
 asked and what each of its inputs is given), `policies` (each `@id`), `expects` and

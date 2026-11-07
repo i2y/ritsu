@@ -135,7 +135,9 @@ fn checked_text(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, V
             return (None, Default::default(), diags);
         }
     };
-    model.source_sha256 = ritsu_base::sha256::hex(src.as_bytes());
+    model.source_sha256 = ritsu_base::fed::hash(src);
+    let places = prog.inputs.iter().map(|f| (f.name.0.clone(), f)).chain(prog.records.iter().flat_map(|r| r.fields.iter().map(|f| (format!("{}.{}", r.name.0, f.name.0), f))));
+    model.fed = places.filter_map(|(place, f)| Some((place, f.fed.as_ref()?.written.clone()))).collect();
     let fr = crate::flow::analyze(&model);
     diags.extend(fr.diags);
     model.monitors = fr.monitors;

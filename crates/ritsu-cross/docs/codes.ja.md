@@ -1086,6 +1086,159 @@ flow
 
 関連: [E206](#e206)
 
+<a id="e207"></a>
+
+## E207 — 出どころがとりうる値を、受け取る側が受け取りません
+
+**いつ出るか**: 入力やフィールドの行に `fed by <参照>` と書いてあり、出どころがとりうる値のどれかを、その行が受け取らないとき。比べるのは、数なら単位と刻みと範囲（単位が違えば成り立ちません）、列挙なら公開名の値、日付なら日、真偽と文字列なら型です。文には値の例と、規則や日付のファイルならそれを出す入力を書きます。契約（proto、OpenAPI、JSON Schema）の上限が無いときと帳簿の上限が無いとき（chobo の上限の 2⁶³ − 1 まで）も、その値は来るので例になります。契約のプロパティが省略でき、null を通すのに、受け取る側が `T?` でないときも同じです。受け取る側が書いていない端は比べません。`fed by` は生成コードを変えず、手書きのコードが本当にその値を運ぶかも確かめません。確かめるのは値の範囲です。
+
+**直し方**: 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`収入.rule`:
+
+```rule
+rule 収入(income) v1
+description "農地の数で決まる、領地の食料"
+
+inputs
+  農地(farms) : number  range >=0 <=3
+
+outputs
+  食料(food) : number  round down(1)
+
+table 食料の表(food_of)
+policy unique
+| 農地 | -> 食料 : number |
+| 0    | 2                |
+| >=1  | 20               |
+```
+
+`人口.rule`:
+
+```rule
+rule 人口(population) v1
+description "受け取る食料で、領地の人口が増えるか"
+
+inputs
+  食料(food) : number  range >=0 <=12  fed by rulec "収入.rule" output 食料
+
+outputs
+  増える(grows) : bool
+
+table 増えるかの表(grows_of)
+policy unique
+| 食料 | -> 増える : bool |
+| >=6  | true             |
+| <6   | false            |
+```
+
+関連: [W207](#w207), [E208](#e208)
+
+<a id="w207"></a>
+
+## W207 — 出どころの値を受け取るかを決められません
+
+**いつ出るか**: `fed by` の出どころが値の全部を言わないとき。rulec が規則の出力の端を数えられないとき、数えた範囲が受け取る側を外れるのに規則のベクタにその値になる入力が無いとき（rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます）、出どころのファイルをその言語が通さないとき（誤りはその言語が言います）、契約の日付に受け取る側が範囲を書いているとき（契約は日付を文字列として運ぶだけです）、レコードやリストどうしのときです。
+
+**直し方**: 規則なら、出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げてください。契約なら、とりうる値を並べてください（JSON Schema の `enum`、Protovalidate の `in`）。ワークフローや kaname なら、出どころの行に範囲を書いてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`繰り越し.rule`:
+
+```rule
+rule 繰り越し(carried_over) v1
+description "次の季節へ繰り越す量"
+
+inputs
+  合計(total) : number  range >=0 <=300
+  費用(cost)  : number  range >=1 <=200
+
+outputs
+  次(ahead) : number  round down(1)
+
+define 残り(left) : number = 合計 - 費用
+
+table 仕上げ(finish)
+policy unique
+| 残り | -> 次 : number |
+| >=0  | 0              |
+| <0   | 合計           |
+```
+
+`研究.rule`:
+
+```rule
+rule 研究(research) v1
+description "研究がどこまで進んだか"
+
+inputs
+  進み(progress) : number  range >=0 <=250  fed by rulec "繰り越し.rule" output 次
+
+outputs
+  遠い(far) : bool
+
+table 遠いかの表(far_of)
+policy unique
+| 進み  | -> 遠い : bool |
+| >=100 | true           |
+| <100  | false          |
+```
+
+関連: [E207](#e207)
+
+<a id="e208"></a>
+
+## E208 — `fed by` の出どころがありません
+
+**いつ出るか**: `fed by` が指すファイルが無いとき、そのファイルに指すものが無いとき（規則の出力、勘定、日付、message のフィールド、スキーマのプロパティ、ワークフローの出力やレコードのフィールド）、文書や `.proto` を読めないとき。参照の形と、値の無いものを指していないことは、書いた言語の単独の検査が言います。単独の検査はほかのファイルを読まないので、先があるかは `ritsu check` が言います。
+
+**直し方**: パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`収入.rule`:
+
+```rule
+rule 収入(income) v1
+description "農地の数で決まる、領地の食料"
+
+inputs
+  農地(farms) : number  range >=0 <=3
+
+outputs
+  食料(food) : number  round down(1)
+
+table 食料の表(food_of)
+policy unique
+| 農地 | -> 食料 : number |
+| 0    | 2                |
+| >=1  | 20               |
+```
+
+`人口.rule`:
+
+```rule
+rule 人口(population) v1
+description "受け取る食料で、領地の人口が増えるか"
+
+inputs
+  食料(food) : number  range >=0 <=60  fed by rulec "収入.rule" output 小麦
+
+outputs
+  増える(grows) : bool
+
+table 増えるかの表(grows_of)
+policy unique
+| 食料 | -> 増える : bool |
+| >=6  | true             |
+| <6   | false            |
+```
+
+関連: [E207](#e207)
+
 <a id="e301"></a>
 
 ## E301 — `ritsu.mod` として読めないファイル

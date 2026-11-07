@@ -34,7 +34,7 @@ $ sakai check examples/shop/shop.ctx
 examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)
 ```
 
-The ten crossings are what the artifacts themselves say: a `.proto` importing another, a rule's `import proto` and `shape`, a calendar's `use calendar`, a workflow's `use rule`, `use proto`, `connect` and child flow.
+The ten crossings are what the artifacts themselves say: a `.proto` importing another, a rule's `import proto` and `shape`, a calendar's `use calendar`, a workflow's `use rule`, `use proto`, `connect` and child flow. A `fed by` counts too: the value hand-written code carries across a boundary needs a relationship like any other.
 sakai reads them through ritsu's ports, in the same process, from each language's own reading of its files.
 
 ## What the checker says

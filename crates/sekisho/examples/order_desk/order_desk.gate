@@ -1,0 +1,31 @@
+gate order_desk v1
+description "Who may refund an order at the desk. Hand-written code takes the order's amount from the order the schema describes and the reason from the request: each `fed by` says where a value comes from, `ritsu check` holds the range of its values, and the code that carries them is not checked"
+namespace OrderDesk
+
+enum refund_reason = damaged | late
+
+role clerk
+  description "Answers customers at the desk"
+  can refund_order
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order of the shop"
+  attributes
+    amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    reason : refund_reason  fed by jsonschema "schemas/order.schema.json" def Refund property reason
+
+permit clerks_refund_small_orders
+  description "A clerk refunds an order of 100 dollars or less"
+  principal in clerk
+  action refund_order
+  when resource.amount <= 10000USDc

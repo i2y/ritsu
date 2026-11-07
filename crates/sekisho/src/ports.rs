@@ -121,7 +121,7 @@ impl ritsu_ports::Gates for Engine {
             name: g.named.name.clone(),
             alias: g.named.alias.clone(),
             version: g.version.clone(),
-            sha256: ritsu_base::sha256::hex(g.src.as_bytes()),
+            sha256: ritsu_base::fed::hash(&g.src),
             namespace: g.namespace.clone(),
             actions: g
                 .actions
@@ -198,7 +198,10 @@ impl ritsu_ports::Items for Engine {
     /// check's to say.
     fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>> {
         let f = parsed(root, file)?;
-        let lines: Vec<&str> = f.src.lines().collect();
+        // Where a value comes from says nothing of what the place means, and a version of it stays
+        // the same (DESIGN 26): the definition is read without `fed by`.
+        let body = ritsu_base::fed::without(&f.src);
+        let lines: Vec<&str> = body.lines().collect();
         let naming = |kind: &str, name: &str| Name::file(Tool::Sekisho, file).with(kind, name);
         let one = |naming: Name, (from, to): (usize, usize)| Item { naming, lines: (from, to), text: ritsu_base::definition::block(&lines, from, to) };
         let mut out = Vec::new();
@@ -256,8 +259,9 @@ impl ritsu_ports::References for Engine {
     /// and each operation its actions guard (`guards`), as the check found it: an operation is named
     /// as the contract names it (its `operationId`, the service from the `.proto`'s package), so the
     /// operations a gate does not find (E202) and those of a gate whose names do not hold are not
-    /// here. A file outside the root has no reference. For Cedar written by hand, the operations its
-    /// schema's `@guards` names ([`crate::cedar_in`]).
+    /// here. Where hand-written code takes an attribute's or an input's value from (`fed by`, DESIGN
+    /// 26). A file outside the root has no reference. For Cedar written by hand, the operations
+    /// its schema's `@guards` names ([`crate::cedar_in`]).
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         if is_cedar(file) {
             return crate::cedar_in::references(root, file);
@@ -301,7 +305,65 @@ impl ritsu_ports::References for Engine {
                 }
             }
         }
+        for (_, _, fd) in crate::ast::fed_places(&f) {
+            let Some(fb) = &fd.fed else { continue };
+            if let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name) {
+                out.push(Reference { line: fb.span.line, target, how: "fed by".into() });
+            }
+        }
         out.sort_by_key(|r| r.line);
+        Ok(out)
+    }
+}
+
+/// What an attribute or an input holds, as the port of `fed by` says it (DESIGN 26).
+fn carried(g: &crate::model::Gate, fd: &crate::model::Field) -> ritsu_ports::Carried {
+    use crate::model::FieldType;
+    use ritsu_ports::Carried;
+    let one = match &fd.ty {
+        FieldType::Bool => Carried::Bool,
+        FieldType::Enum(e) => Carried::Enum { name: g.enums[*e].named.alias.clone(), values: g.enums[*e].values.iter().map(|v| v.alias.clone()).collect() },
+        FieldType::Num { unit, written, lo, hi } => Carried::Num { written: written.clone(), unit: Some(unit.clone()), min: Some(*lo), max: Some(*hi) },
+        FieldType::Date { lo, hi } => Carried::Date { min: Some(i64::from(*lo)), max: Some(i64::from(*hi)) },
+        FieldType::Entity(t) => Carried::Other(g.types[*t].named.alias.clone()),
+    };
+    if fd.optional { Carried::Opt(Box::new(one)) } else { one }
+}
+
+impl ritsu_ports::Feeds for Engine {
+    /// The attributes and the inputs with `fed by` (DESIGN 26), each with what its line takes: a
+    /// gate that does not pass answers nothing. Cedar written by hand writes none.
+    fn feeds(&self, root: &Path, file: &str, _ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
+        if is_cedar(file) {
+            return Ok(Vec::new());
+        }
+        let f = parsed(root, file)?;
+        let places = crate::ast::fed_places(&f);
+        if places.iter().all(|(_, _, fd)| fd.fed.is_none()) {
+            return Ok(Vec::new());
+        }
+        let o = self.passing(root, file)?;
+        let Ok(x) = o.as_ref() else { unreachable!("a check that passes") };
+        let g = &x.walked.as_ref().expect("a file that passes is walked").gate;
+        let mut out = Vec::new();
+        for (kind, owner, fd) in places {
+            let Some(fb) = &fd.fed else { continue };
+            let named = |n: &crate::model::Named| n.is(&fd.name.text);
+            let held = match kind {
+                "action" => g.actions.iter().find(|a| a.named.is(owner)).and_then(|a| a.inputs.iter().find(|i| named(&i.named))),
+                _ => g.types.iter().find(|t| t.named.is(owner)).and_then(|t| t.attrs.iter().find(|i| named(&i.named))),
+            };
+            let Some(held) = held else { continue };
+            let child = if kind == "action" { "input" } else { "attribute" };
+            out.push(ritsu_ports::Fed {
+                line: fb.span.line,
+                place: Name::file(Tool::Sekisho, file).with(kind, owner).with(child, &fd.name.text),
+                takes: carried(g, held),
+                source: ritsu_base::fed::from_root(root, file, &fb.name),
+                written: fb.written.clone(),
+            });
+        }
+        out.sort_by_key(|p| p.line);
         Ok(out)
     }
 }

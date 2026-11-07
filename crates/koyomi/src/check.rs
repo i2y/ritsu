@@ -211,7 +211,10 @@ fn prepare_file(f: File, path: &str, bytes: &[u8], loader: &mut Loader, opts: &O
     let dir = p.parent().unwrap_or(Path::new("")).to_path_buf();
     let mut diags = Vec::new();
     let use_cal = f.use_calendar.clone();
-    let model = resolve::resolve(f, p.clone(), ritsu_base::sha256::hex(bytes));
+    // What the generated code and the facts name the file by: `fed by` moves nothing generated
+    // (DESIGN 21).
+    let digest = std::str::from_utf8(bytes).map_or_else(|_| ritsu_base::sha256::hex(bytes), ritsu_base::fed::hash);
+    let model = resolve::resolve(f, p.clone(), digest);
     let mut m = match model {
         Ok(m) => m,
         Err(mut ds) => {

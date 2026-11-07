@@ -151,7 +151,7 @@ examples/openspec_greeter_archived/greeter.ja.req: エラー 1 件、警告 2 �
 
 ## 契約とポリシー
 
-つながりの先には、OpenAPI と AsyncAPI の文書の要素を一つ、手で書いた [Cedar](https://www.cedarpolicy.com/) のポリシー、アクション、エンティティの型を一つ、書けます。`openapi`、`asyncapi`、`cedar` は、`proto` と同じく参照の書き方のツール名で、yuen がそのファイルを自分で読みます（[examples/refund_contracts](examples/refund_contracts)）。
+つながりの先には、OpenAPI と AsyncAPI の文書と JSON Schema の要素を一つ、手で書いた [Cedar](https://www.cedarpolicy.com/) のポリシー、アクション、エンティティの型を一つ、書けます。`openapi`、`asyncapi`、`jsonschema`、`cedar` は、`proto` と同じく参照の書き方のツール名で、yuen がそのファイルを自分で読みます（[examples/refund_contracts](examples/refund_contracts)）。
 
 ```req
 requirement 返金は円で(refund_in_yen)

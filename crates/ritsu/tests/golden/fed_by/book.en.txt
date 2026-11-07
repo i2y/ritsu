@@ -1,0 +1,21 @@
+ok refund_limit.rule
+ok research.rule
+ok review.rule
+due.cal: ok — every date computes on all 365 days of issued_on (2026-01-01..2026-12-31)
+refunds.book: ok
+  sell.do    may be refused: key_conflict
+  refund.do  may be refused: nothing_left (remaining(order) at least 0.00), key_conflict, already_refused
+  key: sell once per order; a second call that differs only in amount is refused with key_conflict
+  key: refund once per request; a second call that differs only in order or amount is refused with key_conflict
+ok bill.kn: 1 function, total
+refund.flow: ok
+desk.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+error[ritsu E207]: refund_limit.rule:5:1: `input left` takes money[USDc] >=0 <=10000000, and its source chobo "refunds.book" account remaining can be 10000001
+     5 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
+  = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+error[ritsu E207]: refund.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "refunds.book" account remaining can be 10000001
+     9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
+  = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 8 files (rulec 3, koyomi 1, chobo 1, kaname 1, dandori 1, sekisho 1): 2 fail (2 errors); borders between the languages: 10 checked, 0 undecided

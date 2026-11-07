@@ -1,0 +1,3 @@
+error[E009]: tests/mutants/E009_fed_by_on_a_computed_value.gate:23:43: `fed by` can be written only on the line of an attribute or of an `input`
+    23 |     small = limits(amount: amount).small  fed by rulec "orders.rule" output small
+  = `fed by` says where hand-written code takes a value from. A value of `context` is one the gate computes, and its computation says where it comes from.

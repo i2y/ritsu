@@ -298,6 +298,26 @@ inputs
   d : date  range >=2026-01-01 <=2026-01-31
 ```
 
+<a id="e017"></a>
+
+## E017 — `fed by` does not read, or stands where it cannot
+
+**When**: The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than one of `inputs`.
+
+**Fix**: Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`.
+
+**Example**:
+
+```cal
+dates t v1
+
+inputs
+  issued_on : date  range >=2026-01-01 <=2026-12-31  fed by sakai "shop.ctx" term order
+
+date due = issued_on
+  + 30 days
+```
+
 <a id="e016"></a>
 
 ## E016 — An identifier collides, or cannot be used, in a target language gen is to write

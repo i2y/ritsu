@@ -1,0 +1,12 @@
+dates late_fee v1
+description "A late fee starts 14 days after an invoice falls due. Hand-written code carries the due date here from net30.cal: `ritsu check` holds the days it can be against this range, and the code that carries it is not checked"
+
+inputs
+  due_on : date  range >=2026-02-02 <=2028-12-29  fed by koyomi "net30.cal" date due
+
+date fee_starts = due_on
+  + 14 days             # the fee starts 14 days after the due date
+
+claims
+  after_the_due_date  : fee_starts > due_on
+  later_due_later_fee : fee_starts is monotonic

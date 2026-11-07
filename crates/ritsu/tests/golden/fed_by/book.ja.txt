@@ -1,0 +1,21 @@
+ok refund_limit.rule
+ok research.rule
+ok review.rule
+due.cal: ok — issued_on 2026-01-01〜2026-12-31 の 365 日のすべてで、どの日付も計算できます
+refunds.book: ok
+  sell.do    拒否されうる理由: key_conflict
+  refund.do  拒否されうる理由: nothing_left（remaining(order) at least 0.00）、key_conflict、already_refused
+  キー: sell は、order ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: refund は、request ごとに一度だけ動きます。キーが同じで order、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+ok bill.kn: 関数 1 個、total
+refund.flow: 検査を通りました
+desk.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+エラー[ritsu E207]: refund_limit.rule:5:1: `input left` は money[USDc] >=0 <=10000000 を受け取りますが、出どころ chobo "refunds.book" account remaining は 10000001 になることがあります
+     5 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
+  = 帳簿が受け付ける値です。`at least`・`at most` を書いていない端は、chobo の限度（2⁶³ − 1）まで受け付けます。
+  = 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
+エラー[ritsu E207]: refund.flow:9:1: `record Balance field left` は money[USDc] >=0 <=10000000 を受け取りますが、出どころ chobo "refunds.book" account remaining は 10000001 になることがあります
+     9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
+  = 帳簿が受け付ける値です。`at least`・`at most` を書いていない端は、chobo の限度（2⁶³ − 1）まで受け付けます。
+  = 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
+ritsu check: ファイル 8 個（rulec 3、koyomi 1、chobo 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 2 個（エラー 2 件）。言語の境目: 確かめた 10 か所、決められない 0 か所

@@ -27,6 +27,7 @@ fn token_text(k: &Kind) -> String {
         Kind::Hash(h) => format!("sha256:{h}"),
         Kind::Signature(h) => format!("signature:{h}"),
         Kind::Meaning(h) => format!("meaning:{h}"),
+        Kind::FedBy(n) => format!("fed by {n}"),
         Kind::Pipe => "|".into(),
         Kind::Arrow => "->".into(),
         Kind::Colon => ":".into(),
@@ -73,7 +74,8 @@ pub fn meaning_pairs(src: &str) -> Vec<(String, String)> {
         if ts.is_empty() || ts.first().and_then(|t| t.ident()) == Some(crate::kw::DESCRIPTION) {
             continue;
         }
-        let kept: Vec<&crate::lex::Token> = ts.iter().take_while(|t| !t.is(&Kind::At)).collect();
+        // Where a value comes from says nothing of what the rule means (§15.285).
+        let kept: Vec<&crate::lex::Token> = ts.iter().take_while(|t| !t.is(&Kind::At) && !matches!(t.kind, Kind::FedBy(_))).collect();
         if kept.is_empty() {
             continue;
         }

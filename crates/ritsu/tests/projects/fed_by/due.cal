@@ -1,0 +1,8 @@
+dates due v1
+description "An order is due 30 days after it is issued. Hand-written code takes the day from the order the schema describes"
+
+inputs
+  issued_on : date  range >=2026-01-01 <=2026-12-31  fed by jsonschema "schemas/order.schema.json" def Order property issued_on
+
+date due = issued_on
+  + 30 days

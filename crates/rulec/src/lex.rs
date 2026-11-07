@@ -68,6 +68,10 @@ pub enum Kind {
     Signature(String),
     /// `meaning:3f2a9c0d1e4b5a6c` — the pinned meaning of a rule an `apply` reads (§15.230).
     Meaning(String),
+    /// `fed by <naming>` at the end of a line (§15.285): the naming as written, one token, since
+    /// `ritsu_base::fed` reads it and not this lexer. A JSON Pointer or a quoted name in it is no
+    /// word of this language.
+    FedBy(String),
 }
 
 #[derive(Debug, Clone)]
@@ -214,6 +218,12 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
 /// separators is reported (E049) and read as the number it plainly is: cutting the line off
 /// there would end the table it stands in, and every row below would be reported as well.
 pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag>), Diag> {
+    // What `fed by` holds is cut off first and is one token: the rest of the line is read as if it
+    // were not there.
+    let (fed, text) = match ritsu_base::fed::cut(text) {
+        Some(c) => (Some(Token { kind: Kind::FedBy(c.text(text).to_string()), span: Span::new(line_no, c.at, c.end.max(c.naming_at) - c.at) }), &text[..c.at]),
+        None => (None, text),
+    };
     let b = text.as_bytes();
     let mut i = 0usize;
     let mut out = Vec::new();
@@ -410,6 +420,7 @@ pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag
         push(Kind::Ident(word), n, &mut out);
         i += n;
     }
+    out.extend(fed);
     Ok((out, soft))
 }
 

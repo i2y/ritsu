@@ -59,7 +59,7 @@ rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
 with a run that gets there; [Diagnostics](https://i2y.github.io/ritsu/dandori/reference/codes/) lists
-all 37 codes.
+all 38 codes.
 
 ## A workflow
 
@@ -194,7 +194,7 @@ the project is held to the map by `ritsu check` (its E905).
 
 ## Examples
 
-[examples/](examples/) has seven. Five are each written for Temporal, for AWS and for pydantic-graph: a
+[examples/](examples/) has eight. Five are each written for Temporal, for AWS and for pydantic-graph: a
 hotel booking held to Stripe's OpenAPI document; an order in a warehouse's system, whose AWS version
 calls a rule at the rule's own Connect service; the fulfillment of an order, with a child flow, which
 implements a service of a `.proto` and takes the types of the warehouse's answers from the
@@ -209,7 +209,10 @@ seller, is written once for every platform too: the bank's contract marks the nu
 and the name it is held in secret, and the flow carries the account's id alone, so no check of
 [secrets](https://i2y.github.io/ritsu/dandori/secrets/) says anything. Every example has a Japanese
 twin beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes
-them.
+them. The eighth, a request for a refund, is written once for every platform too: `fed by` says the
+amount comes from the OpenAPI document of the requests and the balance from a book of chobo's, and
+`ritsu check` holds what those can come to against what the flow takes
+([What the checker looks at](https://i2y.github.io/ritsu/dandori/checks/#where-a-value-comes-from)).
 [Examples](https://i2y.github.io/ritsu/dandori/examples/) says how the versions differ.
 
 ## How it is checked

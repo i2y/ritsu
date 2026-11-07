@@ -1,0 +1,29 @@
+ok refund_limit.rule
+ok research.rule
+ok review.rule
+due.cal: ok — issued_on 2026-01-01〜2026-12-31 の 365 日のすべてで、どの日付も計算できます
+refunds.book: ok
+  sell.do    拒否されうる理由: more_than_paid（remaining(order) at most 100000.00）、key_conflict、already_refused
+  refund.do  拒否されうる理由: nothing_left（remaining(order) at least 0.00）、key_conflict、already_refused
+  キー: sell は、order ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: refund は、request ごとに一度だけ動きます。キーが同じで order、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+ok bill.kn: 関数 1 個、total
+refund.flow: 検査を通りました
+desk.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+エラー[ritsu E208]: due.cal:5:1: `input issued_on` の出どころ jsonschema "schemas/order.schema.json" def Order property issued_on がありません
+     5 |   issued_on : date  range >=2026-01-01 <=2026-12-31  fed by jsonschema "schemas/order.schema.json" def Order property issued_on
+  = jsonschema "schemas/order.schema.json" def Order property issued_on を文書の中に見つけられません
+  = パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。
+エラー[ritsu E208]: bill.kn:5:1: `record Line field items` の出どころ jsonschema "schemas/order.schema.json" def Order property items がありません
+     5 |   items : number  range >=1 <=20  fed by jsonschema "schemas/order.schema.json" def Order property items
+  = jsonschema "schemas/order.schema.json" def Order property items を文書の中に見つけられません
+  = パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。
+エラー[ritsu E208]: bill.kn:10:1: `function total parameter order` の出どころ jsonschema "schemas/order.schema.json" pointer /$defs/Order/properties/amount がありません
+    10 |   order: number range >=1 <=1000000 fed by jsonschema "schemas/order.schema.json" pointer /$defs/Order/properties/amount
+  = jsonschema "schemas/order.schema.json" pointer /$defs/Order/properties/amount を文書の中に見つけられません
+  = パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。
+エラー[ritsu E208]: desk.gate:16:1: `resource Order attribute amount` の出どころ jsonschema "schemas/order.schema.json" def Order property amount がありません
+    16 |     amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+  = jsonschema "schemas/order.schema.json" def Order property amount を文書の中に見つけられません
+  = パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。
+ritsu check: ファイル 8 個（rulec 3、koyomi 1、chobo 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 3 個（エラー 4 件）。言語の境目: 確かめた 10 か所、決められない 0 か所

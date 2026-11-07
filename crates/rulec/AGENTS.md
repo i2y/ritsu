@@ -158,6 +158,7 @@ A few shapes are worth knowing before the first draft:
   file holds enums rules `import enum … from`; `prerequisites <name> over <enum>` lists `start` and
   a `requires` line per value, refusing cycles, unreachable values and a broken `ordered by`
   (E136-E138).
+- **An input can say where hand-written code takes its value from.** `food : number  range >=0 <=60  fed by rulec "province_income.rule" output food` at the end of an input's line; also a `chobo` account, a `koyomi` date, a `proto` field, an `openapi` or `jsonschema` property, a `dandori` output or record field, a `kaname` record field. `ritsu check` holds what the source can come to against what the input takes (E207, W207, E208); `rulec check` says only whether the form reads (E144). The hand-written code that carries the value is not checked, and generated code does not change.
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 

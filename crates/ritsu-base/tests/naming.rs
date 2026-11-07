@@ -40,6 +40,8 @@ fn reason(why: &str) -> ErrorKind {
         "one child at most (field)" => ErrorKind::TooManyPairs("field".into()),
         "nothing under function" => ErrorKind::NothingUnder("function".into()),
         "only field under record (function)" => ErrorKind::WrongChild { kind: "function".into(), parent: "record".into(), allowed: &["field"] },
+        "property only right after def" => ErrorKind::ChildFirst { kind: "property".into(), parents: vec!["def"] },
+        "nothing under pointer" => ErrorKind::NothingUnder("pointer".into()),
         other => panic!("the reason `{other}` is new to this test; say which error it is"),
     }
 }
@@ -78,7 +80,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused_for_its_reason() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (54, 32), "the table has 54 namings and 32 refusals");
+    assert_eq!((ok, refused), (58, 34), "the table has 58 namings and 34 refusals");
 }
 
 #[test]
@@ -180,12 +182,13 @@ fn the_standard_formats_and_their_kinds() {
         "a JSON Pointer is a word"
     );
     assert_eq!(naming::parse_one("cedar \"s.cedarschema\" entity User").unwrap().kind(), Some("entity"));
-    for t in [Tool::Openapi, Tool::Asyncapi, Tool::Cedar] {
+    for t in [Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::Jsonschema] {
         assert_eq!(t.extension(), None, "{} files are not told by one extension", t.word());
         assert_eq!(Tool::from_word(t.word()), Some(t));
     }
     assert_eq!(Tool::Cedar.extensions(), &[".cedar", ".cedarschema", ".cedarschema.json"]);
     assert_eq!(Tool::Openapi.extensions(), Tool::Asyncapi.extensions());
+    assert_eq!(Tool::Openapi.extensions(), Tool::Jsonschema.extensions());
     // sekisho's things (its DESIGN 8.2): an attribute under a principal's or a resource's type, an
     // input and a computed value under an action
     assert_eq!(Tool::from_word("sekisho"), Some(Tool::Sekisho));

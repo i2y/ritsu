@@ -32,6 +32,7 @@ pub fn parse(path: &str, src: &str) -> Parsed {
     let bad: HashSet<usize> = diags.iter().filter_map(|d| d.line).collect();
     let mut p = Parser { path, src, diags: Vec::new() };
     let file = p.run(&lines, &bad);
+    p.fed_elsewhere(&lines, &bad, file.as_ref());
     diags.append(&mut p.diags);
     crate::diag::sort(&mut diags);
     let file = if diags.iter().any(|d| d.is_error()) { None } else { file };
@@ -307,6 +308,22 @@ fn bounds(c: &mut Cur, span: Span) -> Result<Range, Bad> {
     Ok(Range { span, lo, hi })
 }
 
+/// What `fed by` holds on the line of an attribute or an input, read as every language reads it
+/// (DESIGN 26).
+fn fed_on(line: &Line) -> Result<Option<FedBy>, Bad> {
+    let Some((written, col)) = &line.fed else { return Ok(None) };
+    match ritsu_base::fed::read(written) {
+        Ok(name) => Ok(Some(FedBy { written: written.clone(), name, span: Span { line: line.no, col: *col } })),
+        Err(e) => {
+            let t = e.text();
+            Err(Bad { col: *col, code: "E009", msg: tr!("`fed by` の参照を読めません: {}", "`fed by` does not name a value: {}", t.ja; t.en), notes: vec![tr!(
+                "形は `fed by <ツール> \"<パス>\" <種類> <名前>…` で、行の最後まで読みます。パスはこのファイルのディレクトリからです。",
+                "The form is `fed by <tool> \"<path>\" <kind> <name>…`, read to the end of the line; the path is from this file's directory."
+            )] })
+        }
+    }
+}
+
 /// `refund_limit : money[GBP, incl_tax]  range >=0GBP <=10_000GBP`.
 fn field(c: &mut Cur, what: &Text) -> Result<Field, Bad> {
     let span = c.span();
@@ -360,7 +377,7 @@ fn field(c: &mut Cur, what: &Text) -> Result<Field, Bad> {
         None
     };
     c.done()?;
-    Ok(Field { name, span, ty, ty_span, optional, range })
+    Ok(Field { name, span, ty, ty_span, optional, range, fed: None })
 }
 
 /// One input given to a rule, a date function or an action (`what` says which, for a message):
@@ -755,6 +772,32 @@ impl<'a> Parser<'a> {
         let mut d = Diag::error(b.code, self.path, line, b.col, b.msg).source(self.src);
         d.notes = b.notes;
         self.diags.push(d);
+    }
+
+    /// `fed by` on a line that cannot hold it (DESIGN 26), said here so that no line of any kind
+    /// reads it as written. A line already refused has said what is wrong with it.
+    fn fed_elsewhere(&mut self, lines: &[Line], bad: &HashSet<usize>, file: Option<&File>) {
+        let taken = |no: usize| {
+            file.is_some_and(|f| {
+                let attrs = f.principals.iter().chain(&f.resources).flat_map(|e| e.attributes.iter());
+                attrs.chain(f.actions.iter().flat_map(|a| a.input.iter())).any(|x| x.span.line == no)
+            })
+        };
+        for line in lines {
+            let Some((_, col)) = &line.fed else { continue };
+            if taken(line.no) || bad.contains(&line.no) || self.diags.iter().any(|d| d.line == Some(line.no)) {
+                continue;
+            }
+            self.bad(line.no, Bad {
+                col: *col,
+                code: "E009",
+                msg: tr!("`fed by` を書けるのは、属性の行と `input` の行だけです", "`fed by` can be written only on the line of an attribute or of an `input`"),
+                notes: vec![tr!(
+                    "`fed by` は、手書きのコードが値をどこから運ぶかを言います。`context` の値は、ゲートが自分の計算で求める値で、計算の式が出どころを言っています。",
+                    "`fed by` says where hand-written code takes a value from. A value of `context` is one the gate computes, and its computation says where it comes from."
+                )],
+            });
+        }
     }
 
     fn run(&mut self, lines: &[Line], bad: &HashSet<usize>) -> Option<File> {
@@ -1434,15 +1477,18 @@ impl<'a> Parser<'a> {
         let mut c = Cur::new(line);
         match (open.block, open.sub) {
             (Block::Principal(i), Sub::Attributes) => {
-                let fd = field(&mut c, &tr!("属性", "the attribute"))?;
+                let mut fd = field(&mut c, &tr!("属性", "the attribute"))?;
+                fd.fed = fed_on(line)?;
                 f.principals[i].attributes.push(fd);
             }
             (Block::Resource(i), Sub::Attributes) => {
-                let fd = field(&mut c, &tr!("属性", "the attribute"))?;
+                let mut fd = field(&mut c, &tr!("属性", "the attribute"))?;
+                fd.fed = fed_on(line)?;
                 f.resources[i].attributes.push(fd);
             }
             (Block::Action(i), Sub::Input) => {
-                let fd = field(&mut c, &tr!("入力", "the input"))?;
+                let mut fd = field(&mut c, &tr!("入力", "the input"))?;
+                fd.fed = fed_on(line)?;
                 f.actions[i].input.push(fd);
             }
             (Block::Action(i), Sub::Context) => {

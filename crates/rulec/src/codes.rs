@@ -1177,6 +1177,34 @@ policy unique
 | false    | true     | 0USD   |
 | false    | false    | 2USD   |
 "##;
+const X_E144: &str = r##"rule 配送料(shipping) v1
+
+inputs
+  重さ(weight) : number  range >=1 <=10  from order.weight  fed by rulec "計量.rule" output 重さ
+
+outputs
+  料金(fee) : money[円]
+
+table 料金表(fees)
+policy unique
+| 重さ | -> 料金 |
+| <=5  | 500円   |
+| >5   | 900円   |
+"##;
+const X_E144_EN: &str = r##"rule shipping(shipping) v1
+
+inputs
+  weight : number  range >=1 <=10  from order.weight  fed by rulec "scale.rule" output weight
+
+outputs
+  fee : money[USD]
+
+table fees
+policy unique
+| weight | -> fee |
+| <=5    | 5USD   |
+| >5     | 9USD   |
+"##;
 const X_E143: &str = r##"rule t(t) v1
 
 inputs
@@ -5183,6 +5211,21 @@ pub fn ledger() -> Vec<Entry> {
             &["E142", "E141", "E101"],
         )
         .english(X_E143_EN),
+        err(
+            "E144",
+            tr!("`fed by` を読めないか、書けない場所にあります", "`fed by` does not read, or stands where it cannot"),
+            tr!(
+                "`fed by` の参照が処理系の書き方（`<ツール> \"<パス>\" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、入力の行でない場所に書いたとき、`from` や `random` と一緒に書いたとき、ステートマシンが持ち越す入力に書いたとき。",
+                "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an input's; or they are written together with `from` or `random`; or the input is one a machine carries."
+            ),
+            tr!(
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。`from` が値の出どころを言っているなら、`fed by` を消してください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. If `from` already says where the value comes from, delete the `fed by`."
+            ),
+            X_E144,
+            &["E121", "E122"],
+        )
+        .english(X_E144_EN),
     ]
 }
 

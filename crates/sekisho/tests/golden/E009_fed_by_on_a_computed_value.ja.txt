@@ -1,0 +1,3 @@
+エラー[E009]: tests/mutants/E009_fed_by_on_a_computed_value.gate:23:43: `fed by` を書けるのは、属性の行と `input` の行だけです
+    23 |     small = limits(amount: amount).small  fed by rulec "orders.rule" output small
+  = `fed by` は、手書きのコードが値をどこから運ぶかを言います。`context` の値は、ゲートが自分の計算で求める値で、計算の式が出どころを言っています。

@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 /// The examples, in the order DESIGN 17 gives them: the four that join no other language, then the
 /// four that call rules, dates and books.
-const NAMES: [&str; 8] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split"];
+const NAMES: [&str; 9] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill"];
 
 /// The examples that join no other language, each with its host.
 const HOSTED: [&str; 4] = ["order_flow", "stock_diff", "handles", "catalog"];

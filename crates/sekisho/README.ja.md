@@ -170,6 +170,14 @@ ritsu check: ファイル 8 個（rulec 2、koyomi 3、dandori 1、sekisho 2）�
 
 手で書いた Cedar のファイルも、地図か要件がそれを指し、スキーマの `@guards` にどの action がどの操作を守るかを書いてあれば、同じ確かめを受けます。
 
+属性と入力は、手書きのコードが値を取ってくる出どころを書けます（[examples/order_desk](examples/order_desk)）。
+
+```gate
+    金額(amount) : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.ja.schema.json" def 注文 property 金額
+```
+
+`ritsu check` が相手のファイルに、とりうる値を尋ね、ゲートが受け取らない値があれば止まります。確かめるのは値の範囲です。手書きのコードが本当にその値を運ぶかは何も確かめず、ページにもそう書きます。
+
 ## 人が読むページ
 
 `sekisho doc` は、だれが何をしてよいかを決める人のためのページを書きます。
@@ -226,12 +234,13 @@ $ sekisho explain E302 --lang ja
   `documents.ja.gate` は、同じゲートを日本語の名前で書いたものです。
 - [examples/order_states](examples/order_states)：ワークフローとゲートが、注文の状態を一つの `enums` ファイルから `import enum` で読む例です。一方が、もう一方の知らない状態を名指すことはできません。
   `orders.ja.gate` と `shipping.ja.flow` は、同じものを日本語の名前で書いたものです。
+- [examples/order_desk](examples/order_desk)：窓口でだれが注文を返金できるか。注文の金額と理由の出どころを `fed by` で JSON Schema と書く。`order_desk.ja.gate` は同じゲートを日本語の名前で書いたもので、スキーマの日本語の版を読みます。
 
 ## どう確かめているか
 
 `cargo test -p sekisho` が、言語を変異と例に当て、本物の Cedar を走らせます。
 
-- 156 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 78 には、それぞれ英語の名前の対があります。
+- 158 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 79 には、それぞれ英語の名前の対があります。
 - 例とテストの材料のうち検査を通るすべてのゲートから生成した Cedar を、公式の Cedar の CLI 4.13.0 にかけます。`cedar validate` の strict の検証が何も言わないこと、`cedar format --check` が通ること、`cedar run-tests` がすべての組み合わせを sekisho の参照の評価と同じ答え、同じ決めたポリシーで答えること、JSON の形が `cedar translate-schema` と `translate-policy` の出力と一字も違わないことを確かめます。
 - 手で書いた Cedar に sekisho が返す答えも、公式の CLI の答えと同じです。ポリシーとスキーマの組（`tests/cedar_in/` に置いたものと、それを一か所ずつ変えたもの、検査を通るすべてのゲートから生成した Cedar を手で書いたものとして読ませたもの）について、sekisho が数えるすべての組み合わせをリクエストとエンティティにして `cedar run-tests` にかけ、許すか拒むかと決めたポリシーが同じになることを確かめます。sekisho が決められない問いでは、ポリシーのどの部分を数えないのかを理由に挙げます。
 - TypeScript、Python、Go に生成したコードで、すべての組み合わせのリクエストを生の値から組み立て、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 に尋ね、参照の評価と同じ答えになることを確かめます。生成したコードは `tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ります。

@@ -1,0 +1,13 @@
+module bill v1
+description "What a bill comes to. Hand-written code takes the order from the order the schema describes"
+
+record Line
+  items : number  range >=1 <=20  fed by jsonschema "schemas/order.schema.json" def Order property items
+
+fn total(
+  line: Line,
+  price: money[USDc] range >=1USDc <=1000USDc,
+  order: number range >=1 <=1000000 fed by jsonschema "schemas/order.schema.json" pointer /$defs/Order/properties/amount
+) -> money[USDc]
+  description "The price times the items"
+  price * line.items

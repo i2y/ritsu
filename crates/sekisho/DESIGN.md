@@ -1359,6 +1359,7 @@ requirement refunds_within_limit
 | 塊の中 | `includes` `can` `roles` `attributes` `guards` `principal` `resource` `from` `nobody` `input` `context` `action` `actions` `when` `unless` |
 | 条件 | `in` `is` `not` `and` `or` `any` `workflow` `open` `today` `allow` `deny` `allowed` |
 | 型と範囲 | `bool` `date` と rulec の単位の型（`money[…]`、`mass[…]` など）、`range`、`offset` |
+| 出どころ | `fed` `by`（行の最後に二語が揃って初めて形になる。参照の中は読まない。26 章） |
 | 記号 | `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `->`、`#`（行末までコメント） |
 
 `principal` と `resource` は、行頭（宣言）と、ポリシーの塊の中（スコープ）と、式の中（`principal.suspended`）に出る。どれも同じ語で、位置で意味が決まる（Cedar と同じ）。
@@ -2202,3 +2203,50 @@ import enum order_state from "rules/order_states.rule"
 ### 25.6 残したこと
 
 `.gate` の列挙の順を使う式。`enums` ファイルの列挙の値の表示名（`"Same city"`）を `doc` に出すこと。
+
+## 26. 属性と入力の値の出どころを書く `fed by`（2026-11-07）
+
+### 26.1 きっかけ
+
+ゲートに尋ねるコードは、属性と入力の値をほかの場所から取ってくる。JSON Schema の `Order.amount` の名前や範囲を変えても、ゲートの属性と合わなくなったことはどの検査にも見えなかった。
+
+### 26.2 決定
+
+`principal`・`resource` の属性の行と、`action` の `input` の行の最後に `fed by <参照>` を書く。
+
+```gate
+    amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+```
+
+- **答えるのは `ritsu check`。** 値の比べ方と三つの答えは根の DESIGN 7.16 にあり、X17（`ritsu-cross`）が口だけを通して行う。単独の `sekisho check` は形と場所の誤りだけを言う（E009）。sekisho は口 `Feeds` で受け取る側の型と範囲を渡す。
+- **`context` の行には書けない（E009）。** `context` の値は `limits(amount: 1).small` か `today` の形で、計算の式がすでに出どころを言っている。宣言された型も無く、比べるものが無い。
+- **読み方。** 行を字句に分ける前に `ritsu_base::fed::cut` が切り取り、`ritsu_base::naming` が読む。`fed` と `by` は字句の表に載せるが（色付けと文書のため）、二語が揃って初めて形になるので、名前を奪わない。
+- **嘘を隠さない。** `doc` のページに「属性の出どころ」の節と入力の注を出す。文は「出どころ: `…`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）」。
+- **ハッシュ。** `source_sha256`（`api`、Cedar、生成コードの頭）はこの形を除いたものから取る。Cedar と三つの生成コードは一字も変わらない。
+- `api` の属性と入力に `fed_by`。`Items` は本文からこの形を除き、`References` は `how: "fed by"` で返す。
+
+### 26.3 捨てたもの
+
+(1) `context` の行にも書く：上のとおり。(2) 属性の値を Cedar の `@doc` に載せる：Cedar を変えることになり、Cedar を読む人に確かめていないことを確かめたように見せる。
+
+### 26.4 変わること
+
+属性と入力の行の最後の形が一つ増える。E009 の場合が一つ増える。例 `examples/order_desk`。
+
+### 26.5 確かめたこと
+
+ritsu の `tests/fed_by.rs`：JSON Schema の名前、型、範囲を変えた場合、書けない場所、全部の出力先で生成物が同じ、`doc` と `api`。`tests/mutants/E009_fed_by_on_a_computed_value.gate`、`E009_計算する値の出どころ.gate`。例の JSON Schema の上限を 2,000,000 に広げると：
+
+```console
+$ ritsu check order_desk.gate
+order_desk.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+error[ritsu E207]: order_desk.gate:18:1: `resource Order attribute amount` takes money[USDc] >=1 <=1000000, and its source jsonschema "schemas/order.schema.json" def Order property amount can be 1000001
+    18 |     amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+  = The contract's validation lets it through.
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 1 file (sekisho 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided
+```
+
+### 26.6 残したこと
+
+`use rule` の答えを読む `context` の値は、規則の言語が出力の範囲を言うので、この形を足す理由が無い。JSON Schema は sakai の成果物でないので、コンテキストをまたいで指しても境目の決まりに当たらない（sakai の DESIGN 32 章）。

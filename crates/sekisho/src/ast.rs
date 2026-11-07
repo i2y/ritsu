@@ -283,6 +283,19 @@ pub struct Field {
     /// `T?`: the value may be absent.
     pub optional: bool,
     pub range: Option<Range>,
+    /// Where hand-written code takes the value from, when the line says (DESIGN 26).
+    pub fed: Option<FedBy>,
+}
+
+/// `fed by openapi "api.yaml" schema Order property amount` at the end of the line of an attribute
+/// or an input (DESIGN 26): checked by `ritsu check`, and read by nothing generated.
+#[derive(Clone, Debug)]
+pub struct FedBy {
+    /// The naming as written.
+    pub written: String,
+    /// What it names, with its path as written, from the file's directory.
+    pub name: ritsu_base::naming::Name,
+    pub span: Span,
 }
 
 /// The type of a field, as written.
@@ -715,4 +728,19 @@ impl File {
             What::Actions(refs) => refs.iter().filter_map(|r| self.action(&r.word)).collect(),
         }
     }
+}
+
+/// Every field of a file that can say `fed by` (DESIGN 26): the kind that owns it (`principal`,
+/// `resource`, `action`), the owner's name, and the field, in the order of the kinds.
+pub fn fed_places(f: &File) -> Vec<(&'static str, &str, &Field)> {
+    let mut out: Vec<(&'static str, &str, &Field)> = Vec::new();
+    for (kind, entities) in [("principal", &f.principals), ("resource", &f.resources)] {
+        for e in entities {
+            out.extend(e.attributes.iter().map(|a| (kind, e.name.text.as_str(), a)));
+        }
+    }
+    for a in &f.actions {
+        out.extend(a.input.iter().map(|i| ("action", a.name.text.as_str(), i)));
+    }
+    out
 }

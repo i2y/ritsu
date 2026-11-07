@@ -28,6 +28,7 @@ how to fix it, and the smallest `.flow` that gets it.
 | E020 | the workflow can end with a case in a state that is not final (also when `on cancel` ends it as cancelled) |
 | E021 | an event sent that every state refuses (for a book's hold, an operation the book refuses in every state) |
 | E022 | an event sent that can be refused, with nothing to handle the refusal (for a book's hold, declare the reason the book refuses with in `errors`, and handle it with `on <reason> =>`; a hold expires on its own, so a post or a void after a hold may be refused with `expired`) |
+| E023 | a `fed by` that does not read, that names something that holds no value, or that stands on a line other than an input or a field of a record (`ritsu check` compares the values: E207, W207, E208) |
 | E030 | a call that changes the other side, retried without a `key` |
 | E031 | what an Express workflow cannot do: a wait longer than five minutes, a callback, a nested execution, a call that changes the other side without a `key` |
 | E040 | one run can grow too large for the platform: its history over the limit (25,000 events on Step Functions, 51,200 on Temporal, 3,000 operations on Lambda durable functions), or on Argo Workflows more than 10,000 nodes |

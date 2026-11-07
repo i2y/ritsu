@@ -165,7 +165,7 @@ pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
                 Unread::NoSuchName { same_kind }
             })
         }
-        Tool::Openapi | Tool::Asyncapi | Tool::Cedar => {
+        Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::Jsonschema => {
             let loaded = p.suite.document(&p.root, n.tool, &n.path);
             let read = loaded.as_ref().as_ref().map_err(|why| Unread::Doc(n.path.clone(), why.clone()))?;
             if n.items.is_empty() {

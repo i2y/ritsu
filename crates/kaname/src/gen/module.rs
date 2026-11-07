@@ -82,7 +82,7 @@ fn head(g: &Gen, alias: &str) -> String {
     let c = &g.c;
     let t = g.t;
     let cm = comment(t);
-    let origin = Origin::at(&g.opts.shown, c.src.as_bytes()).of(g.opts.place.module.clone());
+    let origin = Origin::at(&g.opts.shown, ritsu_base::fed::without(&c.src).as_bytes()).of(g.opts.place.module.clone());
     let version = c.module.version.trim_start_matches('v');
     let source = origin.source("module", &c.module.name.text, version).line();
     let mut s = cm.line(&ritsu_emit::header::generated("kaname"));

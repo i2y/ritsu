@@ -156,7 +156,43 @@ impl<'a> P<'a> {
     }
 
     /// An error at the token the cursor is at: what was expected there.
+    /// What `fed by` holds, when it is the next token: read as every language reads it (DESIGN
+    /// 37).
+    fn fed_by(&mut self, c: &mut Cur) -> R<Option<FedBy>> {
+        if !matches!(c.peek(), Some(Tok::FedBy(_))) {
+            return Some(None);
+        }
+        let t = c.next().expect("the token just read");
+        let Tok::FedBy(written) = &t.tok else { unreachable!() };
+        match ritsu_base::fed::read(written) {
+            Ok(name) => Some(Some(FedBy { written: written.clone(), name, span: t.span })),
+            Err(e) => {
+                let w = e.text();
+                self.err("E009", t.span, tr!("`fed by` の参照を読めません: {}", "`fed by` does not name a value: {}", w.ja; w.en)).notes.push(tr!(
+                    "形は `fed by <ツール> \"<パス>\" <種類> <名前>…` で、行の最後まで読みます。パスはこのファイルのディレクトリからです。",
+                    "The form is `fed by <tool> \"<path>\" <kind> <name>…`, read to the end of the line; the path is from this file's directory."
+                ));
+                None
+            }
+        }
+    }
+
+    /// `fed by` where it cannot stand (DESIGN 37), when that is what stopped the line.
+    fn fed_misplaced(&mut self, c: &Cur) -> bool {
+        if !matches!(c.peek(), Some(Tok::FedBy(_))) {
+            return false;
+        }
+        self.err("E009", c.span(), tr!("`fed by` を書けるのは、`record` のフィールドの行と関数の引数だけです", "`fed by` can be written only on the line of a field of a `record` or of a function's parameter")).notes.push(tr!(
+            "`fed by` は、手書きのコードが値をどこから運ぶかを言います。ほかの場所の値は、モジュールが自分で決めます。",
+            "`fed by` says where hand-written code takes a value from. A value anywhere else is one the module decides itself."
+        ));
+        true
+    }
+
     fn expected(&mut self, c: &Cur, what: Text) {
+        if self.fed_misplaced(c) {
+            return;
+        }
         let at = c.span();
         let got = shown_tok(c.peek());
         let msg = if got.is_empty() {
@@ -354,6 +390,9 @@ impl<'a> P<'a> {
     fn line_end(&mut self, c: &Cur) -> R<()> {
         if c.at_end() {
             return Some(());
+        }
+        if self.fed_misplaced(c) {
+            return None;
         }
         let (at, t) = (c.span(), shown_tok(c.peek()));
         self.err("E001", at, tr!("`{t}` を読めません。行はここで終わります", "`{t}` cannot be read: the line ends here"));
@@ -612,7 +651,7 @@ impl<'a> P<'a> {
                     failed = true;
                     continue;
                 }
-                match self.field_line(&fl) {
+                match self.field_line(&fl, false) {
                     Some(f) => fields.push(f),
                     None => failed = true,
                 }
@@ -625,8 +664,8 @@ impl<'a> P<'a> {
         Some(EnumDecl { name, private: false, tparams, ordered: false, listed: true, values, line: line.no })
     }
 
-    /// A field: `<name> : <type>`, with its range and its count.
-    fn field_line(&mut self, l: &Line) -> R<FieldDecl> {
+    /// A field: `<name> : <type>`, with its range and its count, and `fed by` on a record's.
+    fn field_line(&mut self, l: &Line, takes_fed: bool) -> R<FieldDecl> {
         let mut c = Cur::new(&l.tokens, l.no);
         let n = self.decl_name(&mut c, tr!("フィールドの名前", "the field's name"))?;
         if !c.eat(&Tok::Colon) {
@@ -635,8 +674,9 @@ impl<'a> P<'a> {
         }
         let ty = self.ty(&mut c)?;
         let bounds = self.bounds(&mut c)?;
+        let fed = if takes_fed { self.fed_by(&mut c)? } else { None };
         self.line_end(&c)?;
-        Some(FieldDecl { name: n, ty, bounds, line: l.no })
+        Some(FieldDecl { name: n, ty, bounds, line: l.no, fed })
     }
 
     /// The lines under a head line at the left margin: from `self.i` up to the next line there.
@@ -676,7 +716,7 @@ impl<'a> P<'a> {
                 );
                 continue;
             }
-            if let Some(f) = self.field_line(&l) {
+            if let Some(f) = self.field_line(&l, true) {
                 fields.push(f);
             }
         }
@@ -988,7 +1028,8 @@ impl<'a> P<'a> {
                 }
                 let ty = self.ty(&mut c)?;
                 let bounds = self.bounds(&mut c)?;
-                params.push(Param { name: pn, ty, bounds });
+                let fed = self.fed_by(&mut c)?;
+                params.push(Param { name: pn, ty, bounds, fed });
                 if c.eat(&Tok::Comma) {
                     if c.eat(&Tok::RParen) {
                         break;

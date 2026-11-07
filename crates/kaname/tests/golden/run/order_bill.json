@@ -1,0 +1,21 @@
+{
+  "kaname": "<version>",
+  "file": "order_bill.kn",
+  "module": "order_bill",
+  "function": "bill",
+  "input": {
+    "lines": [
+      {
+        "sku": "book-1",
+        "qty": 2
+      },
+      {
+        "sku": "mug-1",
+        "qty": 1
+      }
+    ],
+    "price": 150
+  },
+  "calls": [],
+  "result": 450
+}

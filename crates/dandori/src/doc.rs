@@ -1147,6 +1147,9 @@ pub fn markdown(i: &Input) -> String {
             if !m.outputs.is_empty() {
                 let _ = write!(o, " Outputs: {}.", io(&m.outputs, &m.output_ranges));
             }
+            for (place, written) in &m.fed {
+                let _ = write!(o, " `{place}`: {}.", ritsu_base::fed::page_note(written).en);
+            }
             if let Some(p) = &m.period {
                 let _ = write!(o, " It runs in the period `now range {}`.", p.text);
             }
@@ -1163,6 +1166,9 @@ pub fn markdown(i: &Input) -> String {
             }
             if !m.outputs.is_empty() {
                 let _ = write!(o, "出力は {} です。", io(&m.outputs, &m.output_ranges));
+            }
+            for (place, written) in &m.fed {
+                let _ = write!(o, "`{place}`: {}。", ritsu_base::fed::page_note(written).ja);
             }
             if let Some(p) = &m.period {
                 let _ = write!(o, "動く期間は `now range {}` です。", p.text);
@@ -1776,6 +1782,10 @@ impl<'a> Page<'a> {
                 }
                 if !m.outputs.is_empty() {
                     let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Outputs", "出力"), io(&m.outputs, &m.output_ranges));
+                }
+                for (place, written) in &m.fed {
+                    let note = ritsu_base::fed::page_note(written);
+                    let _ = write!(o, "<dt>{}</dt><dd><code>{}</code>: {}</dd>", tr(lang, "Where a value comes from", "値の出どころ"), esc(place), esc(if lang == Lang::Ja { &note.ja } else { &note.en }));
                 }
                 if let Some(p) = &m.period {
                     let _ = write!(o, "<dt>{}</dt><dd><code>now range {}</code></dd>", tr(lang, "The period it runs in", "動く期間"), esc(&p.text));

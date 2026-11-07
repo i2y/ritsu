@@ -1148,6 +1148,53 @@ input takes `range from koyomi` (E065); an output, a `derive` or a field of an e
 borrow its range from another file. The days are listed as a precondition in `rulec api`
 (`"kind": "days"`), and the page for people lists them beside the input.
 
+### `fed by` — where an input's value comes from
+
+Hand-written code often carries a value from one file to another: the output of one rule to the
+input of the next, the balance of a book, a field of a request. `fed by` at the end of an input's
+line says where the value comes from:
+
+```rule
+inputs
+  food : number  range >=0 <=60  fed by rulec "province_income.rule" output food
+```
+
+The rest of the line is a naming, in the form the whole toolchain names things. The path goes from
+the directory of the file it is written in, and a rule names its own output the same way. `fed`
+and `by` are not reserved: they are the form only when the two stand together at the end of an
+input's line.
+
+| The value comes from | Named as |
+|---|---|
+| an output of a rule | `rulec "<file>" output <name>` |
+| an account of a book | `chobo "<file>" account <name>` |
+| a date of a dates file | `koyomi "<file>" date <name>` |
+| a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
+| a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
+| an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
+| a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+
+`ritsu check` asks the language on each side, and comes to one of three answers:
+
+- **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
+- **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+
+E208 says the source is not there: its file, or the name in it.
+
+Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+
+**What is not checked.** Nothing checks that the hand-written code really carries that value. The
+table of inputs in `rulec doc` says so beside the input: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked).
+
+`rulec check` on its own says whether the form reads and stands where it can (E144), and not
+whether the values agree: the other file belongs to another language, and `ritsu check` asks it, as
+with `range from koyomi`. It stands only on a line of `inputs`, with no `from`, which says where
+the value comes from already, and no `random`; not on a field of `elements` or an input a `machine`
+carries. Nothing generated changes and the `meaning` hash does not read it. `rulec api` lists the
+inputs that have one under `fed_by`.
+
 ### `round` — required on every numeric output
 
 ```

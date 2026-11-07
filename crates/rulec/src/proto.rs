@@ -85,11 +85,7 @@ impl Enum {
     /// be — or when it is another value's whole name, which would make two values one. The
     /// name then stays as written, prefix and all, which is also what protobuf-py does with it.
     fn local<'v>(&self, v: &'v Value) -> &'v str {
-        let prefix = format!("{}_", upper_snake(&self.name));
-        match v.name.strip_prefix(prefix.as_str()) {
-            Some(rest) if rest.starts_with(|c: char| c.is_ascii_alphabetic()) && !self.values.iter().any(|o| o.name == rest) => rest,
-            _ => &v.name,
-        }
+        ritsu_proto::validate::value_local(&self.name, &v.name, |n| self.values.iter().any(|o| o.name == n))
     }
 }
 
@@ -141,16 +137,7 @@ pub use ritsu_proto::json_name;
 /// always used.
 pub use ritsu_proto::validate::{IntRules, Rules};
 
-/// The values an integer kind can hold on the wire.
-pub fn int_bounds(ty: &str) -> Option<(i128, i128)> {
-    match ty.rsplit('.').next().unwrap_or(ty) {
-        "int32" | "sint32" | "sfixed32" => Some((i32::MIN as i128, i32::MAX as i128)),
-        "uint32" | "fixed32" => Some((0, u32::MAX as i128)),
-        "int64" | "sint64" | "sfixed64" => Some((i64::MIN as i128, i64::MAX as i128)),
-        "uint64" | "fixed64" => Some((0, u64::MAX as i128)),
-        _ => None,
-    }
-}
+pub use ritsu_proto::validate::int_bounds;
 
 /// One message declared in a `.proto`, named as it is written. A nested message is listed
 /// under its own short name as well, which is how a path names it.
@@ -270,36 +257,7 @@ pub fn unreadable(e: &ritsu_proto::ReadError) -> String {
 }
 
 
-/// `MemberTier` → `MEMBER_TIER`: an enum's name as the prefix its values carry.
-///
-/// The split is buf's, because `buf lint` is what asks for the prefix (`ENUM_VALUE_PREFIX`)
-/// and protobuf-py splits the same way when it takes it off. A capital begins a word when the
-/// letter before it is lower case or the one after it is, so `HTTPMethod` is `HTTP_METHOD` —
-/// not `H_T_T_P_METHOD`, which buf refuses — and a digit begins none: `Tier2` is `TIER2`.
-pub fn upper_snake(camel: &str) -> String {
-    let b: Vec<char> = camel.chars().collect();
-    let mut out = String::new();
-    for (i, &ch) in b.iter().enumerate() {
-        if ch == '_' {
-            if !out.is_empty() && !out.ends_with('_') {
-                out.push('_');
-            }
-            continue;
-        }
-        if i > 0 && ch.is_ascii_uppercase() && !out.ends_with('_') {
-            let lower_before = b[i - 1].is_ascii_lowercase();
-            let lower_after = b.get(i + 1).is_some_and(|n| !n.is_ascii_uppercase() && !n.is_ascii_digit() && *n != '_');
-            if lower_before || lower_after {
-                out.push('_');
-            }
-        }
-        out.push(ch.to_ascii_uppercase());
-    }
-    while out.ends_with('_') {
-        out.pop();
-    }
-    out
-}
+pub use ritsu_proto::validate::upper_snake;
 
 /// The BSR modules a `buf.yaml` declares under `deps`, by name: a label a ref carries is not
 /// part of it (`buf.build/bufbuild/protovalidate:v1.0.0` is `buf.build/bufbuild/protovalidate`).

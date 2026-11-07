@@ -1,0 +1,20 @@
+workflow refund v1
+description "Pays a refund out of what is left of the order. Hand-written code takes the amount from the request and the balance from the book"
+
+inputs
+  amount : money[USDc]  range >=1USDc <=1000000USDc  fed by openapi "api/refunds.json" schema RefundCreate property amount
+  reason : string  fed by openapi "api/refunds.json" schema RefundCreate property reason
+
+record Balance
+  left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
+
+outputs
+  paid : bool
+
+task pay_out(amount: money[USDc], reason: string) -> bool
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:pay-out"
+  idempotent
+
+flow
+  let done = pay_out(amount: amount, reason: reason)
+  succeed paid = done

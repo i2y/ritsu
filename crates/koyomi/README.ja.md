@@ -117,6 +117,10 @@ koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業�
 
 生成したコードが参照インタプリタと同じ結果を返すことは、範囲のすべての入力で突き合わせるテストで確かめています。証明ではありません。
 
+入力は、手書きのコードが値を取ってくる出どころを書けます。
+`支払期日(due_on) : date  range >=2026-02-02 <=2028-12-29  fed by koyomi "net30.cal" date due`
+（[`late_fee.ja.cal`](examples/late_fee.ja.cal)）。`ritsu check` が相手のファイルに、とりうる値を尋ね、入力が受け取らない日があれば例を添えて止まります。確かめるのは日です。手書きのコードが本当にその値を運ぶかは何も確かめず、ページにもそう書きます。
+
 ## 人が読むページ
 
 `koyomi doc` は、支払条件やカレンダーを読んで、コードが実現すべきものを理解し、確かめる人（経理、法務、会社の休みを決める人、コードをレビューする開発者）のためのページを出します。プルリクエストにそのまま載せられる Markdown か、外のファイルを何も読まない一枚の HTML で、HTML には明るい配色と暗い配色があります。カレンダーの HTML のページは、ある日が休みか、なぜかを、カレンダー自身の行からページの中のスクリプトで答えます。ページには次のものが載ります。
@@ -174,6 +178,7 @@ $ koyomi explain E201 --lang ja                  # いつ出るか、どう直�
 | [`payment_20th_close_next_10th.ja.cal`](examples/payment_20th_close_next_10th.ja.cal) | [`payment_20th_close_next_10th.cal`](examples/payment_20th_close_next_10th.cal) | 上の例 | 通る |
 | [`eom_close_two_months_later.ja.cal`](examples/eom_close_two_months_later.ja.cal) | [`eom_close_two_months_later.cal`](examples/eom_close_two_months_later.cal) | 月末締め翌々月末払い | わざと通らないようにした例。648 日で「受領から60日以内」が成り立たない |
 | [`closing_and_payment_days_as_inputs.ja.cal`](examples/closing_and_payment_days_as_inputs.ja.cal) | [`closing_and_payment_days_as_inputs.cal`](examples/closing_and_payment_days_as_inputs.cal) | 締め日、支払の月、支払の日を整数の入力で受け取る。871,596 通り | 通る |
+| [`late_fee.ja.cal`](examples/late_fee.ja.cal) | [`late_fee.cal`](examples/late_fee.cal) | 支払期日の 14 日後からかかる遅延金。入力の出どころを `fed by` で `net30.cal` の日付と書く | 通る |
 | [`civil_code_period_end.ja.cal`](examples/civil_code_period_end.ja.cal) | [`civil_code_period_end.cal`](examples/civil_code_period_end.cal) | 民法 140〜143 条による期間の満了日。どの日付も e-Gov から取って保存した条文を引く | 通る |
 | [`civil_code_two_readings.ja.cal`](examples/civil_code_two_readings.ja.cal) | [`civil_code_two_readings.cal`](examples/civil_code_two_readings.cal) | 142 条の二つの読み方と、143 条と「月数を足して月末に寄せる」書き方を、それぞれ並べる | わざと通らないようにした例。二つの読み方が分かれるのは 121 通り、もう一組は 39 通り |
 

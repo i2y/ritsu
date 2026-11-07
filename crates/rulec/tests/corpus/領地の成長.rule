@@ -1,0 +1,20 @@
+rule 領地の成長(province_growth_ja) v1
+description "領地がこの季節に育つかを、得た食料から決める。その食料は手書きのコードが 領地の収入.rule から運ぶ。`ritsu check` は値の範囲を確かめ、運ぶコードは確かめない"
+
+inputs
+  食料(food) : number  range >=0 <=60  fed by rulec "領地の収入.rule" output 食料
+
+outputs
+  育つ(grows) : bool
+
+table 成長(growth)
+policy unique
+| 食料 | -> 育つ : bool |
+| <10  | false          |
+| >=10 | true           |
+
+examples
+| 食料 | -> 育つ |
+| 9    | false   |
+| 10   | true    |
+| 60   | true    |

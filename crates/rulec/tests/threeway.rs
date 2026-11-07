@@ -202,6 +202,10 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/product_tax.rule", "product_tax"),
     ("tests/corpus/product_shipping.rule", "product_shipping"),
     ("tests/corpus/商品の料金.rule", "goods_price"),
+    ("tests/corpus/province_income.rule", "province_income"),
+    ("tests/corpus/province_growth.rule", "province_growth"),
+    ("tests/corpus/領地の収入.rule", "province_income_ja"),
+    ("tests/corpus/領地の成長.rule", "province_growth_ja"),
     ("tests/corpus/商品の税.rule", "goods_tax"),
     ("tests/corpus/商品の配送.rule", "goods_delivery"),
 ];

@@ -491,7 +491,8 @@ impl Engine {
             rule: f.name.text.clone(),
             alias: pub_name_of(&f.name),
             version: f.version.clone(),
-            sha256: crate::sha256::hex(src.as_bytes()),
+            // what a workflow writes of the rule it calls: `fed by` moves nothing generated (§15.285)
+            sha256: ritsu_base::fed::hash(src),
             rulec: env!("CARGO_PKG_VERSION").to_string(),
             inputs: f.inputs.iter().map(|i| column(c, &i.name)).collect(),
             outputs: f.outputs.iter().map(|o| column(c, &o.name)).collect(),
@@ -1075,7 +1076,9 @@ impl ritsu_ports::Items for Engine {
         let Some(f) = parsed.file else {
             return Err(refused(&path, &src));
         };
-        let formatted: Vec<String> = crate::fmt::format(&src).lines().map(String::from).collect();
+        // Where a value comes from says nothing of what the item means, and a version of it stays
+        // the same (§15.285): the definition is read without `fed by`, which keeps the lines.
+        let formatted: Vec<String> = crate::fmt::format(&ritsu_base::fed::without(&src)).lines().map(String::from).collect();
         let text = |from: usize, to: usize| -> String { formatted.get(from.saturating_sub(1)..to.min(formatted.len())).map(|ls| ls.join("\n")).unwrap_or_default() };
         let naming = |kind: &str, name: &str| Naming::file(Tool::Rulec, file).with(kind, name);
         let mut out = Vec::new();
@@ -1128,9 +1131,10 @@ impl ritsu_ports::References for Engine {
     /// (`import proto`, `import jsonschema`), the `enums` file an enum is read from whole
     /// (`import enum`, §15.212), the contract a `shape` reads its inputs out of, the contract
     /// whose service the rule implements (`implements`, §15.274), a rule it applies (`apply`), a
-    /// document a `source` copies (`source … file`), and the koyomi date an input takes its days
-    /// from (`range from koyomi`, §15.174). An enum, a message or a service of a `.proto` is named
-    /// from the file's package.
+    /// document a `source` copies (`source … file`), the koyomi date an input takes its days from
+    /// (`range from koyomi`, §15.174), and where hand-written code takes an input's value from
+    /// (`fed by`, §15.285). An enum, a message or a service of a `.proto` is named from the file's
+    /// package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
         let (path, src) = read(&disk)?;
@@ -1190,8 +1194,57 @@ impl ritsu_ports::References for Engine {
             {
                 out.push(Reference { line: d.span.line, target: Naming::file(Tool::Koyomi, &p).with("date", &d.date), how: "range from koyomi".into() });
             }
+            if let Some(fb) = &i.fed
+                && let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name)
+            {
+                out.push(Reference { line: fb.span.line, target, how: "fed by".into() });
+            }
         }
         out.sort_by_key(|r| r.line);
+        Ok(out)
+    }
+}
+
+impl ritsu_ports::Feeds for Engine {
+    /// The inputs with `fed by` (§15.285), each with what its line takes: a rule that does not pass
+    /// its check answers nothing, as every other question of the rule.
+    fn feeds(&self, root: &Path, file: &str, _ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
+        use ritsu_ports::Carried;
+        let (path, src, got) = self.rule(&ritsu_base::paths::on_disk(root, file))?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        if f.inputs.iter().all(|i| i.fed.is_none()) {
+            return Ok(Vec::new());
+        }
+        let facts = self.facts_of(f, c, &src, &path)?;
+        let mut out = Vec::new();
+        for i in &f.inputs {
+            let Some(fb) = &i.fed else { continue };
+            let n = &i.name.text;
+            let Some(col) = facts.inputs.iter().find(|k| &k.name == n) else { continue };
+            let mut takes = Carried::of_column(&facts, &col.ty);
+            // What the facts do not say of a date: its range, or the days of a koyomi date.
+            let date = match &takes {
+                Carried::Date { .. } => Some(false),
+                Carried::Opt(t) if matches!(**t, Carried::Date { .. }) => Some(true),
+                _ => None,
+            };
+            if let Some(opt) = date {
+                let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
+                let (lo, hi) = c.ranges.get(n).copied().unwrap_or((None, None));
+                let dated = match c.day_sets.get(n) {
+                    Some(d) => Carried::Days(d.days.iter().copied().collect()),
+                    None => Carried::Date { min: day(lo), max: day(hi) },
+                };
+                takes = if opt { Carried::Opt(Box::new(dated)) } else { dated };
+            }
+            out.push(ritsu_ports::Fed {
+                line: fb.span.line,
+                place: Naming::file(Tool::Rulec, file).with("input", n),
+                takes,
+                source: ritsu_base::fed::from_root(root, file, &fb.name),
+                written: fb.written.clone(),
+            });
+        }
         Ok(out)
     }
 }

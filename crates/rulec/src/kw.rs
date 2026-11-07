@@ -61,6 +61,10 @@ pub const IMPLEMENTS: &str = "implements";
 /// from, so the glue between the caller's object and the rule's flat inputs is generated and
 /// held to the contract rather than written by hand (§15.125).
 pub const FROM: &str = "from";
+// `food : number  range >=0 <=60  fed by rulec "income.rule" output food`: where hand-written code
+// takes an input's value from, for `ritsu check` to hold against what the input takes (§15.285). The
+// two words together end a line, and `ritsu_base::fed` cuts them off before the line's words are
+// read, so neither is a word here and neither is reserved: an input can go on being called `fed`.
 /// `from any order.lines where category = chilled` and its companion.
 pub const ANY: &str = "any";
 pub const ALL: &str = "all";

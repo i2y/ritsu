@@ -1,0 +1,157 @@
+{
+  "kaname": "<version>",
+  "file": "order_bill.kn",
+  "module": {
+    "name": "order_bill",
+    "alias": "order_bill",
+    "version": "v1",
+    "description": "What the lines of an order come to. Hand-written code takes the lines and the price from the order the schema describes: each `fed by` says where a value comes from, `ritsu check` holds the range of its values, and the code that carries them is not checked",
+    "sha256": "3be91fae627808b7522cd7f1df73f71f261fbed2914d48d3f2db2162c070165e"
+  },
+  "generated": {
+    "typescript": "glue/order_bill.ts",
+    "python": "glue/order_bill.py",
+    "go": "glue/orderbill/orderbill.go",
+    "rust": "glue/order_bill.rs"
+  },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "order_bill"
+    },
+    "functions": [
+      "bill"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ]
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "Line",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5,
+          "fed_by": "jsonschema \"schemas/order.schema.json\" def Line property sku"
+        },
+        {
+          "name": "qty",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=1 <=20",
+          "count": null,
+          "line": 6,
+          "fed_by": "jsonschema \"schemas/order.schema.json\" def Line property qty"
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line",
+        "rust": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "bill",
+      "alias": "bill",
+      "line": 8,
+      "description": "The price times the quantity of every line",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=30"
+        },
+        {
+          "name": "price",
+          "alias": "price",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000USDc",
+          "count": null,
+          "fed_by": "jsonschema \"schemas/order.schema.json\" def Product property price"
+        }
+      ],
+      "result": {
+        "type": "money[USDc]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "bill",
+        "python": "bill",
+        "go": "Bill",
+        "rust": "bill"
+      },
+      "check": {
+        "go": "CheckBill",
+        "rust": "check_bill"
+      }
+    }
+  ],
+  "transfers": []
+}

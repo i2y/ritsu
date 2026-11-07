@@ -207,7 +207,7 @@ pub fn generate(r: &Request) -> Value {
             }
             // kaname writes into a package of ritsu gen only, and is not on the page yet (kaname's
             // DESIGN 19)
-            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Kaname => return None,
+            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Kaname | Tool::Jsonschema => return None,
         })
     });
     let Some(did) = did else {

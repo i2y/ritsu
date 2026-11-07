@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "注文": {
+      "type": "object",
+      "required": ["金額"],
+      "properties": {
+        "金額": { "type": "integer", "minimum": 1, "maximum": 1000000, "description": "セントで" }
+      }
+    },
+    "返金": {
+      "type": "object",
+      "required": ["理由"],
+      "properties": {
+        "理由": { "type": "string", "enum": ["damaged", "late"] }
+      }
+    }
+  }
+}

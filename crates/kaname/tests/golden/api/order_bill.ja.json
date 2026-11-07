@@ -1,0 +1,157 @@
+{
+  "kaname": "<version>",
+  "file": "order_bill.ja.kn",
+  "module": {
+    "name": "注文の請求額",
+    "alias": "order_bill_ja",
+    "version": "v1",
+    "description": "注文の明細がいくらになるかを出す。明細と単価は、手書きのコードがスキーマの言う注文から運ぶ。`fed by` は値の出どころを言う。`ritsu check` は値の範囲を確かめ、運ぶコードは確かめない",
+    "sha256": "4b4f7239da16b54c2ed82224176fa277da1e79eba35d247d4adc05d7cef78887"
+  },
+  "generated": {
+    "typescript": "glue/order_bill_ja.ts",
+    "python": "glue/order_bill_ja.py",
+    "go": "glue/orderbillja/orderbillja.go",
+    "rust": "glue/order_bill_ja.rs"
+  },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "注文の請求額"
+    },
+    "functions": [
+      "請求額"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ]
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "明細",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5,
+          "fed_by": "jsonschema \"schemas/order.ja.schema.json\" def 明細 property 品番"
+        },
+        {
+          "name": "数量",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=1 <=20",
+          "count": null,
+          "line": 6,
+          "fed_by": "jsonschema \"schemas/order.ja.schema.json\" def 明細 property 数量"
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line",
+        "rust": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "請求額",
+      "alias": "bill",
+      "line": 8,
+      "description": "どの明細も、単価に数量を掛けて足す",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=30"
+        },
+        {
+          "name": "単価",
+          "alias": "price",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000USDc",
+          "count": null,
+          "fed_by": "jsonschema \"schemas/order.ja.schema.json\" def 商品 property 単価"
+        }
+      ],
+      "result": {
+        "type": "money[USDc]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "bill",
+        "python": "bill",
+        "go": "Bill",
+        "rust": "bill"
+      },
+      "check": {
+        "go": "CheckBill",
+        "rust": "check_bill"
+      }
+    }
+  ],
+  "transfers": []
+}

@@ -179,6 +179,7 @@ fn unread_diag(p: &Project, fi: usize, line: usize, col: usize, n: &Name, u: &Un
             let what = match n.tool {
                 crate::names::Tool::Openapi => tr!("OpenAPI の文書", "an OpenAPI document"),
                 crate::names::Tool::Asyncapi => tr!("AsyncAPI の文書", "an AsyncAPI document"),
+                crate::names::Tool::Jsonschema => tr!("JSON Schema の文書", "a JSON Schema document"),
                 _ => tr!("Cedar のファイル", "a file of Cedar's"),
             };
             let how = if n.tool == crate::names::Tool::Cedar {

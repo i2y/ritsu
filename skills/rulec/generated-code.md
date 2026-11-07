@@ -316,7 +316,7 @@ Beside the module, `single_coupon_proof.rs` (`--extra proof`) holds proof harnes
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 149 rules it
+a flag because it is the one pass whose cost is noticeable: on the corpus of 153 rules it
 adds about 800 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 

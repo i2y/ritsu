@@ -18,7 +18,7 @@ fn joined(args: &[&str]) -> (u8, String, String) {
     (code, String::from_utf8(out).unwrap(), String::from_utf8(err).unwrap())
 }
 
-const NAMES: [&str; 8] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split"];
+const NAMES: [&str; 9] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill"];
 
 #[test]
 fn every_example_has_the_vectors_the_golden_files_hold() {

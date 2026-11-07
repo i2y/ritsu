@@ -62,7 +62,7 @@ fn the_ledger_has_each_code_once() {
     let l = kaname::codes::ledger();
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
     // DESIGN 12: E001–E008, W001, E101–E115, E201–E204, E301–W303, E401, E402, W501, E601, E602, W901
-    assert_eq!(l.entries.len(), 40);
+    assert_eq!(l.entries.len(), 41);
     // every code is printed by now, and has its example
     let later: Vec<&str> = l.entries.iter().filter(|e| matches!(e.repro, Repro::Later)).map(|e| e.code).collect();
     assert!(later.is_empty(), "{later:?}");

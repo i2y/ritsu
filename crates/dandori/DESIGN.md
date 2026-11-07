@@ -2918,3 +2918,56 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 
 - 暗号化の印の位置（レコードの中のどの項目か）は、タスクの引数と戻りの `secret` までで、レコードの項目の行は `null`。
 - `Model` に残っていない `.flow` の細部（コメント、書いた順の `enum` の行）は載せない。
+
+## 24. 入力とレコードのフィールドの値の出どころを書く `fed by`（2026-11-07）
+
+### 24.1 きっかけ
+
+ワークフローの入力は、手書きのコードが API の申請や帳簿の残高から取って渡す。この値はどの検査にも見えなかった。OpenAPI の `createRefundRequest` の `amount`（1..1,000,000）を、ワークフローの入力だけ 100,000 に縮めても、`ritsu check` は黙る。帳簿の勘定に上限が無いと、レコードの範囲（0..10,000,000）を超える値が帳簿を通り、実行が `Dandori.BadResponse` で終わって初めて分かる。
+
+### 24.2 決定
+
+`inputs` の行と `record` のフィールドの行の最後に `fed by <参照>` を書く。参照は処理系全体の書き方（根の DESIGN 6.2）で、行の最後まで読む。パスは `.flow` のあるディレクトリから。
+
+```flow
+record Balance
+  left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.book" account remaining
+```
+
+- **答えるのは `ritsu check`。** 値の比べ方と三つの答えは根の DESIGN 7.16 にあり、X17（`ritsu-cross`）が口だけを通して行う。単独の `dandori check` は形と場所の誤りだけを言う（E023）。dandori は口 `Feeds` で受け取る側の型と範囲を渡す。
+- **出どころにもなる。** ワークフローの `output` と `record … field` は、ほかの言語の `fed by` の出どころになる。答えるのは書いてある型と範囲で、実行が何を返すかは言わない。
+- **読み方。** 行を字句に分ける前に `ritsu_base::fed::cut` が切り取り、`ritsu_base::naming` が読む。`fed` と `by` は `KEYWORDS`（色付けと文書のための表）に足すが、名前を奪わない。
+- **嘘を隠さない。** `doc` のページの入力の説明とレコードの説明に「出どころ: `…`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）」と出す。
+- **ハッシュ。** `sha256` はこの形を除いたものから取る。全部の出力先（Temporal の三つの言語、Step Functions、Lambda durable functions、pydantic-graph、Argo）で、生成物は一字も変わらない。
+- `api` の入力とレコードのフィールドに `fed_by`。`Items` は本文からこの形を除き、`References` は `how: "fed by"` で返す。
+
+### 24.3 捨てたもの
+
+(1) 生成コードの入口で、出どころの範囲を確かめる：入口の範囲の確かめはすでにあり、書いた `range` が決める。出どころを読むと、ほかの言語のファイルで生成コードが動く。(2) `use book` や `use openapi` の宣言を求める：`fed by` は呼び出しではなく、呼ばない相手に `use` を書かせることになる。
+
+### 24.4 変わること
+
+入力の行とフィールドの行の最後の形が一つ増える。診断 E023。例 `examples/refund_request`（どの出力先でも動く）。
+
+### 24.5 確かめたこと
+
+ritsu の `tests/fed_by.rs`：縮めたフロー、上限の無い帳簿、全部の出力先で生成物が同じ、`doc` と `api`。`examples/refund_request/books/refunds.book` の `at most` を消すと：
+
+```console
+$ ritsu check refund_request.flow books/refunds.book
+books/refunds.book: ok
+  sell.do    may be refused: key_conflict
+  refund.do  may be refused: nothing_left (remaining(order) at least 0.00), key_conflict, already_refused
+  key: sell once per order; a second call that differs only in amount is refused with key_conflict
+  key: refund once per request; a second call that differs only in order or amount is refused with key_conflict
+refund_request.flow: ok
+error[ritsu E207]: refund_request.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "books/refunds.book" account remaining can be 10000001
+     9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.book" account remaining
+  = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 2 files (chobo 1, dandori 1): 1 fail (1 error); borders between the languages: 3 checked, 0 undecided
+```
+
+### 24.6 残したこと
+
+`tests/mutants` は dandori に無い（壊す試しは `tests/fixtures` と `crates/ritsu/tests/fed_by.rs`）。タスクの結果の範囲に `fed by` は書けない：タスクの結果はすでに呼び先の宣言から来る。

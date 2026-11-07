@@ -34,7 +34,7 @@ KEYWORDS = ("workflow", "implements", "description", "kind", "use", "import", "r
     "timeout", "key", "idempotent", "starts", "sends", "observes", "refused", "callback",
     "held", "external", "state", "then", "true", "false", "until", "pass", "for", "in", "at",
     "most", "parallel", "yield", "some", "none", "list", "json", "range", "openapi", "smithy",
-    "proto", "connect", "url", "now")
+    "proto", "connect", "url", "now", "fed", "by")
 
 # The words the parser reads only where they belong, so they stay usable as names elsewhere.
 CONTEXTUAL = ("agent", "claude", "model", "every", "times", "backoff", "second", "seconds",

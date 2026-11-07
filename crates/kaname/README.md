@@ -224,6 +224,17 @@ error[ritsu E203]: tests/docs/net.kn:15:74: `payment.amount - fee`, given to `am
 ritsu check: 3 files (rulec 1, chobo 1, kaname 1): 1 fail (2 errors); borders between the languages: 2 checked, 0 undecided
 ```
 
+A field or a parameter can say where hand-written code takes its value from
+([examples/order_bill](examples/order_bill)):
+
+```kn
+  qty : number  range >=1 <=20  fed by jsonschema "schemas/order.schema.json" def Line property qty
+```
+
+`ritsu check` asks the other file what it can come to, and stops when the module would refuse a
+value of it. The range of the values is what is checked: nothing checks that the hand-written code
+really carries that value, and the page says so.
+
 ## Effects
 
 Each function's type says how far it was checked.
@@ -318,7 +329,7 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 ## Examples
 
 Each is in English, and in Japanese beside it as `<name>.ja.kn`.
-The first four are functional cores that read no other language, each with a host in TypeScript, Python and Go under `host/`:
+The first four are functional cores that read no other language, each with a host in TypeScript, Python and Go under `host/`; [examples/order_bill](examples/order_bill), the ninth, is one too, with no host, and names where its values come from with `fed by`:
 
 - [examples/order_flow](examples/order_flow): an order moved from state to state by events, its states the values of an enum with fields, and the next state or why an event is refused a `result`.
 - [examples/stock_diff](examples/stock_diff): two counts of a stockroom, dicts from a code to how many are on the shelf, compared code by code; the moves of a day netted for each code and laid on a count; the codes to reorder, a set.

@@ -1,0 +1,17 @@
+module 注文の請求額(order_bill_ja) v1
+description "注文の明細がいくらになるかを出す。明細と単価は、手書きのコードがスキーマの言う注文から運ぶ。`fed by` は値の出どころを言う。`ritsu check` は値の範囲を確かめ、運ぶコードは確かめない"
+
+record 明細(Line)
+  品番(sku) : string  fed by jsonschema "schemas/order.ja.schema.json" def 明細 property 品番
+  数量(qty) : number  range >=1 <=20  fed by jsonschema "schemas/order.ja.schema.json" def 明細 property 数量
+
+fn 請求額(bill)(
+  明細(lines): list[明細] count >=1 <=30,
+  単価(price): money[USDc] range >=1USDc <=1000USDc  fed by jsonschema "schemas/order.ja.schema.json" def 商品 property 単価
+) -> money[USDc] total
+  description "どの明細も、単価に数量を掛けて足す"
+  sum(明細, 一件 => 単価 * 一件.数量)
+
+examples
+  請求額(明細: [明細 { 品番: "book-1", 数量: 2 }], 単価: 150USDc) = 300USDc
+  請求額(明細: [明細 { 品番: "book-1", 数量: 2 }, 明細 { 品番: "mug-1", 数量: 1 }], 単価: 150USDc) = 450USDc

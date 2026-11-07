@@ -1,0 +1,2 @@
+bill(lines: [Line { sku: "book-1", qty: 2 }, Line { sku: "mug-1", qty: 1 }], price: 150USDc)
+= 450USDc

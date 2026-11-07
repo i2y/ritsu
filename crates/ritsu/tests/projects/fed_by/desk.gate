@@ -1,0 +1,27 @@
+gate desk v1
+description "Who may refund an order. Hand-written code takes the order's amount from the order the schema describes"
+namespace Desk
+
+role clerk
+  description "Answers customers"
+  can refund_order
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order of the shop"
+  attributes
+    amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+
+permit clerks_refund_small_orders
+  description "A clerk refunds an order of 100 dollars or less"
+  principal in clerk
+  action refund_order
+  when resource.amount <= 10000USDc

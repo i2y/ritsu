@@ -58,6 +58,7 @@ TABLE = (
     ("effect", ("total", "fails", "diverges", "rule", "date", "range", "overflow", "zero")),
     ("body", ("description", "let", "try", "if", "then", "else", "match", "some", "none", "true",
               "false", "and", "or", "not", "in")),
+    ("source", ("fed", "by")),
 )
 
 # The words a name cannot be (E002): kw.rs's RESERVED. Being no name, each is coloured wherever it
@@ -109,6 +110,7 @@ def _of(place, chosen):
 _of("line", ("module", "description", "use", "private", "enum", "record", "fn", "examples"))
 _of("use", ("from",))
 _of("effect", ("fails",))
+_of("source", ("fed", "by"))
 # What a `use` reads: the word of the first line of the file, then `from`.
 USE_KINDS = _of("use", ("rule", "dates", "book", "module"))
 # The types written alone, as `number` and `rate`; the others of the place take `[` after them
@@ -182,6 +184,9 @@ class KanameLexer(RegexLexer):
             (_enum + rf"(?=[^\S\n]*=)", bygroups(*_head, Name.Class, *_alias), "enum-line"),
             (_enum, bygroups(*_head, Name.Class, *_alias), "enum"),
             (r"^(description|examples)\b", Keyword),
+            # Where a field or a parameter takes its value from: a naming, to the end of the line or
+            # to the comma after it.
+            (rf"\bfed{_WS}by\b", Keyword, "fed"),
             # A function's answer: its type, its bounds and its effect, to the end of the line, or
             # to what closes the parameter a function type is the type of.
             (r"->", Operator, "answer"),
@@ -235,6 +240,15 @@ class KanameLexer(RegexLexer):
         # After `->`: the type of the answer, its bounds and its effect. The end of the line ends it,
         # and so does what ends the type of a parameter (`f: (T) -> T, x: T`), a list's type
         # (`list[(T) -> T]`) or the type of a `let` (`let f : (T) -> T = …`).
+        # A naming: its tool, its path in quotes, and the kinds and names it goes down by.
+        "fed": [
+            (r"\n", Whitespace, "#pop"),
+            (r",", Punctuation, "#pop"),
+            (r"[^\S\n]+", Whitespace),
+            (r"#[^\n]*", Comment.Single),
+            (r'"[^"\n]*"', String.Double),
+            (r'[^\s",#]+', Name),
+        ],
         "answer": [
             (r"[^\S\n]+", Whitespace),
             (r"\n", Whitespace, "#pop"),

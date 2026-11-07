@@ -37,6 +37,10 @@ struct Line {
     toks: Vec<Token>,
     line: usize,
     end_col: usize,
+    /// What `fed by` holds at the end of the line, as written, and where `fed` stands. The line is
+    /// read as if the words were not there: what they hold is read by `ritsu_base::fed`, and a JSON
+    /// Pointer or a quoted name in it is no word of this language (DESIGN 24).
+    fed: Option<(String, Span)>,
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +175,20 @@ pub struct Field {
     pub range: Option<RangeDecl>,
     /// `secret` after the type (and its range): what is put here is a secret (DESIGN 1.18)
     pub secret: Option<Span>,
+    /// `fed by …` at the end of the line of an input or a record's field: where hand-written code
+    /// takes the value from, for `ritsu check` to hold (DESIGN 24)
+    pub fed: Option<FedBy>,
+}
+
+/// `fed by chobo "refunds.book" account remaining` at the end of a line (DESIGN 24). Nothing
+/// generated reads it.
+#[derive(Clone, Debug)]
+pub struct FedBy {
+    /// The naming as written.
+    pub written: String,
+    /// What it names, with its path as written, from the file's directory.
+    pub name: ritsu_base::naming::Name,
+    pub span: Span,
 }
 
 /// `range >=1 <=30`, `range >=1kg`: the whole numbers a value may be, both ends included, in the
@@ -500,6 +518,9 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
     let mut out = Vec::new();
     for (i, raw) in src.lines().enumerate() {
         let line = i + 1;
+        let cut = ritsu_base::fed::cut(raw);
+        let fed = cut.as_ref().map(|c| (c.text(raw).to_string(), Span { line, col: raw[..c.at].chars().count() + 1 }));
+        let raw = cut.as_ref().map_or(raw, |c| &raw[..c.at]);
         let chars: Vec<char> = raw.chars().collect();
         let mut j = 0;
         let mut indent = 0;
@@ -683,7 +704,9 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
             return Err(err(span, tr!("ここに `{c}` は書けません", "unexpected character `{c}`")));
         }
         if !toks.is_empty() {
-            out.push(Line { indent, toks, line, end_col: chars.len() + 1 });
+            out.push(Line { indent, toks, line, end_col: chars.len() + 1, fed });
+        } else if let Some((_, span)) = fed {
+            return Err(fed_misplaced(span));
         }
     }
     Ok(out)
@@ -839,7 +862,7 @@ const KEYWORDS: &[&str] = &[
     "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
     "pass", "for", "in", "at", "most", "parallel", "yield", "some", "none", "list", "json", "range",
-    "openapi", "smithy", "proto", "connect", "url", "now",
+    "openapi", "smithy", "proto", "connect", "url", "now", "fed", "by",
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -965,7 +988,37 @@ fn field(cur: &mut Cur) -> Result<Field, Diag> {
     let ty = type_expr(cur)?;
     let range = range_decl(cur)?;
     let secret = secret_mark(cur);
-    Ok(Field { name, ty, range, secret })
+    Ok(Field { name, ty, range, secret, fed: None })
+}
+
+/// The note of an E023 that does not read: what the form is (DESIGN 24).
+fn fed_shape() -> Text {
+    tr!(
+        "形は `fed by <ツール> \"<パス>\" <種類> <名前>…` で、行の最後まで読みます。パスはこのファイルのディレクトリからです。",
+        "The form is `fed by <tool> \"<path>\" <kind> <name>…`, read to the end of the line; the path is from this file's directory."
+    )
+}
+
+/// What `fed by` holds on a line that can hold it, read as every language reads it (DESIGN 24).
+fn fed_on(line: &Line) -> Result<Option<FedBy>, Diag> {
+    let Some((written, span)) = &line.fed else { return Ok(None) };
+    match ritsu_base::fed::read(written) {
+        Ok(name) => Ok(Some(FedBy { written: written.clone(), name, span: *span })),
+        Err(e) => {
+            let t = e.text();
+            let d = Diag::error("E023", span.line, span.col, tr!("`fed by` の参照を読めません: {}", "`fed by` does not name a value: {}", t.ja; t.en));
+            Err(d.note(fed_shape()))
+        }
+    }
+}
+
+/// `fed by` on a line that cannot hold it (DESIGN 24): every line that is not an input's or a
+/// record's field's says where the value comes from in words of its own, or holds no value.
+fn fed_misplaced(span: Span) -> Diag {
+    Diag::error("E023", span.line, span.col, tr!("`fed by` を書けるのは、`inputs` の行と `record` のフィールドの行だけです", "`fed by` can be written only on a line of `inputs` or a field of a `record`")).note(tr!(
+        "`fed by` は、手書きのコードが値をどこから運ぶかを言います。`outputs` は、このワークフローが決める値です。タスクの引数は、フローの式から渡します。",
+        "`fed by` says where hand-written code takes a value from. An output is what this workflow decides, and a task's parameter is given from the flow's own expressions."
+    ))
 }
 
 /// `secret`, after a type and its range: the place holds a secret (DESIGN 1.18). Read only here,
@@ -1734,8 +1787,12 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     }
                     let fl = fl.clone();
                     let mut fc = Cur::new(&fl);
-                    fields.push(field(&mut fc)?);
+                    let mut one = field(&mut fc)?;
                     fc.expect_end()?;
+                    if kw != "outputs" {
+                        one.fed = fed_on(&fl)?;
+                    }
+                    fields.push(one);
                     p.pos += 1;
                 }
                 if fields.is_empty() {
@@ -1907,6 +1964,10 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 ))
             }
         }
+    }
+    let taken = |line: usize| prog.inputs.iter().chain(prog.records.iter().flat_map(|r| r.fields.iter())).any(|f| f.fed.as_ref().is_some_and(|x| x.span.line == line));
+    if let Some((_, span)) = p.lines.iter().filter_map(|l| l.fed.as_ref()).find(|(_, sp)| !taken(sp.line)) {
+        return Err(fed_misplaced(*span));
     }
     Ok(prog)
 }

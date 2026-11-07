@@ -461,6 +461,11 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         if let Some(t) = chances::drawn_from(f, c, n) {
             note.push(t);
         }
+        // Where hand-written code takes it from (§15.285): the reader reads what was held and what
+        // was not, in the words every language's page uses.
+        if let Some(fb) = &i.fed {
+            note.push(crate::i18n::text(&ritsu_base::fed::page_note(&fb.written)));
+        }
         if let Some(cm) = trailing_comment(&lines, i.name.span.line) {
             note.push(cm);
         }

@@ -1,0 +1,28 @@
+gate 店(shop) v1
+description "店の注文の返金を、だれがしてよいか。`context` の値はゲートが計算するので、手書きのコードは運ばない"
+namespace ShopJa
+
+role 係(clerk)
+  description "お客さまに応対する"
+  can 返金する
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  context
+    少額(small) = 上限(金額: 金額).少額  fed by rulec "注文.rule" output 少額
+
+permit 係の返金(clerks_refund)
+  description "係は注文を返金する"
+  principal in 係
+  action 返金する

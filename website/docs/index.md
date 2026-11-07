@@ -165,6 +165,9 @@ them:
   a date or a time the workflow holds to a range, or `now` in the period the workflow runs in;
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
+- the value hand-written code carries from one language to another, named with `fed by` where it is
+  taken: what the source can come to against what the place takes (the code that carries it is not
+  checked);
 - every value a kaname module passes to a rule, a date or a transfer, against the range that one
   declares;
 - money and units, one type across rulec, dandori, chobo and kaname;
@@ -248,6 +251,51 @@ JSON. A check keeps its name, and a new one is added at the end.
 | `secret_destination` | where a task sends a value its contract marks secret, by the map | E905 / W905 |
 | `operation_guard` | an operation a context opens, held to the action of a gate that guards it | E907 / W907 |
 | `workflow_permission` | an operation a workflow calls, against what its gate allows the workflow | E908 / W909 |
+| `fed_by` | a place with `fed by`, against what its source can come to | E207 (E208 for a source that is not there) / W207 |
+
+### Where a value comes from
+
+Hand-written code carries values from one language's world to another's: the output of a rule to the
+input of the next, the balance of a book to a workflow, a field of a request to a gate. No check
+could see them. `fed by` at the end of the line that takes the value says where it comes from, on
+an input of a rule, a workflow or a dates file, a field of a workflow's or a module's record, an
+attribute or an input of a gate, and a parameter of a function:
+
+```text
+food : number  range >=0 <=60  fed by rulec "province_income.rule" output food
+```
+
+What follows is a naming, in the form the whole toolchain names things, from the directory of the
+file it is written in. Each language says on its own only whether the form reads and stands where it
+can. `ritsu check` asks the two languages:
+
+| The value comes from | Named as |
+|---|---|
+| an output of a rule | `rulec "<file>" output <name>` |
+| an account of a book | `chobo "<file>" account <name>` |
+| a date of a dates file | `koyomi "<file>" date <name>` |
+| a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
+| a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
+| an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
+| a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+
+`ritsu check` asks the language on each side, and comes to one of three answers:
+
+- **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
+- **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+
+E208 says the source is not there: its file, or the name in it.
+
+Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+
+sakai counts a `fed by` as a reference, so one that crosses a boundary needs a relationship. Nothing
+generated changes, and neither does the `meaning` hash or a version yuen pins.
+
+**It does not check the code that carries the value.** It says where the value should come from, and
+holds the range of its values; whether the hand-written code really carries that value, nothing
+checks. Each page for people says so where it shows the source.
 
 ## Pages for people
 

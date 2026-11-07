@@ -107,6 +107,9 @@ class RuleLexer(RegexLexer):
             # The ASCII alias (§1.3), which is the public name in the generated code.
             (r"(\()([A-Za-z_][A-Za-z0-9_]*)(\))",
              bygroups(Punctuation, Name.Attribute, Punctuation)),
+            # Where an input's value comes from (§15.285): the two words, then a naming to the end
+            # of the line.
+            (r"\bfed[^\S\n]+by\b", Keyword, "fed"),
             (words(MODIFIERS, suffix=r"\b"), Keyword),
             (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS + ARMS + CLAUSE + APPLY + MACHINE + SOURCE, suffix=r"\b"),
              Name.Builtin),
@@ -124,6 +127,14 @@ class RuleLexer(RegexLexer):
             # Anything else is a name: the business words, which are most of the file. The
             # operator characters are excluded so that `商品合計-値引` is three tokens.
             (r"[^\s|:()\[\],#\"=<>+\-*/×÷−→]+", Name),
+        ],
+        # A naming: its tool, its path in quotes, and the kinds and names it goes down by.
+        "fed": [
+            (r"\n", Whitespace, "#pop"),
+            (r"[^\S\n]+", Whitespace),
+            (r"#[^\n]*", Comment.Single),
+            (r'"[^"\n]*"', String.Double),
+            (r'[^\s"#]+', Name),
         ],
         # What one of the seven declaring words names, up to the alias or the end of line.
         "decl": [

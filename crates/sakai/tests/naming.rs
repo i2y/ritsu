@@ -38,6 +38,8 @@ const REASONS: &[(&str, &str)] = &[
     ("one child at most (field)", "one child at most"),
     ("nothing under function", "`record` cannot come under `function`"),
     ("only field under record (function)", "`function` cannot come under `record`"),
+    ("property only right after def", "`property` comes only right after `def`"),
+    ("nothing under pointer", "`def` cannot come under `pointer`"),
 ];
 
 #[test]
@@ -80,7 +82,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (54, 32), "the table has 54 names and 32 refusals");
+    assert_eq!((ok, refused), (58, 34), "the table has 58 names and 34 refusals");
 }
 
 /// The table is ritsu-base's, and yuen is held to it too; this test only says what it holds, so

@@ -149,6 +149,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E141](#e141) | error | A `never` line is not written as it can be |
 | [E142](#e142) | error | The definitions give a combination a `never` line rules out |
 | [E143](#e143) | error | A `never` line cannot be shown from the definitions |
+| [E144](#e144) | error | `fed by` does not read, or stands where it cannot |
 
 ## E001
 
@@ -5990,3 +5991,31 @@ policy unique
 ```
 
 Related codes: [E142](#e142), [E141](#e141), [E101](#e101)
+
+## E144
+
+`error` — **`fed by` does not read, or stands where it cannot**
+
+**When.** The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an input's; or they are written together with `from` or `random`; or the input is one a machine carries.
+
+**Fix.** Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. If `from` already says where the value comes from, delete the `fed by`.
+
+**Smallest reproduction**:
+
+```rule
+rule shipping(shipping) v1
+
+inputs
+  weight : number  range >=1 <=10  from order.weight  fed by rulec "scale.rule" output weight
+
+outputs
+  fee : money[USD]
+
+table fees
+policy unique
+| weight | -> fee |
+| <=5    | 5USD   |
+| >5     | 9USD   |
+```
+
+Related codes: [E121](#e121), [E122](#e122)

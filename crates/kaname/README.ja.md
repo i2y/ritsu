@@ -227,6 +227,14 @@ examples/payout/books/ledger.book: ok
 ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
 
+フィールドと引数は、手書きのコードが値を取ってくる出どころを書けます（[examples/order_bill](examples/order_bill)）。
+
+```kn
+  数量(qty) : number  range >=1 <=20  fed by jsonschema "schemas/order.ja.schema.json" def 明細 property 数量
+```
+
+`ritsu check` が相手のファイルに、とりうる値を尋ね、モジュールが受け取らない値があれば止まります。確かめるのは値の範囲です。手書きのコードが本当にその値を運ぶかは何も確かめず、ページにもそう書きます。
+
 ## エフェクト
 
 関数の型には、どこまで確かめたかが載ります。
@@ -322,7 +330,7 @@ $ ritsu kaname explain E301 --lang ja
 ## 例
 
 どの例も英語の版があり、その隣に日本語の版（`<名前>.ja.kn`）があります。
-初めの四つは、ほかの言語を読まない Functional Core の例で、`host/` の下に TypeScript、Python、Go のホストを持ちます。
+初めの四つは、ほかの言語を読まない Functional Core の例で、`host/` の下に TypeScript、Python、Go のホストを持ちます。九つ目の [examples/order_bill](examples/order_bill) もそうで、ホストは持たず、値の出どころを `fed by` で書きます。
 
 - [examples/order_flow](examples/order_flow)：イベントで注文を状態から状態へ進める例です。状態はフィールドを持つ列挙の値で、次の状態か、イベントを拒む理由を `result` で返します。
 - [examples/stock_diff](examples/stock_diff)：品番から棚にある数への辞書で、倉庫の二回の棚卸しを品番ごとに比べる例です。一日の入出庫を品番ごとにまとめて棚卸しの数に足すこと、発注する品番の集合も求めます。

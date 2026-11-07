@@ -15,6 +15,8 @@
 //!   `message M` (`components/messages/M`), and `operation O` (`operations/O`).
 //! - `pointer P`: what the JSON Pointer `P` names from the top of the file, for what has no kind
 //!   of its own (a response, a server, a schema of a file that is a part of a document).
+//! - JSON Schema's `def D`: `$defs/D`, or `definitions/D` where the file has no such `$defs`.
+//!   `property P` under it is as under an OpenAPI schema.
 
 use crate::naming::{Name, Tool};
 use crate::paths;
@@ -24,6 +26,48 @@ use crate::yaml::{self, Node, Value};
 /// file that is not there or does not read.
 pub trait Documents {
     fn root(&self, file: &str) -> Option<&Node>;
+}
+
+/// How many files the `$ref`s of one document may reach, so that a reference cannot read a whole
+/// disk.
+pub const MAX_FILES: usize = 1_000;
+
+/// A document and every file its `$ref`s reach, each read once, by its path from the root.
+#[derive(Default)]
+pub struct Loaded {
+    docs: std::collections::BTreeMap<String, Node>,
+}
+
+impl Documents for Loaded {
+    fn root(&self, file: &str) -> Option<&Node> {
+        self.docs.get(file)
+    }
+}
+
+impl Loaded {
+    /// `top`, the document at `file` (from `root`, the project's), and the files its `$ref`s reach
+    /// that are there and read.
+    pub fn reached(root: &std::path::Path, file: &str, top: Node) -> Loaded {
+        let mut l = Loaded::default();
+        l.docs.insert(file.to_string(), top);
+        let mut todo = vec![file.to_string()];
+        while let Some(f) = todo.pop() {
+            let mut rs = Vec::new();
+            refs_in(&l.docs[&f], "", &mut rs);
+            for (_, _, _, w) in rs {
+                let Ok((t, _)) = target(&f, &w) else { continue };
+                if l.docs.contains_key(&t) || l.docs.len() >= MAX_FILES {
+                    continue;
+                }
+                let Ok(src) = crate::fs::read_to_string(crate::paths::on_disk(root, &t)) else { continue };
+                if let Ok(node) = crate::yaml::read_file_text(&t, &src) {
+                    l.docs.insert(t.clone(), node);
+                    todo.push(t);
+                }
+            }
+        }
+        l
+    }
 }
 
 /// Following `$ref`s takes at most this many steps, so that two documents that point at each other
@@ -285,6 +329,18 @@ fn schema_def<'a, D: Documents + ?Sized>(d: &'a D, file: &str, name: &str) -> Op
     Some(definition(d, &f, &p, node))
 }
 
+/// Where a definition of a JSON Schema is written: under `$defs`, or `definitions` (the name draft
+/// 7 and before give the keyword) where `$defs` does not hold it.
+fn def_pointer<D: Documents + ?Sized>(d: &D, file: &str, name: &str) -> Option<String> {
+    ["$defs", "definitions"].into_iter().map(|k| format!("/{k}/{}", escape(name))).find(|p| locate(d, file, p).is_some())
+}
+
+/// The definition of a JSON Schema's `def`, through its `$ref`s.
+fn def_def<'a, D: Documents + ?Sized>(d: &'a D, file: &str, name: &str) -> Option<(String, String, &'a Node)> {
+    let (f, p, node) = locate(d, file, &def_pointer(d, file, name)?)?;
+    Some(definition(d, &f, &p, node))
+}
+
 /// A property of a schema's definition: its own `properties`, then those of the schemas of its
 /// `allOf`, in order; with whether the schema it is in, or one that holds that one in `allOf`,
 /// requires it.
@@ -349,7 +405,13 @@ pub fn find<D: Documents + ?Sized>(d: &D, n: &Name) -> Option<Element> {
         (Tool::Asyncapi, [("channel", c)]) => at(format!("/channels/{}", escape(c))),
         (Tool::Asyncapi, [("channel", c), ("message", m)]) => at(format!("/channels/{}/messages/{}", escape(c), escape(m))),
         (Tool::Asyncapi, [("message", m)]) => at(format!("/components/messages/{}", escape(m))),
-        (Tool::Openapi | Tool::Asyncapi, [("pointer", p)]) if p.starts_with('/') => at(p.to_string()),
+        (Tool::Openapi | Tool::Asyncapi | Tool::Jsonschema, [("pointer", p)]) if p.starts_with('/') => at(p.to_string()),
+        (Tool::Jsonschema, [("def", s)]) => at(def_pointer(d, file, s)?),
+        (Tool::Jsonschema, [("def", s), ("property", p)]) => {
+            let (df, dp, def) = def_def(d, file, s)?;
+            let (pf, pp, required) = property_in(d, &df, &dp, def, p, false, 0)?;
+            Some(Element { file: pf, pointer: pp, value: None, required: Some(required) })
+        }
         _ => None,
     }
 }
@@ -369,6 +431,8 @@ pub fn reference<D: Documents + ?Sized>(d: &D, tool: Tool, file: &str, pointer: 
         (Tool::Asyncapi, ["channels", c, "messages", m]) => n.with("channel", *c).with("message", *m),
         (Tool::Asyncapi, ["components", "messages", m]) => n.with("message", *m),
         (Tool::Asyncapi, ["operations", o]) => n.with("operation", *o),
+        (Tool::Jsonschema, ["$defs" | "definitions", s]) => n.with("def", *s),
+        (Tool::Jsonschema, ["$defs" | "definitions", s, "properties", p]) => n.with("def", *s).with("property", *p),
         (Tool::Openapi, _) => match operations(d, file).into_iter().find(|op| op.pointer == pointer) {
             Some(op) => n.with("operation", op.name()),
             None => n.with("pointer", pointer),
@@ -404,6 +468,17 @@ pub fn gather<D: Documents + ?Sized>(d: &D, n: &Name, kind: &str) -> Vec<Name> {
         (Tool::Asyncapi, "channel", []) => keys("/channels").into_iter().map(|c| file.clone().with("channel", c)).collect(),
         (Tool::Asyncapi, "message", [("channel", c)]) => keys(&format!("/channels/{}/messages", escape(c))).into_iter().map(|m| file.clone().with("channel", *c).with("message", m)).collect(),
         (Tool::Asyncapi, "message", []) => keys("/components/messages").into_iter().map(|m| file.clone().with("message", m)).collect(),
+        (Tool::Jsonschema, "def", []) => {
+            let mut names = keys("/$defs");
+            names.extend(keys("/definitions").into_iter().filter(|k| locate(d, &n.path, &format!("/$defs/{}", escape(k))).is_none()));
+            names.into_iter().map(|s| file.clone().with("def", s)).collect()
+        }
+        (Tool::Jsonschema, "property", [("def", s)]) => {
+            let Some((df, dp, def)) = def_def(d, &n.path, s) else { return vec![] };
+            let mut names = Vec::new();
+            property_names(d, &df, &dp, def, 0, &mut names);
+            names.into_iter().map(|p| file.clone().with("def", *s).with("property", p)).collect()
+        }
         _ => vec![],
     }
 }

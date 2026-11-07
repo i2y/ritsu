@@ -78,9 +78,15 @@ kaname "orders.kn" enum Order value placed field on field items	ERROR: one child
 koyomi "支払条件.cal" claim "受領から　60日"	{"text":"koyomi \"支払条件.cal\" claim \"受領から　60日\"","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から　60日"]]}
 file "."	{"text":"file \".\"","tool":"file","path":".","items":[]}
 file "src/"	{"text":"file \"src\"","tool":"file","path":"src","items":[]}
+jsonschema "schemas/order.schema.json"	{"text":"jsonschema \"schemas/order.schema.json\"","tool":"jsonschema","path":"schemas/order.schema.json","items":[]}
+jsonschema "schemas/order.schema.json" def Order	{"text":"jsonschema \"schemas/order.schema.json\" def Order","tool":"jsonschema","path":"schemas/order.schema.json","items":[["def","Order"]]}
+jsonschema "schemas/order.schema.json" def Order property amount	{"text":"jsonschema \"schemas/order.schema.json\" def Order property amount","tool":"jsonschema","path":"schemas/order.schema.json","items":[["def","Order"],["property","amount"]]}
+jsonschema "schemas/order.schema.json" pointer /$defs/Order/properties/amount	{"text":"jsonschema \"schemas/order.schema.json\" pointer /$defs/Order/properties/amount","tool":"jsonschema","path":"schemas/order.schema.json","items":[["pointer","/$defs/Order/properties/amount"]]}
 koyomi "支払条件.cal" claim 受領から　60日	ERROR: a full-width space outside a string
 geas "a.geas" claim "line\nbreak"	ERROR: only \" and \\ are escapes
 koyomi "支払条件.cal" "date" 支払日	ERROR: a kind written as a string
 "koyomi" "支払条件.cal"	ERROR: a tool written as a string
 rulec "x.rule" output	ERROR: a kind without a name
 file ""	ERROR: an empty path
+jsonschema "schemas/order.schema.json" property amount	ERROR: property only right after def
+jsonschema "schemas/order.schema.json" pointer /a def b	ERROR: nothing under pointer

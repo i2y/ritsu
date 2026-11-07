@@ -1,0 +1,17 @@
+ok refund_limit.rule
+ok research.rule
+ok review.rule
+due.cal: ok — every date computes on all 365 days of issued_on (2026-01-01..2026-12-31)
+refunds.book: ok
+  sell.do    may be refused: more_than_paid (remaining(order) at most 100000.00), key_conflict, already_refused
+  refund.do  may be refused: nothing_left (remaining(order) at least 0.00), key_conflict, already_refused
+  key: sell once per order; a second call that differs only in amount is refused with key_conflict
+  key: refund once per request; a second call that differs only in order or amount is refused with key_conflict
+ok bill.kn: 1 function, total
+refund.flow: ok
+desk.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+error[ritsu E207]: review.rule:5:1: `input band` takes number >=0 <=2, and its source rulec "refund_limit.rule" output band can be 3
+     5 |   band : number  range >=0 <=2  fed by rulec "refund_limit.rule" output band
+  = rulec "refund_limit.rule" output band comes to 3 at left = 1001.
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 8 files (rulec 3, koyomi 1, chobo 1, kaname 1, dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 10 checked, 0 undecided

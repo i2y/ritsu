@@ -367,6 +367,8 @@ fn 変異は決めたコードだけを出す() {
         ("m_e142ja.rule", &[("E142", 1)], "上と同じ規則の日本語の版"),
         ("m_e143.rule", &[("E143", 1)], "規則が計算する列を `never` の行に書いた"),
         ("m_e143ja.rule", &[("E143", 1)], "上と同じ規則の日本語の版"),
+        ("m_e144.rule", &[("E144", 1)], "`from` のある入力に `fed by` も書いた"),
+        ("m_e144ja.rule", &[("E144", 1)], "上と同じ規則の日本語の版"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -821,6 +823,9 @@ fn 変異はコーパスから作り直せる() {
     // is a `constraint` whose forbidden corner hides an uncovered box (§15.98), and no
     // corpus rule has one.
     const BY_HAND: &[&str] = &[
+        // §15.285: `fed by` names another file, and no corpus rule has one.
+        "m_e144.rule",
+        "m_e144ja.rule",
         "m_e116.rule",
         "m_w120.rule",
         "m_e032.rule",

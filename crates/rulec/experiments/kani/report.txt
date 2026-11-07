@@ -1,5 +1,5 @@
 rulec 0.28.0, Kani Rust Verifier 0.68.0 (standalone) CBMC 6.11.0 
-order_fee, fragile_lines_fee, parcel_fee and their Japanese twins measured at 0.44.0 (§15.282); the generated proofs of the others have not changed.
+order_fee, fragile_lines_fee, parcel_fee, province_income, province_growth and their Japanese twins measured at 0.44.0 (§15.282, §15.285); the generated proofs of the others have not changed.
 
 apply_order                1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 average_price              0s  no harness written — see the head of average_price_proof.rs
@@ -113,6 +113,10 @@ product_price              1s  Complete - 1 successfully verified harnesses, 0 f
 product_shipping           1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 product_tax                1s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 prorated_charge            0s  no harness written — see the head of prorated_charge_proof.rs
+province_growth_ja         1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+province_growth            2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+province_income_ja         2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+province_income            2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 quota_left                 1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 quota_request              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 rank                       1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
@@ -151,4 +155,4 @@ us_income_tax              1s  Complete - 2 successfully verified harnesses, 0 f
 yupack_base_fee            9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 yupack_fee                 9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 
-総計 795s
+総計 802s

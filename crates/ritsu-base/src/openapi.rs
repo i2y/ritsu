@@ -257,6 +257,15 @@ pub fn from_node(file: &str, root: &Node, load: &dyn Fn(&str) -> Option<String>)
     Ok(Document { kind, spec, title: info("title"), version: info("version"), operations, unresolved: r.unresolved.into_inner() })
 }
 
+/// What the schema at a JSON Pointer of a document says of a value, through its `$ref`s and its
+/// `allOf`, as an operation's arguments are read: `file` is the document's path, `root` its top, and
+/// `load` is as [`read_with`] takes it. None when nothing stands at the pointer.
+pub fn schema_at(file: &str, root: &Node, pointer: &str, load: &dyn Fn(&str) -> Option<String>) -> Option<Schema> {
+    root.pointer(pointer)?;
+    let r = Reader { load, docs: RefCell::new(HashMap::new()), unresolved: RefCell::new(Vec::new()) };
+    Some(r.schema(Loc { file: file.to_string(), doc: Rc::new(root.clone()), ptr: pointer.to_string() }))
+}
+
 /// The methods of a path item, as OpenAPI 3.2 lists them (`query` is 3.2's).
 const METHODS: [&str; 9] = ["get", "put", "post", "delete", "options", "head", "patch", "trace", "query"];
 

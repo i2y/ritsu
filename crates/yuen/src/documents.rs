@@ -14,24 +14,14 @@
 
 use crate::names::{Name, Tool};
 use ritsu_base::cedar;
-use ritsu_base::document::{self, Documents};
+use ritsu_base::document;
 use ritsu_base::json::Json;
 use ritsu_base::text::Text;
 use ritsu_base::yaml::{self, Node, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
-/// A document and every file its `$ref`s reach, each read once, by its path from the root.
-#[derive(Default)]
-pub struct Loaded {
-    docs: BTreeMap<String, Node>,
-}
-
-impl Documents for Loaded {
-    fn root(&self, file: &str) -> Option<&Node> {
-        self.docs.get(file)
-    }
-}
+pub use document::Loaded;
 
 /// A file a reference of `openapi`, `asyncapi` or `cedar` names, read.
 pub enum Read {
@@ -39,10 +29,6 @@ pub enum Read {
     Policies(cedar::PolicySet),
     Schema(cedar::Schema),
 }
-
-/// How many files the `$ref`s of one document may reach, so that a reference cannot read a whole
-/// disk.
-const MAX_FILES: usize = 1_000;
 
 /// Where a text does not read, and why: `<line>:<column>: …`.
 fn located(line: usize, col: usize, message: &Text) -> Text {
@@ -72,31 +58,15 @@ pub fn load(root: &Path, tool: Tool, file: &str) -> Result<Read, Text> {
         }
         _ => {
             let top = yaml::read_file_text(file, &text).map_err(|e| located(e.line, e.col, &e.message))?;
+            // a JSON Schema may stand in a document of either kind, under its `components/schemas`
             if let Some(k) = document::kind_of(&top)
                 && k != tool
+                && tool != Tool::Jsonschema
             {
                 let (is, w) = (if k == Tool::Openapi { "OpenAPI" } else { "AsyncAPI" }, k.word());
                 return Err(tr!("{is} の文書です。`{w} \"…\"` で指してください", "it is an {is} document, named with `{w} \"…\"`"));
             }
-            let mut l = Loaded::default();
-            l.docs.insert(file.to_string(), top);
-            let mut todo = vec![file.to_string()];
-            while let Some(f) = todo.pop() {
-                let mut rs = Vec::new();
-                document::refs_in(&l.docs[&f], "", &mut rs);
-                for (_, _, _, w) in rs {
-                    let Ok((t, _)) = document::target(&f, &w) else { continue };
-                    if l.docs.contains_key(&t) || l.docs.len() >= MAX_FILES {
-                        continue;
-                    }
-                    let Ok(src) = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, &t)) else { continue };
-                    if let Ok(node) = yaml::read_file_text(&t, &src) {
-                        l.docs.insert(t.clone(), node);
-                        todo.push(t);
-                    }
-                }
-            }
-            Ok(Read::Doc(l))
+            Ok(Read::Doc(Loaded::reached(root, file, top)))
         }
     }
 }
@@ -318,5 +288,9 @@ pub fn is_the_tools(root: &Path, tool: Tool, file: &str) -> bool {
         return true;
     }
     let Ok(src) = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, file)) else { return false };
-    yaml::read_file_text(file, &src).ok().and_then(|top| document::kind_of(&top)) == Some(tool)
+    let Ok(top) = yaml::read_file_text(file, &src) else { return false };
+    if tool == Tool::Jsonschema {
+        return document::kind_of(&top).is_none() && ["$schema", "$defs", "definitions"].iter().any(|k| top.get(k).is_some());
+    }
+    document::kind_of(&top) == Some(tool)
 }

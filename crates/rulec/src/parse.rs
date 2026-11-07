@@ -31,6 +31,10 @@ struct P {
     path: String,
     /// §11 principle 4: a location is file:line plus the table name.
     ctx: String,
+    /// What `fed by` holds on each line that writes it, by the line's number, until an input's line
+    /// takes it: no other reader sees the token, and what is left when the file is read is on a
+    /// line that cannot hold it (§15.285).
+    fed: std::collections::BTreeMap<usize, (String, Span)>,
 }
 
 pub fn parse(src: &str, path: &str) -> Parsed {
@@ -54,8 +58,16 @@ pub fn parse(src: &str, path: &str) -> Parsed {
             }
         }
     }
-    let mut p = P { lines, i: 0, diags, path: path.to_string(), ctx: String::new() };
+    let mut fed = std::collections::BTreeMap::new();
+    for line in &mut lines {
+        if let Some(Token { kind: Kind::FedBy(written), span }) = line.last().cloned() {
+            line.pop();
+            fed.insert(span.line, (written, span));
+        }
+    }
+    let mut p = P { lines, i: 0, diags, path: path.to_string(), ctx: String::new(), fed };
     let file = p.rule_file();
+    p.fed_elsewhere(file.as_ref());
     Parsed { file, diags: p.diags }
 }
 
@@ -75,6 +87,14 @@ fn span_of(ts: &[Token]) -> Span {
         (Some(a), Some(b)) => Span::new(a.span.line, a.span.col, b.span.col + b.span.len - a.span.col),
         _ => Span::new(1, 0, 1),
     }
+}
+
+/// The note of an E144 that does not read: what the form is (§15.285).
+fn fed_shape() -> String {
+    tr!(
+        "形は `fed by <ツール> \"<パス>\" <種類> <名前>…` で、行の最後まで読みます。パスはこのファイルのディレクトリからです。範囲や印は `fed by` の前に書きます。",
+        "The form is `fed by <tool> \"<path>\" <kind> <name>…`, read to the end of the line; the path is from this file's directory. A range and a mark go before `fed by`."
+    )
 }
 
 /// The shape of `from sum`, `from max` or `from min`, said in the note of an E074 (§15.223).
@@ -1277,9 +1297,80 @@ impl P {
             let (range, contract_only) = self.tail_range(head, k);
             let random = tail_random(head, k).or_else(|| trailing_random(&line[cut..]));
             self.tail_junk(head, k, if section == crate::kw::ELEMENTS { Tail::Field } else { Tail::Input });
-            v.push(VarDecl { name, ty, range, contract_only, from, random, span: span_of(&line) });
+            let fed = if section == crate::kw::ELEMENTS { None } else { self.fed_by(&name, from.is_some(), random.is_some()) };
+            v.push(VarDecl { name, ty, range, contract_only, from, random, fed, span: span_of(&line) });
         }
         v
+    }
+
+    /// What `fed by` holds on the line of the input `name`, read as every language reads it
+    /// (§15.285). `from` already says where the value comes from, and a `random` input is drawn:
+    /// neither takes a second source.
+    fn fed_by(&mut self, name: &Name, from: bool, random: bool) -> Option<crate::ast::FedBy> {
+        let (written, span) = self.fed.remove(&name.span.line)?;
+        let at = self.at(span.line);
+        if from || random {
+            let word = if from { crate::kw::FROM } else { crate::kw::RANDOM };
+            self.err(
+                Diag::error("E144", tr!("`fed by` は `{word}` と一緒に書けません", "`fed by` cannot be written with `{word}`"))
+                    .at(at)
+                    .mark(span, tr!("{} の値の出どころを二度言っています", "this says twice where {} comes from", name.text))
+                    .note(if from {
+                        tr!(
+                            "`from` は、生成コードが呼ぶ側のオブジェクトから読むパスで、値の出どころをすでに言っています。`from` だけか、`fed by` だけにしてください。",
+                            "`from` is the path the generated code reads out of the caller's object, and says where the value comes from already. Write one or the other."
+                        )
+                    } else {
+                        tr!(
+                            "`random` の入力は、呼ぶ側が宣言した範囲から一様に引く値で、ほかの世界から運ぶ値ではありません。",
+                            "A `random` input is drawn uniformly from its declared range by the caller; it is not carried from anywhere."
+                        )
+                    }),
+            );
+            return None;
+        }
+        match ritsu_base::fed::read(&written) {
+            Ok(n) => Some(crate::ast::FedBy { written, name: n, span }),
+            Err(e) => {
+                let t = e.text();
+                self.err(Diag::error("E144", tr!("`fed by` の参照を読めません", "`fed by` does not name a value")).at(at).mark(span, crate::i18n::text(&t)).note(fed_shape()));
+                None
+            }
+        }
+    }
+
+    /// The `fed by` left when the file has been read, on a line that cannot hold it, and on an input
+    /// a machine carries, whose value the machine's last call gave it (§15.285).
+    fn fed_elsewhere(&mut self, file: Option<&RuleFile>) {
+        for (line, (_, span)) in std::mem::take(&mut self.fed) {
+            let at = self.at(line);
+            self.err(
+                Diag::error("E144", tr!("`fed by` を書けるのは、入力の行だけです", "`fed by` can be written only on a line of `inputs`"))
+                    .at(at)
+                    .mark(span, tr!("ここには書けません", "it cannot stand here"))
+                    .note(tr!(
+                        "`fed by` は、規則の入力の値を手書きのコードがどこから運ぶかを言います。出力は規則が決める値で、要素のフィールドは呼ぶ側の並びの中の値です。",
+                        "`fed by` says where hand-written code takes the value of a rule's input from. An output is what the rule decides, and a field of an element is a value inside the caller's list."
+                    )),
+            );
+        }
+        let Some(f) = file else { return };
+        let Some(m) = &f.machine else { return };
+        for i in &f.inputs {
+            let Some(fb) = &i.fed else { continue };
+            if m.carry.iter().chain(&m.carries).any(|(c, _, _)| c.text == i.name.text) {
+                let at = self.at(fb.span.line);
+                self.err(
+                    Diag::error("E144", tr!("ステートマシンが持ち越す入力に `fed by` は書けません", "An input a machine carries cannot be `fed by` anything"))
+                        .at(at)
+                        .mark(fb.span.clone(), tr!("{} の値は、前の呼び出しの出力です", "the value of {} is the output of the call before", i.name.text))
+                        .note(tr!(
+                            "`carry` の行が、この入力の出どころをすでに言っています。自分の出力を次の呼び出しに戻す値は、`carry` のない規則でだけ `fed by` で書きます。",
+                            "The `carry` line says where this input comes from already. An output handed back to the next call is written with `fed by` only in a rule with no `carry`."
+                        )),
+                );
+            }
+        }
     }
 
     /// `shape order(order) = jsonschema "order.json" "#/$defs/Order"` (§15.125).

@@ -707,6 +707,7 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 | E014 | 日付どうしが循環している |
 | E015 | `use calendar` の先が使えない（読めない、calendar のファイルでない、循環、オフセットが食い違う） |
 | E016 | `gen` が書く出力先を W001 が挙げる。`gen` は何も書かずに 1 で終わる（15 章） |
+| E017 | `fed by` を読めない、値を持たないものを指す、`inputs` の行でない場所にある（18 章） |
 | W001 | 二つの別名が、ある出力先の綴りで一つの識別子になる。または、別名が、ある出力先では使えない名前になる（15 章） |
 | E101 | 出典のコピーが無い |
 | E102 | 出典が固定されていない（`sha256:` が無い） |
@@ -1886,3 +1887,39 @@ ritsu の生成物に、Rust と Wasm の出力先をそろえる。koyomi、kan
 - 出力先の言語の予約語の E009 も、同じ形である（`bool` は Go だけ、`super` は TypeScript と Rust だけの言葉で、`json` と `public` は PostgreSQL だけの言葉だが、どの出力先も止める）。この章は `naming.rs` の表を分けたもので、`reserved.rs` は変えていない。分けるなら、予約語の表が言語ごとの列を持つことになる。
 - 別々の `koyomi gen` で同じ `--out` に書くときは比べない。比べるのは一度に渡したファイルだけである。
 - Python のモジュールの形は、15 章のとおり `ritsu gen` のパッケージを止めない。
+
+## 18. 入力の値の出どころを書く `fed by`（2026-11-07）
+
+**きっかけ**：手書きのコードが運んでくる入力は、どの検査にも見えなかった。JSON Schema の日付の範囲を変えても、ほかの日付のファイルの期日が先へ動いても、この入力の範囲と合わなくなったことは実行するまで分からない。
+
+**決定**：`inputs` の行の最後に `fed by <参照>` を書く。参照は処理系全体の書き方（根の DESIGN 6.2）で、行の最後まで読む。
+
+```cal
+inputs
+  due_on : date  range >=2026-02-02 <=2028-12-29  fed by koyomi "net30.cal" date due
+```
+
+- **答えるのは `ritsu check`。** 値の比べ方と三つの答えは根の DESIGN 7.16 にあり、X17（`ritsu-cross`）が口だけを通して行う。単独の `koyomi check` は形と場所の誤りだけを言う（E017）。相手のファイルは、koyomi の読むものではない。koyomi は口 `Feeds` で入力の型と範囲を渡し、`Dates` で自分の日付の答えを渡す。出どころが日付なら、koyomi が全入力で計算した日がそのまま比べられ、例の入力も言える。
+- **読み方。** 行を字句に分ける前に `ritsu_base::fed::cut` が切り取り、`ritsu_base::naming` が読む。`fed` と `by` は予約語にしない（`kw.rs` の TABLE の語は全部予約で、二語が揃って初めて形になるものを入れると、`by` という名前を奪う）。
+- **嘘を隠さない。** `doc` のページの入力の説明に「出どころ: `…`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）」と出す。
+- **ハッシュ。** `source_sha256`（`api` と生成コードの頭）はこの形を除いたものから取る。生成コードは全部の出力先で一字も変わらない。
+- `api` の入力に `fed_by`。`Items` は本文からこの形を除き、`References` は `how: "fed by"` で返す。
+
+**捨てたもの**：日付の入力の範囲を出どころから読む（`range from koyomi` の形）。koyomi の入力の範囲は計算の全数を決めるもので、書いたファイルの中に要る。ほかのファイルの中身で動いては、このファイルだけで確かめられることが無くなる。
+
+**変わること**：入力の行の最後の形が一つ増える。診断 E017。例 `examples/late_fee.cal`、`late_fee.ja.cal`。
+
+**確かめたこと**：ritsu の `tests/fed_by.rs`：日のずれ（端の例と入力つき）、契約が日を並べたとき、並べないとき（W207）、ほかの日付のファイルが出どころのとき、全部の出力先で生成物が同じ。`tests/mutants/E017_*`（英日）。`examples/late_fee.cal` を `<=2028-12-28` に縮めると：
+
+```console
+$ ritsu check late_fee.cal net30.cal
+late_fee.cal: ok — 2 claims hold on all 1,061 days of due_on (2026-02-02..2028-12-28)
+net30.cal: ok — 3 claims hold on all 1,064 days of invoice_date (2026-01-01..2028-11-29)
+error[ritsu E207]: late_fee.cal:5:1: `input due_on` takes date >=2026-02-02 <=2028-12-28, and its source koyomi "net30.cal" date due can be 2028-12-29
+     5 |   due_on : date  range >=2026-02-02 <=2028-12-28  fed by koyomi "net30.cal" date due
+  = koyomi "net30.cal" date due comes to 2028-12-29 at invoice_date = 2028-11-29.
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 2 files (koyomi 2): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
+```
+
+**残したこと**：契約の日付で `enum` と `const` のほかは日を言わないものとして W207 にしている。JSON Schema の `formatMinimum` などは読まない。koyomi の入力は範囲が必須なので、日を並べない契約を指すと、この W207 は消えない。サイトに `.cal` の字句の色付けは無いので、足していない。

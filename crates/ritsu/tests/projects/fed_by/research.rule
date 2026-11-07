@@ -1,0 +1,18 @@
+rule research v1
+description "How far the research has come. Hand-written code puts next_progress back into progress the next season"
+
+inputs
+  progress : number  range >=0 <=200  fed by rulec "research.rule" output next_progress
+  learning : number  range >=0 <=100
+
+outputs
+  learned : bool
+  next_progress : number  round down(1)
+
+derive total : number = progress + learning  range >=0 <=300
+
+table finish
+policy unique
+| total | -> learned : bool | next_progress : number |
+| >=100 | true              | 0                      |
+| <100  | false             | 50                     |

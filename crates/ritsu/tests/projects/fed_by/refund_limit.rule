@@ -1,0 +1,14 @@
+rule refund_limit v1
+description "How much of what is left can be refunded at once"
+
+inputs
+  left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
+
+outputs
+  band : number  round down(1)
+
+table band_of
+policy unique
+| left       | -> band : number |
+| <=1000USDc | 0                |
+| >1000USDc  | 2                |

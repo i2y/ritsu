@@ -1,0 +1,7 @@
+error[E144]: `fed by` cannot be written with `from`
+  --> tests/mutants/m_e144.rule:7
+  |
+7 |   weight : number  range >=0 <=100  from order.weight  fed by rulec "scale.rule" output weight
+  |                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this says twice where weight comes from
+  |
+ `from` is the path the generated code reads out of the caller's object, and says where the value comes from already. Write one or the other.

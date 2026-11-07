@@ -14,9 +14,9 @@ use crate::paths::{self, PathError};
 use crate::text::Text;
 use crate::tr;
 
-/// The thirteen tools a naming can start with (DESIGN 6.2, item 2). `ritsu` is not one: it is not a
-/// language. Four are standard formats every language reads the same way: `.proto` files, OpenAPI
-/// and AsyncAPI documents, and Cedar's policies and schemas.
+/// The fifteen tools a naming can start with (DESIGN 6.2, item 2). `ritsu` is not one: it is not a
+/// language. Five are standard formats every language reads the same way: `.proto` files, OpenAPI
+/// and AsyncAPI documents, Cedar's policies and schemas, and JSON Schemas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tool {
     Rulec,
@@ -42,13 +42,16 @@ pub enum Tool {
     /// The language of `.kn` files, a small general-purpose language for a functional core (kaname's
     /// DESIGN 14.6): a module's functions, its records with their fields and its enums with their values.
     Kaname,
+    /// A JSON Schema (YAML or JSON), or a schema inside any document: a definition of its `$defs` or
+    /// `definitions` with its properties, and anything else by its JSON Pointer (DESIGN 6.5).
+    Jsonschema,
 }
 
 /// A tool's kinds, each with the kinds that can come right after it.
 pub type Kinds = &'static [(&'static str, &'static [&'static str])];
 
 impl Tool {
-    pub const ALL: [Tool; 14] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho, Tool::Kaname];
+    pub const ALL: [Tool; 15] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho, Tool::Kaname, Tool::Jsonschema];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -66,6 +69,7 @@ impl Tool {
             Tool::Sakai => "sakai",
             Tool::Sekisho => "sekisho",
             Tool::Kaname => "kaname",
+            Tool::Jsonschema => "jsonschema",
         }
     }
 
@@ -84,7 +88,7 @@ impl Tool {
             Tool::Chobo => Some("book"),
             Tool::Geas => Some("geas"),
             Tool::Proto => Some("proto"),
-            Tool::Openapi | Tool::Asyncapi | Tool::Cedar => None,
+            Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::Jsonschema => None,
             Tool::File => None,
             Tool::Yuen => Some("req"),
             Tool::Sakai => Some("ctx"),
@@ -97,7 +101,7 @@ impl Tool {
     /// holds of the tool. Empty for `file`, which takes any file.
     pub fn extensions(self) -> &'static [&'static str] {
         match self {
-            Tool::Openapi | Tool::Asyncapi => &[".yaml", ".yml", ".json"],
+            Tool::Openapi | Tool::Asyncapi | Tool::Jsonschema => &[".yaml", ".yml", ".json"],
             Tool::Cedar => &[".cedar", ".cedarschema", ".cedarschema.json"],
             Tool::Rulec => &[".rule"],
             Tool::Dandori => &[".flow"],
@@ -163,6 +167,9 @@ impl Tool {
             // kaname's DESIGN 14.6: a field under a record, a value under an enum, and a field under a
             // value that has fields ([`Tool::grandchildren`])
             Tool::Kaname => &[("function", &[]), ("record", &["field"]), ("enum", &["value"])],
+            // A definition of `$defs` or `definitions`, a property of one, and anything else by its
+            // JSON Pointer (DESIGN 6.5).
+            Tool::Jsonschema => &[("def", &["property"]), ("pointer", &[])],
         }
     }
 
@@ -208,7 +215,7 @@ impl Tool {
     }
 
     /// Whether a naming of the tool can have a pair under a pair (proto, rulec, dandori, chobo,
-    /// openapi, asyncapi).
+    /// openapi, asyncapi, jsonschema).
     pub fn nests(self) -> bool {
         self.kinds().iter().any(|(_, cs)| !cs.is_empty())
     }

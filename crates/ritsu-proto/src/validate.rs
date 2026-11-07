@@ -261,3 +261,251 @@ fn ints_of(v: &Value) -> Vec<i128> {
 fn strs_of(v: &Value) -> Vec<String> {
     v.strings()
 }
+
+// --- What passes a field, as integers (rulec's §15.132) ------------------------------------
+
+/// Integers as closed intervals, sorted and apart; `None` is an open end.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ints(pub Vec<(Option<i128>, Option<i128>)>);
+
+impl Ints {
+    pub fn between(lo: Option<i128>, hi: Option<i128>) -> Ints {
+        match (lo, hi) {
+            (Some(a), Some(b)) if a > b => Ints(Vec::new()),
+            _ => Ints(vec![(lo, hi)]),
+        }
+    }
+
+    pub fn points(vs: &[i128]) -> Ints {
+        Ints(vs.iter().map(|&x| (Some(x), Some(x))).collect()).normal()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn intersect(&self, o: &Ints) -> Ints {
+        let mut out = Vec::new();
+        for &(a1, b1) in &self.0 {
+            for &(a2, b2) in &o.0 {
+                let lo = match (a1, a2) {
+                    (None, x) | (x, None) => x,
+                    (Some(x), Some(y)) => Some(x.max(y)),
+                };
+                let hi = match (b1, b2) {
+                    (None, x) | (x, None) => x,
+                    (Some(x), Some(y)) => Some(x.min(y)),
+                };
+                out.push((lo, hi));
+            }
+        }
+        Ints(out).normal()
+    }
+
+    pub fn union(&self, o: &Ints) -> Ints {
+        let mut v = self.0.clone();
+        v.extend(o.0.iter().copied());
+        Ints(v).normal()
+    }
+
+    pub fn without(&self, x: i128) -> Ints {
+        let mut out = Vec::new();
+        for &(a, b) in &self.0 {
+            if a.is_some_and(|a| x < a) || b.is_some_and(|b| x > b) {
+                out.push((a, b));
+                continue;
+            }
+            if a != Some(x) {
+                out.push((a, Some(x - 1)));
+            }
+            if b != Some(x) {
+                out.push((Some(x + 1), b));
+            }
+        }
+        Ints(out).normal()
+    }
+
+    /// Sorted, the empty ones dropped, and merged where they meet.
+    pub fn normal(self) -> Ints {
+        let mut v: Vec<_> = self.0.into_iter().filter(|(a, b)| !matches!((a, b), (Some(a), Some(b)) if a > b)).collect();
+        v.sort_by(|x, y| match (x.0, y.0) {
+            (None, None) => std::cmp::Ordering::Equal,
+            (None, _) => std::cmp::Ordering::Less,
+            (_, None) => std::cmp::Ordering::Greater,
+            (Some(a), Some(b)) => a.cmp(&b),
+        });
+        let mut out: Vec<(Option<i128>, Option<i128>)> = Vec::new();
+        for (a, b) in v {
+            if let Some(last) = out.last_mut() {
+                let meets = match (last.1, a) {
+                    (None, _) | (_, None) => true,
+                    (Some(h), Some(a)) => a <= h.saturating_add(1),
+                };
+                if meets {
+                    last.1 = match (last.1, b) {
+                        (None, _) | (_, None) => None,
+                        (Some(x), Some(y)) => Some(x.max(y)),
+                    };
+                    continue;
+                }
+            }
+            out.push((a, b));
+        }
+        Ints(out)
+    }
+
+    pub fn min(&self) -> Option<i128> {
+        self.0.first().and_then(|(a, _)| *a)
+    }
+
+    pub fn max(&self) -> Option<i128> {
+        self.0.last().and_then(|(_, b)| *b)
+    }
+}
+
+/// The values an integer kind can hold on the wire.
+pub fn int_bounds(ty: &str) -> Option<(i128, i128)> {
+    match ty.rsplit('.').next().unwrap_or(ty) {
+        "int32" | "sint32" | "sfixed32" => Some((i32::MIN as i128, i32::MAX as i128)),
+        "uint32" | "fixed32" => Some((0, u32::MAX as i128)),
+        "int64" | "sint64" | "sfixed64" => Some((i64::MIN as i128, i64::MAX as i128)),
+        "uint64" | "fixed64" => Some((0, u64::MAX as i128)),
+        _ => None,
+    }
+}
+
+/// Whether Protovalidate lets an unset field of implicit presence through whatever the other
+/// rules say: `IGNORE_IF_ZERO_VALUE`, and the two names it had before.
+pub fn ignores_zero(r: &Rules) -> bool {
+    r.ignore.as_deref().is_some_and(|g| g.starts_with("IGNORE_IF"))
+}
+
+/// The integers Protovalidate lets through a field. An unset field of implicit presence is its
+/// zero value, and the rules are applied to it like to any other value — which is why a field
+/// with no rules at all lets 0 through.
+pub fn field_ints(ty: &str, r: &Rules, optional: bool) -> Option<Ints> {
+    let (tmin, tmax) = int_bounds(ty)?;
+    let full = Ints::between(Some(tmin), Some(tmax));
+    if r.ignore.as_deref() == Some("IGNORE_ALWAYS") {
+        return Some(open_ends(full, tmin, tmax));
+    }
+    let i = &r.int;
+    let lower = i.gt.map(|g| g + 1).or(i.gte);
+    let upper = i.lt.map(|l| l - 1).or(i.lte);
+    // Protovalidate reads a lower bound written above the upper one as the two ends of an
+    // excluded range: `gt: 10, lt: 5` lets through what is above 10 or below 5.
+    let reversed = matches!((i.gt.or(i.gte), i.lt.or(i.lte)), (Some(a), Some(b)) if a > b);
+    let mut s = if reversed {
+        Ints::between(None, upper).union(&Ints::between(lower, None))
+    } else {
+        Ints::between(lower, upper)
+    }
+    .intersect(&full);
+    if let Some(k) = i.konst {
+        s = s.intersect(&Ints::points(&[k]));
+    }
+    if !i.in_.is_empty() {
+        s = s.intersect(&Ints::points(&i.in_));
+    }
+    for x in &i.not_in {
+        s = s.without(*x);
+    }
+    // `required` rules 0 out only where the field has no presence of its own; on an `optional`
+    // field it asks that the field be set, and a set 0 passes it (rulec's §15.140).
+    if r.required && !optional {
+        s = s.without(0);
+    }
+    if !optional && ignores_zero(r) {
+        s = s.union(&Ints::points(&[0]));
+    }
+    Some(open_ends(s, tmin, tmax))
+}
+
+/// A bound that is only the kind's own limit is shown open: an `int64` with no rule reads as
+/// "any integer", not as nineteen digits. The 0 an unsigned kind starts at stays, because it
+/// says something.
+pub fn open_ends(s: Ints, tmin: i128, tmax: i128) -> Ints {
+    Ints(s.0.into_iter().map(|(a, b)| (a.filter(|&x| x != tmin || tmin == 0), b.filter(|&x| x != tmax))).collect())
+}
+
+/// The strings Protovalidate lets through a field, or None when it does not list them.
+pub fn field_strs(r: &Rules, optional: bool) -> Option<Vec<String>> {
+    if r.ignore.as_deref() == Some("IGNORE_ALWAYS") {
+        return None;
+    }
+    let mut list = r.str_const.clone().map(|k| vec![k]);
+    if !r.str_in.is_empty() {
+        list = Some(match list {
+            Some(l) => l.into_iter().filter(|x| r.str_in.contains(x)).collect(),
+            None => r.str_in.clone(),
+        });
+    }
+    let mut list = list?;
+    list.retain(|x| !r.str_not_in.contains(x));
+    // The zero value of a string is "", and IGNORE_IF_ZERO_VALUE lets it through unchecked.
+    if !optional && ignores_zero(r) && !list.iter().any(String::is_empty) {
+        list.push(String::new());
+    }
+    Some(list)
+}
+
+// --- The names of an enum's values, as a rule and a reader of a `.proto` call them ------------
+
+/// `MemberTier` → `MEMBER_TIER`: an enum's name as the prefix its values carry.
+///
+/// The split is buf's, because `buf lint` is what asks for the prefix (`ENUM_VALUE_PREFIX`)
+/// and protobuf-py splits the same way when it takes it off. A capital begins a word when the
+/// letter before it is lower case or the one after it is, so `HTTPMethod` is `HTTP_METHOD` —
+/// not `H_T_T_P_METHOD`, which buf refuses — and a digit begins none: `Tier2` is `TIER2`.
+pub fn upper_snake(camel: &str) -> String {
+    let b: Vec<char> = camel.chars().collect();
+    let mut out = String::new();
+    for (i, &ch) in b.iter().enumerate() {
+        if ch == '_' {
+            if !out.is_empty() && !out.ends_with('_') {
+                out.push('_');
+            }
+            continue;
+        }
+        if i > 0 && ch.is_ascii_uppercase() && !out.ends_with('_') {
+            let lower_before = b[i - 1].is_ascii_lowercase();
+            let lower_after = b.get(i + 1).is_some_and(|n| !n.is_ascii_uppercase() && !n.is_ascii_digit() && *n != '_');
+            if lower_before || lower_after {
+                out.push('_');
+            }
+        }
+        out.push(ch.to_ascii_uppercase());
+    }
+    while out.ends_with('_') {
+        out.pop();
+    }
+    out
+}
+
+/// A value's name with the enum's prefix taken off, when what is left is a name of its own
+/// (`is_value` says whether a name is another value's whole name, which would make two values
+/// one). It is not when it begins with a digit — `SIZE_60` would leave `60`, which no alias can
+/// be. The name then stays as written, prefix and all, which is also what protobuf-py does with it.
+pub fn value_local<'v>(enum_name: &str, value: &'v str, is_value: impl Fn(&str) -> bool) -> &'v str {
+    let prefix = format!("{}_", upper_snake(enum_name));
+    match value.strip_prefix(prefix.as_str()) {
+        Some(rest) if rest.starts_with(|c: char| c.is_ascii_alphabetic()) && !is_value(rest) => rest,
+        _ => value,
+    }
+}
+
+/// The values an enum of a `.proto` means under the rules on a field (`rules`, by number; default
+/// for none), each as a rule's `import proto` calls it: the prefix taken off, in lower case, without
+/// the value 0 named `…_UNSPECIFIED`, which proto3 reads as not set (rulec's `Enum::named`).
+pub fn enum_names(e: &crate::model::Enum, rules: &IntRules) -> Vec<String> {
+    let is_value = |n: &str| e.values.iter().any(|o| o.name == n);
+    let passes = |n: i128| rules.konst.is_none_or(|k| k == n) && (rules.in_.is_empty() || rules.in_.contains(&n)) && !rules.not_in.contains(&n);
+    e.values
+        .iter()
+        .filter(|v| passes(v.number as i128))
+        .filter_map(|v| {
+            let local = value_local(&e.name, &v.name, is_value);
+            (v.number != 0 || !local.eq_ignore_ascii_case("unspecified")).then(|| local.to_ascii_lowercase())
+        })
+        .collect()
+}

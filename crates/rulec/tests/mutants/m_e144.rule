@@ -1,0 +1,16 @@
+rule shipping v1
+description "The fee of an order. The weight comes from the contract, and hand-written code would not carry it"
+
+shape order = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+inputs
+  weight : number  range >=0 <=100  from order.weight  fed by rulec "scale.rule" output weight
+
+outputs
+  fee : number
+
+table fee_of
+policy unique
+| weight | -> fee : number |
+| <=10   | 5               |
+| >10    | 20              |

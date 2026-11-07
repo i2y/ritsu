@@ -131,6 +131,12 @@ that the table matches the world (only that the copy is the file the source serv
 anything outside the range. That the generated code gives what the reference interpreter gives
 is a test over every input of the range, not a proof.
 
+An input can say where hand-written code takes its value from:
+`due_on : date  range >=2026-02-02 <=2028-12-29  fed by koyomi "net30.cal" date due`
+([`late_fee.cal`](examples/late_fee.cal)). `ritsu check` asks the other file what it can come to,
+and stops with an example when the input would refuse one of those days. The days are what is
+checked: nothing checks that the hand-written code really carries the value, and the page says so.
+
 ## The page for people
 
 `koyomi doc` writes the page for the people who read the terms to understand and check what the
@@ -206,6 +212,7 @@ On England and Wales, with GOV.UK's bank holidays
 | [`net30.cal`](examples/net30.cal) | Net 30: due 30 days after the invoice date, on the next business day | passes |
 | [`close_and_pay_on_given_days.cal`](examples/close_and_pay_on_given_days.cal) | the closing day, and the month and the day of payment, as integer inputs: 872,960 combinations | passes |
 | [`period_of_months.cal`](examples/period_of_months.cal) | the end of a period of months: the day itself not counted, the day before the corresponding day, an end on a closed day moved to the day after | passes |
+| [`late_fee.cal`](examples/late_fee.cal) | a late fee from 14 days after the due date of `net30.cal`, which `fed by` names as where the input comes from (also [`late_fee.ja.cal`](examples/late_fee.ja.cal)) | passes |
 | [`period_of_months_two_readings.cal`](examples/period_of_months_two_readings.cal) | moving that end read two ways, to the very next day and to the next business day, and the day before the corresponding day against adding the months and rounding down | fails on purpose: the readings part on 709 inputs, the other pair on 39 |
 
 England and Wales changes its clocks, so its calendar has no offset, and these examples give

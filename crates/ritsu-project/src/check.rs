@@ -73,7 +73,7 @@ impl Project {
                     sakai::run::checked(&args, Some(&root_arg), &joined.sakai(), lang)
                 }
                 // the standard formats are read by the languages that name them
-                Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File => continue,
+                Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Jsonschema => continue,
             };
             out.extend(units.into_iter().map(|u| (tool, u)));
         }

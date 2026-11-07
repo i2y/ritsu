@@ -1,0 +1,20 @@
+book 返金 v1
+description "注文ごとに、あといくら返金できるか。売上で増え、返金で減り、上限と下限の内に収まる"
+
+unit USD scale 2
+
+account 返金できる残り(注文: string) : USD
+  description "注文の、返金できる残り"
+  at least 0 refused as 残りなし
+  at most 100000 refused as 支払額超え
+account 客 : USD outside
+
+transfer 売上(注文: string, 金額: USD)
+  description "注文が支払われた"
+  key 注文
+  move 金額 from 客 to 返金できる残り(注文)
+
+transfer 返金(申請: string, 注文: string, 金額: USD)
+  description "返金を払う"
+  key 申請
+  move 金額 from 返金できる残り(注文) to 客

@@ -571,6 +571,9 @@ them:
   against the range the rule declares;
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
+- the value hand-written code carries from one language to another, named with `fed by` where it is
+  taken: what the source can come to against what the place takes (the code that carries it is not
+  checked);
 - every value a kaname module passes to a rule, a date or a transfer, against the range that one
   declares;
 - money and units, one type across rulec, dandori, chobo and kaname;

@@ -1,0 +1,31 @@
+gate 注文の窓口(order_desk_ja) v1
+description "窓口でだれが注文を返金できるか。注文の金額は手書きのコードがスキーマの言う注文から運び、理由は申請から運ぶ。`fed by` は値の出どころを言う。`ritsu check` は値の範囲を確かめ、運ぶコードは確かめない"
+namespace OrderDeskJa
+
+enum 返金の理由(refund_reason) = 破損(damaged) | 遅延(late)
+
+role 窓口係(clerk)
+  description "窓口で客に応対する"
+  can 返金する
+
+principal 利用者(User)
+  description "店の職員"
+  roles 窓口係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    金額(amount) : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.ja.schema.json" def 注文 property 金額
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 利用者
+  resource 注文
+  input
+    理由(reason) : 返金の理由  fed by jsonschema "schemas/order.ja.schema.json" def 返金 property 理由
+
+permit 小さい注文は窓口で返金する(clerks_refund_small_orders)
+  description "100 ドル以下の注文は窓口係が返金する"
+  principal in 窓口係
+  action 返金する
+  when resource.金額 <= 10000USDc

@@ -37,7 +37,7 @@ $ sakai check examples/shop.ja/通販.ctx --lang ja
 examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）
 ```
 
-境界を越える参照の 10 件は、成果物そのものが書いているものです。`.proto` の import、規則の `import proto` と `shape`、カレンダーの `use calendar`、ワークフローの `use rule`・`use proto`・`connect`・子のフローがそれにあたります。
+境界を越える参照の 10 件は、成果物そのものが書いているものです。`.proto` の import、規則の `import proto` と `shape`、カレンダーの `use calendar`、ワークフローの `use rule`・`use proto`・`connect`・子のフローがそれにあたります。`fed by` も数えます。手書きのコードが境界をまたいで運ぶ値にも、ほかと同じく関係が要るからです。
 sakai はこれを、それぞれの言語が自分のファイルを読んだ結果として、ritsu を通して同じプロセスの中で受け取ります。
 
 ## 検査が言うこと

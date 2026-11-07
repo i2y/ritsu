@@ -498,7 +498,10 @@ impl ritsu_ports::Items for Engine {
     /// each line without its comment and the spaces around it.
     fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>> {
         let f = parsed(root, file)?;
-        let lines: Vec<&str> = f.src.lines().collect();
+        // Where a value comes from says nothing of what the input means, and a version of it stays
+        // the same (DESIGN 21): the definition is read without `fed by`.
+        let body = ritsu_base::fed::without(&f.src);
+        let lines: Vec<&str> = body.lines().collect();
         let text = |from: usize, to: usize| -> String { lines.get(from.saturating_sub(1)..to.min(lines.len())).unwrap_or_default().iter().map(|l| plain(l)).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n") };
         let naming = |kind: &str, name: &str| Naming::file(Tool::Koyomi, file).with(kind, name);
         let mut out = Vec::new();
@@ -528,8 +531,8 @@ impl ritsu_ports::Items for Engine {
 }
 
 impl ritsu_ports::References for Engine {
-    /// The calendar a dates file reads (`use calendar`), the calendar a calendar reads, and the
-    /// file a `source` copies.
+    /// The calendar a dates file reads (`use calendar`), the calendar a calendar reads, the file a
+    /// `source` copies, and where hand-written code takes an input's value from (`fed by`, DESIGN 21).
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let f = parsed(root, file)?;
         let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
@@ -546,7 +549,43 @@ impl ritsu_ports::References for Engine {
                 out.push(Reference { line: s.span.line, target: Naming::file(Tool::File, p), how: "source".into() });
             }
         }
+        for i in &f.inputs {
+            if let Some(fb) = &i.fed
+                && let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name)
+            {
+                out.push(Reference { line: fb.span.line, target, how: "fed by".into() });
+            }
+        }
         out.sort_by_key(|r| r.line);
+        Ok(out)
+    }
+}
+
+impl ritsu_ports::Feeds for Engine {
+    /// The inputs with `fed by` (DESIGN 21), each with the range its line takes.
+    fn feeds(&self, root: &Path, file: &str, _ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
+        let f = parsed(root, file)?;
+        if f.inputs.iter().all(|i| i.fed.is_none()) {
+            return Ok(Vec::new());
+        }
+        let o = model(&ritsu_base::paths::on_disk(root, file))?;
+        let m = dates(&o);
+        let mut out = Vec::new();
+        for a in &f.inputs {
+            let Some(fb) = &a.fed else { continue };
+            let Some(i) = m.inputs.iter().find(|i| i.name == a.name.text) else { continue };
+            let takes = match i.ty {
+                crate::ast::Ty::Date => ritsu_ports::Carried::Date { min: Some(i.lo), max: Some(i.hi) },
+                crate::ast::Ty::Int => ritsu_ports::Carried::whole("int", Some(i.lo as i128), Some(i.hi as i128)),
+            };
+            out.push(ritsu_ports::Fed {
+                line: fb.span.line,
+                place: Naming::file(Tool::Koyomi, file).with("input", &a.name.text),
+                takes,
+                source: ritsu_base::fed::from_root(root, file, &fb.name),
+                written: fb.written.clone(),
+            });
+        }
         Ok(out)
     }
 }

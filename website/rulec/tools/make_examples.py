@@ -389,6 +389,38 @@ EXAMPLES = [
         ],
     ),
     (
+        "領地の収入.rule",
+        "領地が季節ごとに得る食料を出す",
+        "次の例の規則が受け取る値を出す規則です。表の出力に計算は書けないので、`define` の行に名前を付けて、その名前を表に置きます。",
+        [
+            "**出力がとりうる値は rulec が数えます。** `農地` は 0 から 20 なので、秋の行で 60 まで届きます。次の例の `fed by` は、この答えを受け取る側と比べます。",
+            "**値を出す規則は、受け取る側のことを何も知りません。** この規則の中に、次の例の名前は出てきません。",
+        ],
+        "The food a province brings in each season",
+        "This rule gives the value the next example takes. An output cell cannot hold arithmetic, so each calculation gets a name on a `define` line and the table holds the name.",
+        [
+            "**rulec counts what an output can come to.** `farmland` goes from 0 to 20, so the autumn row reaches 60. The `fed by` in the next example holds this answer against the place that takes it.",
+            "**The rule that gives the value knows nothing of the one that takes it.** No name from the next example appears here.",
+        ],
+    ),
+    (
+        "領地の成長.rule",
+        "入力の値の出どころを書く",
+        "手書きのコードが `領地の収入.rule` の `食料` をこの規則へ運びます。入力の行の最後の `fed by` は、その出どころを受け取る側に書く形です。",
+        [
+            "**`ritsu check` が両方の規則に尋ねます。** 出どころがとりうる値を全部受け取れれば成り立ちます。範囲を `<=30` に縮めると、`農地 = 20, 季節 = 秋` で 60 になる例を添えて E207 で止まります。受け取る側が広いのは問題ありません。",
+            "**確かめるのは値の範囲だけです。** 手書きのコードが本当にこの値を運ぶかは確かめません。`rulec doc` の入力の表にも、そう書いて出します。",
+            "**検査だけの形です。** 生成コードは一字も変わらず、`meaning` のハッシュも動きません。",
+        ],
+        "Where an input's value comes from",
+        "Hand-written code carries `food` from `province_income.rule` to this rule. The `fed by` at the end of the input's line writes that source down where the value is taken.",
+        [
+            "**`ritsu check` asks both rules.** It holds when the place takes everything the source can come to. Narrow the range to `<=30` and it stops at E207, with the example: 60 at `farmland = 20, season = autumn`. A place wider than its source is fine.",
+            "**The range of the values is what gets checked.** Whether the hand-written code really carries this value is not checked. The table of inputs in `rulec doc` says so.",
+            "**It is a form for checking only.** Generated code does not change by a character, and neither does the `meaning` hash.",
+        ],
+    ),
+    (
         "注文の状態.rule",
         "続いていく注文の、一回のイベント（machine）",
         "通販の注文が、入金・出荷・配達・取消依頼のイベントでどの状態に移り、いくら返金するかを決めます。状態は呼び出す側が持ちます（データベースの注文の行など）。規則は今の状態と一つのイベントを受け取って次の状態を返す純関数のままで、`machine` の節が、その関数を何回続けて呼んでも崩れないことを言います。",

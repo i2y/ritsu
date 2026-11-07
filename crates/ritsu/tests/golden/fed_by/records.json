@@ -1,0 +1,217 @@
+{
+  "held": 10,
+  "failed": 0,
+  "undecided": 0,
+  "records": [
+    {
+      "check": "fed_by",
+      "about": "record Line field items",
+      "at": {
+        "tool": "kaname",
+        "file": "bill.kn",
+        "line": 5
+      },
+      "to": {
+        "tool": "jsonschema",
+        "file": "schemas/order.schema.json",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "jsonschema \"schemas/order.schema.json\" def Order property items",
+      "takes": "number >=1 <=20",
+      "gives": "integer >=1 <=20",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "function total parameter order",
+      "at": {
+        "tool": "kaname",
+        "file": "bill.kn",
+        "line": 10
+      },
+      "to": {
+        "tool": "jsonschema",
+        "file": "schemas/order.schema.json",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "jsonschema \"schemas/order.schema.json\" pointer /$defs/Order/properties/amount",
+      "takes": "number >=1 <=1000000",
+      "gives": "integer >=1 <=1000000",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "resource Order attribute amount",
+      "at": {
+        "tool": "sekisho",
+        "file": "desk.gate",
+        "line": 16
+      },
+      "to": {
+        "tool": "jsonschema",
+        "file": "schemas/order.schema.json",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "jsonschema \"schemas/order.schema.json\" def Order property amount",
+      "takes": "money[USDc] >=1 <=1000000",
+      "gives": "integer >=1 <=1000000",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "input issued_on",
+      "at": {
+        "tool": "koyomi",
+        "file": "due.cal",
+        "line": 5
+      },
+      "to": {
+        "tool": "jsonschema",
+        "file": "schemas/order.schema.json",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "jsonschema \"schemas/order.schema.json\" def Order property issued_on",
+      "takes": "date >=2026-01-01 <=2026-12-31",
+      "gives": "string (2026-04-01, 2026-05-01, 2026-06-01)",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "input amount",
+      "at": {
+        "tool": "dandori",
+        "file": "refund.flow",
+        "line": 5
+      },
+      "to": {
+        "tool": "openapi",
+        "file": "api/refunds.json",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "openapi \"api/refunds.json\" schema RefundCreate property amount",
+      "takes": "money[USDc] >=1 <=1000000",
+      "gives": "integer >=1 <=1000000",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "input reason",
+      "at": {
+        "tool": "dandori",
+        "file": "refund.flow",
+        "line": 6
+      },
+      "to": {
+        "tool": "openapi",
+        "file": "api/refunds.json",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "openapi \"api/refunds.json\" schema RefundCreate property reason",
+      "takes": "string",
+      "gives": "string (damaged, late)",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "record Balance field left",
+      "at": {
+        "tool": "dandori",
+        "file": "refund.flow",
+        "line": 9
+      },
+      "to": {
+        "tool": "chobo",
+        "file": "refunds.book",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "chobo \"refunds.book\" account remaining",
+      "takes": "money[USDc] >=0 <=10000000",
+      "gives": "USD >=0 <=10000000",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "input left",
+      "at": {
+        "tool": "rulec",
+        "file": "refund_limit.rule",
+        "line": 5
+      },
+      "to": {
+        "tool": "chobo",
+        "file": "refunds.book",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "chobo \"refunds.book\" account remaining",
+      "takes": "money[USDc] >=0 <=10000000",
+      "gives": "USD >=0 <=10000000",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "input progress",
+      "at": {
+        "tool": "rulec",
+        "file": "research.rule",
+        "line": 5
+      },
+      "to": {
+        "tool": "rulec",
+        "file": "research.rule",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "rulec \"research.rule\" output next_progress",
+      "takes": "number >=0 <=200",
+      "gives": "number >=0 <=50",
+      "example": null,
+      "why": null
+    },
+    {
+      "check": "fed_by",
+      "about": "input band",
+      "at": {
+        "tool": "rulec",
+        "file": "review.rule",
+        "line": 5
+      },
+      "to": {
+        "tool": "rulec",
+        "file": "refund_limit.rule",
+        "line": null
+      },
+      "result": "held",
+      "code": null,
+      "source": "rulec \"refund_limit.rule\" output band",
+      "takes": "number >=0 <=2",
+      "gives": "number >=0 <=2",
+      "example": null,
+      "why": null
+    }
+  ]
+}

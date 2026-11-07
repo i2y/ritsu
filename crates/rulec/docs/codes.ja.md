@@ -149,6 +149,7 @@ rulec が出しうるコードの全部について、いつ出るかと、ど�
 | [E141](#e141) | error | `never` の行の書き方が違います |
 | [E142](#e142) | error | `never` に書いた組み合わせが、定義から起こります |
 | [E143](#e143) | error | `never` の行を定義から確かめられません |
+| [E144](#e144) | error | `fed by` を読めないか、書けない場所にあります |
 
 ## E001
 
@@ -5990,3 +5991,31 @@ policy unique
 ```
 
 関係するコード: [E142](#e142), [E141](#e141), [E101](#e101)
+
+## E144
+
+`error` — **`fed by` を読めないか、書けない場所にあります**
+
+**いつ出るか。** `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、入力の行でない場所に書いたとき、`from` や `random` と一緒に書いたとき、ステートマシンが持ち越す入力に書いたとき。
+
+**直し方。** 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。`from` が値の出どころを言っているなら、`fed by` を消してください。
+
+**最小の再現**:
+
+```rule
+rule 配送料(shipping) v1
+
+inputs
+  重さ(weight) : number  range >=1 <=10  from order.weight  fed by rulec "計量.rule" output 重さ
+
+outputs
+  料金(fee) : money[円]
+
+table 料金表(fees)
+policy unique
+| 重さ | -> 料金 |
+| <=5  | 500円   |
+| >5   | 900円   |
+```
+
+関係するコード: [E121](#e121), [E122](#e122)

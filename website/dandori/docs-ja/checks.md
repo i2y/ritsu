@@ -58,6 +58,60 @@
 
 **プラットフォーム。** プラットフォームごとに違うことは、`dandori gen` が確かめます。一回の実行がプラットフォームの上限を超えうるか（E040）と、プラットフォームに要るものが欠けていないか、プラットフォームにできないことをしていないか（E050）です。
 
+## 値の出どころ
+
+手書きのコードは、ほかの場所から取った値で実行を始めます。API が受けた申請から金額を、帳簿から残りを取る、といった具合です。入力の行とレコードのフィールドの行の最後の `fed by` は、処理系全体の参照の書き方でその出どころを書く形です（[examples/refund_request](https://github.com/i2y/ritsu/tree/main/crates/dandori/examples/refund_request)）。
+
+```flow
+record 残高
+  残り : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.ja.book" account 返金できる残り
+
+inputs
+  申請額 : money[USDc]  range >=1USDc <=1000000USDc  fed by openapi "specs/refunds.ja.json" schema 返金の申請 property 金額
+```
+
+パスは `.flow` のあるディレクトリから書きます。指せるものは、ほかの言語と同じです。
+
+| 値の出どころ | 書き方 |
+|---|---|
+| 規則の出力 | `rulec "<ファイル>" output <名前>` |
+| 帳簿の勘定 | `chobo "<ファイル>" account <名前>` |
+| 日付のファイルの日付 | `koyomi "<ファイル>" date <名前>` |
+| `.proto` のメッセージのフィールド | `proto "<ファイル>" message <名前> field <名前>` |
+| OpenAPI のスキーマのプロパティ | `openapi "<ファイル>" schema <名前> property <名前>` |
+| JSON Schema のプロパティ | `jsonschema "<ファイル>" def <名前> property <名前>`、または `jsonschema "<ファイル>" pointer <ポインタ>` |
+| ワークフローの出力、そのレコードのフィールド | `dandori "<ファイル>" output <名前>`、`dandori "<ファイル>" record <名前> field <名前>` |
+| kaname のレコードのフィールド | `kaname "<ファイル>" record <名前> field <名前>` |
+
+`ritsu check` が両側の言語に尋ね、答えは三つのどれかになります。
+
+- **成り立つ。** 出どころがとりうる値を、受け取る側が全部受け取ります。受け取る側が広いのは問題ありません。
+- **E207。** 受け取る側が受け取らない値に、出どころがなることがあります。文に、その値と、出どころが言えるならそれを出す入力が出ます。
+- **W207。** 決められません。文に理由が出ます。たとえば、rulec が数えた規則の出力の端にどのベクタも届かないとき、契約が日付を文字列で運び、日を並べていないとき。
+
+E208 は、出どころがそこに無いことを言います（ファイル、またはその中の名前）。
+
+数は単位と刻みを揃えて比べ、単位が違えば成り立ちません。列挙は値の公開名で、日付は日で、真偽と文字列は型だけで比べます。受け取る側が書いていない端は比べません。契約に上限か下限が無いと、受け取る側を超える値を通すので、規則の `from` と同じく（E122）成り立ちません。帳簿の勘定に `at most` が無いときも、chobo の上限（2⁶³ − 1）まで届くので成り立ちません。
+
+次は、帳簿から `at most` を消した場合です。これが無ければ、実行が `Dandori.BadResponse` で終わって初めて分かります。
+
+```console
+$ ritsu check refund_request.ja.flow books/refunds.ja.book --lang ja
+books/refunds.ja.book: ok
+  売上.do  拒否されうる理由: key_conflict
+  返金.do  拒否されうる理由: 残りなし（返金できる残り(注文) at least 0.00）、key_conflict、already_refused
+  キー: 売上 は、注文 ごとに一度だけ動きます。キーが同じで 金額 が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: 返金 は、申請 ごとに一度だけ動きます。キーが同じで 注文、金額 のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+refund_request.ja.flow: 検査を通りました
+エラー[ritsu E207]: refund_request.ja.flow:8:1: `record 残高 field 残り` は money[USDc] >=0 <=10000000 を受け取りますが、出どころ chobo "books/refunds.ja.book" account 返金できる残り は 10000001 になることがあります
+     8 |   残り : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "books/refunds.ja.book" account 返金できる残り
+  = 帳簿が受け付ける値です。`at least`・`at most` を書いていない端は、chobo の限度（2⁶³ − 1）まで受け付けます。
+  = 受け取る側を広げるか、出どころを狭めてください。どちらにするかは人が決めることです。
+ritsu check: ファイル 2 個（chobo 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 3 か所、決められない 0 か所
+```
+
+`dandori check` は単独では、形を読めるかと書ける場所かだけを言います（E023）。相手のファイルはほかの言語が読むものだからです。**手書きのコードが本当にその値を運ぶかは、何も確かめません。** `dandori doc` のページもそう書きます。dandori が生成するものは、どの出力先でも変わりません。
+
 ## 一回の実行の大きさ
 
 一回の実行の大きさには、プラットフォームごとに上限があります。実行履歴は、Step Functions で 25,000 件、Temporal で 51,200 件、Lambda durable functions で 3,000 操作までです。Argo Workflows では Workflow のオブジェクトがすべてのノードを抱えるので、dandori は 10,000 ノードを目安にしています。ループには回数の上限を書き（`repeat at most 12 times`、`for x in xs at most 50`）、再帰も無いので、ビルドは一回の実行履歴が最も長くなる場合を数えられます。数え方は多めなので、上限に近いワークフローは、実際には収まる場合でもエラーになることがあります。
@@ -70,4 +124,4 @@ Temporal では、フローの一番外のループは、履歴が長くなっ�
 
 ## 診断コードの一覧
 
-[診断コード](reference/codes.md)に、37 種類すべてと、それぞれが何を見つけるかをまとめています。
+[診断コード](reference/codes.md)に、38 種類すべてと、それぞれが何を見つけるかをまとめています。

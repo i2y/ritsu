@@ -148,6 +148,19 @@ pub struct Input {
     pub hi: Option<(Lit, Span)>,
     /// Where `range` is, or where it should have been.
     pub range_span: Span,
+    /// Where hand-written code takes the value from, when the line says (DESIGN 21).
+    pub fed: Option<FedBy>,
+}
+
+/// `fed by rulec "orders.rule" output issued_on` at the end of an input's line (DESIGN 21): checked
+/// by `ritsu check`, and read by nothing generated.
+#[derive(Clone, Debug)]
+pub struct FedBy {
+    /// The naming as written.
+    pub written: String,
+    /// What it names, with its path as written, from the file's directory.
+    pub name: ritsu_base::naming::Name,
+    pub span: Span,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

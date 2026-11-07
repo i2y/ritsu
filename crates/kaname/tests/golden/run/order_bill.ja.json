@@ -1,0 +1,21 @@
+{
+  "kaname": "<version>",
+  "file": "order_bill.ja.kn",
+  "module": "注文の請求額",
+  "function": "請求額",
+  "input": {
+    "明細": [
+      {
+        "品番": "book-1",
+        "数量": 2
+      },
+      {
+        "品番": "mug-1",
+        "数量": 1
+      }
+    ],
+    "単価": 150
+  },
+  "calls": [],
+  "result": 450
+}

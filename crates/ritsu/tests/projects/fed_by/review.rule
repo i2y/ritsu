@@ -1,0 +1,14 @@
+rule review v1
+description "Who looks at a refund. Hand-written code takes the band from refund_limit"
+
+inputs
+  band : number  range >=0 <=2  fed by rulec "refund_limit.rule" output band
+
+outputs
+  second_look : bool
+
+table second_look_of
+policy unique
+| band | -> second_look : bool |
+| >=1  | true                  |
+| 0    | false                 |

@@ -6,6 +6,26 @@
 
 koyomi's documents are in the repository: [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.md), [the reference](https://github.com/i2y/ritsu/blob/main/crates/koyomi/docs/reference.md), [the generated code](https://github.com/i2y/ritsu/blob/main/crates/koyomi/docs/generated-code.md), [the codes of its diagnostics](https://github.com/i2y/ritsu/blob/main/crates/koyomi/docs/codes.md).
 
+## Where an input's value comes from
+
+Hand-written code often carries an input from somewhere else: a date of another file, a field of a
+contract. `fed by` at the end of the input's line says where, in the form the toolchain names
+everything, and `ritsu check` asks the other file what it can come to:
+
+```console
+$ cd crates/koyomi/examples
+$ ritsu check late_fee.cal net30.cal
+late_fee.cal: ok — 2 claims hold on all 1,062 days of due_on (2026-02-02..2028-12-29)
+net30.cal: ok — 3 claims hold on all 1,064 days of invoice_date (2026-01-01..2028-11-29)
+ritsu check: 2 files (koyomi 2): all pass; borders between the languages: 1 checked, 0 undecided
+```
+
+Narrow `due_on` by a day, to `<=2028-12-28`, and it stops with E207:
+`koyomi "net30.cal" date due comes to 2028-12-29 at invoice_date = 2028-11-29.`
+
+The days are what is checked. Nothing checks that the hand-written code really carries that value,
+and the page says so ([the reference](https://github.com/i2y/ritsu/blob/main/crates/koyomi/docs/reference.md#fed-by--where-an-inputs-value-comes-from) has the rest).
+
 ## Comparing two versions
 
 `koyomi diff` compares the answers of two versions: of a calendar on every day both know, of a dates file on every input both take. Here an office's calendar closes on its founding day, renames a bank holiday, knows 2027 too and takes an offset:

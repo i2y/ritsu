@@ -74,7 +74,7 @@ does to a case, its retries, its timeout.
 the page works without a network. The page of each example, as written for Temporal:
 [hotel](doc/hotel.html), [order](doc/order.html), [fulfillment](doc/fulfillment.html),
 [inquiry](doc/inquiry.html) and [review](doc/review.html); and of [invoice](doc/invoice.html) and
-[payout](doc/payout.html), which are written once for every platform. A date is drawn as a rule is, with the dates file it is of.
+[payout](doc/payout.html) and [refund_request](doc/refund_request.html), which are written once for every platform. A date is drawn as a rule is, with the dates file it is of.
 
 - **Pick a step.** The pane on the right shows its lines of the `.flow`, what each case can be when
   a run gets there, what the call calls, its retries and timeout, where each of its errors goes,

@@ -137,6 +137,9 @@ The keywords are English, one spelling each. `day` and `days`, `month` and `mont
 The symbols are `->` (an output column of the examples), `..` (a span of days, both ends
 included), `@` (a citation of a law) and `#` (a comment).
 
+`fed by` at the end of an input's line ([below](#fed-by--where-an-inputs-value-comes-from)) is cut
+off before the line's words are read, so neither word is reserved: an input can be called `fed`.
+
 ## Calendars
 
 | Line | What it says |
@@ -245,6 +248,49 @@ of `int` inputs, and every input has both ends of its `range` (E013). The range 
 computes every value of, what the generated code refuses outside of, and what decides whether a
 computation can leave the data range. One date keeps the check exhaustive: a date over a century
 is 36,525 values, two of them over a billion.
+
+### `fed by` — where an input's value comes from
+
+Hand-written code often carries the input from somewhere else. `fed by` at the end of the input's
+line says where:
+
+```cal
+inputs
+  due_on : date  range >=2026-02-02 <=2028-12-29  fed by koyomi "net30.cal" date due
+```
+
+The rest of the line is a naming, in the form the whole toolchain names things; the path goes from
+the directory of the file it is written in. It stands only on a line of `inputs`; anywhere else, or
+when the naming does not read or names something that holds no value, it is E017. `fed` and `by`
+are not reserved: they are the form only when the two stand together at the end of a line.
+
+| The value comes from | Named as |
+|---|---|
+| an output of a rule | `rulec "<file>" output <name>` |
+| an account of a book | `chobo "<file>" account <name>` |
+| a date of a dates file | `koyomi "<file>" date <name>` |
+| a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
+| a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
+| an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
+| a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+
+`ritsu check` asks the language on each side, and comes to one of three answers:
+
+- **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
+- **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+
+E208 says the source is not there: its file, or the name in it.
+
+Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+
+A contract carries a date as a string, so one that lists its days (`enum`, `const`) is compared by
+those days, and one that does not is W207.
+
+**What is not checked.** Nothing checks that the hand-written code really carries that value. The
+page of `koyomi doc` says so: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). Generated code does not change, and `koyomi api` gives the
+naming as the input's `fed_by`.
 
 ### Dates and operations
 
@@ -504,7 +550,7 @@ the range, where the generated code must refuse:
 ### `api`
 
 What calling the generated code takes, without reading it: the functions, their inputs with types
-and ranges, the times, the calendar (its files, lines, sources with their pins and its data
+and ranges (and `fed_by`, the naming of an input's `fed by`), the times, the calendar (its files, lines, sources with their pins and its data
 range), the laws, and for each target the file, the module and the signatures. The shape follows
 rulec's `api`, so a tool that reads one can read the other. `wire.errors` lists the kinds of error
 the generated code raises: `range` (an input outside its range), `data` (a day the calendar does

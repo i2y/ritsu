@@ -1245,8 +1245,13 @@ pub struct Model {
     /// The `.flow` as the head of every generated file names it (ritsu's DESIGN 9.2): its name, or
     /// under `ritsu gen` its path from the project's root.
     pub source_path: String,
-    /// The SHA-256 of the `.flow`'s bytes, in hex.
+    /// The SHA-256 of the `.flow`'s text without its `fed by`, in hex: the form moves nothing
+    /// generated (DESIGN 24).
     pub source_sha256: String,
+    /// The places that say where their value comes from (DESIGN 24): the place as the page shows
+    /// it (`amount`, `Balance.remaining`) and the naming as the line writes it. Only what shows the
+    /// flow to people and tools (`doc` and `api`) reads it.
+    pub fed: Vec<(String, String)>,
     /// Built as a flow of a package of ritsu's (`ritsu gen`, ritsu's DESIGN 9.3): the workflow reads
     /// the rules, the dates and the books from the package's rules/, dates/ and books/; None for a
     /// build of its own, which reads them from code put beside it.

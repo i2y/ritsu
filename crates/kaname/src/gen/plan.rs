@@ -815,7 +815,8 @@ impl<'a> Gen<'a> {
 
     /// The line of the source, as written: the comment a statement of the code is read with.
     pub fn line_of(&self, line: usize) -> String {
-        self.c.src.lines().nth(line.saturating_sub(1)).unwrap_or("").trim().to_string()
+        // without `fed by`, which moves nothing generated (DESIGN 37)
+        ritsu_base::fed::without(self.c.src.lines().nth(line.saturating_sub(1)).unwrap_or("")).trim().to_string()
     }
 
     // ── Literals ───────────────────────────────────────────────────────────

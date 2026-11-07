@@ -355,7 +355,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 232 deliberately broken
+   and that implementation has not been proved correct. The evidence is 234 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -526,6 +526,47 @@ file's SHA-256. The days are read through ritsu, with koyomi joined
 (`ritsu rulec check`, `ritsu check`); a rulec with no koyomi does not
 check the rule over every day instead, and says so (E129). See
 [the reference](reference.md#range-from-koyomi--the-days-a-koyomi-date-comes-to).
+
+## Where an input's value comes from
+
+Hand-written code carries the food a province brought in from one rule to the next. `fed by` at the
+end of the input's line writes that down where the value is taken, in the form the toolchain names
+everything (the [reference](reference.md) has what it can name):
+
+```rule
+inputs
+  food : number  range >=0 <=60  fed by rulec "province_income.rule" output food
+```
+
+`ritsu check` asks both rules, and holds what the source can come to against what the input takes:
+
+```console
+$ ritsu check .
+ok province_growth.rule
+ok province_income.rule
+ritsu check: 2 files (rulec 2): all pass; borders between the languages: 1 checked, 0 undecided
+```
+
+Narrow the input to `<=30`, and the answer comes with an example:
+
+```console
+$ ritsu check .
+ok province_growth.rule
+ok province_income.rule
+error[ritsu E207]: province_growth.rule:5:1: `input food` takes number >=0 <=30, and its source rulec "province_income.rule" output food can be 60
+     5 |   food : number  range >=0 <=30  fed by rulec "province_income.rule" output food
+  = rulec "province_income.rule" output food comes to 60 at farmland = 20, season = autumn.
+  = Widen what this place takes, or narrow what the source gives. Which of the two is a person's decision.
+ritsu check: 2 files (rulec 2): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
+```
+
+When it cannot be decided it says W207 and why, and does not pass in silence: rulec counts an end of
+the output that none of the rule's vectors reaches. `rulec check` on its own says only whether the
+form reads and stands where it can (E144), since the other file is another language's to read.
+
+The range of the values is what is checked. **Nothing checks that the hand-written code really
+carries that value**, and `rulec doc` says so beside the input. Generated code does not change by a
+character, and the `meaning` hash does not read the form.
 
 ## An input that may be missing
 

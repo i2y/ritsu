@@ -302,8 +302,9 @@ fn the_borders_are_counted_from_their_records_in_their_order() {
             ("koyomi_date_input", "b.flow", 3, "received"),
         ]
     );
-    // the words are the order's, and each is one of a check's own
+    // the words are the order's, and each is one of a check's own; a new one comes last
     let words: Vec<&str> = Check::ALL.iter().map(|c| c.word()).collect();
+    assert_eq!(words.last(), Some(&"fed_by"), "{words:?}");
     assert!(Check::ALL.windows(2).all(|w| w[0] < w[1]), "{words:?}");
     assert_eq!(words.iter().collect::<std::collections::BTreeSet<_>>().len(), Check::ALL.len());
     assert!(words.iter().all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '_')), "{words:?}");

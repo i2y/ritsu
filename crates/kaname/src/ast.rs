@@ -167,6 +167,19 @@ pub struct FieldDecl {
     pub ty: TypeRef,
     pub bounds: Bounds,
     pub line: usize,
+    /// Where hand-written code takes the value from, when the line says (DESIGN 37).
+    pub fed: Option<FedBy>,
+}
+
+/// `fed by openapi "api.yaml" schema Order property amount` at the end of the line of a record's
+/// field or a parameter (DESIGN 37): checked by `ritsu check`, and read by nothing generated.
+#[derive(Clone, Debug)]
+pub struct FedBy {
+    /// The naming as written.
+    pub written: String,
+    /// What it names, with its path as written, from the module's directory.
+    pub name: ritsu_base::naming::Name,
+    pub span: Span,
 }
 
 /// A type as written (DESIGN 3.1).
@@ -323,6 +336,8 @@ pub struct Param {
     pub name: Name,
     pub ty: TypeRef,
     pub bounds: Bounds,
+    /// Where hand-written code takes the value from, when the line says (DESIGN 37).
+    pub fed: Option<FedBy>,
 }
 
 /// The lines `let` names, then the expression that answers (DESIGN 2.3, `block`).

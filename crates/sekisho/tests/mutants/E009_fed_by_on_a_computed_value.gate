@@ -1,0 +1,28 @@
+gate shop v1
+description "Who may refund an order of the shop. A value of `context` is one the gate computes, so hand-written code does not carry it"
+namespace Shop
+
+role clerk
+  description "Answers customers"
+  can refund_order
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order of the shop"
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  context
+    small = limits(amount: amount).small  fed by rulec "orders.rule" output small
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order

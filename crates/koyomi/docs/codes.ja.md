@@ -298,6 +298,26 @@ inputs
   d : date  range >=2026-01-01 <=2026-01-31
 ```
 
+<a id="e017"></a>
+
+## E017 — `fed by` を読めないか、書けない場所にあります
+
+**いつ出るか**: `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、`inputs` の行でない場所に書いたとき。
+
+**直し方**: 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。
+
+**再現**:
+
+```cal
+dates t v1
+
+inputs
+  issued_on : date  range >=2026-01-01 <=2026-12-31  fed by sakai "shop.ctx" term order
+
+date due = issued_on
+  + 30 days
+```
+
 <a id="e016"></a>
 
 ## E016 — 生成する出力先の言語で、識別子がぶつかるか使えません

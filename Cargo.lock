@@ -159,6 +159,7 @@ dependencies = [
  "ritsu-project",
  "ritsu-proto",
  "ritsu-testkit",
+ "ritsu-units",
  "rulec",
 ]
 

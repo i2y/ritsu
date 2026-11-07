@@ -393,6 +393,26 @@ anyone may call it. An operation no action guards is an error (E907) where the c
 operations are guarded, and a warning (W907) while none of them is. The example has no map; the
 shop in the browser has one.
 
+## Where a value comes from
+
+Hand-written code asks the gate with values it took from somewhere else. `fed by` at the end of an
+attribute's line, or of a line of an action's `input`, says where, in the form the toolchain names
+everything, and `ritsu check` asks the other file what it can come to
+([examples/order_desk](https://github.com/i2y/ritsu/tree/main/crates/sekisho/examples/order_desk)):
+
+```console
+$ cd crates/sekisho/examples/order_desk
+$ ritsu check order_desk.gate
+order_desk.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+ritsu check: 1 file (sekisho 1): all pass; borders between the languages: 2 checked, 0 undecided
+```
+
+Raise the schema's `maximum` for `amount` to 2000000 and it stops with E207: the attribute takes
+money[USDc] >=1 <=1000000, and its source can be 1000001.
+
+The range of the values is what is checked. Nothing checks that the hand-written code really
+carries that value, and the page says so. Nothing `gen` writes changes.
+
 ## Cedar written by hand
 
 ritsu reads Cedar that people write by hand, too: a file of policies with its schema beside it

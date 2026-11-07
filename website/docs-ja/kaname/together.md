@@ -114,6 +114,21 @@ ritsu が言語の境目で確かめるのは、次のことです。
 
 二つの入力のあいだの前提は、まず、kaname が渡す値どうしに覚えた関係で確かめます。分岐の条件が言う関係と、`running_totals` の `before <= upto <= total` と、各 `total` が同じ並びを同じフィールドで足した `sum` と等しいことです。`if 返金額 > sum(明細, 一件 => 一件.残り)` の `else` で、`running_totals(明細, 一件 => 一件.残り)` の `total` と並べて渡す `返金額` は、`返金額 <= 合計` を保ちます。規則の答えは、rulec が確かめた範囲で読みます。出力の行に書いた範囲か、表の行が書く値か、`result` の式がとる値です。範囲の無い入力を読む出力は、生成したコードが返すとおり、型のどの値にもなりうる値です。
 
+### 値の出どころ
+
+手書きのコードは、ほかの場所から取った値をモジュールに渡します。レコードのフィールドと関数の引数の最後の `fed by` は、処理系全体の参照の書き方でその出どころを書く形で、`ritsu check` が相手のファイルに、とりうる値を尋ねます（[order_bill](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/order_bill)）。
+
+```console
+$ cd crates/kaname/examples/order_bill
+$ ritsu check order_bill.ja.kn --lang ja
+ok order_bill.ja.kn: 関数 1 個、total
+ritsu check: ファイル 1 個（kaname 1）。どれも検査を通りました。言語の境目: 確かめた 3 か所、決められない 0 か所
+```
+
+スキーマの `数量` の `maximum` を 21 に上げると、E207 で止まります。フィールドが受け取るのは number >=1 <=20 で、出どころは 21 になることがあります。
+
+確かめるのは値の範囲です。手書きのコードが本当にその値を運ぶかは何も確かめず、ページにもそう書きます。`ritsu gen` が書くものは変わりません。
+
 ## パッケージの中で
 
 `ritsu gen` は、モジュールのコードを、それが呼ぶ規則、日付、帳簿のコードと同じ、TypeScript、Python、Go、Rust のそれぞれ一つのパッケージに書き、モジュールのコードはそれらのコードを呼びます。振替は値で、その型には、帳簿がそれを拒否しうる理由が載ります。振替を組み立てるのはモジュールで、当てるのはホストです。ホストは、パッケージが帳簿ごとに書く関数を通して、chobo のクライアントで振替を当てます。Rust のパッケージから組んだ Wasm には、モジュールが呼ぶ規則と日付が入り、振替は値で答えます。帳簿のクライアントは入らないので、振替はホストが自分のクライアントで当てます。
@@ -123,3 +138,4 @@ ritsu が言語の境目で確かめるのは、次のことです。
 - [payout](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/payout)：マーケットプレイスが売り手のためにカードの支払いを受け、決済の事業者の手数料を規則で出し、帳簿の振替を二つ組み立てます。振替を当てるのはホストです。
 - [media_mail](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/media_mail)：カートの重さと、どの品物もメディアかを、Media Mail の料金の規則に渡します。米国郵便公社の料金表 Notice 123 から転記しました。
 - [discount_split](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/discount_split)：請求書の値引きを、明細の金額の比で配ります。`allocate` を使う規則を明細ごとに一回ずつ呼び、途中までの合計を `running_totals` で渡します。バージニア州の値引きの規則 23VAC10-210-250 から転記しました。
+- [order_bill](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/order_bill)：注文の明細がいくらになるかを出す。どの値が JSON Schema のどのプロパティから来るかを `fed by` で書く。

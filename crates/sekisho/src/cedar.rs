@@ -1075,7 +1075,7 @@ pub fn head(scope: &Scope, shown: &str, lang: Lang) -> String {
 /// (ritsu's DESIGN 17.8).
 pub fn head_in(scope: &Scope, shown: &str, lang: Lang, module: Option<&ritsu_emit::package::Module>) -> String {
     let f = scope.file();
-    let sha = ritsu_base::sha256::hex(f.src.as_bytes());
+    let sha = ritsu_base::fed::hash(&f.src);
     let version = f.version.strip_prefix('v').unwrap_or(&f.version);
     let source = ritsu_emit::header::Source { path: shown, kind: "gate", name: &f.name.text, version, sha256: &sha, module };
     let c = ritsu_emit::header::Comment::Slashes;

@@ -98,7 +98,7 @@ fn dump_dom(chrome: &Path, url: &str) -> String {
 }
 
 /// The examples the site draws, in the order it lists them.
-const EXAMPLES: [&str; 7] = ["fulfillment", "hotel", "inquiry", "order", "review", "invoice", "payout"];
+const EXAMPLES: [&str; 8] = ["fulfillment", "hotel", "inquiry", "order", "review", "invoice", "payout", "refund_request"];
 
 /// An example as the site draws it: as written for Temporal, or as it is written for every
 /// platform when it has no versions (invoice); `lang` is "" or ".ja".

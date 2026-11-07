@@ -264,7 +264,13 @@ pub fn dates_json(m: &Model) -> Value {
                         Ty::Date => (json!(i.show(i.lo)), json!(i.show(i.hi))),
                         Ty::Int => (json!(i.lo), json!(i.hi)),
                     };
-                    json!({"name": i.name, "alias": i.alias, "type": if i.ty == Ty::Date { "date" } else { "int" }, "range": {"min": lo, "max": hi}})
+                    let mut one = json!({"name": i.name, "alias": i.alias, "type": if i.ty == Ty::Date { "date" } else { "int" }, "range": {"min": lo, "max": hi}});
+                    // Where hand-written code takes it from: `ritsu check` holds the range of what
+                    // can come from there, and nothing holds the code to carrying it (DESIGN 21).
+                    if let Some(fb) = m.file.inputs.iter().find(|a| a.name.text == i.name).and_then(|a| a.fed.as_ref()) {
+                        one["fed_by"] = json!(fb.written);
+                    }
+                    one
                 })
                 .collect(),
         ),

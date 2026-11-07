@@ -150,6 +150,24 @@ role has
 
 See also: [E007](#e007)
 
+<a id="e009"></a>
+
+## E009 — `fed by` does not read, or stands where it cannot
+
+**When**: The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an attribute's or an `input`'s (a value of `context` is one the gate computes itself).
+
+**Fix**: Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`.
+
+**Example**:
+
+```gate
+gate t v1
+
+principal User
+  attributes
+    limit : number  range >=0 <=9  fed by sakai "shop.ctx" term limit
+```
+
 <a id="e101"></a>
 
 ## E101 — A name names nothing

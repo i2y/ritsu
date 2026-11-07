@@ -1,0 +1,20 @@
+book refunds v1
+description "What can still be refunded of each order: a sale raises it, a refund lowers it, and it stays inside its limits"
+
+unit USD scale 2
+
+account remaining(order: string) : USD
+  description "what is left to refund of the order"
+  at least 0 refused as nothing_left
+  at most 100000 refused as more_than_paid
+account customers : USD outside
+
+transfer sell(order: string, amount: USD)
+  description "the order is paid"
+  key order
+  move amount from customers to remaining(order)
+
+transfer refund(request: string, order: string, amount: USD)
+  description "a refund goes out"
+  key request
+  move amount from remaining(order) to customers

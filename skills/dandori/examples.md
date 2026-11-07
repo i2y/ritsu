@@ -1,9 +1,9 @@
 # Examples
 
-Seven examples. Five are each written for Temporal, for AWS and for pydantic-graph: the same flow,
+Eight examples. Five are each written for Temporal, for AWS and for pydantic-graph: the same flow,
 with its tasks called and its news brought in the way the platform does. Temporal is dandori's main
-platform, and its version is the one to read first. The other two, invoice and payout, are written
-once and run as they are on every platform. The version for Temporal, invoice and payout are also
+platform, and its version is the one to read first. The other three, invoice, payout and refund_request, are
+written once and run as they are on every platform. The version for Temporal and those three are also
 drawn by `dandori doc`, on a page where each scenario lights up the way its run goes
 ([Draw a workflow](diagrams.md)).
 
@@ -23,6 +23,7 @@ in each `rules/`, and the Japanese site draws the Japanese versions.
 | an application scored by [Jev](jev.md), and a rule that weighs how sure the score is and sends the rest to a person's approval; also [for Argo Workflows](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/argo/review.flow) | [temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.flow) | [aws](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/aws/review.flow) (Lambda durable functions) | [pydantic-graph](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/pydantic-graph/review.flow) | [page](https://i2y.github.io/ritsu/dandori/doc/review.html) |
 | an order's goods held in stock until its payment is due, then shipped once paid or put back: the stock a book of chobo's, the due date a date of koyomi's, in the period the payment terms take orders in ([Dates and books](dates-and-books.md)) | [invoice](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/invoice/invoice.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/invoice.html) |
 | a payout to a seller: the bank's API pays the account by its id, and a model drafts the notice; the bank's `.proto` marks the account's number and holder secret, and the flow carries neither, so no check of [secrets](secrets.md) says anything | [payout](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/payout/payout.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/payout.html) |
+| a request for a refund, paid out of what is left of the order: `fed by` says where the amount and the balance come from, and `ritsu check` holds what those can come to against what the flow takes ([Where a value comes from](checks.md#where-a-value-comes-from)) | [refund_request](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/refund_request/refund_request.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/refund_request.html) |
 
 ## How the versions differ
 

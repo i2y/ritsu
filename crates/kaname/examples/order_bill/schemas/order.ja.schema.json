@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "明細": {
+      "type": "object",
+      "required": ["品番", "数量"],
+      "properties": {
+        "品番": { "type": "string" },
+        "数量": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "商品": {
+      "type": "object",
+      "required": ["単価"],
+      "properties": {
+        "単価": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "セントで" }
+      }
+    }
+  }
+}

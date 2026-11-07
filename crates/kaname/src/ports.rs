@@ -313,7 +313,10 @@ impl ritsu_ports::Items for Engine {
         use ritsu_base::naming::{Name, Tool};
         use ritsu_ports::Item;
         let (m, src) = parsed(root, file)?;
-        let lines: Vec<&str> = src.lines().collect();
+        // Where a value comes from says nothing of what the place means, and a version of it stays
+        // the same (DESIGN 37): the definition is read without `fed by`.
+        let body = ritsu_base::fed::without(&src);
+        let lines: Vec<&str> = body.lines().collect();
         let naming = |kind: &str, name: &str| Name::file(Tool::Kaname, file).with(kind, name);
         let one = |naming: Name, (from, to): (usize, usize)| Item { naming, lines: (from, to), text: ritsu_base::definition::block(&lines, from, to) };
         let mut out = Vec::new();
@@ -356,7 +359,8 @@ impl ritsu_ports::Items for Engine {
 
 impl ritsu_ports::References for Engine {
     /// The files the module reads, a `use` line each (DESIGN 14.6): a rule (`use rule`), a dates file
-    /// (`use dates`), a book (`use book`) and another module (`use module`), from the root. A file
+    /// (`use dates`), a book (`use book`) and another module (`use module`), from the root; and where
+    /// hand-written code takes a field's or a parameter's value from (`fed by`, DESIGN 37). A file
     /// outside the root has no reference.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<ritsu_ports::Reference>, Vec<Said>> {
         use crate::ast::UseKind;
@@ -373,6 +377,101 @@ impl ritsu_ports::References for Engine {
             };
             out.push(ritsu_ports::Reference { line: u.line, target: Name::file(tool, p), how: format!("use {}", u.kind.word()) });
         }
+        let fields = m.records.iter().flat_map(|r| r.fields.iter().map(|f| f.fed.as_ref()));
+        let params = m.fns.iter().flat_map(|f| f.params.iter().map(|p| p.fed.as_ref()));
+        for fb in fields.chain(params).flatten() {
+            if let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name) {
+                out.push(ritsu_ports::Reference { line: fb.span.line, target, how: "fed by".into() });
+            }
+        }
+        out.sort_by_key(|r| r.line);
         Ok(out)
+    }
+}
+
+/// What a declared place holds, as the port of `fed by` says it (DESIGN 37): the type with what
+/// the place declares of its range, a number's ends as the integers on the wire.
+fn carried(c: &Rc<Checked>, ports: &ritsu_ports::Ports, ty: &crate::ty::Ty, range: Option<&crate::ty::Range>) -> ritsu_ports::Carried {
+    use crate::ty::{Owner, Ty};
+    use ritsu_ports::Carried;
+    use ritsu_units::{Dim, Rat};
+    match ty {
+        Ty::Bool => Carried::Bool,
+        Ty::Str => Carried::Str,
+        Ty::Date => {
+            let day = |r: &Rat| (r.num.div_euclid(r.den)) as i64;
+            Carried::Date { min: range.and_then(|r| r.min.as_ref()).map(day), max: range.and_then(|r| r.max.as_ref()).map(day) }
+        }
+        Ty::Num(n) => {
+            // a rate counts its step on the wire, and everything else whole units
+            let step = if n.unit.dim == Dim::Rate { n.step.or(n.unit.step) } else { None };
+            let mut unit = n.unit.clone();
+            unit.step = step;
+            let by = step.unwrap_or(Rat::int(1));
+            let low = |r: &Rat| { let q = r.div(by); -((-q.num).div_euclid(q.den)) };
+            let high = |r: &Rat| { let q = r.div(by); q.num.div_euclid(q.den) };
+            Carried::Num { written: unit.to_string(), min: range.and_then(|r| r.min.as_ref()).map(low), max: range.and_then(|r| r.max.as_ref()).map(high), unit: Some(unit) }
+        }
+        Ty::Enum(id) => {
+            let values = match &id.owner {
+                Owner::Module(_) => crate::value::Program::of(c).enum_info(id).map(|e| e.values.iter().map(|v| v.alias.as_ref().map_or_else(|| v.text.clone(), |(a, _)| a.clone())).collect()),
+                Owner::Rule(file) => ritsu_ports::Rules::facts(&*ports.rules, file).ok().and_then(|f| f.enums.iter().find(|e| e.name == id.name).map(|e| e.values.iter().map(|v| v.public.clone()).collect())),
+            };
+            Carried::Enum { name: id.name.clone(), values: values.unwrap_or_default() }
+        }
+        Ty::Opt(t) => Carried::Opt(Box::new(carried(c, ports, t, range))),
+        t => Carried::Other(crate::value::Program::of(c).show_ty(c, t)),
+    }
+}
+
+impl ritsu_ports::Feeds for Engine {
+    /// The fields of records and the parameters with `fed by` (DESIGN 37), each with what its line
+    /// takes: a module whose names or types do not pass answers nothing.
+    fn feeds(&self, root: &Path, file: &str, ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
+        use ritsu_base::naming::{Name, Tool};
+        let (m, _) = parsed(root, file)?;
+        let any = m.records.iter().any(|r| r.fields.iter().any(|f| f.fed.is_some())) || m.fns.iter().any(|f| f.params.iter().any(|p| p.fed.is_some()));
+        if !any {
+            return Ok(Vec::new());
+        }
+        let c = Engine::analysed(&ritsu_base::paths::on_disk(root, file), ports)?;
+        let mut out = Vec::new();
+        for r in &m.records {
+            let Some(info) = c.decls.records.iter().find(|i| i.name.text == r.name.text) else { continue };
+            for f in &r.fields {
+                let (Some(fb), Some(slot)) = (&f.fed, info.fields.iter().find(|i| i.name.text == f.name.text).map(|i| &i.slot)) else { continue };
+                out.push(ritsu_ports::Fed {
+                    line: fb.span.line,
+                    place: Name::file(Tool::Kaname, file).with("record", &r.name.text).with("field", &f.name.text),
+                    takes: carried(&c, ports, &slot.ty, slot.range.as_ref()),
+                    source: ritsu_base::fed::from_root(root, file, &fb.name),
+                    written: fb.written.clone(),
+                });
+            }
+        }
+        for fun in &m.fns {
+            let Some(info) = c.decls.fns.iter().find(|i| i.name.text == fun.name.text) else { continue };
+            for p in &fun.params {
+                let (Some(fb), Some(slot)) = (&p.fed, info.params.iter().find(|i| i.name.text == p.name.text).map(|i| &i.slot)) else { continue };
+                out.push(ritsu_ports::Fed {
+                    line: fb.span.line,
+                    place: Name::file(Tool::Kaname, file).with("function", &fun.name.text).with("parameter", &p.name.text),
+                    takes: carried(&c, ports, &slot.ty, slot.range.as_ref()),
+                    source: ritsu_base::fed::from_root(root, file, &fb.name),
+                    written: fb.written.clone(),
+                });
+            }
+        }
+        out.sort_by_key(|f| f.line);
+        Ok(out)
+    }
+
+    /// A field of a record the module declares.
+    fn holds(&self, root: &Path, file: &str, thing: &ritsu_base::naming::Name, ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
+        let c = Engine::analysed(&ritsu_base::paths::on_disk(root, file), ports)?;
+        let items: Vec<(&str, &str)> = thing.items.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
+        let [("record", r), ("field", f)] = items.as_slice() else { return Ok(None) };
+        let field = c.decls.records.iter().find(|i| i.name.text == *r).and_then(|i| i.fields.iter().find(|x| x.name.text == *f));
+        Ok(field.map(|x| carried(&c, ports, &x.slot.ty, x.slot.range.as_ref())))
     }
 }

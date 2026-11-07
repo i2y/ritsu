@@ -45,7 +45,7 @@ impl Suite {
     pub fn reads(&self, tool: Tool) -> bool {
         match tool {
             // the standard formats, which yuen reads itself (DESIGN 3.4, 3.6)
-            Tool::File | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar => true,
+            Tool::File | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::Jsonschema => true,
             Tool::Rulec | Tool::Koyomi => self.index.reads_items(tool) && self.sources.contains_key(tool.word()),
             Tool::Geas => self.index.reads_items(tool) && self.claims.is_some(),
             t => self.index.reads_items(t),

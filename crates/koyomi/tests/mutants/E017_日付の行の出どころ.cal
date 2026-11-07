@@ -1,0 +1,8 @@
+dates 発送(shipping) v1
+description "注文の三日後に発送する。`fed by` は入力の行に書くもので、これはファイルが計算する日付の行である"
+
+inputs
+  注文日(ordered) : date  range >=2026-01-01 <=2026-01-31
+
+date 発送日(ship_by) = 注文日  fed by rulec "注文.rule" output 注文日
+  + 3 days

@@ -230,6 +230,20 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"nowhere.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n",
             &[],
         ),
+        e(
+            "E017",
+            tr!("`fed by` を読めないか、書けない場所にあります", "`fed by` does not read, or stands where it cannot"),
+            tr!(
+                "`fed by` の参照が処理系の書き方（`<ツール> \"<パス>\" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、`inputs` の行でない場所に書いたとき。",
+                "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than one of `inputs`."
+            ),
+            tr!(
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`."
+            ),
+            "dates t v1\n\ninputs\n  issued_on : date  range >=2026-01-01 <=2026-12-31  fed by sakai \"shop.ctx\" term order\n\ndate due = issued_on\n  + 30 days\n",
+            &[],
+        ),
         Entry::new(
             "E016",
             tr!("生成する出力先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language gen is to write"),

@@ -1,0 +1,7 @@
+エラー[E144]: `fed by` は `from` と一緒に書けません
+  --> tests/mutants/m_e144ja.rule:7
+  |
+7 |   重さ(weight) : number  range >=0 <=100  from 注文.weight  fed by rulec "はかり.rule" output 重さ
+  |                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 重さ の値の出どころを二度言っています
+  |
+ `from` は、生成コードが呼ぶ側のオブジェクトから読むパスで、値の出どころをすでに言っています。`from` だけか、`fed by` だけにしてください。

@@ -1,0 +1,12 @@
+dates 遅延金(late_fee_ja) v1
+description "遅延金は、請求の支払期日の 14 日後からかかる。支払期日は手書きのコードが net30.cal から運ぶ。`ritsu check` はとりうる日をこの範囲と比べ、運ぶコードは確かめない"
+
+inputs
+  支払期日(due_on) : date  range >=2026-02-02 <=2028-12-29  fed by koyomi "net30.cal" date due
+
+date 起算日(fee_starts) = 支払期日
+  + 14 days             # 支払期日の 14 日後から遅延金がかかる
+
+claims
+  期日より後           : 起算日 > 支払期日
+  遅い期日は遅い起算日 : 起算日 is monotonic

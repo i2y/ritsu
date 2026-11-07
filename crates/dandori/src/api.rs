@@ -70,11 +70,22 @@ fn place(m: &Model, name: &str, ty: &Ty, rg: Option<&Range>, secret: Option<&Sec
     ]
 }
 
+/// Where hand-written code takes a place's value from (DESIGN 24): `ritsu check` holds the range of
+/// what can come from there, and nothing holds the code to carrying it. Written only for a place
+/// that says, so no other description changes.
+fn with_fed(m: &Model, shown: &str, mut one: Vec<(&'static str, Json)>) -> Vec<(&'static str, Json)> {
+    if let Some((_, w)) = m.fed.iter().find(|(p, _)| p == shown) {
+        one.push(("fed_by", Json::str(w.clone())));
+    }
+    one
+}
+
 fn io(m: &Model) -> (Json, Json) {
     let side = |xs: &[(String, Ty)], ranges: &std::collections::BTreeMap<String, Range>, secrets: &std::collections::BTreeMap<String, SecretMark>, lines: &std::collections::BTreeMap<String, usize>| {
         Json::arr(xs.iter().map(|(n, t)| Json::obj(place(m, n, t, ranges.get(n), secrets.get(n), lines.get(n).copied().unwrap_or(0)))))
     };
-    (side(&m.inputs, &m.input_ranges, &m.input_secrets, &m.input_lines), side(&m.outputs, &m.output_ranges, &m.output_secrets, &m.output_lines))
+    let inputs = Json::arr(m.inputs.iter().map(|(n, t)| Json::obj(with_fed(m, n, place(m, n, t, m.input_ranges.get(n), m.input_secrets.get(n), m.input_lines.get(n).copied().unwrap_or(0))))));
+    (inputs, side(&m.outputs, &m.output_ranges, &m.output_secrets, &m.output_lines))
 }
 
 fn column_json(c: &Column) -> Json {
@@ -156,7 +167,7 @@ fn records_json(m: &Model) -> Json {
         Json::obj([
             ("name", Json::str(r.name.clone())),
             ("origin", origin),
-            ("fields", Json::arr(r.fields.iter().map(|(n, t)| Json::obj(place(m, n, t, r.ranges.get(n), r.secrets.get(n), 0))))),
+            ("fields", Json::arr(r.fields.iter().map(|(n, t)| Json::obj(with_fed(m, &format!("{}.{n}", r.name), place(m, n, t, r.ranges.get(n), r.secrets.get(n), 0)))))),
         ])
     }))
 }

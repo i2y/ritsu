@@ -18,7 +18,7 @@ fn joined(args: &[&str]) -> (u8, String, String) {
 }
 
 /// The examples, each with the function run and its Japanese version's.
-const RUNS: [(&str, &str, &str); 8] = [
+const RUNS: [(&str, &str, &str); 9] = [
     ("order_flow", "replay", "順に進める"),
     ("stock_diff", "changes", "違いの一覧"),
     ("handles", "tag", "タグを読む"),
@@ -27,6 +27,7 @@ const RUNS: [(&str, &str, &str); 8] = [
     ("late_payment", "claim", "遅れの請求"),
     ("media_mail", "quote", "見積もる"),
     ("discount_split", "split", "按分する"),
+    ("order_bill", "bill", "請求額"),
 ];
 
 #[test]

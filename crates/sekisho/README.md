@@ -152,6 +152,17 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 
 A file of Cedar written by hand takes part too, when the map or a requirement names it and its schema says with `@guards` which operation each action guards.
 
+An attribute or an input can say where hand-written code takes its value from
+([examples/order_desk](examples/order_desk)):
+
+```gate
+    amount : money[USDc]  range >=1USDc <=1000000USDc  fed by jsonschema "schemas/order.schema.json" def Order property amount
+```
+
+`ritsu check` asks the other file what it can come to, and stops when the gate would refuse a value
+of it. The range of the values is what is checked: nothing checks that the hand-written code really
+carries that value, and the page says so.
+
 ## The page for people
 
 `sekisho doc` writes a page for the people who decide who may do what: each action's table of the combinations allowed and denied, with the policies that decide them; each policy beside the Cedar it becomes; the computed values, with the pages rulec and koyomi draw of their rule and dates; the expectations, the separations and the roles; the workflows and what their flows call; and the operations guarded.
@@ -204,12 +215,14 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
   `documents.ja.gate` is the same gate with Japanese names.
 - [examples/order_states](examples/order_states): a workflow and a gate that read the states of an order from one `enums` file with `import enum`, so that neither can name a state the other does not.
   `orders.ja.gate` and `shipping.ja.flow` are the same with Japanese names.
+- [examples/order_desk](examples/order_desk): who may refund an order at the desk, with the order's amount and the reason named by `fed by` as coming from a JSON Schema.
+  `order_desk.ja.gate` is the same gate with Japanese names, reading the Japanese version of the schema.
 
 ## How it is checked
 
 `cargo test -p sekisho` runs the language on its mutants and its examples, and runs the real Cedar.
 
-- 156 mutants, each an example or a fixture with one change, are held to the diagnostics they give, in English and in Japanese (78 of them with Japanese names, each with an English twin).
+- 158 mutants, each an example or a fixture with one change, are held to the diagnostics they give, in English and in Japanese (79 of them with Japanese names, each with an English twin).
 - The Cedar generated from every gate of the examples and the tests that passes check goes through the official Cedar CLI 4.13.0: `cedar validate` in strict mode finds nothing, `cedar format --check` passes, `cedar run-tests` answers every combination as sekisho's reference evaluation does, with the same deciding policies, and the JSON forms are what `cedar translate-schema` and `translate-policy` write.
 - Cedar written by hand gets the answers the official CLI gives: for a policy set and its schema (the ones in `tests/cedar_in/` and each of them changed at one place, and the Cedar generated from every gate that passes check, read as if written by hand), every combination sekisho counts is made a request with its entities and run through `cedar run-tests`, with the same decision and the same deciding policies. Where sekisho does not decide, it names the part of the policy it does not count.
 - The code generated for TypeScript, Python and Go builds the requests of every combination from raw data and asks cedar-wasm 4.13.0, cedarpy 4.12.1 and cedar-go v1.8.0, which answer as the reference evaluation; `tsc --strict`, `mypy --strict`, `go vet` and gofmt pass it.

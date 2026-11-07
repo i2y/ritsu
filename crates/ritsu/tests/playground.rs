@@ -162,9 +162,9 @@ fn dandori_root() -> PathBuf {
     repo().join("crates/dandori")
 }
 
-/// dandori's examples in the order dandori's playground listed them, and the versions of each in the
-/// order it listed them.
-const EXAMPLES: [&str; 7] = ["hotel", "order", "fulfillment", "inquiry", "review", "invoice", "payout"];
+/// dandori's examples in the order dandori's playground listed them, then the one written since, and
+/// the versions of each in the order it listed them.
+const EXAMPLES: [&str; 8] = ["hotel", "order", "fulfillment", "inquiry", "review", "invoice", "payout", "refund_request"];
 const VERSIONS: [&str; 4] = ["temporal", "aws", "pydantic-graph", "argo"];
 /// The first draft of the hotel booking dandori's playground opened on, whose check finds errors.
 /// Both of its pages opened it; it has no Japanese version.

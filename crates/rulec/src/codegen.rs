@@ -679,7 +679,8 @@ impl<'a> Gen<'a> {
             enum_names,
             value_names,
             idents,
-            src_hash: hash(src),
+            // A file's `fed by` moves nothing generated, the head's digest included (§15.285).
+            src_hash: hash(&ritsu_base::fed::without(src)),
             src: src.to_string(),
             path: path.to_string(),
             shown: ritsu_emit::header::file_name(path),
@@ -888,7 +889,8 @@ impl<'a> Gen<'a> {
                 m.shown_name(),
                 ritsu_emit::header::one_line(&self.contribution_shown(&m.file)),
                 m.signature.as_deref().unwrap_or(""),
-                &m.sha256[..16.min(m.sha256.len())]
+                // `fed by` moves nothing generated (§15.285).
+                &ritsu_base::fed::hash(&m.src)[..16]
             ));
         }
         // The documents the rule transcribes (§15.68): each law at the date it was read, with
@@ -11024,6 +11026,17 @@ impl Gen<'_> {
             // Where the caller's object holds each input, and the one function per language
             // that reads it (§15.125). Absent when the rule takes its inputs as they come.
             .raw("projection", self.projection_json())
+            // Where hand-written code takes an input from (§15.285): `ritsu check` holds the range of
+            // what can come from there, and nothing holds the code to carrying it. Written only for a
+            // rule that says, so no other description changes.
+            .opt_raw("fed_by", self.f.inputs.iter().any(|i| i.fed.is_some()).then(|| {
+                crate::json::arr(
+                    &self.f.inputs.iter().filter_map(|i| {
+                        let fb = i.fed.as_ref()?;
+                        Some(crate::json::Obj::new().str("name", &i.name.text).str("alias", &pub_name(&i.name)).str("source", &fb.written).finish())
+                    }).collect::<Vec<_>>(),
+                )
+            }))
             // The machine the function is one step of (§15.148), and what each language calls
             // the constants a host needs to keep the state: where a case starts, where it ends.
             .raw("machine", self.machine_json())

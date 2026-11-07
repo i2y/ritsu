@@ -890,6 +890,16 @@ An entry of `applies` has the pin its heading writes: `meaning` from §15.230 on
 (`{"name":"retirement","path":"retirement_pay.rule","sha256":"","meaning":"aadc7468b292ff52"}`), and
 `sha256` for a heading pinned at the callee's bytes as before, `meaning` then absent.
 
+A rule with an input that says where hand-written code takes its value from (`fed by`, §15.285)
+carries `fed_by`, and any other rule leaves it out:
+
+```json
+"fed_by":[{"name":"food","alias":"food","source":"rulec \"province_income.rule\" output food"}]
+```
+
+`source` is the naming as the rule writes it. `ritsu check` holds the range of what can come from
+there; nothing holds the hand-written code to carrying it.
+
 ## `graph`
 
 One object: the rule as a graph of **what decides each value and which values it reads**.

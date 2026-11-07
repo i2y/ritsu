@@ -36,6 +36,10 @@ pub struct Num {
 pub enum Tok {
     Word(String),
     Str(String),
+    /// `fed by <naming>` at the end of a physical line (DESIGN 37): the naming as written, one
+    /// token, since `ritsu_base::fed` reads it and not this lexer. A JSON Pointer or a quoted name in
+    /// it is no word of this language.
+    FedBy(String),
     Num(Num),
     /// Days since 1970-01-01.
     Date(i64),
@@ -74,6 +78,7 @@ impl Tok {
         match self {
             Tok::Word(w) => w.clone(),
             Tok::Str(s) => format!("\"{s}\""),
+            Tok::FedBy(s) => format!("fed by {s}"),
             Tok::Num(n) => n.raw.clone(),
             Tok::Date(d) => crate::date::text(*d),
             Tok::LParen => "(".into(),
@@ -167,16 +172,48 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     let mut joining: Option<Line> = None;
     for (i, text) in src.lines().enumerate() {
         let no = i + 1;
+        // What `fed by` holds is cut off first and is one token: the rest of the line is read as if
+        // it were not there.
+        let fed = ritsu_base::fed::cut(text).map(|c| {
+            let at = text[..c.at].chars().count() + 1;
+            (c.text(text).to_string(), Span { line: no, col: at, end: at + text[c.at..c.end.max(c.at)].chars().count() }, c.at)
+        });
+        let text = fed.as_ref().map_or(text, |f| &text[..f.2]);
         let chars: Vec<char> = text.chars().collect();
         let mut indent = 0;
         while indent < chars.len() && chars[indent] == ' ' {
             indent += 1;
         }
-        let cut = cut_line(file, src, no, &chars, indent, &mut open);
+        let mut cut = cut_line(file, src, no, &chars, indent, &mut open);
         if let Some(d) = cut.error {
             diags.push(d);
             // what the line opened is noise after the error: the line ends where it stopped
             open.clear();
+        }
+        if let Some((written, span, _)) = fed {
+            if open.is_empty() {
+                cut.tokens.push(Token { tok: Tok::FedBy(written), span });
+            } else {
+                // Inside brackets the parameters go on: the `,` that ends one is not of the naming.
+                // What closes them cannot stand after it, since the naming is read to the end of
+                // the line.
+                let (naming, comma) = match written.strip_suffix(',') {
+                    Some(n) => (n.trim_end().to_string(), true),
+                    None => (written, false),
+                };
+                if closes_outside_strings(&naming) {
+                    diags.push(Diag::error("E009", file, no, span.col, tr!("`fed by` の参照のあとに `)` は書けません", "A `)` cannot stand after the naming of a `fed by`")).source(src).note(tr!(
+                        "`fed by` は行の最後まで読みます。引数の `fed by` は、引数を一行ずつに分け、閉じ括弧を次の行に書いてください。",
+                        "`fed by` is read to the end of the line. Put each parameter with a `fed by` on a line of its own, and the closing bracket on the next line."
+                    )));
+                    open.clear();
+                } else {
+                    cut.tokens.push(Token { tok: Tok::FedBy(naming), span });
+                    if comma {
+                        cut.tokens.push(Token { tok: Tok::Comma, span: Span { line: no, col: span.end, end: span.end + 1 } });
+                    }
+                }
+            }
         }
         match joining.as_mut() {
             Some(l) => l.tokens.extend(cut.tokens),
@@ -200,6 +237,17 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
         }
     }
     (lines, diags)
+}
+
+/// Whether a `)` stands outside a string in what `fed by` holds.
+fn closes_outside_strings(text: &str) -> bool {
+    let mut in_str = false;
+    text.chars().any(|c| {
+        if c == '"' {
+            in_str = !in_str;
+        }
+        c == ')' && !in_str
+    })
 }
 
 fn closing(c: char) -> char {

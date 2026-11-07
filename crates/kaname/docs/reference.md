@@ -907,12 +907,60 @@ workflow of dandori:
 | X3 (a) | a day of koyomi given to a rule's date input, against the rule's range |
 | X4 | an amount given to a transfer, against what chobo takes; and the reasons the book can refuse each `do` and `hold` with |
 | X6 | a day given to a date's input, against koyomi's range |
+| X17 | a field or a parameter with `fed by`, against what its source can come to |
 
 They are said by `ritsu check` in ritsu's codes (E201 to W205), and come back to kaname through
 ritsu's port: a place they show leaves the effect, and one they cannot decide or find an example of
 is checked when the code runs (`ritsu W203` in the note of an E401). `ritsu kaname`, `ritsu check`
 and `ritsu gen` hand kaname those verdicts. The binary of kaname's own crate has none, and its
 places wait: their kinds are in the effect, but not held against what is written.
+
+### `fed by` — where a value comes from
+
+Hand-written code hands the module values it took from somewhere else. `fed by` at the end of a
+record's field, or of a parameter of a function, says where:
+
+```kn
+record Line
+  sku : string  fed by jsonschema "schemas/order.schema.json" def Line property sku
+  qty : number  range >=1 <=20  fed by jsonschema "schemas/order.schema.json" def Line property qty
+
+fn bill(
+  lines: list[Line] count >=1 <=30,
+  price: money[USDc] range >=1USDc <=1000USDc  fed by jsonschema "schemas/order.schema.json" def Product property price
+) -> money[USDc] total
+```
+
+The rest of the line is a naming, in the form the whole toolchain names things; the path goes from
+the directory of the file it is written in. A parameter with one stands on a line of its own, since
+the naming reads to the end of the line, and a `,` after it ends it. Anywhere else, or when the
+naming does not read or names something that holds no value, it is E009. `fed` and `by` are not
+reserved: they are the form only when the two stand together at the end of a line.
+
+| The value comes from | Named as |
+|---|---|
+| an output of a rule | `rulec "<file>" output <name>` |
+| an account of a book | `chobo "<file>" account <name>` |
+| a date of a dates file | `koyomi "<file>" date <name>` |
+| a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
+| a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
+| an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
+| a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+
+`ritsu check` asks the language on each side, and comes to one of three answers:
+
+- **It holds.** The place takes everything the source can come to. A place wider than its source is fine.
+- **E207.** The source can come to a value the place refuses. The message gives the value, and the input that gives it when the source can say.
+- **W207.** It cannot be decided, and the message says why: rulec counts an end of a rule's output that none of the rule's vectors reaches, or a contract carries a date as a string and lists no days.
+
+E208 says the source is not there: its file, or the name in it.
+
+Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+
+**What is not checked.** Nothing checks that the hand-written code really carries that value. The
+page of `kaname doc` says so: Comes from `…` (`ritsu check` holds the range of its values; the hand-written code that carries the value is not checked). Nothing `ritsu gen` writes changes, and `kaname api` gives
+the naming as the field's or the parameter's `fed_by`.
 
 ## The page for people
 
@@ -935,6 +983,7 @@ from outside, the pages opening over it.
 | after a type parameter | `key` |
 | at the end of a function's head, and of a function type | `total` `fails` `diverges`, and the kinds `rule` `date` `range` `overflow` `zero` |
 | in a body | `description` `let` `try` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` |
+| at the end of a field's line and of a parameter's | `fed` `by` |
 
 The symbols are `=` `!=` `<` `<=` `>` `>=` `+` `-` `*` `/` `×` `÷` `−` `≦` `≧` `->` `=>` `:` `,`
 `.` `..` `(` `)` `[` `]` `{` `}`, and `#` for a comment. The builtins (`sum`, `map`, …) are names a
@@ -1056,7 +1105,7 @@ Wasm calls it (the exports, the keys of a call and the `module` that picks this 
 functions a call reaches and the shapes of what comes back; `null` for a module with no function a
 host calls), the files it reads, its
 declarations with their types, ranges and counts (and, for a sum, each value's fields and the name
-the code gives its type), each function with its effect inferred and
+the code gives its type; a field or a parameter with `fed by`, its naming as `fed_by`), each function with its effect inferred and
 written, the calls it makes into the other languages with what each check across them came to,
 the places kaname could not show, the names the generated code gives it, and the functions a host
 that does not trust its input calls first (`check`: Go's `Check<Name>` and Rust's

@@ -64,6 +64,10 @@ pub struct Line {
     /// For a `today` line: the text after `offset`, as written, and its column. A time zone's name
     /// (`Europe/London`) is not made of tokens, and it deserves E107 rather than E001.
     pub rest: Option<(String, usize)>,
+    /// What `fed by` holds at the end of the line, as written, and the column of `fed`. The line is
+    /// read as if the words were not there: what they hold is read by `ritsu_base::fed`, and a
+    /// JSON Pointer or a quoted name in it is no word of this language (DESIGN 26).
+    pub fed: Option<(String, usize)>,
 }
 
 impl Line {
@@ -121,6 +125,9 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     let mut diags: Vec<Diag> = Vec::new();
     for (i, text) in src.lines().enumerate() {
         let no = i + 1;
+        let cut = ritsu_base::fed::cut(text);
+        let fed = cut.as_ref().map(|c| (c.text(text).to_string(), text[..c.at].chars().count() + 1));
+        let text = cut.as_ref().map_or(text, |c| &text[..c.at]);
         let all: Vec<char> = text.chars().collect();
         let err = |code: &'static str, col: usize, msg: ritsu_base::text::Text| Diag::error(code, file, no, col, msg).source(src);
         // Indentation is spaces. A tab is refused: how wide it is depends on the editor, and the
@@ -271,7 +278,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
             };
             toks.push(Token { tok, col, end: j + 1 });
         }
-        lines.push(Line { no, indent, tokens: toks, chars: cs, rest });
+        lines.push(Line { no, indent, tokens: toks, chars: cs, rest, fed });
     }
     (lines, diags)
 }

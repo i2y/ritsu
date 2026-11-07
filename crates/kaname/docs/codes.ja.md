@@ -180,6 +180,23 @@ fn 一(one)() -> number
 
 関連: [E007](#e007), [E008](#e008)
 
+<a id="e009"></a>
+
+## E009 — `fed by` を読めないか、書けない場所にあります
+
+**いつ出るか**: `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、`record` のフィールドの行と関数の引数でない場所に書いたとき、引数の `fed by` のあとに同じ行で `)` を書いたとき。
+
+**直し方**: 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。引数の `fed by` は、引数を一行ずつに分け、閉じ括弧を次の行に書いてください。
+
+**再現**:
+
+```kn
+module 注文(t) v1
+
+record 注文明細(order)
+  額(amount) : number  range >=0 <=9  fed by sakai "店.ctx" term 注文
+```
+
 <a id="e101"></a>
 
 ## E101 — この名前のものはありません

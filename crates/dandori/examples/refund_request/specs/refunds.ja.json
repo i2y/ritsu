@@ -1,0 +1,28 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "返金", "version": "1.0.0" },
+  "paths": {
+    "/refunds": {
+      "post": {
+        "operationId": "createRefundRequest",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/返金の申請" } } }
+        },
+        "responses": { "201": { "description": "申請を受けた" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "返金の申請": {
+        "type": "object",
+        "required": ["金額", "理由"],
+        "properties": {
+          "金額": { "type": "integer", "minimum": 1, "maximum": 1000000, "description": "セントで" },
+          "理由": { "type": "string", "enum": ["破損", "遅延"] }
+        }
+      }
+    }
+  }
+}

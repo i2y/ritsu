@@ -56,7 +56,7 @@ pub fn shown(o: &Outcome, lang: Lang) -> String {
 
 /// The examples, English first (DESIGN 17): the four that join no other language, then the four that
 /// call rules, dates and books.
-pub const EXAMPLES: [&str; 16] = [
+pub const EXAMPLES: [&str; 18] = [
     "examples/order_flow/order_flow.kn",
     "examples/order_flow/order_flow.ja.kn",
     "examples/stock_diff/stock_diff.kn",
@@ -73,4 +73,6 @@ pub const EXAMPLES: [&str; 16] = [
     "examples/media_mail/media_mail.ja.kn",
     "examples/discount_split/discount_split.kn",
     "examples/discount_split/discount_split.ja.kn",
+    "examples/order_bill/order_bill.kn",
+    "examples/order_bill/order_bill.ja.kn",
 ];

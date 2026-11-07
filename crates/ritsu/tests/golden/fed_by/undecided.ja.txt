@@ -1,0 +1,17 @@
+ok refund_limit.rule
+ok research.rule
+ok review.rule
+due.cal: ok — issued_on 2026-01-01〜2026-12-31 の 365 日のすべてで、どの日付も計算できます
+refunds.book: ok
+  sell.do    拒否されうる理由: more_than_paid（remaining(order) at most 100000.00）、key_conflict、already_refused
+  refund.do  拒否されうる理由: nothing_left（remaining(order) at least 0.00）、key_conflict、already_refused
+  キー: sell は、order ごとに一度だけ動きます。キーが同じで amount が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: refund は、request ごとに一度だけ動きます。キーが同じで order、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+ok bill.kn: 関数 1 個、total
+refund.flow: 検査を通りました
+desk.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+警告[ritsu W207]: due.cal:5:1: `input issued_on` が出どころ jsonschema "schemas/order.schema.json" def Order property issued_on の値を受け取るかを決められません
+     5 |   issued_on : date  range >=2026-01-01 <=2026-12-31  fed by jsonschema "schemas/order.schema.json" def Order property issued_on
+  = 契約は日付を文字列として運ぶだけで、どの日が来るかを言いません
+  = 契約がとりうる値を並べれば（JSON Schema の `enum`、Protovalidate の `in`）、決められます。
+ritsu check: ファイル 8 個（rulec 3、koyomi 1、chobo 1、kaname 1、dandori 1、sekisho 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 10 か所、決められない 1 か所

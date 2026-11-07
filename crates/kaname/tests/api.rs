@@ -19,7 +19,7 @@ fn run(args: &[&str], suite: Suite) -> (u8, String, String) {
     (code, String::from_utf8(out).unwrap(), String::from_utf8(err).unwrap())
 }
 
-const EXAMPLES: [&str; 8] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split"];
+const EXAMPLES: [&str; 9] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill"];
 
 #[test]
 fn each_example_reads_as_the_golden_files_hold() {

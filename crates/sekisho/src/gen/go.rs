@@ -206,7 +206,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
     let f = p.scope.file();
     let pkg = ritsu_emit::ident::go_package(&g.named.alias);
     let mut t = String::new();
-    let sha = ritsu_base::sha256::hex(f.src.as_bytes());
+    let sha = ritsu_base::fed::hash(&f.src);
     let version = f.version.strip_prefix('v').unwrap_or(&f.version);
     let source = ritsu_emit::header::Source { path: &o.shown, kind: "gate", name: &f.name.text, version, sha256: &sha, module: o.place.module.as_ref() };
     t.push_str(&Comment::Slashes.line(&ritsu_emit::header::generated("sekisho")));

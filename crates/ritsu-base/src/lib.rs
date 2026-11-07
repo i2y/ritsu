@@ -12,6 +12,8 @@
 //! - [`sha256`]: FIPS 180-4.
 //! - [`naming`] and [`paths`]: `<tool> "<path>" [<kind> <name>]...` (DESIGN 6.2), the root of a
 //!   project, and paths from it and from where a tool runs.
+//! - [`fed`]: `fed by <naming>` at the end of a line that declares a value (DESIGN 7.16): where it
+//!   stands in the line, the naming it holds, and the text of a file with it taken off.
 //! - [`sources`]: the copies of a law's articles, their text, their pins, and the requests to
 //!   e-Gov and the eCFR that bring them.
 //! - [`docpage`]: the frame of a page for people — the HTML head and the palette.
@@ -53,6 +55,7 @@ pub mod definition;
 pub mod diag;
 pub mod docpage;
 pub mod document;
+pub mod fed;
 pub mod fs;
 pub mod json;
 pub mod ledger;

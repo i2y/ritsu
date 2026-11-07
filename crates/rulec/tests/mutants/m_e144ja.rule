@@ -1,0 +1,16 @@
+rule 配送料(shipping) v1
+description "注文の配送料。重さは契約から来るので、手書きのコードが運ぶものではない"
+
+shape 注文(order) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+inputs
+  重さ(weight) : number  range >=0 <=100  from 注文.weight  fed by rulec "はかり.rule" output 重さ
+
+outputs
+  料金(fee) : number
+
+table 料金表(fee_of)
+policy unique
+| 重さ | -> 料金 : number |
+| <=10 | 5                |
+| >10  | 20               |

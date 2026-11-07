@@ -66,7 +66,7 @@ pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Un
     }
     let files: Vec<String> = if !ritsu_base::fs::is_dir(&abs) {
         vec![n.path.clone()]
-    } else if matches!(n.tool, Tool::Openapi | Tool::Asyncapi | Tool::Cedar) {
+    } else if matches!(n.tool, Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::Jsonschema) {
         // a document by what its top says, a Cedar file by its name (DESIGN 3.6)
         files_under(&p.root, &n.path, None).into_iter().filter(|f| crate::documents::is_the_tools(&p.root, n.tool, f)).collect()
     } else {
@@ -83,7 +83,7 @@ pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Un
         }
         return Ok(out);
     }
-    if matches!(n.tool, Tool::Openapi | Tool::Asyncapi | Tool::Cedar) {
+    if matches!(n.tool, Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::Jsonschema) {
         for f in &files {
             let loaded = p.suite.document(&p.root, n.tool, f);
             let read = loaded.as_ref().as_ref().map_err(|why| Unread::Doc(f.clone(), why.clone()))?;

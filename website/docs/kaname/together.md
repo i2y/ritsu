@@ -138,6 +138,26 @@ A rule's answer is read in the range rulec holds it to: the one written on the o
 the rows of its tables write, or what its `result` reaches. An output that reads an input with no
 range is a value of the whole of its type, as the generated code returns it.
 
+### Where a value comes from
+
+Hand-written code hands a module values it took from somewhere else. `fed by` at the end of a
+record's field, or of a parameter of a function, says where, in the form the toolchain names
+everything, and `ritsu check` asks the other file what it can come to
+([order_bill](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/order_bill)):
+
+```console
+$ cd crates/kaname/examples/order_bill
+$ ritsu check order_bill.kn
+ok order_bill.kn: 1 function, total
+ritsu check: 1 file (kaname 1): all pass; borders between the languages: 3 checked, 0 undecided
+```
+
+Raise the schema's `maximum` for `qty` to 21 and it stops with E207: the field takes number >=1 <=20,
+and its source can be 21.
+
+The range of the values is what is checked. Nothing checks that the hand-written code really
+carries that value, and the page says so. Nothing `ritsu gen` writes changes.
+
 ## In the package
 
 `ritsu gen` writes a module beside the code of the rules, the dates and the books it calls, in the
@@ -160,3 +180,6 @@ transfer with a client of its own.
   discount spread over the lines of a bill by their amounts, a line at a time through a rule that
   `allocate`s, with the running totals kept by `running_totals`, from Virginia's regulation
   23VAC10-210-250.
+- [order_bill](https://github.com/i2y/ritsu/tree/main/crates/kaname/examples/order_bill): what the
+  lines of an order come to, with `fed by` saying which property of a JSON Schema each value comes
+  from.

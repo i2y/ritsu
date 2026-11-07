@@ -25,6 +25,14 @@ fn bad(col: usize, msg: Text) -> Bad {
     Bad { col, code: "E002", msg, notes: vec![] }
 }
 
+/// The note of an E017: what the form is (DESIGN 21).
+fn fed_shape() -> Text {
+    tr!(
+        "形は `fed by <ツール> \"<パス>\" <種類> <名前>…` で、行の最後まで読みます。パスはこのファイルのディレクトリからです。",
+        "The form is `fed by <tool> \"<path>\" <kind> <name>…`, read to the end of the line; the path is from this file's directory."
+    )
+}
+
 impl Bad {
     fn note(mut self, t: Text) -> Bad {
         self.notes.push(t);
@@ -796,6 +804,19 @@ impl<'a> Parser<'a> {
             let s = ex.span;
             self.err("E002", s.line, s.col, tr!("`examples` の下に表がありません", "`examples` has no table under it"));
         }
+        // `fed by` on a line that cannot hold it, said here so that no line of any kind reads it as
+        // written. A line already refused has said what is wrong with it.
+        for line in lines {
+            let Some((_, col)) = &line.fed else { continue };
+            let taken = f.inputs.iter().any(|i| i.span.line == line.no);
+            if taken || bad_lines.contains(&line.no) || self.diags.iter().any(|d| d.line == Some(line.no)) {
+                continue;
+            }
+            self.err("E017", line.no, *col, tr!("`fed by` を書けるのは、`inputs` の行だけです", "`fed by` can be written only on a line of `inputs`")).notes.push(tr!(
+                "`fed by` は、入力の値を手書きのコードがどこから運ぶかを言います。日付は、このファイルが計算する値です。",
+                "`fed by` says where hand-written code takes the value of an input from. A date is what this file computes."
+            ));
+        }
         self.file = Some(f);
     }
 
@@ -1059,7 +1080,14 @@ impl<'a> Parser<'a> {
                     }
                 }
                 c.done()?;
-                f.inputs.push(Input { name, ty, span, lo, hi, range_span });
+                let fed = match &line.fed {
+                    None => None,
+                    Some((written, col)) => match ritsu_base::fed::read(written) {
+                        Ok(n) => Some(FedBy { written: written.clone(), name: n, span: Span { line: line.no, col: *col } }),
+                        Err(e) => return Err(Bad { col: *col, code: "E017", msg: tr!("`fed by` の参照を読めません: {}", "`fed by` does not name a value: {}", e.text().ja; e.text().en), notes: vec![fed_shape()] }),
+                    },
+                };
+                f.inputs.push(Input { name, ty, span, lo, hi, range_span, fed });
                 Ok(())
             }
             Block::Date(i) => {

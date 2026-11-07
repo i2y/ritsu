@@ -77,7 +77,7 @@ fn every_line_of_the_shared_table() {
             }
         }
     }
-    assert!(ok == 54 && errors == 32, "{ok} lines of JSON and {errors} of errors");
+    assert!(ok == 58 && errors == 34, "{ok} lines of JSON and {errors} of errors");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

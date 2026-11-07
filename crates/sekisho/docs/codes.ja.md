@@ -150,6 +150,24 @@ role 持つ(has)
 
 関連: [E007](#e007)
 
+<a id="e009"></a>
+
+## E009 — `fed by` を読めないか、書けない場所にあります
+
+**いつ出るか**: `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、属性の行と `input` の行でない場所に書いたとき（`context` の値は、ゲートが自分で計算する値です）。
+
+**直し方**: 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。
+
+**再現**:
+
+```gate
+gate t v1
+
+principal 利用者(User)
+  attributes
+    上限(limit) : number  range >=0 <=9  fed by sakai "店.ctx" term 上限
+```
+
 <a id="e101"></a>
 
 ## E101 — 知らない名前です

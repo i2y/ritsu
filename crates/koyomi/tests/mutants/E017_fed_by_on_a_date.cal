@@ -1,0 +1,8 @@
+dates shipping v1
+description "Ships three days after the order. `fed by` goes on the line of an input, and this is the line of a date the file computes"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2026-01-31
+
+date ship_by = ordered  fed by rulec "orders.rule" output ordered
+  + 3 days

@@ -1,0 +1,3 @@
+error[E009]: tests/mutants/E009_計算する値の出どころ.gate:23:32: `fed by` can be written only on the line of an attribute or of an `input`
+    23 |     少額(small) = 上限(金額: 金額).少額  fed by rulec "注文.rule" output 少額
+  = `fed by` says where hand-written code takes a value from. A value of `context` is one the gate computes, and its computation says where it comes from.

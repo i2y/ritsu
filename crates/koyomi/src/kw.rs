@@ -46,6 +46,11 @@ pub const WEEKDAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"
 // Types and ranges.
 pub const INT: &str = "int";
 pub const RANGE: &str = "range";
+// `issued_on : date  range >=2026-01-01 <=2026-12-31  fed by jsonschema "o.json" def Order property
+// issued_on`: where hand-written code takes an input's value from, for `ritsu check` to hold against
+// what the input takes (DESIGN 18). The two words together end the line, and `ritsu_base::fed` cuts
+// them off before its words are read, so neither is a word of the tables below: every word of
+// [`TABLE`] is reserved, and an input can go on being called `fed`.
 
 // The operations.
 pub const DAY: &str = "day";

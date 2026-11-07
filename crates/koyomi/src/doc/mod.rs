@@ -632,6 +632,13 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
             Text::list(&ranges.iter().map(|r| Text::same(r.clone())).collect::<Vec<_>>()).en
         ))
     })]));
+    // Where hand-written code takes an input from (DESIGN 21): what was held, and what was not.
+    for a in &m.file.inputs {
+        if let Some(fb) = &a.fed {
+            let note = ritsu_base::fed::page_note(&fb.written);
+            b.push(Block::P(vec![t(format!("{}: {}", a.name.text, s(note)))]));
+        }
+    }
     if m.claims.is_empty() {
         b.push(Block::P(vec![t(s(tr!("条件は書かれていません。", "The file states no claims.")))]));
     } else {

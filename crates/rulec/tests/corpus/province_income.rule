@@ -1,0 +1,29 @@
+rule province_income v1
+description "The food a province brings in each season, by how much farmland it has. province_growth.rule takes what this gives"
+
+enum season = spring | summer | autumn | winter
+
+inputs
+  farmland : number  range >=0 <=20
+  season   : season
+
+outputs
+  food : number  round down(1)
+
+define twice : number = farmland * 2
+define thrice : number = farmland * 3
+
+table income
+policy unique
+| season | -> food : number |
+| spring | farmland         |
+| summer | twice            |
+| autumn | thrice           |
+| winter | 0                |
+
+examples
+| farmland | season | -> food |
+| 10       | spring | 10      |
+| 10       | autumn | 30      |
+| 20       | autumn | 60      |
+| 10       | winter | 0       |

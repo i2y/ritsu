@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E143, W105, W110, W111, W114-W133, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E144, W105, W110, W111, W114-W133, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -187,6 +187,7 @@ A few shapes are worth knowing before the first draft:
   file holds enums rules `import enum … from`; `prerequisites <name> over <enum>` lists `start` and
   a `requires` line per value, refusing cycles, unreachable values and a broken `ordered by`
   (E136-E138).
+- **An input can say where hand-written code takes its value from.** `food : number  range >=0 <=60  fed by rulec "province_income.rule" output food` at the end of an input's line; also a `chobo` account, a `koyomi` date, a `proto` field, an `openapi` or `jsonschema` property, a `dandori` output or record field, a `kaname` record field. `ritsu check` holds what the source can come to against what the input takes (E207, W207, E208); `rulec check` says only whether the form reads (E144). The hand-written code that carries the value is not checked, and generated code does not change.
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 

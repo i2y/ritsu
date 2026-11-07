@@ -226,7 +226,10 @@ impl ritsu_ports::Items for Engine {
     /// field's, an input's and an output's is its line; a value's is its name.
     fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>> {
         let (src, prog) = parsed(root, file)?;
-        let lines: Vec<&str> = src.lines().collect();
+        // Where a value comes from says nothing of what the place means, and a version of it stays
+        // the same (DESIGN 24): the definition is read without `fed by`.
+        let body = ritsu_base::fed::without(&src);
+        let lines: Vec<&str> = body.lines().collect();
         let blocks = syntax::blocks(&src);
         let block = |line: usize| blocks.iter().find(|(a, _)| *a == line).copied().unwrap_or((line, line));
         let naming = |kind: &str, name: &str| Naming::file(Tool::Dandori, file).with(kind, name);
@@ -270,8 +273,9 @@ impl ritsu_ports::References for Engine {
     /// from its `enums` file, the descriptions of the APIs its
     /// tasks call (`use proto`, `use openapi`, `use smithy`), the service of a `.proto` it implements
     /// (`implements`), each method of one a task calls (`connect`), each transfer of a book a task
-    /// runs an operation of (`book`), and the `.flow` of each child workflow (`flow`). A service is
-    /// named from its `.proto`'s package.
+    /// runs an operation of (`book`), the `.flow` of each child workflow (`flow`), and where
+    /// hand-written code takes a place's value from (`fed by`, DESIGN 24). A service is named from
+    /// its `.proto`'s package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let (_, prog) = parsed(root, file)?;
         let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
@@ -335,7 +339,82 @@ impl ritsu_ports::References for Engine {
                 }
             }
         }
+        for f in prog.inputs.iter().chain(prog.records.iter().flat_map(|r| r.fields.iter())) {
+            let Some(fb) = &f.fed else { continue };
+            if let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name) {
+                out.push(Reference { line: fb.span.line, target, how: "fed by".into() });
+            }
+        }
         out.sort_by_key(|r| r.line);
         Ok(out)
+    }
+}
+
+/// What a place of a flow holds, as the port of `fed by` says it (DESIGN 24): an enum of a rule's
+/// is the rule's public names of its values, which is what a rule answers with and what goes on the
+/// wire; a flow writes the rule's own names of them.
+fn carried(m: &crate::model::Model, ports: &ritsu_ports::Ports, ty: &crate::model::Ty, rg: Option<&crate::model::Range>) -> ritsu_ports::Carried {
+    use crate::model::Ty;
+    use ritsu_ports::Carried;
+    match ty {
+        Ty::Int => Carried::whole("int", rg.and_then(|r| r.lo).map(i128::from), rg.and_then(|r| r.hi).map(i128::from)),
+        Ty::Str => Carried::Str,
+        Ty::Bool => Carried::Bool,
+        Ty::Date => Carried::Date { min: rg.and_then(|r| r.lo), max: rg.and_then(|r| r.hi) },
+        Ty::Num(u) => Carried::Num { written: u.to_string(), unit: Some(u.clone()), min: rg.and_then(|r| r.lo).map(i128::from), max: rg.and_then(|r| r.hi).map(i128::from) },
+        Ty::Enum(e) => {
+            let def = &m.enums[*e];
+            let values = m.values_in(*e, rg.copied());
+            // `<rule>.<enum>` for a rule's, the rule named as the flow's `use rule` names it.
+            let of_rule = def.name.split_once('.').and_then(|(r, en)| Some((m.rules.iter().find(|u| u.name == r)?, en)));
+            let public = of_rule.and_then(|(u, en)| {
+                let facts = ports.rules.facts(&u.info.path).ok()?;
+                let e = facts.enums.iter().find(|x| x.name == en)?.clone();
+                Some(values.iter().map(|v| e.values.iter().find(|x| &x.name == v).map_or_else(|| v.clone(), |x| x.public.clone())).collect::<Vec<_>>())
+            });
+            Carried::Enum { name: def.name.clone(), values: public.unwrap_or(values) }
+        }
+        Ty::Opt(t) => Carried::Opt(Box::new(carried(m, ports, t, rg))),
+        t => Carried::Other(m.ty_name(t)),
+    }
+}
+
+impl ritsu_ports::Feeds for Engine {
+    /// The inputs and the fields of records with `fed by` (DESIGN 24), each with what its line
+    /// takes, as dandori's own range check reads it: a flow that does not pass answers nothing.
+    fn feeds(&self, root: &Path, file: &str, ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
+        let (_, prog) = parsed(root, file)?;
+        if !prog.inputs.iter().chain(prog.records.iter().flat_map(|r| r.fields.iter())).any(|f| f.fed.is_some()) {
+            return Ok(Vec::new());
+        }
+        let disk = ritsu_base::paths::on_disk(root, file);
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
+        let place = |fb: &syntax::FedBy, place: Naming, takes| ritsu_ports::Fed { line: fb.span.line, place, takes, source: ritsu_base::fed::from_root(root, file, &fb.name), written: fb.written.clone() };
+        let mut out = Vec::new();
+        for f in &prog.inputs {
+            let (Some(fb), Some((_, ty))) = (&f.fed, m.inputs.iter().find(|(n, _)| *n == f.name.0)) else { continue };
+            out.push(place(fb, Naming::file(Tool::Dandori, file).with("input", &f.name.0), carried(&m, ports, ty, m.input_ranges.get(&f.name.0))));
+        }
+        for r in &prog.records {
+            let Some(def) = m.records.iter().find(|d| d.name == r.name.0) else { continue };
+            for f in &r.fields {
+                let (Some(fb), Some((_, ty))) = (&f.fed, def.fields.iter().find(|(n, _)| *n == f.name.0)) else { continue };
+                out.push(place(fb, Naming::file(Tool::Dandori, file).with("record", &r.name.0).with("field", &f.name.0), carried(&m, ports, ty, def.ranges.get(&f.name.0))));
+            }
+        }
+        out.sort_by_key(|f| f.line);
+        Ok(out)
+    }
+
+    /// A workflow's output, or a field of a record it knows.
+    fn holds(&self, root: &Path, file: &str, thing: &Naming, ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
+        let disk = ritsu_base::paths::on_disk(root, file);
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
+        let items: Vec<(&str, &str)> = thing.items.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
+        Ok(match items.as_slice() {
+            [("output", n)] => m.outputs.iter().find(|(x, _)| x == n).map(|(_, t)| carried(&m, ports, t, m.output_ranges.get(*n))),
+            [("record", r), ("field", n)] => m.records.iter().find(|d| d.name == *r).and_then(|d| d.fields.iter().find(|(x, _)| x == n).map(|(_, t)| carried(&m, ports, t, d.ranges.get(*n)))),
+            _ => None,
+        })
     }
 }
