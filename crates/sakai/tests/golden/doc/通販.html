@@ -82,26 +82,26 @@ h2:target { color: var(--accent); }
 <tbody>
 <tr><td><code>dandori</code></td><td><code>ordering/受注.flow</code></td><td>実装するサービス <code>FulfillmentService</code>／子のフロー <code>delivery/配送の手配.flow</code></td></tr>
 <tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/fulfillment.proto</code></td><td>メッセージ <code>FulfillRequest</code>、<code>FulfillmentOrder</code>、<code>Line</code>、<code>Gift</code>、<code>FulfillResponse</code>、<code>AnswerPackingRequest</code>、<code>AnswerPackingResponse</code>／サービス <code>FulfillmentService</code></td></tr>
-<tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/order.proto</code></td><td>メッセージ <code>Order</code>、<code>GetOrderRequest</code>、<code>GetOrderResponse</code>／列挙 <code>OrderStatus</code>／サービス <code>OrderService</code></td></tr>
+<tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/order.proto</code></td><td>メッセージ <code>Order</code>、<code>GetOrderRequest</code>、<code>GetOrderResponse</code>、<code>CancelOrderRequest</code>、<code>CancelOrderResponse</code>／列挙 <code>OrderStatus</code>／サービス <code>OrderService</code></td></tr>
 <tr><td><code>file</code></td><td>14 個のファイル（コード）</td><td></td></tr>
 </tbody>
 </table>
 <h3>公表された言語</h3>
 <ul>
-<li><code>shop.ordering.v1</code>：書いたもの <code>proto/shop/ordering/v1/order.proto</code>、<code>proto/shop/ordering/v1/fulfillment.proto</code>。公開ホストサービス <code>OrderService</code>（<code>GetOrder</code>）。公開ホストサービス <code>FulfillmentService</code>（<code>Fulfill</code>、<code>AnswerPacking</code>）。<code>ordering/受注.flow</code> が実装する。生成したコード <code>py/shop/ordering/v1</code>、<code>ts/shop/ordering/v1</code>、<code>java/src/main/java/shop/ordering/v1</code>、<code>go/shop/ordering/v1</code></li>
+<li><code>shop.ordering.v1</code>：書いたもの <code>proto/shop/ordering/v1/order.proto</code>、<code>proto/shop/ordering/v1/fulfillment.proto</code>。公開ホストサービス <code>OrderService</code>（<code>GetOrder</code>、<code>CancelOrder</code>）。公開ホストサービス <code>FulfillmentService</code>（<code>Fulfill</code>、<code>AnswerPacking</code>）。<code>ordering/受注.flow</code> が実装する。生成したコード <code>py/shop/ordering/v1</code>、<code>ts/shop/ordering/v1</code>、<code>java/src/main/java/shop/ordering/v1</code>、<code>go/shop/ordering/v1</code></li>
 </ul>
 <h3>用語集</h3>
 <table>
 <thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
 <tbody>
 <tr><td><code>注文</code></td><td>客が確定させた購入の申し込み。取り消されても消えない</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; message Order</code></td><td>—</td></tr>
-<tr><td><code>キャンセル</code></td><td>出荷の前に、客の申し出で注文を取り消すこと</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus value ORDER_STATUS_CANCELLED</code></td><td><a href="#ctx-billing">請求</a>（<code>受注で取消</code> として）</td></tr>
+<tr><td><code>キャンセル</code></td><td>出荷の前に注文を取り消すこと。客の申し出のときと、引き当てと発送に失敗したときがある</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus value ORDER_STATUS_CANCELLED</code></td><td><a href="#ctx-billing">請求</a>（<code>受注で取消</code> として）</td></tr>
 </tbody>
 </table>
 <h3>関係</h3>
 <ul>
-<li>上流 <a href="#ctx-inventory">在庫</a>：公開ホストサービス・公表された言語 <code>warehouse.v1</code> → 順応者。越える参照：<code>proto/shop/ordering/v1/fulfillment.proto:15</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:49</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/受注.flow:55</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/受注.flow:59</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
-<li><a href="#ctx-delivery">配送</a> とパートナーシップ。越える参照：<code>ordering/受注.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/出荷の急ぎ.rule&quot;</code>; <code>ordering/受注.flow:65</code> (flow) → <code>dandori &quot;delivery/配送の手配.flow&quot;</code></li>
+<li>上流 <a href="#ctx-inventory">在庫</a>：公開ホストサービス・公表された言語 <code>warehouse.v1</code> → 順応者。越える参照：<code>proto/shop/ordering/v1/fulfillment.proto:15</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:51</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/受注.flow:57</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/受注.flow:61</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
+<li><a href="#ctx-delivery">配送</a> とパートナーシップ。越える参照：<code>ordering/受注.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/出荷の急ぎ.rule&quot;</code>; <code>ordering/受注.flow:73</code> (flow) → <code>dandori &quot;delivery/配送の手配.flow&quot;</code></li>
 <li>下流 <a href="#ctx-billing">請求</a>：公開ホストサービス・公表された言語 <code>shop.ordering.v1</code> → 腐敗防止層。越える参照：<code>billing/rules/請求の要否.rule:4</code> (import proto) → <code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code></li>
 </ul>
 <h2 id="ctx-inventory">在庫（inventory）</h2>
@@ -135,7 +135,7 @@ h2:target { color: var(--accent); }
 </table>
 <h3>関係</h3>
 <ul>
-<li>下流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>warehouse.v1</code> → 順応者。越える参照：<code>proto/shop/ordering/v1/fulfillment.proto:15</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:49</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/受注.flow:55</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/受注.flow:59</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
+<li>下流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>warehouse.v1</code> → 順応者。越える参照：<code>proto/shop/ordering/v1/fulfillment.proto:15</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/受注.flow:51</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/受注.flow:57</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/受注.flow:61</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
 <li>下流 <a href="#ctx-delivery">配送</a>：公開ホストサービス・公表された言語 <code>warehouse.v1</code> → 腐敗防止層</li>
 </ul>
 <h2 id="ctx-delivery">配送（delivery）</h2>
@@ -171,7 +171,7 @@ h2:target { color: var(--accent); }
 </table>
 <h3>関係</h3>
 <ul>
-<li><a href="#ctx-ordering">受注</a> とパートナーシップ。越える参照：<code>ordering/受注.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/出荷の急ぎ.rule&quot;</code>; <code>ordering/受注.flow:65</code> (flow) → <code>dandori &quot;delivery/配送の手配.flow&quot;</code></li>
+<li><a href="#ctx-ordering">受注</a> とパートナーシップ。越える参照：<code>ordering/受注.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/出荷の急ぎ.rule&quot;</code>; <code>ordering/受注.flow:73</code> (flow) → <code>dandori &quot;delivery/配送の手配.flow&quot;</code></li>
 <li>上流 <a href="#ctx-inventory">在庫</a>：公開ホストサービス・公表された言語 <code>warehouse.v1</code> → 腐敗防止層</li>
 <li><a href="#ctx-billing">請求</a> と共有カーネル：<code>koyomi &quot;calendars/東京の営業日.cal&quot;</code>、<code>dir &quot;py/calendars&quot;</code>、<code>dir &quot;ts/calendars&quot;</code>、<code>dir &quot;java/src/main/java/calendars&quot;</code>、<code>dir &quot;go/calendars&quot;</code>。越える参照：<code>delivery/出荷日.cal:3</code> (use calendar) → <code>koyomi &quot;calendars/東京の営業日.cal&quot;</code></li>
 <li>下流 <a href="#ctx-billing">請求</a>：供給者・公開ホストサービス・公表された言語 <code>shop.delivery.v1</code> → 顧客。越える参照：<code>billing/rules/出荷の送料.rule:7</code> (shape) → <code>proto &quot;proto/shop/delivery/v1/shipment.proto&quot; message CreateShipmentRequest</code></li>
@@ -234,7 +234,7 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>語</th><th>コンテキスト</th><th>定義</th><th>境界を越えるとき</th></tr></thead>
 <tbody>
-<tr><td><code>キャンセル</code></td><td><a href="#ctx-ordering">受注</a></td><td>出荷の前に、客の申し出で注文を取り消すこと</td><td><a href="#ctx-billing">請求</a>（<code>受注で取消</code> として）。同じ名前の語が <a href="#ctx-billing">請求</a> にもある</td></tr>
+<tr><td><code>キャンセル</code></td><td><a href="#ctx-ordering">受注</a></td><td>出荷の前に注文を取り消すこと。客の申し出のときと、引き当てと発送に失敗したときがある</td><td><a href="#ctx-billing">請求</a>（<code>受注で取消</code> として）。同じ名前の語が <a href="#ctx-billing">請求</a> にもある</td></tr>
 <tr><td><code>キャンセル</code></td><td><a href="#ctx-billing">請求</a></td><td>請求を確定したあとに請求を取り消し、返金すること</td><td>同じ名前の語が <a href="#ctx-ordering">受注</a> にもある</td></tr>
 <tr><td><code>出荷</code></td><td><a href="#ctx-delivery">配送</a></td><td>荷物を倉庫から運送会社に渡すこと</td><td><a href="#ctx-billing">請求</a></td></tr>
 <tr><td><code>割れ物</code></td><td><a href="#ctx-delivery">配送</a></td><td>運ぶときに上に物を載せない荷物</td><td><a href="#ctx-billing">請求</a></td></tr>

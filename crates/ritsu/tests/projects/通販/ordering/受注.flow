@@ -1,13 +1,15 @@
 # コピー元: dandori の examples/fulfillment/temporal/fulfillment.ja.flow。規則を Connect で呼ぶようにし、proto と子の .flow の
-# パスをこの例の置き場所に、在庫の値の名前を stock.proto のものに直し、明細に在庫を押さえる ID を持たせ、押さえたあとの失敗では戻し、梱包が済んだら確定する
+# パスをこの例の置き場所に、在庫の値の名前を stock.proto のものに直し、明細に在庫を押さえる ID を持たせ、押さえたあとの失敗では戻して注文を取り消し、明細の食い違いを在庫不足と分け、梱包が済んだら確定する
 workflow 引当と発送 v1 implements 店.FulfillmentService
-description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ち、引き当てたぶんを確定してから、お客さまに知らせる。明細は並べて引き当て、足りない明細があるときも、引き当てたあとで失敗したときも、引き当てたぶんを戻す。Temporal 向けの版：倉庫の呼び出しは dandori が Connect で生成するアクティビティ。配送チームのワークフローが専用のタスクキューで配送を手配し（子ワークフロー、配送の手配.flow）、翌日便の車がなければ通常便で頼み直す。梱包の依頼、お知らせ、記録は自分で書くアクティビティで、梱包の担当者は、生成したクライアントが送る Update でコールバックに応答する"
+description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ち、引き当てたぶんを確定してから、お客さまに知らせる。明細は並べて引き当て、足りない明細があるときも、引き当てたあとで失敗したときも、引き当てたぶんを戻し、注文を取り消す。Temporal 向けの版：倉庫の呼び出しは dandori が Connect で生成するアクティビティ。配送チームのワークフローが専用のタスクキューで配送を手配し（子ワークフロー、配送の手配.flow）、翌日便の車がなければ通常便で頼み直す。梱包の依頼、お知らせ、記録は自分で書くアクティビティで、梱包の担当者は、生成したクライアントが送る Update でコールバックに応答する"
 
 use rule 急ぎ from "../delivery/rules/出荷の急ぎ.rule"
   connect "https://rules.example.com"
 use proto 店 from "../proto/shop/ordering/v1/fulfillment.proto"
 use proto warehouse from "../proto/warehouse/v1/stock.proto"
   url "https://warehouse.example.com"
+use proto 受注 from "../proto/shop/ordering/v1/order.proto"
+  url "https://orders.example.com"
 
 record 明細
   id  : string
@@ -59,6 +61,12 @@ task 引当を確定する(id: string)
   connect warehouse "StockService/Post"
   idempotent
 
+# この実行があきらめた注文は取り消す。請求は注文の状態を読み（請求の要否.rule）、取り消した注文は
+# 請求しない。
+task 注文を取り消す(id: string)
+  connect 受注 "OrderService/CancelOrder"
+  idempotent
+
 # 配送チームのワークフローが、専用のタスクキューのワーカーで配送を手配する。それ自身の .flow で
 # 書いてあり、検査はこのタスクを、その入力・出力・エラーと突き合わせる。
 task 配送を手配する(注文ID: string, 便: 急ぎ.便, 宛名: string?, 付帯: json) -> 配送
@@ -85,16 +93,28 @@ flow
     let 答え = 在庫を引き当てる(line_id: 明細.id, sku: 明細.sku, quantity: 明細.数)
     yield 答え
   let 足りない = false
+  let 食い違い = false
   for 一つ in 結果 at most 50
     match 一つ.stock
-      STOCK_SHORT, STOCK_CONFLICT => let 足りない = true
+      STOCK_SHORT => let 足りない = true
+      STOCK_CONFLICT => let 食い違い = true
       STOCK_SECURED => pass
+  match 食い違い
+    true =>
+      for 戻す in 結果 at most 50 in parallel
+        match 戻す.id
+          some id => 引当を戻す(id: id)
+          none => pass
+      注文を取り消す(id: 注文.id)
+      fail 明細の食い違い "注文 {注文.id} には、前に別の sku や数で押さえた明細があります"
+    false => pass
   match 足りない
     true =>
       for 戻す in 結果 at most 50 in parallel
         match 戻す.id
           some id => 引当を戻す(id: id)
           none => pass
+      注文を取り消す(id: 注文.id)
       fail 在庫不足 "注文 {注文.id} には在庫の足りない明細があります"
     false => pass
   let 宛名: string? = none
@@ -113,12 +133,14 @@ flow
             match 戻す.id
               some id => 引当を戻す(id: id)
               none => pass
+          注文を取り消す(id: 注文.id)
           fail 配送の手配の失敗 "注文 {注文.id} の配送を手配できませんでした"
     on failure =>
       for 戻す in 結果 at most 50 in parallel
         match 戻す.id
           some id => 引当を戻す(id: id)
           none => pass
+      注文を取り消す(id: 注文.id)
       fail 配送の手配の失敗 "注文 {注文.id} の配送を手配できませんでした"
   let 箱 = 梱包を待つ(注文ID: 注文.id, 引当: 結果)
     on timeout =>
@@ -126,12 +148,14 @@ flow
         match 戻す.id
           some id => 引当を戻す(id: id)
           none => pass
+      注文を取り消す(id: 注文.id)
       fail 梱包の遅れ "二日たっても梱包の知らせがありません"
     on 欠品 =>
       for 戻す in 結果 at most 50 in parallel
         match 戻す.id
           some id => 引当を戻す(id: id)
           none => pass
+      注文を取り消す(id: 注文.id)
       fail 梱包の欠品 "注文 {注文.id} の梱包の途中で品が足りなくなりました。受注に戻します"
   for 押さえた in 結果 at most 50 in parallel
     match 押さえた.id

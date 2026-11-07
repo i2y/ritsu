@@ -82,26 +82,26 @@ h2:target { color: var(--accent); }
 <tbody>
 <tr><td><code>dandori</code></td><td><code>ordering/fulfillment.flow</code></td><td>implements <code>FulfillmentService</code>; child flows <code>delivery/arrange_delivery.flow</code></td></tr>
 <tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/fulfillment.proto</code></td><td>messages <code>FulfillRequest</code>, <code>FulfillmentOrder</code>, <code>Line</code>, <code>Gift</code>, <code>FulfillResponse</code>, <code>AnswerPackingRequest</code>, <code>AnswerPackingResponse</code>; services <code>FulfillmentService</code></td></tr>
-<tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/order.proto</code></td><td>messages <code>Order</code>, <code>GetOrderRequest</code>, <code>GetOrderResponse</code>; enums <code>OrderStatus</code>; services <code>OrderService</code></td></tr>
+<tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/order.proto</code></td><td>messages <code>Order</code>, <code>GetOrderRequest</code>, <code>GetOrderResponse</code>, <code>CancelOrderRequest</code>, <code>CancelOrderResponse</code>; enums <code>OrderStatus</code>; services <code>OrderService</code></td></tr>
 <tr><td><code>file</code></td><td>14 files (code)</td><td></td></tr>
 </tbody>
 </table>
 <h3>Published language</h3>
 <ul>
-<li><code>shop.ordering.v1</code>: written in <code>proto/shop/ordering/v1/order.proto</code>, <code>proto/shop/ordering/v1/fulfillment.proto</code>; open host service <code>OrderService</code> (<code>GetOrder</code>); open host service <code>FulfillmentService</code> (<code>Fulfill</code>, <code>AnswerPacking</code>), implemented by <code>ordering/fulfillment.flow</code>; generated code in <code>py/shop/ordering/v1</code>, <code>ts/shop/ordering/v1</code>, <code>java/src/main/java/shop/ordering/v1</code>, <code>go/shop/ordering/v1</code></li>
+<li><code>shop.ordering.v1</code>: written in <code>proto/shop/ordering/v1/order.proto</code>, <code>proto/shop/ordering/v1/fulfillment.proto</code>; open host service <code>OrderService</code> (<code>GetOrder</code>, <code>CancelOrder</code>); open host service <code>FulfillmentService</code> (<code>Fulfill</code>, <code>AnswerPacking</code>), implemented by <code>ordering/fulfillment.flow</code>; generated code in <code>py/shop/ordering/v1</code>, <code>ts/shop/ordering/v1</code>, <code>java/src/main/java/shop/ordering/v1</code>, <code>go/shop/ordering/v1</code></li>
 </ul>
 <h3>Glossary</h3>
 <table>
 <thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
 <tbody>
 <tr><td><code>order</code></td><td>A purchase the customer has confirmed. It does not disappear when it is cancelled</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; message Order</code></td><td>—</td></tr>
-<tr><td><code>cancel</code></td><td>Cancelling an order before it ships, at the customer&#39;s request</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus value ORDER_STATUS_CANCELLED</code></td><td><a href="#ctx-billing">Billing</a> (as <code>cancelled_in_ordering</code>)</td></tr>
+<tr><td><code>cancel</code></td><td>Cancelling an order before it ships: at the customer&#39;s request, or because its fulfillment failed</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus value ORDER_STATUS_CANCELLED</code></td><td><a href="#ctx-billing">Billing</a> (as <code>cancelled_in_ordering</code>)</td></tr>
 </tbody>
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Upstream <a href="#ctx-inventory">Inventory</a>: open host service, published language <code>warehouse.v1</code> → conformist. References that cross: <code>proto/shop/ordering/v1/fulfillment.proto:16</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:49</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/fulfillment.flow:55</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/fulfillment.flow:59</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
-<li>Partnership with <a href="#ctx-delivery">Delivery</a>. References that cross: <code>ordering/fulfillment.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/urgency.rule&quot;</code>; <code>ordering/fulfillment.flow:65</code> (flow) → <code>dandori &quot;delivery/arrange_delivery.flow&quot;</code></li>
+<li>Upstream <a href="#ctx-inventory">Inventory</a>: open host service, published language <code>warehouse.v1</code> → conformist. References that cross: <code>proto/shop/ordering/v1/fulfillment.proto:16</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:51</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/fulfillment.flow:57</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/fulfillment.flow:61</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
+<li>Partnership with <a href="#ctx-delivery">Delivery</a>. References that cross: <code>ordering/fulfillment.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/urgency.rule&quot;</code>; <code>ordering/fulfillment.flow:73</code> (flow) → <code>dandori &quot;delivery/arrange_delivery.flow&quot;</code></li>
 <li>Downstream <a href="#ctx-billing">Billing</a>: open host service, published language <code>shop.ordering.v1</code> → anticorruption layer. References that cross: <code>billing/rules/billing_need.rule:4</code> (import proto) → <code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code></li>
 </ul>
 <h2 id="ctx-inventory">Inventory (inventory)</h2>
@@ -135,7 +135,7 @@ h2:target { color: var(--accent); }
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Downstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>warehouse.v1</code> → conformist. References that cross: <code>proto/shop/ordering/v1/fulfillment.proto:16</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:49</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/fulfillment.flow:55</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/fulfillment.flow:59</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
+<li>Downstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>warehouse.v1</code> → conformist. References that cross: <code>proto/shop/ordering/v1/fulfillment.proto:16</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:51</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/fulfillment.flow:57</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code>; <code>ordering/fulfillment.flow:61</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Post</code></li>
 <li>Downstream <a href="#ctx-delivery">Delivery</a>: open host service, published language <code>warehouse.v1</code> → anticorruption layer</li>
 </ul>
 <h2 id="ctx-delivery">Delivery (delivery)</h2>
@@ -171,7 +171,7 @@ h2:target { color: var(--accent); }
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Partnership with <a href="#ctx-ordering">Ordering</a>. References that cross: <code>ordering/fulfillment.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/urgency.rule&quot;</code>; <code>ordering/fulfillment.flow:65</code> (flow) → <code>dandori &quot;delivery/arrange_delivery.flow&quot;</code></li>
+<li>Partnership with <a href="#ctx-ordering">Ordering</a>. References that cross: <code>ordering/fulfillment.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/urgency.rule&quot;</code>; <code>ordering/fulfillment.flow:73</code> (flow) → <code>dandori &quot;delivery/arrange_delivery.flow&quot;</code></li>
 <li>Upstream <a href="#ctx-inventory">Inventory</a>: open host service, published language <code>warehouse.v1</code> → anticorruption layer</li>
 <li>Shared kernel with <a href="#ctx-billing">Billing</a>: <code>koyomi &quot;calendars/tokyo_business_days.cal&quot;</code>, <code>dir &quot;py/calendars&quot;</code>, <code>dir &quot;ts/calendars&quot;</code>, <code>dir &quot;java/src/main/java/calendars&quot;</code>, <code>dir &quot;go/calendars&quot;</code>. References that cross: <code>delivery/ship_date.cal:3</code> (use calendar) → <code>koyomi &quot;calendars/tokyo_business_days.cal&quot;</code></li>
 <li>Downstream <a href="#ctx-billing">Billing</a>: supplier, open host service, published language <code>shop.delivery.v1</code> → customer. References that cross: <code>billing/rules/shipment_fee.rule:7</code> (shape) → <code>proto &quot;proto/shop/delivery/v1/shipment.proto&quot; message CreateShipmentRequest</code></li>
@@ -234,7 +234,7 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>Term</th><th>Context</th><th>Definition</th><th>Across a boundary</th></tr></thead>
 <tbody>
-<tr><td><code>cancel</code></td><td><a href="#ctx-ordering">Ordering</a></td><td>Cancelling an order before it ships, at the customer&#39;s request</td><td><a href="#ctx-billing">Billing</a> (as <code>cancelled_in_ordering</code>); a term of the same name is in <a href="#ctx-billing">Billing</a></td></tr>
+<tr><td><code>cancel</code></td><td><a href="#ctx-ordering">Ordering</a></td><td>Cancelling an order before it ships: at the customer&#39;s request, or because its fulfillment failed</td><td><a href="#ctx-billing">Billing</a> (as <code>cancelled_in_ordering</code>); a term of the same name is in <a href="#ctx-billing">Billing</a></td></tr>
 <tr><td><code>cancel</code></td><td><a href="#ctx-billing">Billing</a></td><td>Voiding an invoice after it was confirmed, and refunding it</td><td>a term of the same name is in <a href="#ctx-ordering">Ordering</a></td></tr>
 <tr><td><code>fee</code></td><td><a href="#ctx-billing">Billing</a></td><td>The amount for each payment, worked out from the rate in the contract</td><td>—</td></tr>
 <tr><td><code>fragile</code></td><td><a href="#ctx-delivery">Delivery</a></td><td>A parcel that nothing is put on top of while it travels</td><td><a href="#ctx-billing">Billing</a></td></tr>

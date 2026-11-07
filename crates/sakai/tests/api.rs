@@ -65,10 +65,10 @@ fn each_crossing_says_how_it_refers() {
             "koyomi \"delivery/出荷日.cal\" 3 -> koyomi \"calendars/東京の営業日.cal\" (use calendar, shared_kernel)",
             "dandori \"ordering/受注.flow\" 6 -> rulec \"delivery/rules/出荷の急ぎ.rule\" (use rule … connect, partnership)",
             "dandori \"ordering/受注.flow\" 9 -> proto \"proto/warehouse/v1/stock.proto\" (use proto, upstream_downstream)",
-            "dandori \"ordering/受注.flow\" 49 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve (connect, upstream_downstream)",
-            "dandori \"ordering/受注.flow\" 55 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Release (connect, upstream_downstream)",
-            "dandori \"ordering/受注.flow\" 59 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Post (connect, upstream_downstream)",
-            "dandori \"ordering/受注.flow\" 65 -> dandori \"delivery/配送の手配.flow\" (flow, partnership)",
+            "dandori \"ordering/受注.flow\" 51 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve (connect, upstream_downstream)",
+            "dandori \"ordering/受注.flow\" 57 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Release (connect, upstream_downstream)",
+            "dandori \"ordering/受注.flow\" 61 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Post (connect, upstream_downstream)",
+            "dandori \"ordering/受注.flow\" 73 -> dandori \"delivery/配送の手配.flow\" (flow, partnership)",
         ]
     );
     // a rule's enum and a shape's message cross with what they reach
@@ -139,10 +139,10 @@ fn each_crossing_says_how_it_refers_in_english() {
             "koyomi \"delivery/ship_date.cal\" 3 -> koyomi \"calendars/tokyo_business_days.cal\" (use calendar, shared_kernel)",
             "dandori \"ordering/fulfillment.flow\" 6 -> rulec \"delivery/rules/urgency.rule\" (use rule … connect, partnership)",
             "dandori \"ordering/fulfillment.flow\" 9 -> proto \"proto/warehouse/v1/stock.proto\" (use proto, upstream_downstream)",
-            "dandori \"ordering/fulfillment.flow\" 49 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve (connect, upstream_downstream)",
-            "dandori \"ordering/fulfillment.flow\" 55 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Release (connect, upstream_downstream)",
-            "dandori \"ordering/fulfillment.flow\" 59 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Post (connect, upstream_downstream)",
-            "dandori \"ordering/fulfillment.flow\" 65 -> dandori \"delivery/arrange_delivery.flow\" (flow, partnership)",
+            "dandori \"ordering/fulfillment.flow\" 51 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve (connect, upstream_downstream)",
+            "dandori \"ordering/fulfillment.flow\" 57 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Release (connect, upstream_downstream)",
+            "dandori \"ordering/fulfillment.flow\" 61 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Post (connect, upstream_downstream)",
+            "dandori \"ordering/fulfillment.flow\" 73 -> dandori \"delivery/arrange_delivery.flow\" (flow, partnership)",
         ]
     );
     let shape = &v["crossings"][2]["elements"];

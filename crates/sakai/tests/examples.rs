@@ -400,9 +400,11 @@ fn the_two_maps_say_the_same_but_for_the_names() {
 /// The book, the flow and the contract of an example: a hold lasts longer than the waits it sits
 /// through (the packing crew's two days, and the days from an order to its shipping day, seven at
 /// most: `delivery/ship_date.cal`), the contract has the call that posts a hold, and the flow posts
-/// the lines it held once the packing is done and gives them back in every way it fails after the
-/// holds (a `fail` after the first, which gives them back itself, has a `release` just above it).
-fn holds_are_kept(example: &str, book: &str, flow: &str, release: &str, post: &str, wait: &str, told: &str, fails_after_holds: usize) {
+/// the lines it held once the packing is done, and in every way it fails after the holds it gives
+/// them back and cancels the order (a `fail` has the `cancel` right above it and the `release` above
+/// that), which is what keeps a failed order from being billed.
+#[allow(clippy::too_many_arguments)]
+fn holds_are_kept(example: &str, book: &str, flow: &str, release: &str, cancel: &str, post: &str, wait: &str, told: &str, fails_after_holds: usize) {
     let book_text = std::fs::read_to_string(Path::new(example).join(book)).unwrap();
     let days: u32 = book_text.lines().find_map(|l| l.trim().strip_prefix("pending expires after ")).and_then(|r| r.strip_suffix(" days")).and_then(|d| d.parse().ok()).unwrap_or_else(|| panic!("{book} holds for a number of days:\n{book_text}"));
     assert!(days > 7, "a hold of {days} days does not outlast the seven days to a shipping day");
@@ -417,11 +419,12 @@ fn holds_are_kept(example: &str, book: &str, flow: &str, release: &str, post: &s
     let posted = at(post);
     assert!(at(&format!("{wait}(")) < posted, "the packing is waited for before the posting");
     assert!(posted < at(told), "the posting comes before the customer is told");
-    // every `fail` after the holds has the release above it (the shortage's own is the first)
+    // every `fail` after the holds has the release and the cancelling above it
     let fails: Vec<usize> = (body..lines.len()).filter(|i| lines[*i].trim_start().starts_with("fail ")).collect();
     assert_eq!(fails.len(), fails_after_holds, "the failures of the flow: {fails:?}");
     for i in fails {
         assert!(lines[i.saturating_sub(5)..i].iter().any(|l| l.contains(release)), "{flow}:{} fails without giving back what was held", i + 1);
+        assert!(lines[i - 1].trim_start().starts_with(cancel), "{flow}:{} fails without cancelling the order", i + 1);
     }
     let proto = std::fs::read_to_string(Path::new(example).join("proto/warehouse/v1/stock.proto")).unwrap();
     assert!(proto.contains("rpc Post(PostRequest) returns (PostResponse);"));
@@ -429,10 +432,10 @@ fn holds_are_kept(example: &str, book: &str, flow: &str, release: &str, post: &s
 
 #[test]
 fn the_holds_of_the_book_outlast_the_waits_and_every_failure_gives_them_back() {
-    holds_are_kept("examples/shop.ja", "inventory/在庫の引当.book", "ordering/受注.flow", "引当を戻す", "引当を確定する(", "梱包を待つ", "出しました", 5);
+    holds_are_kept("examples/shop.ja", "inventory/在庫の引当.book", "ordering/受注.flow", "引当を戻す", "注文を取り消す(", "引当を確定する(", "梱包を待つ", "出しました", 6);
 }
 
 #[test]
 fn the_holds_of_the_book_outlast_the_waits_and_every_failure_gives_them_back_in_english() {
-    holds_are_kept("examples/shop", "inventory/inventory.book", "ordering/fulfillment.flow", "release_stock", "post_stock(", "wait_for_packing", "went out by", 5);
+    holds_are_kept("examples/shop", "inventory/inventory.book", "ordering/fulfillment.flow", "release_stock", "cancel_order(", "post_stock(", "wait_for_packing", "went out by", 6);
 }

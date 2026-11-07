@@ -19,7 +19,7 @@ service FulfillmentService {
 
   // 注文の明細を引き当て、配送を手配し、梱包が済んだらお客さまに知らせる。
   rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
-    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"]};
+    option (dandori.v1.start) = {fails: ["在庫不足", "明細の食い違い", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"]};
   }
 
   // 梱包の担当者が、`梱包を待つ` のコールバックに応答する。

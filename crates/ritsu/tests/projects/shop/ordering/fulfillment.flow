@@ -1,13 +1,15 @@
 # Copied from dandori's examples/fulfillment/temporal/fulfillment.flow. The rule is called by Connect, the paths of the
-# protos and of the child .flow are those of this example's layout, the names of the inventory's values are those of stock.proto, each line has an id its stock is held under, a failure after the hold gives it back, and the packing is posted when it is done
+# protos and of the child .flow are those of this example's layout, the names of the inventory's values are those of stock.proto, each line has an id its stock is held under, a failure after the hold gives it back and cancels the order, a conflict over a line is told from a shortage, and the packing is posted when it is done
 workflow fulfillment v1 implements shop.FulfillmentService
-description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, post what was reserved, and then tell the customer. The lines are reserved side by side, and when one is short, or anything fails after the stock was reserved, what was reserved is released. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
+description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, post what was reserved, and then tell the customer. The lines are reserved side by side, and when one is short, or anything fails after the stock was reserved, what was reserved is released and the order is cancelled. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
 
 use rule urgency from "../delivery/rules/urgency.rule"
   connect "https://rules.example.com"
 use proto shop from "../proto/shop/ordering/v1/fulfillment.proto"
 use proto warehouse from "../proto/warehouse/v1/stock.proto"
   url "https://warehouse.example.com"
+use proto orders from "../proto/shop/ordering/v1/order.proto"
+  url "https://orders.example.com"
 
 record Line
   id       : string
@@ -59,6 +61,12 @@ task post_stock(id: string)
   connect warehouse "StockService/Post"
   idempotent
 
+# An order this run gives up on is cancelled: its status is what billing reads (billing_need.rule),
+# and a cancelled order is not billed.
+task cancel_order(id: string)
+  connect orders "OrderService/CancelOrder"
+  idempotent
+
 # The delivery team's workflow arranges the delivery, on the workers of its own task queue. It is
 # written as a .flow of its own, and the checker holds this task to its inputs, outputs and errors.
 task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
@@ -85,16 +93,28 @@ flow
     let r = reserve_stock(line_id: line.id, sku: line.sku, quantity: line.quantity)
     yield r
   let any_short = false
+  let any_conflict = false
   for one in results at most 50
     match one.stock
-      STOCK_SHORT, STOCK_CONFLICT => let any_short = true
+      STOCK_SHORT => let any_short = true
+      STOCK_CONFLICT => let any_conflict = true
       STOCK_SECURED => pass
+  match any_conflict
+    true =>
+      for taken in results at most 50 in parallel
+        match taken.id
+          some id => release_stock(id: id)
+          none => pass
+      cancel_order(id: order.id)
+      fail StockConflict "Order {order.id} has a line held before with another sku or quantity"
+    false => pass
   match any_short
     true =>
       for taken in results at most 50 in parallel
         match taken.id
           some id => release_stock(id: id)
           none => pass
+      cancel_order(id: order.id)
       fail OutOfStock "Order {order.id} has lines the stock is short of"
     false => pass
   let recipient: string? = none
@@ -113,12 +133,14 @@ flow
             match taken.id
               some id => release_stock(id: id)
               none => pass
+          cancel_order(id: order.id)
           fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
     on failure =>
       for taken in results at most 50 in parallel
         match taken.id
           some id => release_stock(id: id)
           none => pass
+      cancel_order(id: order.id)
       fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
   let packed = wait_for_packing(order_id: order.id, reservations: results)
     on timeout =>
@@ -126,12 +148,14 @@ flow
         match taken.id
           some id => release_stock(id: id)
           none => pass
+      cancel_order(id: order.id)
       fail PackingLate "No word of the packing in two days"
     on short =>
       for taken in results at most 50 in parallel
         match taken.id
           some id => release_stock(id: id)
           none => pass
+      cancel_order(id: order.id)
       fail PackingShort "The warehouse found an item missing while packing order {order.id}. It goes back to ordering"
   for held in results at most 50 in parallel
     match held.id

@@ -17,7 +17,7 @@ published language shop.ordering.v1
 terms
   注文 "客が確定させた購入の申し込み。取り消されても消えない"
     means message Order
-  キャンセル "出荷の前に、客の申し出で注文を取り消すこと"
+  キャンセル "出荷の前に注文を取り消すこと。客の申し出のときと、引き当てと発送に失敗したときがある"
     means enum OrderStatus value ORDER_STATUS_CANCELLED
 
 upstream 在庫 conformist

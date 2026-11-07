@@ -4,9 +4,11 @@ package shop.ordering.v1;
 
 import "buf/validate/validate.proto";
 
-// Ordering's published language: the status of an order, and the service that looks an order up.
+// Ordering's published language: the status of an order, and the service that looks an order up
+// and cancels it. An order whose fulfillment fails is cancelled, and billing does not bill it.
 service OrderService {
   rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
 }
 
 enum OrderStatus {
@@ -30,3 +32,9 @@ message GetOrderRequest {
 message GetOrderResponse {
   Order order = 1;
 }
+
+message CancelOrderRequest {
+  string id = 1;
+}
+
+message CancelOrderResponse {}

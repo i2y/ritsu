@@ -17,7 +17,7 @@ published language shop.ordering.v1
 terms
   order "A purchase the customer has confirmed. It does not disappear when it is cancelled"
     means message Order
-  cancel "Cancelling an order before it ships, at the customer's request"
+  cancel "Cancelling an order before it ships: at the customer's request, or because its fulfillment failed"
     means enum OrderStatus value ORDER_STATUS_CANCELLED
 
 upstream Inventory conformist

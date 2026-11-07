@@ -1,21 +1,21 @@
-エラー[E207]: ordering/fulfillment.flow:49:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
-    49 |   connect warehouse "StockService/Reserve"
+エラー[E207]: ordering/fulfillment.flow:51:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
+    51 |   connect warehouse "StockService/Reserve"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
   = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
-      Ordering   ordering/fulfillment.flow:49                                                connect StockService/Reserve
+      Ordering   ordering/fulfillment.flow:51                                                connect StockService/Reserve
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  公表された言語 warehouse.v1 のもの
-エラー[E207]: ordering/fulfillment.flow:55:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
-    55 |   connect warehouse "StockService/Release"
+エラー[E207]: ordering/fulfillment.flow:57:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
+    57 |   connect warehouse "StockService/Release"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
   = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
-      Ordering   ordering/fulfillment.flow:55                                                connect StockService/Release
+      Ordering   ordering/fulfillment.flow:57                                                connect StockService/Release
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Release  公表された言語 warehouse.v1 のもの
-エラー[E207]: ordering/fulfillment.flow:59:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
-    59 |   connect warehouse "StockService/Post"
+エラー[E207]: ordering/fulfillment.flow:61:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
+    61 |   connect warehouse "StockService/Post"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
   = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
-      Ordering   ordering/fulfillment.flow:59                                             connect StockService/Post
+      Ordering   ordering/fulfillment.flow:61                                             connect StockService/Post
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Post  公表された言語 warehouse.v1 のもの

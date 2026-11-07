@@ -1,21 +1,21 @@
-error[E207]: ordering/fulfillment.flow:49:1: The workflow ordering/fulfillment.flow of Ordering calls StockService, which is no open host service of Inventory
-    49 |   connect warehouse "StockService/Reserve"
+error[E207]: ordering/fulfillment.flow:51:1: The workflow ordering/fulfillment.flow of Ordering calls StockService, which is no open host service of Inventory
+    51 |   connect warehouse "StockService/Reserve"
   = The open host services of the published language warehouse.v1 are PackingService.
   = Across a boundary a workflow calls only the services the other side lists under `open host service`.
   involved:
-      Ordering   ordering/fulfillment.flow:49                                                connect StockService/Reserve
+      Ordering   ordering/fulfillment.flow:51                                                connect StockService/Reserve
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  a part of the published language warehouse.v1
-error[E207]: ordering/fulfillment.flow:55:1: The workflow ordering/fulfillment.flow of Ordering calls StockService, which is no open host service of Inventory
-    55 |   connect warehouse "StockService/Release"
+error[E207]: ordering/fulfillment.flow:57:1: The workflow ordering/fulfillment.flow of Ordering calls StockService, which is no open host service of Inventory
+    57 |   connect warehouse "StockService/Release"
   = The open host services of the published language warehouse.v1 are PackingService.
   = Across a boundary a workflow calls only the services the other side lists under `open host service`.
   involved:
-      Ordering   ordering/fulfillment.flow:55                                                connect StockService/Release
+      Ordering   ordering/fulfillment.flow:57                                                connect StockService/Release
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Release  a part of the published language warehouse.v1
-error[E207]: ordering/fulfillment.flow:59:1: The workflow ordering/fulfillment.flow of Ordering calls StockService, which is no open host service of Inventory
-    59 |   connect warehouse "StockService/Post"
+error[E207]: ordering/fulfillment.flow:61:1: The workflow ordering/fulfillment.flow of Ordering calls StockService, which is no open host service of Inventory
+    61 |   connect warehouse "StockService/Post"
   = The open host services of the published language warehouse.v1 are PackingService.
   = Across a boundary a workflow calls only the services the other side lists under `open host service`.
   involved:
-      Ordering   ordering/fulfillment.flow:59                                             connect StockService/Post
+      Ordering   ordering/fulfillment.flow:61                                             connect StockService/Post
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Post  a part of the published language warehouse.v1

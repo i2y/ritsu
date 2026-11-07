@@ -1029,7 +1029,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 ```
 エラー[E401]: ctx/請求.ctx:17:3: 「請求」の腐敗防止層の対応に、「受注」の列挙 shop.ordering.v1.OrderStatus の値 ORDER_STATUS_RETURNED がありません
     17 |   enum OrderStatus -> enum BillingStatus
-  = ORDER_STATUS_RETURNED は proto/shop/ordering/v1/order.proto:16 の値です。
+  = ORDER_STATUS_RETURNED は proto/shop/ordering/v1/order.proto:20 の値です。
   = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: ORDER_STATUS_RETURNED -> refuse "…"
   関わるもの:
@@ -1141,23 +1141,23 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 例で、在庫が `StockService` を公開ホストサービスから外したとき（受注のワークフローは、それを `connect` で呼ぶ）。三つ出るうちの一つめ：
 
 ```
-エラー[E207]: ordering/受注.flow:49:1: 「受注」の ordering/受注.flow が、「在庫」の公開ホストサービスでない StockService を呼んでいます
-    49 |   connect warehouse "StockService/Reserve"
+エラー[E207]: ordering/受注.flow:51:1: 「受注」の ordering/受注.flow が、「在庫」の公開ホストサービスでない StockService を呼んでいます
+    51 |   connect warehouse "StockService/Reserve"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
   = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
-      受注  ordering/受注.flow:49                                                       connect StockService/Reserve
+      受注  ordering/受注.flow:51                                                       connect StockService/Reserve
       在庫  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  公表された言語 warehouse.v1 のもの
 ```
 
 例で、受注と配送のパートナーシップを、受注が配送の顧客になる関係に替えたとき（受注のワークフローは、配送のワークフローを子として走らせる。4.7）：
 
 ```
-エラー[E209]: ordering/受注.flow:65:1: 「受注」の ordering/受注.flow が、「配送」のワークフロー delivery/配送の手配.flow を子として走らせています
-    65 |   flow "../delivery/配送の手配.flow"
+エラー[E209]: ordering/受注.flow:73:1: 「受注」の ordering/受注.flow が、「配送」のワークフロー delivery/配送の手配.flow を子として走らせています
+    73 |   flow "../delivery/配送の手配.flow"
   = 境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「配送」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「配送」が公表したサービスを `connect` で呼んでください。
   関わるもの:
-      受注  ordering/受注.flow:65               flow "../delivery/配送の手配.flow"
+      受注  ordering/受注.flow:73               flow "../delivery/配送の手配.flow"
       配送  dandori "delivery/配送の手配.flow"  「配送」の内側のもの
 ```
 
@@ -2833,10 +2833,11 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 2. **確定の口。** `StockService` に `Post(PostRequest) returns (PostResponse)`（`PostRequest { string id = 1; }`）を足し、フローに `post_stock(id)`（`connect warehouse "StockService/Post"`、`idempotent`）を足した。全部の言語のサービスのコードに `post` を足した。
 3. **いつ確定し、いつ戻すか。** 梱包が済み、お客さまに知らせる前に、押さえた全部の行を確定する。押さえたあとの失敗（`OutOfStock`、`DeliveryFailed`、`PackingLate`、新しい `PackingShort`）では、押さえた全部を戻す。`on failure` は処理されなかったタスクのエラーのあとにしか走らず、`fail` のあとには走らないので、`for` を `fail` ごとに書いた。
 4. **契約が行を運ぶ。** 帳簿を `transfer reserve(line, sku, qty)`、`key line` にした。`ReserveRequest` に `line_id = 3`、フローの `record Line` に `id`、`fulfillment.proto` の `Line` に `id = 3` を足し、サービスの予約 ID は `line_id` にした。帳簿のキーが行だけなので、確定と取消も行だけで引ける（`Post` の `id` で足りる）。
-5. **`key_conflict` の行き先。** `Stock` に `STOCK_CONFLICT = 3` を足し、サービスのコードは `key_conflict` をそれで答え、`done_before` は成功の答えにした。フローは `STOCK_CONFLICT` を `STOCK_SHORT` と同じく、押さえられなかったものとして扱う。
+5. **`key_conflict` の行き先。** `Stock` に `STOCK_CONFLICT = 3` を足し、サービスのコードは `key_conflict` をそれで答え、`done_before` は成功の答えにした。フローは `STOCK_CONFLICT` を在庫切れと分けて `fail StockConflict` にし、`fulfillment.proto` の `fails` に足した。同じ明細を前に別の中身で押さえていたのは調べるべき不具合で、棚が空になったのとは違う。両方あれば `StockConflict` が先である。
 6. **梱包の途中の不足。** `wait_for_packing` に `errors short` を足し、`on short` で `fail PackingShort` にして、`fulfillment.proto` の `fails` に足した。コールバックの応答でエラーを送るには、dandori の `options.proto` が定めるとおり、`{"error": "short"}` を `ok` の代わりに送るので、`AnswerPackingRequest` は変えない。
 7. **範囲。** `order.proto` の `amount_jpy`（0〜1,000,000）と `stock.proto` の `quantity`（0〜1,000,000）に Protovalidate の範囲を書いた。dandori の E016 が、タスクの引数とレコードにも同じ範囲を求める。
 8. **読み替えの既定。** 層のコードは、地図にない値は例外にする（Python、TypeScript、Go、Java）。配送の層は、地図が拒否する `SHORT` と、地図にない値を読み分ける。`check_layers.py` は、`unmapped` の行と、各層が知っている最後の値の次の番号で、コードが例外を出すことを確かめる。
+9. **失敗した注文は取り消し、請求しない。** `OrderService` に `CancelOrder` を足し、フローの `fail` のそれぞれの直前に `cancel_order(id)`（`idempotent`）を置いた。状態が `CANCELLED` になれば、`billing_need.rule` は `skip` と答える。用語の `cancel` は、客の申し出だけでなく失敗も含む言い方にした。
 
 ### 30.3 捨てたもの
 
@@ -2847,15 +2848,16 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 
 ### 30.4 変わること
 
-通販の例が、英日の二つとも変わる：帳簿、`stock.proto`、`order.proto`、`fulfillment.proto`、フロー、四つの言語のコード、`check_layers.py`、README。境界を越える参照が 9 件から 10 件になる（`Post` の `connect` 一つ）。`ritsu` のテストのプロジェクト（`tests/projects/shop` と `通販`）は例のコピーなので、同じに揃えた。`tests/mutants` の三つの重ね書き（E105 の `order.proto`、E202 の同梱のフロー、E401 の `stock.proto`）は、壊す所だけが例と違うように作り直した。
+通販の例が、英日の二つとも変わる：帳簿、`stock.proto`、`order.proto`、`fulfillment.proto`、フロー、四つの言語のコード、`check_layers.py`、README。境界を越える参照が 9 件から 10 件になる（`Post` の `connect` 一つ）。受注の中で呼ぶ `CancelOrder` は境界を越えないので、この数は変わらない。`ritsu` のテストのプロジェクト（`tests/projects/shop` と `通販`）は例のコピーなので、同じに揃えた。`tests/mutants` の四つの重ね書き（E105 の `order.proto`、E202 の同梱のフロー、E401 の `order.proto` と `stock.proto`）は、壊す所だけが例と違うように作り直した。
 
 ### 30.5 確かめたこと
 
-英日どちらの例も `ritsu check` が通り（21 ファイル）、`sakai check` が「10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)」と言い、`check_layers.py` は「11 held, 0 failed, 0 left out」と言う。値 0 を `skip` と答える前の層で同じ検査を走らせると落ちる（`tests/vectors.rs` の誤りを入れた二つ）。売り越しの再現は、新しい帳簿で `post` が `done` になり、別の注文は在庫切れで断られる。`chobo run` で、一つの注文の二行が別々に押さえられ、同じ行を別の数で押さえると `key_conflict`、同じ中身なら `done_before` になる。フローの五つの終わり方（成功、`OutOfStock`、`PackingShort`、`PackingLate`、`DeliveryFailed`）を `ritsu run` で流し、成功では `post_stock` が行ごとに呼ばれ、ほかの四つでは `release_stock` が押さえた行ごとに呼ばれる。`tests/examples.rs` に、押さえが 7 日より長いこと、確定が梱包のあとでお知らせの前にあること、`fail` ごとに戻す呼び出しが直前にあることを確かめる試験を足した。buf の lint は、Protovalidate の代わりの `.proto` を横に置いて、ネットワークなしで通す。
+英日どちらの例も `ritsu check` が通り（21 ファイル）、`sakai check` が「10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)」と言い、`check_layers.py` は「11 held, 0 failed, 0 left out」と言う。値 0 を `skip` と答える前の層で同じ検査を走らせると落ちる（`tests/vectors.rs` の誤りを入れた二つ）。売り越しの再現は、新しい帳簿で `post` が `done` になり、別の注文は在庫切れで断られる。`chobo run` で、一つの注文の二行が別々に押さえられ、同じ行を別の数で押さえると `key_conflict`、同じ中身なら `done_before` になる。フローの六つの終わり方（成功、`OutOfStock`、`StockConflict`、`PackingShort`、`PackingLate`、`DeliveryFailed`）を、ritsu の `tests/run.rs` が英日の両方で `ritsu run` で流す。成功では `post_stock` が行ごとに呼ばれて注文を取り消さず、ほかの五つでは `release_stock` が押さえた行ごとに呼ばれ、最後に `cancel_order` が呼ばれる。`tests/examples.rs` に、押さえが 7 日より長いこと、確定が梱包のあとでお知らせの前にあること、`fail` ごとに戻す呼び出しと取り消しが直前にあることを確かめる試験を足した。buf の lint は、Protovalidate の代わりの `.proto` を横に置いて、ネットワークなしで通す。
 
 ### 30.6 残したこと
 
-- 失敗した実行のあとの注文の状態と請求：どの世界も言っていない。`billing_need.rule` は `paid` を請求し、`fulfillment.flow` は注文の状態を書かない。在庫切れが `CANCELLED` になるのか、`paid` のまま残るのかは、作者の決めることである。
+- 請求が読む時点：`billing_need.rule` は読んだ時点の状態に答える。実行が失敗して `CANCELLED` になる前に `paid` を読めば請求する。いつ読むかを書いた成果物はない。
+- `cancel_order` 自身の失敗：処理していないので実行はそのエラーで終わり、注文の状態は変わらないまま残る。`idempotent` なので、やり直せば同じ結果になる。
 - 出荷日と梱包待ちの比較：関係があると書いた成果物がないので、穴と言えない。
 - `payment_terms.cal` と `ship_date.cal` を読むコードやフローがない：`next_business_day` を呼ぶ手書きのコードが代わりにある。
 - 確定（`post_stock`）や知らせる（`notify`）が処理されないエラーで失敗したときは、押さえたぶんを戻さない。確定が途中まで通った後で戻すのが正しいかが決まらない。

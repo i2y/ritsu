@@ -8,7 +8,16 @@ import (
 
 func Short(answers []*warehousev1.ReserveResponse) bool {
 	for _, a := range answers {
-		if a.Stock == warehousev1.Stock_STOCK_SHORT || a.Stock == warehousev1.Stock_STOCK_CONFLICT {
+		if a.Stock == warehousev1.Stock_STOCK_SHORT {
+			return true
+		}
+	}
+	return false
+}
+
+func Conflicting(answers []*warehousev1.ReserveResponse) bool {
+	for _, a := range answers {
+		if a.Stock == warehousev1.Stock_STOCK_CONFLICT {
 			return true
 		}
 	}
@@ -17,4 +26,8 @@ func Short(answers []*warehousev1.ReserveResponse) bool {
 
 func Received(id string, amountJpy int64) *orderingv1.Order {
 	return &orderingv1.Order{Id: id, Status: orderingv1.OrderStatus_ORDER_STATUS_RECEIVED, AmountJpy: amountJpy}
+}
+
+func Cancelled(order *orderingv1.Order) *orderingv1.Order {
+	return &orderingv1.Order{Id: order.Id, Status: orderingv1.OrderStatus_ORDER_STATUS_CANCELLED, AmountJpy: order.AmountJpy}
 }

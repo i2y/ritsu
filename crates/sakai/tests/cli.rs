@@ -154,7 +154,7 @@ fn the_paths_of_a_diagnostic_are_written_from_where_sakai_runs() {
     assert_eq!(code(&o), 1);
     let t = out(&o);
     assert!(t.starts_with(&format!("error[E401]: {base}/ctx/請求.ctx:17:3:")), "{t}");
-    assert!(t.contains(&format!("= ORDER_STATUS_RETURNED is the value at {base}/proto/shop/ordering/v1/order.proto:16.")), "{t}");
+    assert!(t.contains(&format!("= ORDER_STATUS_RETURNED is the value at {base}/proto/shop/ordering/v1/order.proto:20.")), "{t}");
     assert!(t.contains("受注  proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus"), "{t}");
     // From a directory under the root.
     let o = common::sakai_in(&dir.path().join("ctx"), &["check", "../基本.ctx", "--root", ".."]);
@@ -162,7 +162,7 @@ fn the_paths_of_a_diagnostic_are_written_from_where_sakai_runs() {
     assert!(t.starts_with("error[E401]: 請求.ctx:17:3:"), "{t}");
     assert!(t.contains("請求  請求.ctx:14 "), "{t}");
     assert!(t.contains("受注  proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus"), "{t}");
-    assert!(t.contains("= ORDER_STATUS_RETURNED is the value at ../proto/shop/ordering/v1/order.proto:16."), "{t}");
+    assert!(t.contains("= ORDER_STATUS_RETURNED is the value at ../proto/shop/ordering/v1/order.proto:20."), "{t}");
     // An absolute path given, absolute paths written.
     let abs = dir.path().join("基本.ctx");
     let o = common::sakai_in(parent, &["check", abs.to_str().unwrap()]);
@@ -326,14 +326,14 @@ fn the_paths_of_a_diagnostic_are_written_from_where_sakai_runs_in_english() {
     assert_eq!(code(&o), 1);
     let t = out(&o);
     assert!(t.starts_with(&format!("error[E401]: {base}/ctx/billing.ctx:17:3:")), "{t}");
-    assert!(t.contains(&format!("= ORDER_STATUS_RETURNED is the value at {base}/proto/shop/ordering/v1/order.proto:16.")), "{t}");
+    assert!(t.contains(&format!("= ORDER_STATUS_RETURNED is the value at {base}/proto/shop/ordering/v1/order.proto:20.")), "{t}");
     assert!(t.contains("Ordering  proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus"), "{t}");
     let o = common::sakai_in(&dir.path().join("ctx"), &["check", "../basic.ctx", "--root", ".."]);
     let t = out(&o);
     assert!(t.starts_with("error[E401]: billing.ctx:17:3:"), "{t}");
     assert!(t.contains("Billing   billing.ctx:14 "), "{t}");
     assert!(t.contains("Ordering  proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus"), "{t}");
-    assert!(t.contains("= ORDER_STATUS_RETURNED is the value at ../proto/shop/ordering/v1/order.proto:16."), "{t}");
+    assert!(t.contains("= ORDER_STATUS_RETURNED is the value at ../proto/shop/ordering/v1/order.proto:20."), "{t}");
     let abs = dir.path().join("basic.ctx");
     let o = common::sakai_in(parent, &["check", abs.to_str().unwrap()]);
     let t = out(&o);

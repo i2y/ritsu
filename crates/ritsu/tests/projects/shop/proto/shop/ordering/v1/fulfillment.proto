@@ -20,7 +20,7 @@ service FulfillmentService {
 
   // Reserve the lines of an order, arrange the delivery, and tell the customer once it is packed.
   rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
-    option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate", "PackingShort"]};
+    option (dandori.v1.start) = {fails: ["OutOfStock", "StockConflict", "DeliveryFailed", "PackingLate", "PackingShort"]};
   }
 
   // The packing crew's answer to the callback of `wait_for_packing`.

@@ -4,9 +4,11 @@ package shop.ordering.v1;
 
 import "buf/validate/validate.proto";
 
-// 受注の公表された言語。注文の状態と、注文を引くサービス。
+// 受注の公表された言語。注文の状態と、注文を引いて取り消すサービス。引き当てと発送に失敗した
+// 注文は取り消され、請求はそれを請求しない。
 service OrderService {
   rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
 }
 
 enum OrderStatus {
@@ -30,3 +32,9 @@ message GetOrderRequest {
 message GetOrderResponse {
   Order order = 1;
 }
+
+message CancelOrderRequest {
+  string id = 1;
+}
+
+message CancelOrderResponse {}

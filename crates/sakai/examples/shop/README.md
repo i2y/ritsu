@@ -48,7 +48,7 @@ Each context also owns its directories of code in `py/`, `ts/`, `java/` and `go/
 ## From the hold to the post
 
 Each line of an order is held in the book under the line's id, for 14 days (`pending expires after 14 days` in `inventory/inventory.book`): longer than the two days the packing crew has to answer, and than the seven days at most from an order to the shipping day (`delivery/ship_date.cal`).
-When the packing is done, `fulfillment.flow` posts what it held (`StockService/Post`) before it tells the customer; when anything fails after the hold, it gives all of it back (`StockService/Release`).
+When the packing is done, `fulfillment.flow` posts what it held (`StockService/Post`) before it tells the customer; when anything fails after the hold, it gives all of it back (`StockService/Release`) and cancels the order (`OrderService/CancelOrder`).
 `chobo run` plays the case the hold has to outlast, the packing that takes two days:
 
 ```text
@@ -61,17 +61,19 @@ inventory/inventory.book (packing takes 2 days, then the order ships): 5 steps
 ```
 
 With the hold of 30 minutes the book had before, the same steps end otherwise: step 3 says `reserve(o1, A) expired` (the piece went back to the shelf), step 4 is `refused: expired`, and step 5 holds the piece for another order, `done`.
-`ritsu run` plays the five ways the workflow ends (an order of two lines, `l1` of sku A and `l2` of sku B, the delivery by the standard carrier), and what each does to the holds:
+`ritsu run` plays the six ways the workflow ends (an order `o1` of two lines, `l1` of sku A and `l2` of sku B, the delivery by the standard carrier), and what each does to the holds and to the order:
 
-| Ending | Calls to the warehouse after the holds |
+| Ending | Calls after the holds |
 |---|---|
 | succeeds | `post_stock(l1)`, `post_stock(l2)`, then `notify` |
-| `OutOfStock` (`l2` is `STOCK_SHORT` or `STOCK_CONFLICT`) | `release_stock(l1)` |
-| `DeliveryFailed` | `release_stock(l1)`, `release_stock(l2)` |
-| `PackingLate` (no word in two days) | `release_stock(l1)`, `release_stock(l2)` |
-| `PackingShort` (the packing crew answers with the error `short`) | `release_stock(l1)`, `release_stock(l2)` |
+| `OutOfStock` (`l2` is `STOCK_SHORT`) | `release_stock(l1)`, `cancel_order(o1)` |
+| `StockConflict` (`l2` is `STOCK_CONFLICT`) | `release_stock(l1)`, `cancel_order(o1)` |
+| `DeliveryFailed` | `release_stock(l1)`, `release_stock(l2)`, `cancel_order(o1)` |
+| `PackingLate` (no word in two days) | `release_stock(l1)`, `release_stock(l2)`, `cancel_order(o1)` |
+| `PackingShort` (the packing crew answers with the error `short`) | `release_stock(l1)`, `release_stock(l2)`, `cancel_order(o1)` |
 
-A reservation that comes back `STOCK_CONFLICT` is the book's `key_conflict`: the line was held before with another sku or quantity.
+A failed order is cancelled and not billed: `cancel_order` (`OrderService/CancelOrder`) makes its status `ORDER_STATUS_CANCELLED`, and `billing/rules/billing_need.rule` answers `skip` for that.
+A reservation that comes back `STOCK_CONFLICT` is the book's `key_conflict`: the line was held before with another sku or quantity. That is a fault to look into and not a shelf gone empty, so the run ends as `StockConflict`, not as `OutOfStock`.
 The service answers `done_before` as a success, as the book means it.
 
 ## Where the files come from

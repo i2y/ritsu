@@ -45,24 +45,24 @@ Takes orders, holds stock for them, hands them to delivery, and sees them throug
 |---|---|---|
 | `dandori` | `ordering/fulfillment.flow` | 実装するサービス `FulfillmentService`／子のフロー `delivery/arrange_delivery.flow` |
 | `proto` | `proto/shop/ordering/v1/fulfillment.proto` | メッセージ `FulfillRequest`、`FulfillmentOrder`、`Line`、`Gift`、`FulfillResponse`、`AnswerPackingRequest`、`AnswerPackingResponse`／サービス `FulfillmentService` |
-| `proto` | `proto/shop/ordering/v1/order.proto` | メッセージ `Order`、`GetOrderRequest`、`GetOrderResponse`／列挙 `OrderStatus`／サービス `OrderService` |
+| `proto` | `proto/shop/ordering/v1/order.proto` | メッセージ `Order`、`GetOrderRequest`、`GetOrderResponse`、`CancelOrderRequest`、`CancelOrderResponse`／列挙 `OrderStatus`／サービス `OrderService` |
 | `file` | 14 個のファイル（コード） |  |
 
 ### 公表された言語
 
-- `shop.ordering.v1`：書いたもの `proto/shop/ordering/v1/order.proto`、`proto/shop/ordering/v1/fulfillment.proto`。公開ホストサービス `OrderService`（`GetOrder`）。公開ホストサービス `FulfillmentService`（`Fulfill`、`AnswerPacking`）。`ordering/fulfillment.flow` が実装する。生成したコード `py/shop/ordering/v1`、`ts/shop/ordering/v1`、`java/src/main/java/shop/ordering/v1`、`go/shop/ordering/v1`
+- `shop.ordering.v1`：書いたもの `proto/shop/ordering/v1/order.proto`、`proto/shop/ordering/v1/fulfillment.proto`。公開ホストサービス `OrderService`（`GetOrder`、`CancelOrder`）。公開ホストサービス `FulfillmentService`（`Fulfill`、`AnswerPacking`）。`ordering/fulfillment.flow` が実装する。生成したコード `py/shop/ordering/v1`、`ts/shop/ordering/v1`、`java/src/main/java/shop/ordering/v1`、`go/shop/ordering/v1`
 
 ### 用語集
 
 | 語 | 定義 | 指すもの | 越えていく先 |
 |---|---|---|---|
 | `order` | A purchase the customer has confirmed. It does not disappear when it is cancelled | `proto "proto/shop/ordering/v1/order.proto" message Order` | — |
-| `cancel` | Cancelling an order before it ships, at the customer's request | `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus value ORDER_STATUS_CANCELLED` | [Billing](#billingbilling)（`cancelled_in_ordering` として） |
+| `cancel` | Cancelling an order before it ships: at the customer's request, or because its fulfillment failed | `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus value ORDER_STATUS_CANCELLED` | [Billing](#billingbilling)（`cancelled_in_ordering` として） |
 
 ### 関係
 
-- 上流 [Inventory](#inventoryinventory)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
-- [Delivery](#deliverydelivery) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- 上流 [Inventory](#inventoryinventory)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:51` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:57` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:61` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
+- [Delivery](#deliverydelivery) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:73` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - 下流 [Billing](#billingbilling)：公開ホストサービス・公表された言語 `shop.ordering.v1` → 腐敗防止層。越える参照：`billing/rules/billing_need.rule:4` (import proto) → `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus`
 
 ## Inventory（inventory）
@@ -95,7 +95,7 @@ Keeps the counts on the warehouse shelves, holds stock for each line of an order
 
 ### 関係
 
-- 下流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
+- 下流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:51` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:57` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:61` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
 - 下流 [Delivery](#deliverydelivery)：公開ホストサービス・公表された言語 `warehouse.v1` → 腐敗防止層
 
 ## Delivery（delivery）
@@ -130,7 +130,7 @@ Decides the day to ship, chooses how to carry, and arranges delivery of the parc
 
 ### 関係
 
-- [Ordering](#orderingordering) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- [Ordering](#orderingordering) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:73` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - 上流 [Inventory](#inventoryinventory)：公開ホストサービス・公表された言語 `warehouse.v1` → 腐敗防止層
 - [Billing](#billingbilling) と共有カーネル：`koyomi "calendars/tokyo_business_days.cal"`、`dir "py/calendars"`、`dir "ts/calendars"`、`dir "java/src/main/java/calendars"`、`dir "go/calendars"`。越える参照：`delivery/ship_date.cal:3` (use calendar) → `koyomi "calendars/tokyo_business_days.cal"`
 - 下流 [Billing](#billingbilling)：供給者・公開ホストサービス・公表された言語 `shop.delivery.v1` → 顧客。越える参照：`billing/rules/shipment_fee.rule:7` (shape) → `proto "proto/shop/delivery/v1/shipment.proto" message CreateShipmentRequest`
@@ -192,7 +192,7 @@ Collects what buyers think and shows it. It has nothing to do with billing
 
 | 語 | コンテキスト | 定義 | 境界を越えるとき |
 |---|---|---|---|
-| `cancel` | [Ordering](#orderingordering) | Cancelling an order before it ships, at the customer's request | [Billing](#billingbilling)（`cancelled_in_ordering` として）。同じ名前の語が [Billing](#billingbilling) にもある |
+| `cancel` | [Ordering](#orderingordering) | Cancelling an order before it ships: at the customer's request, or because its fulfillment failed | [Billing](#billingbilling)（`cancelled_in_ordering` として）。同じ名前の語が [Billing](#billingbilling) にもある |
 | `cancel` | [Billing](#billingbilling) | Voiding an invoice after it was confirmed, and refunding it | 同じ名前の語が [Ordering](#orderingordering) にもある |
 | `fee` | [Billing](#billingbilling) | The amount for each payment, worked out from the rate in the contract | — |
 | `fragile` | [Delivery](#deliverydelivery) | A parcel that nothing is put on top of while it travels | [Billing](#billingbilling) |

@@ -45,24 +45,24 @@ Takes orders, holds stock for them, hands them to delivery, and sees them throug
 |---|---|---|
 | `dandori` | `ordering/fulfillment.flow` | implements `FulfillmentService`; child flows `delivery/arrange_delivery.flow` |
 | `proto` | `proto/shop/ordering/v1/fulfillment.proto` | messages `FulfillRequest`, `FulfillmentOrder`, `Line`, `Gift`, `FulfillResponse`, `AnswerPackingRequest`, `AnswerPackingResponse`; services `FulfillmentService` |
-| `proto` | `proto/shop/ordering/v1/order.proto` | messages `Order`, `GetOrderRequest`, `GetOrderResponse`; enums `OrderStatus`; services `OrderService` |
+| `proto` | `proto/shop/ordering/v1/order.proto` | messages `Order`, `GetOrderRequest`, `GetOrderResponse`, `CancelOrderRequest`, `CancelOrderResponse`; enums `OrderStatus`; services `OrderService` |
 | `file` | 14 files (code) |  |
 
 ### Published language
 
-- `shop.ordering.v1`: written in `proto/shop/ordering/v1/order.proto`, `proto/shop/ordering/v1/fulfillment.proto`; open host service `OrderService` (`GetOrder`); open host service `FulfillmentService` (`Fulfill`, `AnswerPacking`), implemented by `ordering/fulfillment.flow`; generated code in `py/shop/ordering/v1`, `ts/shop/ordering/v1`, `java/src/main/java/shop/ordering/v1`, `go/shop/ordering/v1`
+- `shop.ordering.v1`: written in `proto/shop/ordering/v1/order.proto`, `proto/shop/ordering/v1/fulfillment.proto`; open host service `OrderService` (`GetOrder`, `CancelOrder`); open host service `FulfillmentService` (`Fulfill`, `AnswerPacking`), implemented by `ordering/fulfillment.flow`; generated code in `py/shop/ordering/v1`, `ts/shop/ordering/v1`, `java/src/main/java/shop/ordering/v1`, `go/shop/ordering/v1`
 
 ### Glossary
 
 | Term | Definition | Means | Crosses into |
 |---|---|---|---|
 | `order` | A purchase the customer has confirmed. It does not disappear when it is cancelled | `proto "proto/shop/ordering/v1/order.proto" message Order` | — |
-| `cancel` | Cancelling an order before it ships, at the customer's request | `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus value ORDER_STATUS_CANCELLED` | [Billing](#billing-billing) (as `cancelled_in_ordering`) |
+| `cancel` | Cancelling an order before it ships: at the customer's request, or because its fulfillment failed | `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus value ORDER_STATUS_CANCELLED` | [Billing](#billing-billing) (as `cancelled_in_ordering`) |
 
 ### Relationships
 
-- Upstream [Inventory](#inventory-inventory): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
-- Partnership with [Delivery](#delivery-delivery). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- Upstream [Inventory](#inventory-inventory): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:51` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:57` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:61` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
+- Partnership with [Delivery](#delivery-delivery). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:73` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - Downstream [Billing](#billing-billing): open host service, published language `shop.ordering.v1` → anticorruption layer. References that cross: `billing/rules/billing_need.rule:4` (import proto) → `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus`
 
 ## Inventory (inventory)
@@ -95,7 +95,7 @@ Keeps the counts on the warehouse shelves, holds stock for each line of an order
 
 ### Relationships
 
-- Downstream [Ordering](#ordering-ordering): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
+- Downstream [Ordering](#ordering-ordering): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:51` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:57` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:61` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
 - Downstream [Delivery](#delivery-delivery): open host service, published language `warehouse.v1` → anticorruption layer
 
 ## Delivery (delivery)
@@ -130,7 +130,7 @@ Decides the day to ship, chooses how to carry, and arranges delivery of the parc
 
 ### Relationships
 
-- Partnership with [Ordering](#ordering-ordering). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- Partnership with [Ordering](#ordering-ordering). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:73` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - Upstream [Inventory](#inventory-inventory): open host service, published language `warehouse.v1` → anticorruption layer
 - Shared kernel with [Billing](#billing-billing): `koyomi "calendars/tokyo_business_days.cal"`, `dir "py/calendars"`, `dir "ts/calendars"`, `dir "java/src/main/java/calendars"`, `dir "go/calendars"`. References that cross: `delivery/ship_date.cal:3` (use calendar) → `koyomi "calendars/tokyo_business_days.cal"`
 - Downstream [Billing](#billing-billing): supplier, open host service, published language `shop.delivery.v1` → customer. References that cross: `billing/rules/shipment_fee.rule:7` (shape) → `proto "proto/shop/delivery/v1/shipment.proto" message CreateShipmentRequest`
@@ -192,7 +192,7 @@ Collects what buyers think and shows it. It has nothing to do with billing
 
 | Term | Context | Definition | Across a boundary |
 |---|---|---|---|
-| `cancel` | [Ordering](#ordering-ordering) | Cancelling an order before it ships, at the customer's request | [Billing](#billing-billing) (as `cancelled_in_ordering`); a term of the same name is in [Billing](#billing-billing) |
+| `cancel` | [Ordering](#ordering-ordering) | Cancelling an order before it ships: at the customer's request, or because its fulfillment failed | [Billing](#billing-billing) (as `cancelled_in_ordering`); a term of the same name is in [Billing](#billing-billing) |
 | `cancel` | [Billing](#billing-billing) | Voiding an invoice after it was confirmed, and refunding it | a term of the same name is in [Ordering](#ordering-ordering) |
 | `fee` | [Billing](#billing-billing) | The amount for each payment, worked out from the rate in the contract | — |
 | `fragile` | [Delivery](#delivery-delivery) | A parcel that nothing is put on top of while it travels | [Billing](#billing-billing) |

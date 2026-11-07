@@ -4,9 +4,11 @@
 //! held to its golden text (in the language of its version) and JSON; to `dandori run` on the
 //! scenario filled in with what the languages answered (the same trace); to each language's own
 //! command on what it was asked (`rulec replay`, `koyomi eval`, `chobo run`); and the two versions
-//! to each other. Then what stops a run. Last, the flow of `tests/projects/ticket_desk`, which
+//! to each other. Then what stops a run. Then the flow of `tests/projects/ticket_desk`, which
 //! answers the events it is told with a rule of its own: every scenario `ritsu dandori scenarios`
-//! writes for it runs under `ritsu run` to its end.
+//! writes for it runs under `ritsu run` to its end. Last, the fulfillment flow of the shop example:
+//! the way it succeeds and each way it fails, in English and in Japanese, with what it gives back,
+//! whether it cancels the order, and what it tells the customer.
 
 use ritsu_testkit::TempDir;
 use serde_json::{json, Value};
@@ -478,3 +480,113 @@ const APPROVAL_TERMS: &str = "dates approval_terms v1\ndescription \"An approval
 const STOCK: &str = "book stock v1\ndescription \"Stock, held for 30 days at most\"\n\nunit pcs\n\naccount shelf(sku: string) : pcs\n  at least 0 refused as out_of_stock\naccount suppliers : pcs outside\naccount customers : pcs outside\n\ntransfer receive(delivery: string, sku: string, qty: pcs)\n  key delivery, sku\n  move qty from suppliers to shelf(sku)\n\ntransfer reserve(order: string, sku: string, qty: pcs)\n  key order, sku\n  pending expires after 30 days\n  move qty from shelf(sku) to customers\n";
 
 const APPROVAL: &str = "workflow approval v1\n  now range >=2026-01-01 <=2027-12-31\ndescription \"Holds an order's goods, waits three days for the goods to be checked, and asks for an approval due on the third business day after; it runs in 2026 and 2027, the years the approval terms know\"\n\nuse dates terms from \"approval_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:approval-terms\"\nuse book stock from \"stock.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:stock\"\n\nrecord Approval\n  approver : string\n\ninputs\n  order : string\n  sku   : string\n  qty   : int  range >=1 <=100\n\noutputs\n  outcome : string\n\ntask reserve(order: string, sku: string, qty: int) -> stock.reserve\n  book stock.reserve.hold\n  starts stock.reserve\n  errors out_of_stock\n\ntask ship(order: string, sku: string) -> stock.reserve\n  book stock.reserve.post\n  sends post\n  errors expired\n\ntask put_back(order: string, sku: string) -> stock.reserve\n  book stock.reserve.void\n  sends void\n  errors expired, already_posted\n\ntask ask(order: string, by: timestamp) -> Approval\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask\"\n  callback\n  timeout until by\n\ncase goods : stock.reserve follows stock.reserve\n\nflow\n  goods <- reserve(order: order, sku: sku, qty: qty)\n    on out_of_stock => fail OutOfStock \"nothing left on the shelf\"\n  wait 3 days\n  let due = terms.due(asked: now)\n  let a = ask(order: order, by: due.at)\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => succeed outcome = \"expired\"\n      succeed outcome = \"put back\"\n  goods <- ship(order: order, sku: sku)\n    on expired => succeed outcome = \"expired\"\n  succeed outcome = \"approved by {a.approver}\"\n\non failure\n  match goods.state\n    none => pass\n    held =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n        on already_posted => pass\n        on failure => fail NotPutBack \"the goods held for the order could not be put back\" leaving goods\n";
+
+// ── The workflow of sakai's shop: how each way it ends leaves the holds and the order ─────────
+
+/// One of the two versions of the example, in the words of its `.flow`.
+struct Shop {
+    dir: &'static str,
+    flow: &'static str,
+    order: fn() -> Value,
+    delivery: fn() -> Value,
+    packing: fn() -> Value,
+    short: &'static str,
+    /// The tasks: release, post, cancel, notify.
+    calls: [&'static str; 4],
+    /// The failures: short of stock, a conflict, the delivery, the packing late, the packing short.
+    fails: [&'static str; 5],
+}
+
+const SHOPS: [Shop; 2] = [
+    Shop {
+        dir: "../sakai/examples/shop",
+        flow: "ordering/fulfillment.flow",
+        order: || {
+            json!({"order": {"id": "o1", "member": false, "amount": 1000, "gift": null, "extra": {}, "lines": [
+                {"id": "l1", "sku": "A", "quantity": 1},
+                {"id": "l2", "sku": "B", "quantity": 1},
+            ]}})
+        },
+        delivery: || json!({"tracking_number": "T1"}),
+        packing: || json!({"boxes": 1}),
+        short: "short",
+        calls: ["release_stock", "post_stock", "cancel_order", "notify"],
+        fails: ["OutOfStock", "StockConflict", "DeliveryFailed", "PackingLate", "PackingShort"],
+    },
+    Shop {
+        dir: "../sakai/examples/shop.ja",
+        flow: "ordering/受注.flow",
+        order: || {
+            json!({"注文": {"id": "o1", "会員": false, "金額": 1000, "贈り物": null, "付帯": {}, "明細": [
+                {"id": "l1", "sku": "A", "数": 1},
+                {"id": "l2", "sku": "B", "数": 1},
+            ]}})
+        },
+        delivery: || json!({"追跡番号": "T1"}),
+        packing: || json!({"箱の数": 1}),
+        short: "欠品",
+        calls: ["引当を戻す", "引当を確定する", "注文を取り消す", "知らせる"],
+        fails: ["在庫不足", "明細の食い違い", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"],
+    },
+];
+
+/// Plays a scenario of the shop: the calls after the holds, by name and first argument, and how it ended.
+fn shop_ends(shop: &Shop, answers: Vec<Value>) -> (Vec<String>, Value) {
+    let t = TempDir::new("shop-run");
+    let scenario = t.path().join("s.json");
+    std::fs::write(&scenario, json!({"name": "s", "input": (shop.order)(), "answers": answers, "rules": "rulec"}).to_string()).unwrap();
+    let dir = here().join(shop.dir);
+    let (code, out, err) = ritsu_in(&dir, &["run", shop.flow, "--scenario", scenario.to_str().unwrap(), "--format", "json"]);
+    assert_eq!(code, 0, "{out}{err}");
+    let ran: Value = serde_json::from_str(&out).unwrap();
+    let calls: Vec<String> = ran["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| Some((e["call"].as_str()?, e["args"].as_object()?)))
+        .filter(|(c, _)| shop.calls.contains(c))
+        .map(|(c, a)| if c == shop.calls[3] { c.to_string() } else { format!("{c}({})", a["id"].as_str().unwrap()) })
+        .collect();
+    (calls, ran["trace"]["end"].clone())
+}
+
+/// In every way the workflow fails after the holds, it gives back what it held and cancels the order,
+/// which is what `billing_need.rule` reads as not to be billed; and a line held before with another
+/// sku or quantity is told from a shelf gone empty. The way it succeeds cancels nothing.
+#[test]
+fn the_shop_gives_back_and_cancels_in_every_way_it_fails() {
+    let ok = |v: Value| json!({"ok": v});
+    let done = || json!({"ok": null});
+    let stock = |sku: &str, what: &str, id: Option<&str>| match id {
+        Some(id) => json!({"ok": {"sku": sku, "stock": what, "id": id}}),
+        None => json!({"ok": {"sku": sku, "stock": what}}),
+    };
+    let held = || vec![stock("A", "STOCK_SECURED", Some("l1")), stock("B", "STOCK_SECURED", Some("l2"))];
+    let with = |mut a: Vec<Value>, more: Vec<Value>| {
+        a.extend(more);
+        a
+    };
+    for shop in &SHOPS {
+        let [release, post, cancel, notify] = shop.calls;
+        let (rel1, rel2, gone) = (format!("{release}(l1)"), format!("{release}(l2)"), format!("{cancel}(o1)"));
+
+        let (calls, end) = shop_ends(shop, with(held(), vec![ok((shop.delivery)()), ok((shop.packing)()), done(), done(), done()]));
+        assert_eq!(calls, [format!("{post}(l1)"), format!("{post}(l2)"), notify.to_string()], "{}", shop.dir);
+        assert!(end.get("succeed").is_some(), "{end}");
+
+        let failures = [
+            (vec![stock("A", "STOCK_SECURED", Some("l1")), stock("B", "STOCK_SHORT", None), done(), done()], vec![rel1.clone(), gone.clone()], shop.fails[0]),
+            (vec![stock("A", "STOCK_SECURED", Some("l1")), stock("B", "STOCK_CONFLICT", None), done(), done()], vec![rel1.clone(), gone.clone()], shop.fails[1]),
+            // Both: the conflict is the one to look into, and nothing was held to give back.
+            (vec![stock("A", "STOCK_CONFLICT", None), stock("B", "STOCK_SHORT", None), done()], vec![gone.clone()], shop.fails[1]),
+            (with(held(), vec![json!({"error": "boom"}), done(), done(), done()]), vec![rel1.clone(), rel2.clone(), gone.clone()], shop.fails[2]),
+            (with(held(), vec![ok((shop.delivery)()), json!({"error": "timeout"}), done(), done(), done()]), vec![rel1.clone(), rel2.clone(), gone.clone()], shop.fails[3]),
+            (with(held(), vec![ok((shop.delivery)()), json!({"error": shop.short}), done(), done(), done()]), vec![rel1.clone(), rel2.clone(), gone.clone()], shop.fails[4]),
+        ];
+        for (answers, want, failure) in failures {
+            let (calls, end) = shop_ends(shop, answers);
+            assert_eq!(calls, want, "{} {failure}", shop.dir);
+            assert_eq!(end["fail"]["error"], failure, "{} {end}", shop.dir);
+        }
+    }
+}
