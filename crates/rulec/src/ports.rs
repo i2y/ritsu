@@ -1194,9 +1194,9 @@ impl ritsu_ports::References for Engine {
             {
                 out.push(Reference { line: d.span.line, target: Naming::file(Tool::Koyomi, &p).with("date", &d.date), how: "range from koyomi".into() });
             }
-            if let Some(fb) = &i.fed
-                && let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name)
-            {
+        }
+        for fb in f.inputs.iter().chain(f.elements.iter().flat_map(|el| &el.fields)).filter_map(|i| i.fed.as_ref()) {
+            if let Ok(target) = ritsu_base::fed::from_root(root, file, &fb.name) {
                 out.push(Reference { line: fb.span.line, target, how: "fed by".into() });
             }
         }
@@ -1206,21 +1206,32 @@ impl ritsu_ports::References for Engine {
 }
 
 impl ritsu_ports::Feeds for Engine {
-    /// The inputs with `fed by` (§15.285), each with what its line takes: a rule that does not pass
-    /// its check answers nothing, as every other question of the rule.
+    /// The inputs and the fields of elements with `fed by` (§15.285), each with what its line takes:
+    /// a rule that does not pass its check answers nothing, as every other question of the rule.
+    /// Only what this file writes itself: a contribution becomes the rule it adds to, whose lines
+    /// name their sources from that rule's directory and are asked of when that rule is.
     fn feeds(&self, root: &Path, file: &str, _ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
         use ritsu_ports::Carried;
         let (path, src, got) = self.rule(&ritsu_base::paths::on_disk(root, file))?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
-        if f.inputs.iter().all(|i| i.fed.is_none()) {
+        let Some(own) = crate::parse::parse(&src, &path).file else { return Ok(Vec::new()) };
+        let places = own.inputs.iter().map(|i| (None, i)).chain(own.elements.iter().flat_map(|el| el.fields.iter().map(move |fd| (Some(el), fd))));
+        if places.clone().all(|(_, i)| i.fed.is_none()) {
             return Ok(Vec::new());
         }
         let facts = self.facts_of(f, c, &src, &path)?;
         let mut out = Vec::new();
-        for i in &f.inputs {
+        for (el, i) in places {
             let Some(fb) = &i.fed else { continue };
             let n = &i.name.text;
-            let Some(col) = facts.inputs.iter().find(|k| &k.name == n) else { continue };
+            let columns = match el {
+                None => &facts.inputs,
+                Some(el) => match facts.elements.iter().find(|(name, ..)| name == &el.name.text) {
+                    Some((_, _, fields)) => fields,
+                    None => continue,
+                },
+            };
+            let Some(col) = columns.iter().find(|k| &k.name == n) else { continue };
             let mut takes = Carried::of_column(&facts, &col.ty);
             // What the facts do not say of a date: its range, or the days of a koyomi date.
             let date = match &takes {
@@ -1239,7 +1250,10 @@ impl ritsu_ports::Feeds for Engine {
             }
             out.push(ritsu_ports::Fed {
                 line: fb.span.line,
-                place: Naming::file(Tool::Rulec, file).with("input", n),
+                place: match el {
+                    None => Naming::file(Tool::Rulec, file).with("input", n),
+                    Some(el) => Naming::file(Tool::Rulec, file).with("elements", &el.name.text).with("field", n),
+                },
                 takes,
                 source: ritsu_base::fed::from_root(root, file, &fb.name),
                 written: fb.written.clone(),

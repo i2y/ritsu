@@ -1,7 +1,7 @@
-error[E144]: `fed by` cannot be written with `from`
+error[E144]: `fed by` cannot be written with `from count`
   --> tests/mutants/m_e144.rule:7
   |
-7 |   weight : number  range >=0 <=100  from order.weight  fed by rulec "scale.rule" output weight
-  |                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this says twice where weight comes from
+7 |   parcels : number  range >=0 <=100  from count order.parcels  fed by rulec "scale.rule" output parcels
+  |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the generated code works out parcels from the list
   |
- `from` is the path the generated code reads out of the caller's object, and says where the value comes from already. Write one or the other.
+ The generated code works out a value of `from count` from the caller's list, and no hand-written code carries it. What is carried is a value of an element: write `fed by` on a field of `elements`.

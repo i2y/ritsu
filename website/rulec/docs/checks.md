@@ -562,7 +562,9 @@ ritsu check: 2 files (rulec 2): 1 fail (1 error); borders between the languages:
 
 When it cannot be decided it says W207 and why, and does not pass in silence: rulec counts an end of
 the output that none of the rule's vectors reaches. `rulec check` on its own says only whether the
-form reads and stands where it can (E144), since the other file is another language's to read.
+form reads and stands where it can (E144), since the other file is another language's to read. It
+stands on an input and on a field of `elements`, after a plain `from`: the `from` is where the
+generated code reads the value, and `fed by` is where the code that fills the object takes it from.
 
 The range of the values is what is checked. **Nothing checks that the hand-written code really
 carries that value**, and `rulec doc` says so beside the input. Generated code does not change by a

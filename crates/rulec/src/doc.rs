@@ -525,6 +525,9 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             if let Some(p) = &fd.from {
                 note.push(tr!("要素の `{}` から読みます", "read from `{}` of the element", p.steps().join(".")));
             }
+            if let Some(fb) = &fd.fed {
+                note.push(crate::i18n::text(&ritsu_base::fed::page_note(&fb.written)));
+            }
             note.extend(trailing_comment(&lines, fd.name.span.line));
             let note = note.join(" / ");
             o.push_str(&format!(

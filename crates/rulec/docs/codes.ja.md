@@ -5996,9 +5996,9 @@ policy unique
 
 `error` — **`fed by` を読めないか、書けない場所にあります**
 
-**いつ出るか。** `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、入力の行でない場所に書いたとき、`from` や `random` と一緒に書いたとき、ステートマシンが持ち越す入力に書いたとき。
+**いつ出るか。** `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、`inputs` の行と `elements` のフィールドの行でない場所に書いたとき、生成コードが並びから求める `from`（`count`、`any`、`sum` など）や `random` と一緒に書いたとき、ステートマシンが持ち越す入力に書いたとき。
 
-**直し方。** 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。`from` が値の出どころを言っているなら、`fed by` を消してください。
+**直し方。** 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。生成コードが並びから求める値なら、`fed by` を `elements` のフィールドに書いてください。
 
 **最小の再現**:
 
@@ -6006,7 +6006,7 @@ policy unique
 rule 配送料(shipping) v1
 
 inputs
-  重さ(weight) : number  range >=1 <=10  from order.weight  fed by rulec "計量.rule" output 重さ
+  重さ(weight) : number  range >=1 <=10  from count order.parcels  fed by rulec "計量.rule" output 重さ
 
 outputs
   料金(fee) : money[円]

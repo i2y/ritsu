@@ -5996,9 +5996,9 @@ Related codes: [E142](#e142), [E141](#e141), [E101](#e101)
 
 `error` — **`fed by` does not read, or stands where it cannot**
 
-**When.** The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an input's; or they are written together with `from` or `random`; or the input is one a machine carries.
+**When.** The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an input's or a field of `elements`; or they are written together with `random`, or with a `from` the generated code works out from a list (`count`, `any`, `sum` and their kin); or the input is one a machine carries.
 
-**Fix.** Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. If `from` already says where the value comes from, delete the `fed by`.
+**Fix.** Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. If the generated code works the value out from a list, write `fed by` on a field of `elements`.
 
 **Smallest reproduction**:
 
@@ -6006,7 +6006,7 @@ Related codes: [E142](#e142), [E141](#e141), [E101](#e101)
 rule shipping(shipping) v1
 
 inputs
-  weight : number  range >=1 <=10  from order.weight  fed by rulec "scale.rule" output weight
+  weight : number  range >=1 <=10  from count order.parcels  fed by rulec "scale.rule" output weight
 
 outputs
   fee : money[USD]

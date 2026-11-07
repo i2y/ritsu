@@ -11026,17 +11026,23 @@ impl Gen<'_> {
             // Where the caller's object holds each input, and the one function per language
             // that reads it (§15.125). Absent when the rule takes its inputs as they come.
             .raw("projection", self.projection_json())
-            // Where hand-written code takes an input from (§15.285): `ritsu check` holds the range of
-            // what can come from there, and nothing holds the code to carrying it. Written only for a
-            // rule that says, so no other description changes.
-            .opt_raw("fed_by", self.f.inputs.iter().any(|i| i.fed.is_some()).then(|| {
-                crate::json::arr(
-                    &self.f.inputs.iter().filter_map(|i| {
-                        let fb = i.fed.as_ref()?;
-                        Some(crate::json::Obj::new().str("name", &i.name.text).str("alias", &pub_name(&i.name)).str("source", &fb.written).finish())
-                    }).collect::<Vec<_>>(),
-                )
-            }))
+            // Where hand-written code takes an input or a field of an element from (§15.285):
+            // `ritsu check` holds the range of what can come from there, and nothing holds the code
+            // to carrying it. Written only for a rule that says, so no other description changes.
+            .opt_raw("fed_by", {
+                let entry = |el: Option<&str>, i: &VarDecl| {
+                    let fb = i.fed.as_ref()?;
+                    let o = crate::json::Obj::new();
+                    let o = match el {
+                        Some(el) => o.str("elements", el),
+                        None => o,
+                    };
+                    Some(o.str("name", &i.name.text).str("alias", &pub_name(&i.name)).str("source", &fb.written).finish())
+                };
+                let fields = self.f.elements.iter().flat_map(|el| el.fields.iter().filter_map(|fd| entry(Some(&el.name.text), fd)));
+                let all: Vec<String> = self.f.inputs.iter().filter_map(|i| entry(None, i)).chain(fields).collect();
+                (!all.is_empty()).then(|| crate::json::arr(&all))
+            })
             // The machine the function is one step of (§15.148), and what each language calls
             // the constants a host needs to keep the state: where a case starts, where it ends.
             .raw("machine", self.machine_json())

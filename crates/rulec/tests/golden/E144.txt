@@ -1,7 +1,7 @@
-エラー[E144]: `fed by` は `from` と一緒に書けません
+エラー[E144]: `fed by` は `from count` と一緒に書けません
   --> tests/mutants/m_e144ja.rule:7
   |
-7 |   重さ(weight) : number  range >=0 <=100  from 注文.weight  fed by rulec "はかり.rule" output 重さ
-  |                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 重さ の値の出どころを二度言っています
+7 |   個数(parcels) : number  range >=0 <=100  from count 注文.parcels  fed by rulec "はかり.rule" output 個数
+  |                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 個数 の値は、生成コードが並びから求めます
   |
- `from` は、生成コードが呼ぶ側のオブジェクトから読むパスで、値の出どころをすでに言っています。`from` だけか、`fed by` だけにしてください。
+ `from count` の値は、生成コードが呼ぶ側の並びから求めるもので、手書きのコードが運ぶ値ではありません。運ばれるのは並びの要素の値なので、`elements` のフィールドに `fed by` を書いてください。

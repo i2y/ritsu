@@ -380,6 +380,70 @@ fn a_rules_end_no_vector_reaches_is_undecided() {
     holds(&Files::none().with("carried_over.rule", carry).with("research.rule", &research.replace("<=250", "<=300")), "fed-undecided-widened", 1);
 }
 
+/// A field of an element, and an input read through a path of a contract. The path says where the
+/// generated code reads the value out of the caller's object, and `fed by` where the hand-written
+/// code that fills the object takes it from, so they stand together on one line. Both are held to
+/// what can come from the source, and both reach the record, the page and the description.
+#[test]
+fn a_field_of_an_element_and_an_input_with_a_path() {
+    let recruit = "rule recruit v1\n\ninputs\n  barracks : bool\n\noutputs\n  veterancy : number  round down(1)\n\ntable t\npolicy unique\n| barracks | -> veterancy : number |\n| true     | 1                     |\n| false    | 0                     |\n";
+    let schema = r##"{"$schema": "https://json-schema.org/draft/2020-12/schema", "$defs": {"Side": {"type": "object", "required": ["morale", "units"], "properties": {"morale": {"type": "integer", "minimum": 0, "maximum": 2}, "units": {"type": "array", "maxItems": 9, "items": {"type": "object", "required": ["veterancy"], "properties": {"veterancy": {"type": "integer", "minimum": 0, "maximum": 2}}}}}}}}"##;
+    let battle = "rule battle v1\n\nshape side = jsonschema \"side.schema.json\" \"#/$defs/Side\"\n\ninputs\n  morale : number  range >=0 <=2  from side.morale  fed by rulec \"recruit.rule\" output veterancy\n\nelements units from side.units\n  veterancy : number  range >=0 <=2  from veterancy  fed by rulec \"recruit.rule\" output veterancy\n\noutputs\n  veterans : number  round down(1)\n\ntable seasoned\npolicy unique\n| veterancy | -> seasoned : bool |\n| >=1       | true               |\n| <1        | false              |\n\ncount veterans_of over units where seasoned  range >=0 <=9\n\ntable total\npolicy unique\n| morale | veterans_of | -> veterans : number |\n| -      | -           | veterans_of          |\n";
+    let files = Files::none().with("recruit.rule", recruit).with("side.schema.json", schema).with("battle.rule", battle);
+    let v = holds(&files, "fed-field", 2);
+    assert_eq!(record(&v, "elements units field veterancy")["takes"], "number >=0 <=2");
+    assert_eq!(record(&v, "input morale")["takes"], "number >=0 <=2");
+
+    // the rule gives more than the field and the input take
+    let raised = files.clone().edit("recruit.rule", "| true     | 1 ", "| true     | 3 ");
+    stops(
+        &raised,
+        "fed-field-raised",
+        &[against("battle.rule", "input morale", "E207", Some("3")), against("battle.rule", "elements units field veterancy", "E207", Some("3"))],
+    );
+
+    // the page and the description say so, of a field as of an input
+    let t = files.lay_out("fed-field-pages");
+    let (_, page, _) = ritsu_in(t.path(), &["rulec", "doc", "battle.rule"]);
+    assert_eq!(page.matches("Comes from `rulec \"recruit.rule\" output veterancy`").count(), 2, "{page}");
+    let (_, api, _) = ritsu_in(t.path(), &["rulec", "api", "battle.rule"]);
+    let api: Value = serde_json::from_str(&api).unwrap();
+    assert_eq!(api["fed_by"][0]["name"], "morale");
+    assert_eq!(api["fed_by"][1]["elements"], "units");
+    assert_eq!(api["fed_by"][1]["name"], "veterancy");
+
+    // nothing generated moves, for these two places either
+    let gen_of = |f: &Files, tag: &str| {
+        let t = f.lay_out(tag);
+        let (code, out, err) = ritsu_in(t.path(), &["gen", "battle.rule", "--target", "python", "--out", "gen"]);
+        assert_eq!(code, 0, "{out}{err}");
+        tree(&t.path().join("gen"))
+    };
+    assert_eq!(gen_of(&files, "fed-field-gen-a"), gen_of(&files.without_the_form(), "fed-field-gen-b"));
+}
+
+/// A contribution becomes the rule it adds to, and that rule's lines name their sources from its
+/// own directory: they are asked of once, for that rule. What the contribution writes itself is
+/// read from the contribution's directory.
+#[test]
+fn a_contribution_answers_for_its_own_lines() {
+    let base = "rule base v1\n\ninputs\n  v : number  range >=0 <=9  fed by rulec \"feeder.rule\" output y\n\noutputs\n  z : number  round half_even(1)\n\nopen bonus : rate  combine sum  range >=0% <=100%\n\ndefine z : number = half_even(v * (100% + bonus), 1)\n";
+    let contribution = |line: &str| format!("contribution extra v1\nto \"../rules/base.rule\" signature:d7fb87de920ecdd6\n\ninputs\n  w : number  range >=0 <=9{line}\n\ntable extra_of\npolicy unique\n| w   | -> extra : rate[step 1%] |\n| >=5 | 10%                      |\n| <5  | 0%                       |\n\ninto bonus\n  extra\n");
+    let files = Files::none().with("rules/feeder.rule", FEEDER).with("rules/base.rule", base);
+    let own = files.clone().with("mods/extra.rule", &contribution(""));
+    let (code, text, v) = own.check("fed-contribution");
+    assert!(!text.contains("E208"), "{text}");
+    assert_eq!(records(&v).len(), 1, "{code}: {}", v["borders"]);
+    assert_eq!(records(&v)[0]["at"]["file"], "rules/base.rule");
+
+    // what the contribution writes is read from where it stands
+    let written = files.with("mods/extra.rule", &contribution("  fed by rulec \"../rules/feeder.rule\" output y"));
+    let (_, text, v) = written.check("fed-contribution-own");
+    assert!(!text.contains("E208"), "{text}");
+    assert_eq!(records(&v).len(), 2, "{}", v["borders"]);
+    assert!(records(&v).iter().any(|r| r["at"]["file"] == "mods/extra.rule" && r["about"] == "input w"), "{}", v["borders"]);
+}
+
 /// Undecided: the rule that is the source does not pass its own check. That is rulec's to say.
 #[test]
 fn a_source_its_language_does_not_pass_is_undecided() {
@@ -613,15 +677,13 @@ fn what_names_no_value_stops_at_each_language() {
 #[test]
 fn where_the_form_cannot_be_written() {
     let t = TempDir::new("fed-places");
-    let cases: [(&str, &str, String, &str); 10] = [
-        // with `from`, which already says where the value comes from
-        ("rulec", "r.rule", "rule r v1\n\nshape o(o) = proto \"o.proto\" shop.Order\n\ninputs\n  v(v) : number  range >=0 <=9  from o.n  fed by rulec \"x.rule\" output y\n\noutputs\n  z : bool\n\ntable t\npolicy unique\n| v | -> z : bool |\n| - | true       |\n".to_string(), "E144"),
+    let cases: [(&str, &str, String, &str); 9] = [
+        // with a `from` the generated code works out, which nothing carries
+        ("rulec", "r.rule", "rule r v1\n\nshape o(o) = proto \"o.proto\" shop.Order\n\ninputs\n  v(v) : number  range >=0 <=9  from count o.lines  fed by rulec \"x.rule\" output y\n\noutputs\n  z : bool\n\ntable t\npolicy unique\n| v | -> z : bool |\n| - | true       |\n".to_string(), "E144"),
         // with `random`, whose value is the rule's own draw
         ("rulec", "r.rule", "rule r v1\n\ninputs\n  v : number  range >=0 <=9  random  fed by rulec \"x.rule\" output y\n\noutputs\n  z : bool\n\ntable t\npolicy unique\n| v | -> z : bool |\n| - | true       |\n".to_string(), "E144"),
         // an output
         ("rulec", "r.rule", "rule r v1\n\ninputs\n  v : number  range >=0 <=9\n\noutputs\n  z : bool  fed by rulec \"x.rule\" output y\n\ntable t\npolicy unique\n| v | -> z : bool |\n| - | true       |\n".to_string(), "E144"),
-        // a field of an element, whose value comes with its sequence
-        ("rulec", "r.rule", "rule r v1\n\ninputs\n  v : number  range >=0 <=9\n\nelements rows\n  w : number  range >=0 <=9  fed by rulec \"x.rule\" output y\n\noutputs\n  z : bool\n\ntable t\npolicy unique\n| v | -> z : bool |\n| - | true       |\n".to_string(), "E144"),
         // an input a machine carries, whose value the machine's last call gave it
         ("rulec", "r.rule", "rule r v1\n\nenum st = a | b\n\ninputs\n  state : st  fed by rulec \"x.rule\" output after_it\n\noutputs\n  after_it : st\n\ntable step\npolicy unique\n| state | -> after_it : st |\n| a     | b               |\n| b     | b               |\n\nmachine m over step\n  carry state -> after_it\n  initial a\n  final b\n".to_string(), "E144"),
         // a `date` line of a dates file

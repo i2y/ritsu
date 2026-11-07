@@ -304,7 +304,7 @@ golden!(w133_never_reached, "W133", "tests/mutants/m_w133.rule", "W133");
 golden!(e141_a_name_not_there, "E141", "tests/mutants/m_e141.rule", "E141");
 golden!(e142_the_definitions_give_it, "E142", "tests/mutants/m_e142.rule", "E142");
 golden!(e143_a_computed_column, "E143", "tests/mutants/m_e143.rule", "E143");
-golden!(e144_fed_by_with_from, "E144", "tests/mutants/m_e144.rule", "E144");
+golden!(e144_fed_by_with_from_count, "E144", "tests/mutants/m_e144.rule", "E144");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

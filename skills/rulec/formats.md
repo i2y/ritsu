@@ -890,11 +890,13 @@ An entry of `applies` has the pin its heading writes: `meaning` from §15.230 on
 (`{"name":"retirement","path":"retirement_pay.rule","sha256":"","meaning":"aadc7468b292ff52"}`), and
 `sha256` for a heading pinned at the callee's bytes as before, `meaning` then absent.
 
-A rule with an input that says where hand-written code takes its value from (`fed by`, §15.285)
-carries `fed_by`, and any other rule leaves it out:
+A rule with an input, or a field of `elements`, that says where hand-written code takes its value
+from (`fed by`, §15.285) carries `fed_by`, and any other rule leaves it out. A field says its
+`elements`:
 
 ```json
-"fed_by":[{"name":"food","alias":"food","source":"rulec \"province_income.rule\" output food"}]
+"fed_by":[{"name":"food","alias":"food","source":"rulec \"province_income.rule\" output food"},
+          {"elements":"units","name":"veterancy","alias":"veterancy","source":"rulec \"recruit_allowed.rule\" output veterancy"}]
 ```
 
 `source` is the naming as the rule writes it. `ritsu check` holds the range of what can come from

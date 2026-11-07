@@ -1190,10 +1190,24 @@ table of inputs in `rulec doc` says so beside the input: Comes from `…` (`rits
 
 `rulec check` on its own says whether the form reads and stands where it can (E144), and not
 whether the values agree: the other file belongs to another language, and `ritsu check` asks it, as
-with `range from koyomi`. It stands only on a line of `inputs`, with no `from`, which says where
-the value comes from already, and no `random`; not on a field of `elements` or an input a `machine`
-carries. Nothing generated changes and the `meaning` hash does not read it. `rulec api` lists the
-inputs that have one under `fed_by`.
+with `range from koyomi`. It stands on a line of `inputs` and on a field of `elements`, and goes
+after a plain `from`:
+
+```rule
+inputs
+  progress : number  range >=0 <=200  from realm.research_progress  fed by rulec "tech.rule" output next_progress
+
+elements units from battle.units
+  veterancy : number  range >=0 <=2  from veterancy  fed by rulec "recruit_allowed.rule" output veterancy
+```
+
+The `from` is where the generated code reads the value out of the caller's object, and `fed by` is
+where the hand-written code that fills that object takes it from. It does not stand with a `from`
+the generated code works out from a list (`count`, `any`, `all`, `sum`, `max`, `min`), which no
+hand-written code carries; write it on the field of `elements` instead. Nor with `random`, or on an
+input a `machine` carries. Nothing generated changes and the `meaning` hash does not read it.
+`rulec api` lists the inputs and the fields that have one under `fed_by`, a field with its
+`elements`.
 
 ### `round` — required on every numeric output
 

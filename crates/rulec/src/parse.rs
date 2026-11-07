@@ -1297,35 +1297,43 @@ impl P {
             let (range, contract_only) = self.tail_range(head, k);
             let random = tail_random(head, k).or_else(|| trailing_random(&line[cut..]));
             self.tail_junk(head, k, if section == crate::kw::ELEMENTS { Tail::Field } else { Tail::Input });
-            let fed = if section == crate::kw::ELEMENTS { None } else { self.fed_by(&name, from.is_some(), random.is_some()) };
+            let fed = self.fed_by(&name, from.as_ref(), random.is_some());
             v.push(VarDecl { name, ty, range, contract_only, from, random, fed, span: span_of(&line) });
         }
         v
     }
 
-    /// What `fed by` holds on the line of the input `name`, read as every language reads it
-    /// (§15.285). `from` already says where the value comes from, and a `random` input is drawn:
-    /// neither takes a second source.
-    fn fed_by(&mut self, name: &Name, from: bool, random: bool) -> Option<crate::ast::FedBy> {
+    /// What `fed by` holds on the line of the input or the field `name`, read as every language
+    /// reads it (§15.285). A plain `from` is the path the generated code reads the value at, and
+    /// `fed by` where the hand-written code that fills the object takes it from, so the two stand
+    /// together. A `from count` and its kin are worked out by the generated code, and a `random`
+    /// input is drawn: nothing carries either of them.
+    fn fed_by(&mut self, name: &Name, from: Option<&Projection>, random: bool) -> Option<crate::ast::FedBy> {
         let (written, span) = self.fed.remove(&name.span.line)?;
         let at = self.at(span.line);
-        if from || random {
-            let word = if from { crate::kw::FROM } else { crate::kw::RANDOM };
+        let worked_out = from.filter(|p| !matches!(p.kind, ProjKind::Field)).map(|p| p.kind.word());
+        if let Some(word) = worked_out {
+            self.err(
+                Diag::error("E144", tr!("`fed by` は `from {word}` と一緒に書けません", "`fed by` cannot be written with `from {word}`"))
+                    .at(at)
+                    .mark(span, tr!("{} の値は、生成コードが並びから求めます", "the generated code works out {} from the list", name.text))
+                    .note(tr!(
+                        "`from {word}` の値は、生成コードが呼ぶ側の並びから求めるもので、手書きのコードが運ぶ値ではありません。運ばれるのは並びの要素の値なので、`elements` のフィールドに `fed by` を書いてください。",
+                        "The generated code works out a value of `from {word}` from the caller's list, and no hand-written code carries it. What is carried is a value of an element: write `fed by` on a field of `elements`."
+                    )),
+            );
+            return None;
+        }
+        if random {
+            let word = crate::kw::RANDOM;
             self.err(
                 Diag::error("E144", tr!("`fed by` は `{word}` と一緒に書けません", "`fed by` cannot be written with `{word}`"))
                     .at(at)
-                    .mark(span, tr!("{} の値の出どころを二度言っています", "this says twice where {} comes from", name.text))
-                    .note(if from {
-                        tr!(
-                            "`from` は、生成コードが呼ぶ側のオブジェクトから読むパスで、値の出どころをすでに言っています。`from` だけか、`fed by` だけにしてください。",
-                            "`from` is the path the generated code reads out of the caller's object, and says where the value comes from already. Write one or the other."
-                        )
-                    } else {
-                        tr!(
-                            "`random` の入力は、呼ぶ側が宣言した範囲から一様に引く値で、ほかの世界から運ぶ値ではありません。",
-                            "A `random` input is drawn uniformly from its declared range by the caller; it is not carried from anywhere."
-                        )
-                    }),
+                    .mark(span, tr!("{} の値は、呼ぶ側が引きます", "the caller draws {}", name.text))
+                    .note(tr!(
+                        "`random` の入力は、呼ぶ側が宣言した範囲から一様に引く値で、ほかの世界から運ぶ値ではありません。",
+                        "A `random` input is drawn uniformly from its declared range by the caller; it is not carried from anywhere."
+                    )),
             );
             return None;
         }
@@ -1345,12 +1353,12 @@ impl P {
         for (line, (_, span)) in std::mem::take(&mut self.fed) {
             let at = self.at(line);
             self.err(
-                Diag::error("E144", tr!("`fed by` を書けるのは、入力の行だけです", "`fed by` can be written only on a line of `inputs`"))
+                Diag::error("E144", tr!("`fed by` を書けるのは、`inputs` の行と `elements` のフィールドの行だけです", "`fed by` can be written only on a line of `inputs` or on a field of `elements`"))
                     .at(at)
                     .mark(span, tr!("ここには書けません", "it cannot stand here"))
                     .note(tr!(
-                        "`fed by` は、規則の入力の値を手書きのコードがどこから運ぶかを言います。出力は規則が決める値で、要素のフィールドは呼ぶ側の並びの中の値です。",
-                        "`fed by` says where hand-written code takes the value of a rule's input from. An output is what the rule decides, and a field of an element is a value inside the caller's list."
+                        "`fed by` は、規則が受け取る値を手書きのコードがどこから運ぶかを言います。出力は規則が決める値です。",
+                        "`fed by` says where hand-written code takes a value the rule receives from. An output is what the rule decides."
                     )),
             );
         }
