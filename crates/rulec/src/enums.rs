@@ -395,9 +395,24 @@ fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Vec<String>, Diag> {
 /// E032: the set the file has and the set the rule declares are not the same.
 fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_path: &str) -> Vec<Diag> {
     let Some(target) = f.enums.iter().find(|e| e.name.text == im.target.text) else {
-        // The rule names an enum it does not declare. E012 has already said so; saying it
-        // twice from here would only bury it.
-        return Vec::new();
+        // Nothing else reads this name, so without a word here the enum would be held to nothing.
+        let declared: Vec<String> = f.enums.iter().map(|e| format!("`{}`", e.name.text)).collect();
+        let d = Diag::error(
+            "E012",
+            tr!("`{}` という列挙はこのファイルにありません", "This file has no enum called `{}`", im.target.text),
+        )
+        .at(format!("{rule_path}:{}", im.span.line))
+        .mark(im.target.span.clone(), "")
+        .note(tr!(
+            "`->` の右には、{} と突き合わせるこのファイルの列挙を書きます。",
+            "After `->` goes the enum of this file to hold to {}.",
+            im.file
+        ));
+        return vec![if declared.is_empty() {
+            d
+        } else {
+            d.note(tr!("このファイルの列挙: {}", "The enums of this file: {}", declared.join(", ")))
+        }];
     };
     let have: Vec<String> = target
         .values

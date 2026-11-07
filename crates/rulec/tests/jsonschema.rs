@@ -106,6 +106,35 @@ fn 一致していれば何も言わない() {
     assert_eq!(code, 0, "{out}");
 }
 
+/// What follows `->` is all that says which enum the file holds. A name no enum has would otherwise
+/// hold nothing to anything and say nothing.
+#[test]
+fn an_arrow_to_no_enum_stops() {
+    let (_tmp, d) = dir("arrow");
+    std::fs::write(d.join("api.json"), DOC).unwrap();
+    std::fs::write(d.join("tier.proto"), "syntax = \"proto3\";\n\nenum Tier {\n  TIER_UNSPECIFIED = 0;\n  TIER_BASIC = 1;\n  TIER_GOLD = 2;\n}\n").unwrap();
+    let body = "\nenum tier = basic | gold\n\ninputs\n  member : tier\n\noutputs\n  fee : money[USD]  round up(1USD)\n\n\
+                table fees\npolicy unique\n| member | -> fee : money[USD] |\n| basic  | 8USD                |\n| gold   | 4USD                |\n";
+    let lines = [
+        ("jsonschema", r##"import jsonschema "api.json" "#/components/schemas/MemberTier" -> "##),
+        ("proto", r#"import proto "tier.proto" Tier -> "#),
+    ];
+    for (tag, line) in lines {
+        let p = d.join(format!("{tag}.rule"));
+        let check = |target: &str| {
+            std::fs::write(&p, format!("rule delivery_fee v1\n\n{line}{target}\n{body}")).unwrap();
+            let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").arg("check").arg(&p).output().expect("rulec");
+            (o.status.code().unwrap_or(-1), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
+        };
+        let (code, out) = check("tier");
+        assert_eq!(code, 0, "{tag}: {out}");
+        let (code, out) = check("teir");
+        assert_eq!(code, 1, "{tag}: {out}");
+        assert!(out.contains("error[E012]: This file has no enum called `teir`"), "{tag}: {out}");
+        assert!(out.contains("The enums of this file: `tier`"), "{tag}: {out}");
+    }
+}
+
 #[test]
 fn スキーマに値が増えたら止まる() {
     let grown = DOC.replace(r#""enum": ["basic", "gold"]"#, r#""enum": ["basic", "gold", "platinum"]"#);

@@ -404,7 +404,7 @@ Related codes: [E009](#e009), [E012](#e012)
 
 `error` — **The name is not declared**
 
-**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia). `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103.
+**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. It appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia), and when what follows `->` on an `import proto` or `import jsonschema` line is no enum of this file. `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103.
 
 **Fix.** Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`).
 
