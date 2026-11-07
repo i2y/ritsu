@@ -608,7 +608,7 @@ npm のパッケージは、モジュールの依存を、置き場と、`ritsu 
 
 `ritsu impact --base <版>` は、変更で答えが動いたかと誰に関わるかを、一つの報告にまとめます。変わったファイル、head にだけあるエラーと警告、規則・日付・ゲートで答えが変わる入力のすべて（読んでいる暦が変わったゲートも入ります）、動いた要件とその持ち主、変更に触れる主張とどの主張も走らない変更行、生成物が新しいかどうかです。head は `--head` で版を指さなければ作業ツリーで、`ritsu.mod` のないプロジェクトでも動きます。
 
-`--route <file.rule>` を付けると、自分で書いた規則が変更の行き先を決めます。規則の入力の名前が報告の事実の名前で、ほかの規則と同じ検査を通ります。[`crates/ritsu/examples/impact.ja/route.ja.rule`](crates/ritsu/examples/impact.ja/route.ja.rule) では、二つ目の表に「答えが動いた変更がそのままマージへ行く」行がありません。一つ目の表がそこへ送ると `ritsu check` が止まります（E101）。
+`--route <file.rule>` を付けると、自分で書いた規則が変更の行き先を決めます。規則の入力の名前が報告の事実の名前で、ほかの規則と同じ検査を通ります。[`crates/ritsu/examples/impact.ja/route.ja.rule`](crates/ritsu/examples/impact.ja/route.ja.rule) では、最後の表に「答えが動いた変更がそのままマージへ行く」行がありません。`経路を決める` の表がそこへ送ると `ritsu check` が止まります（E101）。
 
 ```rule
 table 経路を決める
@@ -620,12 +620,18 @@ policy unique
 | false        | 0            | 0        | >=1          | 持ち主が読む     |
 | false        | 0            | 0        | 0            | マージ           |
 
+table 答えが動いたか
+policy unique
+| 動いた数 | -> 答えが動いた : bool |
+| >=1      | true                   |
+| 0        | false                  |
+
 table 誰が読むか
 policy unique
-| 動いた数 | 経路                 | -> 人が読む : bool |
-| >=1      | 持ち主が読む, 止める | true               |
-| 0        | 持ち主が読む, 止める | true               |
-| 0        | マージ               | false              |
+| 答えが動いた | 経路                 | -> 人が読む : bool |
+| true         | 持ち主が読む, 止める | true               |
+| false        | 持ち主が読む, 止める | true               |
+| false        | マージ               | false              |
 ```
 
 この例の `refund_band.ja.rule` の区分を 20 点から 30 点に動かすと、次のように出ます。

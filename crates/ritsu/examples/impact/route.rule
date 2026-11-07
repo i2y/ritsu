@@ -1,26 +1,26 @@
 rule route(route) v1
-description "Where a change goes, from the facts of ritsu impact. Each input is named after a fact. The second table holds the promise: its rows send no change that moved an answer to merge, so a first table that does stops the check (E101)"
+description "Where a change goes, from the facts of ritsu impact. Each input is named after a fact. The last table holds the promise: its rows send no change that moved an answer to merge, so a `route` table that does stops the check (E101)"
 
 enum destination(destination) = merge | owner_reads | stop
 
 inputs
-  new_errors          : number  range >=0
-  new_warnings        : number  range >=0
-  undecided           : number  range >=0
+  new_errors          : number  range >=0 <=1000000
+  new_warnings        : number  range >=0 <=1000000
+  undecided           : number  range >=0 <=1000000
   generated_stale     : bool
-  generated_unchecked : number  range >=0
-  rule_changes        : number  range >=0
-  date_changes        : number  range >=0
-  allow_gained        : number  range >=0
-  allow_lost          : number  range >=0
-  policies_moved      : number  range >=0
-  book_changes        : number  range >=0
-  interface_changes   : number  range >=0
-  interface_breaks    : number  range >=0
-  requirements_moved  : number  range >=0
-  opaque_specs        : number  range >=0
-  unclaimed_lines     : number  range >=0
-  other_files         : number  range >=0
+  generated_unchecked : number  range >=0 <=1000000
+  rule_changes        : number  range >=0 <=1000000
+  date_changes        : number  range >=0 <=1000000
+  allow_gained        : number  range >=0 <=1000000
+  allow_lost          : number  range >=0 <=1000000
+  policies_moved      : number  range >=0 <=1000000
+  book_changes        : number  range >=0 <=1000000
+  interface_changes   : number  range >=0 <=1000000
+  interface_breaks    : number  range >=0 <=1000000
+  requirements_moved  : number  range >=0 <=1000000
+  opaque_specs        : number  range >=0 <=1000000
+  unclaimed_lines     : number  range >=0 <=1000000
+  other_files         : number  range >=0 <=1000000
 
 outputs
   route        : destination
@@ -38,12 +38,18 @@ policy unique
 | false           | 0          | 0     | >=1    | owner_reads            |
 | false           | 0          | 0     | 0      | merge                  |
 
+table answers
+policy unique
+| moved | -> answers_moved : bool |
+| >=1   | true                    |
+| 0     | false                   |
+
 table who_reads
 policy unique
-| moved | route             | -> person_reads : bool |
-| >=1   | owner_reads, stop | true                   |
-| 0     | owner_reads, stop | true                   |
-| 0     | merge             | false                  |
+| answers_moved | route             | -> person_reads : bool |
+| true          | owner_reads, stop | true                   |
+| false         | owner_reads, stop | true                   |
+| false         | merge             | false                  |
 
 examples
 | new_errors | new_warnings | undecided | generated_stale | generated_unchecked | rule_changes | date_changes | allow_gained | allow_lost | policies_moved | book_changes | interface_changes | interface_breaks | requirements_moved | opaque_specs | unclaimed_lines | other_files | -> route    | -> person_reads |

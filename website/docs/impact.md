@@ -90,16 +90,22 @@ policy unique
 | false           | 0          | 0     | >=1    | owner_reads            |
 | false           | 0          | 0     | 0      | merge                  |
 
+table answers
+policy unique
+| moved | -> answers_moved : bool |
+| >=1   | true                    |
+| 0     | false                   |
+
 table who_reads
 policy unique
-| moved | route             | -> person_reads : bool |
-| >=1   | owner_reads, stop | true                   |
-| 0     | owner_reads, stop | true                   |
-| 0     | merge             | false                  |
+| answers_moved | route             | -> person_reads : bool |
+| true          | owner_reads, stop | true                   |
+| false         | owner_reads, stop | true                   |
+| false         | merge             | false                  |
 ```
 
-The second table holds a promise: it has no row for a change that moved an answer and goes to merge, so
-a first table that sends one there stops `ritsu check` with E101. Because the check covers every input,
+The last table holds a promise: it has no row for a change that moved an answer and goes to merge, so
+a `route` table that sends one there stops `ritsu check` with E101. Because the check covers every input,
 that holds for every change, not for the examples alone.
 
 What this rule lets through to merge is what the report can vouch for: prose, a spec whose answers are

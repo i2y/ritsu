@@ -757,8 +757,8 @@ claim runs, and whether the generated files are current. The head is the working
 
 With `--route <file.rule>`, a rule of your own says where the change goes. Its inputs are named after
 the facts of the report, and it passes the same checks as any other rule. In
-[`crates/ritsu/examples/impact/route.rule`](crates/ritsu/examples/impact/route.rule), the second
-table has no row for a change that moved an answer and goes straight to merge, so a first table that
+[`crates/ritsu/examples/impact/route.rule`](crates/ritsu/examples/impact/route.rule), the last table
+has no row for a change that moved an answer and goes straight to merge, so a `route` table that
 sends one there stops `ritsu check` (E101):
 
 ```rule
@@ -771,12 +771,18 @@ policy unique
 | false           | 0          | 0     | >=1    | owner_reads            |
 | false           | 0          | 0     | 0      | merge                  |
 
+table answers
+policy unique
+| moved | -> answers_moved : bool |
+| >=1   | true                    |
+| 0     | false                   |
+
 table who_reads
 policy unique
-| moved | route             | -> person_reads : bool |
-| >=1   | owner_reads, stop | true                   |
-| 0     | owner_reads, stop | true                   |
-| 0     | merge             | false                  |
+| answers_moved | route             | -> person_reads : bool |
+| true          | owner_reads, stop | true                   |
+| false         | owner_reads, stop | true                   |
+| false         | merge             | false                  |
 ```
 
 Moving a band of that example's `refund_band.rule` from 20 items to 30 gives:

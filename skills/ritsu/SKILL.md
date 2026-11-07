@@ -456,7 +456,7 @@ and 2 on what could not be compared or decided, and prints the JSON to its end i
 
 With `--route <file.rule>` a rule the project keeps says where the change goes. Its inputs are named
 after the facts, and `ritsu impact --help` lists them. Write what a route promises as a table the check
-holds, as in `crates/ritsu/examples/impact/route.rule`, whose second table has no row for a change that
+holds, as in `crates/ritsu/examples/impact/route.rule`, whose last table has no row for a change that
 moved an answer and goes to merge. Where the route says a person reads, that stays with the person
 (§7): do not record a review with `yuen review` to get past `new_errors`. `merge` says only that no
 person has to read it: run the tests and the claims as well, for `ritsu impact` runs none.

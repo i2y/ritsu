@@ -768,7 +768,7 @@ fn the_route_of_the_example_sends_no_change_that_moved_an_answer_to_merge() {
     let d = Desk::en("impact-promise");
     let (code, out, err) = d.ritsu(&["check", "route.rule"]);
     assert_eq!(code, 0, "{out}\n{err}");
-    // a table that sends such a change to merge: the second table has no row for it, and the check stops
+    // a table that sends such a change to merge: the last table has no row for it, and the check stops
     d.edit("route.rule", "| false           | 0          | >=1   | -      | owner_reads            |", "| false           | 0          | >=1   | -      | merge                  |");
     let s = std::fs::read_to_string(d.repo.work.join("route.rule")).unwrap();
     let kept: Vec<&str> = s.lines().filter(|l| !l.ends_with("| owner_reads | true            |")).collect();
