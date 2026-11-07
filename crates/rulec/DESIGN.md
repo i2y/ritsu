@@ -6525,6 +6525,40 @@ inputs
 - `derive` や `define` の範囲は宣言のとおりに読む。定義から届かない値だけを取る行は、宣言の範囲の中なら言わない。
 - 契約（`from`）が通さない値だけを取る行は言わない。§3.3 の「表の検査は `from` を知らない」と同じ線である。
 
+### 15.287 起きるはずのことを書く `possible`（2026-11-07）
+
+**きっかけ。** `never`・`once`・`always` は悪いことが起きないとしか言わない。どの出来事でも取消へ進む表はそれを全部守り、`check` は W125 の警告を出して 0 で終わる（`tests/corpus/order_cancels_everything.rule`）。全部 `false` を答える表は、一番上の階層の `never` を全部守る。W125 は状態に着くかだけを言い、ある状態のあとで起きるか、ある答えが返るかは言えない。主張を全部書いても、表が仕事をしているとは分からない。
+
+**決定。** 守りの主張の反対側として `possible` の行を足す。起きるはずのことを書き、起きる最短の呼び出しの並びを見せる。
+
+```rule
+machine order over step
+  carry    state -> next_state
+  initial  received
+  final    delivered, cancelled
+  never    shipped after cancelled
+  possible delivered
+  possible cancelled after paid, shipped
+  possible refund >0JPY after shipped
+```
+
+- **三つの形と一番上の階層。** `possible <状態>, … [after <状態>, …]`（`never` の反対）、`possible <出力> <セル> [after <状態>, …]`（`once` の反対）、`possible <持ち越す入力> <セル> [and …] [when <状態>, …]`（`always` の反対）。`machine` の外は一度の呼び出しの話で、`never` の行の書き方で `possible 名前 = 値, 名前 > 値` と書く（`never` の外の行の反対）。名前は入力と出力と `elements` の集計。`machine` のある規則の外の行も一度の呼び出しである。
+- **一覧はそれぞれについての主張。** `possible a, b after c, d` は四つの組で、結果はどの組かを言う（`possible::pairs`）。`when` の一覧も状態ごとに一つの主張で、`and` は同じ場所の話である。`after` は `never` の検査と同じ読み方で、見つかれば `never` は破れ、`possible` は成り立つ。
+- **判定は三値のまま向きが逆。** 守りの主張は、walk が届かなければ成り立ち、本当の呼び出しで破れる。`possible` は、本当の呼び出しの並びが見つかって初めて成り立つ（`held` は一つの世界のまま、`mixed` の辺は数えない、区間で歩いたときは本当の呼び出しで見つけ直せたものだけ）。成り立たないは、起きることより広い walk の全部（`mixed` と区間の辺も入れる）を調べ尽くし、未決着の区画も無いときだけで E146。どちらでもなければ機械は W127、一番上の階層は W135（`machine::settle_possible`、`possible::one_call_claims`）。
+- **切る場所。** 出力の形は `once_cuts` と同じく出力の元の名前を境目で切り、持ち越す値の形は `interval_cuts` がセルの境目で切る。`Edge.flags` は `once` の行に続けて `possible` の出力の行を持つ（`machine::answer_lines`）。`possible` の行の無い規則の辺は今までと同じで、`once` の Maybe の扱いも変わらない。文字列の出力は、呼ぶ側が渡す文字列を読むときだけ区画を代表と見ない（`machine::reads_a_string`）。`names_constant` はセルの名前を知らない文字列を一つの座標に畳むので、そのまま使うと誤った E146 になる。
+- **手がかりを本文に。** 悪い例の並びは無いので、E146 は見えているものを言う。`after` のときはその状態のあとに着ける状態、出力の形は呼び出しが答えた値（六つまで）、持ち越す値の形はその状態での値の範囲、一番上の階層は入力の条件に合う呼び出しが答えた値か、扉が受けないこと。
+- **見せ方。** `rulec check --show-possible`（`--show-shadow` の隣、E126 の Calls の形）。`--format json` はファイルごとに `kind: possible` の一行（無いファイルは一字も変わらない。`formats.md`）。`rulec doc` は機械の主張の下に「起きること」として一呼び出し一行の表を、外の行は「この組み合わせは起こらない」の隣に一覧で。`rulec vectors` は並びをトレースに、外の行の呼び出しを普通のベクトルに入れ（`why` が行）、どの言語のランナーも再生する。`rulec api` は `machine.possible` と一番上の `possible`（無ければキーが無い）。
+- **証明書。** 機械の並びを `machine.possible`（持ち越す値があれば `machine.carried.possible`）に載せ、`tools/recheck.py` と Lean が初期状態から一歩ずつ走らせて終わりを確かめる（`Machine.happens_of_reachedOk`、`answers_of_answeredOk`、`Carried.Model.carries_of_carriesOk`）。出力の形は、表の行が書く値がセルに入るときだけ載せ、計算で出る値は `uncertified` に書く。外の行は `witness` を載せ、どちらの再検算も答えを計算しないので stated として言う。
+- **文脈で読むキーワード。** `RESERVED` に入れず `LINE_HEAD` に入れる。`possible` という入力や状態を書ける。`rulec fmt` は `possible` のある `machine` のブロックだけを 8 文字に揃え、無いブロックは 7 文字のままで、既存のファイルは変わらない。
+
+**捨てたもの。** (1) W125 を強くする：状態に着くかしか言えず、`after` も答えも言えない。全部の状態に着かなくてよい規則（移行のために残した状態）もある。(2) 書かなくても全部の状態に着くことを求める：意図を読めない。起きるはずのことは人が書く。(3) 成り立つ行も警告で知らせる：何も言わないのが成り立つ。見たい人は `--show-possible` を使う。(4) 悪い例の代わりに最短の近い並びを出す：手がかりは「見えているもの」で足り、近さの定義は別の話になる。(5) `rulec gen` のコードに並びを出す：`possible` は確かめと文書とベクトルの話で、生成物を一字も変えない。(6) 状態と出力に同じ名前があるとき E145：語だけなら状態、セルが続けば状態ではないので読み違えない。止めると書き方が無くなる。出力と持ち越す入力の両方のときだけ E145 にする。
+
+**変わること。** 行の形が一つ増える。診断 E145、E146、W135。`check --show-possible`。`Report.tables_hold`。`--format json` の `kind: possible` の一行。コーパスに `order_happens.rule`、`order_cancels_everything.rule`、`repair_quote.rule` とその日本語の版。壊す試し `m_e145*`、`m_e146*`、`m_e146_call*`。
+
+**確かめたこと。** `crates/rulec/tests/possible.rs`：何もしない表と足したときの対、三つの形の成り立つ・成り立たない・決められない、`held` の世界をまたがないこと、`mixed` を数えないこと、区間で歩く場合（`possible n = 70000000` は W127）、`after` の組の分け方、一番上の階層と W135、`--show-possible` の文字と JSON、並びが vectors に入ること、Python の `rulec test` が再生すること、両方の再検算と証明書の偽造。
+
+**残したこと。** 外の行の呼び出しの答えは、再検算では計算しない（stated。`rulec test` が再生する）。`rulec diff` は `possible` を読まない：扉を変えないので、新しい版で起きなくなったことは新しい版の `check` が言う。`dandori` と `kaname` には足していない。`--show-possible` は `rulec check` だけで、`ritsu check` には無い（`--show-shadow` と同じ）。
+
 ### 15.289 検査は通るのに再検査が落とす形（2026-11-07）
 
 **きっかけ**：`ritsu impact` の例の規則（`crates/ritsu/examples/impact/route.rule`）の最初の形は、`rulec check` を通るのに、木の規則の試験で二つの再検査に落ちた。調べると、直すものが一つ、直していない穴が二つあった。

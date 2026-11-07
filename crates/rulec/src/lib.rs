@@ -76,6 +76,7 @@ pub mod ooxml;
 pub mod over;
 pub mod parse;
 /// Which values of an enum need which before them (§15.222).
+pub mod possible;
 pub mod prereq;
 /// ritsu's ports, as rulec answers them (ritsu's DESIGN 3.2).
 pub mod ports;
@@ -116,11 +117,14 @@ pub struct Report {
     pub merged: Vec<String>,
     /// For a contribution: the file it adds to, as the run shows it.
     pub adds_to: Option<String>,
+    /// Whether the check got as far as the claims about sequences of calls, and the `possible`
+    /// lines were read (§15.287).
+    pub tables_hold: bool,
 }
 
 impl Report {
     fn of(diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64) -> Report {
-        Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: None }
+        Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: None, tables_hold: false }
     }
 }
 
@@ -183,7 +187,7 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
             let qseen: std::collections::HashSet<String> = alone.quiet.iter().map(|d| finding_key(d, path)).collect();
             let mut quiet = alone.quiet;
             quiet.extend(merged.quiet.drain(..).filter(|d| !qseen.contains(&finding_key(d, path))));
-            Report { diags, quiet, shadow: merged.shadow, nodes: alone.nodes + merged.nodes, merged: merged.merged, adds_to: None }
+            Report { diags, quiet, shadow: merged.shadow, nodes: alone.nodes + merged.nodes, merged: merged.merged, adds_to: None, tables_hold: merged.tables_hold }
         }
         _ => pipeline(f, path, budget),
     }
@@ -218,7 +222,7 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
     let mut shadow = region::Shadow::default();
     let mut nodes = 0i64;
     let adds_to = (f.kind == ast::FileKind::Contribution).then(|| f.contrib.as_ref().and_then(|h| h.to.as_ref()).and_then(|t| link::join(path, &t.file))).flatten();
-    let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone() };
+    let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone(), tables_hold: false };
     // A name the file's lines declare twice, or two names given one identifier (§15.262): whatever
     // reads the name below would read one of the two, so the check stops before anything does.
     diags.extend(names::check(f, path));
@@ -314,6 +318,10 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
             diags.extend(machine::check(f, &t, path, budget.max(0) as usize));
         }
     }
+    // What one call can have at once (§15.287): counted once the tables hold, as the machine's are.
+    if tables_hold {
+        diags.extend(possible::check(f, &t, path, budget.max(0) as usize));
+    }
     // The prerequisites (§15.222): a finite graph, walked whole. The order an `ordered by` table
     // gives is read once the tables hold.
     diags.extend(prereq::check_graph(f, &t, path, tables_hold));
@@ -322,7 +330,7 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
         diags.extend(chances::check(f, &t, path, budget.max(0) as usize));
     }
     link::attribute(&mut diags, f);
-    done(diags, quiet, shadow, nodes)
+    Report { tables_hold, ..done(diags, quiet, shadow, nodes) }
 }
 
 /// Per-set check results (shadowing pairs and dead rows) that the §9.2 coverage decision

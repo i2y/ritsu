@@ -1218,6 +1218,63 @@ pub struct AlwaysDecl {
     pub span: Span,
 }
 
+/// `possible 配達済 after 入金済`, `possible 返金額 >0円 after 出荷済`, `possible 残り日数 = 0 when 督促中`
+/// under a `machine` (§15.287): the far side of `never`, `once` and `always`. A sequence of calls
+/// makes it happen, and the check shows the shortest one.
+///
+/// What the words are is the type check's to say: a word with no cell is a state, and a name with a
+/// cell an output or a carried input.
+#[derive(Debug, Clone)]
+pub struct PossibleDecl {
+    /// `<state>, …`, when the line has no cell.
+    pub states: Vec<Name>,
+    /// `<name> <cell>`, joined by `and`: the name, the cell, and where the cell is.
+    pub tests: Vec<(Name, Cell, Span)>,
+    /// `after <state>, …`.
+    pub after: Vec<Name>,
+    /// `when <state>, …`.
+    pub when: Vec<Name>,
+    pub span: Span,
+}
+
+impl PossibleDecl {
+    /// The tests as they are written: `返金額 >0円`, `残り日数 >=1 and 督促済 = true`.
+    pub fn tests_said(&self) -> String {
+        let ts: Vec<String> = self.tests.iter().map(|(n, cell, _)| format!("{} {}", n.text, cell_text(cell))).collect();
+        ts.join(" and ")
+    }
+
+    /// The line as it is written, in one spelling.
+    pub fn said(&self) -> String {
+        let names = |v: &[Name]| v.iter().map(|n| n.text.clone()).collect::<Vec<_>>().join(", ");
+        let head = if self.tests.is_empty() { names(&self.states) } else { self.tests_said() };
+        let mut s = format!("{} {head}", crate::kw::POSSIBLE);
+        if !self.after.is_empty() {
+            s.push_str(&format!(" {} {}", crate::kw::AFTER, names(&self.after)));
+        }
+        if !self.when.is_empty() {
+            s.push_str(&format!(" {} {}", crate::kw::WHEN, names(&self.when)));
+        }
+        s
+    }
+}
+
+/// `possible 区分 = 上位, 承認 = true` where a line starts outside every block (§15.287): one call
+/// has all of these at once. The far side of the `never` line.
+#[derive(Debug, Clone)]
+pub struct PossibleLine {
+    pub conds: Vec<NeverCond>,
+    pub span: Span,
+}
+
+impl PossibleLine {
+    /// The line as it is written, in one spelling: `possible tier = gold, approved = true`.
+    pub fn said(&self) -> String {
+        let conds: Vec<String> = self.conds.iter().map(NeverCond::said).collect();
+        format!("{} {}", crate::kw::POSSIBLE, conds.join(", "))
+    }
+}
+
 /// `machine 注文(order) over 遷移` and the lines under it (§15.148).
 ///
 /// The rule is one step of a state machine. `carry` names the output that comes back as an
@@ -1249,6 +1306,8 @@ pub struct MachineDecl {
     pub onces: Vec<OnceDecl>,
     /// The `always` lines (§15.217).
     pub alwayses: Vec<AlwaysDecl>,
+    /// The `possible` lines (§15.287).
+    pub possibles: Vec<PossibleDecl>,
     /// `held <input>, …`: the inputs a case holds from its first call to its last, and where
     /// the line is (§15.149).
     pub held: Vec<Name>,
@@ -1505,6 +1564,8 @@ pub struct RuleFile {
     pub constraints: Vec<Constraint>,
     /// The combinations that do not happen (§15.282), under `kw::NEVER` outside a `machine`.
     pub nevers: Vec<NeverLine>,
+    /// What one call can have at once (§15.287), under `kw::POSSIBLE` outside a `machine`.
+    pub possibles: Vec<PossibleLine>,
     /// The shapes of the caller's objects that inputs are projected from (§15.125).
     pub shapes: Vec<ShapeDecl>,
     /// The contract whose Connect service the rule is served as (§15.274), when it names one.
@@ -1591,6 +1652,12 @@ impl RuleFile {
     /// The cells the `never` lines test a name with.
     pub fn never_cells<'s>(&'s self, name: &'s str) -> impl Iterator<Item = &'s Cell> {
         self.nevers.iter().flat_map(|n| n.conds.iter()).filter(move |k| k.name.text == name).map(|k| &k.cell)
+    }
+
+    /// The cells the `never` and the one-call `possible` lines test a name with: where a walk over
+    /// the rule's inputs cuts, so that a coordinate is wholly inside a cell or wholly outside it.
+    pub fn claim_cells<'s>(&'s self, name: &'s str) -> impl Iterator<Item = &'s Cell> {
+        self.never_cells(name).chain(self.possibles.iter().flat_map(|n| n.conds.iter()).filter(move |k| k.name.text == name).map(|k| &k.cell))
     }
 
     /// The summaries of the rule.

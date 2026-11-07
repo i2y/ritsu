@@ -362,7 +362,7 @@ pub(crate) fn axis_with(
                         }
                     }
                 }
-                for cell in f.never_cells(col) {
+                for cell in f.claim_cells(col) {
                     if let Cell::Prefix(ps) = cell {
                         for p in ps {
                             if !patterns.contains(p) {
@@ -409,8 +409,8 @@ pub(crate) fn axis_with(
                     }
                 }
                 // A `never` line cuts where it tests, so that a coordinate is wholly on one side of
-                // it (§15.282).
-                for cell in f.never_cells(col) {
+                // it (§15.282), and a one-call `possible` line the same way (§15.287).
+                for cell in f.claim_cells(col) {
                     let lits: Vec<&Lit> = match cell {
                         Cell::Cmp(cs) => cs.iter().map(|(_, l)| l).collect(),
                         Cell::Lit(l) => vec![l],

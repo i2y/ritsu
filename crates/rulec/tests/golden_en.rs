@@ -302,6 +302,8 @@ golden!(e123_reads, "E123-reads", "tests/mutants/m_e123reads.rule", "E123");
 golden!(e101_never, "E101-never", "tests/mutants/m_e101never.rule", "E101");
 golden!(w133_never_reached, "W133", "tests/mutants/m_w133.rule", "W133");
 golden!(e141_a_name_not_there, "E141", "tests/mutants/m_e141.rule", "E141");
+golden!(e145_not_a_state, "E145", "tests/mutants/m_e145.rule", "E145");
+golden!(e146_never_happens, "E146", "tests/mutants/m_e146.rule", "E146");
 golden!(e142_the_definitions_give_it, "E142", "tests/mutants/m_e142.rule", "E142");
 golden!(e143_a_computed_column, "E143", "tests/mutants/m_e143.rule", "E143");
 golden!(w134_a_line_that_takes_nothing, "W134", "tests/mutants/m_w134.rule", "W134");

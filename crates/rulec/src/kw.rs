@@ -126,7 +126,7 @@ pub const EXTEND: &str = "extend";
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, MAX, MIN, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
-    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES, OPEN, IMPLEMENTS, NEVER,
+    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES, OPEN, IMPLEMENTS, NEVER, POSSIBLE,
 ];
 
 /// The line heads of a `contribution` file besides those of a rule it may write (§15.227): where it
@@ -218,6 +218,11 @@ pub const NEVER: &str = "never";
 pub const AFTER: &str = "after";
 /// `once 返金額 >0円` — at most one call in a case answers an output the cell accepts.
 pub const ONCE: &str = "once";
+/// `possible 配達済 after 入金済` under a `machine`, and `possible 区分 = 上位, 承認 = true` where a
+/// line starts outside every block (§15.287): what is to happen, with the shortest calls that make
+/// it happen. Read at the head of a line and given up to a declared name, as `prerequisites` is, so
+/// the word is not reserved (§15.157).
+pub const POSSIBLE: &str = "possible";
 
 // --- Counting the walk (§15.58)
 /// `count 一致数(hits) over 納入先 where 判定 = 一致` — how many elements satisfy a test.

@@ -553,6 +553,52 @@ pub fn terse_footer() -> String {
     )
 }
 
+/// A witness as JSON: what a finding's has, and a `possible` line's (§15.287).
+fn witness_obj(w: &Witness) -> crate::json::Obj {
+    let pairs = |ps: &[(String, WVal)]| -> String {
+        let mut o = crate::json::Obj::new();
+        for (n, v) in ps {
+            o = o.raw(n, v.json());
+        }
+        o.finish()
+    };
+    let mut witness = crate::json::Obj::new();
+    if !w.inputs.is_empty() {
+        witness = witness.raw("inputs", pairs(&w.inputs));
+    }
+    if !w.outputs.is_empty() {
+        witness = witness.raw("outputs", pairs(&w.outputs));
+    }
+    if !w.expected.is_empty() {
+        witness = witness.raw("expected", pairs(&w.expected));
+    }
+    if !w.trace.is_empty() {
+        let steps: Vec<String> = w
+            .trace
+            .iter()
+            .map(|st| {
+                let rows: Vec<String> = st
+                    .rows
+                    .iter()
+                    .map(|r| crate::json::Obj::new().str("table", &r.table).int("row", r.row as i128).finish())
+                    .collect();
+                crate::json::Obj::new()
+                    .raw("inputs", pairs(&st.inputs))
+                    .raw("outputs", pairs(&st.outputs))
+                    .raw("rows", crate::json::arr(&rows))
+                    .finish()
+            })
+            .collect();
+        witness = witness.raw("trace", crate::json::arr(&steps));
+    }
+    witness
+}
+
+/// A witness as a JSON object, on its own.
+pub fn witness_json(w: &Witness) -> String {
+    witness_obj(w).finish()
+}
+
 /// `--format json`, version 2 (§11 principle 6).
 ///
 /// Every v1 field is still here and still means what it meant, so a reader written against
@@ -588,43 +634,7 @@ pub fn render_json(d: &Diag, path: &str) -> String {
         })
         .collect();
 
-    let pairs = |ps: &[(String, WVal)]| -> String {
-        let mut o = crate::json::Obj::new();
-        for (n, v) in ps {
-            o = o.raw(n, v.json());
-        }
-        o.finish()
-    };
-    let mut witness = crate::json::Obj::new();
-    if !d.witness.inputs.is_empty() {
-        witness = witness.raw("inputs", pairs(&d.witness.inputs));
-    }
-    if !d.witness.outputs.is_empty() {
-        witness = witness.raw("outputs", pairs(&d.witness.outputs));
-    }
-    if !d.witness.expected.is_empty() {
-        witness = witness.raw("expected", pairs(&d.witness.expected));
-    }
-    if !d.witness.trace.is_empty() {
-        let steps: Vec<String> = d
-            .witness
-            .trace
-            .iter()
-            .map(|st| {
-                let rows: Vec<String> = st
-                    .rows
-                    .iter()
-                    .map(|r| crate::json::Obj::new().str("table", &r.table).int("row", r.row as i128).finish())
-                    .collect();
-                crate::json::Obj::new()
-                    .raw("inputs", pairs(&st.inputs))
-                    .raw("outputs", pairs(&st.outputs))
-                    .raw("rows", crate::json::arr(&rows))
-                    .finish()
-            })
-            .collect();
-        witness = witness.raw("trace", crate::json::arr(&steps));
-    }
+    let witness = witness_obj(&d.witness);
 
     let rows: Vec<String> = d
         .rows

@@ -73,3 +73,6 @@ Claude利用料.rule	claude_api_usage_fee.rule
 小包の手数料.rule	parcel_fee.rule
 領地の収入.rule	province_income.rule
 領地の成長.rule	province_growth.rule
+注文の起きること.rule	order_happens.rule
+なんでも取り消す注文.rule	order_cancels_everything.rule
+修理の見積り.rule	repair_quote.rule

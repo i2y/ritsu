@@ -1,0 +1,29 @@
+rule なんでも取り消す注文(order_cancels_everything_ja) v1
+description "注文の起きることと同じ注文で、役に立たない表を持つもの。どの出来事でも取消になる。`never` と `once` の行は気にしないので `check` はエラーを出さず、ほかの状態に着かないと警告が言うだけ。`possible 配達済` を足すと E146 で止まる。"
+
+enum 状態(order_state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 配達済(delivered) | 取消(cancelled)
+enum 出来事(happening) = 入金(pay) | 出荷(ship) | 配達(deliver) | 取消依頼(cancel)
+
+inputs
+  状態(state)   : 状態
+  出来事(event) : 出来事
+
+outputs
+  次の状態(next_state) : 状態
+  返金額(refund)       : money[円]  round down(1円)
+
+table 遷移(step)
+policy unique
+| 状態   | 出来事 | -> 次の状態 | 返金額 |
+| 受付   | -      | 取消        | 0円    |
+| 入金済 | -      | 取消        | 0円    |
+| 出荷済 | -      | 取消        | 0円    |
+| 配達済 | -      | 状態        | 0円    |
+| 取消   | -      | 状態        | 0円    |
+
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  initial 受付
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円

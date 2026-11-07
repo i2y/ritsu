@@ -1,0 +1,26 @@
+rule repair_quote v1
+description "What a repair shop quotes, and what has to come out of the table: a job that is approved, a gold job that is approved, a large basic job. A table that answers `false` to everything keeps the `never` line as well."
+
+enum member_tier = basic | gold
+
+inputs
+  tier  : member_tier
+  tools : number  range >=0 <=10
+
+never tier = gold, tools = 0
+
+outputs
+  fee      : money[USD]  round up(1USD)
+  approved : bool
+
+table quote
+policy first
+| tier  | tools | -> fee | approved |
+| gold  | >5    | 200USD | true     |
+| gold  | -     | 50USD  | true     |
+| basic | >8    | 150USD | false    |
+| basic | -     | 10USD  | false    |
+
+possible approved = true
+possible tier = gold, approved = true
+possible fee > 100USD, tier = basic

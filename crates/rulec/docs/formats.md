@@ -61,6 +61,29 @@ still means the same thing, and `v` says which version wrote the line.
 | `fix` | `kind` from the closed set below, and `text`: the rewritten form, ready to paste. Language independent, no prose |
 | `key` | the identity `--diff-base` compares on. Two runs that name the same finding use the same key |
 
+**A file with `possible` lines has one more line** (§15.287), after its findings, and it is the only
+line without `severity`; read `kind` first. A file with no such line prints nothing more.
+
+```json
+{"v":2,"kind":"possible","file":"tests/corpus/order_happens.rule","possible":[
+ {"line":36,"claim":"possible delivered","result":"holds",
+  "witness":{"inputs":{"state":"shipped","event":"deliver"},"outputs":{"next_state":"delivered","refund":0},
+             "trace":[{"inputs":{"state":"received","event":"pay"},"outputs":{"next_state":"paid","refund":0},"rows":[{"table":"step","row":1}]},…]}},
+ {"line":41,"claim":"possible event = cancel, refund = 500JPY","result":"holds",
+  "witness":{"inputs":{"state":"paid","event":"cancel"},"outputs":{"next_state":"cancelled","refund":500}}}]}
+```
+
+| field | meaning |
+|---|---|
+| `line` | the line of the file |
+| `claim` | the claim as it reads, one per pair: `possible cancelled after paid` |
+| `result` | `holds`, `absent` (E146) or `undecided` (W127, W135) |
+| `witness` | where it holds: `trace` as E126 has it, and `inputs` and `outputs` of the last call. A line outside a `machine` has one call and no `trace`. A case that starts there takes no call, and `witness` is `{}` |
+| `why` | where it does not: **prose**, the same note the finding gives |
+
+The line is written only when the tables hold (§15.148): a file stopped before the machine's claims has
+findings and no such line.
+
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
 `add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`,
 `flip_bound`, `narrow_contract`, `rewrite_literal`, `none`. `rewrite_literal` is one literal as
@@ -791,6 +814,18 @@ after the first, and `always`, one per line; neither key is there otherwise:
 with a module gives it. The NumPy plan lists the same under `machine.more`, each
 `{"in":…,"out":…,"initial":…}`.
 
+A machine with `possible` lines (§15.287) adds `possible`, one entry per line as written, and a rule
+with such lines outside its `machine` carries `possible` at the top level. Neither key is there
+otherwise. `check` has found the calls; these are the lines:
+
+```json
+"machine":{…,"possible":[{"said":"possible delivered","states":["delivered"],"after":[]},
+  {"said":"possible refund >0JPY after shipped","output":"refund","cell":">0JPY","after":["shipped"]},
+  {"said":"possible attempts = 2 when pending","tests":[{"input":"attempts","cell":"2"}],"when":["pending"]}]},
+"possible":[{"said":"possible event = cancel, refund = 500JPY",
+  "conds":[{"name":"event","cell":"= cancel"},{"name":"refund","cell":"= 500JPY"}]}]
+```
+
 A file with a `prerequisites` block (§15.222) — a rule, or an `enums` file — carries
 `prerequisites` at the top level, one entry per block; the key is absent otherwise:
 
@@ -1087,6 +1122,18 @@ certificate hands over, so it holds of the rule too. A world is `Machine.world`,
 with the rows that do not take its coordinates left out, and `stepIn_world` and
 `reachesIn_world` say that every call and every state of a case of the world is one of that
 machine's — so the theorems above, applied to it, speak for the cases of the world.
+
+A `possible` line (§15.287) is `machine.possible`, one entry per pair: `line`, `said`, `after`, `world`, `path`,
+and `form` with what it asks: `state` with `state`, or `output` with `answer`, what a `once` line's entry
+holds. `path` is calls in the shape of a finish path's. A checker walks them from the initial state, each
+one a call that really happens (`Machine.callOk`) in one world, and holds the end to the line:
+`happens_of_reachedOk` and `answers_of_answeredOk` say what a pass settles. An answer stands only on a row
+that writes a value the test takes; a row that works its value out is not shown here. A line that cannot be
+laid is named in `uncertified`, and a held input something else reads lays none. Over carried values the
+entries are `machine.carried.possible`, each call run as a finish path's is, with `form` also `values`
+(`when`, `tests`), which `carries_of_carriesOk` settles. A `possible` line outside a `machine` is the
+top-level `possible`, each with its `witness`: the call is listed, and what it answers is not worked out by
+either program, so each one comes out as stated. `rulec test` plays the call.
 
 A machine that carries more than its state is `proofs/RulecCert/Carried.lean` (§15.232). There a
 case is a configuration — the state and the value of each carried thing — and a call that really
@@ -1402,7 +1449,7 @@ makes the next call **from the state the call before it answered**, as the langu
 value — the runner does not read it back out of JSON. There is a sequence for every transition
 a case can make and every two that can follow one another, each the shortest from the initial
 state that ends with them and each passing the `held` inputs the same value on every call, and
-one for each `scenario`; `why` says which. The expected file
+one for each `scenario`, one for each `possible` claim that takes a call, with the claim as its `why`; `why` says which. The expected file
 starts with `{"initial":…,"final":[…]}`, what the runner has to print for the first line, and
 then has one fixtures record per call, the carried input filled in, so a runner that hands the
 state over wrongly shows up as a record whose `in` differs.

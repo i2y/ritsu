@@ -1,0 +1,41 @@
+rule order_happens v1
+description "How a mail order moves on with each event, and what has to happen for the table to be doing its job: a delivery, a cancellation after payment or shipping, a refund after shipping. The `never` and `once` lines alone are kept by a table that does nothing (see order_cancels_everything)."
+
+enum order_state = received | paid | shipped | delivered | cancelled
+enum happening = pay | ship | deliver | cancel
+
+inputs
+  state : order_state
+  event : happening
+
+outputs
+  next_state : order_state
+  refund     : money[JPY]  round down(1JPY)
+
+table step
+policy unique
+| state     | event         | -> next_state | refund |
+| received  | pay           | paid          | 0JPY   |
+| received  | cancel        | cancelled     | 0JPY   |
+| received  | ship, deliver | state         | 0JPY   |
+| paid      | ship          | shipped       | 0JPY   |
+| paid      | cancel        | cancelled     | 500JPY |
+| paid      | pay, deliver  | state         | 0JPY   |
+| shipped   | deliver       | delivered     | 0JPY   |
+| shipped   | cancel        | cancelled     | 300JPY |
+| shipped   | pay, ship     | state         | 0JPY   |
+| delivered | -             | state         | 0JPY   |
+| cancelled | -             | state         | 0JPY   |
+
+machine order over step
+  carry    state -> next_state
+  initial  received
+  final    delivered, cancelled
+  never    shipped after cancelled
+  once     refund >0JPY
+  possible delivered
+  possible cancelled after paid, shipped
+  possible refund >0JPY after shipped
+
+# Outside the machine, one call: a cancellation that pays back.
+possible event = cancel, refund = 500JPY

@@ -67,7 +67,8 @@ pub enum Flag {
 pub struct Edge {
     pub from: String,
     pub to: String,
-    /// One per `once` line, in order.
+    /// One per `once` line, in order, and then one per `possible` line about an output
+    /// ([`answer_lines`], §15.287).
     pub flags: Vec<Flag>,
     /// The row that decided the carried output, as `(table, row)`.
     pub row: Option<(String, usize)>,
@@ -247,6 +248,8 @@ pub struct Analysis {
     /// The calls that really happen, from where a case starts (§15.217). Empty for a machine
     /// that carries only its state.
     pub real: Real,
+    /// One per pair of each `possible` line, in the order written (§15.287).
+    pub possible_claims: Vec<crate::possible::Claim>,
 }
 
 impl Analysis {
@@ -473,7 +476,7 @@ pub fn coord_text(ax: &Axis, ci: usize) -> String {
 }
 
 /// The numeric boundaries a cell names, in the unit of `ty`.
-fn cell_bounds(cell: &Cell, ty: &Ty) -> Vec<Rat> {
+pub(crate) fn cell_bounds(cell: &Cell, ty: &Ty) -> Vec<Rat> {
     let ty = match ty {
         Ty::Opt(t) => t.as_ref(),
         t => t,
@@ -497,7 +500,7 @@ fn cell_bounds(cell: &Cell, ty: &Ty) -> Vec<Rat> {
 /// row writes into it, followed through the tables in between. A `once` line tests the
 /// output, so each of these is cut at the line's boundaries — which is what makes one input
 /// stand for its whole cell, as a table's own cell makes it for the column it tests.
-fn sources(f: &RuleFile, name: &str) -> Vec<String> {
+pub(crate) fn sources(f: &RuleFile, name: &str) -> Vec<String> {
     let inputs: BTreeSet<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
     let computed = |n: &str| {
         f.items.iter().any(|it| match it {
@@ -530,48 +533,80 @@ fn sources(f: &RuleFile, name: &str) -> Vec<String> {
     out
 }
 
-/// The boundaries every `once` line adds, and the computed columns it makes tested.
+/// A `possible` line about one output (§15.287), as what it is to a call: a test on the answer, read
+/// the way a `once` line's is. `None` for a line about states or carried values.
+fn possible_output(f: &RuleFile, m: &MachineDecl, p: &PossibleDecl) -> Option<OnceDecl> {
+    let [(n, cell, csp)] = p.tests.as_slice() else { return None };
+    if !f.outputs.iter().any(|o| o.name.text == n.text) || m.more().iter().any(|(i, _)| *i == n.text) {
+        return None;
+    }
+    Some(OnceDecl { output: n.clone(), cell: cell.clone(), cell_span: csp.clone(), span: p.span.clone() })
+}
+
+/// What a call's answer is read against, in the order of an edge's `flags`: the `once` lines, then the
+/// `possible` lines about an output (§15.287).
+pub(crate) fn answer_lines(f: &RuleFile, m: &MachineDecl) -> Vec<OnceDecl> {
+    let mut out = m.onces.clone();
+    out.extend(m.possibles.iter().filter_map(|p| possible_output(f, m, p)));
+    out
+}
+
+/// Where a test on an output cuts: at the cell's boundaries, on each name the output takes its value
+/// from, and the computed ones among those become tested columns.
+pub(crate) fn output_cuts(f: &RuleFile, c: &Checked, output: &str, cell: &Cell, extra: &mut Vec<(String, Rat)>, more: &mut BTreeSet<String>) {
+    let inputs: BTreeSet<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
+    let Some(oty) = c.ty_of(output) else { return };
+    let bounds = cell_bounds(cell, &oty);
+    if bounds.is_empty() {
+        return;
+    }
+    let mut srcs = sources(f, output);
+    // An output that is a `define` of its own name is its own source.
+    if f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == output)) && !srcs.iter().any(|s| s == output) {
+        srcs.push(output.to_string());
+    }
+    for s in srcs {
+        if !inputs.contains(s.as_str()) {
+            more.insert(s.clone());
+        }
+        for b in &bounds {
+            extra.push((s.clone(), *b));
+        }
+    }
+}
+
+/// The boundaries every `once` line adds, and every `possible` line about an output (§15.287), and the
+/// computed columns they make tested.
 fn once_cuts(f: &RuleFile, c: &Checked, m: &MachineDecl) -> (Vec<(String, Rat)>, BTreeSet<String>) {
     let mut extra = Vec::new();
     let mut more = BTreeSet::new();
-    let inputs: BTreeSet<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
-    for on in &m.onces {
-        let Some(oty) = c.ty_of(&on.output.text) else { continue };
-        let bounds = cell_bounds(&on.cell, &oty);
-        if bounds.is_empty() {
-            continue;
-        }
-        let mut srcs = sources(f, &on.output.text);
-        // An output that is a `define` of its own name is its own source.
-        if f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == on.output.text)) && !srcs.contains(&on.output.text) {
-            srcs.push(on.output.text.clone());
-        }
-        for s in srcs {
-            if !inputs.contains(s.as_str()) {
-                more.insert(s.clone());
-            }
-            for b in &bounds {
-                extra.push((s.clone(), *b));
-            }
-        }
+    for on in answer_lines(f, m) {
+        output_cuts(f, c, &on.output.text, &on.cell, &mut extra, &mut more);
     }
     (extra, more)
+}
+
+/// Whether a test on `name` reads a string the caller passes: the walk has one coordinate for every
+/// string no cell names, so one call does not stand for the others there.
+pub(crate) fn reads_a_string(f: &RuleFile, c: &Checked, name: &str) -> bool {
+    let is_str = |n: &str| c.ty_of(n).is_some_and(|t| *t.present() == Ty::Str);
+    is_str(name) && sources(f, name).iter().any(|s| is_str(s))
 }
 
 /// Whether the answer to `on` is one flag over the whole cell: the output is one value there,
 /// or it is read off a column whose coordinate lies wholly on one side of every boundary the
 /// cell names.
-fn flag_settled(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], rows: &[(String, usize)], on: &OnceDecl) -> bool {
-    if crate::vdiff::names_constant(f, c, axes, cell, rows, std::slice::from_ref(&on.output.text)) {
+pub(crate) fn flag_settled(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], rows: &[(String, usize)], output: &str, tested: &Cell) -> bool {
+    if crate::vdiff::names_constant(f, c, axes, cell, rows, &[output.to_string()]) {
         return true;
     }
     let fired: HashMap<&str, usize> = rows.iter().map(|(t, r)| (t.as_str(), *r)).collect();
     // Follow the output to the column it is read off in this cell.
-    let mut n = on.output.text.clone();
+    let mut n = output.to_string();
     for _ in 0..16 {
         if let Some(ai) = axes.iter().position(|a| a.col == n) {
             let Some(ty) = c.ty_of(&n) else { return false };
-            let bounds = cell_bounds(&on.cell, &ty);
+            let bounds = cell_bounds(tested, &ty);
             return match &axes[ai].coords[cell[ai]] {
                 Coord::Open(lo, hi) => !bounds.iter().any(|b| {
                     lo.is_none_or(|l| b.cmp_to(l) == std::cmp::Ordering::Greater) && hi.is_none_or(|h| b.cmp_to(h) == std::cmp::Ordering::Less)
@@ -678,7 +713,7 @@ fn coupled_inputs(f: &RuleFile, fixed: &[String], axes: &[Axis]) -> Vec<String> 
 }
 
 /// The value of a named output in an answer.
-fn out_val<'b>(outs: &'b [(String, Option<Val>)], name: &str) -> Option<&'b Val> {
+pub(crate) fn out_val<'b>(outs: &'b [(String, Option<Val>)], name: &str) -> Option<&'b Val> {
     outs.iter().find(|(k, _)| k == name).and_then(|(_, v)| v.as_ref())
 }
 
@@ -741,8 +776,8 @@ fn more_complete(f: &RuleFile, c: &Checked, m: &MachineDecl) -> Option<Vec<(Stri
 
 /// Where a carried number is cut when it is walked in intervals (§15.217), on top of where the
 /// rule's own cells cut it: at every value a row writes into its output, at every boundary an
-/// `always` line names for it, and at the value a case starts with — so the start is a point,
-/// and an interval is either wholly inside an `always` cell or wholly outside it.
+/// `always` or a `possible` line names for it (§15.287), and at the value a case starts with — so
+/// the start is a point, and an interval is either wholly inside such a cell or wholly outside it.
 fn interval_cuts(c: &Checked, m: &MachineDecl, items: &[(String, String, Val, Ty, Option<(Rat, Rat)>)]) -> Vec<(String, Rat)> {
     let mut out = Vec::new();
     for (i, o, v, ty, range) in items {
@@ -761,6 +796,15 @@ fn interval_cuts(c: &Checked, m: &MachineDecl, items: &[(String, String, Val, Ty
         }
         for al in &m.alwayses {
             for (n, cell, _) in &al.tests {
+                if n.text == *i {
+                    for b in cell_bounds(cell, ty) {
+                        out.push((i.clone(), b));
+                    }
+                }
+            }
+        }
+        for p in &m.possibles {
+            for (n, cell, _) in &p.tests {
                 if n.text == *i {
                     for b in cell_bounds(cell, ty) {
                         out.push((i.clone(), b));
@@ -1017,6 +1061,8 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
         range_claims: Vec::new(),
         finish_open: None,
         real: Real::default(),
+        // Each is undecided until the walk says otherwise: what returns early below has not walked.
+        possible_claims: crate::possible::machine_claims(m),
     };
     let (mut extra, more) = once_cuts(f, c, m);
     let cap = (budget / NODES_PER_CELL).max(1) as u128;
@@ -1101,9 +1147,11 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
     a.held = fixed_idx.iter().map(|&i| axes[i].col.clone()).collect();
     a.held_axes = fixed_idx.iter().map(|&i| axes[i].clone()).collect();
     a.coupled = coupled_inputs(f, &a.held, &axes);
-    let tys: Vec<Option<Ty>> = m.onces.iter().map(|o| c.ty_of(&o.output.text)).collect();
+    let counted = answer_lines(f, m);
+    let n_once = m.onces.len();
+    let tys: Vec<Option<Ty>> = counted.iter().map(|o| c.ty_of(&o.output.text)).collect();
     let flags_of = |outs: &[(String, Option<Val>)]| -> Vec<Flag> {
-        m.onces
+        counted
             .iter()
             .zip(tys.iter())
             .map(|(o, ty)| match (out_val(outs, &o.output.text), ty) {
@@ -1206,8 +1254,11 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
                 let next = next_of(&ans.outs);
                 let next_ok = next.is_some()
                     && crate::vdiff::names_constant(f, c, &axes, &cell, &ans.rows, &[cout.to_string()]);
-                let settled_flags: Vec<bool> =
-                    m.onces.iter().map(|o| flag_settled(f, c, &axes, &cell, &ans.rows, o)).collect();
+                let settled_flags: Vec<bool> = counted
+                    .iter()
+                    .enumerate()
+                    .map(|(k, o)| flag_settled(f, c, &axes, &cell, &ans.rows, &o.output.text, &o.cell) && (k < n_once || !reads_a_string(f, c, &o.output.text)))
+                    .collect();
                 let edge = |inp: &HashMap<String, Val>, an: &crate::vdiff::Answer, flags: Vec<Flag>, to: String, tc: Vec<usize>, approx: bool| Edge {
                     from: s.clone(),
                     to,
@@ -1273,7 +1324,7 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
                     // ends; whatever they answer is a transition that really happens.
                     let mut seen: Vec<(HashMap<String, Val>, crate::vdiff::Answer)> = vec![(inputs.clone(), ans)];
                     seen.extend(walker.others(&cell, &inputs));
-                    let mut observed_flags: Vec<BTreeSet<Flag>> = vec![BTreeSet::new(); m.onces.len()];
+                    let mut observed_flags: Vec<BTreeSet<Flag>> = vec![BTreeSet::new(); counted.len()];
                     let mut observed_to: BTreeSet<(String, Vec<usize>)> = BTreeSet::new();
                     for (inp, an) in &seen {
                         let Some(to) = next_of(&an.outs) else { continue };
@@ -1287,7 +1338,7 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
                             add(&mut a, e);
                         }
                     }
-                    let open: Vec<usize> = (0..m.onces.len()).filter(|&k| !settled_flags[k]).collect();
+                    let open: Vec<usize> = (0..counted.len()).filter(|&k| !settled_flags[k]).collect();
                     if !next_ok || targets.iter().any(|t| t.is_none()) {
                         // Another next state, or another value of a carried boolean or enum, may
                         // hide in the cell.
@@ -1310,9 +1361,24 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
                                 }
                             }
                         }
-                        let covered = open.len() == 1 && observed_flags[open[0]].len() == 2;
+                        // Whether the calls seen have already answered both ways. One open `once`
+                        // line, as it always was, and every open `possible` line each on its own:
+                        // a `possible` line asks for one call and reads no other line's flag
+                        // (§15.287).
+                        let open_once: Vec<usize> = open.iter().copied().filter(|&k| k < n_once).collect();
+                        let once_covered = open_once.len() == 1 && observed_flags[open_once[0]].len() == 2;
+                        let both_ways = |k: usize| if k < n_once { once_covered } else { observed_flags[k].len() == 2 };
+                        let covered = !open.is_empty() && (open_once.is_empty() || once_covered) && open.iter().all(|&k| k < n_once || both_ways(k));
                         if !covered && !open.is_empty() {
                             if let Some(tc) = to_of(&an.outs) {
+                                // A line the calls seen have settled keeps what this call answers.
+                                let mut fl = fl;
+                                let read = flags_of(&an.outs);
+                                for &k in &open {
+                                    if both_ways(k) {
+                                        fl[k] = read[k];
+                                    }
+                                }
                                 let e = edge(inp, an, fl, to, tc, false);
                                 add(&mut a, e);
                             }
@@ -1343,6 +1409,7 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
     if !a.more.is_empty() {
         settle_more(&mut a, f, c, m, &mut walker);
     }
+    settle_possible(&mut a, f, c, m, &mut walker);
     Some(a)
 }
 
@@ -1631,6 +1698,7 @@ fn world_inputs(a: &Analysis) -> HashMap<Vec<usize>, Vec<(String, Val)>> {
 /// what comes back. It stops at `REAL_STATES` places or `REAL_RUNS` calls.
 fn real_calls(a: &Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: &mut Walker) -> Real {
     let mut r = Real { complete: true, ..Default::default() };
+    let counted = answer_lines(f, m);
     let mut ids: HashMap<(String, Vec<String>, Vec<usize>), usize> = HashMap::new();
     let mut intern = |r: &mut Real, s: &str, vals: &[Val], w: &[usize]| -> (usize, bool) {
         let k = (s.to_string(), vals.iter().map(crate::vectors::show).collect::<Vec<_>>(), w.to_vec());
@@ -1667,7 +1735,7 @@ fn real_calls(a: &Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: 
             let (Some(fv), Some(tv)) = (fv, tv) else { continue };
             let (from, _) = intern(&mut r, &e.from, &fv, &e.world);
             let (to, _) = intern(&mut r, &e.to, &tv, &e.world);
-            r.calls.push((from, concrete(m, c, e.clone()), Some(to)));
+            r.calls.push((from, concrete(&counted, c, e.clone()), Some(to)));
         }
         return r;
     }
@@ -1692,7 +1760,7 @@ fn real_calls(a: &Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: 
         r.starts.push(i);
         q.push_back(i);
     }
-    let tys: Vec<Option<Ty>> = m.onces.iter().map(|o| c.ty_of(&o.output.text)).collect();
+    let tys: Vec<Option<Ty>> = counted.iter().map(|o| c.ty_of(&o.output.text)).collect();
     let deciders: BTreeSet<String> = f
         .items
         .iter()
@@ -1749,8 +1817,7 @@ fn real_calls(a: &Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: 
                 if !made.insert((id, to, row.clone())) {
                     continue;
                 }
-                let flags = m
-                    .onces
+                let flags = counted
                     .iter()
                     .zip(tys.iter())
                     .map(|(o, ty)| match (out_val(&an.outs, &o.output.text), ty) {
@@ -1781,9 +1848,8 @@ fn real_calls(a: &Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: 
 
 /// A call the walk saw, with its `once` flags read off what it answers: a call that really
 /// happens counts or does not.
-fn concrete(m: &MachineDecl, c: &Checked, mut e: Edge) -> Edge {
-    e.flags = m
-        .onces
+fn concrete(counted: &[OnceDecl], c: &Checked, mut e: Edge) -> Edge {
+    e.flags = counted
         .iter()
         .map(|o| match (out_val(&e.outputs, &o.output.text), c.ty_of(&o.output.text)) {
             (Some(v), Some(ty)) if crate::eval::cell_matches(c, &o.cell, v, &ty) => Flag::Yes,
@@ -2045,16 +2111,236 @@ fn settle_more(a: &mut Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, wal
 }
 
 // ---------------------------------------------------------------------------------------
+// What is to happen (§15.287)
+// ---------------------------------------------------------------------------------------
+
+/// What one pair of a `possible` line asks for.
+enum Asked<'p> {
+    /// A case is in this state.
+    State(&'p str),
+    /// A call answers an output the cell accepts: the place of the line in an edge's `flags`, and the
+    /// output's name.
+    Answer(usize, &'p str),
+    /// A case is somewhere the carried values fit the line's cells.
+    Place,
+}
+
+/// The `possible` lines (§15.287), settled the way round from `never` and its neighbours. A claim that
+/// something bad is reached holds where the walk, which takes in more than happens, does not reach it,
+/// and is broken only by calls that really happen. This one holds only by calls that really happen,
+/// each one the same case's; it fails only where the walk, which takes in more than happens, reached
+/// everything it could and did not find it; and anything between is not settled.
+fn settle_possible(a: &mut Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: &mut Walker) {
+    if m.possibles.is_empty() {
+        return;
+    }
+    let real = if a.more.is_empty() { real_calls(a, f, c, m, walker) } else { a.real.clone() };
+    let mut out_of: Vec<Vec<usize>> = vec![Vec::new(); real.nodes.len()];
+    for (i, (from, _, _)) in real.calls.iter().enumerate() {
+        out_of[*from].push(i);
+    }
+    let edges = a.edges.clone();
+    let succ = |n: &Node| -> Vec<(usize, Node)> {
+        edges
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.from == n.0 && e.world == n.1 && e.from_carry == n.2)
+            .map(|(i, e)| (i, (e.to.clone(), n.1.clone(), e.to_carry.clone())))
+            .collect()
+    };
+    let starts: Vec<Node> = a.nodes.iter().filter(|n| n.0 == a.initial && !a.node_parent.contains_key(*n)).cloned().collect();
+    let mut flag = m.onces.len();
+    let mut claims = Vec::new();
+    for (li, p) in m.possibles.iter().enumerate() {
+        let answer = possible_output(f, m, p).map(|o| {
+            flag += 1;
+            (flag - 1, o.output.text)
+        });
+        let more = a.more.clone();
+        let fits = |vals: &[Val]| -> bool {
+            p.tests.iter().all(|(n, cell, _)| match more.iter().position(|it| it.input == n.text) {
+                Some(k) => crate::eval::cell_matches(c, cell, &vals[k], &more[k].ty),
+                None => false,
+            })
+        };
+        let within = |vals: &[Val]| more.iter().zip(vals).all(|(it, v)| place_of(it, v) != Some(OUT));
+        for (said, target, before, place) in crate::possible::pairs(p) {
+            let asked = match (&answer, target) {
+                (Some((k, name)), _) => Asked::Answer(*k, name.as_str()),
+                (None, Some(s)) if p.tests.is_empty() => Asked::State(s),
+                _ => Asked::Place,
+            };
+            let been = |s: &str| before.is_none_or(|b| b == s);
+            let speaks = |s: &str| place.is_none_or(|w| w == s);
+
+            // The calls that really happen, nearest first.
+            let first: Vec<(usize, bool)> = real.starts.iter().map(|&n| (n, been(&real.nodes[n].0))).collect();
+            let (order, parent) = bfs_from(first, |(n, seen): &(usize, bool)| {
+                out_of[*n].iter().filter_map(|&i| real.calls[i].2.map(|t| (i, (t, *seen || been(&real.nodes[t].0))))).collect()
+            });
+            let trace_to = |b: &(usize, bool)| -> Vec<Edge> { path_to(&parent, b).into_iter().map(|i| real.calls[i].1.clone()).collect() };
+            let shown: Option<Vec<Edge>> = match asked {
+                Asked::State(s) => order.iter().find(|(n, seen)| *seen && real.nodes[*n].0 == s).map(trace_to),
+                Asked::Answer(k, _) => order.iter().filter(|(_, seen)| *seen).find_map(|b| {
+                    out_of[b.0].iter().find(|&&i| real.calls[i].1.flags[k] == Flag::Yes).map(|&i| {
+                        let mut t = trace_to(b);
+                        t.push(real.calls[i].1.clone());
+                        t
+                    })
+                }),
+                Asked::Place => order.iter().find(|(n, _)| speaks(&real.nodes[*n].0) && within(&real.nodes[*n].1) && fits(&real.nodes[*n].1)).map(trace_to),
+            };
+
+            // The walk: every place a case can be, and calls that may not happen.
+            let first: Vec<(Node, bool)> = starts.iter().map(|n| (n.clone(), been(&n.0))).collect();
+            let (walked, _) = bfs_from(first, |(n, seen): &(Node, bool)| {
+                succ(n)
+                    .into_iter()
+                    .map(|(i, to)| {
+                        let t = *seen || been(&to.0);
+                        (i, (to, t))
+                    })
+                    .collect()
+            });
+            let coord_fits = |n: &Node| -> bool {
+                !n.2.contains(&OUT) && {
+                    let vals: Option<Vec<Val>> = a.more.iter().zip(&n.2).map(|(it, &ci)| crate::vdiff::coord_val(&it.axis, ci)).collect();
+                    vals.is_some_and(|vals| fits(&vals))
+                }
+            };
+            let may = match asked {
+                Asked::State(s) => walked.iter().any(|(n, seen)| *seen && n.0 == s),
+                Asked::Answer(k, _) => walked.iter().any(|(n, seen)| *seen && succ(n).iter().any(|(i, _)| edges[*i].flags[k] != Flag::No)),
+                Asked::Place => walked.iter().any(|(n, _)| speaks(&n.0) && coord_fits(n)),
+            };
+            let answered_yes = match asked {
+                Asked::Answer(k, _) => walked.iter().any(|(n, seen)| *seen && succ(n).iter().any(|(i, _)| edges[*i].flags[k] == Flag::Yes)),
+                _ => true,
+            };
+            let mut open: Vec<String> = walked.iter().map(|(n, _)| n).filter(|n| a.unknown.get(&(n.0.clone(), n.2.clone())).copied().unwrap_or(0) > 0).map(|n| n.0.clone()).collect();
+            open.sort();
+            open.dedup();
+            let verdict = if let Some(t) = shown {
+                crate::possible::Possibly::Shown(t)
+            } else if may && !answered_yes {
+                crate::possible::Possibly::Undecided(tr!(
+                    "セルに入る呼び出しがあるかを、区画全体では決めきれませんでした",
+                    "whether a call answers what the cell accepts could not be settled over its whole cell"
+                ))
+            } else if may && !a.more.is_empty() && (!a.whole || a.held.is_empty()) {
+                let mut why = tr!(
+                    "持ち越す値を区間にまとめた上では手順が見つかりましたが、本当に起きる呼び出しでは作れませんでした",
+                    "a sequence was found over the intervals of the carried values, and it could not be made from calls that really happen"
+                );
+                if !real.complete {
+                    why.push_str(&tr!(
+                        "（本当に起きる呼び出しは、{} 通りの状態まで調べました）",
+                        " (the calls that really happen were followed to {} places a case can be in)",
+                        real.nodes.len()
+                    ));
+                }
+                crate::possible::Possibly::Undecided(why)
+            } else if may {
+                crate::possible::Possibly::Undecided(tr!(
+                    "見つかった手順は、途中で {} を変えないと通れません。一つの値のまま通れるかまでは、調べていません",
+                    "the sequence found needs {} to change partway, and whether one value carries it is not followed",
+                    a.held.join(", ")
+                ))
+            } else if !open.is_empty() {
+                crate::possible::Possibly::Undecided(tr!(
+                    "状態 {} からの呼び出しに、答えを出す入力を作れず、起こらないとも示せなかった区画があります",
+                    "calls from state {} include cells no input was built for and none shown impossible",
+                    open.join(" / ")
+                ))
+            } else {
+                crate::possible::Possibly::Absent(absent_note(a, c, p, &asked, before, place, &walked, &succ))
+            };
+            claims.push(crate::possible::Claim { decl: Some(li), line: p.span.line, said, verdict });
+        }
+    }
+    a.possible_claims = claims;
+}
+
+/// What the walk does see, for a claim it did not find (E146): there is no sequence to show, so the
+/// finding says what is there instead.
+#[allow(clippy::too_many_arguments)]
+fn absent_note(a: &Analysis, c: &Checked, p: &PossibleDecl, asked: &Asked, before: Option<&str>, place: Option<&str>, walked: &[(Node, bool)], succ: &dyn Fn(&Node) -> Vec<(usize, Node)>) -> String {
+    let states = |set: &mut dyn Iterator<Item = &String>| -> Vec<String> {
+        let mut v: Vec<String> = Vec::new();
+        for s in set {
+            if !v.contains(s) {
+                v.push(s.clone());
+            }
+        }
+        v
+    };
+    let reached = states(&mut walked.iter().map(|(n, _)| &n.0));
+    let not_there = |b: &str| tr!("{b} には着きません。{} から着ける状態は {} です。", "{b} is never reached. From {} a case reaches {}.", a.initial, reached.join(" / "));
+    if let Some(b) = before {
+        if !reached.iter().any(|s| s == b) {
+            return not_there(b);
+        }
+    }
+    match asked {
+        Asked::State(s) => match before {
+            Some(b) => {
+                let after = states(&mut walked.iter().filter(|(_, seen)| *seen).map(|(n, _)| &n.0));
+                tr!("{b} のあとに着ける状態は {} です。{s} はそこにありません。", "After {b} a case reaches {}. {s} is not among them.", after.join(" / "))
+            }
+            None => tr!("{} から着ける状態は {} です。{s} はそこにありません。", "From {} a case reaches {}. {s} is not among them.", a.initial, reached.join(" / ")),
+        },
+        Asked::Answer(_, name) => {
+            let mut said: Vec<String> = Vec::new();
+            for (n, _) in walked.iter().filter(|(_, seen)| *seen) {
+                for (i, _) in succ(n) {
+                    if let Some(v) = out_val(&a.edges[i].outputs, name) {
+                        let h = human(c, name, v);
+                        if !said.contains(&h) {
+                            said.push(h);
+                        }
+                    }
+                }
+            }
+            let list = if said.len() <= 6 { said.join(" / ") } else { tr!("{} 通りの値", "{} different values", said.len()) };
+            match before {
+                Some(b) => tr!("{b} にいたあとの呼び出しで {name} が答えるのは {list} です。", "After {b}, the calls answer {name} with {list}."),
+                None => tr!("案件が着ける状態からの呼び出しで {name} が答えるのは {list} です。", "From the states a case reaches, the calls answer {name} with {list}."),
+            }
+        }
+        Asked::Place => {
+            let here = place.is_none_or(|w| reached.iter().any(|s| s == w));
+            if !here {
+                return not_there(place.unwrap_or_default());
+            }
+            let mut parts: Vec<String> = Vec::new();
+            for (n, _, _) in &p.tests {
+                let Some(k) = a.more.iter().position(|it| it.input == n.text) else { continue };
+                let cs: BTreeSet<usize> = walked.iter().map(|(x, _)| x).filter(|x| place.is_none_or(|w| w == x.0) && x.2.get(k).is_some_and(|c| *c != OUT)).map(|x| x.2[k]).collect();
+                let part = format!("{} {}", n.text, a.values_text(k, &cs));
+                if !parts.contains(&part) {
+                    parts.push(part);
+                }
+            }
+            let vals = parts.join(&tr!("、", "; "));
+            match place {
+                Some(w) => tr!("案件が {w} にいるとき、{vals} です。", "When a case is in {w}, it has {vals}."),
+                None => tr!("案件が着けるどの状態でも、{vals} です。", "In the states a case reaches, it has {vals}."),
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // Findings
 // ---------------------------------------------------------------------------------------
 
 /// A value as a person reads it: `3000円`, `8%`, `受付`.
-fn human(c: &Checked, name: &str, v: &Val) -> String {
+pub(crate) fn human(c: &Checked, name: &str, v: &Val) -> String {
     v.show(&c.ty_of(name).unwrap_or(Ty::Unknown))
 }
 
 /// One call, in the wire's words.
-fn step_of(c: &Checked, f: &RuleFile, e: &Edge) -> Step {
+pub(crate) fn step_of(c: &Checked, f: &RuleFile, e: &Edge) -> Step {
     let mut inputs: Vec<(String, WVal)> = Vec::new();
     for i in &f.inputs {
         if let Some(v) = e.inputs.get(&i.name.text) {
@@ -2078,7 +2364,7 @@ fn step_of(c: &Checked, f: &RuleFile, e: &Edge) -> Step {
 /// The lines of prose that walk a reader through a trace. A machine that carries more than its
 /// state shows those values beside the state each call is made in, and what the call answers
 /// for them (§15.217).
-fn trace_lines(a: &Analysis, c: &Checked, f: &RuleFile, trace: &[Edge], show: &[String]) -> Vec<String> {
+pub(crate) fn trace_lines(a: &Analysis, c: &Checked, f: &RuleFile, trace: &[Edge], show: &[String]) -> Vec<String> {
     let mut out = vec![tr!("手順（{} から）:", "Calls (from {}):", a.initial)];
     let carried: Vec<&str> = std::iter::once(a.carry.0.as_str()).chain(a.more.iter().map(|it| it.input.as_str())).collect();
     for (k, e) in trace.iter().enumerate() {
@@ -2388,6 +2674,26 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str, budget: usize) -> Vec<Diag> 
                 format!("machine:undecided:range:{}", it.input),
             )),
             Verdict::Holds => {}
+        }
+    }
+    // `possible` (§15.287): what is to happen and does not.
+    for cl in &a.possible_claims {
+        let Some(p) = cl.decl.and_then(|k| m.possibles.get(k)) else { continue };
+        let said = &cl.said;
+        match &cl.verdict {
+            crate::possible::Possibly::Shown(_) => {}
+            crate::possible::Possibly::Absent(what) => out.push(
+                Diag::error("E146", tr!("`{said}` になる呼び出しの並びはありません", "No sequence of calls makes `{said}` happen"))
+                    .at(at(p.span.line))
+                    .key(format!("machine:possible:{said}"))
+                    .mark(p.span.clone(), "")
+                    .note(what.clone())
+                    .note(tr!(
+                        "案件が着ける範囲を全部調べました。行き先や答えを決める表の行を直すか、起きなくてよいことなら `possible` の行を消してください。",
+                        "Everywhere a case can get to was looked at. Correct the rows that decide where a case goes and what it answers, or drop the `possible` line if this need not happen."
+                    )),
+            ),
+            crate::possible::Possibly::Undecided(why) => out.push(undecided_diag(&a, at(p.span.line), p.span.clone(), said.clone(), why, format!("machine:undecided:possible:{said}"))),
         }
     }
     if a.exact {

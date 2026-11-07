@@ -1220,6 +1220,11 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             rank(&mut cond.cell, declared.get(&cond.name.text).and_then(|(e, _)| e.as_ref()));
         }
     }
+    for n in f.possibles.iter_mut() {
+        for cond in &mut n.conds {
+            rank(&mut cond.cell, declared.get(&cond.name.text).and_then(|(e, _)| e.as_ref()));
+        }
+    }
     for it in f.items.iter_mut() {
         let Item::Table(t) = it else { continue };
         let cols: Vec<Option<String>> = t.inputs.iter().map(|(n, _)| declared.get(n).and_then(|(e, _)| e.clone())).collect();
@@ -1233,6 +1238,12 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         for o in &mut m.onces {
             let en = declared.get(&o.output.text).and_then(|(e, _)| e.clone());
             rank(&mut o.cell, en.as_ref());
+        }
+        for p in &mut m.possibles {
+            for (n, cell, _) in &mut p.tests {
+                let en = declared.get(&n.text).and_then(|(e, _)| e.clone());
+                rank(cell, en.as_ref());
+            }
         }
     }
     for (k, it) in f.items.iter_mut().enumerate() {
@@ -2658,6 +2669,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // Whether the combination really does not come is `never_lines`' to say, from the definitions.
     for n in &f.nevers {
         c.never_line(n, f, path);
+    }
+    // `possible` (§15.287): the far side of it, read the same way.
+    for n in &f.possibles {
+        c.possible_line(n, f, path);
     }
 
     // The ranges of the outputs (§15.268): a range written on an output's line is held to what
@@ -4190,6 +4205,229 @@ impl Checked {
         }
     }
 
+    /// A cell of a `possible` line, read as a table's cell on that name would be. What it names is not a
+    /// row, so W111 is left as it was, and a cell that does not fit is the line's own E145.
+    fn possible_cell(&mut self, name: &Name, cell: &Cell, ty: &Ty, csp: &Span, at: &str) {
+        if matches!(cell, Cell::Nothing) && !matches!(ty, Ty::Opt(_)) {
+            self.diags.push(
+                Diag::error("E145", tr!("`possible` の行が、値の無いことを求めています", "A `possible` line asks for an absent value"))
+                    .at(at.to_string())
+                    .mark(name.span.clone(), tr!("{} は optional ではありません", "{} is not optional", name.text))
+                    .note(tr!("`none` が書けるのは、型が `T?` の名前だけです。", "`none` belongs to a name of type `T?`.")),
+            );
+            return;
+        }
+        let sc = *self.scales.get(&name.text).unwrap_or(&1);
+        let (used, used_values) = (self.used.clone(), self.used_values.clone());
+        let before = self.diags.len();
+        self.cell(cell, ty.present(), sc, csp, at, true);
+        self.used = used;
+        self.used_values = used_values;
+        let said = self.diags.split_off(before);
+        for d in said {
+            if d.severity != crate::diag::Severity::Error {
+                self.diags.push(d);
+                continue;
+            }
+            self.diags.push(
+                Diag::error("E145", tr!("`possible` の行のセルが {} に合いません", "A cell of a `possible` line does not fit {}", name.text))
+                    .at(at.to_string())
+                    .mark(csp.clone(), d.title.clone())
+                    .note(tr!("{} の型は {ty} です。", "{} is of type {ty}.", name.text)),
+            );
+        }
+    }
+
+    /// One `possible` line outside a `machine` (§15.287): one call has all of these at once. The names
+    /// are what a call passes or answers: inputs, outputs, and summaries of `elements`.
+    fn possible_line(&mut self, n: &PossibleLine, f: &RuleFile, path: &str) {
+        let at = tr!("{path}:{} 起きること", "{path}:{} possible", n.span.line);
+        let shape = |title: String| Diag::error("E145", title).at(at.clone());
+        let mut seen: Vec<&str> = Vec::new();
+        for cond in &n.conds {
+            let name = cond.name.text.as_str();
+            let sp = &cond.name.span;
+            if seen.contains(&name) {
+                self.diags.push(
+                    shape(tr!("`possible` の行に、同じ名前の条件が二つあります", "A `possible` line has two conditions on one name"))
+                        .mark(sp.clone(), tr!("{name} の条件は前にもあります", "{name} has a condition already"))
+                        .note(tr!(
+                            "一つの名前の条件は一つにしてください。比較は `{name} >= 1 < 5`、値の集合は `{name} = a | b` と書けます。",
+                            "Keep one condition on a name. A comparison is written `{name} >= 1 < 5` and a set of values `{name} = a | b`."
+                        )),
+                );
+                continue;
+            }
+            seen.push(name);
+            let is_output = f.outputs.iter().any(|o| o.name.text == name);
+            let Some(sym) = self.syms.get(name).cloned() else {
+                self.diags.push(
+                    shape(tr!("`possible` の行に、知らない名前があります", "A `possible` line names something that is not there"))
+                        .mark(sp.clone(), tr!("{name} という入力も出力も集計もありません", "there is no input, output or summary called {name}"))
+                        .note(tr!(
+                            "`possible` に書けるのは、一回の呼び出しが渡す入力と答える出力、それに `elements` の集計（`count`・`sum`・`max`・`min`）です。",
+                            "A `possible` line names what one call passes and answers: inputs, outputs, and summaries of `elements` (`count`, `sum`, `max`, `min`)."
+                        )),
+                );
+                continue;
+            };
+            if sym.kind == SymKind::Element {
+                self.diags.push(
+                    shape(tr!("`possible` の行に、要素のフィールドがあります", "A `possible` line names a field of an element"))
+                        .mark(sp.clone(), tr!("{name} は要素ごとの値です", "{name} is a value of each element"))
+                        .note(tr!(
+                            "`possible` は一回の呼び出しの値の組み合わせを書きます。要素のフィールドは、`count`・`sum`・`max`・`min` で集計してから書いてください。",
+                            "A `possible` line is about the values of one call. Summarise a field of an element with `count`, `sum`, `max` or `min`, and name the summary."
+                        )),
+                );
+                continue;
+            }
+            if sym.kind != SymKind::Input && !is_output && !f.is_summary(name) {
+                self.diags.push(
+                    shape(tr!("`possible` の行に、入力でも出力でもない名前があります", "A `possible` line names something that is neither an input nor an output"))
+                        .mark(sp.clone(), tr!("{name} は計算の途中の値です", "{name} is a value worked out along the way"))
+                        .note(tr!(
+                            "呼び出す人に見えるのは、渡す入力と答えの出力です。途中の値について言いたいなら、それを出力にするか、元の入力で書いてください。",
+                            "What a caller sees is the inputs it passes and the outputs it gets. To say something of a value along the way, make it an output, or say it over the inputs it comes from."
+                        )),
+                );
+                continue;
+            }
+            self.possible_cell(&cond.name, &cond.cell, &sym.ty, &cond.name.span, &at);
+        }
+    }
+
+    /// The `possible` lines under a `machine` (§15.287). A word with no cell is a state; a name with a
+    /// cell is an output, or a carried input, and a line is one or the other. `after` belongs to a
+    /// state's line and an output's, and `when` to the carried values'.
+    fn machine_possibles(&mut self, f: &RuleFile, m: &MachineDecl, state_enum: Option<&str>, path: &str) {
+        let at_m = |line: usize| tr!("{path}:{line} ステートマシン {}", "{path}:{line} machine {}", m.name.text);
+        let states: Option<Vec<String>> = state_enum.and_then(|en| self.enums.get(en).cloned());
+        let (state_in, state_out) = m.carried().map(|(i, o)| (i.to_string(), o.to_string())).unwrap_or_default();
+        let carried_in: Vec<String> = m.more().iter().map(|(i, _)| i.to_string()).collect();
+        let carried_out: Vec<String> = m.more().iter().map(|(_, o)| o.to_string()).collect();
+        let outputs: Vec<&str> = f.outputs.iter().map(|o| o.name.text.as_str()).collect();
+        for p in &m.possibles {
+            let at = at_m(p.span.line);
+            let e145 = |title: String, span: &Span, mark: String| Diag::error("E145", title).at(at.clone()).mark(span.clone(), mark);
+            // The states the line names, wherever they stand.
+            let named: Vec<&Name> = p.states.iter().chain(p.after.iter()).chain(p.when.iter()).collect();
+            if let Some(values) = &states {
+                for v in named {
+                    if values.contains(&v.text) {
+                        continue;
+                    }
+                    let is_value = outputs.contains(&v.text.as_str()) || carried_in.contains(&v.text);
+                    let d = e145(tr!("`{}` は状態ではありません", "`{}` is not a state", v.text), &v.span, tr!("`possible` の行", "on the `possible` line"))
+                        .note(tr!("状態は {} です。", "The states are {}.", values.join(" / ")));
+                    self.diags.push(if is_value && p.tests.is_empty() {
+                        d.note(tr!(
+                            "{n} の値について言いたいなら、セルを続けてください（`possible {n} >0`、`possible {n} true`）。",
+                            "To say something of the value of {n}, follow it with a cell (`possible {n} >0`, `possible {n} true`).",
+                            n = v.text
+                        ))
+                    } else {
+                        d
+                    });
+                }
+            }
+            if p.tests.is_empty() {
+                if let Some(w) = p.when.first() {
+                    self.diags.push(
+                        e145(tr!("状態の行に `when` は書けません", "A line of states takes no `when`"), &w.span, String::new())
+                            .note(tr!("`when` は持ち越す値の行に書きます。状態の順序は `after` で書いてください。", "`when` belongs to a line of carried values. Say the order of states with `after`.")),
+                    );
+                }
+                for v in &p.states {
+                    if p.after.iter().any(|a| a.text == v.text) {
+                        self.diags.push(
+                            e145(tr!("`possible` の両側に同じ状態 {} があります", "The same state {} is on both sides of `possible`", v.text), &v.span, String::new()).note(tr!(
+                                "`possible A after B` は、B を通ったあとに A に着く並びがあるという主張です。同じ状態が両側にあると、そこに着いただけで成り立ち、何も言っていないことになります。",
+                                "`possible A after B` says a sequence of calls reaches A once it has been in B. A state on both sides holds as soon as it is reached, which says nothing."
+                            )),
+                        );
+                    }
+                }
+                continue;
+            }
+            // Which each name is.
+            let mut n_out = 0usize;
+            let mut n_carried = 0usize;
+            let mut typed: Vec<(&Name, &Cell, &Span, Ty)> = Vec::new();
+            for (n, cell, csp) in &p.tests {
+                let name = n.text.as_str();
+                if name == state_in || name == state_out {
+                    self.diags.push(
+                        e145(tr!("{name} は状態です", "{name} is the state"), &n.span, String::new())
+                            .note(tr!("状態については、`possible <状態>` と状態の名前を書いてください。", "Of the state, write the state's name: `possible <state>`.")),
+                    );
+                    continue;
+                }
+                let is_out = outputs.contains(&name);
+                let is_in = carried_in.iter().any(|x| x == name);
+                if is_out && is_in {
+                    self.diags.push(
+                        e145(tr!("{name} は出力でもあり、持ち越す入力でもあります", "{name} is both an output and a carried input"), &n.span, String::new())
+                            .note(tr!("どちらについての行か読めないので、どちらかの名前を変えてください。", "The line could be about either, so rename one of them.")),
+                    );
+                    continue;
+                }
+                if !is_in && carried_out.iter().any(|x| x == name) {
+                    let i = m.more().iter().find(|(_, o)| *o == name).map(|(i, _)| i.to_string()).unwrap_or_default();
+                    self.diags.push(
+                        e145(tr!("{name} は持ち越す値の出力です", "{name} is the output of a carried value"), &n.span, String::new())
+                            .note(tr!("持ち越す値については、入力の名前で書いてください（`possible {i} …`）。", "Of a carried value, write its input's name (`possible {i} …`).")),
+                    );
+                    continue;
+                }
+                if !is_out && !is_in {
+                    self.diags.push(
+                        e145(tr!("{name} は出力でも持ち越す入力でもありません", "{name} is neither an output nor a carried input"), &n.span, String::new()).note(tr!(
+                            "`machine` の中の `possible` が読むのは、状態と、一回の呼び出しが答える出力と、持ち越す値です。一回の呼び出しの入力について言いたいなら、`machine` の外に `possible` の行を書いてください。",
+                            "A `possible` line under `machine` reads states, the outputs of a call, and carried values. To say something of a call's inputs, write the `possible` line outside the `machine`."
+                        )),
+                    );
+                    continue;
+                }
+                if is_out {
+                    n_out += 1;
+                } else {
+                    n_carried += 1;
+                }
+                if let Some(ty) = self.syms.get(name).map(|s| s.ty.clone()) {
+                    typed.push((n, cell, csp, ty));
+                }
+            }
+            let mixed = if n_out > 0 && (n_carried > 0 || p.tests.len() > 1) {
+                Some((
+                    tr!("`and` でつなげるのは持ち越す値だけです", "Only carried values are joined by `and`"),
+                    tr!(
+                        "出力は一回の呼び出しの答え、持ち越す値は案件がいる場所なので、同時には言えません。出力は一行に一つ書いてください。",
+                        "An output is what one call answers and a carried value is where a case is, so they are not said at once. Write one output on a line."
+                    ),
+                ))
+            } else if n_out > 0 && !p.when.is_empty() {
+                Some((
+                    tr!("出力の行に `when` は書けません", "A line about an output takes no `when`"),
+                    tr!("`{a}` を使ってください。`possible <出力> <セル> {a} <状態>` は、その状態にいたあとの呼び出しの答えです。", "Use `{a}`: `possible <output> <cell> {a} <state>` is what a call answers after a case has been in that state.", a = crate::kw::AFTER),
+                ))
+            } else if n_carried > 0 && !p.after.is_empty() {
+                Some((
+                    tr!("持ち越す値の行に `after` は書けません", "A line about carried values takes no `after`"),
+                    tr!("`{w}` を使ってください。`possible <持ち越す入力> <セル> {w} <状態>` は、案件がその状態にいるときの値です。", "Use `{w}`: `possible <carried input> <cell> {w} <state>` is the value when a case is in that state.", w = crate::kw::WHEN),
+                ))
+            } else {
+                None
+            };
+            if let Some((title, note)) = mixed {
+                self.diags.push(e145(title, &p.span, String::new()).note(note));
+            }
+            for (n, cell, csp, ty) in typed {
+                self.possible_cell(n, cell, &ty, csp, &at);
+            }
+        }
+    }
+
     /// The value a test on a column of one element looks for (`count … where <column> = <value>`,
     /// the `where` of `max` and `min`): a bool needs none, which is what makes `where 会社名一致`
     /// read the way it is meant to; an enum's has to be one of its values.
@@ -5544,6 +5782,8 @@ impl Checked {
         }
         // The further carried values (§15.217), where they start, and the `always` lines.
         self.machine_more(f, m, path);
+        // The `possible` lines (§15.287): which of the three each is, and do its names fit.
+        self.machine_possibles(f, m, state_enum.as_deref(), path);
         // The states named.
         if let Some(en) = &state_enum {
             let values = self.enums.get(en).cloned().unwrap_or_default();

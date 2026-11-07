@@ -1473,6 +1473,37 @@ A line does everywhere what a `constraint` does:
   rule, `ritsu check` holds the call to it (ritsu's E201 and W201), and what it cannot decide a
   workflow checks when it runs.
 
+### possible
+
+`never` says what does not happen, and a table that answers `false` to everything keeps it. A
+`possible` line is the far side, written the same way: **one call has all of these at once**.
+
+```rule
+never    tier = gold, tools = 0
+possible approved = true
+possible tier = gold, approved = true
+possible fee > 100USD, tier = basic
+```
+
+The conditions are a `never` line's (`=`, `|`, `not:`, comparisons, `none`, `starts_with`), and a
+name is an input, an output or a summary of `elements`. A line changes no generated code. Only a
+call the ranges, a `constraint` and a `never` line take counts. A rule with a `machine` can have
+these too: outside the `machine`, a line is about one call; the machine's own `possible` lines are in
+§6.4.
+
+`rulec check` looks for that call, cutting the inputs at the line's own boundaries, and an output
+worked out from the inputs at its sources':
+
+| what it finds | result | code |
+|---|---|---|
+| a call that has them all | it holds, and `--show-possible` prints the call | none |
+| no such call, and every cell of the inputs was looked at | it does not happen. The finding says what the calls that meet the line's inputs answered, or that the door takes none of them | E146 |
+| neither: a cell no input was built for and none shown impossible, or inputs that do not cut into cells within the budget, where a call found among the vectors' inputs still shows the line | not settled, never said to hold | W135 |
+
+A name nothing declares, a value its column cannot hold, two conditions on one name and a field of
+an element are E145. The call that shows a line stays in the rule's vectors (§11.4), and `rulec doc`
+lists it beside the `never` lines.
+
 ## 6.2 elements and fold
 
 A rule is one decision about one case. Sometimes the case carries a **sequence** — the rows
@@ -1857,6 +1888,9 @@ machine order over step
 | `once <output> <cell>` | in one case, at most one call answers an output the cell accepts: a refund paid, a point granted |
 | `initial <input> <value>` | where a further carried value starts. One for every `carry` line after the first (E072) |
 | `always <input> <cell> and … when <state>, …` | in every state a case can reach — every one on the `when` list, when there is one — each carried value named fits its cell |
+| `possible <state>, … after <state>, …` | a sequence of calls reaches each of the first states, having been in the second. `after` may be left out. The far side of `never` |
+| `possible <output> <cell> after <state>, …` | one call answers a value the cell accepts, having been in the state. `after` may be left out. The far side of `once` |
+| `possible <carried input> <cell> and … when <state>, …` | a case is somewhere with each value in its cell, in the state when `when` names one. The far side of `always` |
 
 `carry` is the whole of what is new about the meaning. **The generated function does not
 change** — it takes the state as an argument and answers the next one, and keeps nothing — so
@@ -1873,6 +1907,7 @@ about every **sequence** of calls the caller can make, and `rulec check` proves 
 | `once` | a sequence of calls in which two calls answer what the cell accepts | E127 |
 | `always` | a sequence of calls that reaches a state the line speaks of with a carried value its cell does not accept | E135 |
 | a carried number's range | a sequence of calls whose last call answers a carried number outside its input's range | E134 |
+| `possible` | what the line says does not happen, wherever a case can get to | E146 |
 | reach | a state no sequence of calls reaches, and a row that applies only in such states | W125, W126 |
 
 Without `held`, every input may take any value on every call, and a sequence that changes the
@@ -1975,6 +2010,60 @@ claims that nothing bad is reached still hold then, since the walk of a class ta
 value's calls, but whether a case can always still reach a final state is reported as
 undecided (W127), and so is a counterexample that could only be followed by changing the value
 partway.
+
+### possible, in a machine
+
+`never`, `once` and `always` say nothing bad happens, and a table that takes no event, or one that
+cancels on every event, keeps them all: `tests/corpus/order_cancels_everything.rule` passes `check`
+with warnings. Write down what is to happen, and that table stops.
+
+```rule
+machine order over step
+  carry    state -> next_state
+  initial  received
+  final    delivered, cancelled
+  never    shipped after cancelled
+  once     refund >0JPY
+  possible delivered
+  possible cancelled after paid, shipped
+  possible refund >0JPY after shipped
+```
+
+A word followed by nothing, by `,` or by `after` is a state; a name followed by a cell is an output
+or a carried input (a name that is both is E145). **A list is a claim for each**: `possible a, b
+after c, d` is four claims, and a finding names the pair. `when a, b` is one claim per state too, and
+`and` joins cells that hold in the same place. `after` reads as in `never`: a call made from the
+`after` state is a call after it, and a state on both sides of the word is E145. A `when` line names no
+state in its cells: of the state, write `possible <state>`.
+
+`possible` holds **only by calls that really happen**:
+
+| result | when | code |
+|---|---|---|
+| it holds | a shortest sequence of real calls was found. A case keeps its `held` inputs, a sequence no one value is shown to make does not count, and over carried numbers walked in intervals only what real calls found again counts | none |
+| it does not | everywhere a case can get to was looked at, cells and intervals alike, and it is not there. There is no bad sequence to print, so the finding says what is there: the states reached after that state, the values the calls answered | E146 |
+| not settled | neither | W127, never said to hold |
+
+The boundaries of a line's cell cut the walk, so that one input stands for its class, as a `once` or an
+`always` line does. A word that is not a state, a name it does not know, a cell its type cannot hold,
+a list of states mixed with cells, `after` with `when`, `when` on an output's cell and `after` on a
+carried value's are E145.
+
+`rulec check --show-possible` prints each claim with its calls, in the form E126 has them:
+
+```
+tests/corpus/order_happens.rule:38 possible refund >0JPY after shipped
+  Calls (from received):
+    1. at received, event = pay → paid (refund = 0JPY, table step row 1)
+    2. at paid, event = ship → shipped (refund = 0JPY, table step row 4)
+    3. at shipped, event = cancel → cancelled (refund = 300JPY, table step row 8)
+```
+
+`rulec check --format json` carries the same (formats.md). `rulec doc` shows each one as a table, a
+call to a row, under "What happens". `rulec vectors` writes each one as a trace, with the line as its
+`why`, so every language's runner plays it, and `rulec certificate` lays it on the table's rows for
+both re-checkers: a path of calls from the initial state that ends where the line says. **The generated
+code does not change.** A `possible` line says nothing to it.
 
 ### scenario
 
@@ -2991,6 +3080,9 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 `true` `false` `starts_with` (the words of a cell), `default` (the mark after a value in its
 `enum` line), `after` (which divides a machine's `never` line), and `empty` `exhausted` `by` `with`
 (the words of a `fold` arm). A state may be called `initial`, `held` or `final`.
+
+`possible` is read by where it stands, at the head of a line, and is not reserved: an input, an
+output or a state may be called it.
 
 <!-- RESERVED -->
 | | |

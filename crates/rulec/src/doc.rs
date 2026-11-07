@@ -376,6 +376,97 @@ fn never_section(f: &RuleFile) -> String {
     o
 }
 
+/// How a `possible` line that was not shown reads on the page: the finding it comes as, and why.
+fn possible_not_shown(cl: &crate::possible::Claim) -> String {
+    use crate::possible::Possibly;
+    match &cl.verdict {
+        Possibly::Absent(why) => tr!("起きません（E146）。{}\n\n", "Does not happen (E146). {}\n\n", md_esc(why)),
+        Possibly::Undecided(why) => {
+            let code = crate::possible::undecided_code(cl);
+            tr!("決めきれませんでした（{code}）。{}\n\n", "Not settled ({code}): {}.\n\n", md_esc(why))
+        }
+        Possibly::Shown(_) => String::new(),
+    }
+}
+
+/// The `possible` lines of a machine (§15.287), each with its calls, one row to a call as a scenario
+/// has them: the state and the values carried into it, what the call passes, what it answers.
+fn possible_machine_section(f: &RuleFile, c: &Checked, a: &crate::machine::Analysis) -> String {
+    use crate::possible::Possibly;
+    let Some(m) = &f.machine else { return String::new() };
+    if a.possible_claims.is_empty() {
+        return String::new();
+    }
+    let mut o = tr!(
+        "\n### 起きること\n\n`rulec check` が、それぞれの最短の呼び出しの並びを見つけました。`possible` の行は生成コードを変えません。\n\n",
+        "\n### What happens\n\n`rulec check` found the shortest calls for each of these. A `possible` line does not change the generated code.\n\n"
+    );
+    let carried: Vec<String> = std::iter::once(a.carry.0.clone()).chain(a.more.iter().map(|it| it.input.clone())).collect();
+    let passed: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).filter(|n| !carried.contains(n)).collect();
+    let answered: Vec<String> = std::iter::once(a.carry.1.clone()).chain(a.more.iter().map(|it| it.output.clone())).collect();
+    for cl in &a.possible_claims {
+        // The output the line asks about has a column of its own beside the ones carried.
+        let about: Vec<String> = cl
+            .decl
+            .and_then(|k| m.possibles.get(k))
+            .map(|p| p.tests.iter().map(|(n, _, _)| n.text.clone()).filter(|n| f.outputs.iter().any(|x| x.name.text == *n) && !answered.contains(n)).collect())
+            .unwrap_or_default();
+        o.push_str(&format!("**`{}`**\n\n", md_esc(&cl.said)));
+        match &cl.verdict {
+            Possibly::Shown(t) if t.is_empty() => {
+                o.push_str(&tr!("案件はここから始まります（{}）。呼び出しは要りません。\n\n", "A case starts here ({}), with no call needed.\n\n", md_esc(&a.initial)));
+            }
+            Possibly::Shown(t) => {
+                let mut head: Vec<String> = carried.clone();
+                head.extend(passed.iter().cloned());
+                head.extend(answered.iter().enumerate().map(|(k, n)| if k == 0 { format!("→ {n}") } else { n.clone() }));
+                head.extend(about.iter().cloned());
+                head.push(tr!("表の行", "Row").to_string());
+                let rows: Vec<Vec<String>> = t
+                    .iter()
+                    .map(|e| {
+                        let input = |n: &String| e.inputs.get(n).map(|v| crate::machine::human(c, n, v)).unwrap_or_default();
+                        let answer = |n: &String| crate::machine::out_val(&e.outputs, n).map(|v| crate::machine::human(c, n, v)).unwrap_or_default();
+                        let mut row: Vec<String> = carried.iter().map(input).collect();
+                        row.extend(passed.iter().map(input));
+                        row.extend(answered.iter().map(answer));
+                        row.extend(about.iter().map(answer));
+                        row.push(e.row.as_ref().map(|(tn, r)| crate::eval::row_tag(tn, *r)).unwrap_or_default());
+                        row
+                    })
+                    .collect();
+                o.push_str(&md_table(&head, &rows, true));
+                o.push('\n');
+            }
+            _ => o.push_str(&possible_not_shown(cl)),
+        }
+    }
+    o
+}
+
+/// The `possible` lines outside a `machine` (§15.287): what one call can have at once, and that call.
+fn possible_lines_section(f: &RuleFile, c: &Checked) -> String {
+    use crate::possible::Possibly;
+    if f.possibles.is_empty() {
+        return String::new();
+    }
+    let mut o = tr!("\n## 起きること\n\n", "\n## What happens\n\n");
+    o.push_str(&tr!(
+        "`rulec check` が、一度の呼び出しでそれぞれが同時に成り立つ入力を見つけました。`possible` の行は生成コードを変えません。\n\n",
+        "`rulec check` found a call that has each of these at once. A `possible` line does not change the generated code.\n\n"
+    ));
+    for cl in crate::possible::one_call_claims(f, c, crate::region::DEFAULT_BUDGET as usize) {
+        // A list item, as the `never` lines are, so a bar stays a bar.
+        let what = match &cl.verdict {
+            Possibly::Shown(t) => t.first().map(|e| format!("`{}`", crate::possible::call_line(f, c, e))).unwrap_or_default(),
+            _ => possible_not_shown(&cl).trim_end().to_string(),
+        };
+        o.push_str(&tr!("- `{}`：{what}\n", "- `{}`: {what}\n", cl.said));
+    }
+    o.push('\n');
+    o
+}
+
 pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     render_named(f, c, src, path, path)
 }
@@ -741,6 +832,7 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
         o.push('\n');
     }
     o.push_str(&never_section(f));
+    o.push_str(&possible_lines_section(f, c));
 
     // --- What the walks find. A reader reading the table below sees a column of numbers; this
     // is where those numbers come from, and how long a sequence the rule will take at all
@@ -1402,6 +1494,9 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
             )
         ));
     }
+
+    // What is to happen, and the shortest calls that make it happen (§15.287).
+    o.push_str(&possible_machine_section(f, c, &a));
 
     // The scenarios, with the state each call started in.
     if !f.scenarios.is_empty() {

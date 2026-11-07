@@ -2129,6 +2129,220 @@ def finishOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool)
 
 end Model
 
+/-! ### What is to happen (rulec's §15.287) -/
+
+namespace Model
+
+/-- **A case's calls that really happen**, from `start`, with whether it has been in a state of `B` yet.
+    An empty `B` asks for nothing. -/
+inductive Happens (K : Model) (start : Nat × List Rat) (B : List Nat) : Nat × List Rat → Bool → Prop
+  | start : Happens K start B start (B.isEmpty || B.contains start.1)
+  | call {c c' : Nat × List Rat} {b : Bool} {r : Nat} : Happens K start B c b → K.fires c r c' →
+      Happens K start B c' (b || B.contains c'.1)
+
+/-- Where a path of calls leads, each run from where the one before led, and whether the case has been
+    in `B` by then. -/
+def walk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (B : List Nat) :
+    (Nat × List Rat) × Bool → List FCall → Option ((Nat × List Rat) × Bool)
+  | q, [] => some q
+  | q, call :: rest =>
+    match K.callOk askedOk q.1 call with
+    | some c' => K.walk askedOk B (c', q.2 || B.contains c'.1) rest
+    | none => none
+
+/-- **`possible A after B`**, with the values a case carries. -/
+def reachedOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (start : Nat × List Rat)
+    (B : List Nat) (A : Nat) (cs : List FCall) : Bool :=
+  match K.walk askedOk B (start, B.isEmpty || B.contains start.1) cs with
+  | some q => q.1.1 == A && q.2
+  | none => false
+
+/-- **`possible <output> <cell> after B`**: having been in `B`, one more call through a row `shows`
+    marks. -/
+def answeredOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (start : Nat × List Rat)
+    (B : List Nat) (shows : Nat → Bool) (cs : List FCall) (last : FCall) : Bool :=
+  match K.walk askedOk B (start, B.isEmpty || B.contains start.1) cs with
+  | some q => q.2 && shows last.row && (K.callOk askedOk q.1 last).isSome
+  | none => false
+
+end Model
+
+/-- A value in a cell, as a test: `CItem.cellHolds` over one value. -/
+def CItem.cellHoldsB (it : CItem) (cell : CellTest) (v : Rat) : Bool :=
+  match it.kind, cell with
+  | _, .any => true
+  | .num .., .cmp ts => ts.all (fun t => cmpHolds t.1 v t.2)
+  | .num .., .inVals ws => ws.contains v
+  | .num .., .notInVals ws => ws.all (fun w => v != w)
+  | .words ws, .isIn ws' =>
+    (List.range ws.length).any (fun i => decide (v = (i : Rat)) &&
+      match ws[i]? with
+      | some w => ws'.contains w
+      | none => false)
+  | .words ws, .notIn ws' =>
+    (List.range ws.length).any (fun i => decide (v = (i : Rat)) &&
+      match ws[i]? with
+      | some w => !ws'.contains w
+      | none => false)
+  | _, _ => false
+
+theorem CItem.cellHolds_of_cellHoldsB {it : CItem} {cell : CellTest} {v : Rat}
+    (h : it.cellHoldsB cell v = true) : it.cellHolds cell v := by
+  unfold CItem.cellHoldsB at h
+  unfold CItem.cellHolds
+  cases hk : it.kind with
+  | num lo hi st gr =>
+    rw [hk] at h
+    cases cell with
+    | any => trivial
+    | cmp ts =>
+      simp only [List.all_eq_true] at h
+      intro t ht
+      exact holds_of_cmpHolds (h t ht)
+    | inVals ws =>
+      have hm : v ∈ ws := by simpa using h
+      exact ⟨v, hm, rfl⟩
+    | notInVals ws =>
+      simp only [List.all_eq_true, bne_iff_ne, ne_eq] at h
+      intro w hw
+      exact h w hw
+    | nothing => simp at h
+    | isIn _ => simp at h
+    | notIn _ => simp at h
+    | prefixOf _ => simp at h
+    | rank _ _ => simp at h
+  | words ws =>
+    rw [hk] at h
+    cases cell with
+    | any => trivial
+    | isIn ws' =>
+      simp only [List.any_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+      obtain ⟨i, _, hv, hw⟩ := h
+      cases hget : ws[i]? with
+      | none => simp [hget] at hw
+      | some w =>
+        simp only [hget, List.contains_iff_mem] at hw
+        exact ⟨i, w, hv, hget, hw⟩
+    | notIn ws' =>
+      simp only [List.any_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+      obtain ⟨i, _, hv, hw⟩ := h
+      cases hget : ws[i]? with
+      | none => simp [hget] at hw
+      | some w =>
+        simp only [hget, Bool.not_eq_true'] at hw
+        refine ⟨i, w, hv, hget, fun hmem => ?_⟩
+        rw [List.contains_iff_mem.2 hmem] at hw
+        exact absurd hw (by simp)
+    | nothing => simp at h
+    | cmp _ => simp at h
+    | inVals _ => simp at h
+    | notInVals _ => simp at h
+    | prefixOf _ => simp at h
+    | rank _ _ => simp at h
+
+namespace Model
+
+/-- **`possible <carried input> <cell> and … when A`**: the calls lead from `start` to a state `A`
+    allows, with every value the line names in its cell. -/
+def carriesOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (start : Nat × List Rat)
+    (A : Option Nat) (tests : List (Nat × CellTest)) (cs : List FCall) : Bool :=
+  match K.walk askedOk [] (start, true) cs with
+  | some q =>
+    (match A with
+     | some a => q.1.1 == a
+     | none => true) &&
+    tests.all (fun kt =>
+      match K.items[kt.1]?, q.1.2[kt.1]? with
+      | some it, some v => it.cellHoldsB kt.2 v
+      | _, _ => false)
+  | none => false
+
+end Model
+
+/-- A path that checks is one a case makes. -/
+theorem Model.happens_of_walk {K : Model} {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {start : Nat × List Rat} {B : List Nat} :
+    ∀ {cs : List FCall} {q q' : (Nat × List Rat) × Bool}, K.Happens start B q.1 q.2 →
+      K.walk askedOk B q cs = some q' → K.Happens start B q'.1 q'.2 := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro q q' hh hw
+    simp only [Model.walk, Option.some.injEq] at hw
+    subst hw
+    exact hh
+  | cons call rest ih =>
+    intro q q' hh hw
+    simp only [Model.walk] at hw
+    cases hc : K.callOk askedOk q.1 call with
+    | none => rw [hc] at hw; exact absurd hw (by simp)
+    | some c' =>
+      rw [hc] at hw
+      exact ih (Model.Happens.call hh (Model.fires_of_callOk hask hc)) hw
+
+/-- **`possible A after B` holds**: a case gets there by calls that really happen. -/
+theorem Model.happens_of_reachedOk {K : Model} {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {start : Nat × List Rat} {B : List Nat}
+    {A : Nat} {cs : List FCall} (h : K.reachedOk askedOk start B A cs = true) :
+    ∃ c, c.1 = A ∧ K.Happens start B c true := by
+  unfold Model.reachedOk at h
+  cases hw : K.walk askedOk B (start, B.isEmpty || B.contains start.1) cs with
+  | none => rw [hw] at h; exact absurd h (by simp)
+  | some q =>
+    rw [hw] at h
+    simp only [Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨hA, hb⟩ := h
+    have hh := Model.happens_of_walk hask (q := (start, B.isEmpty || B.contains start.1)) Model.Happens.start hw
+    rw [hb] at hh
+    exact ⟨q.1, hA, hh⟩
+
+/-- **`possible <output> <cell> after B` holds**: having been in `B`, a case makes a call that really
+    happens through a row `shows` marks. -/
+theorem Model.answers_of_answeredOk {K : Model} {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {start : Nat × List Rat} {B : List Nat}
+    {shows : Nat → Bool} {cs : List FCall} {last : FCall}
+    (h : K.answeredOk askedOk start B shows cs last = true) :
+    ∃ c r c', K.Happens start B c true ∧ K.fires c r c' ∧ shows r = true := by
+  unfold Model.answeredOk at h
+  cases hw : K.walk askedOk B (start, B.isEmpty || B.contains start.1) cs with
+  | none => rw [hw] at h; exact absurd h (by simp)
+  | some q =>
+    rw [hw] at h
+    simp only [Bool.and_eq_true, Option.isSome_iff_exists] at h
+    obtain ⟨⟨hb, hshow⟩, ⟨c', hc⟩⟩ := h
+    have hh := Model.happens_of_walk hask (q := (start, B.isEmpty || B.contains start.1)) Model.Happens.start hw
+    rw [hb] at hh
+    exact ⟨q.1, last.row, c', hh, Model.fires_of_callOk hask hc, hshow⟩
+
+/-- **`possible <carried input> <cell> when A` holds**: by calls that really happen a case is in a state
+    `A` allows, with every value the line names in its cell. -/
+theorem Model.carries_of_carriesOk {K : Model} {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {start : Nat × List Rat}
+    {A : Option Nat} {tests : List (Nat × CellTest)} {cs : List FCall}
+    (h : K.carriesOk askedOk start A tests cs = true) :
+    ∃ c b, K.Happens start [] c b ∧ (∀ a, A = some a → c.1 = a) ∧
+      ∀ kt ∈ tests, ∃ it v, K.items[kt.1]? = some it ∧ c.2[kt.1]? = some v ∧ it.cellHolds kt.2 v := by
+  unfold Model.carriesOk at h
+  cases hw : K.walk askedOk [] (start, true) cs with
+  | none => rw [hw] at h; exact absurd h (by simp)
+  | some q =>
+    rw [hw] at h
+    simp only [Bool.and_eq_true, List.all_eq_true] at h
+    obtain ⟨hA, ht⟩ := h
+    have hstart : K.Happens start [] start true := by
+      have := Model.Happens.start (K := K) (start := start) (B := [])
+      simpa using this
+    have hh := Model.happens_of_walk hask (q := (start, true)) hstart hw
+    refine ⟨q.1, q.2, hh, ?_, ?_⟩
+    · intro a ha
+      subst ha
+      simpa using hA
+    · intro kt hkt
+      have := ht kt hkt
+      split at this
+      next it v hi hv => exact ⟨it, v, hi, hv, CItem.cellHolds_of_cellHoldsB this⟩
+      next => exact absurd this (by simp)
+
 /-- **Every configuration a case can reach can still finish**: where the places hold where a case
     starts and are closed under the counted calls, and the finish check passes on them, a final state
     can be reached by calls that really happen from every configuration a case can reach — by the

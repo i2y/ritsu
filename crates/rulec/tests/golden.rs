@@ -189,6 +189,8 @@ golden!(e044_準用の輪, "E044-ring", "tests/mutants/m_e044ringja.rule", "E044
 golden!(w132_変えない項, "W132", "tests/mutants/m_w132ja.rule", "W132");
 golden!(w133_定義からは起こらない行, "W133", "tests/mutants/m_w133ja.rule", "W133");
 golden!(e141_知らない名前, "E141", "tests/mutants/m_e141ja.rule", "E141");
+golden!(e145_状態でない語, "E145", "tests/mutants/m_e145ja.rule", "E145");
+golden!(e146_起きない, "E146", "tests/mutants/m_e146ja.rule", "E146");
 golden!(e142_定義から起こる組み合わせ, "E142", "tests/mutants/m_e142ja.rule", "E142");
 golden!(e143_計算する列, "E143", "tests/mutants/m_e143ja.rule", "E143");
 golden!(w134_何も外さない行, "W134", "tests/mutants/m_w134ja.rule", "W134");

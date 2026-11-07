@@ -1,0 +1,27 @@
+rule 修理の見積り(repair_quote) v1
+description "修理店の見積り。表から出なければならない答え（承認される仕事、承認される上位の仕事、大きな普通の仕事）も書く。どれにも `false` を答える表でも `never` の行は守れる。"
+
+enum 区分(member_tier) = 普通(basic) | 上位(gold)
+
+inputs
+  区分(tier)    : 区分
+  工具数(tools) : number  range >=0 <=10
+
+never 区分 = 上位, 工具数 = 0
+
+outputs
+  料金(fee)      : money[USD]  round up(1USD)
+  承認(approved) : bool
+
+table 見積り(quote)
+policy first
+| 区分 | 工具数 | -> 料金 | 承認  |
+| 上位 | >5     | 200USD  | true  |
+| 上位 | -      | 50USD   | true  |
+| 普通 | >8     | 150USD  | false |
+| 普通 | -      | 10USD   | false |
+
+possible 承認 = true
+possible 区分 = 上位, 承認 = true
+possible 料金 > 100USD, 区分 = 普通
+possible 区分 = 普通, 承認 = true

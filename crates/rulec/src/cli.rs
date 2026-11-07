@@ -148,6 +148,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--format", Some("json"), tr!("GitHub annotations に流せる一行一件の JSON", "one JSON object per line, ready for GitHub annotations")).choices(&["json"]),
                 flag("--show-shadow", None, tr!("件数に畳んである隠れ対も全部並べる", "list every shadow pair, including the ones folded into the count")),
+                flag("--show-possible", None, tr!("`possible` の行ごとに、起きる最短の呼び出しの並びを出す", "for each `possible` line, print the shortest calls that make it happen")),
                 flag("--terse", None, tr!("一件を三行に絞る（見出し・位置・その入力）。詳しくは rulec explain", "cut each finding to three lines: heading, position, witness; `rulec explain` has the rest")),
                 flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった指摘を伏せる", "hide findings that were already present at that git revision")),
                 flag("--budget", Some("<n>"), tr!("検査が訪れるノード数の上限。超えたら E109", "cap on the nodes the check visits; over it, E109")).default(crate::region::DEFAULT_BUDGET.to_string()),
@@ -1256,7 +1257,7 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
             if json && a.has("--terse") {
                 return terse_with_json();
             }
-            check(&files, json, a.has("--terse"), a.has("--show-shadow"), a.get("--diff-base"), budget)
+            check(&files, json, a.has("--terse"), a.has("--show-shadow"), a.has("--show-possible"), a.get("--diff-base"), budget)
         }
         "explain" => explain(&files, &a),
         "fmt" => fmt(&files, a.has("--check"), json),
@@ -1498,6 +1499,7 @@ fn check(
     json: bool,
     terse: bool,
     show_shadow: bool,
+    show_possible: bool,
     diff_base: Option<&str>,
     budget: i64,
 ) -> ExitCode {
@@ -1514,6 +1516,7 @@ fn check(
         };
         let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
         let r = crate::report_with(&src, path, budget);
+        let tables_hold = r.tables_hold;
         let mut diags = r.diags;
         let errors_before = diags.iter().any(|d| d.severity == Severity::Error);
         diags.retain(|d| said.insert(crate::finding_key(d, path)));
@@ -1568,7 +1571,12 @@ fn check(
                 print!("{}", crate::diag::render_terse(d));
             }
         }
+        // What the `possible` lines come to, shown when they hold too (§15.287).
+        let possible = if tables_hold && (json || show_possible) { crate::possible::of_source(&src, path, budget) } else { None };
         if json {
+            if let Some((f, c, res)) = &possible {
+                println!("{}", crate::possible::report_json(f, c, res, path));
+            }
             continue;
         }
         // The default rendering and everything after the findings are shared with
@@ -1576,6 +1584,9 @@ fn check(
         // answer differently.
         if !terse {
             print!("{}", crate::findings_text(&diags, &lines));
+        }
+        if let Some((f, c, res)) = &possible {
+            print!("{}", crate::possible::report_text(f, c, res, path));
         }
         if errors_before && !crate::has_error(&diags) {
             // Its errors were said for a file above; the file still does not pass.

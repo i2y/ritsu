@@ -521,6 +521,16 @@ awk '{ print } /^never 割れ物あり = false, 割れ物数 >= 1$/ { print "nev
 # A column the rule computes
 awk '{ print } /^never tools = 0, total > 0USD$/ { print "never all_fees > 900USD" }'           "$C/order_fee.rule"       > "$M/m_e143.rule"
 awk '{ print } /^never 工具数 = 0, 合計 > 0USD$/ { print "never 全部の料金 > 900USD" }'           "$C/注文の手数料.rule"     > "$M/m_e143ja.rule"
+# --- `possible` lines (§15.287). The English rule, and its Japanese version beside it.
+# A word that is not a state
+awk '/^  possible delivered$/ { sub(/delivered/, "arrived") } { print }'                       "$C/order_happens.rule"            > "$M/m_e145.rule"
+awk '/^  possible 配達済$/ { sub(/配達済/, "届いた") } { print }'                                "$C/注文の起きること.rule"           > "$M/m_e145ja.rule"
+# The table that cancels everything keeps every `never` and `once` line: say what is to happen
+awk '{ print } /^  once    refund >0JPY$/ { print "  possible delivered" }'                    "$C/order_cancels_everything.rule" > "$M/m_e146.rule"
+awk '{ print } /^  once    返金額 >0円$/ { print "  possible 配達済" }'                            "$C/なんでも取り消す注文.rule"       > "$M/m_e146ja.rule"
+# Outside the machine: one call that has both, and the table never gives it
+awk '{ print } /^possible fee > 100USD, tier = basic$/ { print "possible tier = basic, approved = true" }' "$C/repair_quote.rule"   > "$M/m_e146_call.rule"
+awk '{ print } /^possible 料金 > 100USD, 区分 = 普通$/ { print "possible 区分 = 普通, 承認 = true" }'        "$C/修理の見積り.rule" > "$M/m_e146_callja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

@@ -546,7 +546,7 @@ fn 色づけの語彙はkwと同じ() {
         ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX, kw::ALLOCATE])),
         ("CLAUSE", sorted(&[kw::WHEN, kw::THEN, kw::ALWAYS])),
         ("APPLY", sorted(&[kw::EXCEPT])),
-        ("MACHINE", sorted(&[kw::CARRY, kw::INITIAL, kw::FINAL, kw::NEVER, kw::ONCE, kw::AFTER])),
+        ("MACHINE", sorted(&[kw::CARRY, kw::INITIAL, kw::FINAL, kw::NEVER, kw::ONCE, kw::POSSIBLE, kw::AFTER])),
     ] {
         let mut got = list(name);
         got.sort();

@@ -10407,6 +10407,8 @@ impl Gen<'_> {
                         .collect::<Vec<_>>(),
                 )),
             )
+            // What is to happen (§15.287), as written; `check` has found the calls.
+            .opt_raw("possible", (!m.possibles.is_empty()).then(|| crate::possible::machine_api(self.f, m)))
             .finish()
     }
 
@@ -11010,6 +11012,8 @@ impl Gen<'_> {
             // What the entry guard holds a caller to that `rulec schema` cannot say. A
             // caller that validated the shape and stopped is not done (§15.116).
             .raw("preconditions", crate::verify::preconditions_json(self.f, self.c))
+            // What one call can have at once (§15.287): no door, so no precondition.
+            .opt_raw("possible", (!self.f.possibles.is_empty()).then(|| crate::possible::lines_api(self.f)))
             .raw("applies", crate::json::arr(&self.f.applies.iter().map(|a| {
                 crate::json::Obj::new()
                     .str("name", &a.name.text)

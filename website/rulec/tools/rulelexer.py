@@ -37,7 +37,7 @@ __all__ = ["RuleLexer"]
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
 HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sum", "sequence", "clause", "source", "shape", "apply", "machine", "scenario", "max", "min", "prerequisites", "open")
-HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint", "never", "chances", "implements")
+HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint", "never", "possible", "chances", "implements")
 
 MODIFIERS = ("range", "round", "contract_only", "default", "step", "random", "combine")
 CLAUSE = ("when", "then", "always")
@@ -45,7 +45,7 @@ CLAUSE = ("when", "then", "always")
 APPLY = ("except",)
 # The body of a `machine` (§15.148): its lines, and the word a `never` line is split by. Its
 # `held` line is the fold's word, listed with the arms.
-MACHINE = ("carry", "initial", "final", "never", "once", "after")
+MACHINE = ("carry", "initial", "final", "never", "once", "possible", "after")
 # What starts a line inside a clause, an apply or a machine body: the two clause lines, the
 # apply's exception, `overrides`, which a clause carries as a table does, and the machine's
 # lines.

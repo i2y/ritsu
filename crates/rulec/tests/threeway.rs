@@ -174,6 +174,12 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/retry_attempts.rule", "retry_attempts"),
     ("tests/corpus/grace_period.rule", "grace_period"),
     ("tests/corpus/one_time_perk.rule", "one_time_perk"),
+    ("tests/corpus/order_happens.rule", "order_happens"),
+    ("tests/corpus/注文の起きること.rule", "order_happens_ja"),
+    ("tests/corpus/order_cancels_everything.rule", "order_cancels_everything"),
+    ("tests/corpus/なんでも取り消す注文.rule", "order_cancels_everything_ja"),
+    ("tests/corpus/repair_quote.rule", "repair_quote"),
+    ("tests/corpus/修理の見積り.rule", "repair_quote_ja"),
     // §15.222: prerequisites in a rule, with `ordered by`, and in an `enums` file the other two read.
     ("tests/corpus/course_catalog.rule", "course_catalog"),
     ("tests/corpus/科目の履修.rule", "course_enrollment"),

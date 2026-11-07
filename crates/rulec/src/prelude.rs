@@ -372,6 +372,15 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 n.word(&mut v.text, &v.span);
             }
         }
+        for p in &mut m.possibles {
+            for (_, cell, sp) in &mut p.tests {
+                let sp = sp.clone();
+                n.cell(cell, &sp);
+            }
+            for v in p.states.iter_mut().chain(p.after.iter_mut()).chain(p.when.iter_mut()) {
+                n.word(&mut v.text, &v.span);
+            }
+        }
     }
     for s in &mut f.scenarios {
         n.table(&mut s.table);

@@ -1407,6 +1407,29 @@ def checkContracts (cert : Json) (r : Report) : Report := Id.run do
       r := r.state s!"contract {name}: some of its rules could not be read and were taken as true"
   return r
 
+/-- The rows that show what a `possible` line about an output asks (rulec's §15.287): those that write a
+    value the test takes. A value a row computes says nothing here, as it would for a `once` line. -/
+def answerShows (on : Json) : Nat → Bool :=
+  let test := (field on "test").getD Json.null
+  let lo : Option Int := field test "lo" >>= (fun j => (j.getInt?).toOption)
+  let hi : Option Int := field test "hi" >>= (fun j => (j.getInt?).toOption)
+  let words := (fieldArr test "words").toList.filterMap str
+  let isWords := (field test "words").isSome
+  let flagOf : Json → Bool := fun v =>
+    if v.isNull then false
+    else if isWords then
+      match boolOf v with
+      | some bv => words.contains (if bv then "true" else "false")
+      | none => words.contains ((str v).getD "")
+    else
+      match (v.getInt?).toOption with
+      | some n => (lo.map (fun l => decide (l ≤ n))).getD true && (hi.map (fun h => decide (n ≤ h))).getD true
+      | none => false
+  let flags : List (Nat × Bool) := (fieldArr on "rows").toList.filterMap (fun x => do
+    let i ← fieldNat x "row"
+    some (i, flagOf ((field x "value").getD Json.null)))
+  fun i => (flags.find? (fun x => x.1 == i)).map (·.2) |>.getD false
+
 /-- Which rows a `once` line counts: a row whose value there passes the line's test, and a row that
     writes a computed value (which may). -/
 def onceCounts (on : Json) : Nat → Bool :=
@@ -1690,17 +1713,23 @@ def checkCarried (cert mj tj : Json) (t : ReadTable) (M : Machine) (init : Nat) 
   -- That a case can still finish (rulec's §15.233): from every place not in a final state, a path of
   -- calls that really happen, each run here (`Carried.Model.callOk`); `Carried.Model.reachable_finishes`
   -- is what a pass settles. Where the section lays none, the claim is named as stated (by the caller).
+  let typesJ := (field cert "types").getD Json.null
+  let callOf : Json → Option Carried.FCall := fun x => do
+    let row ← fieldNat x "row"
+    let at_ := (fieldArr x "at").toList.filterMap nat
+    let ins ← (objPairs ((field x "inputs").getD Json.null)).mapM (fun (n, v) => do
+      let q ← optRat v
+      let ty ← tyOfString (fieldStr typesJ n)
+      some (n, ((q, ty) : UVal)))
+    some { row := row, point := at_, inputs := ins }
+  -- The values behind a point, as the table's sieve reads them: each column's, then the names of
+  -- its linear model's that are not columns (`linear.extra`).
+  let extras := (fieldArr ((field tj "linear").getD Json.null) "extra").toList.filterMap str
+  let valOf : (String → Option UVal) → String → Rat := fun env n => ((env n).map (·.1)).getD 0
+  let askedOk : Point → (String → Option UVal) → Bool := fun p env =>
+    witnessOk t.cert.sieve p (t.columns.map (valOf env) ++ extras.map (valOf env))
   if !finals.isEmpty then
     if let some fj := field cm "finish" >>= arr then
-      let typesJ := (field cert "types").getD Json.null
-      let callOf : Json → Option Carried.FCall := fun x => do
-        let row ← fieldNat x "row"
-        let at_ := (fieldArr x "at").toList.filterMap nat
-        let ins ← (objPairs ((field x "inputs").getD Json.null)).mapM (fun (n, v) => do
-          let q ← optRat v
-          let ty ← tyOfString (fieldStr typesJ n)
-          some (n, ((q, ty) : UVal)))
-        some { row := row, point := at_, inputs := ins }
       let some paths := fj.toList.mapM (fun x => do
           let (pl, _) ← (field x "place") >>= placeOf
           let calls ← (fieldArr x "path").toList.mapM callOf
@@ -1708,16 +1737,50 @@ def checkCarried (cert mj tj : Json) (t : ReadTable) (M : Machine) (init : Nat) 
         | return (r.fail "carried values: a path to a final state cannot be read", {})
       let pathsOf : Nat × List (Option Nat) → List Carried.FCall := fun pl =>
         ((paths.find? (fun q => q.1 == pl)).map (·.2)).getD []
-      -- The values behind a point, as the table's sieve reads them: each column's, then the names of
-      -- its linear model's that are not columns (`linear.extra`).
-      let extras := (fieldArr ((field tj "linear").getD Json.null) "extra").toList.filterMap str
-      let valOf : (String → Option UVal) → String → Rat := fun env n => ((env n).map (·.1)).getD 0
-      let askedOk : Point → (String → Option UVal) → Bool := fun p env =>
-        witnessOk t.cert.sieve p (t.columns.map (valOf env) ++ extras.map (valOf env))
       if K.finishOk askedOk finals places pathsOf then
         claims := claims.push "every place a case can be can still finish"
         laid := { laid with finish := true }
       else return (r.fail "carried values: a place has no path of calls to a final state that checks", {})
+  -- What is to happen (rulec's §15.287): from where a case starts, calls that really happen, each run
+  -- here, keeping the held columns' coordinates; `Carried.Model.happens_of_reachedOk`,
+  -- `answers_of_answeredOk` and `carries_of_carriesOk` say what a pass settles.
+  let heldAxes := (fieldArr mj "held").toList.filterMap nat
+  let heldInputs := (fieldArr mj "held_inputs").toList.filterMap str
+  for en in fieldArr cm "possible" do
+    let said := fieldStr en "said"
+    let some startVals := Carried.pointOfItems K.items start.2
+      | return (r.fail s!"carried values: `{said}` starts from a place that stands for more than one value", {})
+    let pathJ := (fieldArr en "path").toList
+    let some calls := pathJ.mapM callOf
+      | return (r.fail s!"carried values: a call of `{said}` cannot be read", {})
+    let keeps := match pathJ.head? with
+      | some j0 => pathJ.all (fun j =>
+          let at_ := (fieldArr j "at").toList.filterMap nat
+          let at0 := (fieldArr j0 "at").toList.filterMap nat
+          heldAxes.all (fun fk => at_[fk]? == at0[fk]?) &&
+            heldInputs.all (fun n =>
+              (field ((field j "inputs").getD Json.null) n >>= optRat) ==
+                (field ((field j0 "inputs").getD Json.null) n >>= optRat)))
+      | none => true
+    if !keeps then return (r.fail s!"carried values: the calls of `{said}` do not keep a held input", {})
+    let after := (fieldNat en "after").toList
+    let startC : Nat × List Rat := (start.1, startVals)
+    let form := fieldStr en "form"
+    let passes : Bool :=
+      if form == "state" then
+        K.reachedOk askedOk startC after ((fieldNat en "state").getD 0) calls
+      else if form == "output" then
+        match calls.reverse with
+        | last :: before => K.answeredOk askedOk startC after (answerShows ((field en "answer").getD Json.null)) before.reverse last
+        | [] => false
+      else
+        let tests := (fieldArr en "tests").toList.filterMap (fun x => do
+          let k ← fieldNat x "item"
+          let c ← field x "cell" >>= (fun cj => cellOfJson (fun _ => []) cj)
+          some (k, c))
+        tests.length == (fieldArr en "tests").size && K.carriesOk askedOk startC (fieldNat en "when") tests calls
+    if passes then claims := claims.push s!"`{said}`"
+    else return (r.fail s!"carried values: the calls of `{said}` do not check", {})
   r := r.say s!"  carried values over {tname}: {", ".intercalate claims.toList}"
   return (r, laid)
 
@@ -1898,6 +1961,53 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
             r := r.state "the machine's paths come with no values behind their calls"
             claims := add claims "every state reached can still finish (the calls are not shown to be asked about)"
           else r := r.fail "machine: a state reached has no path of calls to a final state"
+  -- What is to happen (rulec's §15.287): calls that really happen from where a case starts, in one
+  -- world; `Machine.happens_of_reachedOk` and `answers_of_answeredOk` say what a pass settles.
+  let possibleJ := fieldArr mj "possible"
+  if coupled && possibleJ.size > 0 then
+    r := r.fail "machine: calls for a `possible` line are given, and a held input is read by more than its own column"
+  else
+    for en in possibleJ do
+      let said := fieldStr en "said"
+      let w := (fieldArr en "world").toList.filterMap nat
+      let pathJ := (fieldArr en "path").toList
+      let callOf : Json → Option Machine.Call := fun x => do
+        let st ← fieldNat x "state"
+        let row ← fieldNat x "row"
+        let at_ := (fieldArr x "at").toList.filterMap nat
+        let vs := (fieldArr x "at_values").toList.map (fun v => (optRat v).getD 0)
+        let xs := (fieldArr x "extra_values").toList.map (fun v => (optRat v).getD 0)
+        some { state := st, row := row, point := at_, values := vs ++ xs }
+      let some calls := pathJ.mapM callOf
+        | r := r.fail s!"machine: a call of `{said}` cannot be read"
+          continue
+      let atWorld : Json → Bool := fun c =>
+        let at_ := (fieldArr c "at").toList.filterMap nat
+        w.length == fixed.length && (fixed.zip w).all (fun kc => at_[kc.1]? == some kc.2)
+      if !(pathJ.all atWorld) then
+        r := r.fail s!"machine: a call of `{said}` is not made with one world's held coordinates"
+        continue
+      let stated := pathJ.all (fun c =>
+        let vs := fieldArr c "at_values"
+        vs.size == t.columns.length &&
+          (List.range t.columns.length).all (fun ai =>
+            match t.spans[ai]? with
+            | some cs => cs.all (·.isNone) || !(vs[ai]!).isNull
+            | none => true))
+      let asked : Point → List Rat → Bool := if stated then witnessOk C.sieve else (fun p _ => !pointRuledOut C.sieve p)
+      let Mw := M.world fixed w
+      let after := (fieldNat en "after").toList
+      let passes : Bool :=
+        if fieldStr en "form" == "state" then
+          Mw.reachedOk asked init after ((fieldNat en "state").getD 0) calls
+        else
+          match calls.reverse with
+          | last :: before => Mw.answeredOk asked init after (answerShows ((field en "answer").getD Json.null)) before.reverse last
+          | [] => false
+      if passes then
+        claims := add claims s!"`{said}`"
+        if !stated then r := r.state s!"the calls of `{said}` come with no values behind them"
+      else r := r.fail s!"machine: the calls of `{said}` do not check"
   let inWorlds := if fixed.isEmpty then "" else s!" in {worldsJ.size} worlds"
   claims := #[s!"{reached.length} of {states.length} states reached{inWorlds}"] ++ claims
   r := r.say s!"  machine over {tname}: {", ".intercalate claims.toList}"
@@ -2011,7 +2121,10 @@ def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report)
         r := r.fail s!"carried values: row {row}'s move of {fieldStr it "output"} is not read from the row's own cell of it"
       else read := read + 1
   -- What a `once` line reads on each row (rulec's §15.233): the value its answer cell writes.
-  for on in fieldArr mj "once" do
+  -- A `possible` line about an output reads its rows the same way (rulec's §15.287).
+  let possibleAnswers : Array Json :=
+    (fieldArr mj "possible" ++ fieldArr ((field mj "carried").getD Json.null) "possible").filterMap (fun en => field en "answer")
+  for on in fieldArr mj "once" ++ possibleAnswers do
     let some test := field on "test" | continue
     let out := fieldStr on "output"
     let j := colOf out
@@ -3251,6 +3364,10 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     r := checkContracts cert r
     r := checkNevers cert r
     r := checkMachine cert tables r
+    -- A `possible` line outside a `machine` (rulec's §15.287): the call that shows it is listed, and
+    -- what the rule answers to it is not worked out here.
+    for en in fieldArr cert "possible" do
+      r := r.state s!"`{fieldStr en "said"}`: the call that shows it is listed, and what it answers is not worked out here"
     -- Which values need which before them (rulec's §15.222): no cycle, every value but those no
     -- case can take reached from `start`, and an `ordered by` table's order kept along the edges
     -- (`Prereq.no_cycle`, `Prereq.reached_holds`, `Prereq.never_held`, `Prereq.order_along`).

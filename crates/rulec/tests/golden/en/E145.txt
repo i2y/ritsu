@@ -1,0 +1,7 @@
+error[E145]: `arrived` is not a state
+  --> tests/mutants/m_e145.rule:36 machine order
+   |
+36 |   possible arrived
+   |            ^^^^^^^ on the `possible` line
+   |
+ The states are received / paid / shipped / delivered / cancelled.

@@ -302,14 +302,13 @@ fn lists(rest: &str) -> String {
 /// A line under `machine` (§15.148): two spaces in, the keyword padded to the width of the
 /// longest one so the values start in one column, and the rest one space apart as a clause's
 /// body is.
-fn machine_body(line: &str) -> String {
+fn machine_body(line: &str, w: usize) -> String {
     let b = clause_body(line);
     let t = b.trim_start();
     let (word, rest) = match t.find(' ') {
         Some(p) => (&t[..p], t[p + 1..].trim_start()),
         None => (t, ""),
     };
-    let w = MACHINE_LINES.iter().map(|k| k.len()).max().unwrap_or(0);
     // A list is written `配達済, 取消`: the comma against the word before it. The comment and the
     // commas are where the lexer reads them, so a `#` or a ` ,` in a string stays (§15.267).
     let (words, comment) = match comment_at(rest) {
@@ -348,7 +347,15 @@ fn commas_against(text: &str) -> String {
 
 /// The words that start a line under `machine`.
 const MACHINE_LINES: &[&str] =
-    &[crate::kw::CARRY, crate::kw::HELD, crate::kw::INITIAL, crate::kw::FINAL, crate::kw::NEVER, crate::kw::ONCE, crate::kw::ALWAYS];
+    &[crate::kw::CARRY, crate::kw::HELD, crate::kw::INITIAL, crate::kw::FINAL, crate::kw::NEVER, crate::kw::ONCE, crate::kw::ALWAYS, crate::kw::POSSIBLE];
+
+/// How wide the first column of a `machine` block is: its longest word but `possible`, which widens
+/// only a block that has one, so that a block without one stays as it was written (§15.287).
+fn machine_width(lines: &[String]) -> usize {
+    let narrow = MACHINE_LINES.iter().filter(|k| **k != crate::kw::POSSIBLE).map(|k| k.len()).max().unwrap_or(0);
+    let has = lines.iter().take_while(|l| !l.trim().is_empty()).any(|l| first_word(l) == crate::kw::POSSIBLE);
+    if has { crate::kw::POSSIBLE.len() } else { narrow }
+}
 
 fn first_word(line: &str) -> &str {
     line.trim_start().split(|c: char| c.is_whitespace()).next().unwrap_or("")
@@ -364,6 +371,7 @@ pub fn format(src: &str) -> String {
     let mut in_apply = false;
     // The lines under a `machine`, up to the next blank line or line head.
     let mut in_machine = false;
+    let mut machine_w = 0;
     // The terms under an `open` value or an `into` (§15.227), up to the next blank line or line
     // head: one name each, two spaces in.
     let mut in_terms = false;
@@ -377,11 +385,14 @@ pub fn format(src: &str) -> String {
             }
             in_terms = (w == crate::kw::OPEN || w == crate::kw::INTO) && !lines[i].starts_with(char::is_whitespace) && !binding(&lines[i]);
             if in_machine && MACHINE_LINES.contains(&w) {
-                out.push(machine_body(&lines[i]));
+                out.push(machine_body(&lines[i], machine_w));
                 i += 1;
                 continue;
             }
             in_machine = w == crate::kw::MACHINE;
+            if in_machine {
+                machine_w = machine_width(&lines[i + 1..]);
+            }
             // The lines under `prerequisites` (§15.222), aligned as one block.
             if w == crate::kw::PREREQUISITES && !lines[i].starts_with(char::is_whitespace) {
                 in_clause = false;

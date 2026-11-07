@@ -1169,6 +1169,142 @@ policy unique
 | false    | true      | 0USD   |
 | false    | false     | 2USD   |
 "##;
+const X_E145: &str = r##"rule t(t) v1
+
+enum 状態(state) = 受付(received) | 発送済(shipped) | 配達済(delivered)
+enum 操作(step) = 発送(ship) | 配達(deliver)
+
+inputs
+  状態(state_now) : 状態
+  操作(step_now)  : 操作
+
+outputs
+  次(next_state) : 状態
+
+table 進み方(moves)
+policy first
+| 状態   | 操作 | -> 次   |
+| 受付   | 発送 | 発送済  |
+| 発送済 | 配達 | 配達済  |
+| -      | -    | 状態    |
+
+machine 注文(order) over 進み方
+  carry    状態 -> 次
+  initial  受付
+  final    配達済
+  possible 届いた
+"##;
+const X_E145_EN: &str = r##"rule t(t) v1
+
+enum state(state) = received(received) | shipped(shipped) | delivered(delivered)
+enum step(step) = ship(ship) | deliver(deliver)
+
+inputs
+  state_now(state_now) : state
+  step_now(step_now)   : step
+
+outputs
+  next_state(next_state) : state
+
+table moves(moves)
+policy first
+| state_now | step_now | -> next_state |
+| received  | ship     | shipped   |
+| shipped   | deliver  | delivered |
+| -         | -        | state_now     |
+
+machine order(order) over moves
+  carry    state_now -> next_state
+  initial  received
+  final    delivered
+  possible arrived
+"##;
+const X_E146: &str = r##"rule t(t) v1
+
+enum 状態(state) = 受付(received) | 発送済(shipped) | 配達済(delivered) | 取消(cancelled)
+enum 操作(step) = 発送(ship) | 配達(deliver) | 取り消し(cancel)
+
+inputs
+  状態(state_now) : 状態
+  操作(step_now)  : 操作
+
+outputs
+  次(next_state) : 状態
+
+table 進み方(moves)
+policy first
+| 状態 | 操作     | -> 次  |
+| 受付 | 取り消し | 取消   |
+| -    | -        | 状態   |
+
+machine 注文(order) over 進み方
+  carry    状態 -> 次
+  initial  受付
+  final    配達済, 取消
+  never    発送済 after 取消
+  possible 配達済
+"##;
+const X_E146_EN: &str = r##"rule t(t) v1
+
+enum state(state) = received(received) | shipped(shipped) | delivered(delivered) | cancelled(cancelled)
+enum step(step) = ship(ship) | deliver(deliver) | cancel(cancel)
+
+inputs
+  state_now(state_now) : state
+  step_now(step_now)   : step
+
+outputs
+  next_state(next_state) : state
+
+table moves(moves)
+policy first
+| state_now | step_now | -> next_state |
+| received  | cancel   | cancelled     |
+| -         | -        | state_now     |
+
+machine order(order) over moves
+  carry    state_now -> next_state
+  initial  received
+  final    delivered, cancelled
+  never    shipped after cancelled
+  possible delivered
+"##;
+const X_W135: &str = r##"rule t(t) v1
+
+inputs
+  数量(qty)   : number  range >=1 <=1000000
+  単価(price) : number  range >=1 <=1000000
+
+define 合計の元(raw_total) : number = 数量 * 単価
+
+outputs
+  合計(total) : number  round down(1)
+
+table 合計を出す(totals)
+policy first
+| -> 合計   |
+| 合計の元  |
+
+possible 合計 = 80779853376
+"##;
+const X_W135_EN: &str = r##"rule t(t) v1
+
+inputs
+  qty(qty)     : number  range >=1 <=1000000
+  price(price) : number  range >=1 <=1000000
+
+define raw_total(raw_total) : number = qty * price
+
+outputs
+  total(total) : number  round down(1)
+
+table totals(totals)
+policy first
+| -> total  |
+| raw_total |
+
+possible total = 80779853376
+"##;
 const X_E142: &str = r##"rule t(t) v1
 
 shape 注文(order) = jsonschema "order.json" "#/$defs/Order"
@@ -4810,15 +4946,15 @@ pub fn ledger() -> Vec<Entry> {
             "W127",
             tr!("ステートマシンの主張を決めきれませんでした", "A claim of the machine could not be settled"),
             tr!(
-                "主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。数を持ち越す機械（`carry` の二行目から）では、ほかに三つあります。数の値を一つずつ調べると予算を超えるので区間にまとめて調べ、区間の上で破れる並びを、本当に起きる呼び出しでは作り直せなかったとき。区間にまとめたので、どの状態からも終わりに着けるかを確かめていないとき。持ち越す数の次の値が区画の中でほかの入力とともに動き、あいだの値を一つずつは試していないとき。決めきれなかったことを、成り立つとは言いません。",
+                "主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。数を持ち越す機械（`carry` の二行目から）では、ほかに三つあります。数の値を一つずつ調べると予算を超えるので区間にまとめて調べ、区間の上で破れる並びを、本当に起きる呼び出しでは作り直せなかったとき。区間にまとめたので、どの状態からも終わりに着けるかを確かめていないとき。持ち越す数の次の値が区画の中でほかの入力とともに動き、あいだの値を一つずつは試していないとき。決めきれなかったことを、成り立つとは言いません。`possible` の行（E146）では、本当の呼び出しの並びが見つからず、無いとも言い切れないときで、見つかった並びが途中で `held` の値を変えないと通れないときや、区間の上でしか作れないときも含みます。rulec は、決めきれなかった `possible` を成り立つとは言いません。",
                 "A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. A machine that carries numbers (a `carry` line after the first) leaves three more: the numbers were walked in intervals, since every value one by one is past the budget, and a sequence that breaks the claim over the intervals could not be made again from calls that really happen; walked in intervals, that every state a case reaches can still get to a final one is not followed; or a carried number's next value moves with another input inside a cell, and the values between the ones the calls seen answered were not each tried. What was not settled is not said to hold."
             ),
             tr!(
-                "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。区間にまとめたためなら、`--budget` を上げるか持ち越す数の範囲を狭めると、値を一つずつ調べて決めます。",
+                "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。区間にまとめたためなら、`--budget` を上げるか持ち越す数の範囲を狭めると、値を一つずつ調べて決めます。 On a `possible` line (E146) it is a sequence of real calls not found and none shown not to be there, including one found that needs a `held` value to change partway or that is made only over intervals. rulec does not say an unsettled `possible` holds.",
                 "If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario. Where the carried numbers were walked in intervals, raising `--budget` or narrowing their ranges lets every value be walked one by one, and the claim settled."
             ),
             X_W127,
-            &["W114", "E128"],
+            &["W114", "E128", "E146"],
         )
         .english(X_W127_EN),
         warn(
@@ -5227,6 +5363,51 @@ pub fn ledger() -> Vec<Entry> {
             &["E142", "E143", "E018"],
         )
         .english(X_E141_EN),
+        err(
+            "E145",
+            tr!("`possible` の行の書き方が違います", "A `possible` line is not written as it can be"),
+            tr!(
+                "`machine` の中の `possible` の行に、状態でない語、知らない名前、型に合わないセルがあるとき。状態の一覧とセルを一行に混ぜたとき。`after` と `when` を一行に書いたとき。出力のセルに `when` を、持ち越す値のセルに `after` を書いたとき。名前が出力でもあり持ち越す入力でもあって、どちらの話か読めないとき。`machine` の外では、入力でも出力でも集計でもない名前、同じ名前の条件が二つ、要素のフィールド、型に合わないセルがあるとき。",
+                "A `possible` line under `machine` has a word that is not a state, a name it does not know, or a cell its type cannot hold; mixes a list of states with cells; has both `after` and `when`; writes `when` on an output's cell or `after` on a carried value's; or names something that is both an output and a carried input, so that which one it means cannot be read. Outside `machine`: a name that is neither an input, an output nor a summary, two conditions on one name, a field of an element, or a cell its type cannot hold."
+            ),
+            tr!(
+                "`machine` の中は `possible <状態>, … [after <状態>, …]`、`possible <出力> <セル> [after <状態>, …]`、`possible <持ち越す入力> <セル> [and …] [when <状態>, …]` の三つの形です。`machine` の外は `never` の行と同じ書き方で、`possible 名前 = 値, 名前 > 値` と書きます。",
+                "Under `machine` there are three forms: `possible <state>, … [after <state>, …]`, `possible <output> <cell> [after <state>, …]` and `possible <carried input> <cell> [and …] [when <state>, …]`. Outside `machine` it is written as a `never` line is: `possible name = value, name > value`."
+            ),
+            X_E145,
+            &["E146", "W135", "W127", "E141"],
+        )
+        .english(X_E145_EN),
+        err(
+            "E146",
+            tr!("`possible` に書いたことが、どの呼び出しでも起きません", "What a `possible` line says does not happen, whatever the calls"),
+            tr!(
+                "`possible` の行が言うことを、案件が着ける範囲を全部調べても見つけられなかったとき（未決着の区画が無く、持ち越す値を区間で歩いたときは区間の上でも無いとき）。何もしない表は `never` と `once` と `always` を全部守るので、この行が、表が仕事をしていることを確かめます。`machine` の外では、入力の区画を全部調べても、一度の呼び出しでその条件が同時に成り立たないとき。呼び出しは `constraint`、`never` の行、入力の範囲が受け入れるものだけを数えます。悪い例の並びはないので、本文は代わりに、見えているもの（その状態のあとに着ける状態、呼び出しが答えた値）を言います。",
+                "What a `possible` line says was not found anywhere a case can get to (no cell was left unsettled, and over the intervals too where carried values are walked in intervals). A table that does nothing keeps every `never`, `once` and `always`; this line is what shows the table does its job. Outside `machine`: every cell of the inputs was looked at and no one call has the conditions together. Only calls a `constraint`, a `never` line and the ranges of the inputs take are counted. There is no bad sequence to show, so the finding says what is there instead: the states reached after that state, the values the calls answered."
+            ),
+            tr!(
+                "行き先や答えを決める表の行を直してください。起きなくてよいことなら、`possible` の行を消してください。成り立つ行の並びは `rulec check --show-possible` で見られます。",
+                "Correct the rows that decide where a case goes and what it answers. If this need not happen, drop the `possible` line. `rulec check --show-possible` shows the calls of the lines that hold."
+            ),
+            X_E146,
+            &["E145", "E126", "W125", "W127", "W135"],
+        )
+        .english(X_E146_EN),
+        warn(
+            "W135",
+            tr!("`possible` の行を決めきれませんでした", "A `possible` line could not be settled"),
+            tr!(
+                "`machine` の外の `possible` の行で、条件に合う呼び出しが見つからず、合わないとも言い切れないとき。答えが入力から計算で出て、区画の中で値が動くときや、入力の区画が予算を超えるとき、`fold` を読むときに起きます。`machine` の中の行は W127 で言います。rulec は、決めきれなかったことを成り立つとは言いません。",
+                "A `possible` line outside `machine` has no call found that meets it and none shown that it cannot. It happens where an answer is computed from the inputs and moves inside a cell, where the inputs cut into more cells than the budget covers, or where the rule reads a `fold`. A line under `machine` says this as W127. What was not settled is not said to hold."
+            ),
+            tr!(
+                "`--budget` を上げるか、その呼び出しを `examples` に書いて確かめてください。計算で出る値なら、表の答えで分かる条件（`approved = true` など）に書き直すと決まることがあります。",
+                "Raise `--budget`, or write the call down in `examples`. For a computed value, a condition on an answer a table decides (`approved = true`) can often be settled."
+            ),
+            X_W135,
+            &["E145", "E146", "W127"],
+        )
+        .english(X_W135_EN),
         err(
             "E142",
             tr!("`never` に書いた組み合わせが、定義から起こります", "The definitions give a combination a `never` line rules out"),

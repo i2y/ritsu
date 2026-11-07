@@ -361,6 +361,135 @@ theorem finishes_of_pathOk {m : Machine} {askedOk : Point → List Rat → Bool}
       rw [hst] at hf
       exact Finishes.call hf (ih hrest)
 
+/-! ## What is to happen (rulec's §15.287)
+
+The far side of `never` and `once`: not that nothing bad is reached, but that something is, by calls
+that really happen, one after another from where a case starts. -/
+
+/-- **A case's calls that really happen**, from `init`, with whether it has been in a state of `B` yet.
+    An empty `B` asks for nothing, so a case counts as having been there from the start. -/
+inductive Happens (m : Machine) (init : Nat) (B : List Nat) : Nat → Bool → Prop
+  | start : Happens m init B init (B.isEmpty || B.contains init)
+  | call {s s' : Nat} {b : Bool} {r : Row} : Happens m init B s b → m.fires s r s' →
+      Happens m init B s' (b || B.contains s')
+
+/-- Where a path of calls leads, each made from where the one before went, and whether the case has
+    been in `B` by then. -/
+def walk (m : Machine) (askedOk : Point → List Rat → Bool) (B : List Nat) :
+    Nat × Bool → List Call → Option (Nat × Bool)
+  | q, [] => some q
+  | q, c :: cs =>
+    if c.state == q.1 then
+      match m.callOk askedOk c with
+      | some s' => m.walk askedOk B (s', q.2 || B.contains s') cs
+      | none => none
+    else none
+
+/-- **`possible A after B`**: the calls lead from `init` to `A`, the case having been in `B`. -/
+def reachedOk (m : Machine) (askedOk : Point → List Rat → Bool) (init : Nat) (B : List Nat) (A : Nat)
+    (cs : List Call) : Bool :=
+  match m.walk askedOk B (init, B.isEmpty || B.contains init) cs with
+  | some q => q.1 == A && q.2
+  | none => false
+
+/-- **`possible <output> <cell> after B`**: the calls lead from `init` to where the case has been in
+    `B`, and from there one more call goes through a row `shows` marks. -/
+def answeredOk (m : Machine) (askedOk : Point → List Rat → Bool) (init : Nat) (B : List Nat)
+    (shows : Nat → Bool) (cs : List Call) (last : Call) : Bool :=
+  match m.walk askedOk B (init, B.isEmpty || B.contains init) cs with
+  | some q => q.2 && last.state == q.1 && shows last.row && (m.callOk askedOk last).isSome
+  | none => false
+
+/-- A call that checks really happens, through the row it names. -/
+theorem fires_row_of_callOk {m : Machine} {askedOk : Point → List Rat → Bool}
+    (hask : ∀ p v, askedOk p v = true → m.table.asked p) {c : Call} {s' : Nat}
+    (h : m.callOk askedOk c = some s') : ∃ r, r.index = c.row ∧ m.fires c.state r s' := by
+  unfold callOk at h
+  cases hr : m.table.rows.find? (fun r => r.index == c.row) with
+  | none => rw [hr] at h; exact absurd h (by simp)
+  | some r =>
+    rw [hr] at h
+    dsimp only at h
+    cases hmv : m.move r.index with
+    | none => rw [hmv] at h; exact absurd h (by simp)
+    | some mv =>
+      rw [hmv] at h
+      dsimp only at h
+      split at h
+      next hc =>
+        simp only [Bool.and_eq_true] at hc
+        obtain ⟨⟨⟨⟨hsp, hak⟩, hbox⟩, hst⟩, hfirst⟩ := hc
+        have hrm : r ∈ m.table.rows := List.mem_of_find?_eq_some hr
+        have hidx : r.index = c.row := by
+          have := List.find?_some hr
+          simpa using this
+        refine ⟨r, hidx, c.point, mv, hsp, hask _ _ hak, atState_of_atStateB hst, hrm, hbox,
+          first_of_firstOk hfirst, hmv, ?_⟩
+        simpa using h
+      next => exact absurd h (by simp)
+
+/-- A path that checks is one a case makes. -/
+theorem happens_of_walk {m : Machine} {askedOk : Point → List Rat → Bool}
+    (hask : ∀ p v, askedOk p v = true → m.table.asked p) {init : Nat} {B : List Nat} :
+    ∀ {cs : List Call} {q q' : Nat × Bool}, m.Happens init B q.1 q.2 →
+      m.walk askedOk B q cs = some q' → m.Happens init B q'.1 q'.2 := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro q q' hh hw
+    simp only [walk, Option.some.injEq] at hw
+    subst hw
+    exact hh
+  | cons c cs ih =>
+    intro q q' hh hw
+    simp only [walk] at hw
+    split at hw
+    next hst =>
+      cases hc : m.callOk askedOk c with
+      | none => rw [hc] at hw; exact absurd hw (by simp)
+      | some s' =>
+        rw [hc] at hw
+        obtain ⟨r, hf⟩ := fires_of_callOk hask hc
+        have hst' : c.state = q.1 := by simpa using hst
+        rw [hst'] at hf
+        exact ih (Happens.call hh hf) hw
+    next => exact absurd hw (by simp)
+
+/-- **`possible A after B` holds**: a case gets there by calls that really happen. -/
+theorem happens_of_reachedOk {m : Machine} {askedOk : Point → List Rat → Bool}
+    (hask : ∀ p v, askedOk p v = true → m.table.asked p) {init A : Nat} {B : List Nat} {cs : List Call}
+    (h : m.reachedOk askedOk init B A cs = true) : m.Happens init B A true := by
+  unfold reachedOk at h
+  cases hw : m.walk askedOk B (init, B.isEmpty || B.contains init) cs with
+  | none => rw [hw] at h; exact absurd h (by simp)
+  | some q =>
+    rw [hw] at h
+    simp only [Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨hA, hb⟩ := h
+    have hh := happens_of_walk hask (q := (init, B.isEmpty || B.contains init)) Happens.start hw
+    rw [hA, hb] at hh
+    exact hh
+
+/-- **`possible <output> <cell> after B` holds**: having been in `B`, a case makes a call that really
+    happens through a row `shows` marks. -/
+theorem answers_of_answeredOk {m : Machine} {askedOk : Point → List Rat → Bool}
+    (hask : ∀ p v, askedOk p v = true → m.table.asked p) {init : Nat} {B : List Nat}
+    {shows : Nat → Bool} {cs : List Call} {last : Call}
+    (h : m.answeredOk askedOk init B shows cs last = true) :
+    ∃ s r s', m.Happens init B s true ∧ m.fires s r s' ∧ shows r.index = true := by
+  unfold answeredOk at h
+  cases hw : m.walk askedOk B (init, B.isEmpty || B.contains init) cs with
+  | none => rw [hw] at h; exact absurd h (by simp)
+  | some q =>
+    rw [hw] at h
+    simp only [Bool.and_eq_true, beq_iff_eq, Option.isSome_iff_exists] at h
+    obtain ⟨⟨⟨hb, hst⟩, hshow⟩, ⟨s', hc⟩⟩ := h
+    have hh := happens_of_walk hask (q := (init, B.isEmpty || B.contains init)) Happens.start hw
+    obtain ⟨r, hidx, hf⟩ := fires_row_of_callOk hask hc
+    rw [hst] at hf
+    rw [hb] at hh
+    exact ⟨q.1, r, s', hh, hf, by rw [hidx]; exact hshow⟩
+
 /-- **Finish**: from every state of the set the check passes, a final state can be reached by
     calls that really happen. With `reaches_mem`, that is every state a case can reach. -/
 theorem finishes_of_finishOk {m : Machine} {askedOk : Point → List Rat → Bool}

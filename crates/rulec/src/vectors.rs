@@ -2040,6 +2040,13 @@ pub fn constraint_holds<'v>(k: &Constraint, value: &dyn Fn(&str) -> Option<&'v V
     }
 }
 
+/// The inputs the generated vectors draw from, each one a call the door takes: where a question about
+/// one call looks when the rule's space does not cut into cells (§15.287).
+pub(crate) fn plain_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
+    let cands = candidates(f, c);
+    pool(f, c, &cands).into_iter().map(|(a, _)| a).filter(|a| allowed(f, c, a) && days_ok(c, a)).collect()
+}
+
 /// The whole suite: the cases the reference evaluator answers, and the cases it **refuses**.
 ///
 /// A refusal is an answer of its own kind. For a rule that walks a sequence it is where two
@@ -2124,6 +2131,20 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             fired,
             why: tr!("例 {}行目", "example row {}", n + 1),
         });
+    }
+
+    // The call that shows a `possible` line outside a `machine` (§15.287) stays as well: the
+    // generated code is held to answering what the line says happens.
+    for (said, a) in crate::possible::one_call_inputs(f, c) {
+        let key = key_of(&a);
+        if let Some(&i) = seen_in.get(&key) {
+            forced.insert(i);
+            continue;
+        }
+        let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
+        seen_in.insert(key, evaluated.len());
+        forced.insert(evaluated.len());
+        evaluated.push(Vector { input: a, outputs: outs, trace, fired, why: said });
     }
 
     // A row with a cell on a computed column that no vector reached may still be one the check
@@ -3508,6 +3529,15 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
         }
         if !steps.is_empty() {
             out.traces.push(Trace { why: tr!("手順の例 {}", "scenario {}", sc.name.text), steps });
+        }
+    }
+    // The calls that show a `possible` line (§15.287): every language's runner plays them. One that
+    // begins where a case starts has no call to play.
+    for cl in &a.possible_claims {
+        if let crate::possible::Possibly::Shown(t) = &cl.verdict {
+            if !t.is_empty() {
+                out.traces.push(Trace { why: cl.said.clone(), steps: t.iter().map(&step_of).collect() });
+            }
         }
     }
     Some(out)

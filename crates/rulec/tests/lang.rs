@@ -109,7 +109,10 @@ fn codes_do_not_depend_on_language() {
         s.lines().filter_map(|l| l.split("\"code\":\"").nth(1).map(|r| r.split('"').next().unwrap().to_string())).collect()
     };
     assert_eq!(codes(&ja), codes(&en), "the codes are the stable API; only the prose may differ");
-    assert!(!en.lines().any(|l| l.contains("\"title\":\"") && has_japanese(l.split("\"title\":\"").nth(1).unwrap().split("\",\"").next().unwrap())), "{en}");
+    // A title may quote a name the rule is written with (W125 names a state), so a rule written in
+    // Japanese is not read for this.
+    let in_english = |l: &&str| l.split("\"file\":\"").nth(1).is_none_or(|r| r.split('"').next().unwrap().is_ascii());
+    assert!(!en.lines().filter(in_english).any(|l| l.contains("\"title\":\"") && has_japanese(l.split("\"title\":\"").nth(1).unwrap().split("\",\"").next().unwrap())), "{en}");
 }
 
 #[test]

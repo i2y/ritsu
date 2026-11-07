@@ -130,6 +130,7 @@ const DECLARING: &[&str] = &[
     crate::kw::FOLD,
     crate::kw::CONSTRAINT,
     crate::kw::NEVER,
+    crate::kw::POSSIBLE,
     crate::kw::TABLE,
     crate::kw::CLAUSE,
     crate::kw::RESULT,
@@ -285,6 +286,7 @@ fn declared(f: &RuleFile) -> usize {
         + f.examples.len()
         + f.constraints.len()
         + f.nevers.len()
+        + f.possibles.len()
         + f.shapes.len()
         + usize::from(f.implements.is_some())
         + f.sequences.len()
@@ -321,6 +323,7 @@ fn line_shape(word: &str) -> String {
         crate::kw::FOLD => tr!("`fold <判定の列> over <並び> [-> <名前>(<別名>) : <型>]`", "`fold <verdict column> over <sequence> [-> <name>(<alias>) : <type>]`"),
         crate::kw::CONSTRAINT => tr!("`constraint <入力> <= <入力>`", "`constraint <input> <= <input>`"),
         crate::kw::NEVER => tr!("`never <名前> = <値>, <名前> >= <値>`", "`never <name> = <value>, <name> >= <value>`"),
+        crate::kw::POSSIBLE => tr!("`possible <名前> = <値>, <名前> >= <値>`", "`possible <name> = <value>, <name> >= <value>`"),
         crate::kw::TABLE => tr!("`table <名前>(<別名>)` の行と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
         crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` の行と、その下に `when …` と `then …` の行", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
         crate::kw::MACHINE => tr!("`machine <名前>(<別名>) over <表>` の行と、その下に `carry`・`initial`・`final` の行", "`machine <name>(<alias>) over <table>`, with `carry`, `initial` and `final` under it"),
@@ -427,6 +430,7 @@ impl P {
             examples: Vec::new(),
             constraints: Vec::new(),
             nevers: Vec::new(),
+            possibles: Vec::new(),
             shapes: Vec::new(),
             implements: None,
             elements: Vec::new(),
@@ -596,6 +600,12 @@ impl P {
                 crate::kw::NEVER => {
                     if let Some(n) = self.never_line(&line) {
                         f.nevers.push(n);
+                    }
+                    self.i += 1;
+                }
+                crate::kw::POSSIBLE => {
+                    if let Some(n) = self.possible_line(&line) {
+                        f.possibles.push(n);
                     }
                     self.i += 1;
                 }
@@ -2353,7 +2363,7 @@ impl P {
         // lines under a broken heading are not read again as top-level declarations. A `never`
         // under a `machine` is the machine's, and starts a line of the rule's only outside it.
         self.i += 1;
-        let block = self.block_lines_keeping(&[crate::kw::NEVER]);
+        let block = self.block_lines_keeping(&[crate::kw::NEVER, crate::kw::POSSIBLE]);
         let shape_note = || {
             tr!(
                 "形は `machine <名前>(<ascii>) over <表>` です。表は、持ち越す出力を決める表です。",
@@ -2394,6 +2404,7 @@ impl P {
             nevers: Vec::new(),
             onces: Vec::new(),
             alwayses: Vec::new(),
+            possibles: Vec::new(),
             held: Vec::new(),
             held_span: None,
             span: span.clone(),
@@ -2522,14 +2533,19 @@ impl P {
                         m.alwayses.push(a);
                     }
                 }
+                crate::kw::POSSIBLE => {
+                    if let Some(p) = self.machine_possible(&l) {
+                        m.possibles.push(p);
+                    }
+                }
                 other => {
                     self.err(
                         Diag::error("E050", tr!("`{other}` は `machine` の中に書けません", "`{other}` cannot appear under `machine`"))
                             .at(self.at(sp.line))
                             .mark(sp.clone(), "")
                             .note(tr!(
-                                "`machine` の中に書けるのは `carry`・`held`・`initial`・`final`・`never`・`once`・`always` の行です。",
-                                "The lines under `machine` are `carry`, `held`, `initial`, `final`, `never`, `once` and `always`."
+                                "`machine` の中に書けるのは `carry`・`held`・`initial`・`final`・`never`・`once`・`always`・`possible` の行です。",
+                                "The lines under `machine` are `carry`, `held`, `initial`, `final`, `never`, `once`, `always` and `possible`."
                             )),
                     );
                 }
@@ -2650,16 +2666,41 @@ impl P {
     /// the members of a set are divided by `|`, as an `enum` line divides its values.
     fn never_line(&mut self, line: &[Token]) -> Option<NeverLine> {
         let span = span_of(line);
-        let bad = |p: &mut Self, sp: Span, what: String| -> Option<NeverLine> {
-            p.err(
+        let conds = self.cond_line(line, false)?;
+        Some(NeverLine { conds, span })
+    }
+
+    /// `possible <name> = <value>, <name> >= <value>` where a line starts outside every block
+    /// (§15.287): the conditions a `never` line takes, read the same way.
+    fn possible_line(&mut self, line: &[Token]) -> Option<PossibleLine> {
+        let span = span_of(line);
+        let conds = self.cond_line(line, true)?;
+        Some(PossibleLine { conds, span })
+    }
+
+    /// The conditions of a `never` line, or of a `possible` line outside a `machine`, which is E145
+    /// where the other is E141.
+    fn cond_line(&mut self, line: &[Token], possible: bool) -> Option<Vec<NeverCond>> {
+        let span = span_of(line);
+        let bad = |p: &mut Self, sp: Span, what: String| -> Option<Vec<NeverCond>> {
+            let d = if possible {
+                Diag::error("E145", tr!("`possible` の行の形が違います", "A `possible` line is not shaped like this"))
+                    .at(p.at(sp.line))
+                    .mark(sp, what)
+                    .note(tr!(
+                        "形は `possible <名前> = <値>, <名前> >= <値>` です。条件はコンマで区切り、それぞれに名前を一つ書きます。値の集合は `状態 = 入金済み | 出荷済み`、否定は `状態 = not: 入金済み`、比較は `数 >= 1 < 5` と書きます。",
+                        "The shape is `possible <name> = <value>, <name> >= <value>`: conditions separated by commas, each on one name. A set of values is `state = paid | shipped`, its opposite `state = not: paid`, and a comparison `count >= 1 < 5`."
+                    ))
+            } else {
                 Diag::error("E141", tr!("`never` の行の形が違います", "A `never` line is not shaped like this"))
                     .at(p.at(sp.line))
                     .mark(sp, what)
                     .note(tr!(
                         "形は `never <名前> = <値>, <名前> >= <値>` です。条件はコンマで区切り、それぞれに名前を一つ書きます。値の集合は `状態 = 入金済み | 出荷済み`、否定は `状態 = not: 入金済み`、比較は `数 >= 1 < 5` と書きます。",
                         "The shape is `never <name> = <value>, <name> >= <value>`: conditions separated by commas, each on one name. A set of values is `state = paid | shipped`, its opposite `state = not: paid`, and a comparison `count >= 1 < 5`."
-                    )),
-            );
+                    ))
+            };
+            p.err(d);
             None
         };
         if line.len() < 2 {
@@ -2687,11 +2728,95 @@ impl P {
             let toks: Vec<Token> = written.iter().map(|t| if t.is(&Kind::Pipe) { Token { kind: Kind::Comma, span: t.span.clone() } } else { t.clone() }).collect();
             let cell = self.cell(&toks)?;
             if matches!(cell, Cell::DontCare) {
-                return bad(self, span_of(seg), tr!("`-` は何も外しません", "`-` leaves out nothing"));
+                let what = if possible { tr!("`-` は何も求めていません", "`-` asks for nothing") } else { tr!("`-` は何も外しません", "`-` leaves out nothing") };
+                return bad(self, span_of(seg), what);
             }
             conds.push(NeverCond { name, cell });
         }
-        Some(NeverLine { conds, span })
+        Some(conds)
+    }
+
+    /// `possible …` under `machine` (§15.287). A word that nothing follows, or a comma or `after`,
+    /// is a state; a name a cell follows is an output or a carried input, which the type check
+    /// tells apart. Only the shape is read here (E145).
+    fn machine_possible(&mut self, l: &[Token]) -> Option<PossibleDecl> {
+        let sp = span_of(l);
+        let bad = |p: &mut Self, at: Span, what: String| -> Option<PossibleDecl> {
+            p.err(
+                Diag::error("E145", tr!("`possible` の行の形が違います", "A `possible` line is not shaped like this"))
+                    .at(p.at(sp.line))
+                    .mark(at, what)
+                    .note(tr!(
+                        "形は三つです。`{p} <状態>, … {a} <状態>, …`、`{p} <出力> <セル> {a} <状態>, …`、`{p} <持ち越す入力> <セル> and … {w} <状態>, …`。`{a}` と `{w}` から後は、要らなければ書きません。",
+                        "There are three shapes: `{p} <state>, … {a} <state>, …`, `{p} <output> <cell> {a} <state>, …` and `{p} <carried input> <cell> and … {w} <state>, …`. Leave out what follows `{a}` or `{w}` when it is not needed.",
+                        p = crate::kw::POSSIBLE,
+                        a = crate::kw::AFTER,
+                        w = crate::kw::WHEN
+                    )),
+            );
+            None
+        };
+        let names = |ts: &[Token]| -> Vec<Name> { ts.iter().filter_map(|t| t.ident().map(|x| Name { text: x.to_string(), ascii: None, span: t.span.clone() })).collect() };
+        let ok_list = |ts: &[Token]| !ts.is_empty() && ts.iter().all(|t| t.ident().is_some() || t.is(&Kind::Comma)) && ts.iter().any(|t| t.ident().is_some());
+        let body = &l[1..];
+        let a = body.iter().rposition(|t| t.ident() == Some(crate::kw::AFTER));
+        let w = body.iter().rposition(|t| t.ident() == Some(crate::kw::WHEN));
+        if a.is_some() && w.is_some() {
+            return bad(self, sp.clone(), tr!("`{}` と `{}` は一つの行に書けません", "`{}` and `{}` do not go on one line", crate::kw::AFTER, crate::kw::WHEN));
+        }
+        let (head, tail) = match a.or(w) {
+            Some(k) => (&body[..k], Some(&body[k + 1..])),
+            None => (body, None),
+        };
+        if let Some(ts) = tail {
+            if !ok_list(ts) {
+                return bad(self, sp.clone(), tr!("後ろに状態がありません", "no state follows"));
+            }
+        }
+        let Some(first) = head.first() else {
+            return bad(self, sp.clone(), tr!("起きるはずのことが書かれていません", "nothing is said to happen"));
+        };
+        if first.ident().is_none() {
+            return bad(self, first.span.clone(), tr!("状態か名前で始めてください", "start with a state or a name"));
+        }
+        let after = if a.is_some() { names(tail.unwrap_or_default()) } else { Vec::new() };
+        let when = if w.is_some() { names(tail.unwrap_or_default()) } else { Vec::new() };
+        // A word nothing follows, or a comma: a list of states.
+        if head.len() == 1 || head[1].is(&Kind::Comma) {
+            if !ok_list(head) {
+                return bad(self, span_of(head), tr!("状態の一覧の形が違います", "this is not a list of states"));
+            }
+            return Some(PossibleDecl { states: names(head), tests: Vec::new(), after, when, span: sp.clone() });
+        }
+        let mut parts: Vec<Vec<Token>> = vec![Vec::new()];
+        for t in head {
+            if t.ident() == Some("and") {
+                parts.push(Vec::new());
+            } else if let Some(last) = parts.last_mut() {
+                last.push(t.clone());
+            }
+        }
+        let mut tests = Vec::new();
+        for part in parts {
+            let Some(name) = part.first().and_then(|t| t.ident()).map(|x| x.to_string()) else {
+                return bad(self, sp.clone(), tr!("`and` の区切りの中に名前がありません", "a part between `and` has no name"));
+            };
+            if part.len() < 2 {
+                return bad(self, part[0].span.clone(), tr!("{name} のセルがありません", "{name} has no cell"));
+            }
+            // A value may be written after `=`, and a set with `|`, as they are outside a `machine`.
+            let written = if part[1].is(&Kind::Eq) { &part[2..] } else { &part[1..] };
+            if written.is_empty() {
+                return bad(self, part[1].span.clone(), tr!("`=` の後に値がありません", "there is no value after `=`"));
+            }
+            let toks: Vec<Token> = written.iter().map(|t| if t.is(&Kind::Pipe) { Token { kind: Kind::Comma, span: t.span.clone() } } else { t.clone() }).collect();
+            let cell = self.cell(&toks)?;
+            if matches!(cell, Cell::DontCare) {
+                return bad(self, span_of(written), tr!("`-` は何も求めていません", "`-` asks for nothing"));
+            }
+            tests.push((Name { text: name, ascii: None, span: part[0].span.clone() }, cell, span_of(written)));
+        }
+        Some(PossibleDecl { states: Vec::new(), tests, after, when, span: sp })
     }
 
     fn constraint(&mut self, line: &[Token]) -> Option<Constraint> {

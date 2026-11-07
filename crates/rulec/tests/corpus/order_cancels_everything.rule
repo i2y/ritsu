@@ -1,0 +1,29 @@
+rule order_cancels_everything v1
+description "The same order as order_happens, with a table that does nothing useful: every event cancels it. No `never` or `once` line minds, so `check` finds no error, and only warnings say the other states are not reached. Add `possible delivered` and it stops with E146."
+
+enum order_state = received | paid | shipped | delivered | cancelled
+enum happening = pay | ship | deliver | cancel
+
+inputs
+  state : order_state
+  event : happening
+
+outputs
+  next_state : order_state
+  refund     : money[JPY]  round down(1JPY)
+
+table step
+policy unique
+| state     | event | -> next_state | refund |
+| received  | -     | cancelled     | 0JPY   |
+| paid      | -     | cancelled     | 0JPY   |
+| shipped   | -     | cancelled     | 0JPY   |
+| delivered | -     | state         | 0JPY   |
+| cancelled | -     | state         | 0JPY   |
+
+machine order over step
+  carry   state -> next_state
+  initial received
+  final   delivered, cancelled
+  never   shipped after cancelled
+  once    refund >0JPY

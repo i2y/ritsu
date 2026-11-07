@@ -3742,6 +3742,20 @@ def literal_agrees(where, axis, text, value):
 STATED = []
 
 
+def answer_shows(answer, row):
+    """Whether a row writes a value the test takes, as the certificate reads it: a value it computes
+    says nothing here (rulec's §15.287)."""
+    test = answer.get("test")
+    written = next((r for r in answer.get("rows", []) if r["row"] == row), None)
+    if test is None or written is None or written.get("value") is None:
+        return False
+    v = written["value"]
+    if "words" in test:
+        return (("true" if v else "false") if isinstance(v, bool) else str(v)) in test["words"]
+    lo, hi = test.get("lo"), test.get("hi")
+    return (lo is None or v >= lo) and (hi is None or v <= hi)
+
+
 def check_machine(cert):
     """Re-check a machine's section (§15.148, §15.149). Returns a one-line summary; raises Bad.
 
@@ -3943,6 +3957,48 @@ def check_machine(cert):
             if at_state not in finals:
                 raise Bad(f"machine: the path from {states[s]}{label} ends at {states[at_state]}, which is not final")
         claims.add("finish")
+    # What is to happen (§15.287): a path of calls that really happen, each one a point of its row's
+    # box at the state the one before it went to, made with one world's coordinates. It starts where
+    # a case starts and it ends with what the line says.
+    if m.get("possible") and coupled:
+        raise Bad("machine: calls for a `possible` line are given, and a held input is read by more than its own column")
+    for en in m.get("possible", []):
+        said, at_w, after = en["said"], en["world"], en.get("after")
+        if len(at_w) != len(fixed):
+            raise Bad(f"machine: `{said}` is not made in one of the worlds")
+        s, been = init, after is None or init == after
+        last_row, last_been = None, been
+        for st in en["path"]:
+            row, at = st["row"], st["at"]
+            if st["state"] != s or row not in rows:
+                raise Bad(f"machine: the calls of `{said}` do not follow on at row {row}")
+            if len(at) != len(axes) or any(c not in rows[row]["accepts"][ai] for ai, c in enumerate(at)):
+                raise Bad(f"machine: the call for row {row} of `{said}` is not in that row's box")
+            if any(at[fk] != c for fk, c in zip(fixed, at_w)):
+                raise Bad(f"machine: the call for row {row} of `{said}` is not made with the world's held coordinates")
+            if k is not None and at[k] != s:
+                raise Bad(f"machine: the call for row {row} of `{said}` is not made from {states[s]}")
+            why = sieve_admits(t, st.get("at_values"), at)
+            if why is None:
+                why = facts_hold(t, t["_cert"], st.get("at_values"), st.get("extra_values"))
+            if why is not None:
+                if st.get("at_values") is None or "no value is given" in why or "states no values" in why:
+                    weak += 1
+                else:
+                    raise Bad(f"machine: the call for row {row} of `{said}` is one no input makes — {why}")
+            if t["policy"] == "first":
+                for earlier in sorted(x for x in rows if x < row):
+                    if all(c in rows[earlier]["accepts"][ai] for ai, c in enumerate(at)):
+                        raise Bad(f"machine: the call for row {row} of `{said}` is taken by row {earlier} first")
+            last_row, last_been = row, been
+            s = s if moves[row] is None else moves[row]
+            been = been or s == after
+        if en["form"] == "state":
+            if s != en["state"] or not been:
+                raise Bad(f"machine: the calls of `{said}` end at {states[s]}, which is not what it says")
+        elif last_row is None or not last_been or not answer_shows(en["answer"], last_row):
+            raise Bad(f"machine: the last call of `{said}` does not answer it")
+        claims.add(said)
     if weak:
         STATED.append(f"machine: {weak} calls on the paths come with no values behind them")
     worlds = "" if not fixed else f" in {len(m['worlds'])} worlds"
@@ -4335,6 +4391,25 @@ def check_carried(cert):
             return all(v is not None and (num(v) < lo or num(v) > hi) for v in cell["values"])
         return kind == "any"
 
+    def value_fits(cell, kk, v):
+        """Whether one value a case carries is in a cell (rulec's §15.287)."""
+        kind = cell.get("cell")
+        if labels[kk] is not None:
+            w = labels[kk][int(v)]
+            if kind == "is":
+                return w in cell["words"]
+            if kind == "not":
+                return w not in cell["words"]
+            return kind == "any"
+        if kind == "cmp":
+            ops = {"<=": lambda x, y: x <= y, "<": lambda x, y: x < y, ">=": lambda x, y: x >= y, ">": lambda x, y: x > y}
+            return all(t2["value"] is not None and ops[t2["op"]](v, num(t2["value"])) for t2 in cell["tests"])
+        if kind == "in":
+            return any(x is not None and num(x) == v for x in cell["values"])
+        if kind == "not_in":
+            return all(x is not None and num(x) != v for x in cell["values"])
+        return kind == "any"
+
     for li, al in enumerate(cm.get("always", [])):
         when = set(al["when"])
         # A place outside a range is the range's claim, not this one's.
@@ -4361,96 +4436,96 @@ def check_carried(cert):
     # or a number the rule computes, inside its coordinate; the inputs keep their ranges and the
     # constraints; the values the rule computes are worked out from the inputs with every rounding
     # meeting a value on its grid; and each carried value moves on to exactly what the row writes.
-    if finals and cm.get("finish") is not None:
-        cols = [a["column"] for a in axes]
-        inputs = set(cert.get("inputs", []))
-        extras = (t.get("linear") or {}).get("extra", [])
-        paths = {place(x["place"]): x["path"] for x in cm["finish"]}
+    cols = [a["column"] for a in axes]
+    inputs = set(cert.get("inputs", []))
+    extras = (t.get("linear") or {}).get("extra", [])
 
-        def run_call(s, vals, st):
-            row, at = st["row"], st["at"]
-            if row not in rows:
-                raise Bad(f"carried values: a call on a path names row {row}, which is not in {m['table']}")
-            if len(at) != len(axes) or any(not 0 <= c < len(axes[ai]["coords"]) for ai, c in enumerate(at)):
-                raise Bad(f"carried values: the call for row {row} is not a point of the table")
-            if any(c not in rows[row]["accepts"][ai] for ai, c in enumerate(at)):
-                raise Bad(f"carried values: the call for row {row} is not in that row's box")
-            if k is not None and at[k] != s:
-                raise Bad(f"carried values: the call for row {row} is not made from {states[s]}")
-            if first and any(all(c in rows[e]["accepts"][ai] for ai, c in enumerate(at)) for e in order if e < row):
-                raise Bad(f"carried values: the call for row {row} is taken by an earlier row first")
-            env = {}
-            for n, v in (st.get("inputs") or {}).items():
-                if n not in inputs:
-                    raise Bad(f"carried values: the call for row {row} is made with {n}, which is not an input")
-                env[n] = Fraction(v)
-            try:
-                for _ in range(len(vorder) + 1):
-                    for n in vorder:
-                        if n not in env:
-                            v = exact_value(values[n], env)
-                            if v is not None:
-                                env[n] = v
+    def run_call(s, vals, st):
+        row, at = st["row"], st["at"]
+        if row not in rows:
+            raise Bad(f"carried values: a call on a path names row {row}, which is not in {m['table']}")
+        if len(at) != len(axes) or any(not 0 <= c < len(axes[ai]["coords"]) for ai, c in enumerate(at)):
+            raise Bad(f"carried values: the call for row {row} is not a point of the table")
+        if any(c not in rows[row]["accepts"][ai] for ai, c in enumerate(at)):
+            raise Bad(f"carried values: the call for row {row} is not in that row's box")
+        if k is not None and at[k] != s:
+            raise Bad(f"carried values: the call for row {row} is not made from {states[s]}")
+        if first and any(all(c in rows[e]["accepts"][ai] for ai, c in enumerate(at)) for e in order if e < row):
+            raise Bad(f"carried values: the call for row {row} is taken by an earlier row first")
+        env = {}
+        for n, v in (st.get("inputs") or {}).items():
+            if n not in inputs:
+                raise Bad(f"carried values: the call for row {row} is made with {n}, which is not an input")
+            env[n] = Fraction(v)
+        try:
+            for _ in range(len(vorder) + 1):
                 for n in vorder:
-                    if exact_value(values[n], env) != env.get(n):
-                        raise Bad(f"carried values: the call for row {row}: {n} is not what its expression comes to")
-            except Inexact as why:
-                raise Bad(f"carried values: the call for row {row} rounds a value off its grid ({why})")
-            for ai, (a, c) in enumerate(zip(axes, at)):
-                b = closed_at(t, ai, c) if (a.get("bounds") or [None] * len(a["coords"]))[c] is not None else None
-                if a["column"] not in inputs and (a["column"] not in values or b is None):
-                    raise Bad(f"carried values: the call for row {row} is laid on a table that reads {a['column']}, "
-                              f"which is neither an input nor a number the rule computes")
-                if b is not None:
-                    v = env.get(a["column"])
-                    if v is None or (b[0] is not None and v < b[0]) or (b[1] is not None and v > b[1]):
-                        raise Bad(f"carried values: the call for row {row}: {a['column']} is not inside its coordinate")
-            for n in inputs:
-                r = cert.get("ranges", {}).get(n)
-                if n in env and r is not None and r[0] is not None and r[1] is not None and not num(r[0]) <= env[n] <= num(r[1]):
-                    raise Bad(f"carried values: the call for row {row} is made with {n} outside its range")
-            for kc in cert.get("constraints", []):
-                ls, rs = side(kc["left"]), side(kc["right"])
-                if any(n not in env for n in ls + rs):
-                    raise Bad(f"carried values: the call for row {row} does not say {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
-                x, y = sum((env[n] for n in ls), Fraction(0)), sum((env[n] for n in rs), Fraction(0))
-                if not {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[kc["op"]]:
-                    raise Bad(f"carried values: the call for row {row} breaks {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
-            for line in cert.get("nevers", []):
-                if line["door"] and all(k["name"] in env for k in line["conds"]) and never_hits(line, env):
-                    raise Bad(f"carried values: the call for row {row} breaks `{line['said']}`")
-            at_values = [None if (a.get("bounds") or [None] * len(a["coords"]))[c] is None else str(env.get(a["column"]))
-                         for a, c in zip(axes, at)]
-            why = sieve_admits(t, at_values, at) or facts_hold(t, cert, at_values, [str(env[n]) if n in env else None for n in extras])
-            if why is not None:
-                raise Bad(f"carried values: the call for row {row} is one no input makes — {why}")
-            nxt = []
-            for kk, it in enumerate(items):
-                v = vals[kk]
-                ax = it.get("axis")
-                if labels[kk] is None:
-                    if env.get(it["input"]) != v:
-                        raise Bad(f"carried values: the call for row {row} is not made with {it['input']} = {v}")
-                    if ax is not None:
-                        lo, hi = closed_at(t, ax, at[ax])
-                        if (lo is not None and v < lo) or (hi is not None and v > hi):
-                            raise Bad(f"carried values: the call for row {row}: {it['input']} is not inside its coordinate")
-                elif ax is not None and axes[ax]["coords"][at[ax]] != labels[kk][int(v)]:
-                    raise Bad(f"carried values: the call for row {row} is not made with {it['input']} = {labels[kk][int(v)]}")
-                g = mv[kk][row]
-                if g[0] == "stay":
-                    w = v
-                elif g[0] == "to":
-                    w = Fraction(g[1])
-                elif g[0] == "lit":
-                    w = g[1]
-                else:
-                    w = env.get(g[1])
-                if w is None or (labels[kk] is None and grids[kk] is not None and (w / grids[kk]).denominator != 1):
-                    raise Bad(f"carried values: the call for row {row} carries {it['output']} on to a value off its grid")
-                nxt.append(w)
-            return (s if moves.get(row) is None else moves[row]), nxt
+                    if n not in env:
+                        v = exact_value(values[n], env)
+                        if v is not None:
+                            env[n] = v
+            for n in vorder:
+                if exact_value(values[n], env) != env.get(n):
+                    raise Bad(f"carried values: the call for row {row}: {n} is not what its expression comes to")
+        except Inexact as why:
+            raise Bad(f"carried values: the call for row {row} rounds a value off its grid ({why})")
+        for ai, (a, c) in enumerate(zip(axes, at)):
+            b = closed_at(t, ai, c) if (a.get("bounds") or [None] * len(a["coords"]))[c] is not None else None
+            if a["column"] not in inputs and (a["column"] not in values or b is None):
+                raise Bad(f"carried values: the call for row {row} is laid on a table that reads {a['column']}, "
+                          f"which is neither an input nor a number the rule computes")
+            if b is not None:
+                v = env.get(a["column"])
+                if v is None or (b[0] is not None and v < b[0]) or (b[1] is not None and v > b[1]):
+                    raise Bad(f"carried values: the call for row {row}: {a['column']} is not inside its coordinate")
+        for n in inputs:
+            r = cert.get("ranges", {}).get(n)
+            if n in env and r is not None and r[0] is not None and r[1] is not None and not num(r[0]) <= env[n] <= num(r[1]):
+                raise Bad(f"carried values: the call for row {row} is made with {n} outside its range")
+        for kc in cert.get("constraints", []):
+            ls, rs = side(kc["left"]), side(kc["right"])
+            if any(n not in env for n in ls + rs):
+                raise Bad(f"carried values: the call for row {row} does not say {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
+            x, y = sum((env[n] for n in ls), Fraction(0)), sum((env[n] for n in rs), Fraction(0))
+            if not {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[kc["op"]]:
+                raise Bad(f"carried values: the call for row {row} breaks {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
+        for line in cert.get("nevers", []):
+            if line["door"] and all(k["name"] in env for k in line["conds"]) and never_hits(line, env):
+                raise Bad(f"carried values: the call for row {row} breaks `{line['said']}`")
+        at_values = [None if (a.get("bounds") or [None] * len(a["coords"]))[c] is None else str(env.get(a["column"]))
+                     for a, c in zip(axes, at)]
+        why = sieve_admits(t, at_values, at) or facts_hold(t, cert, at_values, [str(env[n]) if n in env else None for n in extras])
+        if why is not None:
+            raise Bad(f"carried values: the call for row {row} is one no input makes — {why}")
+        nxt = []
+        for kk, it in enumerate(items):
+            v = vals[kk]
+            ax = it.get("axis")
+            if labels[kk] is None:
+                if env.get(it["input"]) != v:
+                    raise Bad(f"carried values: the call for row {row} is not made with {it['input']} = {v}")
+                if ax is not None:
+                    lo, hi = closed_at(t, ax, at[ax])
+                    if (lo is not None and v < lo) or (hi is not None and v > hi):
+                        raise Bad(f"carried values: the call for row {row}: {it['input']} is not inside its coordinate")
+            elif ax is not None and axes[ax]["coords"][at[ax]] != labels[kk][int(v)]:
+                raise Bad(f"carried values: the call for row {row} is not made with {it['input']} = {labels[kk][int(v)]}")
+            g = mv[kk][row]
+            if g[0] == "stay":
+                w = v
+            elif g[0] == "to":
+                w = Fraction(g[1])
+            elif g[0] == "lit":
+                w = g[1]
+            else:
+                w = env.get(g[1])
+            if w is None or (labels[kk] is None and grids[kk] is not None and (w / grids[kk]).denominator != 1):
+                raise Bad(f"carried values: the call for row {row} carries {it['output']} on to a value off its grid")
+            nxt.append(w)
+        return (s if moves.get(row) is None else moves[row]), nxt
 
+    if finals and cm.get("finish") is not None:
+        paths = {place(x["place"]): x["path"] for x in cm["finish"]}
         for p in sorted(places):
             if p[0] in finals:
                 continue
@@ -4464,6 +4539,39 @@ def check_carried(cert):
             if s not in finals:
                 raise Bad(f"carried values: the path from a place at {states[p[0]]} ends at {states[s]}, which is not final")
         claims.append("finish")
+    # What is to happen (rulec's §15.287): each call run as a case makes it, from where a case starts,
+    # keeping the held columns' coordinates. What it ends in is what the line says.
+    fixed = m.get("held", [])
+    for en in cm.get("possible", []):
+        said = en["said"]
+        s, vals = start[0], [coords[kk][c][0] for kk, c in enumerate(start[1])]
+        if any(c == OUT or coords[kk][c][0] != coords[kk][c][1] for kk, c in enumerate(start[1])):
+            raise Bad(f"carried values: `{said}` starts from a place that stands for more than one value")
+        been = en.get("after") is None or s == en["after"]
+        steps = en["path"]
+        form = en["form"]
+        last_row, last_been = None, been
+        for st in steps:
+            if any(st["at"][fk] != steps[0]["at"][fk] for fk in fixed):
+                raise Bad(f"carried values: the calls of `{said}` do not keep a held input's coordinate")
+            for n in m.get("held_inputs", []):
+                if (st.get("inputs") or {}).get(n) != (steps[0].get("inputs") or {}).get(n):
+                    raise Bad(f"carried values: the calls of `{said}` do not keep {n}")
+            last_row, last_been = st["row"], been
+            s, vals = run_call(s, vals, st)
+            been = been or s == en.get("after")
+        if form == "state":
+            if s != en["state"] or not been:
+                raise Bad(f"carried values: the calls of `{said}` end at {states[s]}")
+        elif form == "output":
+            if last_row is None or not last_been or not answer_shows(en["answer"], last_row):
+                raise Bad(f"carried values: the last call of `{said}` does not answer it")
+        else:
+            if en.get("when") is not None and s != en["when"]:
+                raise Bad(f"carried values: the calls of `{said}` end at {states[s]}")
+            if not all(value_fits(tt["cell"], tt["item"], vals[tt["item"]]) for tt in en["tests"]):
+                raise Bad(f"carried values: the calls of `{said}` do not end with what it names")
+        claims.append(said)
     # A claim laid here is laid: the closure over the state alone could not carry it (its rows
     # move the carried values too), and it is no longer listed as stated for that.
     laid_once = {m["once"][int(c.split()[1])]["output"] for c in claims if c.startswith("once ")}
@@ -4544,7 +4652,9 @@ def check_machine_cells(cert, path):
         if not answer_cell(r["row"], out, src):
             raise Bad(f"machine: row {r['row']}'s move is not read from the row's own cell of {out}")
         read += 1
-    for on in m["once"]:
+    # What a `possible` line about an output reads on each row is held the same way (§15.287).
+    possible_answers = [en["answer"] for en in m.get("possible", []) + (m.get("carried") or {}).get("possible", []) if "answer" in en]
+    for on in m["once"] + possible_answers:
         test = on.get("test")
         if test is None:
             continue
@@ -4785,6 +4895,10 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
+    # A `possible` line outside a `machine` (rulec's §15.287): the call that shows it is listed, and what
+    # the rule answers to it is not worked out here.
+    for en in cert.get("possible") or []:
+        STATED.append(f"`{en['said']}`: the call that shows it is listed, and what it answers is not worked out here")
     for p in cert.get("prerequisites") or []:
         try:
             out.append("  " + check_prerequisites(cert, p))

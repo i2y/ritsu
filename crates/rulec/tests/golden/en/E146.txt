@@ -1,0 +1,8 @@
+error[E146]: No sequence of calls makes `possible delivered` happen
+  --> tests/mutants/m_e146.rule:30 machine order
+   |
+30 |   possible delivered
+   |   ^^^^^^^^^^^^^^^^^^
+   |
+ From received a case reaches received / cancelled. delivered is not among them.
+ Everywhere a case can get to was looked at. Correct the rows that decide where a case goes and what it answers, or drop the `possible` line if this need not happen.
