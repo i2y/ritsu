@@ -535,3 +535,55 @@ examples
     let e = &c["elements"][0];
     assert_eq!(e["fields"]["category"].as_str(), Some("service"), "{out}");
 }
+
+/// `--no-claims`: a `.geas` file is read and nothing it names is run, no journal is written, and it
+/// still counts as a file of the project. What can be said without a run stops the check all the
+/// same: a line that does not parse, and a call its contract does not have.
+#[test]
+fn no_claims_reads_the_claim_files_and_runs_nothing() {
+    let t = TempDir::new("check-no-claims");
+    let mark = t.path().join("ran");
+    t.write("leave_a_mark.sh", format!("touch '{}'\n", mark.display()));
+    t.write("api.yaml", "openapi: 3.0.3\ninfo: {title: leave, version: \"1\"}\npaths:\n  /leave:\n    get:\n      responses:\n        \"200\": {description: ok}\n");
+    let claim = "target mark {\n  run \"sh leave_a_mark.sh\"\n}\n\nclaim \"it leaves a mark\" {\n  when mark.run()\n  then exit is 0\n}\n";
+    t.write("mark.geas", claim);
+    t.write("ritsu.mod", "module example.com/acme/leave\nversion 1.0.0\ndescription \"Leave\"\n");
+
+    let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--no-claims"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("1 claim · not run\n"), "{out}");
+    assert!(out.contains("ritsu check: 1 file (geas 1): all pass"), "{out}");
+    assert!(!mark.exists(), "a claim ran:\n{out}");
+    assert!(!t.path().join(".geas").exists(), "a journal was written");
+
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--no-claims", "--lang", "ja"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("主張 1 件 · 走らせていません\n"), "{out}");
+
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--no-claims", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let file = &v["files"].as_array().unwrap()[0];
+    assert_eq!((file["file"].as_str(), file["ok"].as_bool(), file["check"]["claims_not_run"].as_i64()), (Some("mark.geas"), Some(true), Some(1)), "{out}");
+    assert!(!mark.exists(), "a claim ran:\n{out}");
+
+    // a call the contract does not have, before anything runs
+    let held = "target api {\n  serve \"sh leave_a_mark.sh {port}\"\n  port auto\n  contract \"api.yaml\"\n}\n\nclaim \"it answers\" {\n  when api.get(\"/nothing\")\n  then status is 200\n}\n";
+    t.write("mark.geas", held);
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--no-claims"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("E016"), "{out}");
+    assert!(!mark.exists(), "a claim ran:\n{out}");
+
+    // a line that does not parse
+    t.write("mark.geas", "claim \"it never ends\" {\n");
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--no-claims"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[geas E"), "{out}");
+
+    // and without the flag it does run, which is what the mark above is there to tell
+    t.write("mark.geas", claim);
+    let (code, out, _) = ritsu_in(t.path(), &["check", "."]);
+    assert_eq!(code, 0, "{out}");
+    assert!(mark.exists(), "the claim did not run:\n{out}");
+}

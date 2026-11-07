@@ -518,7 +518,7 @@ fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
     2
 }
 
-/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings]`: the exit
+/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims]`: the exit
 /// code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let code = run(args, lang, &mut std::io::stdout(), &mut std::io::stderr());
@@ -551,10 +551,11 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
             _ => return refuse(Text::new(format!("`--budget {v}` は正の整数ではありません"), format!("`--budget {v}` is not a positive integer")), lang, err),
         },
     };
-    let project = match Project::load(&a.pos, a.get("--root")) {
+    let mut project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
         Err(e) => return refuse(e, lang, err),
     };
+    project.run_claims = !a.has("--no-claims");
     let deps_warnings = a.has("--deps-warnings");
     let json = a.get("--format") == Some("json");
     // In a module, the tree first (DESIGN 17.8): what stops the run is said and the run stops
@@ -576,7 +577,7 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
     }
     let project = project.with_dependencies();
     // a spec's claims start process groups; a signal stops them before ritsu goes
-    if project.files.iter().any(|f| f.tool == Tool::Geas) {
+    if project.run_claims && project.files.iter().any(|f| f.tool == Tool::Geas) {
         geas::proc::stop_groups_on_signals();
     }
     let joined = Joined::with_budget(budget);

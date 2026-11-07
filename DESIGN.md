@@ -1608,7 +1608,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 ### 8.1 ritsu のコマンド
 
 ```
-ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--lang ja|en]
+ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims] [--lang ja|en]
 ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <target>] [--format json]
 ritsu gen [<パス>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
 ritsu gen --library [--embed <名前>]... [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
@@ -1622,6 +1622,7 @@ ritsu --help | --version
 - `ritsu check` は、パスを渡さなければ今いるディレクトリを読む。各言語の `check` を全部のファイルに走らせ、言語をまたぐ検査をし、最後に一行の要約（言語ごとのファイルの数、確かめた境目の数、決められなかった数）を出す。
 - `--budget <n>` は、空間を歩く検査の上限で、rulec の検査（区画とステートマシン）が一つの規則で訪れるノード数と、sekisho が一つの action で歩く組み合わせの数に、同じ数を渡す（`ritsu_project::Joined::with_budget`）。既定は言語ごとの既定（rulec は 50,000,000、sekisho は 100,000,000）のまま。koyomi の検査も予算（E305）を持つが、koyomi の口が予算を持たないので、いまは渡さない。
 - `--deps-warnings` は、モジュールの全体を検査するとき、依存のファイルの警告も一つずつ出す。無ければ、依存ごとの数だけを出す（17.8）。
+- `--no-claims` は、手元の `.geas` を読むだけにして、主張を走らせず、ジャーナルも書かない。読めないファイル、構文、書いてある鍵、`contract` の文書との突き合わせ（E015、E016、W015）は確かめ、`.geas` は検査したファイルに数える。人が書いたモジュールを確かめるときと、ディスクに無いリビジョンを確かめるときの形で、`ritsu mod site`、`ritsu mod report`、`ritsu impact` はこれで検査する。走らせれば、作者が書いたプログラムがその機械で動くからである（17.8 の依存と同じ理由）。
 - `ritsu gen` は、`--target`（何度でも書ける）か、無ければ `ritsu.mod` の `target` の行（17.3）が挙げる出力先だけを書く。どちらも無ければ、何も書かずに exit 2 で止まり、0.40.0 と同じファイルを書くコマンドを示す（9.3、9.6）。
 - `ritsu mod …` は、モジュールのコマンドで、`ritsu <言語>` と同じく自分のコマンドの表を持つ（17.19）。通信するのはこのコマンドだけである（17.1 の M4）。
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
@@ -3988,6 +3989,10 @@ yuen のほかの五つは、インターフェースの差と、使う側の検
 
 **名前が同じ二つの側**。二つの側の書き方が同じとき（同じ `<名前>@<版>` を二度、`.` を二度、同じファイルを二度、`ritsu mod report` のタグが動いたモジュール）は、見出しの二つの側と、振る舞いの差の中のファイルの名前の後ろに、その側のダイジェストの先頭（`sha256:` と 16 進の 12 字）を括弧に入れて付ける（`@pricing@1.1.0/rules/shipping_fee.rule (sha256:<12 字>)`）。使うダイジェストは、両方の側が OCI のマニフェストのダイジェストを持てばそれ、そうでなければ両方ともファイルのダイジェスト（JSON の `files_digest`）、二つのファイルの差ではそれぞれのバイトのダイジェストである。同じ版を二つ並べれば、先頭も同じになる。テキストと markdown のほか、JSON の振る舞いの差の、言語の diff の `old` と `new` の名前にも付く。
 
+**規則が呼ぶ側に求めること**。`api` の `preconditions`（`constraint`、`never`、集計の上限、日の集合）は、並びを見ずに一つずつ比べ、片方にだけあるものを `/preconditions/<番号>` の足した差と消えた差にして、値に行の文を置く。行を上に足しても、下の行の差にはならない。足した差は使う側を壊しうる差に数え、消えた差は数えない。ほかの差と向きが逆なのは、新しい条件が前は通っていた呼び出しを拒み、消えた条件は求めるものが減るだけだからである。表の答えが同じでも、この差があれば `ritsu mod diff` は exit 1 を返す。
+
+**`fed by` の行**。値の出どころの行は、使う側のコードが読むものではないので、インターフェースの差に数えない。場所と二つの版の出どころを `fed_by` に置き、差を一行で言う。これだけなら `ritsu mod diff` は exit 0 で、違いなしと言う。`ritsu impact` の `interface_changes` にだけ数えるのは、行を消すと `ritsu check` が確かめるものが減り、誰かが読むべきだからである。
+
 **出力**。テキストと markdown は、見出し（二つの側と版）、ファイルの一覧、`require` の変わり、ファイルごとの振る舞いの差（その言語の diff の出力）、インターフェースの差、動いた要件、まとめの一文の順に並べる。インターフェースの差は、壊しうる差を先に並べる。同じ変わり方で同じ値の差が、場所の一つの部分だけ違って三つ以上あれば、一行にまとめてその部分を `{python,go,rust}` と書く。規則の api には生成する言語ごとの部分があり、規則の一つの変わりが言語の数だけ出るからである。api の形が変わらず、帳簿の壊れる差も無いファイルは、一つずつ並べずに一行で言う（「ほかの 3 個のファイルは、インターフェースが変わりません」）。ファイルの一覧と、一つのファイルのインターフェースの差は 200 行まで出し、残りは数だけを言う（`ritsu mod report` の markdown では 50 行まで）。markdown では、`@` を含む語を全部コードの書き方にする（17.10 と同じ）。JSON は全部を持つ。
 
 **終了コード**：0（違いが無い）、1（振る舞いかインターフェースか要件に違いが見つかった）、2（比べられない）。違いに数えるのは、振る舞いの答えの違い、言語のファイルを足したか消したこと、インターフェースの差、帳簿の E050 と E051、規則の E310、動いた要件である。違いが見つからず、振る舞いを比べられなかったファイル（検査を通らない、上限を超える）があれば 2 で、違いが無いとは言わない。違いが見つかれば、比べられなかったファイルがあっても 1 である。
@@ -4683,7 +4688,7 @@ warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` re
 
 **`sekisho diff --format json`**：`{"sekisho", "old": {"file", "name", "version"}, "new": {…}, "actions": [{"action", "combinations", "gained": [{"count", "old_policies", "new_policies", "examples": [{<名前>: <値>}]}], "lost": […], "reasons": […], "unknown": [{"count", "examples"}], "frames_only_old": ["<principal の型> → <resource の型>"], "frames_only_new": […], "same_elsewhere": true | false}], "only_old": {"actions", "roles", "attributes", "inputs", "types"}, "only_new": {…}, "total": {"gained", "lost", "reasons", "unknown"}}`。例のキーは新しい版の名前で、古い版の値が違えば `old <名前>` のキーに置く（17.9.4）。`same_elsewhere` は、決められない組み合わせが無ければ true である。
 
-**インターフェースの差**（`ritsu mod diff` の中）：`{"file", "tool": <言語> | null, "how": "api" | "items" | "digest", "version": {"old", "new"} | null, "changes": [{"at", "change": "added" | "removed" | "changed", "old", "new", "may_break": true | false}], "breaks": [{"tool": "chobo" | "ritsu", <診断の JSON>}], "note": null | "<文>"}`。`tool` は、言語の無いファイル（データ、文書）で null である。`breaks` は、帳簿の E050・E051・W107（`tool` は `chobo`）と規則の E310（`tool` は `ritsu`）で中身を持ち、ほかは空の配列である。`breaks` の `tool` は、コードがどの道具のものかで（chobo の E050 と dandori の E050 は別のコードである）、ファイルの `tool` とは別である。`note` は、api の JSON か中のものを比べられず、ダイジェストだけを比べたときの理由である。
+**インターフェースの差**（`ritsu mod diff` の中）：`{"file", "tool": <言語> | null, "how": "api" | "items" | "digest", "version": {"old", "new"} | null, "changes": [{"at", "change": "added" | "removed" | "changed", "old", "new", "may_break": true | false}], "fed_by": [{"at", "old": <文字列> | null, "new": <文字列> | null}], "breaks": [{"tool": "chobo" | "ritsu", <診断の JSON>}], "note": null | "<文>"}`。`tool` は、言語の無いファイル（データ、文書）で null である。`breaks` は、帳簿の E050・E051・W107（`tool` は `chobo`）と規則の E310（`tool` は `ritsu`）で中身を持ち、ほかは空の配列である。`breaks` の `tool` は、コードがどの道具のものかで（chobo の E050 と dandori の E050 は別のコードである）、ファイルの `tool` とは別である。`note` は、api の JSON か中のものを比べられず、ダイジェストだけを比べたときの理由である。
 
 **`ritsu mod diff --format json`**：`{"ritsu", "old": {"path", "module", "version", "digest", "files_digest", "commit"}, "new": {…}, "files": {"added", "removed", "changed", "same"}, "requires": {"added": [{"name", "module", "version"}], "removed": […], "changed": [{"name", "old", "new"}]}, "behavior": [{"file", "tool", "result": <その言語の diff の JSON> | null, "error": null | "<文>"}], "interface": [<インターフェースの差>], "why": [<動いた要件>], "differs": true | false}`。`why` の各項目は `{"file", "line", "requirement", "change", "text": {"old", "new"}, "in_force": {"old", "new"}, "owner": {"old", "new"}, "decided": [{"date", "by", "why"}], "from": [{"what", "id", "asof": {"old", "new"}, "change", "lines": [{"op", "text"}], "more"}], "links": [{"role", "artifact", "path", "change"}], "waivers": [{"role", "why"}], "looked": [{"date", "by"}], "unsettled"}` で、`change` は `added`、`removed`、`changed` か、動いていないものでは null である（17.9.5）。`path` は側の書き方（`example.com/acme/pricing@1.0.0`、ディレクトリ、`.`）で、`digest` は置き場の版（OCI のマニフェストのダイジェスト）だけが持つ。`files_digest` はモジュールのファイルのダイジェスト（運ぶファイルの tar の。`ritsu mod list` と lock の `files_digest` と同じ値）で、どの書き方の側も持つ。`commit` は git から取った版だけが持つ。二つのファイルの差では、`module`、`version`、`digest`、`files_digest` は null である。名前が同じ二つの側では、`behavior` の言語の diff の `old` と `new` の名前に、ダイジェストの先頭が付く（17.9.6）。`error` は、振る舞いを比べられなかったときの理由で、そのとき `result` は null である。
 

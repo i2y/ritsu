@@ -299,8 +299,8 @@ impl Impact {
         let changed = classify(&files, &base_files, &head_files, root);
 
         // the two checks, with no claim run
-        let base_check = check_side(Some(base_files.clone()), root, budget, joined, lang);
-        let head_check = check_side(head_files.clone(), root, budget, joined, lang);
+        let base_check = check_side(Some(base_files.clone()), root, budget, lang);
+        let head_check = check_side(head_files.clone(), root, budget, lang);
         for (side, name) in [(&base_check, base.to_string()), (&head_check, head.unwrap_or("working tree").to_string())] {
             for t in &side.trouble {
                 undecided.push((format!("check: {name}"), t.clone()));
@@ -520,11 +520,11 @@ fn has_file_of(side: &Option<Rc<dyn Files>>, root: &Path, tool: Tool) -> bool {
 }
 
 /// `ritsu check` of one side, its `.geas` files only read (nothing is run: the side may not be on the
-/// disk).
-fn check_side(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, joined: &Joined, lang: Lang) -> Side {
+/// disk, and a report starts no service).
+fn check_side(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, lang: Lang) -> Side {
     let mut side = Side::default();
     let args = report::check_args(root, budget);
-    let ran = report::check_ran(files.clone(), root, lang, |o, e| ritsu_project::project::without_own_claims(|| ritsu::check::run(&args, lang, o, e)));
+    let ran = report::check_ran(files, root, lang, |o, e| ritsu::check::run(&args, lang, o, e));
     if let Some((diags, counts)) = ran.found {
         side.diags = diags;
         side.counts = counts;
@@ -534,16 +534,6 @@ fn check_side(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, jo
         if side.trouble.is_empty() {
             side.trouble.push(tr!("`ritsu check` が確かめられないファイルがありました", "`ritsu check` could not check a file"));
         }
-    }
-    let specs: Vec<String> = files_of(&files, root, Tool::Geas).into_iter().map(|f| root.join(f).to_string_lossy().into_owned()).collect();
-    let found = within(files, || joined.geas.read_only(root, &specs, lang));
-    for f in &found {
-        match f.severity {
-            Severity::Error => side.counts.errors += 1,
-            Severity::Warning => side.counts.warnings += 1,
-            _ => {}
-        }
-        side.diags.push(ritsu::check::entry("geas", f));
     }
     side
 }
@@ -848,7 +838,8 @@ fn facts_of(changed: &[Changed], new: &[Json], d: &ModDiff, undecided: &[(String
     }
     let (mut iface, mut breaks) = (0i128, 0i128);
     for i in &d.interface {
-        iface += i.changes.len() as i128;
+        // a `fed by` line is no change of the interface, and dropping one loosens what the check holds
+        iface += (i.changes.len() + i.fed_by.len()) as i128;
         let wrong = i.breaks.iter().filter(|(_, f)| f.severity == Severity::Error).count() as i128;
         breaks += i.changes.iter().filter(|c| c.may_break()).count() as i128 + wrong;
         if i.tool == Some(Tool::Chobo) {

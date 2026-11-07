@@ -658,6 +658,41 @@ fn what_cannot_be_compared_makes_exit_2_and_the_json_goes_to_its_end() {
     assert!(out.contains("比べられないもの、決められないもの"), "{out}");
 }
 
+/// A `fed by` line moves no answer and no interface, and it still goes to a person: dropping one
+/// loosens what the check holds. A `never` line changes what a caller may send, whatever the table
+/// answers.
+#[test]
+fn a_line_on_a_values_source_and_a_line_on_what_callers_may_send() {
+    if no_git() {
+        return;
+    }
+    let origin = "rule origin(origin) v1\ndescription \"A number of items\"\n\ninputs\n  counted : number  range >=1 <=60\n\noutputs\n  items : number  round down(1)\n\ndefine as_counted : number = counted\n\ntable items\npolicy unique\n| counted | -> items    |\n| -       | as_counted |\n";
+    let desk = |what: &str| {
+        let d = Desk::empty(what);
+        copy_into(&d.repo, &here().join("examples/impact"), "");
+        d.repo.write("origin.rule", origin);
+        d.repo.commit("the desk");
+        d.repo.tag("base");
+        d
+    };
+    let d = desk("impact-fed-by");
+    d.edit("refund_band.rule", "  items : number  range >=1 <=60\n", "  items : number  range >=1 <=60  fed by rulec \"origin.rule\" output items\n");
+    d.review("refunds.req", "development");
+    let (code, v, _) = d.json(&["--route", "route.rule"]);
+    assert_eq!(code, 0, "{}", v["markdown"]);
+    assert_eq!((fact(&v, "rule_changes"), fact(&v, "interface_changes"), fact(&v, "interface_breaks")), (0, 1, 0), "{}", v["facts"]);
+    assert!(v["markdown"].as_str().unwrap().contains("`inputs/items` now says where its value comes from: `rulec \"origin.rule\" output items`"), "{}", v["markdown"]);
+    assert_eq!(the_route(&v), ("owner_reads", true), "{}", v["markdown"]);
+
+    let d = desk("impact-never");
+    d.edit("origin.rule", "\noutputs\n", "\nnever counted = 7\n\noutputs\n");
+    let (code, v, _) = d.json(&["--route", "route.rule"]);
+    assert_eq!(code, 0, "{}", v["markdown"]);
+    assert_eq!((fact(&v, "interface_changes"), fact(&v, "interface_breaks")), (1, 1), "{}", v["facts"]);
+    assert!(v["markdown"].as_str().unwrap().contains("never counted = 7"), "{}", v["markdown"]);
+    assert_eq!(the_route(&v), ("owner_reads", true), "{}", v["markdown"]);
+}
+
 // ── The route rule ──────────────────────────────────────────────────────
 
 /// A route rule whose inputs are `inputs` and which always answers `merge`.

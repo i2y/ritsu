@@ -366,8 +366,10 @@ ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the langua
 ```
 
 That line counts a dependency's warnings, and `--deps-warnings` shows each. A dependency's `.geas`
-claims are not run. An error in a dependency's own files is its author's to fix: tell the person,
-and do not copy the files into the project to change them.
+claims are not run. `--no-claims` treats the module at hand the same way: its `.geas` files are read
+and nothing is run, which is how to check a module someone else wrote. An error in a dependency's own
+files is its author's to fix: tell the person, and do not copy the files into the project to change
+them.
 
 **Raising a version** changes the answers of the files that read the module, so show what it changes
 before it is merged. `ritsu mod diff <module>@<old> <module>@<new>` compares two versions of a

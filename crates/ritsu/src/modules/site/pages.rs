@@ -150,14 +150,17 @@ pub(super) struct Check {
     errors: usize,
     /// What it printed, when it does not pass.
     said: String,
+    /// Whether the version has `.geas` files, read and not run.
+    claims: bool,
 }
 
-/// `ritsu check .` in the directory of a version, and what it says; None when it could not be run
-/// or printed nothing a page can read.
-fn check_of(root: &Path, lang: Lang) -> Option<Check> {
+/// `ritsu check . --no-claims` in the directory of a version, and what it says; None when it could not
+/// be run or printed nothing a page can read. The claims are not run: they would run the programs the
+/// module's author wrote on the machine that builds the site (DESIGN 17.8).
+fn check_of(root: &Path, lang: Lang, claims: bool) -> Option<Check> {
     let exe = std::env::current_exe().ok()?;
-    let run = |format: &str| std::process::Command::new(&exe).current_dir(root).args(["check", ".", "--format", format, "--lang", lang.code()]).output().ok();
-    let o = run("json")?;
+    let run = |more: &[&str]| std::process::Command::new(&exe).current_dir(root).args(["check", ".", "--no-claims", "--lang", lang.code()]).args(more).output().ok();
+    let o = run(&["--format", "json"])?;
     let j = ritsu_base::json::parse(String::from_utf8_lossy(&o.stdout).trim()).ok()?;
     let ok = j.get("ok").and_then(Json::as_bool)?;
     let own = |f: &&Json| f.get("dependency").is_none_or(Json::is_null);
@@ -165,10 +168,10 @@ fn check_of(root: &Path, lang: Lang) -> Option<Check> {
     let files = listed.iter().filter(own).count();
     let bad = listed.iter().filter(own).filter(|f| f.get("ok").and_then(Json::as_bool) == Some(false)).count();
     if ok {
-        return Some(Check { files, errors: 0, said: String::new() });
+        return Some(Check { files, errors: 0, said: String::new(), claims });
     }
-    let said = run("text").map(|t| String::from_utf8_lossy(&t.stdout).into_owned() + &String::from_utf8_lossy(&t.stderr)).unwrap_or_default();
-    Some(Check { files, errors: bad.max(1), said })
+    let said = run(&[]).map(|t| String::from_utf8_lossy(&t.stdout).into_owned() + &String::from_utf8_lossy(&t.stderr)).unwrap_or_default();
+    Some(Check { files, errors: bad.max(1), said, claims })
 }
 
 /// A version, read for its pages.
@@ -370,7 +373,8 @@ impl Writer<'_> {
             self.write(&format!("{dir}/module.json"), &json)?;
         }
         let changes = before.and_then(|p| p.module.as_ref().map(|pm| (p.version.clone(), diff::modules(pm, m, None, self.lang, &self.joined))));
-        Ok(Read { shown: v, holds, check: check_of(&m.root, self.lang), changes })
+        let claims = m.files.keys().any(|f| diff::tool_of(f) == Some(Tool::Geas));
+        Ok(Read { shown: v, holds, check: check_of(&m.root, self.lang, claims), changes })
     }
 
     /// The list's `signature` lines that cover the module `name`.
@@ -417,7 +421,8 @@ impl Writer<'_> {
             let n = c.files;
             if c.errors == 0 {
                 if n > 0 {
-                    out.push(Proof { ok: true, html: inline(&self.say(tr!("`ritsu check` を通ります", "Passes `ritsu check`"))) });
+                    let said = if c.claims { tr!("`ritsu check` を通ります（主張は走らせていません）", "Passes `ritsu check`, its claims not run") } else { tr!("`ritsu check` を通ります", "Passes `ritsu check`") };
+                    out.push(Proof { ok: true, html: inline(&self.say(said)) });
                 }
             } else {
                 let e = c.errors;
@@ -1003,11 +1008,23 @@ impl Writer<'_> {
         }
         if let Some(c) = &r.check {
             let f = c.files;
+            let command = if c.claims { "ritsu check . --no-claims" } else { "ritsu check ." };
+            let not_run = if c.claims {
+                format!(
+                    " {}",
+                    inline(&self.say(tr!(
+                        "`.geas` の主張は読むだけで、走らせていません。走らせると、モジュールの作者が書いたプログラムがこのサイトをビルドする機械で動くからです。",
+                        "The claims of its `.geas` files were read and not run: running them would run its author's programs on the machine that builds this site."
+                    )))
+                )
+            } else {
+                String::new()
+            };
             let html = if c.errors == 0 {
                 let w = plural(f, "file", "files");
-                inline(&self.say(tr!("`ritsu check .`：ファイル {f} 個がすべて通りました。", "`ritsu check .`: all {w} pass.")))
+                format!("{}{not_run}", inline(&self.say(tr!("`{command}`：ファイル {f} 個がすべて通りました。", "`{command}`: all {w} pass."))))
             } else {
-                format!("<span class=\"warn\">{}</span><details><summary>{}</summary><pre class=\"code\"><code>{}</code></pre></details>", inline(&self.say(tr!("`ritsu check .` がエラーを出しました。", "`ritsu check .` found errors."))), esc(&self.say(tr!("言語の出力", "What it said"))), esc(c.said.trim()))
+                format!("<span class=\"warn\">{}</span>{not_run}<details><summary>{}</summary><pre class=\"code\"><code>{}</code></pre></details>", inline(&self.say(tr!("`{command}` がエラーを出しました。", "`{command}` found errors."))), esc(&self.say(tr!("言語の出力", "What it said"))), esc(c.said.trim()))
             };
             o.push_str(&item(tr!("検査", "Check"), html));
         }

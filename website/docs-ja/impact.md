@@ -93,7 +93,7 @@ policy unique
 | `allow_gained`、`allow_lost` | ゲートが新しく許可する、拒否するようになった組み合わせの数 |
 | `policies_moved` | 答えは同じで効くポリシーが変わった組み合わせの数、片方の版にしかないものの有無、足した・消したゲートの数 |
 | `book_changes` | `.book` が出すものの変更の数と、足した・消した帳簿の数 |
-| `interface_changes`、`interface_breaks` | 使う側のコードから見える変更の数と、そのうち壊す可能性のあるものの数 |
+| `interface_changes`、`interface_breaks` | 使う側のコードから見える変更の数と、そのうち壊す可能性のあるものの数。`fed by` の行を足す、消す、変えるのも変更に数えます。消すと検査が確かめるものが減るからです |
 | `undecided` | 比べられなかった、決められなかったものの数 |
 | `opaque_specs` | 変わった `.flow`、`.kn`、`.ctx`、`.geas`、`.proto` の数。中身は比べません |
 | `requirements_moved`、`requirements_unknown` | 動いた要件の数と、どの要件にも届かない仕様とコードの数 |

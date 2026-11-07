@@ -128,7 +128,7 @@ Counts are `number` inputs, 0 or more, and the rest are `bool`.
 | `allow_gained`, `allow_lost` | the combinations a gate now allows or denies that it did not |
 | `policies_moved` | the combinations with the same answer from other policies, what only one version of a gate has, and the gates added or removed |
 | `book_changes` | the changes to what a `.book` offers, and the books added or removed |
-| `interface_changes`, `interface_breaks` | the changes to what files offer the code that uses them, and those that can break it |
+| `interface_changes`, `interface_breaks` | the changes to what files offer the code that uses them, and those that can break it. A `fed by` line added, dropped or moved counts as a change here, because dropping one loosens what the check holds |
 | `undecided` | what could not be compared or decided |
 | `opaque_specs` | the changed `.flow`, `.kn`, `.ctx`, `.geas` and `.proto` files, whose contents are not compared |
 | `requirements_moved`, `requirements_unknown` | the requirements that moved, and the changed specs and code no requirement reaches |

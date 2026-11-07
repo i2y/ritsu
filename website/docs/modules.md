@@ -348,6 +348,8 @@ pages, and `--alternate <lang>=<path>` links each page to the same page of the s
 language, by the path from this site's root. The command exits 1 when a version cannot be verified,
 which its page says, and 2 when the list does not read or a registry or a repository cannot be
 reached. A version that does not pass `ritsu check` is shown as it is, with what the check said.
+The check is `ritsu check . --no-claims`: the claims of a `.geas` file are read and not run, because
+running them would run the module's author's programs on the machine that builds the site.
 
 ### A list of your own on GitHub Pages
 
@@ -472,8 +474,11 @@ interface:
 …
 ```
 
-A change that may break a user is a candidate: whether it does is for the user's check to say. Some
-changes break a user whatever its check says. An account or a transfer of a book that changed is
+A change that may break a user is a candidate: whether it does is for the user's check to say. A
+removal or a change is one, and so is a new `constraint` or `never` line on a rule's inputs, which
+refuses calls that used to work though the table answers as before. A `fed by` line is not a change
+of the interface: the code that uses the file does not read it, and it is said on a line of its own.
+Some changes break a user whatever its check says. An account or a transfer of a book that changed is
 chobo's E050 or E051: the accounts and the holds already in a database keep the old definition. A
 value of an enum or a field of a message whose number on the Connect wire moved is E310: a message
 one version writes, the other reads as another value or another field, and neither fails. A rule

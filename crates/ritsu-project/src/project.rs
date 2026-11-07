@@ -89,6 +89,9 @@ pub struct Project {
     /// The `.geas` files of the dependencies, whose claims are not run (DESIGN 17.8): left out of
     /// [`Project::files`], and counted.
     pub not_run: Vec<File>,
+    /// Whether the `.geas` files of the module at hand are run. False, they are only read: `ritsu
+    /// check --no-claims`, and what checks a module someone else wrote or a revision not on the disk.
+    pub run_claims: bool,
 }
 
 impl Project {
@@ -165,7 +168,7 @@ impl Project {
         }
         let files = rels.into_iter().map(|(tool, rel)| File { tool, shown: shown.path(&rel), rel }).collect();
         let tree = module.then(|| ritsu_base::modules::tree(&root));
-        let mut p = Project { root, shown, given, root_flag: root_flag.map(str::to_string), files, skipped, tree, whole, not_run: Vec::new() };
+        let mut p = Project { root, shown, given, root_flag: root_flag.map(str::to_string), files, skipped, tree, whole, not_run: Vec::new(), run_claims: true };
         p.leave_out_claims();
         if p.files.is_empty() {
             let gs = p.given.join(" ");

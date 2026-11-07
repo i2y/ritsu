@@ -384,17 +384,17 @@ pub(crate) fn key(d: &Json) -> (String, String, String, String, String) {
 /// not check (exit 2).
 fn check(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, lang: Lang) -> Result<(Vec<Json>, Counts), Vec<Text>> {
     let args = check_args(root, budget);
-    // the claims are not run: a revision is not on the disk, and a report starts no service
-    match check_ran(files, root, lang, |o, e| ritsu_project::project::without_own_claims(|| ritsu::check::run(&args, lang, o, e))) {
+    match check_ran(files, root, lang, |o, e| ritsu::check::run(&args, lang, o, e)) {
         Ran { code: 0 | 1, found: Some(found), .. } => Ok(found),
         Ran { said, .. } => Err(said),
     }
 }
 
-/// The command line of [`check`].
+/// The command line of [`check`]. Its claims are read and not run: a revision is not on the disk, and
+/// a report starts no service.
 pub(crate) fn check_args(root: &Path, budget: Option<u64>) -> Vec<String> {
     let at = root.to_string_lossy().into_owned();
-    let mut args: Vec<String> = vec![at.clone(), "--root".into(), at, "--format".into(), "json".into(), "--deps-warnings".into()];
+    let mut args: Vec<String> = vec![at.clone(), "--root".into(), at, "--format".into(), "json".into(), "--deps-warnings".into(), "--no-claims".into()];
     if let Some(b) = budget {
         args.push("--budget".into());
         args.push(b.to_string());
@@ -412,12 +412,12 @@ pub(crate) struct Ran {
 
 /// `run` (`ritsu check --format json`) reading `files`, and what it came to.
 pub(crate) fn check_ran(files: Option<Rc<dyn Files>>, root: &Path, lang: Lang, run: impl FnOnce(&mut Vec<u8>, &mut Vec<u8>) -> u8) -> Ran {
-    // a module with no file of ritsu's languages of its own (one that only gathers dependencies), or
-    // only `.geas` files (their claims are not run here), has nothing for the check to say, which
-    // `ritsu check` stops on: no diagnostic, and the modules are compared all the same
+    // a module with no file of ritsu's languages of its own (one that only gathers dependencies) has
+    // nothing for the check to say, which `ritsu check` stops on: no diagnostic, and the modules are
+    // compared all the same
     let mut under = Vec::new();
     diff::within(files.clone(), || ritsu_base::paths::walk(root, ".", &[], &mut under));
-    if !under.iter().any(|f| diff::tool_of(f).is_some_and(|t| t != Tool::Geas)) {
+    if !under.iter().any(|f| diff::tool_of(f).is_some()) {
         return Ran { code: 0, found: Some((Vec::new(), Counts::default())), said: Vec::new() };
     }
     let (mut out, mut err) = (Vec::new(), Vec::new());

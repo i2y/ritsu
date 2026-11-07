@@ -413,6 +413,60 @@ fn a_version_that_cannot_be_verified_exits_1() {
     }
 }
 
+/// A version is checked with its claims read and not run, wherever it comes from: running them would
+/// run its author's programs on the machine that builds the site. A version with no `.geas` file says
+/// what it always said, one that fails says what `ritsu check` printed, and its Changes tab says in
+/// words what a rule now asks of its callers and where a value comes from.
+#[test]
+fn a_version_is_checked_with_its_claims_read_and_not_run() {
+    let a = Acme::new("mod-site-claims");
+    let host = a.host();
+    let mark = a.path("ran");
+    let claim = "target mark {\n  run \"sh leave_a_mark.sh\"\n}\n\nclaim \"it leaves a mark\" {\n  when mark.run()\n  then exit is 0\n}\n";
+    ritsu_testkit::tmp::copy_dir(&a.path("tax-1.1.0"), &a.path("tax-1.2.0"));
+    edit(&a.t, "tax-1.2.0/ritsu.mod", "version 1.1.0", "version 1.2.0");
+    a.t.write("tax-1.2.0/leave_a_mark.sh", format!("touch '{}'\n", mark.display()));
+    a.t.write("tax-1.2.0/mark.geas", claim);
+    let origin = "rule origin v1\ndescription \"A category\"\n\nenum category = standard | reduced | zero\n\ninputs\n  asked : category\n\noutputs\n  category : category\n\ntable category\npolicy unique\n| asked    | -> category : category |\n| standard | standard               |\n| reduced  | reduced                |\n| zero     | zero                   |\n";
+    a.t.write("tax-1.2.0/rules/origin.rule", origin);
+    edit(&a.t, "tax-1.2.0/rules/vat_rate.rule", "  category : category\n", "  category : category  fed by rulec \"origin.rule\" output category\n");
+    edit(&a.t, "tax-1.2.0/rules/vat_rate.rule", "\noutputs\n", "\nnever category = zero\n\noutputs\n");
+    edit(&a.t, "tax-1.2.0/rules/vat_rate.rule", "| zero     | 0%      |\n", "");
+    let (code, out, err) = a.run_in("tax-1.2.0", &a.path("pushed"), &["mod", "push"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    // one that does not pass, from a working tree
+    ritsu_testkit::tmp::copy_dir(&a.path("tax-1.2.0"), &a.path("work/tax-next"));
+    edit(&a.t, "work/tax-next/ritsu.mod", "version 1.2.0", "version 1.3.0");
+    a.t.write("work/tax-next/mark.geas", "claim \"it never ends\" {\n");
+    a.t.write(
+        "work/tax.list",
+        format!("module \"{host}/acme/tax\"\nlocal \"tax-next\"\n\nsignature \"{host}/acme/\" by matching \"^https://github[.]com/acme/\" issuer \"https://token.actions.githubusercontent.com\"\n"),
+    );
+    let (code, out, err) = a.site("work/tax.list", "claims", &[], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(!mark.exists(), "writing the site ran a claim:\n{out}{err}");
+
+    let page = |version: &str| {
+        std::fs::read_to_string(a.path(&format!("claims/{host}/acme/tax/{version}/index.html"))).unwrap_or_else(|e| panic!("{version}: {e}"))
+    };
+    let (held, plain, failed) = (page("1.2.0"), page("1.1.0"), page("1.3.0"));
+    assert!(held.contains("<code>ritsu check . --no-claims</code>: all 3 files pass."), "{held}");
+    assert!(held.contains("were read and not run: running them would run its author"), "{held}");
+    assert!(held.contains("Passes <code>ritsu check</code>, its claims not run"), "{held}");
+    assert!(plain.contains("<code>ritsu check .</code>: all 1 file pass."), "{plain}");
+    assert!(!plain.contains("--no-claims"), "{plain}");
+    assert!(failed.contains("<code>ritsu check . --no-claims</code> found errors."), "{failed}");
+    assert!(failed.contains("mark.geas:"), "what the check printed, its paths from the module:\n{failed}");
+    assert!(!failed.contains("is not a value this flag takes"), "{failed}");
+    assert!(!failed.contains(a.path("").to_string_lossy().as_ref()), "a path of this machine on the page:\n{failed}");
+
+    // what 1.2.0 changes, in words
+    assert!(held.contains("rules/vat_rate.rule</span> now asks its callers to keep to <code>never category = zero</code>"), "{held}");
+    assert!(held.contains("may break a user"), "{held}");
+    assert!(held.contains("<code>inputs/category</code> now says where its value comes from: <code>rulec &quot;origin.rule&quot; output category</code>"), "{held}");
+    assert!(held.contains("The inputs both versions accept get the same answers, but 1 change to the interface may break a user."), "{held}");
+}
+
 /// Working trees beside the registry's modules: shop 0.3.0 (one more version of shop, after the
 /// registry's two, compared with 0.2.0; its lock's modules fetched and said; a file in Shift_JIS,
 /// in `module.json` as base64), shop 0.1.0 (the registry has it: said, and the registry's shown),

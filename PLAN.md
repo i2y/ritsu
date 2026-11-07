@@ -2301,6 +2301,17 @@ geas のターゲットに `contract "<file>"` の行を足した（geas の DES
 
 確かめたこと：`crates/geas/tests/docs.rs`、`tests/skill.rs`、`crates/ritsu/tests/skill.rs`。測定の記録は devenv にあり、リポジトリには置かない。
 
+### 7.98 モジュールのページと新しい機能の突き合わせ（2026-11-07）
+
+0.44.0 と今回のビルドで、種の 10 本のページ（英日 428 枚ずつ）を作って比べ、新しい書き方を足した試しの版のページを読んで、四つを直した。比べた結果、今の 10 本で変わるのは FMLA の `.flow` のコードのページの色（`fed by` で `by` が語になった）だけだった。
+
+- `ritsu mod site` が版ごとの検査で、そのモジュールの `.geas` の主張を走らせていた（17.8 の決めと食い違う。`local` の行で実行を確かめ、`module` と `git` の行も同じ関数を通る）。`ritsu check --no-claims` を足し、サイト、`mod report`、`ritsu impact` はこれで検査する。`mod report` は主張を走らせないだけで `.geas` を読んでいなかったので、DESIGN の書いたとおり構文と鍵と契約を読むようになった。
+- 検査に落ちた版のページが、本当のエラーでなく `--format text` を断る文を出していた。
+- 規則の `preconditions` を一つずつ比べ、足した行を使う側を壊しうる差に数え、行の文で言う。前は `0 was added` と言い、壊しうる差を 0 と数えていた。
+- `fed by` の行をインターフェースの差から分けた（DESIGN 17.9 の「`fed by` の行」）。
+
+確かめたこと：`crates/ritsu/tests/check.rs` の `no_claims_…`、`modules_site.rs` の `a_version_is_checked_…`（レジストリから取った版で印が残らないこと、落ちた版の文）、`modules_diff.rs` の `what_a_rule_asks_…`、`impact.rs` の `a_line_on_…`。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。

@@ -129,6 +129,14 @@ pub fn check_summary(results: &[ClaimResult], journal: &str, lang: Lang) -> Stri
     }
 }
 
+/// The last line of a spec read and not run.
+pub fn read_summary(n: usize, lang: Lang) -> String {
+    match lang {
+        Lang::En => format!("{} · not run\n", count(n, "claim", "claims")),
+        Lang::Ja => format!("主張 {n} 件 · 走らせていません\n"),
+    }
+}
+
 /// The last line of `snap`, and its warning when some claim did not hold.
 pub fn snap_summary(results: &[ClaimResult], kept: usize, baseline: &str, lang: Lang) -> String {
     let (n, f) = (results.len(), failed(results));

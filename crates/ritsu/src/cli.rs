@@ -189,6 +189,14 @@ pub fn commands() -> Vec<Cmd> {
                     "in a check of a whole module, show each warning of the dependencies' files too (else only how many each dependency has)"
                 ),
             ),
+            flag(
+                "--no-claims",
+                None,
+                tr!(
+                    "`.geas` のファイルは読むだけにし、主張を走らせない（構文、書いてある鍵、契約との突き合わせは確かめる）。人が書いたモジュールを確かめるときに",
+                    "read the `.geas` files and run none of their claims (their syntax, the keys written in them and their contracts are still held): for a module someone else wrote"
+                ),
+            ),
         ],
         exits: vec![
             (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
