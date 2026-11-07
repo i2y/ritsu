@@ -1,0 +1,64 @@
+# What the order service answers. orders.geas holds every answer to it.
+openapi: 3.1.0
+info:
+  title: Orders
+  version: "1"
+paths:
+  /orders:
+    post:
+      responses:
+        "201":
+          description: The order made
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: The total is not a whole number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /orders/{id}:
+    get:
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: There is no such order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+components:
+  schemas:
+    Order:
+      type: object
+      required: [id, state, total, placed]
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+          enum: [open, paid]
+        total:
+          type: integer
+          minimum: 0
+        placed:
+          type: string
+          format: date
+    Problem:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

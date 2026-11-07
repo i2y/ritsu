@@ -1,0 +1,28 @@
+# Claims for a small order service, whose answers are held to the document that says what it answers.
+# The `contract` line makes every `get` and `post` of this target one more check: the status, the
+# headers the answer must send, its media type, and its body against the schema, whatever the claim
+# itself looks at.
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+
+claim "a new order is open" {
+  when api.post("/orders", body: "2500")
+  then status is 201
+  when api.get("/orders/1")
+  then status is 200
+  and  body json ".state" is "open"
+}
+
+claim "a total that is not a number is refused" {
+  when api.post("/orders", body: "a lot")
+  then status is 400
+}
+
+claim "an unknown order is not found" {
+  when api.get("/orders/9")
+  then status is 404
+}

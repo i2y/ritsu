@@ -1,0 +1,8 @@
+警告[W015]: c/unheld.geas:6:3: 契約 unheld.yaml の `propertyNames`、`pattern` "(?=o)" は、geas が答えと突き合わせません
+     6 |   contract "unheld.yaml"
+not ok 1 - the rest is held
+    c/unheld.geas:10: contract GET /orders/{id} のはずが、実際は $.state: "lost" は "open" のどれでもありません
+        10 |   when api.get("/orders/state")
+      ここまでの実行:
+          10  when api.get("/orders/state")  →  200, body "{\"id\": \"state\", \"state\": \"lost\", \"total\": 100, \"placed\": \"2026-11-07\"}"
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: c/.geas/unheld.journal.jsonl

@@ -136,6 +136,7 @@ each other's state and can run in any order. `#` starts a comment. The forms, at
 target calc { run "python3 calc.py" }           a command, run once per `when`
 target api  { serve "node server.ts {port}"     a service, started once per claim,
               port auto }                       on a free port geas picks; or `port 8123`
+contract "api.yaml"                             (in a serve target) every get and post is held to this OpenAPI document
 target app  { pixie "greeter" }                 a pixie app, driven headless
 target ui   { driver "python3 my_driver.py" }   any other GUI, through a driver program
 serial                                          (in a target) its claims never run side by side
@@ -253,6 +254,7 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E011 | a pin geas cannot keep for that target | give `clock` and `seed` an `env "NAME"` on a process |
 | E012, E013 | another target's `when` between two pixie actions; an argument an action cannot take there | move the `when`; see [gui.md](gui.md) |
 | E014 | a `within` geas cannot keep: after a screen action, below 1 or above 60 seconds, or on a `when` with no check under it | `within` 1 to 60 seconds on a `run`, `get` or `post`, with the checks to wait for under it; `advance(ms)` for a screen |
+| E015, E016 | a `contract` file that cannot be read; a call the document does not have | write the path from the spec's directory; correct the call, add it to the document, or call through a target with no `contract` line |
 | E030 to E033 | a program that would not start, a `run` over 5 s, a service that never opened its port, an HTTP exchange that failed | fix the program or the target's command; the notes hold its stderr |
 | E034 to E037 | no Chrome; an action the app refused; a page that did not load or settle; a GUI driver geas cannot read | the notes show the screen and what it could reach |
 | E050, E051 | no baseline, or one that cannot be read | ask the person, then `ritsu geas snap` |
@@ -260,6 +262,7 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E065, E066 | a coverage tool missing or failing; a service that stopped without writing its record | [map.md](map.md) |
 | E080, E081 | arguments the command does not take; a file that cannot be read or written | `geas --help` |
 | E090 | a file given to `scenarios` that is neither an OpenSpec spec nor a change's delta spec | give `openspec/specs/…` or `openspec/changes/<id>`; `openspec validate` says what is wrong |
+| W015 | what a contract says and geas does not hold | nothing is wrong; those keywords are not held, and the rest is |
 | W060, W061 | a target that gave `map` no record; a Rust profile from a program geas did not start | build it with coverage; start the binary itself |
 | W901 | a key written in the spec, in a string or a comment (`check`; the kind, its prefix and its length, never the key) | have the target's program read it from where it runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 

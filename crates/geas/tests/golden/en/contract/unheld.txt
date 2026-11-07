@@ -1,0 +1,8 @@
+warning[W015]: c/unheld.geas:6:3: geas does not hold an answer to `propertyNames`, `pattern` "(?=o)" of the contract unheld.yaml
+     6 |   contract "unheld.yaml"
+not ok 1 - the rest is held
+    c/unheld.geas:10: contract GET /orders/{id} — got $.state: "lost" is not one of "open"
+        10 |   when api.get("/orders/state")
+      the run that gets there:
+          10  when api.get("/orders/state")  →  200, body "{\"id\": \"state\", \"state\": \"lost\", \"total\": 100, \"placed\": \"2026-11-07\"}"
+1 claim · 0 ok · 1 failed · journal: c/.geas/unheld.journal.jsonl

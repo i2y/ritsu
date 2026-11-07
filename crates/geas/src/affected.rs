@@ -3,6 +3,7 @@
 //! runs nothing. A record is held to the code it was made on, file by file, and a
 //! record of other code is refused (E062) rather than read.
 
+use crate::contract;
 use crate::diag::{self, Diag, Show, count};
 use ritsu_base::text::{Lang, Text};
 use crate::diff::{self, Blob, FileDiff, Mark};
@@ -138,6 +139,7 @@ struct Answer {
     deleted: Vec<(String, bool)>,
     outside: Vec<String>,
     spec_changed: Vec<String>,
+    contract_changed: Vec<String>,
     baseline_changed: Option<String>,
 }
 
@@ -146,6 +148,7 @@ impl Answer {
         self.unclaimed.is_empty()
             && self.deleted.iter().all(|(_, known)| *known)
             && self.spec_changed.is_empty()
+            && self.contract_changed.is_empty()
             && self.baseline_changed.is_none()
     }
 }
@@ -247,13 +250,17 @@ fn answer_for(spec_file: &str, root: Option<&str>, maps: &[String], diff_shown: 
         deleted: vec![],
         outside: vec![],
         spec_changed: vec![],
+        contract_changed: vec![],
         baseline_changed: None,
     };
+    let contracts = contracts_of(spec_file, &root, &spec_rel);
     let mut sources: Vec<(&FileDiff, Blob, Blob)> = Vec::new();
     for f in &files {
         let paths: Vec<&str> = [f.old_path.as_deref(), f.new_path.as_deref()].into_iter().flatten().collect();
         if paths.contains(&spec_rel.as_str()) {
             answer.spec_changed.push(f.path().to_string());
+        } else if paths.iter().any(|p| contracts.contains(*p)) {
+            answer.contract_changed.push(f.path().to_string());
         } else if paths.contains(&baseline_rel.as_str()) {
             answer.baseline_changed = Some(baseline_rel.clone());
         } else if f.binary || !paths.iter().any(|p| tree::is_source(p)) {
@@ -364,6 +371,14 @@ fn answer_for(spec_file: &str, root: Option<&str>, maps: &[String], diff_shown: 
 
 /// Reads a record, and holds it to this spec: E060 when there is none, E061 when
 /// it does not read or is another spec's.
+/// The files the contracts of a spec are read from, each from the root.
+fn contracts_of(spec_file: &str, root: &Path, spec_rel: &str) -> BTreeSet<String> {
+    let Ok(src) = ritsu_base::fs::read_to_string(spec_file) else { return BTreeSet::new() };
+    let spec = root.join(spec_rel);
+    let dir = spec.parent().unwrap_or(root);
+    contract::files(&src, dir).iter().filter_map(|p| tree::relative(root, &ritsu_base::paths::absolute(p))).collect()
+}
+
 fn read_record(shown: &str, spec_file: &str, spec_rel: &str) -> Result<Rec, Problem> {
     let text = match ritsu_base::fs::read_to_string(shown) {
         Ok(s) => s,
@@ -764,6 +779,12 @@ fn to_text(a: &Answer, lang: Lang) -> String {
             Lang::Ja => format!("主張のファイルが変わりました: {f}。主張を読み直してください\n"),
         });
     }
+    for f in &a.contract_changed {
+        out.push_str(&match lang {
+            Lang::En => format!("the contract changed: {f}; the claims are held to what it says now\n"),
+            Lang::Ja => format!("契約が変わりました: {f}。主張はこれから、いまの内容と突き合わされます\n"),
+        });
+    }
     if let Some(f) = &a.baseline_changed {
         out.push_str(&match lang {
             Lang::En => format!("the baseline changed: {f}; drift compares against what it holds now\n"),
@@ -840,6 +861,7 @@ pub(crate) fn for_port(spec_file: &str, root: Option<&str>, maps: &[String], dif
             deleted: a.deleted.clone(),
             outside: a.outside.clone(),
             spec_changed: a.spec_changed.clone(),
+            contract_changed: a.contract_changed.clone(),
             baseline_changed: a.baseline_changed.is_some(),
         }),
     }
@@ -891,8 +913,9 @@ fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
         a.deleted.iter().map(|(f, known)| format!("{{\"file\":{},\"known\":{known}}}", json::quote(f))).collect();
     let outside: Vec<String> = a.outside.iter().map(|f| json::quote(f)).collect();
     let spec_changed: Vec<String> = a.spec_changed.iter().map(|f| json::quote(f)).collect();
+    let contract_changed: Vec<String> = a.contract_changed.iter().map(|f| json::quote(f)).collect();
     format!(
-        "{{\"geas\":1,\"spec\":{},\"diff\":{},\"records\":[{}],\"claims\":[{}],\"unclaimed\":[{}],\"deleted\":[{}],\"outside\":[{}],\"spec_changed\":[{}],\"baseline_changed\":{},\"ok\":{}}}",
+        "{{\"geas\":1,\"spec\":{},\"diff\":{},\"records\":[{}],\"claims\":[{}],\"unclaimed\":[{}],\"deleted\":[{}],\"outside\":[{}],\"spec_changed\":[{}],\"contract_changed\":[{}],\"baseline_changed\":{},\"ok\":{}}}",
         json::quote(spec),
         json::quote(diff_arg),
         records.join(","),
@@ -901,6 +924,7 @@ fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
         deleted.join(","),
         outside.join(","),
         spec_changed.join(","),
+        contract_changed.join(","),
         a.baseline_changed.is_some(),
         a.ok()
     )

@@ -1,0 +1,2 @@
+error[E015]: E015-no-such-file.geas:4:3: cannot read the contract nowhere.json: No such file or directory (os error 2)
+     4 |   contract "nowhere.json"

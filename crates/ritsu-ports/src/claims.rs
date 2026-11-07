@@ -65,6 +65,8 @@ pub struct Affected {
     pub outside: Vec<String>,
     /// The spec itself, when the diff changes it.
     pub spec_changed: Vec<String>,
+    /// The files of the spec's contracts the diff changes.
+    pub contract_changed: Vec<String>,
     /// Whether the diff changes the spec's baseline.
     pub baseline_changed: bool,
 }

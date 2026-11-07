@@ -1,0 +1,54 @@
+# Every way an answer breaks its contract. No claim here checks anything itself but the status: the
+# contract is what notices.
+
+target api {
+  serve "python3 orders.py {port}"
+  port auto
+  contract "orders.yaml"
+}
+
+claim "a state the contract does not list" {
+  when api.get("/orders/state")
+  then status is 200
+}
+
+claim "a member the contract requires is missing" {
+  when api.get("/orders/total")
+  then status is 200
+}
+
+claim "several things are wrong, and the first few are said" {
+  when api.get("/orders/many")
+  then status is 200
+}
+
+claim "a member that only goes to the service comes back" {
+  when api.get("/orders/secret")
+  then status is 200
+}
+
+claim "a status the contract does not list" {
+  when api.get("/orders/teapot")
+  then status is 418
+}
+
+claim "a media type the contract does not list" {
+  when api.get("/orders/text")
+  then status is 200
+}
+
+claim "a body that is not JSON" {
+  when api.get("/orders/broken")
+  then status is 200
+}
+
+claim "a header the contract requires is missing" {
+  when api.post("/orders", body: "bare")
+  then status is 201
+}
+
+claim "the claim goes on after an answer breaks it" {
+  when api.get("/orders/state")
+  when api.get("/orders/ok")
+  then status is 200
+}

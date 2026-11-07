@@ -103,6 +103,31 @@ fn the_spec_changed() {
     affected(&s, "spec.diff", &[], 1, "en/affected/spec.txt");
 }
 
+/// A contract, and a file its `$ref` reaches, are read as the spec is: what the claims are held to
+/// has changed. A document no target names is outside the record, as any file that is not code.
+#[test]
+fn the_contract_changed() {
+    let s = after("affected-contract");
+    let spec = s.read(SPEC);
+    s.write(SPEC, &spec.replacen("  port 8126\n", "  port 8126\n  contract \"api/shop.yaml\"\n", 1));
+    s.write(
+        "api/shop.yaml",
+        "openapi: 3.1.0\ninfo: { title: Shop, version: \"1\" }\npaths:\n  /x:\n    get:\n      responses:\n        \"200\":\n          description: x\n          content:\n            application/json:\n              schema: { $ref: \"./schemas.yaml#/X\" }\n",
+    );
+    s.write("api/schemas.yaml", "X: { type: object }\n");
+    s.write("api/other.yaml", "X: { type: object }\n");
+    let hunk = |f: &str| format!("diff --git a/{f} b/{f}\nindex 1111111..2222222 100644\n--- a/{f}\n+++ b/{f}\n@@ -1 +1 @@\n-X: {{ type: string }}\n+X: {{ type: object }}\n");
+    s.write("contract.diff", &format!("{}{}{}", hunk("api/schemas.yaml"), hunk("api/other.yaml"), hunk("api/shop.yaml")));
+    let out = affected(&s, "contract.diff", &[], 1, "en/affected/contract.txt");
+    assert!(out.contains("the contract changed: api/schemas.yaml;"), "{out}");
+    assert!(out.contains("the contract changed: api/shop.yaml;"), "{out}");
+    assert!(!out.contains("the contract changed: api/other.yaml"), "{out}");
+    affected(&s, "contract.diff", &["--lang", "ja"], 1, "ja/affected/contract.txt");
+    let (out, _, code) = run(s.path(), &["affected", SPEC, "contract.diff", "--root", ".", "--json"], &[]);
+    assert_eq!(code, 1);
+    assert_eq!(json(&out).get("contract_changed").arr().len(), 2, "{out}");
+}
+
 #[test]
 fn the_baseline_changed() {
     let s = after("affected-baseline");

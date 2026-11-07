@@ -258,3 +258,112 @@ fn a_document_written_in_japanese() {
     assert_eq!(refund.security.as_ref().map(|s| (s.requirements.clone(), s.own)), Some((vec![vec!["staff".to_string()]], false)));
     assert_eq!(refund.responses.iter().map(|(c, _)| c.as_str()).collect::<Vec<_>>(), ["201", "403"]);
 }
+
+/// What a service answers, as `geas`'s `contract` reads it: every operation with its responses, every
+/// schema a response reaches as one entry however often it is reached, and what is not read said by
+/// where it is.
+const RESPONDS: &str = r##"openapi: 3.1.0
+info: { title: Orders, version: "1" }
+servers:
+  - url: https://orders.example.com/v1
+paths:
+  /orders/{id}:
+    servers:
+      - url: /v2
+    get:
+      responses:
+        "200":
+          description: The order
+          headers:
+            ETag: { required: true, schema: { type: string } }
+            X-Note: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+            text/*: {}
+        4XX:
+          description: Not this one
+  /orders:
+    post:
+      responses:
+        default:
+          description: Whatever it answers
+          content:
+            application/json:
+              schema: { $ref: "./more.yaml#/Order" }
+components:
+  schemas:
+    Order:
+      type: [object, "null"]
+      required: [id]
+      properties:
+        id: { type: string, minLength: 1, pattern: "^a" }
+        state: { enum: [open, paid] }
+        parent: { $ref: "#/components/schemas/Order" }
+        secret: { writeOnly: true }
+        nothing: false
+        odd: { contains: { type: string } }
+"##;
+
+fn responding() -> openapi::Responses {
+    let more = "Order: { type: object, propertyNames: { maxLength: 3 }, allOf: [{ $ref: \"#/Missing\" }] }\n";
+    openapi::responses("dir/api.yaml", RESPONDS, &|p| (p == "dir/more.yaml").then(|| more.to_string())).unwrap()
+}
+
+#[test]
+fn the_operations_and_their_responses() {
+    let r = responding();
+    let got: Vec<(&str, &str, Vec<&str>)> =
+        r.operations.iter().map(|o| (o.method.as_str(), o.path.as_str(), o.bases.iter().map(String::as_str).collect())).collect();
+    assert_eq!(got, [("GET", "/orders/{id}", vec!["/v2"]), ("POST", "/orders", vec!["/v1"])]);
+    let get = &r.operations[0];
+    assert_eq!(get.responses.iter().map(|x| x.status.as_str()).collect::<Vec<_>>(), ["200", "4XX"]);
+    assert_eq!(get.responses[0].required_headers, ["ETag"]);
+    assert_eq!(get.responses[0].media.iter().map(|(m, _)| m.as_str()).collect::<Vec<_>>(), ["application/json", "text/*"]);
+    assert_eq!(get.responses[0].media[1].1, None, "a media type with no schema");
+    assert!(get.responses[1].media.is_empty(), "a response with no content");
+    assert_eq!(r.operations[1].responses[0].status, "default");
+}
+
+#[test]
+fn a_schema_is_read_whole_and_one_that_holds_itself_is_one_entry() {
+    let r = responding();
+    let top = r.operations[0].responses[0].media[0].1.expect("a schema");
+    // the `$ref` lands on the schema through `allOf`
+    let order = &r.shapes[top].all_of.first().map_or(top, |&i| i);
+    let order = &r.shapes[*order];
+    assert_eq!(order.types, ["object", "null"]);
+    assert_eq!(order.required, ["id"]);
+    let member = |name: &str| order.properties.iter().find(|(n, _)| n == name).map(|(_, i)| *i).unwrap_or_else(|| panic!("no {name}"));
+    let id = &r.shapes[member("id")];
+    assert_eq!((id.min_length, id.pattern.as_deref()), (Some(1), Some("^a")));
+    assert_eq!(r.shapes[member("state")].values.as_deref(), Some(&["\"open\"".to_string(), "\"paid\"".to_string()][..]));
+    assert!(r.shapes[member("secret")].write_only);
+    assert!(r.shapes[member("nothing")].never);
+    // `parent` is the order again: the same entry, not one more for each time it is read
+    let parent = &r.shapes[member("parent")];
+    let again = parent.all_of.first().copied().unwrap_or(member("parent"));
+    assert_eq!(&r.shapes[again], order);
+    assert!(r.shapes.len() < 12, "{} entries: a schema that holds itself was read again", r.shapes.len());
+}
+
+#[test]
+fn what_is_not_read_is_said_by_where_it_is() {
+    let r = responding();
+    let unheld: Vec<(&str, &str)> = r.unheld.iter().map(|u| (u.keyword.as_str(), u.file.as_str())).collect();
+    assert!(unheld.contains(&("contains", "dir/api.yaml")), "{unheld:?}");
+    assert!(unheld.contains(&("propertyNames", "dir/more.yaml")), "{unheld:?}");
+    let odd = r.unheld.iter().find(|u| u.keyword == "contains").expect("contains");
+    assert_eq!(odd.line, RESPONDS.lines().position(|l| l.contains("contains:")).unwrap() + 1);
+    let missing: Vec<&str> = r.unresolved.iter().map(|u| u.written.as_str()).collect();
+    assert_eq!(missing, ["#/Missing"], "a `$ref` that cannot be followed is listed, not guessed");
+}
+
+#[test]
+fn a_document_that_says_nothing_of_what_a_service_answers() {
+    let async_api = "asyncapi: 3.0.0\ninfo: { title: x, version: \"1\" }\n";
+    let e = openapi::responses("a.yaml", async_api, &|_| None).unwrap_err();
+    assert!(e.message.en.contains("AsyncAPI"), "{}", e.message.en);
+    assert!(openapi::responses("a.yaml", "swagger: \"2.0\"\n", &|_| None).is_err());
+    assert!(openapi::responses("a.yaml", "- not\n- a document\n", &|_| None).is_err());
+}

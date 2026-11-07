@@ -1,0 +1,11 @@
+target api {
+  serve "python3 api.py {port}"
+  port auto
+  contract "one.json"
+  contract "two.json"
+}
+
+claim "answers" {
+  when api.get("/")
+  then status is 200
+}

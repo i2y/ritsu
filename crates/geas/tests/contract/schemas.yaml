@@ -1,0 +1,13 @@
+Order:
+  type: object
+  required: [id, state, total]
+  additionalProperties: false
+  properties:
+    id: { type: string }
+    state: { $ref: "#/State" }
+    total: { type: integer, minimum: 0 }
+    placed: { type: string, format: date }
+    card: { type: string, writeOnly: true }
+State:
+  type: string
+  enum: [open, paid]

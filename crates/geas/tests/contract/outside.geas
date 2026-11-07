@@ -1,0 +1,27 @@
+# Calls the contract does not have, said before anything runs.
+
+target api {
+  serve "python3 orders.py {port}"
+  port auto
+  contract "orders.yaml"
+}
+
+target free {
+  serve "python3 orders.py {port}"
+  port auto
+}
+
+claim "a path it does not have" {
+  when api.get("/order/ok")
+  then status is 200
+}
+
+claim "a method it does not have" {
+  when api.post("/orders/ok")
+  then status is 200
+}
+
+claim "a target with no contract may call anything" {
+  when free.get("/order/ok")
+  then status is 200
+}

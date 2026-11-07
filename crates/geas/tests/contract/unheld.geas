@@ -1,0 +1,12 @@
+# A contract with what geas does not hold an answer to: it is said, and the claims run.
+
+target api {
+  serve "python3 orders.py {port}"
+  port auto
+  contract "unheld.yaml"
+}
+
+claim "the rest is held" {
+  when api.get("/orders/state")
+  then status is 200
+}

@@ -343,6 +343,42 @@ not ok 2 - a job finishes in the background
 
 読み出しも POST で呼ぶ API のために、`post` と `run` も待てます。ただ、呼び出しは書いたとおりに繰り返すので、その呼び出しがすることも繰り返されます。読み出しの呼び出しがあるなら、そちらで待ってください。画面はこの方法では待てません（E014）。geas は操作のたびに画面が落ち着くのを待ちます。時間が足りなければ `advance(ms)` で進めます。
 
+## サービスの答えを契約と突き合わせる
+
+主張が確かめるのは、書いた人が思いついたところだけです。ステータスと、メンバーを一つか二つ。答えのほかの部分が変わっても、どの主張も気づきません。サービスに OpenAPI の文書があるなら、ターゲットに `contract` の行を足すと、そのターゲットの答えをすべて文書と突き合わせます。見るのは、ステータス、答えが送るべきヘッダー、メディアタイプ、スキーマに対する本体です。[examples/orders](examples/orders) がその例です。
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+
+claim "a new order is open" {
+  when api.post("/orders", body: "2500")
+  then status is 201
+  when api.get("/orders/1")
+  then status is 200
+  and  body json ".state" is "open"
+}
+…
+```
+
+エージェントが合計を文字列にし、`placed` の名前を変えたとします。主張に書いたチェックはどれも成り立ったままですが、答えは文書に合いません。
+
+```text
+not ok 1 - a new order is open
+    examples/orders/orders.geas:13: contract POST /orders のはずが、実際は $: 必須の placed がありません。$.total: "2500" は string で、契約は integer です
+        13 |   when api.post("/orders", body: "2500")
+    examples/orders/orders.geas:15: contract GET /orders/{id} のはずが、実際は $: 必須の placed がありません。$.total: "2500" は string で、契約は integer です
+        15 |   when api.get("/orders/1")
+…
+```
+
+答えごとに、その `when` の行のチェックが一つ増え、結果にも `--json` にもジャーナルにも載ります。`within` で待つ呼び出しは、待って得た答えだけを突き合わせます。契約に合うまで待つことはしません。突き合わせるのは `get` と `post` だけで、Chrome のページが送るリクエストは見えません。どの呼び出しをするかは主張が決めるので、どの主張も引き出さない答えは突き合わせません。
+
+文書にない呼び出しがあると、何も走らせる前に止まります（E016）。文書を読めないときも同じです（E015）。文書の外を呼ぶつもりの主張（知らないパスが 404 を返す、など）は、`contract` の行のないターゲットから呼びます。文書に書かれていて geas が突き合わせないものは、一度だけ知らせます（W015）。ファイルは OpenAPI 3.0、3.1、3.2 の JSON か YAML で、パスは主張のファイルのディレクトリから書きます。モジュールの中なら `@<名前>/…` で依存の文書も指せます。`$ref` はディスクの別のファイルにも届きます。
+
 ## 言語
 
 `when` はターゲットの呼び出しで、`then` と `and` がその結果をチェックします。
@@ -363,7 +399,7 @@ not ok 2 - a job finishes in the background
   = その環境変数の名前を、同じ行に書いてください（`clock "2026-08-29T09:00:00+09:00" env "NOW"`）
 ```
 
-どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 37 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
+どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 40 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
 
 `--jobs 4` を付けると、主張を四つまで並列に走らせます。`port auto` のサービスはそれぞれ別のポートで動きます。報告もジャーナルもベースラインも主張の順に書くので、一つずつ走らせたときとバイト単位で同じです。あるターゲットを使う主張どうしが、geas から見えない状態（ファイルやデータベース）を共有しているなら、`serial` を書いて並列に走らないようにします。言語の全体は [skills/geas/language.md](../../skills/geas/language.md)（英語）にあります。
 
@@ -449,6 +485,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 | [tally-rust](examples/tally-rust) | Rust のコマンドライン。`-C instrument-coverage` を付けてビルドする |
 | [web-greeter](examples/web-greeter) | Chrome で開くページとそのサービス。固定を全部使う |
 | [jobs](examples/jobs) | 答えを返したあとでジョブが終わるサービスと、`within` でそれを待つ主張 |
+| [orders](examples/orders) | OpenAPI の文書のあるサービスと、すべての答えをそれと突き合わせる `contract` の行 |
 | [pixie-greeter](examples/pixie-greeter) | pixie のデスクトップアプリ。pixie でビルドして、主張のファイルの横に置く |
 
 どの例にも、何を見せるか、どう走らせるか、出力のどこを見ればよいかを書いた README（英語）があります。

@@ -365,6 +365,15 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                             waited,
                         });
                         when_idx += 1;
+                        // what it answered, held to its contract as one more check (DESIGN §20);
+                        // of a `when` that waits, what it kept
+                        if let Some(cr) = crate::contract::held_to(tg.contract.as_ref(), call, pos.line, &o) {
+                            journal.push(journal_check(&claim.name, &cr));
+                            if !cr.ok {
+                                failed_after = Some(observations.len());
+                            }
+                            checks.push(cr);
+                        }
                         obs = Some(o);
                     }
                     Err(f) => {
@@ -383,15 +392,7 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
             Step::Then(check) => {
                 let o = obs.as_ref().expect("E005 refuses a check before any `when`");
                 let cr = check::eval(check, o);
-                journal.push(format!(
-                    "{{\"claim\":{},\"event\":\"check\",\"line\":{},\"check\":{},\"expected\":{},\"actual\":{},\"ok\":{}}}",
-                    json::quote(&claim.name),
-                    cr.line,
-                    json::quote(&cr.label),
-                    json::quote(&cr.expected),
-                    json::quote(&cr.actual.en),
-                    cr.ok
-                ));
+                journal.push(journal_check(&claim.name, &cr));
                 if !cr.ok {
                     failed_after = Some(observations.len());
                 }
@@ -479,6 +480,19 @@ pub fn run_up_to(r: &ClaimResult, line: usize) -> Vec<diag::Step> {
             RunLine { line: o.line, when: format!("{}.{}", o.target, o.call), observed: Some(o.obs.summary()), waited: o.waited.clone() }.step()
         })
         .collect()
+}
+
+/// A check in the journal.
+fn journal_check(claim: &str, cr: &CheckResult) -> String {
+    format!(
+        "{{\"claim\":{},\"event\":\"check\",\"line\":{},\"check\":{},\"expected\":{},\"actual\":{},\"ok\":{}}}",
+        json::quote(claim),
+        cr.line,
+        json::quote(&cr.label),
+        json::quote(&cr.expected),
+        json::quote(&cr.actual.en),
+        cr.ok
+    )
 }
 
 /// A `when` in the journal, its observation as recorded: masked values written as

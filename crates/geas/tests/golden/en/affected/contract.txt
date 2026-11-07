@@ -1,0 +1,6 @@
+diff: contract.diff · record: .geas/shop.map.jsonl (it fits either side)
+outside the record:
+  api/other.yaml
+the contract changed: api/schemas.yaml; the claims are held to what it says now
+the contract changed: api/shop.yaml; the claims are held to what it says now
+4 claims · 0 touched · 0 changed lines no claim runs

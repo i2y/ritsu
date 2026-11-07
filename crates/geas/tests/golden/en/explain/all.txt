@@ -292,6 +292,60 @@ Repro
       then body json ".state" is "done"
     }
 
+error[E015]: a `contract` file that cannot be read
+
+When it appears
+  The file a target's `contract` line names is missing or cannot be read, is a path a module does not take, is not an OpenAPI 3.0, 3.1 or 3.2 document (AsyncAPI and Swagger 2.0 are not read), or a response reaches a `$ref` that cannot be followed. No claim runs.
+
+What usually fixes it
+  Write the path from the spec's directory, or as `@<name>/…` for a dependency of a module. A `$ref` can land in the same document or in a file on the disk, not at a URL.
+
+Repro
+  $ geas check e015.geas
+  e015.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+      contract "api/orders.json"
+    }
+
+    claim "a new order is open" {
+      when api.get("/orders/1")
+      then status is 200
+    }
+
+error[E016]: a call the contract does not have
+
+When it appears
+  A `get` or a `post` on a target with a `contract` line calls a path or a method its document does not have. The path is compared up to its `?`, a `{id}` stands for one or more characters of a segment, and the path of a URL in `servers` may be in front or not. It is known without running anything, so no claim runs.
+
+What usually fixes it
+  Correct the call, or add it to the contract. A claim that means to call outside the contract (an unknown path answers 404) calls through a target with no `contract` line.
+
+Repro
+  $ geas check e016.geas
+  e016.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+      contract "orders.json"
+    }
+
+    claim "a new order is open" {
+      when api.get("/order/1")
+      then status is 200
+    }
+  orders.json:
+    {
+      "openapi": "3.1.0",
+      "info": { "title": "Orders", "version": "1" },
+      "paths": {
+        "/orders/{id}": {
+          "get": { "responses": { "200": { "description": "The order" } } }
+        }
+      }
+    }
+
 error[E030]: a program that could not be started
 
 When it appears
@@ -848,6 +902,39 @@ Repro
     # Notes
 
     Nothing here is a spec.
+
+warning[W015]: what a contract says that geas does not hold an answer to
+
+When it appears
+  A schema of the `contract` document uses a keyword geas does not read (`patternProperties`, `propertyNames`, `dependentRequired`, `dependentSchemas`, `dependencies`, `if`, `then`, `else`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`), or a `pattern` geas's patterns cannot say the same (a lookaround, `\b`, `^` or `$` anywhere but the two ends). The rest is held, and the claims run.
+
+What usually fixes it
+  Check that part with a `then` in the claims. The document need not change.
+
+Repro
+  $ geas check w015.geas
+  w015.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+      contract "orders.json"
+    }
+  orders.json:
+    {
+      "openapi": "3.1.0",
+      "info": { "title": "Orders", "version": "1" },
+      "paths": {
+        "/orders/{id}": {
+          "get": { "responses": { "200": {
+            "description": "The order",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "patternProperties": { "^x-": { "type": "string" } }
+            } } }
+          } } }
+        }
+      }
+    }
 
 warning[W060]: a target that gave no record at all in `map`
 

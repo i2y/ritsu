@@ -2283,6 +2283,14 @@ rulec や chobo などで表現されたものを、それぞれ一つの閉じ�
 
 確かめたこと：`crates/ritsu/tests/impact.rs` の 23 件と英日の golden、`--test modules_report --test readme --test website --test skill`、sekisho、rulec、koyomi の差の試験。返金の見本では、壊し方 53 件のどれもマージへ行かず、無害な変更 16 件のうちマージへ行ったのは README、規則の説明とコメントの 4 件、主張の記録があるとき Go のコメントも行く。プルリクエストのワークフローは本物の Actions では走らせていない。
 
+### 7.96 サービスの答えを契約と突き合わせる行（2026-11-07）
+
+geas のターゲットに `contract "<file>"` の行を足した（geas の DESIGN 20 章）。その `get` と `post` の答えを OpenAPI の文書と突き合わせ、`when` の行のチェックを一つ増やす。文書を読めないのは E015、文書にない呼び出しは何も走らせる前の E016、読まないキーワードは W015 である。パスはモジュールの決まり（DESIGN 17.6）に従う。読むのは `ritsu_base::openapi::responses` で、`$ref` をたどって応答のスキーマを丸ごと持つ。`geas affected` は文書と、`$ref` が届くファイルの変更を `contract_changed` に数えて exit 1 にする。
+
+返金の見本の壊し方 31 件で、本物のバイナリで測り直した。手書きのテストと主張の 16 件に、列挙の値を変えた壊し方、必須のメンバーを落とした壊し方、文書にないルートを足した壊し方の 3 件が加わって 19 件になる。無害な変更 6 件で誤報は無い。無改造の見本でも、`GET /invoices/{invoiceId}` の 401 が文書にないことを三度とも言う（見本の穴で、見本は直していない）。
+
+確かめたこと：`crates/geas/tests/contract.rs`（壊し方ごとの主張を英日の golden で、`-j1` と `-j4` で、モジュールの中のパス）、`tests/readme.rs` の `examples/orders`、`tests/affected.rs`、`crates/ritsu-base/tests/openapi.rs`。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。

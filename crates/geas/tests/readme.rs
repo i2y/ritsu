@@ -300,3 +300,30 @@ fn the_jobs_in_english() {
 fn the_jobs_in_japanese() {
     jobs_story("ja", " --lang ja");
 }
+
+/// The story of the order service: every answer holds to the document that says what it answers, and
+/// an agent's change to the order, which no claim reads, fails the claims that get one back.
+fn orders_story(lang: &str, flag: &str) {
+    if !python3("the order service's story in the READMEs") {
+        return;
+    }
+    let mut t = Session::new(&format!("readme-orders-{lang}"));
+    copy_example("orders", &t.s);
+    let spec = "examples/orders/orders.geas";
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 0);
+    t.s.write("examples/orders/server.py", &repo_file("tests/changes/orders/after/server.py"));
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 1);
+    t.status(1);
+    let text = std::mem::take(&mut t.text);
+    golden(&format!("{lang}/readme/orders.txt"), &text);
+}
+
+#[test]
+fn the_orders_in_english() {
+    orders_story("en", "");
+}
+
+#[test]
+fn the_orders_in_japanese() {
+    orders_story("ja", " --lang ja");
+}

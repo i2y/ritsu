@@ -1,0 +1,9 @@
+target calc {
+  run "python3 calc.py"
+  contract "calc.json"
+}
+
+claim "adds two integers" {
+  when calc.run("2", "+", "3")
+  then stdout is "5"
+}

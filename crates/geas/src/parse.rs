@@ -36,6 +36,8 @@ struct RawTarget {
     drivers: Vec<RawCmd>,
     ports: Vec<(Port, Pos)>,
     serials: Vec<Pos>,
+    /// Each `contract` line: its file and where it is written.
+    contracts: Vec<(String, Pos)>,
     /// A line E002 refused: what it was meant to say is unknown, so a line that
     /// seems missing is not reported as well.
     unknown_line: bool,
@@ -245,6 +247,7 @@ impl P {
             drivers: vec![],
             ports: vec![],
             serials: vec![],
+            contracts: vec![],
             unknown_line: false,
             pins: vec![],
         };
@@ -278,6 +281,10 @@ impl P {
                         rt.ports.push((Port::Auto, at(&tk)));
                     }
                     "serial" => rt.serials.push(at(&tk)),
+                    "contract" => {
+                        let s = self.expect(Kind::Str, "the contract's file, in quotes", "`\"` で囲んだ契約のファイル")?;
+                        rt.contracts.push((s.text.clone(), at(&tk)));
+                    }
                     "port" => {
                         let n = self.expect(Kind::Num, "a port number or `auto`", "ポート番号か `auto`")?;
                         match n.text.parse::<u16>() {
@@ -298,8 +305,8 @@ impl P {
                     other => {
                         self.e002(
                             &tk,
-                            format!("a target has no line `{other}`; its lines are run, serve, pixie, driver, port, serial, and the pins env, tz, locale, clock and seed"),
-                            format!("ターゲットに `{other}` という行は書けません。書けるのは run、serve、pixie、driver、port、serial と、固定の env、tz、locale、clock、seed です"),
+                            format!("a target has no line `{other}`; its lines are run, serve, pixie, driver, port, serial, contract, and the pins env, tz, locale, clock and seed"),
+                            format!("ターゲットに `{other}` という行は書けません。書けるのは run、serve、pixie、driver、port、serial、contract と、固定の env、tz、locale、clock、seed です"),
                         );
                         rt.unknown_line = true;
                         self.skip_line(tk.line);
@@ -308,8 +315,8 @@ impl P {
                 _ => {
                     return Err(self.expected(
                         &tk,
-                        "`run`, `serve`, `pixie`, `driver`, `port`, `serial`, a pin or `}`",
-                        "`run`、`serve`、`pixie`、`driver`、`port`、`serial`、固定、`}` のどれか",
+                        "`run`, `serve`, `pixie`, `driver`, `port`, `serial`, `contract`, a pin or `}`",
+                        "`run`、`serve`、`pixie`、`driver`、`port`、`serial`、`contract`、固定、`}` のどれか",
                     ));
                 }
             }
@@ -1578,6 +1585,7 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
         ("driver", tg.drivers.iter().map(|r| r.pos).collect()),
         ("port", tg.ports.iter().map(|r| r.1).collect()),
         ("serial", tg.serials.clone()),
+        ("contract", tg.contracts.iter().map(|c| c.1).collect()),
     ] {
         if let [first, second, ..] = places.as_slice() {
             diags.push(
@@ -1638,6 +1646,19 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
         [(w, c)] => (*w, *c),
     };
     if word != "serve" {
+        if let Some((_, p)) = tg.contracts.first() {
+            // said, and the target is still what its command makes it, so that its claims are
+            // checked too
+            diags.push(diag::error(
+                "E004",
+                p.line,
+                p.col,
+                tr!(
+                    "ターゲット `{name}` に `contract` がありますが `serve` がありません。契約で確かめるのは、サービスの答えだけです",
+                    "the target `{name}` has `contract` but no `serve`; a contract holds what a service answers",
+                ),
+            ));
+        }
         if let Some((_, p)) = tg.ports.first() {
             // said, and the target is still what its command makes it, so that its
             // claims are checked too
@@ -2014,7 +2035,8 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
         if let Some(kind) = kind {
             let pins = pins.remove(&tg.name).unwrap_or_default();
             let serial = !tg.serials.is_empty();
-            targets.push(Target { name: tg.name.clone(), kind, pos: tg.kw_pos, pins, serial });
+            let contract = tg.contracts.first().map(|(file, pos)| Contract { file: file.clone(), pos: *pos, held: None });
+            targets.push(Target { name: tg.name.clone(), kind, pos: tg.kw_pos, pins, serial, contract });
         }
     }
     let names: Vec<&str> = raw.targets.iter().map(|t| t.name.as_str()).collect();

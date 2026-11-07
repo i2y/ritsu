@@ -1,0 +1,19 @@
+$ geas check examples/orders/orders.geas
+ok 1 - a new order is open
+ok 2 - a total that is not a number is refused
+ok 3 - an unknown order is not found
+3 claims · 3 ok · 0 failed · journal: examples/orders/.geas/orders.journal.jsonl
+$ geas check examples/orders/orders.geas
+not ok 1 - a new order is open
+    examples/orders/orders.geas:13: contract POST /orders — got $: the required placed is missing; $.total: "2500" is string; the contract says integer
+        13 |   when api.post("/orders", body: "2500")
+    examples/orders/orders.geas:15: contract GET /orders/{id} — got $: the required placed is missing; $.total: "2500" is string; the contract says integer
+        15 |   when api.get("/orders/1")
+      the run that gets there:
+          13  when api.post("/orders", body: "2500")  →  201, body "{\"id\": \"1\", \"state\": \"open\", \"total\": \"2500\", \"placedAt\": \"2026-11-07\"}"
+          15  when api.get("/orders/1")  →  200, body "{\"id\": \"1\", \"state\": \"open\", \"total\": \"2500\", \"placedAt\": \"2026-11-07\"}"
+ok 2 - a total that is not a number is refused
+ok 3 - an unknown order is not found
+3 claims · 2 ok · 1 failed · journal: examples/orders/.geas/orders.journal.jsonl
+$ echo $?
+1

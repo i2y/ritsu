@@ -1,0 +1,6 @@
+差分: contract.diff · 記録: .geas/shop.map.jsonl（どちらの側にも合う）
+記録の外のファイル:
+  api/other.yaml
+契約が変わりました: api/schemas.yaml。主張はこれから、いまの内容と突き合わされます
+契約が変わりました: api/shop.yaml。主張はこれから、いまの内容と突き合わされます
+主張 4 件 · 関わる主張 0 件 · どの主張も通らない変更 0 行

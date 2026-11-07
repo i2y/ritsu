@@ -458,6 +458,65 @@ class Handler(BaseHTTPRequestHandler):
 HTTPServer((\"127.0.0.1\", int(sys.argv[1])), Handler).serve_forever()
 ";
 
+const X_E015: &str = "target api {
+  serve \"python3 server.py {port}\"
+  port auto
+  contract \"api/orders.json\"
+}
+
+claim \"a new order is open\" {
+  when api.get(\"/orders/1\")
+  then status is 200
+}
+";
+
+const X_E016: &str = "target api {
+  serve \"python3 server.py {port}\"
+  port auto
+  contract \"orders.json\"
+}
+
+claim \"a new order is open\" {
+  when api.get(\"/order/1\")
+  then status is 200
+}
+";
+
+const X_W015: &str = "target api {
+  serve \"python3 server.py {port}\"
+  port auto
+  contract \"orders.json\"
+}
+";
+
+const ORDERS_JSON: &str = "{
+  \"openapi\": \"3.1.0\",
+  \"info\": { \"title\": \"Orders\", \"version\": \"1\" },
+  \"paths\": {
+    \"/orders/{id}\": {
+      \"get\": { \"responses\": { \"200\": { \"description\": \"The order\" } } }
+    }
+  }
+}
+";
+
+const ORDERS_OF_ANY_NAME_JSON: &str = "{
+  \"openapi\": \"3.1.0\",
+  \"info\": { \"title\": \"Orders\", \"version\": \"1\" },
+  \"paths\": {
+    \"/orders/{id}\": {
+      \"get\": { \"responses\": { \"200\": {
+        \"description\": \"The order\",
+        \"content\": { \"application/json\": { \"schema\": {
+          \"type\": \"object\",
+          \"patternProperties\": { \"^x-\": { \"type\": \"string\" } }
+        } } }
+      } } }
+    }
+  }
+}
+";
+
 const X_W060: &str = "target five {
   run \"echo 5\"
 }
@@ -726,6 +785,32 @@ pub fn table() -> Vec<Entry> {
                 "Write `within` after a `run`, a `get` or a `post`, with a whole number of seconds from 1 to 60, and under it the checks to wait for. A screen is given more time with `advance(ms)`.",
             ),
             repro: spec(&["check", "e014.geas"], &[("e014.geas", X_E014)], 2),
+        },
+        Entry {
+            code: "E015",
+            summary: tr!("読めない `contract` のファイル", "a `contract` file that cannot be read"),
+            when: tr!(
+                "ターゲットの `contract` の行が指すファイルが無いか読めないとき、モジュールの中でそのパスを指せないとき、OpenAPI 3.0、3.1、3.2 の文書でないとき（AsyncAPI と Swagger 2.0 は読めません）、応答から届く `$ref` を辿れないときです。どの主張も走りません。",
+                "The file a target's `contract` line names is missing or cannot be read, is a path a module does not take, is not an OpenAPI 3.0, 3.1 or 3.2 document (AsyncAPI and Swagger 2.0 are not read), or a response reaches a `$ref` that cannot be followed. No claim runs.",
+            ),
+            fix: tr!(
+                "パスは主張のファイルのディレクトリから、モジュールの依存なら `@<名前>/…` で書いてください。`$ref` で読めるのは同じ文書と、ディスクにあるファイルです。URL は読みません。",
+                "Write the path from the spec's directory, or as `@<name>/…` for a dependency of a module. A `$ref` can land in the same document or in a file on the disk, not at a URL.",
+            ),
+            repro: spec(&["check", "e015.geas"], &[("e015.geas", X_E015)], 2),
+        },
+        Entry {
+            code: "E016",
+            summary: tr!("契約に無い呼び出し", "a call the contract does not have"),
+            when: tr!(
+                "`contract` の行があるターゲットの `get` か `post` が、その文書に無いパスやメソッドを呼んでいるときです。パスは `?` より前で比べ、`{{id}}` は一つの区切りの中の 1 文字以上に合います。`servers` の URL のパスは、前に付いていても無くてもかまいません。主張を走らせずに分かるので、どの主張も走りません。",
+                "A `get` or a `post` on a target with a `contract` line calls a path or a method its document does not have. The path is compared up to its `?`, a `{{id}}` stands for one or more characters of a segment, and the path of a URL in `servers` may be in front or not. It is known without running anything, so no claim runs.",
+            ),
+            fix: tr!(
+                "呼び先を直すか、契約に足してください。契約の外をわざと呼ぶ主張（知らないパスが 404 になること）は、`contract` の行が無いターゲットから呼んでください。",
+                "Correct the call, or add it to the contract. A claim that means to call outside the contract (an unknown path answers 404) calls through a target with no `contract` line.",
+            ),
+            repro: Repro { args: &["check", "e016.geas"], files: &[("e016.geas", X_E016), ("orders.json", ORDERS_JSON)], exit: 2, needs: &[], env: &[] },
         },
         Entry {
             code: "E030",
@@ -1097,6 +1182,19 @@ pub fn table() -> Vec<Entry> {
                 "Give a spec (`openspec/specs/<capability>/spec.md`), a change's delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`), or a directory that holds them; `openspec validate` says what is wrong with a form.",
             ),
             repro: spec(&["scenarios", "e090.geas", "--openspec", "notes.md"], &[("e090.geas", X_E090), ("notes.md", NOTES_MD)], 2),
+        },
+        Entry {
+            code: "W015",
+            summary: tr!("契約のうち、geas が答えと突き合わせないところ", "what a contract says that geas does not hold an answer to"),
+            when: tr!(
+                "`contract` の文書のスキーマが、geas の読まないキーワード（`patternProperties`、`propertyNames`、`dependentRequired`、`dependentSchemas`、`dependencies`、`if`、`then`、`else`、`unevaluatedProperties`、`unevaluatedItems`、`contains`、`minContains`、`maxContains`）を使っているときと、`pattern` を geas のパターンで同じ意味に書けないとき（先読み、後読み、`\\b`、両端以外の `^` と `$`）です。ほかの部分は突き合わせます。主張は走ります。",
+                "A schema of the `contract` document uses a keyword geas does not read (`patternProperties`, `propertyNames`, `dependentRequired`, `dependentSchemas`, `dependencies`, `if`, `then`, `else`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`, `maxContains`), or a `pattern` geas's patterns cannot say the same (a lookaround, `\\b`, `^` or `$` anywhere but the two ends). The rest is held, and the claims run.",
+            ),
+            fix: tr!(
+                "その部分は、主張の `then` で確かめてください。文書を変える必要はありません。",
+                "Check that part with a `then` in the claims. The document need not change.",
+            ),
+            repro: Repro { args: &["check", "w015.geas"], files: &[("w015.geas", X_W015), ("orders.json", ORDERS_OF_ANY_NAME_JSON)], exit: 0, needs: &[], env: &[] },
         },
         Entry {
             code: "W060",

@@ -292,6 +292,60 @@
       then body json ".state" is "done"
     }
 
+エラー[E015]: 読めない `contract` のファイル
+
+いつ出るか
+  ターゲットの `contract` の行が指すファイルが無いか読めないとき、モジュールの中でそのパスを指せないとき、OpenAPI 3.0、3.1、3.2 の文書でないとき（AsyncAPI と Swagger 2.0 は読めません）、応答から届く `$ref` を辿れないときです。どの主張も走りません。
+
+直し方
+  パスは主張のファイルのディレクトリから、モジュールの依存なら `@<名前>/…` で書いてください。`$ref` で読めるのは同じ文書と、ディスクにあるファイルです。URL は読みません。
+
+再現
+  $ geas check e015.geas
+  e015.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+      contract "api/orders.json"
+    }
+
+    claim "a new order is open" {
+      when api.get("/orders/1")
+      then status is 200
+    }
+
+エラー[E016]: 契約に無い呼び出し
+
+いつ出るか
+  `contract` の行があるターゲットの `get` か `post` が、その文書に無いパスやメソッドを呼んでいるときです。パスは `?` より前で比べ、`{id}` は一つの区切りの中の 1 文字以上に合います。`servers` の URL のパスは、前に付いていても無くてもかまいません。主張を走らせずに分かるので、どの主張も走りません。
+
+直し方
+  呼び先を直すか、契約に足してください。契約の外をわざと呼ぶ主張（知らないパスが 404 になること）は、`contract` の行が無いターゲットから呼んでください。
+
+再現
+  $ geas check e016.geas
+  e016.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+      contract "orders.json"
+    }
+
+    claim "a new order is open" {
+      when api.get("/order/1")
+      then status is 200
+    }
+  orders.json:
+    {
+      "openapi": "3.1.0",
+      "info": { "title": "Orders", "version": "1" },
+      "paths": {
+        "/orders/{id}": {
+          "get": { "responses": { "200": { "description": "The order" } } }
+        }
+      }
+    }
+
 エラー[E030]: 起動できないプログラム
 
 いつ出るか
@@ -848,6 +902,39 @@
     # Notes
 
     Nothing here is a spec.
+
+警告[W015]: 契約のうち、geas が答えと突き合わせないところ
+
+いつ出るか
+  `contract` の文書のスキーマが、geas の読まないキーワード（`patternProperties`、`propertyNames`、`dependentRequired`、`dependentSchemas`、`dependencies`、`if`、`then`、`else`、`unevaluatedProperties`、`unevaluatedItems`、`contains`、`minContains`、`maxContains`）を使っているときと、`pattern` を geas のパターンで同じ意味に書けないとき（先読み、後読み、`\b`、両端以外の `^` と `$`）です。ほかの部分は突き合わせます。主張は走ります。
+
+直し方
+  その部分は、主張の `then` で確かめてください。文書を変える必要はありません。
+
+再現
+  $ geas check w015.geas
+  w015.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+      contract "orders.json"
+    }
+  orders.json:
+    {
+      "openapi": "3.1.0",
+      "info": { "title": "Orders", "version": "1" },
+      "paths": {
+        "/orders/{id}": {
+          "get": { "responses": { "200": {
+            "description": "The order",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "patternProperties": { "^x-": { "type": "string" } }
+            } } }
+          } } }
+        }
+      }
+    }
 
 警告[W060]: `map` で記録が何も取れなかったターゲット
 

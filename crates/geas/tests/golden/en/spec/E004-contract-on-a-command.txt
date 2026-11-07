@@ -1,0 +1,2 @@
+error[E004]: E004-contract-on-a-command.geas:3:3: the target `calc` has `contract` but no `serve`; a contract holds what a service answers
+     3 |   contract "calc.json"

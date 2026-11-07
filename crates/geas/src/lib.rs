@@ -8,6 +8,7 @@ extern crate ritsu_base;
 pub mod affected;
 pub mod cdp;
 pub mod check;
+pub mod contract;
 /// The `geas` command, as a function.
 pub mod cli;
 pub mod codes;

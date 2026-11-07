@@ -15,6 +15,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+mod responses;
+pub use responses::{Responding, Response, Responses, Shape, Unheld, responses};
+
 /// The kind of a document.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
@@ -494,27 +497,7 @@ impl Reader<'_> {
         let sensitive = n.get("x-sensitive-data").is_some_and(|v| v.value != Value::Bool(false));
         let classification = n.get("x-data-classification").map(|c| (c.get("category").and_then(Node::as_str).unwrap_or(""), c.get("sensitivity").and_then(Node::as_str)));
         s.mark = crate::marks::schema_mark(s.format.as_deref(), sensitive, classification);
-        let number = |k: &str| -> Option<Number> {
-            match &n.get(k)?.value {
-                Value::Int(i) => Some(Number::Int(*i)),
-                Value::Float(f) => Some(Number::Decimal(f.clone())),
-                _ => None,
-            }
-        };
-        let flag = |k: &str| n.get(k).is_some_and(|v| v.value == Value::Bool(true));
-        s.minimum = number("minimum").map(|value| Bound { value, exclusive: flag("exclusiveMinimum") });
-        s.maximum = number("maximum").map(|value| Bound { value, exclusive: flag("exclusiveMaximum") });
-        // 3.1: the exclusive ends are numbers of their own; the tighter end holds
-        if let Some(x) = number("exclusiveMinimum") {
-            if s.minimum.as_ref().is_none_or(|m| !below(&x, &m.value)) {
-                s.minimum = Some(Bound { value: x, exclusive: true });
-            }
-        }
-        if let Some(x) = number("exclusiveMaximum") {
-            if s.maximum.as_ref().is_none_or(|m| !below(&m.value, &x)) {
-                s.maximum = Some(Bound { value: x, exclusive: true });
-            }
-        }
+        (s.minimum, s.maximum) = bounds(n);
         let wire = |v: &Node| -> Option<String> {
             match &v.value {
                 Value::Null => None,
@@ -771,6 +754,34 @@ impl Reader<'_> {
         }
         out
     }
+}
+
+/// The number a key of a schema holds.
+fn number_at(n: &Node, k: &str) -> Option<Number> {
+    match &n.get(k)?.value {
+        Value::Int(i) => Some(Number::Int(*i)),
+        Value::Float(f) => Some(Number::Decimal(f.clone())),
+        _ => None,
+    }
+}
+
+/// The lowest and the highest value a schema takes.
+fn bounds(n: &Node) -> (Option<Bound>, Option<Bound>) {
+    let flag = |k: &str| n.get(k).is_some_and(|v| v.value == Value::Bool(true));
+    let mut minimum = number_at(n, "minimum").map(|value| Bound { value, exclusive: flag("exclusiveMinimum") });
+    let mut maximum = number_at(n, "maximum").map(|value| Bound { value, exclusive: flag("exclusiveMaximum") });
+    // 3.1: the exclusive ends are numbers of their own; the tighter end holds
+    if let Some(x) = number_at(n, "exclusiveMinimum") {
+        if minimum.as_ref().is_none_or(|m| !below(&x, &m.value)) {
+            minimum = Some(Bound { value: x, exclusive: true });
+        }
+    }
+    if let Some(x) = number_at(n, "exclusiveMaximum") {
+        if maximum.as_ref().is_none_or(|m| !below(&m.value, &x)) {
+            maximum = Some(Bound { value: x, exclusive: true });
+        }
+    }
+    (minimum, maximum)
 }
 
 /// Whether `a` is below `b`. Decimals are compared by their value as far as an `f64` holds it.

@@ -214,6 +214,7 @@ after this round:
 file    := (target | claim | mask | pin)*
 target  := "target" IDENT "{" tprop* "}"
 tprop   := "run" STR | "serve" STR | "port" (NUM | "auto")
+         | "contract" STR                       ; on a serve target (§20)
          | "pixie" STR | "driver" STR | "serial" | pin
 pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
          | "tz" STR | "locale" STR
@@ -2106,3 +2107,101 @@ Checked: `each_files_check_in_the_json_is_what_its_language_writes` in
 ritsu's `tests/check.rs` gives the copy of `examples/calc` to `ritsu check`
 (its claims run Python), and holds the `check` of `calc.geas` to what
 `ritsu geas check calc.geas --json` prints, less those two keys.
+
+## 20. Holding what a service answers to its contract (2026-11-07)
+
+A claim checks what its author thought of. The sample refund service has eleven claims and an
+OpenAPI document, and a change that renames a member or returns a value the document does not list
+goes by as long as no claim reads it. The document already says what every answer may be, so the
+question is how to use it without asking for anything per claim.
+
+`contract "<file>"` on a `serve` target holds every `get` and `post` of that target to the document.
+The path is from the spec's directory and, in a module, what any path written in a file is (ritsu's
+DESIGN 17.6): under the module's root, or in a dependency by `@<name>/`. It is the only path a claims
+file writes, and it follows the one rule so a module's claims mean the same in another tree. The
+document is OpenAPI 3.0, 3.1 or 3.2, in JSON or YAML, read
+by the one reader of such documents (`ritsu_base::openapi::responses`, beside what reads what an
+operation is sent).
+
+**Before anything runs.** A file that cannot be read, a path a module refuses, a document that is
+AsyncAPI or Swagger 2.0, or one in which a `$ref` a response reaches cannot be followed is E015. A `get` or `post` whose path or method the
+document does not have is E016. What the document says and geas does not hold is W015, once for each
+word: `patternProperties`, `propertyNames`, `dependentRequired`, `dependentSchemas`, `dependencies`,
+`if`, `then`, `else`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`,
+`maxContains`, and a `pattern` geas's patterns cannot say the same. A second `contract` line, or one on
+a target that is not `serve`, is E004. `ritsu check` and `ritsu impact` read these the same way, and
+`ritsu impact` counts E015 and E016 as new errors of the head.
+
+**Which operation a call is.** The path is cut at `?` and `#`. A `{id}` stands for one or more
+characters within a segment, and a segment is compared as written and with its `%XX` read back. The
+path a `servers` URL adds may be in front or not, since a service under test may be reached either
+way, with the operation's servers over its path item's over the document's. Of the operations that
+fit, the one with the most segments written out wins, and the first written on a tie.
+
+**What an answer is held to.**
+
+- The status: the exact one, then `NXX`, then `default`. None of those is a violation.
+- The headers its response marks `required`, as to being there. Their schemas are not read.
+- The media type, the exact one, then `type/*`, then `*/*`, when the response lists any. A response
+  that lists no `content` has its body unread.
+- A body of a JSON media type (`/json`, `+json`), against its schema. A body of another media type is
+  not read: geas has nothing to read it with.
+- Of a schema: `type` (a list, and `null`), `nullable`, `enum`, `const`, `format` (below), `minimum`,
+  `maximum`, both forms of `exclusive`, `multipleOf`, `minLength`, `maxLength` (in characters),
+  `pattern`, `items`, `prefixItems`, `minItems`, `maxItems`, `uniqueItems`, `required`, `properties`,
+  `additionalProperties`, `minProperties`, `maxProperties`, `allOf`, `$ref` (with its siblings),
+  `anyOf`, `oneOf`, `not`, boolean schemas, and `writeOnly`. A `writeOnly` member is not required in an
+  answer, and is a violation when it comes back.
+- `format` is held for `date`, `date-time`, `uuid`, `int32` and `int64`, which have one meaning. The
+  others are left to the document: a document may use a format of its own, and `email` or `uri` are
+  read differently by different tools, and a false alarm costs more here than a missed one, because it
+  is a claim failing on a change nobody made.
+
+**What it is in a run.** Each answer is one more check on its `when`'s line, with `label: "contract"`,
+`expected: "GET /orders/{id}"` and, when it holds, the status as `actual`. The first three problems are
+said, then how many more. The journal writes it as a `check` event, so drift and the record do not
+change. A claim goes on after an answer breaks the document, as it does after any failed check.
+
+**Forms passed over.**
+
+- A check under each `when` (`then answer fits contract`). Forgetting it is the thing this is for, and
+  a line per claim is the cost the document was meant to save.
+- A command that calls every operation in the document. The document does not say how to reach a state
+  in which an answer comes back, or with what body. The claims already do, so they choose the calls, and
+  an answer no claim brings about is not held. Generating claims from a document was measured too
+  (ritsu's DESIGN 17.10.1), and needs a table of people, invoices and states that a line does not.
+- E016 as a warning. A route the document lacks is what the document is for, and in the measurement
+  below it is the catch no answer could give: the call stops before it runs. A claim that means to call
+  outside the document has a way out, a second target with no `contract` line.
+- Holding every answer of a wait. The answers before the kept one are the service on its way, and they
+  are not what the claim says. Nor does the wait wait for the contract: a broken answer would look like
+  "not yet", and spend the time before saying less.
+- Holding the requests a page makes in Chrome. geas sees a page through its accessibility tree and does
+  not see its requests; holding them would ask Chrome for what the rest of geas does not read.
+- A JSON Schema library. geas has no dependency to add one to, and holds the keywords above by hand
+  with its own patterns. A pattern it cannot run faithfully is a warning rather than a pass.
+
+**Measured.** On the refund sample with the 31 breaks of code and contract written by another agent
+(ritsu's DESIGN 17.10.1), the real binary with the line added to the target and no other change:
+
+| | Caught |
+|---|---|
+| the eleven claims, `go vet` and `go test` | 16 |
+| and the `contract` line | 19 |
+
+The three new ones are a value of an enum renamed in the code, a required member dropped, and a route
+added to the service and the claims but not the document (E016, before anything runs). The six harmless
+changes among the same set gave no new violation. The untouched sample gave one, three runs out of
+three: `GET /invoices/{invoiceId}` answers 401 and its document lists 200, 403 and 404. That is a real
+gap in the document.
+
+**Left.** Request bodies and parameters are not held to the document; what a claim sends is its own
+business, and a claim that sends what the document forbids is often the point of the claim. A header's
+schema is not read. The coverage of the document (which operations and statuses no claim brought about)
+is not reported.
+
+Checked: `tests/contract.rs` with the service `tests/impl/orders.py`, one claim for each way of breaking
+a document, in both languages, with `-j1` and `-j4`; `tests/readme.rs` runs the story of
+`examples/orders`; `tests/affected.rs` holds a change to a contract, and to a file its `$ref` reaches,
+as a change to what the claims are held to (`contract_changed`, exit 1, as a changed spec is); and
+`ritsu-base`'s `tests/openapi.rs` holds what the reader gives.

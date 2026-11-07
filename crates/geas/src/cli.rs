@@ -2,7 +2,7 @@
 //! geas` (ritsu's DESIGN 8.2); and `geas check` of the specs of a project, as `ritsu check`
 //! prints it ([`checked`]).
 
-use crate::{affected, codes, diag, drift, map, model, parse, proc, report, run, scenarios, sched, skill};
+use crate::{affected, codes, contract, diag, drift, map, model, parse, proc, report, run, scenarios, sched, skill};
 
 use diag::{Diag, Show};
 use ritsu_base::text::{Lang, Text};
@@ -421,6 +421,14 @@ fn shown(p: &Path) -> String {
     p.display().to_string()
 }
 
+/// A spec as a run reads it: parsed, its contracts read and its calls held to them (DESIGN §20),
+/// with the warnings that leaves; or what stops it.
+fn with_contracts(src: &str, p: &Paths) -> Result<(model::Spec, Vec<Diag>), Vec<Diag>> {
+    let mut spec = parse::parse(src)?;
+    let said = contract::read(&mut spec, &p.cwd);
+    if said.iter().any(Diag::is_error) { Err(said) } else { Ok((spec, said)) }
+}
+
 /// A spec geas could not run: its diagnostics on stderr, or as JSON on stdout.
 fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
     if a.json {
@@ -511,8 +519,9 @@ fn run_file(file: &str, a: &Args) -> i32 {
         }
     };
     // `check` says the keys written in the spec (W901), whatever else it holds
-    let keys = if a.cmd == Cmd::Check { diag::keys(&src) } else { Vec::new() };
-    let spec = match parse::parse(&src) {
+    let mut keys = if a.cmd == Cmd::Check { diag::keys(&src) } else { Vec::new() };
+    let p = paths(file);
+    let (spec, warnings) = match with_contracts(&src, &p) {
         Ok(s) => s,
         Err(diags) => {
             let ds: Vec<(String, Diag)> = keys.into_iter().chain(diags).map(|d| (file.to_string(), d)).collect();
@@ -520,7 +529,9 @@ fn run_file(file: &str, a: &Args) -> i32 {
             return 2;
         }
     };
-    let p = paths(file);
+    if a.cmd == Cmd::Check {
+        keys.extend(warnings);
+    }
     if a.cmd == Cmd::Map {
         return map_file(file, a, &src, &spec, &p);
     }
@@ -835,12 +846,15 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
             }
         };
         // the keys written in the spec (W901), whatever else it holds
-        let key_diags = diag::keys(&src);
-        let keys: Vec<Part> = key_diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
-        let spec = match parse::parse(&src) {
-            Ok(s) => s,
+        let mut key_diags = diag::keys(&src);
+        let p = paths(file);
+        let spec = match with_contracts(&src, &p) {
+            Ok((s, warnings)) => {
+                key_diags.extend(warnings);
+                s
+            }
             Err(diags) => {
-                let parts = keys.into_iter().chain(diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang))))).collect();
+                let parts = key_diags.iter().chain(&diags).map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
                 // the object `geas check --json` prints of a spec it could not run
                 let ds: Vec<(String, Diag)> = key_diags.iter().chain(&diags).map(|d| (file.clone(), d.clone())).collect();
                 let json = ritsu_base::json::parse(&report::failure_json(file, &ds, lang)).unwrap_or(ritsu_base::json::Json::Null);
@@ -848,7 +862,7 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
                 continue;
             }
         };
-        let p = paths(file);
+        let keys: Vec<Part> = key_diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
         let geas_dir = ritsu_base::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
         let (results, journal) = run::run_spec(&spec, &p.cwd, &geas_dir, &p.stem, sched::jobs(None));
         let mut parts: Vec<Part> = keys;
@@ -900,9 +914,11 @@ pub fn read_only(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::
             }
         };
         out.extend(diag::keys(&src).iter().map(|d| finding(file, d, d.shown(file, &src, lang))));
-        if let Err(diags) = parse::parse(&src) {
-            out.extend(diags.iter().map(|d| finding(file, d, d.shown(file, &src, lang))));
-        }
+        let said = match with_contracts(&src, &paths(file)) {
+            Ok((_, warnings)) => warnings,
+            Err(diags) => diags,
+        };
+        out.extend(said.iter().map(|d| finding(file, d, d.shown(file, &src, lang))));
     }
     out
 }

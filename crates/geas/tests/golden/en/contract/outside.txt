@@ -1,0 +1,8 @@
+error[E016]: c/outside.geas:15:3: the contract orders.yaml has no GET /order/ok
+    15 |   when api.get("/order/ok")
+  = the contract's paths: /orders, /orders/{id}
+  = add it to the contract, or call it through a target with no `contract` line
+error[E016]: c/outside.geas:20:3: the contract orders.yaml has no POST /orders/ok
+    20 |   when api.post("/orders/ok")
+  = /orders/{id} has GET
+  = add it to the contract, or call it through a target with no `contract` line

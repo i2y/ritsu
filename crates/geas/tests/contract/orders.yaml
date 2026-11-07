@@ -1,0 +1,28 @@
+# What tests/impl/orders.py is held to.
+openapi: 3.1.0
+info: { title: Orders, version: "1" }
+servers:
+  - url: https://orders.example.com/v1
+paths:
+  /orders:
+    post:
+      responses:
+        "201":
+          description: The order made
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "./schemas.yaml#/Order" }
+  /orders/{id}:
+    get:
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema: { $ref: "./schemas.yaml#/Order" }
+        "404":
+          description: There is no such order

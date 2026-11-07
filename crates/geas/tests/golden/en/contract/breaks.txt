@@ -1,0 +1,46 @@
+not ok 1 - a state the contract does not list
+    c/breaks.geas:11: contract GET /orders/{id} — got $.state: "lost" is not one of "open", "paid"
+        11 |   when api.get("/orders/state")
+      the run that gets there:
+          11  when api.get("/orders/state")  →  200, body "{\"id\": \"state\", \"state\": \"lost\", \"total\": 100, \"placed\": \"2026-11-07\"}"
+not ok 2 - a member the contract requires is missing
+    c/breaks.geas:16: contract GET /orders/{id} — got $: the required total is missing
+        16 |   when api.get("/orders/total")
+      the run that gets there:
+          16  when api.get("/orders/total")  →  200, body "{\"id\": \"total\", \"state\": \"open\", \"placed\": \"2026-11-07\"}"
+not ok 3 - several things are wrong, and the first few are said
+    c/breaks.geas:21: contract GET /orders/{id} — got $.state: "lost" is not one of "open", "paid"; $.total: "a" is string; the contract says integer; $.placed: "yesterday" is not date; and 1 more
+        21 |   when api.get("/orders/many")
+      the run that gets there:
+          21  when api.get("/orders/many")  →  200, body "{\"id\": \"many\", \"state\": \"lost\", \"total\": \"a\", \"placed\": \"yesterday\", \"e…
+not ok 4 - a member that only goes to the service comes back
+    c/breaks.geas:26: contract GET /orders/{id} — got $.card: the contract says it is only ever sent to the service (writeOnly)
+        26 |   when api.get("/orders/secret")
+      the run that gets there:
+          26  when api.get("/orders/secret")  →  200, body "{\"id\": \"secret\", \"state\": \"open\", \"total\": 100, \"placed\": \"2026-11-07\", \"…
+not ok 5 - a status the contract does not list
+    c/breaks.geas:31: contract GET /orders/{id} — got status 418, which the contract does not list (it lists 200, 404)
+        31 |   when api.get("/orders/teapot")
+      the run that gets there:
+          31  when api.get("/orders/teapot")  →  418, body "short and stout"
+not ok 6 - a media type the contract does not list
+    c/breaks.geas:36: contract GET /orders/{id} — got status 200 as text/plain, which the contract does not list (it lists application/json)
+        36 |   when api.get("/orders/text")
+      the run that gets there:
+          36  when api.get("/orders/text")  →  200, body "an order"
+not ok 7 - a body that is not JSON
+    c/breaks.geas:41: contract GET /orders/{id} — got status 200 with a body that is not JSON
+        41 |   when api.get("/orders/broken")
+      the run that gets there:
+          41  when api.get("/orders/broken")  →  200, body "<html>"
+not ok 8 - a header the contract requires is missing
+    c/breaks.geas:46: contract POST /orders — got status 201 without the required header Location
+        46 |   when api.post("/orders", body: "bare")
+      the run that gets there:
+          46  when api.post("/orders", body: "bare")  →  201, body "{\"id\": \"1\", \"state\": \"open\", \"total\": 100, \"placed\": \"2026-11-07\"}"
+not ok 9 - the claim goes on after an answer breaks it
+    c/breaks.geas:51: contract GET /orders/{id} — got $.state: "lost" is not one of "open", "paid"
+        51 |   when api.get("/orders/state")
+      the run that gets there:
+          51  when api.get("/orders/state")  →  200, body "{\"id\": \"state\", \"state\": \"lost\", \"total\": 100, \"placed\": \"2026-11-07\"}"
+9 claims · 0 ok · 9 failed · journal: c/.geas/breaks.journal.jsonl

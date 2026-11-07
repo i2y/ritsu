@@ -414,6 +414,54 @@ A `post` or a `run` can wait too, for an API that reads with POST, but each call
 is written, and so is what it does: wait on a read where there is one. A screen is not waited for
 this way (E014): geas lets it settle after each action, and `advance(ms)` gives it more time.
 
+## Holding what a service answers to its contract
+
+A claim checks what its author thought of: a status, a member or two. The rest of an answer can
+change and no claim notices. When a service has an OpenAPI document, a `contract` line on its target
+holds every answer of that target to it: the status, the headers the answer must send, the media
+type, and the body against the schema. [examples/orders](examples/orders) is a service with one:
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+
+claim "a new order is open" {
+  when api.post("/orders", body: "2500")
+  then status is 201
+  when api.get("/orders/1")
+  then status is 200
+  and  body json ".state" is "open"
+}
+…
+```
+
+After an agent made the total a string and renamed `placed`, every check the claim writes still
+holds. The answers do not hold to the document:
+
+```text
+not ok 1 - a new order is open
+    examples/orders/orders.geas:13: contract POST /orders — got $: the required placed is missing; $.total: "2500" is string; the contract says integer
+        13 |   when api.post("/orders", body: "2500")
+    examples/orders/orders.geas:15: contract GET /orders/{id} — got $: the required placed is missing; $.total: "2500" is string; the contract says integer
+        15 |   when api.get("/orders/1")
+…
+```
+
+Each answer is one more check on its `when`'s line, in the report, in `--json` and in the journal.
+A wait holds only the answer it kept, and does not wait for the contract. Only `get` and `post` are
+held; the requests a page makes in Chrome are not seen. The claims choose the calls, so an answer no
+claim brings about is not held.
+
+Before anything runs, a call the document does not have stops the spec (E016), and a document that
+cannot be read does too (E015). A claim that means to call outside the document, such as an unknown
+path that answers 404, calls through a target with no `contract` line. What the document says and geas
+does not hold is said once (W015). The file is OpenAPI 3.0, 3.1 or 3.2, in JSON or YAML, written from
+the spec's directory, or from a dependency as `@<name>/…` in a module, and a `$ref` can reach another
+file on the disk.
+
 ## The language
 
 A `when` is an action on a target; `then` and `and` check what it observed.
@@ -441,7 +489,7 @@ error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` 
 
 Every diagnostic has a code, the place, and what leads to it: a claim that could not run carries the
 run that gets there, as E035 above. `geas explain <code>` says when a code appears, what usually
-fixes it, and the smallest claims file that gives it; there are 37 codes, and `--lang ja` prints
+fixes it, and the smallest claims file that gives it; there are 40 codes, and `--lang ja` prints
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.
@@ -538,6 +586,7 @@ and JSON geas writes.
 | [tally-rust](examples/tally-rust) | a command line in Rust, built with `-C instrument-coverage` |
 | [web-greeter](examples/web-greeter) | a page in Chrome and its service, every pin |
 | [jobs](examples/jobs) | a service whose jobs finish after it answers, and a claim that waits for one with `within` |
+| [orders](examples/orders) | a service with an OpenAPI document, and a `contract` line that holds every answer to it |
 | [pixie-greeter](examples/pixie-greeter) | a pixie desktop app, built with pixie and put beside the claims |
 
 Each has a README saying what it shows, how to run it, and what to look for.

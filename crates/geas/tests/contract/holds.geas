@@ -1,0 +1,28 @@
+# Every answer the contract allows: nothing to say. The checks of the claims are their own.
+
+target api {
+  serve "python3 orders.py {port}"
+  port auto
+  contract "orders.yaml"
+}
+
+claim "an order is read back" {
+  when api.get("/orders/ok")
+  then status is 200
+  and  body json ".state" is "open"
+}
+
+claim "the contract's path holds under its server's path and with a query" {
+  when api.get("/v1/orders/ok?expand=lines")
+  then status is 200
+}
+
+claim "a new order says where it is" {
+  when api.post("/orders", body: "book")
+  then status is 201
+}
+
+claim "a wait holds the answer it kept to the contract, and not the ones before" {
+  when api.get("/orders/later") within 5 seconds
+  then body json ".state" is "open"
+}

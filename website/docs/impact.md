@@ -25,7 +25,8 @@ say anything of its own about what a file means.
   capitals but README, CHANGELOG, CHANGES and CONTRIBUTING) or something else. The lines of code written
   by hand are counted.
 - **The check**: `ritsu check` of both sides, with `.geas` files read and their claims not run, and the
-  errors and warnings only the head has. A diagnostic whose line moved is not new.
+  errors and warnings only the head has. A diagnostic whose line moved is not new. A `contract` a `.geas`
+  file names is read too, so a call its document does not have counts as a new error.
 - **What moved**: what `ritsu mod diff` says of the two sides, so every input whose answer differs in a
   rule, every date that differs in a dates file, and every combination a gate decides differently. That
   includes what a file reads: a gate reading a calendar moves when the calendar does, and a gate with a

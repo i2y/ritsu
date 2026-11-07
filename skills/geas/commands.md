@@ -163,7 +163,8 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   adds a note: the answer compared is the last one.
 - `affected`: `{"geas":1,"spec","diff","records":[{"file","side"}],"claims":[{"index","name",
   "status","lines":[{"file","side","lines","how","startup"}]}],"unclaimed":[{"file","side","lines",
-  "why"}],"deleted":[{"file","known"}],"outside","spec_changed","baseline_changed","ok"}`. A line's
+  "why"}],"deleted":[{"file","known"}],"outside","spec_changed","contract_changed","baseline_changed",
+  "ok"}`. A line's
   `side` is `after` (numbered in the code after the change) or `before` (a removed line); `how` is
   `ran` or `near`; `startup` names the target every claim of which runs the line.
 - `scenarios`: `{"geas":1,"specs":[{"path","delta","requirements":[{"name","op","line","scenarios":

@@ -228,7 +228,8 @@ The code is the agent's; the claims are what a person reads. geas runs each clai
 program — a command line, an HTTP service, a page in a browser — and, given a diff, tells which
 claims it touches. Given an OpenSpec spec, `geas scenarios` lists the scenarios that no claim of the
 same name checks. A claim can wait for an answer that comes later, such as a job a service finishes
-after it answers, for as long as the claim says.
+after it answers, for as long as the claim says. One line on a target holds every answer of a service to
+its OpenAPI document, whatever the claims look at.
 
 ```geas
 # The human-auditable half. The implementation (calc.py) is agent-written;

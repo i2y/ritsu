@@ -1,0 +1,5 @@
+ok 1 - an order is read back
+ok 2 - the contract's path holds under its server's path and with a query
+ok 3 - a new order says where it is
+ok 4 - a wait holds the answer it kept to the contract, and not the ones before
+4 claims · 4 ok · 0 failed · journal: c/.geas/holds.journal.jsonl

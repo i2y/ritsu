@@ -1,0 +1,2 @@
+エラー[E004]: E004-contract-on-a-command.geas:3:3: ターゲット `calc` に `contract` がありますが `serve` がありません。契約で確かめるのは、サービスの答えだけです
+     3 |   contract "calc.json"

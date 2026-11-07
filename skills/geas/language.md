@@ -42,6 +42,7 @@ claim "answers on its own port" {
 | `run "<command>"` | a command: geas starts it once for each `when`, with the call's arguments after its words |
 | `serve "<command>"` and `port <n>` | a service: geas starts it once per claim that touches it, waits up to 5 s for the port to open, and stops it when the claim ends |
 | `port auto` | geas picks a free port on 127.0.0.1 for each instance and writes it where the command, or an `env` value, says `{port}` |
+| `contract "<file>"` | on a `serve` target: every `get` and `post` is held to this OpenAPI document (below), the path from the spec's directory |
 | `serial` | claims that touch this target never run at the same time, for state geas cannot see |
 | `pixie "<app>"` | a pixie app, driven headless ([gui.md](gui.md)) |
 | `driver "<command>"` | any other GUI, through a program that speaks geas's driver protocol ([gui.md](gui.md)) |
@@ -163,6 +164,38 @@ after a `when`'s call makes geas call again, 100 ms after each answer, until eve
   does it add `"tries"` and `"ms"`, so a wait that holds writes the same bytes however many calls
   it took ([commands.md](commands.md)). The baseline's `call` does not hold the wait, and drift
   compares the answer the wait kept.
+
+## Holding answers to a contract
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+  contract "api.yaml"
+}
+…
+```
+
+Each answer of a `get` or a `post` on that target is one more check, on its `when`'s line, with no
+line of its own in the claim: the status is one the document lists (the exact one, then `NXX`, then
+`default`), the headers its response marks `required` are there, the media type is one it lists, and a
+JSON body fits the schema. It fails its claim like any check, says the first three problems, and
+writes `"check":"contract"` in the journal.
+
+- OpenAPI 3.0, 3.1 or 3.2, in JSON or YAML; a `$ref` can reach another file on the disk, not a URL.
+  In a module, the path is under its root or `@<name>/…` in a dependency. A file that cannot be read,
+  or a `$ref` a response reaches that cannot be followed, is E015.
+- A call the document does not have stops the spec before anything runs (E016). The path is compared
+  up to its `?`; a `{id}` stands for one or more characters of a segment; what a `servers` URL adds may
+  be there or not. A claim that means to call outside the document (an unknown path answers 404) calls
+  through a second target with no `contract` line.
+- A keyword geas does not read, or a `pattern` it cannot say the same, is W015; the rest still holds.
+  `format` is held for `date`, `date-time`, `uuid`, `int32` and `int64`. A `writeOnly` member that
+  comes back is a violation. A body of a media type that is not JSON is not read.
+- A wait holds only the answer it kept, and does not wait for the contract. A page's requests in Chrome
+  are not seen.
+- The claims choose the calls, so an answer no claim brings about is not held: this adds to claims and
+  does not stand for them.
 
 ## Subjects and matchers
 
@@ -325,6 +358,7 @@ drift notes pins that differ from the baseline's.
 file    := (target | claim | mask | pin)*
 target  := "target" IDENT "{" tprop* "}"
 tprop   := "run" STR | "serve" STR | "port" (NUM | "auto")
+         | "contract" STR                       ; on a serve target
          | "pixie" STR | "driver" STR | "serial" | pin
 pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
          | "tz" STR | "locale" STR

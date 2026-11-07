@@ -1,0 +1,8 @@
+エラー[E016]: c/outside.geas:15:3: 契約 orders.yaml に GET /order/ok はありません
+    15 |   when api.get("/order/ok")
+  = 契約のパス: /orders、/orders/{id}
+  = 契約に足すか、`contract` の行が無いターゲットから呼んでください
+エラー[E016]: c/outside.geas:20:3: 契約 orders.yaml に POST /orders/ok はありません
+    20 |   when api.post("/orders/ok")
+  = /orders/{id} にあるのは GET です
+  = 契約に足すか、`contract` の行が無いターゲットから呼んでください

@@ -40,6 +40,18 @@ pub struct Target {
     pub pins: Pins,
     /// `serial`: the claims that touch it run one at a time (DESIGN §10).
     pub serial: bool,
+    /// `contract`: what the service answers is held to this document (DESIGN §20).
+    pub contract: Option<Contract>,
+}
+
+/// A target's `contract` line.
+#[derive(Debug, Clone)]
+pub struct Contract {
+    /// As written: from the spec's directory.
+    pub file: String,
+    pub pos: Pos,
+    /// What it holds, once `contract::read` has read it.
+    pub held: Option<std::sync::Arc<crate::contract::Held>>,
 }
 
 /// What a target's processes are given to see (DESIGN §12), as the spec writes it:

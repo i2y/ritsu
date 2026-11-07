@@ -1,0 +1,19 @@
+$ geas check examples/orders/orders.geas --lang ja
+ok 1 - a new order is open
+ok 2 - a total that is not a number is refused
+ok 3 - an unknown order is not found
+主張 3 件 · 成り立った 3 件 · 成り立たなかった 0 件 · ジャーナル: examples/orders/.geas/orders.journal.jsonl
+$ geas check examples/orders/orders.geas --lang ja
+not ok 1 - a new order is open
+    examples/orders/orders.geas:13: contract POST /orders のはずが、実際は $: 必須の placed がありません。$.total: "2500" は string で、契約は integer です
+        13 |   when api.post("/orders", body: "2500")
+    examples/orders/orders.geas:15: contract GET /orders/{id} のはずが、実際は $: 必須の placed がありません。$.total: "2500" は string で、契約は integer です
+        15 |   when api.get("/orders/1")
+      ここまでの実行:
+          13  when api.post("/orders", body: "2500")  →  201, body "{\"id\": \"1\", \"state\": \"open\", \"total\": \"2500\", \"placedAt\": \"2026-11-07\"}"
+          15  when api.get("/orders/1")  →  200, body "{\"id\": \"1\", \"state\": \"open\", \"total\": \"2500\", \"placedAt\": \"2026-11-07\"}"
+ok 2 - a total that is not a number is refused
+ok 3 - an unknown order is not found
+主張 3 件 · 成り立った 2 件 · 成り立たなかった 1 件 · ジャーナル: examples/orders/.geas/orders.journal.jsonl
+$ echo $?
+1

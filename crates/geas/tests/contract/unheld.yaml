@@ -1,0 +1,16 @@
+openapi: 3.0.3
+info: { title: Orders, version: "1" }
+paths:
+  /orders/{id}:
+    get:
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                propertyNames: { maxLength: 8 }
+                properties:
+                  id: { type: string, pattern: "(?=o)" }
+                  state: { type: string, enum: [open] }
