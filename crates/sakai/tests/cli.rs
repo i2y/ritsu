@@ -28,7 +28,7 @@ fn no_arguments_help_and_version() {
     assert!(err(&o).contains("sakai check"), "{}", err(&o));
     let o = sakai(&["--help"]);
     assert_eq!(code(&o), 0);
-    for c in ["check", "gen", "export", "api", "explain"] {
+    for c in ["check", "gen", "export", "api", "vectors", "explain"] {
         assert!(out(&o).contains(&format!("sakai {c} ")), "{c} is in --help");
     }
     let o = sakai(&["--version"]);
@@ -38,7 +38,7 @@ fn no_arguments_help_and_version() {
 
 #[test]
 fn every_command_has_its_help() {
-    for c in ["check", "gen", "export", "api", "explain"] {
+    for c in ["check", "gen", "export", "api", "vectors", "explain"] {
         let a = sakai(&[c, "--help"]);
         let b = sakai(&["help", c]);
         let h = sakai(&[c, "-h"]);
@@ -83,6 +83,10 @@ fn what_is_refused_with_exit_2() {
         vec!["api", MAP, MAP],
         vec!["api", ROOT],
         vec!["api", MAP, "--format", "json"],
+        vec!["vectors"],
+        vec!["vectors", MAP, MAP],
+        vec!["vectors", ROOT],
+        vec!["vectors", MAP, "--format", "json"],
         vec!["gen", MAP],
         vec!["gen", MAP, "--target", "depguard"],
         vec!["gen", MAP, MAP, "--target", "import-linter"],

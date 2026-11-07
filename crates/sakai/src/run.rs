@@ -110,6 +110,7 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
         "gen" => gen_cmd(&a, lang, suite, out, err),
         "export" => export_cmd(&a, lang, suite, out, err),
         "api" => api_cmd(&a, lang, suite, out, err),
+        "vectors" => vectors_cmd(&a, lang, suite, out, err),
         "doc" => doc_cmd(&a, lang, suite, out, err),
         "explain" => explain_cmd(&a, lang, suite, out, err),
         _ => unreachable!("every command in the table is dispatched"),
@@ -348,6 +349,28 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         None => {
             let _ = write!(out, "{text}");
         }
+    }
+    0
+}
+
+/// `sakai vectors`: the values the mappings of the layers say, one JSON line each; a map that does not pass
+/// check gets its diagnostics and no line.
+fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let (root, map) = match one_map(a, "vectors", lang, err) {
+        Ok(x) => x,
+        Err(code) => return code,
+    };
+    let o = match check::check_map_with(&root, &map, suite) {
+        Ok(o) => o,
+        Err(e) => return refuse(err, e, lang),
+    };
+    if o.has_errors() {
+        let _ = write!(err, "{}", check::render(&o, lang));
+        return exit_of(&o.diags);
+    }
+    let c = o.checked.as_ref().expect("a map with no errors is checked through");
+    for line in crate::vectors::lines(c, suite) {
+        let _ = writeln!(out, "{line}");
     }
     0
 }

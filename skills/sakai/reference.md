@@ -253,6 +253,29 @@ The upstream enum may be a schema with `enum` under `components/schemas` of the 
 
 Only an anticorruption layer writes mappings (E304, E305).
 
+### Vectors for the code of a layer
+
+sakai does not read the code of a layer, and does not check that it maps as the mapping says. It prints what the mapping says, in the form the vectors of the other languages are in (JSON Lines), so that a test of the code can be held to it value by value:
+
+```console
+$ sakai vectors examples/shop/shop.ctx --root examples/shop
+```
+
+```json
+{"context":"Delivery","upstream":"Inventory","through":"warehouse.v1","layer":["py/delivery/acl/inventory","ts/delivery/acl/inventory","java/src/main/java/delivery/acl/inventory","go/delivery/acl/inventory"],"enum":"PackingStatus","value":"PACKING_STATUS_UNSPECIFIED","number":0,"unmapped":true,"unset":true}
+{"context":"Delivery",…,"enum":"PackingStatus","value":"PACKING_STATUS_PACKED","number":2,"to":{"enum":"shipping_decision","value":"ship"}}
+{"context":"Delivery",…,"enum":"PackingStatus","value":"PACKING_STATUS_SHORT","number":3,"refuse":"A box with an item missing is not shipped. It goes back to ordering"}
+{"context":"Billing",…,"enum":"OrderStatus","value":"ORDER_STATUS_PAID","number":2,"answers":{"handling":"bill"},"to":{"enum":"order_status","value":"paid","rule":"billing/rules/billing_need.rule"}}
+```
+
+There is a line for every value of every enum an `upstream … anticorruption layer` maps with `enum <upstream> -> <target>`, in the order of the map and of the enum. `context` is the downstream whose layer it is, `upstream` the context it reads, `through` the published language the enum is in, `layer` what the map writes under `layer` (paths from the root), `enum` the upstream enum as the mapping writes it, `value` its value, and `number` the number the `.proto` gives it (a value of an OpenAPI or AsyncAPI document has none). Each line says one thing of the value:
+
+- `to`: where it goes, `{"enum": …, "value": …}`; with `"rule"` the path of the rule when the enum is a rule's, and the value is the rule's, whether a line writes it or the rule's `import proto` is the mapping.
+- `refuse`: it is refused, with the reason the line gives (`null` for a bare `refuse`).
+- `unmapped`: the map says nothing of it, as the value 0 of an enum that says nothing is set (`unset` marks that one), and is left out of the check of the values. It is a line all the same: a value is not dropped silently.
+
+Where the target is a rule's enum and that enum is the rule's only input, `answers` is what rulec answers for the value, the outputs by name, asked as every language asks it (`{"refused": …}` where the rule's door refuses it). sakai writes nothing of the rule's answer itself. A map that does not pass `check` prints its diagnostics, and no line. The Python of the shop example is held to the lines by `examples/shop/check_layers.py`, which uses the standard library alone.
+
 ## Naming an artifact
 
 A context file names a file or a thing in it in one form, the same in yuen and in ritsu (`ritsu-base/tests/fixtures/naming.tsv` is its table of tests):
@@ -288,7 +311,7 @@ Each code, with when it comes, how to fix it and the smallest reproduction, is i
 
 ## What is not checked
 
-- Whether the code of an anticorruption layer maps as its mapping says.
+- Whether the code of an anticorruption layer maps as its mapping says. `sakai vectors` prints what the mapping says, value by value, for a test of the code to be held to ([Vectors](#vectors-for-the-code-of-a-layer)).
 - Calls no contract writes: HTTP to a URL in a string with no OpenAPI document, a queue with no AsyncAPI document, a shared database, reflection and dynamic imports. What OpenAPI and AsyncAPI documents write is checked.
 - Whether the code calls HTTP, and sends to and receives from channels, as its documents say.
 - Whether generated code really was generated from its published language.
@@ -316,6 +339,7 @@ Every keyword has one English spelling and no synonym.
 | `sakai export cml <map.ctx> [--out <file>]` | write the map as Context Mapper's CML |
 | `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>]` | write the map's page: the context map, each context's artifacts and glossary, the relationships and what crosses them, the mappings |
 | `sakai api <map.ctx>` | print the map, the owners and the crossings as JSON |
+| `sakai vectors <map.ctx> [--root <dir>]` | print what each anticorruption layer's mappings say, one JSON line for every value of every upstream enum, for the tests of the layer's code ([Vectors](#vectors-for-the-code-of-a-layer)) |
 | `sakai explain <code>`, `sakai explain --all [--format markdown]` | look a diagnostic up |
 
 Every command takes `--lang ja|en` (else `SAKAI_LANG`, then `RITSU_LANG`, else English).

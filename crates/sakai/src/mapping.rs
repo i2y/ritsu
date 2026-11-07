@@ -51,6 +51,14 @@ fn target_words(values: &[&str]) -> Text {
     Text { ja: shown.join("、"), en: shown.join(", ") }
 }
 
+/// The numbers of the values of the `.proto` enum a name points at, by the values' names: what a
+/// layer's code is given on the wire (`sakai vectors`). None for an enum of a document, whose values
+/// have no number.
+pub fn numbers(ps: &Protos, n: &Name) -> Option<Vec<(String, i64)>> {
+    let (e, _, _) = enum_of(ps, n)?;
+    Some(e.values.iter().map(|v| (v.name.clone(), v.number)).collect())
+}
+
 /// The proto enum a name points at, with its full name.
 fn enum_of<'a>(ps: &'a Protos, n: &Name) -> Option<(&'a proto::Enum, String, &'a proto::ProtoFile)> {
     if n.tool != Tool::Proto {

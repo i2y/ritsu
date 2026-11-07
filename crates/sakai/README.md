@@ -190,11 +190,13 @@ $ sakai gen examples/shop/shop.ctx --target dependency-cruiser
 $ sakai export cml examples/shop/shop.ctx
 $ sakai doc examples/shop/shop.ctx --format html --out site
 $ sakai api examples/shop/shop.ctx
+$ sakai vectors examples/shop/shop.ctx
 $ sakai explain E401
 ```
 
 `check` takes map files and directories, and `--format json`; `--root` changes the directory paths are counted from (else the nearest one above that holds `.git` or `ritsu.mod`).
 `gen` takes `--target` once for each tool whose settings it writes (`import-linter`, `dependency-cruiser`, `archunit`, `go-arch-lint`), and writes none when one cannot be written (E501); up to 0.40.0 it was `sakai build`, which now stops with exit 2 and says the new name.
+`vectors` prints what the mappings of the anticorruption layers say, one JSON line for every value of every upstream enum (the value it becomes, the refusal and its reason, `unmapped` for what the map says nothing of, the number in the `.proto`, and what the rule answers where it goes to a rule's enum): sakai does not read the code of a layer, and a test of the code is held to these lines ([the reference](docs/reference.md#vectors-for-the-code-of-a-layer)); [examples/shop/check_layers.py](examples/shop/check_layers.py) does it for the Python of the shop.
 Every command takes `--lang ja|en` (else `SAKAI_LANG`, then `RITSU_LANG`, else English) and `--help`.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 

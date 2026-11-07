@@ -157,6 +157,24 @@ pub fn commands() -> Vec<Cmd> {
         },
         Cmd {
             usage: None,
+            name: "vectors",
+            args: "<map.ctx>",
+            purpose: tr!(
+                "腐敗防止層の読み替えを、コードの試験が食べる値にして JSON Lines で出す。地図が `enum <上流> -> <下流>` で読み替える上流の列挙の値を、すべて一行ずつ。読み替えの先の値、拒否とその理由、地図が何も言わない値（`unmapped`）、`.proto` の値の番号、先が規則の列挙なら規則の答え",
+                "print what the mappings of the anticorruption layers say as the values a layer's tests are held to, as JSON Lines: one line for every value of every upstream enum a map maps with `enum <upstream> -> <downstream>`, with the value it becomes, or the refusal and its reason, the values the map says nothing of (`unmapped`), the number of a `.proto` value, and, where it goes to a rule's enum, what the rule answers"
+            ),
+            params: vec![("<map.ctx>", tr!("検査を通る map のファイル", "a map file that passes check"))],
+            flags: vec![root_flag()],
+            exits: vec![
+                (0, tr!("出した", "printed")),
+                (1, tr!("地図にエラーがある（診断は標準エラーに出す）", "the map has errors (the diagnostics go to standard error)")),
+                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物（E104）", "bad arguments, a file that cannot be read, or an artifact of a language not joined (E104)")),
+            ],
+            examples: vec!["sakai vectors examples/shop/shop.ctx", "sakai vectors examples/shop/shop.ctx | jq -c 'select(.unmapped)'"],
+            codes: vec![],
+        },
+        Cmd {
+            usage: None,
             name: "explain",
             args: "<CODE>",
             purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest reproduction"),

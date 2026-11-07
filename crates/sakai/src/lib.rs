@@ -34,6 +34,8 @@ pub mod run;
 /// The languages sakai reads through ritsu's ports.
 pub mod suite;
 pub mod terms;
+/// The values a layer's code is held to (`sakai vectors`).
+pub mod vectors;
 pub mod api;
 pub mod build;
 pub mod cli;

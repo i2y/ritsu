@@ -193,11 +193,13 @@ $ sakai gen examples/shop.ja/通販.ctx --target archunit --lang ja
 $ sakai export cml examples/shop.ja/通販.ctx --lang ja
 $ sakai doc examples/shop.ja/通販.ctx --format html --out site --lang ja
 $ sakai api examples/shop.ja/通販.ctx
+$ sakai vectors examples/shop.ja/通販.ctx
 $ sakai explain E401 --lang ja
 ```
 
 `check` は地図のファイルとディレクトリを受け取り、`--format json` も付けられます。`--root` は、パスを数える起点のディレクトリを替えます（無ければ、上にたどって `.git` か `ritsu.mod` のある一番近いディレクトリ）。
 `gen` は、設定を書くツール（`import-linter`、`dependency-cruiser`、`archunit`、`go-arch-lint`）ごとに `--target` を一つずつ受け取り、どれかが書けなければ（E501）どれも書きません。0.40.0 までは `sakai build` で、いまは新しい名前を言って 2 で終わります。
+`vectors` は、腐敗防止層の対応が言っていることを、上流の列挙の値ごとに一行の JSON で出します（その値がなるもの、拒否とその理由、地図が何も言わない値の `unmapped`、`.proto` の番号、先が規則の列挙なら規則の答え）。sakai は層のコードを読みません。コードの試験は、この行に合わせます（[リファレンス（英語）](docs/reference.md#vectors-for-the-code-of-a-layer)）。通販の Python は [examples/shop/check_layers.py](examples/shop/check_layers.py) が確かめます。
 どのコマンドも `--lang ja|en`（無ければ `SAKAI_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--help` を受け付けます。
 終了コードは、エラーが無ければ 0、エラーがあれば 1、引数の誤り、読めないファイル、つながっていない言語の成果物なら 2 です。
 

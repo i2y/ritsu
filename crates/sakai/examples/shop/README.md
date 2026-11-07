@@ -11,6 +11,15 @@ examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each i
 The map holds rules, calendars and workflows, so it is checked by `ritsu sakai` (or `sakai`, the link of the same name): sakai reads what those files name through the other languages, in the same process.
 `sakai doc examples/shop/shop.ctx` writes the map's page; [`tests/golden/doc/shop.en.md`](../../tests/golden/doc/shop.en.md) is that page.
 
+`sakai vectors examples/shop/shop.ctx` prints what the mappings of the two anticorruption layers say, a line for each value of `PackingStatus` and `OrderStatus` ([`tests/golden/vectors/shop.jsonl`](../../tests/golden/vectors/shop.jsonl) is that output). sakai does not read the Python of the layers; [`check_layers.py`](check_layers.py) holds it to the lines, using the standard library alone:
+
+```text
+$ sakai vectors examples/shop/shop.ctx | python3 examples/shop/check_layers.py
+7 held, 0 failed, 2 left out (unmapped, or a layer this file does not know)
+```
+
+The two left out are the values 0, `PACKING_STATUS_UNSPECIFIED` and `ORDER_STATUS_UNSPECIFIED`: the map says nothing of a value that says nothing is set, so there is nothing to hold the code to there.
+
 ## The contexts
 
 | Context | Owner | What it owns |

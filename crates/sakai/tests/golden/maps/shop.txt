@@ -18,6 +18,7 @@ files
   billing/rules/shipment_fee.rule -> Billing
   calendars/data/syukujitsu.csv -> Billing
   calendars/tokyo_business_days.cal -> Billing
+  check_layers.py -> -
   contexts/billing.ctx -> -
   contexts/delivery.ctx -> -
   contexts/inventory.ctx -> -
