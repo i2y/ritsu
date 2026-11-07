@@ -5,8 +5,8 @@
 //! the test is that it says what the vectors say: for every row of `rulec vectors`, `rulec run
 //! --input -` on the row's `in` answers the row's `out`; for every refused input `gen` writes,
 //! it refuses for the kind and the sentence the file gives. The materials have a machine, a
-//! sequence read by a walk and by a count, `apply`, a `constraint`, a fold that contradicts
-//! itself, and a plain table, English first with the Japanese versions of three of them.
+//! sequence read by a walk and by a count, `apply`, a `constraint`, `never` lines, a fold that
+//! contradicts itself, and a plain table, English first with the Japanese versions of four of them.
 
 use rulec::json::Json;
 use std::io::Write;
@@ -17,7 +17,7 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-const RULES: [&str; 11] = [
+const RULES: [&str; 13] = [
     "tests/corpus/member_tier_shipping.rule",
     "tests/corpus/order_lifecycle.rule",
     "tests/corpus/one_time_perk.rule",
@@ -26,7 +26,9 @@ const RULES: [&str; 11] = [
     "tests/corpus/part_time_retirement_pay.rule",
     "tests/corpus/express_delivery_quote.rule",
     "tests/corpus/nationwide_freight.rule",
+    "tests/corpus/order_fee.rule",
     "tests/corpus/注文の状態.rule",
+    "tests/corpus/注文の手数料.rule",
     "tests/corpus/買物かごの送料.rule",
     "tests/corpus/全国運賃.rule",
 ];
