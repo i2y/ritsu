@@ -1,5 +1,5 @@
 {
-  "sekisho": "0.43.0",
+  "sekisho": "0.44.0",
   "old": {
     "file": "tests/diff/limits.gate",
     "name": "limits",
