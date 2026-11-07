@@ -47,6 +47,7 @@ itself: those files are the person's.
 | `codes.md` | every diagnostic, as `geas explain --all` prints it |
 | `gui.md` | the screen, the actions, pixie, Chrome, and the driver protocol |
 | `map.md` | `geas map` and `geas affected` in full, and CI recipes |
+| `from-specs.md` | proposing claims from what a project's rules, gates, books and workflows already say |
 | `examples.md` | the examples and what each shows |
 
 ## Rebuilding it

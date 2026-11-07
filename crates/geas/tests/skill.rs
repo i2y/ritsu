@@ -38,7 +38,7 @@ fn the_install_writes_the_folder_as_it_is() {
     let s = Scratch::new("skill-install");
     let (out, err, code) = run(s.path(), &["skill", "--install", "here/skills"], &[]);
     assert_eq!((err.as_str(), code), ("", 0), "{out}");
-    assert_eq!(out, "wrote the geas skill to here/skills/geas (7 files)\n");
+    assert_eq!(out, "wrote the geas skill to here/skills/geas (8 files)\n");
     let installed = s.path().join("here/skills/geas");
     assert_eq!(names(&installed), names(&skill()), "the binary carries other files than skills/geas holds");
     for n in names(&skill()) {

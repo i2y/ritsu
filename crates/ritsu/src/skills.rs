@@ -93,6 +93,7 @@ pub const SKILLS: &[Skill] = &[
             ("gui.md", include_str!("../../../skills/geas/gui.md")),
             ("language.md", include_str!("../../../skills/geas/language.md")),
             ("map.md", include_str!("../../../skills/geas/map.md")),
+            ("from-specs.md", include_str!("../../../skills/geas/from-specs.md")),
         ],
     },
     Skill {

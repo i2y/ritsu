@@ -1462,7 +1462,7 @@ As built:
   `codes.md` from `geas explain --all`; the geas it runs is `$GEAS`, else
   `target/debug/geas`, else the one on PATH.
 - `geas skill --install <dir>` makes the directories it needs and prints
-  `wrote the geas skill to <dir>/geas (7 files)`. A `<dir>/geas` that is
+  `wrote the geas skill to <dir>/geas (8 files)`. A `<dir>/geas` that is
   already there is E081 unless `--force` is given; with it, the skill's
   files are written again and any other file in the folder is left as it
   is, since geas does not remove what it did not write. A file given to
@@ -2126,7 +2126,7 @@ operation is sent).
 **Before anything runs.** A file that cannot be read, a path a module refuses, a document that is
 AsyncAPI or Swagger 2.0, or one in which a `$ref` a response reaches cannot be followed is E015. A `get` or `post` whose path or method the
 document does not have is E016. What the document says and geas does not hold is W015, once for each
-word: `patternProperties`, `propertyNames`, `dependentRequired`, `dependentSchemas`, `dependencies`,
+word: `$dynamicRef`, `$recursiveRef`, `patternProperties`, `propertyNames`, `dependentRequired`, `dependentSchemas`, `dependencies`,
 `if`, `then`, `else`, `unevaluatedProperties`, `unevaluatedItems`, `contains`, `minContains`,
 `maxContains`, and a `pattern` geas's patterns cannot say the same. A second `contract` line, or one on
 a target that is not `serve`, is E004. `ritsu check` and `ritsu impact` read these the same way, and
@@ -2205,3 +2205,54 @@ a document, in both languages, with `-j1` and `-j4`; `tests/readme.rs` runs the 
 `examples/orders`; `tests/affected.rs` holds a change to a contract, and to a file its `$ref` reaches,
 as a change to what the claims are held to (`contract_changed`, exit 1, as a changed spec is); and
 `ritsu-base`'s `tests/openapi.rs` holds what the reader gives.
+
+## 21. Claims from the specs: a page of the skill, not a command (2026-11-07)
+
+A project in ritsu's languages already says who may do what, where a rule changes its answer, what a
+book refuses and how a workflow can go, and `sekisho vectors`, `rulec vectors`, `chobo scenarios` and
+`dandori scenarios` list it. Each entry could be a claim. The question was whether a command should write
+them.
+
+A prototype generator did: 203 claims from the sample refund service's specs, which caught 26 of 31 breaks
+written by another agent. It took a table of 61 lines (who plays which caller, how each state is reached,
+where each answer shows) and 1,713 lines of generator, and the generator holds the shape of that one
+sample, a resource with a balance and requests on it. One sample does not settle such a shape (ritsu's
+DESIGN 17.10.1). The table and the shape are the parts that take reading the project. An agent can read a
+project, so `skills/geas/from-specs.md` tells one how, and the claims are proposed to the person like any
+others (§1 of the skill).
+
+**Measured.** An agent that had seen neither the breaks, nor the generator, nor any result read the page
+and wrote its claims for the same sample. It took 8 minutes, wrote 49 claims and a `contract` line, and
+said what it could not reach (the clock, two callers at once, a boundary no seeded invoice has). The page
+was written by someone who had seen the breaks; it names none of them.
+
+| | Caught of 31 |
+|---|---|
+| the eleven claims, `go vet` and `go test` | 16 |
+| and the `contract` line (§20) | 19 |
+| and the agent's 49 claims | 24 |
+| the generator's 203 claims | 26 |
+
+The file runs in 10 to 25 seconds, against 40 to 60 for the generator's. A break counts when one claim
+that never failed on the untouched sample failed in both of two runs. Six harmless changes gave no new
+failure.
+
+**What it missed that the generator caught.** Two breaks: two columns of an export swapped, and a conflict
+on making a request turned into an update. The other five got past everything, and no list led to them: a
+call answered before the gate is asked, a workflow id reused, a balance read without its hold, a loop that
+skips a refused line, and a tool that sends one id where another belongs.
+
+**The flakes taught the page something.** Two claims read a balance once, right after the state said the
+request was rejected. The service writes the state first and gives the hold back after. They held in the
+agent's seven runs on a quiet machine, and failed in three of fifteen with other copies running. With
+`within` on the read of the balance, the file held in thirty of thirty under the same load, and the breaks
+those claims catch were still caught. So the page says to run ten times with the machine busy, and to wait
+on what the work ended in as well as on its state.
+
+**Forms passed over.** A command, for the reasons above. A page per language of ritsu: what is hard is the
+same for each (reaching a state, where an answer shows), and the lists differ only in their command. A
+number of claims to aim for: the agent's 49 caught almost as much as 203, and a person reads them.
+
+**Left.** The expected answers of a split came from `kaname run` along a chain of earlier refunds, which only
+the agent's reading found; a rule whose inputs are state has no list of its own. Whether the same page holds
+for a project with no spec of a given kind has not been tried, and neither has a second sample.

@@ -13,7 +13,9 @@ use std::rc::Rc;
 /// The keywords of a schema that say something of a value and are not read: an answer is not held
 /// to them, and [`Responses::unheld`] says where they are written. `format` is not one of them,
 /// since a document may use a format of its own, and what it says is for the language to read.
-const NOT_READ: [&str; 13] = [
+const NOT_READ: [&str; 15] = [
+    "$dynamicRef",
+    "$recursiveRef",
     "patternProperties",
     "propertyNames",
     "dependentRequired",

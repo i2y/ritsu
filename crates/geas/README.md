@@ -504,7 +504,7 @@ never the claims, and proposes the claims it finds missing. The binary carries i
 
 ```console
 $ geas skill --install .claude/skills
-wrote the geas skill to .claude/skills/geas (7 files)
+wrote the geas skill to .claude/skills/geas (8 files)
 ```
 
 The same folder is [skills/geas](../../skills/geas); [skills/README.md](skills/README.md) says more.

@@ -16,6 +16,7 @@ pub const FILES: &[(&str, &str)] = &[
     ("commands.md", include_str!("../../../skills/geas/commands.md")),
     ("gui.md", include_str!("../../../skills/geas/gui.md")),
     ("map.md", include_str!("../../../skills/geas/map.md")),
+    ("from-specs.md", include_str!("../../../skills/geas/from-specs.md")),
     ("examples.md", include_str!("../../../skills/geas/examples.md")),
     ("codes.md", include_str!("../../../skills/geas/codes.md")),
 ];

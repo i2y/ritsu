@@ -409,7 +409,7 @@ not ok 1 - a new order is open
 
 ```console
 $ geas skill --install .claude/skills --lang ja
-geas のスキルを .claude/skills/geas に書きました（ファイル 7 個）
+geas のスキルを .claude/skills/geas に書きました（ファイル 8 個）
 ```
 
 同じフォルダーが [skills/geas](../../skills/geas) にあります。くわしくは [skills/README.md](skills/README.md)（英語）を見てください。

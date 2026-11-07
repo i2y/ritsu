@@ -38,7 +38,8 @@ holds the code to the claims. That split is the whole point, so keep to it.
   loosen.
 - **A missing claim is proposed, not written.** When `ritsu geas affected` lists changed code no claim
   runs, when `ritsu geas drift` lists a change no claim covers, or when the person asks for behavior no
-  claim states, write the claim you propose, say why, and let the person accept it.
+  claim states, write the claim you propose, say why, and let the person accept it. When the project
+  has rules, gates, books or workflows, [from-specs.md](from-specs.md) is how to propose many at once.
 - **A new baseline and a new mask are asked for.** `ritsu geas snap` changes what `drift` compares
   against, and a `mask` line stops drift from looking at a field; both can hide a change, so the
   person decides.
@@ -356,6 +357,7 @@ service refuse it, or is the claim wrong?"
 | [codes.md](codes.md) | every diagnostic: when it appears, how to fix it, the smallest spec that gives it |
 | [gui.md](gui.md) | the screen, the actions, pixie, Chrome, and the driver protocol |
 | [map.md](map.md) | recording what each claim runs, `ritsu geas affected` in full, each language's needs, CI recipes |
+| [from-specs.md](from-specs.md) | proposing claims from what a project's rules, gates, books and workflows already say |
 | [examples.md](examples.md) | the examples beside geas in the ritsu repository, and what each shows |
 
 `ritsu geas skill` prints this file, and `ritsu geas skill --install <dir>` writes the whole folder as

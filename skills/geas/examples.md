@@ -1,6 +1,6 @@
 # The examples
 
-The geas repository has eight examples under `examples/`, each a claims file beside a small program,
+The geas repository has nine examples under `examples/`, each a claims file beside a small program,
 with a README that says what it shows and how to run it. The programs were written the way an agent
 writes them; the claims are what a person reads.
 
@@ -13,6 +13,7 @@ writes them; the claims are what a person reads.
 | `tally-rust` | a command line in Rust | `map` on a program built with `-C instrument-coverage` |
 | `web-greeter` | a page and its service in Python | a page in Chrome: typing, clicking, Enter, the screen's nodes, `into:`, states, `matching`, and claims on the same service's API; all four pins (`locale`, `tz`, `clock`, `seed`), since the page writes the date, greets by the time of day and draws a fortune at random |
 | `jobs` | an HTTP service in Python whose jobs finish after it answers | a claim that posts a job and waits for its result with `within 3 seconds`, on the read, not the post |
+| `orders` | an HTTP service in Python with an OpenAPI document | a `contract` line that holds every answer to the document, with the change that breaks it and no claim's check |
 | `pixie-greeter` | pixie's greeter, a desktop app | a pixie target driven headless: `open()`, `input`, `click`, `submit()`, `field: 2`; the app is built with pixie and put beside the claims file |
 
 For each example but `pixie-greeter`, `tests/changes/<example>/` in the repository holds an
@@ -21,7 +22,8 @@ change as a git diff (`change.diff`) and as a plain one (`change.plain.diff`). T
 before and after the change and `affected` on both diffs. The change to `web-greeter` turns its
 Greet button into a `<div>` with a click handler, which the screen shows as text and the claims
 refuse. The change to `jobs` calls a finished job `"finished"` instead of `"done"`, and the claim
-that waits runs out of time.
+that waits runs out of time. The change to `orders` makes the total a string and renames `placed`:
+every check the claims write still holds, and the `contract` line fails them.
 
 ## Running them
 
