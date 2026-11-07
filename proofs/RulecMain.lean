@@ -964,9 +964,9 @@ inductive Span where
 /-- Whether two spans of one column have anything in common. Two shapes that do not match
     are not compared: saying they meet is the half that declines to conclude. -/
 def Span.meets : Span → Span → Bool
-  | .num _ ah, .num bl _ =>
+  | .num al ah, .num bl bh =>
     !((match ah, bl with | some x, some y => decide (x < y) | _, _ => false) ||
-      (match bl, ah with | some _, some _ => false | _, _ => false))
+      (match bh, al with | some x, some y => decide (x < y) | _, _ => false))
   | .words a, .words b => a.any (fun x => b.contains x)
   | _, _ => true
 
