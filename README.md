@@ -709,7 +709,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: i2y/ritsu@v0.44.0
+      - uses: i2y/ritsu@v0.45.0
       - name: Report what raising the dependencies changes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -923,7 +923,7 @@ cargo install --git https://github.com/i2y/ritsu --locked rulec
 
 Every release, from 0.23.0 on (continuing rulec's numbering), carries archives for macOS and
 Linux and `.deb` and `.rpm` packages, on the [releases page](https://github.com/i2y/ritsu/releases).
-With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i2y/ritsu@v0.44.0`.
+With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i2y/ritsu@v0.45.0`.
 
 From 0.26.0, a release also carries `i2y-ritsu-<version>.tgz`, the npm package `@i2y/ritsu`: ritsu
 built for WebAssembly, which Node 22 or later runs with no native binary, with the native binary's
@@ -931,7 +931,7 @@ commands and an API to call them from JavaScript. It is not on the npm registry;
 the release:
 
 ```
-npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.44.0/i2y-ritsu-0.44.0.tgz
+npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.45.0/i2y-ritsu-0.45.0.tgz
 ```
 
 [Its README](packaging/npm/README.md) and [ritsu in Node](https://i2y.github.io/ritsu/node/) say

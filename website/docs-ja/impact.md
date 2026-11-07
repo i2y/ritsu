@@ -136,7 +136,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: i2y/ritsu@v0.44.0
+      - uses: i2y/ritsu@v0.45.0
       - name: Say what the change moved and where it goes
         env:
           GH_TOKEN: ${{ github.token }}
