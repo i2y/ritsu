@@ -47,6 +47,11 @@ fn skill_page() -> Page {
     page("skills/ritsu/SKILL.md")
 }
 
+/// The pages of the skill of ritsu.
+fn skill_pages() -> Vec<Page> {
+    vec![skill_page(), page("skills/ritsu/between.md")]
+}
+
 /// The frontmatter of a SKILL.md, as its lines.
 fn frontmatter(text: &str) -> Vec<String> {
     let front = text.strip_prefix("---\n").and_then(|t| t.split_once("\n---\n")).map(|(f, _)| f).expect("SKILL.md starts with its frontmatter");
@@ -80,19 +85,24 @@ fn skill_md_says_what_it_is() {
 
 #[test]
 fn no_link_leaves_the_skill() {
-    let p = skill_page();
     let mut wrong = Vec::new();
-    for (line, target) in link_targets(&p.text) {
-        if target.starts_with("https://") || target.starts_with("http://") {
-            continue;
-        }
-        let (file, frag) = target.split_once('#').map_or((target.as_str(), None), |(f, a)| (f, Some(a)));
-        if file.is_empty() {
-            if !p.anchors.iter().any(|a| Some(a.as_str()) == frag) {
-                wrong.push(format!("{}:{line}: no heading of the skill is anchored `#{}`", p.name, frag.unwrap_or("")));
+    for p in skill_pages() {
+        for (line, target) in link_targets(&p.text) {
+            if target.starts_with("https://") || target.starts_with("http://") {
+                continue;
             }
-        } else if file.contains('/') || !skill().join(file).is_file() {
-            wrong.push(format!("{}:{line}: {target} leaves the skill, or leads nowhere in it", p.name));
+            let (file, frag) = target.split_once('#').map_or((target.as_str(), None), |(f, a)| (f, Some(a)));
+            if file.is_empty() {
+                if !p.anchors.iter().any(|a| Some(a.as_str()) == frag) {
+                    wrong.push(format!("{}:{line}: no heading of the skill is anchored `#{}`", p.name, frag.unwrap_or("")));
+                }
+            } else if file.contains('/') || !skill().join(file).is_file() {
+                wrong.push(format!("{}:{line}: {target} leaves the skill, or leads nowhere in it", p.name));
+            } else if let Some(frag) = frag
+                && !page(&format!("skills/ritsu/{file}")).anchors.iter().any(|a| a == frag)
+            {
+                wrong.push(format!("{}:{line}: no heading of {file} is anchored `#{frag}`", p.name));
+            }
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
@@ -151,15 +161,16 @@ fn goldens() -> Vec<(String, Vec<String>)> {
 
 #[test]
 fn the_output_it_shows_is_what_ritsu_prints() {
-    let p = skill_page();
     let goldens = goldens();
     let mut wrong = Vec::new();
     let mut seen = 0;
-    for b in p.blocks.iter().filter(|b| b.info == "text") {
-        seen += 1;
-        let shown = shown_lines(b);
-        if !goldens.iter().any(|(_, file)| lines_in_order(&shown, file)) {
-            wrong.push(format!("{}:{}: a ```text block that is the lines of no golden file of ritsu's tests, in order", p.name, b.at));
+    for p in skill_pages() {
+        for b in p.blocks.iter().filter(|b| b.info == "text") {
+            seen += 1;
+            let shown = shown_lines(b);
+            if !goldens.iter().any(|(_, file)| lines_in_order(&shown, file)) {
+                wrong.push(format!("{}:{}: a ```text block that is the lines of no golden file of ritsu's tests, in order", p.name, b.at));
+            }
         }
     }
     // A check of two files and a run.
@@ -167,9 +178,17 @@ fn the_output_it_shows_is_what_ritsu_prints() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// The page on what no file says shows what the languages answer, by running them.
+#[test]
+fn the_page_on_what_no_file_says_runs() {
+    let (ran, wrong) = run_the_consoles(&[page("skills/ritsu/between.md")]);
+    assert!(ran >= 2, "{ran} commands run: the page shows what a rule and a dates file answer");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 #[test]
 fn the_commands_it_names_are_commands() {
-    let (seen, wrong) = commands_named(&[skill_page()]);
+    let (seen, wrong) = commands_named(&skill_pages());
     assert!(seen >= 10, "{seen} commands named in the skill: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
@@ -365,7 +384,7 @@ fn ritsu_skills_install_writes_the_ten_as_they_are() {
     assert_eq!(every_file(&dir), files_of_skills(&ten()), "the project's .claude/skills/ holds the ten, and nothing else");
     same_as_skills(&dir);
     assert_eq!(out.lines().count(), 10, "{out}");
-    assert!(out.starts_with("wrote .claude/skills/ritsu (1 file)\nwrote .claude/skills/rulec ("), "{out}");
+    assert!(out.starts_with("wrote .claude/skills/ritsu (2 files)\nwrote .claude/skills/rulec ("), "{out}");
     // Again: every file is already the same, and nothing is written.
     let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install"]);
     assert_eq!(code, 0, "{out}{err}");

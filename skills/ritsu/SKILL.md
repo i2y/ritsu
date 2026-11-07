@@ -1,6 +1,6 @@
 ---
 name: ritsu
-description: Work on a project with files of two or more of ritsu's nine small languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai), who may do what (`.gate`, sekisho) and functional cores (`.kn`, kaname). `ritsu check` checks each file with its own language and then across them, which shows that a call keeps a rule's preconditions, that a date's days fit a rule's range, that a ledger takes the amounts it is given, and that a hold has not always expired when it is posted. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-W206, E301-W303, W901, E905-W909), when a workflow has to be run with its rules, dates and books computed, or when one package of TypeScript, Python or Go is to be generated for the whole project. To write one language's files, read that language's skill.
+description: Work on a project with files of two or more of ritsu's nine small languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai), who may do what (`.gate`, sekisho) and functional cores (`.kn`, kaname). `ritsu check` checks each file with its own language and then across them, holding a call to a rule's preconditions, a date's days to a rule's range and a ledger to its amounts. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E208, E301-W303, W901, E905-W909), when a workflow has to be run with its rules, dates and books computed, when one package of TypeScript, Python or Go is to be generated for the whole project, or when a project is to be looked over for what its files depend on and none says. To write one language's files, read that language's skill.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), which runs each language as `ritsu <language> …`; a link to ritsu named for a language (`rulec`, `dandori`, …), as a release archive holds, runs the same. `ritsu skills install` writes the ten skills into a project's `.claude/skills/`.
 license: MIT OR Apache-2.0
 ---
@@ -104,7 +104,7 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
   - `borders` has the counts `held`, `failed` and `undecided`, and `records`, one for each border,
     as many as the counts add up to: `check` (which check: `precondition`, `rule_date_input`,
     `range_from_koyomi`, `transfer_amount`, `transfer_refusals`, `hold_expiry`,
-    `koyomi_date_input`, `secret_destination`, `operation_guard` or `workflow_permission`),
+    `koyomi_date_input`, `secret_destination`, `operation_guard`, `workflow_permission` or `fed_by`),
     `about`, the two sides `at` (where the diagnostic is) and `to` (null when there is none), each
     with `tool`, `file` and `line` (null where it is not known), `result` (`held`, `failed` or
     `undecided`) and `code` (null when it holds). They come in that order of the checks, then by
@@ -425,3 +425,13 @@ cosign (`add`, `get`, `fetch`, `versions`, `push`, `report` and `site`, and `loc
 neither in the store nor in the module's copy, run `ritsu mod fetch` with the native ritsu; if it is
 fetched already and the API's `dirs` opens only some directories, add the store to `dirs`, or put
 the copy in the module with `ritsu mod vendor`.
+
+## 10. What no file says
+
+`all pass` says nothing about what a project depends on and no file states: a value hand-written
+code carries from one language to another, a list of values written in two files, a hold that has to
+outlast a wait. Those break with no diagnostic. When you are asked to look a project over, or before
+you hand over one with hand-written code between the languages, follow [between.md](between.md): ask
+each language what it answers, find the relations nobody states, put each where a language can hold
+it (`fed by`, `import enum`, `claims`), break each one once, and report what held, what failed and
+what was left open.

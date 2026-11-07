@@ -4,7 +4,7 @@
 
 | スキル | 使う場面 |
 |---|---|
-| [ritsu](ritsu/SKILL.md) | 二つ以上の言語のファイルを持つプロジェクト。言語をまたぐ `ritsu check`、`ritsu run`、`ritsu gen`、ritsu 自身の診断 |
+| [ritsu](ritsu/SKILL.md) | 二つ以上の言語のファイルを持つプロジェクト。言語をまたぐ `ritsu check`、`ritsu run`、`ritsu gen`、ritsu 自身の診断、[どのファイルも言っていない関係](ritsu/between.md) |
 | [rulec](rulec/SKILL.md) | 業務の規則（`.rule`）。運賃表、手数料、割引、資格の判定を、証明つきのコードにする |
 | [dandori](dandori/SKILL.md) | ワークフロー（`.flow`）。走らせる前に検査し、Temporal、Step Functions、durable functions、Argo、pydantic-graph 向けにビルドする |
 | [koyomi](koyomi/SKILL.md) | 締め日、支払日、営業日（`.cal`） |

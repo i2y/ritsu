@@ -8,7 +8,7 @@ on this repository.
 
 | Skill | Use it for |
 |---|---|
-| [ritsu](ritsu/SKILL.md) | a project with files of more than one language: `ritsu check` across them, `ritsu run`, `ritsu gen`, and the diagnostics ritsu has of its own |
+| [ritsu](ritsu/SKILL.md) | a project with files of more than one language: `ritsu check` across them, `ritsu run`, `ritsu gen`, the diagnostics ritsu has of its own, and [what no file says](ritsu/between.md) |
 | [rulec](rulec/SKILL.md) | business rules (`.rule`): tariffs, fees, discounts, eligibility, turned into proved code |
 | [dandori](dandori/SKILL.md) | workflows (`.flow`), checked before they run and built for Temporal, Step Functions, durable functions, Argo and pydantic-graph |
 | [koyomi](koyomi/SKILL.md) | closing days, payment days and business days (`.cal`) |

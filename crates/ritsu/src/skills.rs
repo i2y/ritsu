@@ -28,6 +28,7 @@ pub const SKILLS: &[Skill] = &[
         name: "ritsu",
         files: &[
             ("SKILL.md", include_str!("../../../skills/ritsu/SKILL.md")),
+            ("between.md", include_str!("../../../skills/ritsu/between.md")),
         ],
     },
     Skill {

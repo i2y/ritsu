@@ -145,5 +145,10 @@ fn a_workflow_and_a_gate_read_one_enum_and_stop_when_a_value_is_renamed() {
         }
         assert_eq!(out.matches("error[").count(), 3, "{file}: {out}");
         assert!(out.contains("2 fail (3 errors)"), "{file}: {out}");
+        // what the page of the skill on the relations between languages shows
+        if flow == "shipping.flow" {
+            let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/check/enum-value-renamed.txt");
+            ritsu_testkit::golden::check(&golden, &out).unwrap();
+        }
     }
 }

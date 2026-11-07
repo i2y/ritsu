@@ -1,0 +1,13 @@
+ok rules/order_states.rule
+ok rules/注文の状態.rule
+error[dandori E003]: shipping.flow:17:5: `paid` is not a value of `order_state` (settled, shipped, returned, refunded)
+    17 |     paid =>
+shipping.ja.flow: ok
+error[sekisho E101]: orders.gate:26:26: The enum `order_state` has no value `paid`
+    26 |   when resource.state is paid
+  = The values there are `settled`, `shipped`, `returned` and `refunded`.
+error[sekisho E101]: orders.gate:31:26: The enum `order_state` has no value `paid`
+    31 |   when resource.state is paid
+  = The values there are `settled`, `shipped`, `returned` and `refunded`.
+orders.ja.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+ritsu check: 6 files (rulec 2, dandori 2, sekisho 2): 2 fail (3 errors); borders between the languages: 0 checked, 0 undecided
