@@ -1,0 +1,17 @@
+rule fragile_fee(fragile_fee) v1
+description "The table leaves out two combinations no order gives, and E101 asks for them, with its reason (§15.281)"
+
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  has_fragile  : bool  from any order.lines where fragile = true
+  none_fragile : bool  from all order.lines where fragile = false
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table handling
+policy unique
+| has_fragile | none_fragile | -> fee : money[USD] |
+| true        | false        | 5USD                |
+| false       | true         | 0USD                |

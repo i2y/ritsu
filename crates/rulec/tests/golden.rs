@@ -110,6 +110,8 @@ golden!(e121_契約に無いパス, "E121", "tests/mutants/m_e121.rule", "E121")
 golden!(e122_契約が通すのに規則が受け付けない, "E122", "tests/mutants/m_e122.rule", "E122");
 golden!(w123_契約が送らない値でしか当たらない行, "W123", "tests/mutants/m_w123.rule", "W123");
 golden!(e123_契約が制約を約束しない, "E123", "tests/mutants/m_e123.rule", "E123");
+golden!(e123_集計の入力, "E123-reads", "tests/mutants/m_e123readsja.rule", "E123");
+golden!(e101_定義からは起こらない, "E101-never", "tests/mutants/m_e101neverja.rule", "E101");
 golden!(w124_契約が送らない組み合わせでしか当たらない行, "W124", "tests/mutants/m_w124.rule", "W124");
 
 // A rule applied by another (§15.69).
@@ -185,6 +187,7 @@ golden!(e033_寄与が足した値, "E033-added", "tests/mutants/m_e033addja.rul
 golden!(e040_形の固定, "E040-signature", "tests/mutants/m_e040sigja.rule", "E040");
 golden!(e044_準用の輪, "E044-ring", "tests/mutants/m_e044ringja.rule", "E044");
 golden!(w132_変えない項, "W132", "tests/mutants/m_w132ja.rule", "W132");
+golden!(w133_定義からは起こらない行, "W133", "tests/mutants/m_w133ja.rule", "W133");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

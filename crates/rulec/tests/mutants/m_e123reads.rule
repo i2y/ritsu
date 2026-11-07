@@ -1,0 +1,19 @@
+rule fragile_fee(fragile_fee) v1
+description "A wrong constraint over two reads of one collection: it says every line is a fragile one (§15.281)"
+
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  fragile_lines : number  range >=0 <=20  from count order.lines where fragile = true
+  lines         : number  range >=1 <=20  from count order.lines
+
+constraint lines <= fragile_lines
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table handling
+policy unique
+| fragile_lines | -> fee : money[USD] |
+| >=1           | 5USD                |
+| 0             | 0USD                |

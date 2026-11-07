@@ -145,6 +145,7 @@ rulec が出しうるコードの全部について、いつ出るかと、ど�
 | [E068](#e068) | error | 開いた値の形が違います |
 | [E131](#e131) | error | 合わせた値が、宣言した範囲を出ます |
 | [W132](#w132) | warning | 開いた値の項が、合わせた値を変えません |
+| [W133](#w133) | warning | 行が、定義からは起こらない組み合わせでしか当たりません |
 
 ## E001
 
@@ -3127,7 +3128,7 @@ policy unique
 | b | false          |
 ```
 
-関係するコード: [E102](#e102), [E105](#e105), [W111](#w111)
+関係するコード: [E102](#e102), [E105](#e105), [W111](#w111), [W133](#w133)
 
 ## E102
 
@@ -4074,9 +4075,9 @@ policy unique
 
 `error` — **契約が、規則の `constraint` を破る組み合わせを通します**
 
-**いつ出るか。** `constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめ、見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。
+**いつ出るか。** `constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめ、見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。`from count`・`sum`・`max`・`min` で読む入力は、定義と要素の値から、破るリクエストを実際に組み立てて確かめ、要素まで例に出します。組み立てられないものには何も言いません。
 
-**直し方。** どちらを直すかは、人が決めることです。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。
+**直し方。** どちらを直すかは、人が決めることです。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。`from` の集計で読む入力では、まず `constraint` の向きと `where` を確かめてください。契約の CEL の `filter` や `all` はここでは読まないので、契約に書いても E123 は消えません。この形の `fix.kind` は `none` です。
 
 **最小の再現**:
 
@@ -4113,6 +4114,34 @@ message Quote {
   int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
   bool express = 4;
 }
+```
+
+**`from` の集計で読む入力**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  tools(tools)         : number  range >=0 <=20  from count order.lines where category = tool
+  non_parts(non_parts) : number  range >=0 <=20  from count order.lines where category = not: part
+
+constraint non_parts <= tools
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| tools | -> x |
+| -     | true |
+```
+
+隣に置く `order.json`:
+
+```rule
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/Line"}}},"required":["lines"]},"Line":{"type":"object","properties":{"category":{"type":"string","enum":["tool","part","service"]}},"required":["category"]}}}
 ```
 
 関係するコード: [E122](#e122), [W124](#w124), [E018](#e018)
@@ -5815,3 +5844,42 @@ define limit : number = cap
 ```
 
 関係するコード: [E068](#e068), [E131](#e131)
+
+## W133
+
+`warning` — **行が、定義からは起こらない組み合わせでしか当たりません**
+
+**いつ出るか。** 行のセルが試す列のなかに、`from any`・`all`・`count`・`sum`・`max`・`min` で読む入力か、`elements` の集計があり、セルが求める組み合わせになるリクエストが定義から作れないとき。たとえば `any … where category = tool` と `all … where category = part` がどちらも true の組み合わせは、要素がどんな値でも起こりません。定義と、契約が要素に置く条件だけを読んで確かめ、決まらないものには何も言いません。この警告が出ても、表の完全性（E101）は変わりません。表の検査は列を別々の値として読むからで、`from` を読まない生成先には、呼ぶ側が計算した値がそのまま届きます。
+
+**直し方。** 行を消しても E101 が出ないなら、消してください。E101 が出るなら、表の完全性にこの行が要るので、残してください。行の答えが `from` を読まない呼び出しのためのものなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape 注文(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  工具あり(has_tool)  : bool  from any 注文.lines where category = tool
+  全部部品(all_parts) : bool  from all 注文.lines where category = part
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 工具料(tool_fee)
+policy unique
+| 工具あり | 全部部品 | -> 料金 |
+| true     | true     | 99USD   |
+| true     | false    | 5USD    |
+| false    | true     | 0USD    |
+| false    | false    | 2USD    |
+```
+
+隣に置く `order.json`:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/Line"}}},"required":["lines"]},"Line":{"type":"object","properties":{"category":{"type":"string","enum":["tool","part","service"]}},"required":["category"]}}}
+```
+
+関係するコード: [E101](#e101), [E123](#e123), [W124](#w124)

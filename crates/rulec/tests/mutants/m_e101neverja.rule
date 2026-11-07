@@ -1,0 +1,17 @@
+rule 割れ物の手数料(fragile_fee) v1
+description "どの注文にも起こらない二つの組み合わせを表が書いておらず、E101 が理由を添えて求める（§15.281）"
+
+shape 注文(order) = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  割れ物あり(has_fragile)   : bool  from any 注文.lines where fragile = true
+  割れ物なし(none_fragile)  : bool  from all 注文.lines where fragile = false
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table 取扱(handling)
+policy unique
+| 割れ物あり | 割れ物なし | -> 手数料 : money[USD] |
+| true       | false      | 5USD                   |
+| false      | true       | 0USD                   |

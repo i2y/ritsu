@@ -1,0 +1,19 @@
+rule 割れ物の手数料(fragile_fee) v1
+description "一つのコレクションを読む二つの入力のあいだの、間違った制約。どの行も割れ物だと言っている（§15.281）"
+
+shape 注文(order) = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  割れ物の行数(fragile_lines) : number  range >=0 <=20  from count 注文.lines where fragile = true
+  行数(lines)                 : number  range >=1 <=20  from count 注文.lines
+
+constraint 行数 <= 割れ物の行数
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table 取扱(handling)
+policy unique
+| 割れ物の行数 | -> 手数料 : money[USD] |
+| >=1          | 5USD                   |
+| 0            | 0USD                   |

@@ -1558,9 +1558,10 @@ impl TableRegion {
     /// Return one uncovered coordinate. In the recursive split of §6.3, a branch in which some
     /// surviving row is don't-care on all remaining axes is pruned as certainly covered.
     fn find_hole(&self, rows: &[usize], budget: &mut i64, ups: &[Upstream], c: &Checked) -> Option<Vec<usize>> {
-        self.hole_rec(rows, 0, budget, &mut Vec::new(), ups, c)
+        self.hole_rec(rows, 0, budget, &mut Vec::new(), ups, c, &|_| false)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn hole_rec(
         &self,
         rows: &[usize],
@@ -1569,6 +1570,7 @@ impl TableRegion {
         path: &mut Vec<usize>,
         ups: &[Upstream],
         chk: &Checked,
+        skip: &dyn Fn(&[usize]) -> bool,
     ) -> Option<Vec<usize>> {
         *budget -= 1;
         if *budget < 0 {
@@ -1585,7 +1587,7 @@ impl TableRegion {
             // whenever the corner happened to be impossible — a `constraint` that forbids
             // (甲=1, 乙=0) hid the gap at (甲=1, 乙=1), and `check` said ok while the generated
             // code hit its own `unreachable!`.
-            return self.first_reachable(path, ups, chk, budget, true);
+            return self.first_reachable(path, ups, chk, budget, true).filter(|h| !skip(h));
         }
         if ai == self.axes.len() {
             return None;
@@ -1600,7 +1602,7 @@ impl TableRegion {
         for c in 0..self.axes[ai].len() {
             let sub: Vec<usize> = rows.iter().copied().filter(|&r| self.masks[r][ai][c]).collect();
             path.push(c);
-            if let Some(h) = self.hole_rec(&sub, ai + 1, budget, path, ups, chk) {
+            if let Some(h) = self.hole_rec(&sub, ai + 1, budget, path, ups, chk, skip) {
                 path.pop();
                 return Some(h);
             }
@@ -1812,6 +1814,137 @@ impl TableRegion {
         items.into_iter().map(|(_, p)| p).collect()
     }
 
+    /// What a gap asks of the columns the reads of a collection stand behind, and of what is read
+    /// beside them: the coordinates of the gap, or with `point` the one value of each.
+    fn asks_of_gap(&self, path: &[usize], point: Option<&[Option<Rat>]>, walks: &crate::projection::walks::Walks) -> (Vec<(String, crate::projection::walks::Ask)>, Vec<crate::fourier::Ineq>) {
+        use crate::fourier::Lin;
+        use crate::projection::walks::Ask;
+        let mut asks = Vec::new();
+        let mut ineqs = Vec::new();
+        for (ai, axis) in self.axes.iter().enumerate() {
+            let name = &self.col_names[ai];
+            if !walks.knows(name) {
+                continue;
+            }
+            // A gap that stops short leaves the rest of its axes open, and the example at the
+            // first coordinate of each.
+            let ci = match (path.get(ai), point) {
+                (Some(i), _) => *i,
+                (None, Some(_)) => 0,
+                (None, None) => continue,
+            };
+            let exactly = |ineqs: &mut Vec<crate::fourier::Ineq>, k: Rat| {
+                let d = Lin::var(name).plus(&Lin::con(k.mul(Rat::int(-1))));
+                ineqs.push(d.clone().le(false));
+                ineqs.push(d.ge(false));
+            };
+            match axis {
+                Axis::Bool => asks.push((name.clone(), Ask::Truth(ci == 0))),
+                Axis::Enum { values } => match values.get(ci).map(String::as_str) {
+                    Some(crate::kw::TRUE) => asks.push((name.clone(), Ask::Truth(true))),
+                    Some(crate::kw::FALSE) => asks.push((name.clone(), Ask::Truth(false))),
+                    Some(crate::kw::NONE) | None => {}
+                    Some(v) => asks.push((name.clone(), Ask::Words(vec![v.to_string()]))),
+                },
+                Axis::Num { coords, wire, .. } => {
+                    let w = Rat::int(*wire);
+                    let chosen = point.and_then(|p| p.get(ai).copied().flatten());
+                    match (chosen, coords.get(ci)) {
+                        (_, Some(Coord::Absent) | None) => {}
+                        (Some(x), _) => exactly(&mut ineqs, x.mul(w)),
+                        (None, Some(Coord::Point(x))) => exactly(&mut ineqs, x.mul(w)),
+                        (None, Some(Coord::Open(a, b))) => {
+                            if let Some(a) = a {
+                                ineqs.push(Lin::var(name).plus(&Lin::con(a.mul(w).mul(Rat::int(-1)))).ge(true));
+                            }
+                            if let Some(b) = b {
+                                ineqs.push(Lin::var(name).plus(&Lin::con(b.mul(w).mul(Rat::int(-1)))).le(true));
+                            }
+                        }
+                    }
+                }
+                Axis::Prefix { .. } => {}
+            }
+        }
+        (asks, ineqs)
+    }
+
+    /// The gap E101 shows: the first one, unless no definition of a collection's reads reaches it
+    /// and another one is reached. A gap that occurs is the one to fix first, and saying a gap
+    /// never occurs while one beside it does would be read as saying it of the table. Only so many
+    /// gaps are tried, since each is a question of its own; past them the first one stands.
+    #[allow(clippy::too_many_arguments)]
+    fn gap_to_show(&self, first: Vec<usize>, rows: &[usize], budget: i64, ups: &[Upstream], c: &Checked, f: &RuleFile, rule_path: &str) -> Vec<usize> {
+        use crate::projection::walks::Walks;
+        if !reads_a_collection(f) {
+            return first;
+        }
+        let walks = Walks::of(f, c, rule_path);
+        if !self.col_names.iter().any(|n| walks.walks_for(n)) {
+            return first;
+        }
+        let held = walks.constraints();
+        if !self.never_reached(&first, &walks, &held) {
+            return first;
+        }
+        let mut left = budget;
+        let tried = std::cell::Cell::new(0);
+        let skip = |h: &[usize]| {
+            tried.set(tried.get() + 1);
+            tried.get() > GAPS_TRIED || self.never_reached(h, &walks, &held)
+        };
+        self.hole_rec(rows, 0, &mut left, &mut Vec::new(), ups, c, &skip).unwrap_or(first)
+    }
+
+    /// Whether no definition reaches a gap.
+    fn never_reached(&self, path: &[usize], walks: &crate::projection::walks::Walks, held: &[crate::fourier::Ineq]) -> bool {
+        let (asks, mut ineqs) = self.asks_of_gap(path, None, walks);
+        ineqs.extend(held.iter().cloned());
+        matches!(walks.ask(&asks, &ineqs), crate::projection::walks::Possible::No(_))
+    }
+
+    /// What the definitions of a collection's reads say of a gap. The table is held to every
+    /// combination whatever they say, because a target that does not read `from` is handed what
+    /// the caller worked out (§15.55), so E101 stays; only its words change. A gap no definition
+    /// reaches gets notes that say so. In a gap some part of which is reached, the example is put
+    /// on a combination that occurs, when the one it had does not.
+    fn behind_the_gap(&self, path: &[usize], vals: Option<Vec<Option<Rat>>>, c: &Checked, f: &RuleFile, rule_path: &str) -> (Option<Vec<Option<Rat>>>, Vec<String>) {
+        use crate::projection::walks::{Possible, Walks};
+        if !reads_a_collection(f) {
+            return (vals, Vec::new());
+        }
+        let walks = Walks::of(f, c, rule_path);
+        let read: Vec<String> = self.col_names.iter().filter(|n| walks.walks_for(n)).cloned().collect();
+        if read.is_empty() {
+            return (vals, Vec::new());
+        }
+        let held = walks.constraints();
+        let (asks, mut ineqs) = self.asks_of_gap(path, None, &walks);
+        ineqs.extend(held.iter().cloned());
+        match walks.ask(&asks, &ineqs) {
+            Possible::No(_) => (vals, walks.never_notes(&read)),
+            Possible::Unknown => (vals, Vec::new()),
+            Possible::Yes(ex) => {
+                let Some(point) = vals.as_deref() else { return (vals, Vec::new()) };
+                let (asks, mut ineqs) = self.asks_of_gap(path, Some(point), &walks);
+                ineqs.extend(held);
+                if !matches!(walks.ask(&asks, &ineqs), Possible::No(_)) {
+                    return (vals, Vec::new());
+                }
+                let moved = vals.map(|w| {
+                    w.into_iter()
+                        .enumerate()
+                        .map(|(ai, v)| match (&self.axes[ai], ex.values.get(&self.col_names[ai])) {
+                            (Axis::Num { wire, .. }, Some(x)) if walks.knows(&self.col_names[ai]) => Some(x.div(Rat::int(*wire))),
+                            _ => v,
+                        })
+                        .collect()
+                });
+                (moved, Vec::new())
+            }
+        }
+    }
+
     /// The input behind a gap that lies on a column the rule computes (§15.190). The witness
     /// says what the derived columns come to, and no caller sends those, so the input is worked
     /// out: the linear model solved with every numeric column held at the value the witness
@@ -1977,6 +2110,14 @@ impl TableRegion {
         }
         Some(format!("| {} |", out.join(" | ")))
     }
+}
+
+/// How many gaps E101 tries, looking for one the definitions of a collection's reads reach.
+const GAPS_TRIED: usize = 64;
+
+/// Whether a rule reads a collection at all: what the definitions say is not looked for otherwise.
+fn reads_a_collection(f: &RuleFile) -> bool {
+    f.inputs.iter().any(|i| i.from.as_ref().is_some_and(|p| !matches!(p.kind, crate::ast::ProjKind::Field))) || f.aggs().next().is_some()
 }
 
 /// `(column, value)` pairs as the input half of a witness.
@@ -2963,11 +3104,15 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     nodes += budget - left;
     let anchor = set.members[0].clone();
     if let Some(hole) = hole {
+        let hole = reg.gap_to_show(hole, &all, budget, &ups, c, f, path);
         out.push(
             {
                 // The values behind the gap, each computed column's inside what it comes to
                 // (§15.195): the example is one that occurs.
                 let vals = reg.reach_values(&hole);
+                // What the reads of a collection say of the gap (§15.281): the example is moved
+                // to a combination that occurs, or there is none and the notes say so.
+                let (vals, never) = reg.behind_the_gap(&hole, vals, c, f, path);
                 let d = Diag::error("E101", tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"))
                     .at(at(head_span.line, 0))
                     .table(anchor.clone())
@@ -2983,6 +3128,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                         }
                         None => String::new(),
                     })
+                    .notes_from(never)
                     .note(tr!("ヒント: この入力に当てはまる行を足してください。", "hint: add a row that matches this input."));
                 let d = if merged {
                     d.note(tr!(

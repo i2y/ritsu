@@ -145,6 +145,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E068](#e068) | error | An open value is not shaped as one |
 | [E131](#e131) | error | A value put together leaves the range it declares |
 | [W132](#w132) | warning | A term of an open value changes nothing |
+| [W133](#w133) | warning | A row is reached only by a combination the definitions never give |
 
 ## E001
 
@@ -3127,7 +3128,7 @@ policy unique
 | b | false          |
 ```
 
-Related codes: [E102](#e102), [E105](#e105), [W111](#w111)
+Related codes: [E102](#e102), [E105](#e105), [W111](#w111), [W133](#w133)
 
 ## E102
 
@@ -4074,9 +4075,9 @@ Related codes: [E122](#e122), [W124](#w124), [E102](#e102), [W111](#w111)
 
 `error` — **The contract lets through a combination the rule's `constraint` refuses**
 
-**When.** Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken. The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed.
+**When.** Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken. The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed. An input read with `from count`, `sum`, `max` or `min` is worked out from its definition and what the elements can hold: a request that breaks the `constraint` is built and evaluated, and its elements are in the example. Where none can be built, nothing is said.
 
-**Fix.** Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it.
+**Fix.** Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it. For an input read with an aggregate of `from`, look first at the direction of the `constraint` and at its `where`. `filter` and `all` in a contract's CEL are not read here, so writing them there does not clear E123, and in this form `fix.kind` is `none`.
 
 **Smallest reproduction**:
 
@@ -4113,6 +4114,34 @@ message Quote {
   int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
   bool express = 4;
 }
+```
+
+**Inputs read with an aggregate of `from`**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  tools(tools)         : number  range >=0 <=20  from count order.lines where category = tool
+  non_parts(non_parts) : number  range >=0 <=20  from count order.lines where category = not: part
+
+constraint non_parts <= tools
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| tools | -> x |
+| -     | true |
+```
+
+With `order.json` beside it:
+
+```rule
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/Line"}}},"required":["lines"]},"Line":{"type":"object","properties":{"category":{"type":"string","enum":["tool","part","service"]}},"required":["category"]}}}
 ```
 
 Related codes: [E122](#e122), [W124](#w124), [E018](#e018)
@@ -5815,3 +5844,42 @@ define limit : number = cap
 ```
 
 Related codes: [E068](#e068), [E131](#e131)
+
+## W133
+
+`warning` — **A row is reached only by a combination the definitions never give**
+
+**When.** Among the columns a row's cells test is an input read with `from any`, `all`, `count`, `sum`, `max` or `min`, or a summary over `elements`, and no request gives the combination the cells ask for. `any … where category = tool` and `all … where category = part` both being true, for one, does not occur whatever the elements hold. Only the definitions and what the contract says of an element are read, and nothing is said where it cannot be decided. Completeness (E101) is not changed by this: the check of a table reads each column as a value of its own, and a target that does not read `from` is handed whatever the caller worked out.
+
+**Fix.** If E101 does not come back without the row, delete it. If it does, the table needs the row to be complete, so keep it. If the row's answer is for a call that does not read `from`, leave it: `check --diff-base` in CI reports only the ones that are new.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  has_tool(has_tool)   : bool  from any order.lines where category = tool
+  all_parts(all_parts) : bool  from all order.lines where category = part
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| has_tool | all_parts | -> fee |
+| true     | true      | 99USD  |
+| true     | false     | 5USD   |
+| false    | true      | 0USD   |
+| false    | false     | 2USD   |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/Line"}}},"required":["lines"]},"Line":{"type":"object","properties":{"category":{"type":"string","enum":["tool","part","service"]}},"required":["category"]}}}
+```
+
+Related codes: [E101](#e101), [E123](#e123), [W124](#w124)

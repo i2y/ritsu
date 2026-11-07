@@ -1,0 +1,19 @@
+warning[W133]: row 1 is reached only by a combination the definitions never give
+  --> tests/mutants/m_w133.rule:16 table handling
+   |
+16 | | true        | true         | 99USD               |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the definitions of has_fragile, none_fragile never give this combination
+   |
+ This combination never comes out of the definitions (`has_fragile` is `any order.lines where fragile = true`, `none_fragile` is `all order.lines where fragile = false`).
+ A call that reads through `from` never reaches this row. The code generated for NumPy, Rust, Go, Swift, Java, SQL and Wasm does not read `from`, so only values a caller worked out reach it.
+ hint: if E101 does not come back without this row, delete it. If it does, the table needs the row to be complete, so keep it.
+
+warning[W133]: row 4 is reached only by a combination the definitions never give
+  --> tests/mutants/m_w133.rule:19 table handling
+   |
+19 | | false       | false        | 2USD                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the definitions of has_fragile, none_fragile never give this combination
+   |
+ This combination never comes out of the definitions (`has_fragile` is `any order.lines where fragile = true`, `none_fragile` is `all order.lines where fragile = false`).
+ A call that reads through `from` never reaches this row. The code generated for NumPy, Rust, Go, Swift, Java, SQL and Wasm does not read `from`, so only values a caller worked out reach it.
+ hint: if E101 does not come back without this row, delete it. If it does, the table needs the row to be complete, so keep it.

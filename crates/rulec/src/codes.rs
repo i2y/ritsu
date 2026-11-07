@@ -1043,6 +1043,64 @@ policy unique
 | minimum | -> x |
 | -       | true |
 "##;
+// The reads of a collection, and a constraint that does not hold of them (§15.281).
+const LINES_OF_KINDS: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":20,\"items\":{\"$ref\":\"#/$defs/Line\"}}},\"required\":[\"lines\"]},\"Line\":{\"type\":\"object\",\"properties\":{\"category\":{\"type\":\"string\",\"enum\":[\"tool\",\"part\",\"service\"]}},\"required\":[\"category\"]}}}\n")];
+const X_E123_READS: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  tools(tools)         : number  range >=0 <=20  from count order.lines where category = tool
+  non_parts(non_parts) : number  range >=0 <=20  from count order.lines where category = not: part
+
+constraint non_parts <= tools
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| tools | -> x |
+| -     | true |
+"##;
+const X_W133: &str = r##"rule t(t) v1
+
+shape 注文(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  工具あり(has_tool)  : bool  from any 注文.lines where category = tool
+  全部部品(all_parts) : bool  from all 注文.lines where category = part
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 工具料(tool_fee)
+policy unique
+| 工具あり | 全部部品 | -> 料金 |
+| true     | true     | 99USD   |
+| true     | false    | 5USD    |
+| false    | true     | 0USD    |
+| false    | false    | 2USD    |
+"##;
+const X_W133_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  has_tool(has_tool)   : bool  from any order.lines where category = tool
+  all_parts(all_parts) : bool  from all order.lines where category = part
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| has_tool | all_parts | -> fee |
+| true     | true      | 99USD  |
+| true     | false     | 5USD   |
+| false    | true      | 0USD   |
+| false    | false     | 2USD   |
+"##;
 const X_W124: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g\n  急ぎ(express) : bool  from 見積.express\n\noutputs\n  料金(fee) : money[円]  round up(10円)\n\ntable 料金表(fees)\npolicy first\n| 急ぎ  | 重さ | -> 料金 |\n| true  | >5kg | 3000円  |\n| true  | -    | 1500円  |\n| false | -    | 800円   |\n";
 const X_W124_EN: &str = r##"rule t(t) v1
 
@@ -3920,7 +3978,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
             ),
             X_E101,
-            &["E102", "E105", "W111"],
+            &["E102", "E105", "W111", "W133"],
         ),
         err(
             "E102",
@@ -4308,18 +4366,19 @@ pub fn ledger() -> Vec<Entry> {
             "E123",
             tr!("契約が、規則の `constraint` を破る組み合わせを通します", "The contract lets through a combination the rule's `constraint` refuses"),
             tr!(
-                "`constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめ、見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。",
-                "Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken. The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed."
+                "`constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめ、見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。`from count`・`sum`・`max`・`min` で読む入力は、定義と要素の値から、破るリクエストを実際に組み立てて確かめ、要素まで例に出します。組み立てられないものには何も言いません。",
+                "Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken. The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed. An input read with `from count`, `sum`, `max` or `min` is worked out from its definition and what the elements can hold: a request that breaks the `constraint` is built and evaluated, and its elements are in the example. Where none can be built, nothing is said."
             ),
             tr!(
-                "どちらを直すかは、人が決めることです。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。",
-                "Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it."
+                "どちらを直すかは、人が決めることです。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。`from` の集計で読む入力では、まず `constraint` の向きと `where` を確かめてください。契約の CEL の `filter` や `all` はここでは読まないので、契約に書いても E123 は消えません。この形の `fix.kind` は `none` です。",
+                "Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it. For an input read with an aggregate of `from`, look first at the direction of the `constraint` and at its `where`. `filter` and `all` in a contract's CEL are not read here, so writing them there does not clear E123, and in this form `fix.kind` is `none`."
             ),
             X_E123,
             &["E122", "W124", "E018"],
         )
         .with_files(QUOTE_PROTO)
-        .english(X_E123_EN),
+        .english(X_E123_EN)
+        .also_with(tr!("`from` の集計で読む入力", "Inputs read with an aggregate of `from`"), X_E123_READS, LINES_OF_KINDS),
         warn(
             "W124",
             tr!("行が、契約の通さない組み合わせでしか当たりません", "A row is reached only by a combination the contract does not let through"),
@@ -4950,6 +5009,22 @@ pub fn ledger() -> Vec<Entry> {
             X_W132,
             &["E068", "E131"],
         ),
+        warn(
+            "W133",
+            tr!("行が、定義からは起こらない組み合わせでしか当たりません", "A row is reached only by a combination the definitions never give"),
+            tr!(
+                "行のセルが試す列のなかに、`from any`・`all`・`count`・`sum`・`max`・`min` で読む入力か、`elements` の集計があり、セルが求める組み合わせになるリクエストが定義から作れないとき。たとえば `any … where category = tool` と `all … where category = part` がどちらも true の組み合わせは、要素がどんな値でも起こりません。定義と、契約が要素に置く条件だけを読んで確かめ、決まらないものには何も言いません。この警告が出ても、表の完全性（E101）は変わりません。表の検査は列を別々の値として読むからで、`from` を読まない生成先には、呼ぶ側が計算した値がそのまま届きます。",
+                "Among the columns a row's cells test is an input read with `from any`, `all`, `count`, `sum`, `max` or `min`, or a summary over `elements`, and no request gives the combination the cells ask for. `any … where category = tool` and `all … where category = part` both being true, for one, does not occur whatever the elements hold. Only the definitions and what the contract says of an element are read, and nothing is said where it cannot be decided. Completeness (E101) is not changed by this: the check of a table reads each column as a value of its own, and a target that does not read `from` is handed whatever the caller worked out."
+            ),
+            tr!(
+                "行を消しても E101 が出ないなら、消してください。E101 が出るなら、表の完全性にこの行が要るので、残してください。行の答えが `from` を読まない呼び出しのためのものなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。",
+                "If E101 does not come back without the row, delete it. If it does, the table needs the row to be complete, so keep it. If the row's answer is for a call that does not read `from`, leave it: `check --diff-base` in CI reports only the ones that are new."
+            ),
+            X_W133,
+            &["E101", "E123", "W124"],
+        )
+        .with_files(LINES_OF_KINDS)
+        .english(X_W133_EN),
     ]
 }
 

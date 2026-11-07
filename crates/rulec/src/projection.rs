@@ -31,6 +31,8 @@ use crate::relation::{Atom, Extra, Formula, Lin, Rel, Relation, Term};
 use crate::types::{Checked, Ty};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod walks;
+
 /// What a contract says stands at a path.
 #[derive(Debug, Clone, PartialEq)]
 pub enum At {
@@ -104,6 +106,9 @@ pub struct Contract {
     at: String,
     /// For a schema: whether the keywords beside a `$ref` apply too (§15.140).
     siblings: bool,
+    /// The collections whose elements are read in their own right (§15.281), so that their
+    /// `items` are no rule left unread.
+    read_items: Vec<Vec<String>>,
 }
 
 /// Why the contract a `shape` names gives nothing to hold the rule to: the note that says so.
@@ -121,7 +126,7 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, Unread> {
         EnumSource::JsonSchema => {
             let doc = crate::jsonschema::read(text, &d.file).map_err(Unread::Nothing)?;
             let siblings = siblings_apply(&doc);
-            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone(), siblings })
+            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone(), siblings, read_items: Vec::new() })
         }
         EnumSource::Proto => {
             let file = crate::proto::read(&d.file, text).map_err(|e| Unread::File(crate::proto::unreadable(&e)))?;
@@ -137,7 +142,7 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, Unread> {
                     )
                 }));
             }
-            Ok(Contract { kind: d.source, doc: None, msgs, enums: file.enums, at: d.at.clone(), siblings: false })
+            Ok(Contract { kind: d.source, doc: None, msgs, enums: file.enums, at: d.at.clone(), siblings: false, read_items: Vec::new() })
         }
     }
 }
@@ -553,7 +558,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     let dead: BTreeSet<(String, usize)> = w123.iter().filter_map(|d| Some((d.table.clone()?, d.row?))).collect();
     out.extend(w123);
     for ((d, con), (_, ac)) in read_ok.iter().zip(&across) {
-        out.extend(broken_constraints(f, c, con, ac, rule_path));
+        out.extend(broken_constraints(f, c, con, ac, &d.name.text, rule_path));
         out.extend(unreachable_rows(f, c, ac, &d.name.text, &dead, rule_path));
     }
     for d in &f.shapes {
@@ -2709,6 +2714,12 @@ fn type_allows(x: &Json, ty: &str) -> bool {
 impl Contract {
     /// The condition the contract of `shape` places on what the rule reads from it.
     pub(crate) fn across(&self, f: &RuleFile, c: &Checked, shape: &str) -> Across {
+        self.across_reading(f, c, shape, &[])
+    }
+
+    /// The same, with the collections at `walked` read as well: their lengths are terms, and what
+    /// their elements hold is read by the one who asked (§15.281).
+    pub(crate) fn across_reading(&self, f: &RuleFile, c: &Checked, shape: &str, walked: &[Vec<String>]) -> Across {
         let mut terms = BTreeMap::new();
         let mut names = BTreeMap::new();
         for i in &f.inputs {
@@ -2731,12 +2742,22 @@ impl Contract {
             names.insert(t.clone(), i.name.text.clone());
             terms.insert(i.name.text.clone(), t);
         }
-        let reads: Vec<Term> = terms.values().cloned().collect();
-        let cond = match self.kind {
-            EnumSource::JsonSchema => self.schema_condition(&reads),
-            EnumSource::Proto => self.proto_condition(&reads),
+        let mut reads: Vec<Term> = terms.values().cloned().collect();
+        reads.extend(walked.iter().map(|p| Term::Size(p.clone())));
+        let cond = if walked.is_empty() {
+            self.condition(&reads)
+        } else {
+            Contract { read_items: walked.to_vec(), ..self.clone() }.condition(&reads)
         };
         Across { rel: Relation::of(&cond), terms, names, unread: cond.has_unknown() }
+    }
+
+    /// What the contract asks, as far as it says anything about these.
+    fn condition(&self, reads: &[Term]) -> Formula {
+        match self.kind {
+            EnumSource::JsonSchema => self.schema_condition(reads),
+            EnumSource::Proto => self.proto_condition(reads),
+        }
     }
 
     /// What a field is, for reading a condition about it.
@@ -3223,6 +3244,7 @@ impl Contract {
                     Some(m) => Formula::cmp(&n, Rel::Le, &con(m)),
                     None => Formula::unknown(),
                 },
+                ("items", Kind::List) if self.read_items.iter().any(|p| p.as_slice() == q) => continue,
                 ("items" | "prefixItems" | "additionalItems" | "contains" | "minContains" | "maxContains" | "uniqueItems" | "unevaluatedItems" | "const" | "enum", Kind::List) => {
                     Formula::unknown()
                 }
@@ -3268,6 +3290,7 @@ fn wire_constraint(k: &crate::ast::Constraint, i: usize, c: &Checked, broken: bo
 fn cell_ineqs(cell: &Cell, ty: &Ty, sc: i128, name: &str, row: usize) -> Option<Vec<fourier::Ineq>> {
     let at = |l: &Lit| match l {
         Lit::Num(n) => crate::types::lit_value_in_pub(n, ty).map(|v| v.mul(Rat::int(sc))),
+        Lit::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
         _ => None,
     };
     let tag = |part| fourier::Origin::Cell { row, col: name.to_string(), part };
@@ -3297,12 +3320,21 @@ fn full_path(pr: &Projection) -> String {
 /// E123: a `constraint` between two inputs of one contract that the contract does not keep. A
 /// message it lets through, with both values inside the rule's ranges, breaks the constraint,
 /// and the generated code refuses it at the door (§15.140).
-fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, rule_path: &str) -> Vec<Diag> {
+fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, shape: &str, rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     let proj = |n: &str| f.inputs.iter().find(|i| i.name.text == n).and_then(|i| i.from.as_ref());
+    // Read only for a rule whose constraints name a read of a collection beyond its length.
+    let mut walks: Option<walks::Walks> = None;
     for (idx, k) in f.constraints.iter().enumerate() {
         let names: Vec<&String> = k.names().collect();
-        let Some(terms) = names.iter().map(|n| ac.term(n)).collect::<Option<Vec<&Term>>>() else { continue };
+        let Some(terms) = names.iter().map(|n| ac.term(n)).collect::<Option<Vec<&Term>>>() else {
+            // A read of the elements is no term of the contract: what it can come to is what the
+            // elements can (§15.281).
+            if names.iter().any(|n| proj(n).is_some_and(|p| p.root.text == shape && !matches!(p.kind, ProjKind::Field))) {
+                out.extend(walks.get_or_insert_with(|| walks::Walks::of(f, c, rule_path)).broken(shape, idx, k, rule_path));
+            }
+            continue;
+        };
         let Some(paths) = names.iter().map(|n| proj(n).map(full_path)).collect::<Option<Vec<String>>>() else { continue };
         let mut ineqs = wire_ranges(ac, c);
         ineqs.push(wire_constraint(k, idx, c, true));

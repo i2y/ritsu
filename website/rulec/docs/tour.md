@@ -444,6 +444,10 @@ Four things follow.
   message, a `oneof` and JSON Schema's combinators relate fields to each other. A
   `constraint` the contract does not keep is E123, and a row asking for a combination the
   contract never lets through is W124.
+- **The reads of one collection are held to their definitions.** A `constraint` over two counts
+  that some request breaks is E123 too, with that request's elements as the example. A gap the
+  definitions never reach is still E101, with a note that says so, because a target that does not
+  read `from` takes whatever its caller worked out. A row only such a combination reaches is W133.
 
 No check of the table changes. What comes out of a projection is a scalar input like any
 other, and completeness and overlap are decided as they would be without `from`.

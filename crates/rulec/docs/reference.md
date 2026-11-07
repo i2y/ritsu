@@ -815,6 +815,32 @@ value the contract lets through, ask for a combination the contract's conditions
 through — express above 5 kg where the contract says `!this.express || this.weight_g <= 5000`,
 two members of one `oneof` both set — is **W124**.
 
+**The reads of one collection are held to their definitions.** `from any`, `all`, `count`, `sum`,
+`max` and `min` each walk the collection on their own, and the check of a table takes what comes
+out as columns that have nothing to do with each other. The definitions do tie them:
+`any … where category = tool` and `all … where category = part` are never both true, and a count
+of the lines that are not parts goes past a count of the tools as soon as one line is a service.
+`check` reads the definitions for this beside the table, with what the contract says of an element
+(its enums and ranges, and `minItems` and `maxItems` on the collection), and three things come of
+it.
+
+- A `constraint` over inputs read with `count`, `sum`, `max` or `min` that some request breaks is
+  **E123**. The request is built and evaluated, and the example shows its elements: `order.lines`
+  holding 1 element with `category` = "service". The generated code would refuse that order at the
+  door. Here `fix.kind` is `none`, because `filter` and `all` in a contract's CEL are not read and
+  a promise written that way would not clear the error.
+- A gap in a table is still **E101** when the combination never comes out of the definitions, and a
+  note says so and gives each definition. The check of a table reads each column as a value of its
+  own, and the row is what a call that does not read through `from` gets: the seven targets with no
+  projection function, below, take whatever their caller worked out. A gap with a part that occurs
+  and a part that does not is shown by the part that occurs.
+- A row only such a combination reaches is **W133**. If E101 comes back without the row, keep it.
+
+Each of these says only what it has shown. A combination is called impossible only from conditions
+wider than the truth, and possible only from elements that were built and evaluated. What cannot be
+decided either way — a field cut into too many parts, a `sum` beside a `max` that no small
+collection gives — is passed over in silence. None of this moves a check of the table.
+
 A field the contract lets an object leave out can only be taken by an optional input (`T?`),
 and the projection function reads a missing one — or a missing object on the way to it — as
 `none`. In a JSON Schema that is a field not in `required`, and a required input read from one
@@ -1298,6 +1324,13 @@ Writing `-` in a cell says "this column does not matter here". Before constraint
 had to stand in for "this cannot happen", and the two read the same on the page. A constraint
 is how the second one is said out loud.
 
+The caller's guarantee has to be one the contract keeps, between inputs read with `from` (§3.3).
+That goes for counts, totals and extremes over a collection too: `constraint non_parts <= tools`,
+with `non_parts` a count of the lines that are not parts, says every such line is a tool, and when
+the contract lets a service line through it is E123, with that line in the example. `any` and `all`
+give a `bool`, which has no order, so a relation between them cannot be written here (E018). A row
+for a combination the definitions never give is W133.
+
 ## 6.2 elements and fold
 
 A rule is one decision about one case. Sometimes the case carries a **sequence** — the rows
@@ -1643,6 +1676,14 @@ on one walk read every element: a `fold` that stops ends its own reading, and th
 it still sees the elements after. A `count`, a `sum`, a `max` or a `min` named like an output is
 that output, and answers it. Every target but SQL and NumPy generates them, for the reason SQL
 gets no walk at all.
+
+**Summaries over one sequence tie each other, and the check of a table does not read that.** A
+table reads each summary as a column, so with `tools`, a count of the elements where `is_tool`,
+`total`, a `sum` of `weight`, and `heaviest`, a `max` of `weight`, it asks for
+`tools = 0, total = 0, heaviest = 1`, though no sequence gives a total of 0 and a heaviest element
+of 1 when `weight` is at least 1. E101 keeps asking for the row, and a note says the combination
+never comes out of the definitions; a row only such a combination reaches is W133, as it is for
+the reads of `from` (§3.3).
 
 ## 6.4 machine and scenario
 

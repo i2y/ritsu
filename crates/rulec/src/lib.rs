@@ -288,6 +288,16 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
         shadow.confirm += r.shadow.confirm;
         nodes += r.nodes;
     }
+    // A row the definitions of its reads never reach (§15.281), once the tables have said which
+    // rows are dead already and the contract which ones it never lets through.
+    {
+        let told: std::collections::BTreeSet<(String, usize)> = diags
+            .iter()
+            .filter(|d| matches!(d.code, "E102" | "W123" | "W124"))
+            .filter_map(|d| Some((d.table.clone()?, d.row?)))
+            .collect();
+        diags.extend(projection::walks::impossible_rows(f, &t, path, &told));
+    }
     diags.extend(eval::check_examples(f, &t, path));
     // The machine the rule is one step of (§15.148). Its claims are about sequences of calls,
     // and a step with a hole or two answers is not a step yet: they wait for the tables.

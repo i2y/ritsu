@@ -19,6 +19,9 @@ pub struct Rules {
     /// `IGNORE_IF_ZERO_VALUE` and its older names, or `IGNORE_ALWAYS`.
     pub ignore: Option<String>,
     pub int: IntRules,
+    /// The rules on an enum: its values by number. `defined_only` is what a reader of protojson
+    /// holds it to anyway, since a number it does not know does not read as a string.
+    pub enum_values: IntRules,
     pub min_items: Option<i128>,
     pub max_items: Option<i128>,
     pub str_const: Option<String>,
@@ -113,6 +116,9 @@ pub fn field_rules(opts: &[Opt]) -> Rules {
                 "example" => {}
                 _ => r.unread.push(path.join(".")),
             },
+            ["enum", "const"] => r.enum_values.konst = int_of(&v),
+            ["enum", "in"] => r.enum_values.in_.extend(ints_of(&v)),
+            ["enum", "not_in"] => r.enum_values.not_in.extend(ints_of(&v)),
             ["repeated", "min_items"] => r.min_items = int_of(&v),
             ["repeated", "max_items"] => r.max_items = int_of(&v),
             // `unique` and the rules on each element say nothing about how many there are.

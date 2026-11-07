@@ -296,6 +296,12 @@ golden!(e040_signature, "E040-signature", "tests/mutants/m_e040sig.rule", "E040"
 golden!(e044_ring, "E044-ring", "tests/mutants/m_e044ring.rule", "E044");
 golden!(w132_idle_term, "W132", "tests/mutants/m_w132.rule", "W132");
 
+// What the reads of one collection can say together (§15.281): a wrong constraint over two counts,
+// a gap no definition reaches, and a row no definition reaches.
+golden!(e123_reads, "E123-reads", "tests/mutants/m_e123reads.rule", "E123");
+golden!(e101_never, "E101-never", "tests/mutants/m_e101never.rule", "E101");
+golden!(w133_never_reached, "W133", "tests/mutants/m_w133.rule", "W133");
+
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.
 golden!(e076_input_not_in_the_contract, "E076", "tests/mutants/m_e076.rule", "E076");

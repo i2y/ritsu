@@ -113,6 +113,40 @@ contract keeps everything the rule asks of these values, `rulec certificate` wri
 case by case, and both re-checkers verify it — the Lean one on the theorem `included_sound`
 ([How it is checked](assurance.md)).
 
+The reads of **one collection** are held to their definitions as well. `from any`, `all`, `count`,
+`sum`, `max` and `min` each walk the collection on their own, and a table takes what comes out as
+separate columns, but the definitions tie them. A `constraint` over counts, totals or extremes that
+some request breaks is **E123**, and the example shows that request's elements:
+
+```rule
+inputs
+  tools     : number  range >=0 <=20  from count order.lines where category = tool
+  non_parts : number  range >=0 <=20  from count order.lines where category = not: part
+
+constraint non_parts <= tools
+```
+
+```console
+$ rulec check rules/tool_fee.rule
+error[E123]: The contract lets `order.lines` through with values that break `constraint non_parts <= tools`
+  --> rules/tool_fee.rule:9 constraint
+  |
+9 | constraint non_parts <= tools
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the contract does not promise this
+  |
+ A request with `order.lines` holding 1 element with `category` = "service", for one, passes the contract's validation and gives `non_parts` = 1 and `tools` = 0, which breaks the `constraint`.
+ A value that passes the contract's validation is still refused at the door of the generated code: an API answers the request with an error, and a Kafka consumer stops or sends the message to the DLQ.
+ hint: if the `constraint` is wrong, correct it. If it is right, take it off and decide in the tables what the rule answers for that combination. A contract cannot promise this in a form read here.
+```
+
+The `constraint` says every order line that is not a part is a tool, and an order with one service
+line passes the contract and stops at the door. A gap no definition can reach, such as `any` of the
+tools and `all` of the parts both true, is still **E101**, and a note says the combination never
+comes out of the definitions: the seven targets with no function that reads `from` take whatever
+their caller worked out. A row only such a combination reaches is **W133**. Summaries over a
+sequence of `elements` get the same note and the same warning. Nothing is said where it cannot be
+decided, and none of this moves a check of the table.
+
 A rule may also be served **as a service a contract declares**:
 `implements proto "<file>" <Service>` hands the names and the numbers of its Connect wire to a
 `.proto` that keeps them. Every `rulec check` reads that contract and holds its service to the
@@ -280,7 +314,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 220 deliberately broken
+   and that implementation has not been proved correct. The evidence is 226 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

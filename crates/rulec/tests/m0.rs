@@ -355,6 +355,12 @@ fn 変異は決めたコードだけを出す() {
         ("m_e044ringja.rule", &[("E044", 1)], "上と同じ規則の日本語の版"),
         ("m_w132.rule", &[("W132", 1)], "どの注文にもある上限より高い上限を足した（何も抑えない）"),
         ("m_w132ja.rule", &[("W132", 1)], "上と同じ寄与の日本語の版"),
+        ("m_e123reads.rule", &[("E123", 1)], "どの行も割れ物だと constraint に書いた（割れ物でない行がある注文が破る）"),
+        ("m_e123readsja.rule", &[("E123", 1)], "上と同じ規則の日本語の版"),
+        ("m_w133.rule", &[("W133", 2)], "割れ物の行があって、どの行も割れ物でない行を書いた（その裏の組み合わせも）"),
+        ("m_w133ja.rule", &[("W133", 2)], "上と同じ規則の日本語の版"),
+        ("m_e101never.rule", &[("E101", 1)], "どの注文にも起こらない組み合わせの行を書かなかった"),
+        ("m_e101neverja.rule", &[("E101", 1)], "上と同じ規則の日本語の版"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -856,6 +862,14 @@ fn 変異はコーパスから作り直せる() {
         "m_e076ja.rule",
         "m_e013svc.rule",
         "m_e013svcja.rule",
+        // §15.281: the corpus is made of rules that are right, and these are wrong about what the
+        // reads of one collection can say together. In English and in Japanese.
+        "m_e123reads.rule",
+        "m_e123readsja.rule",
+        "m_w133.rule",
+        "m_w133ja.rule",
+        "m_e101never.rule",
+        "m_e101neverja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

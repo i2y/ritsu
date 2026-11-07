@@ -343,6 +343,14 @@ impl Diag {
         self
     }
 
+    /// Several notes, in order.
+    pub fn notes_from(mut self, notes: Vec<String>) -> Self {
+        for n in notes {
+            self = self.note(n);
+        }
+        self
+    }
+
     /// A note that is only sometimes there, so the caller does not have to branch.
     pub fn maybe_note(self, n: Option<String>) -> Self {
         match n {

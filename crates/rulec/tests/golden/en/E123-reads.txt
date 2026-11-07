@@ -1,0 +1,10 @@
+error[E123]: The contract lets `order.lines` through with values that break `constraint lines <= fragile_lines`
+  --> tests/mutants/m_e123reads.rule:10 constraint
+   |
+10 | constraint lines <= fragile_lines
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the contract does not promise this
+   |
+ A request with `order.lines` holding 1 element with `fragile` = false, for one, passes the contract's validation and gives `lines` = 1 and `fragile_lines` = 0, which breaks the `constraint`.
+ A value that passes the contract's validation is still refused at the door of the generated code: an API answers the request with an error, and a Kafka consumer stops or sends the message to the DLQ.
+ hint: if the `constraint` is wrong, correct it. If it is right, take it off and decide in the tables what the rule answers for that combination. A contract cannot promise this in a form read here.
+ The contract has rules that could not be read, and they are treated here as not there.
