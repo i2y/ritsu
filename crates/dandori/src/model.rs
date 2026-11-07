@@ -202,8 +202,8 @@ pub struct EnumDef {
     /// have no order.
     pub ordered: bool,
     /// the `enums` file an `import enum` read it from: the path as written, and the enum's name
-    /// there. Nothing but the page for people (`doc`) reads it; to everything else the enum is one
-    /// the flow wrote.
+    /// there. Only what shows the flow to people and tools (`doc` and `api`) reads it; to everything
+    /// else the enum is one the flow wrote.
     pub from: Option<(String, String)>,
 }
 

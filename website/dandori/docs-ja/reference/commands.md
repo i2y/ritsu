@@ -63,7 +63,7 @@ $ ritsu dandori api examples/hotel/temporal/hotel.flow | jq '.tasks[] | select(.
 | `period`、`history_encrypted` | 動く期間（`text`、`min`、`max`、`line`）と、`history encrypted` の行。無ければ `null` |
 | `uses` | `use` の行ごとに、`kind`（`rule`、`dates`、`book`、`openapi`、`smithy`、`proto`）、`name`、書いたとおりの `file`、`line`。規則には、規則の名前と版、`sha256`、型と範囲つきの `inputs` と `outputs`、`lambda`・`local`・`connect` の URL・`connection` のどれで呼ぶか。日付のファイルには、日付と引数。帳簿には、振替 |
 | `inputs`、`outputs` | `name`、`type`、`optional`、`range`、`secret`、`line`。`range` は `.flow` に書くとおりの `text` と、データとしての `min`・`max`（数、日、時刻、順序のある列挙なら値。通す `values` の全部も） |
-| `enums`、`records` | 値とフィールド。レコードの `origin` は、ワークフロー自身のもの、規則の出力、仮押さえ、`.proto` のメッセージのどれか |
+| `enums`、`records` | 値とフィールド。列挙の `from` は、`import enum` で読んだファイルと、そこでの名前（フローに書いた列挙は null）。レコードの `origin` は、ワークフロー自身のもの、規則の出力、仮押さえ、`.proto` のメッセージのどれか |
 | `tasks` | `kind`（`http`、`connect`、`aws`、`lambda`、`agent`、`jev`、`book`、`workflow`、`state_machine`、`durable_function`、`argo_template`、`image`、`event`、自分で実装する `own`）、呼び先の `calls`、`params` と `result`（型、範囲、秘密）、`timeout`、`deadline`、`retry`、`key`、`idempotent`、`changes_things`、`callback`、ステータスか例外つきの `errors`、`refused_as`、`machine`、`discloses` |
 | `cases` | 持つ `record`、追う状態機械 `follows`、`states` と `final`、`held`、`external` のイベント、`refused_when` |
 | `children` | タスクが動かす子の `.flow` ごとに、タスク、`file`、ワークフロー、`inputs`、`outputs` |

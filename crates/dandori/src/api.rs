@@ -142,7 +142,7 @@ fn uses_json(m: &Model) -> Json {
 }
 
 fn enums_json(m: &Model) -> Json {
-    Json::arr(m.enums.iter().map(|e| Json::obj([("name", Json::str(e.name.clone())), ("values", Json::arr(e.values.iter().cloned().map(Json::str))), ("ordered", Json::Bool(e.ordered))])))
+    Json::arr(m.enums.iter().map(|e| Json::obj([("name", Json::str(e.name.clone())), ("values", Json::arr(e.values.iter().cloned().map(Json::str))), ("ordered", Json::Bool(e.ordered)), ("from", opt(e.from.as_ref().map(|(file, name)| Json::obj([("file", Json::str(file.clone())), ("enum", Json::str(name.clone()))]))))])))
 }
 
 fn records_json(m: &Model) -> Json {

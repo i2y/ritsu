@@ -186,7 +186,8 @@
         "auto",
         "review"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "hold.room",
@@ -195,7 +196,8 @@
         "deluxe",
         "suite"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "payment_intent.capture_method",
@@ -204,7 +206,8 @@
         "automatic_async",
         "manual"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "payment_intent.confirmation_method",
@@ -212,7 +215,8 @@
         "automatic",
         "manual"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "payment_intent.event",
@@ -225,7 +229,8 @@
         "cancel",
         "expire"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "payment_intent.funds",
@@ -235,7 +240,8 @@
         "captured",
         "released"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "payment_intent.status",
@@ -248,7 +254,8 @@
         "succeeded",
         "canceled"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     },
     {
       "name": "Outcome",
@@ -256,7 +263,8 @@
         "stayed",
         "awaiting_review"
       ],
-      "ordered": false
+      "ordered": false,
+      "from": null
     }
   ],
   "records": [

@@ -737,7 +737,7 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | proto | `import` の行（行番号つき）、フィールドとメソッドの型 | 別の proto のファイルと、使っている要素 |
 | rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）、`import enum`（行と、`enums` のファイルの列挙）、`range from koyomi`（行と、日付のファイルの日付）、`implements`（行と、proto のサービス。26 章）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から。20 章 | proto のファイルと、列挙と値、メッセージ、規則、`enums` のファイル、日付のファイル |
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
-| dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`import enum`（29 章）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
+| dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`import enum`（31 章）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
 | sekisho のゲート（`.gate`） | sekisho の `References` の `use rule`・`use dates`・`use calendar`・`use gate`・`import enum`（行と、先のファイル）、`guards`（行と、守る操作の参照）。17 章 | 規則、日付のファイルとカレンダー、ほかの `.gate`、契約の操作 |
 | 手で書いた Cedar のスキーマ | sekisho の `References` の `guards`（action の `@guards` の参照と、action の行）。17 章 | 契約の操作 |
