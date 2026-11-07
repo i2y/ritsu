@@ -13,7 +13,7 @@
 //! - From above: the rows of the table that decides the output which some input may reach
 //!   ([`crate::region::live_rows`]: the region of the row, less what the rows that take
 //!   precedence cover, through the sieve the completeness proof uses — the derived values'
-//!   reach, the `constraint`s, the tables above, the linear model). A row the sieve rules out is
+//!   reach, the `constraint`s and `never` lines, the tables above, the linear model). A row the sieve rules out is
 //!   never reached, so the values the other rows write hold every value the output comes to. A
 //!   row that passes an enum or a bool input on (`| paid | pay | state |`) writes the values of
 //!   that input its own cell lets in (and the hold, when there is one).
@@ -502,7 +502,7 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
                 vectors.iter().find_map(|v| {
                     let mut input = v.input.clone();
                     input.insert(w.clone(), x.clone());
-                    if !crate::vectors::allowed(&f2, &input) || !crate::vectors::days_ok(&c2, &input) {
+                    if !crate::vectors::allowed(&f2, &c2, &input) || !crate::vectors::days_ok(&c2, &input) {
                         return None;
                     }
                     let (outs, _, _) = crate::eval::run_all(&f2, &c2, input.clone().into_iter().collect());

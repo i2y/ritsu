@@ -230,8 +230,9 @@ fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
     // reproduction misspells `std/都道府県` and whose English one misspells `std/us/states`
     // (DESIGN §15.182); and W901, written with both from the start (ritsu's DESIGN 16.3). E075 and
     // W128 came with their twins (§15.208, §15.209), and so did E066 and E069 (§15.210, §15.212) and
-    // E132 and E139 (§15.213, §15.215), and E074 (§15.223), and E140 (§15.268), and W133 (§15.281).
-    assert_eq!(twins, 66, "英語の再現を持つ項目の数が変わった: {twins}");
+    // E132 and E139 (§15.213, §15.215), and E074 (§15.223), and E140 (§15.268), and W133 (§15.281),
+    // and E141, E142 and E143 (§15.282).
+    assert_eq!(twins, 69, "英語の再現を持つ項目の数が変わった: {twins}");
 }
 
 /// Japanese is left in a reproduction shown in English only where being Japanese is the point of
@@ -279,8 +280,9 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // (§15.210, §15.212) 117, E132 and E139 (§15.213, §15.215) 119, E072, E134 and E135
     // (§15.217) 122, E071, E136, E137, E138 and W130 (§15.222) 127, E074 (§15.223) 128, E070,
     // E073, E133, W129 and W131 (§15.224–§15.226) 133, E067, E068, E131 and W132 (§15.227)
-    // 137, E140 (§15.268) 138, E076 (§15.274) 139, and W133 (§15.281) 140.
-    assert_eq!(all.len(), 140, "台帳の件数が変わった: {}", all.len());
+    // 137, E140 (§15.268) 138, E076 (§15.274) 139, W133 (§15.281) 140, and E141, E142 and E143
+    // (§15.282) 143.
+    assert_eq!(all.len(), 143, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

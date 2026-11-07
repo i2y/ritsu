@@ -290,7 +290,7 @@ partial def coverOfJson : Option Json → Option Cover
           || (field c "derived_axis").isSome || (field c "every_point_ruled_out").isSome
           || (field c "farkas").isSome || (field c "days_axis").isSome
           || (field c "define_axis").isSome || (field c "above_rows").isSome
-          || (field c "truth_axis").isSome
+          || (field c "truth_axis").isSome || (field c "never").isSome
         then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
@@ -379,6 +379,8 @@ structure ReadTable where
   /-- Per axis: whether the column is an input the rule declares optional (`T?`). Its axis
       starts with the absent value, `none`, which stands for no number (rulec's §15.201). -/
   optional : List Bool := []
+  /-- The cells of the rule's `never` lines this table reads, one for each axis (rulec's §15.282). -/
+  neverCells : List (List CellTest) := []
   /-- Leaves the cover rests on an upstream table for. -/
   upstream : Bool
 
@@ -653,6 +655,18 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
              let col ← fieldNat x "col"
              let len ← fieldNat x "len"
              some { line := line, col := col, len := len, text := fieldStr x "text" }) })
+  -- The `never` lines this table reads (rulec's §15.282): each cell read the way a row's is, and
+  -- what it takes on the axes it tests, read off the coordinates the way a row's box is.
+  let neverCells : List (List CellTest) ← (fieldArr j "nevers").toList.mapM (fun n =>
+    ((fieldArr n "tests").toList.zip columns).mapM (fun (x, col) => cellOfJson groups x (orderOf col)))
+  let prefixesAt : List (List (Option (List Char))) := axes.toList.map (fun a =>
+    (fieldArr a "prefixes").toList.map (fun p => (str p).map String.toList))
+  let neverLines : List (List (Nat × List Nat)) := neverCells.map (fun cells =>
+    ((List.range cells.length).zip cells).filterMap (fun (ai, cell) =>
+      match cell with
+      | .any => none
+      | .prefixOf ws => some (ai, boxOfPrefix ((prefixesAt[ai]?).getD []) ws)
+      | c => some (ai, boxOf ((labels[ai]?).getD []) ((coords[ai]?).getD []) c)))
   some {
     name := name
     outputs := (fieldNat j "outputs").getD 0
@@ -660,6 +674,7 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     labels := axes.toList.map (fun a => (fieldArr a "coords").toList.filterMap str)
     spans := coords
     rowsRaw := rowsRaw
+    neverCells := neverCells
     unused := (fieldArr j "unused").toList.filterMap nat
     ruledOut := (fieldArr j "unreachable").toList.filterMap nat
     -- The strong reading needs a value behind every coordinate that stands for one. A
@@ -711,7 +726,8 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
                  truth := (List.range columns.length).map (fun ai => do
                    let (op, L, R) ← truthOf ((columns[ai]?).getD "")
                    let ta ← ((labels[ai]?).getD []).idxOf? "true"
-                   some { op := op, l := L, r := R, trueAt := ta }) }
+                   some { op := op, l := L, r := R, trueAt := ta })
+                 lines := neverLines }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))

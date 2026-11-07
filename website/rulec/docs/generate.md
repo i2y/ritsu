@@ -294,8 +294,8 @@ input, and the function's name and signature in each of the five.
 
 **The entry guard** enforces at run time what the proof assumed. Every
 numeric input is checked against its declared range and every enum input
-against its values; then every `constraint` between two inputs, and a
-date input that takes its range from a koyomi date against the days that
+against its values; then every `constraint` between two inputs, every
+`never` line that names an input, and a date input that takes its range from a koyomi date against the days that
 date comes to. Without it, a caller outside the declared domain would get
 a silently wrong number — and the completeness proof says nothing about
 inputs that were never declared. A number that is not an integer is refused before the range is
@@ -340,8 +340,8 @@ exactly once.
 It is worth running because the model checker and the checker that
 proved the table share no code. Where they agree, two unrelated tools
 say the same thing; where they disagree, one of them is wrong and you
-get the input that shows it. On the corpus of 143 rules, 301 harnesses
-verify in 777 seconds.
+get the input that shows it. On the corpus of 149 rules, 315 harnesses
+verify in 795 seconds.
 
 What it does not say: anything about the table itself, or about any
 target but this one. And two kinds of rule get no harness at all, the
@@ -561,7 +561,7 @@ table-level agreement alone would hide a helper bug in a table that
 never produces fractions. The refused inputs are the other half: an
 input for every reason the door turns one away — one left out, one of
 another kind, one past an end of its range, a combination a `constraint`
-rules out — and every language has to refuse each of them with the
+or a `never` line rules out — and every language has to refuse each of them with the
 sentence the reference evaluator says.
 
 ## Wasm: one module for any host

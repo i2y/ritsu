@@ -109,6 +109,7 @@ const DECLARING: &[&str] = &[
     crate::kw::MIN,
     crate::kw::FOLD,
     crate::kw::CONSTRAINT,
+    crate::kw::NEVER,
     crate::kw::TABLE,
     crate::kw::CLAUSE,
     crate::kw::RESULT,
@@ -152,7 +153,9 @@ const CONTRIBUTION_FILE: &[&str] = &[
 /// (`prerequisites = …`, `prerequisites -> …`) does. A reserved word there is E009, as it was.
 fn named_like_head(line: &[Token]) -> bool {
     let w = line.first().and_then(|t| t.ident()).unwrap_or("");
-    !crate::kw::RESERVED.contains(&w)
+    // `never` was reserved long before it headed a line of its own (§15.282), and it is what a field
+    // of an element could always be named. Its line has a name second, so a declaration still reads.
+    (!crate::kw::RESERVED.contains(&w) || w == crate::kw::NEVER)
         && line.get(1).is_some_and(|t| t.is(&Kind::LParen) || t.is(&Kind::Colon) || t.is(&Kind::Eq) || t.is(&Kind::Arrow))
 }
 
@@ -261,6 +264,7 @@ fn declared(f: &RuleFile) -> usize {
         + f.items.len()
         + f.examples.len()
         + f.constraints.len()
+        + f.nevers.len()
         + f.shapes.len()
         + usize::from(f.implements.is_some())
         + f.sequences.len()
@@ -296,6 +300,7 @@ fn line_shape(word: &str) -> String {
         ),
         crate::kw::FOLD => tr!("`fold <判定の列> over <並び> [-> <名前>(<別名>) : <型>]`", "`fold <verdict column> over <sequence> [-> <name>(<alias>) : <type>]`"),
         crate::kw::CONSTRAINT => tr!("`constraint <入力> <= <入力>`", "`constraint <input> <= <input>`"),
+        crate::kw::NEVER => tr!("`never <名前> = <値>, <名前> >= <値>`", "`never <name> = <value>, <name> >= <value>`"),
         crate::kw::TABLE => tr!("`table <名前>(<別名>)` の行と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
         crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` の行と、その下に `when …` と `then …` の行", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
         crate::kw::MACHINE => tr!("`machine <名前>(<別名>) over <表>` の行と、その下に `carry`・`initial`・`final` の行", "`machine <name>(<alias>) over <table>`, with `carry`, `initial` and `final` under it"),
@@ -401,6 +406,7 @@ impl P {
             result: None,
             examples: Vec::new(),
             constraints: Vec::new(),
+            nevers: Vec::new(),
             shapes: Vec::new(),
             implements: None,
             elements: Vec::new(),
@@ -476,8 +482,8 @@ impl P {
                     .at(at)
                     .mark(span_of(&line), "")
                     .note(tr!(
-                        "寄与は、足す先の規則の開いた場所に足すだけで、関数の形（出力、`result`、`apply`、機械、たどる並び、列挙、取り込み、出典、契約、制約、確率の主張）は足す先の規則が決めます。",
-                        "A contribution only adds to the open places of the rule it adds to. The shape of the function — its outputs, its `result`, an `apply`, a machine, the sequences it walks, its enums, imports, sources, contracts and constraints, and the claims of chances — is that rule's."
+                        "寄与は、足す先の規則の開いた場所に足すだけで、関数の形（出力、`result`、`apply`、機械、たどる並び、列挙、取り込み、出典、契約、制約、`never` の行、確率の主張）は足す先の規則が決めます。",
+                        "A contribution only adds to the open places of the rule it adds to. The shape of the function — its outputs, its `result`, an `apply`, a machine, the sequences it walks, its enums, imports, sources, contracts, constraints and `never` lines, and the claims of chances — is that rule's."
                     ));
                 // The claims of chances (§15.224) are the rule's: what is drawn, and how likely each
                 // answer is, whatever is added to it.
@@ -564,6 +570,12 @@ impl P {
                 crate::kw::SHAPE => {
                     if let Some(d) = self.shape_decl(&line) {
                         f.shapes.push(d);
+                    }
+                    self.i += 1;
+                }
+                crate::kw::NEVER => {
+                    if let Some(n) = self.never_line(&line) {
+                        f.nevers.push(n);
                     }
                     self.i += 1;
                 }
@@ -1156,6 +1168,11 @@ impl P {
 
     /// An indented run of declarations under `inputs` / `outputs`.
     fn block_lines(&mut self) -> Vec<Vec<Token>> {
+        self.block_lines_keeping(&[])
+    }
+
+    /// The lines of a block, up to a blank line or a line head other than those in `keep`.
+    fn block_lines_keeping(&mut self, keep: &[&str]) -> Vec<Vec<Token>> {
         let mut out = Vec::new();
         loop {
             let Some(line) = self.cur() else { break };
@@ -1163,6 +1180,11 @@ impl P {
                 break;
             }
             let w = line.first().and_then(|t| t.ident()).unwrap_or("");
+            if keep.contains(&w) {
+                out.push(line.clone());
+                self.i += 1;
+                continue;
+            }
             // A declaration named like a line head that is not reserved is that declaration
             // (§15.222): only a reserved word is kept from being a name.
             if KEYWORDS.contains(&w) && named_like_head(line) {
@@ -2229,9 +2251,10 @@ impl P {
     fn machine(&mut self, line: &[Token]) -> Option<MachineDecl> {
         let span = span_of(line);
         // The heading and the block under it are consumed whatever else goes wrong, so the
-        // lines under a broken heading are not read again as top-level declarations.
+        // lines under a broken heading are not read again as top-level declarations. A `never`
+        // under a `machine` is the machine's, and starts a line of the rule's only outside it.
         self.i += 1;
-        let block = self.block_lines();
+        let block = self.block_lines_keeping(&[crate::kw::NEVER]);
         let shape_note = || {
             tr!(
                 "形は `machine <名前>(<ascii>) over <表>` です。表は、持ち越す出力を決める表です。",
@@ -2522,6 +2545,56 @@ impl P {
     /// `A <= B` and `A >= B` when it is ever wanted. One shape means one thing to read
     /// (§15.55). One side may add inputs up, `a + b <= c` (§15.216), and that is all the
     /// arithmetic a constraint takes: no coefficient, no constant, no second sum.
+    /// `never <name> = <value>, <name> >= <value>`, one or more conditions separated by commas
+    /// (§15.282). A condition holds what a cell of a table holds: its value after `=`, or its
+    /// comparison or `starts_with` straight after the name. The comma divides conditions here, so
+    /// the members of a set are divided by `|`, as an `enum` line divides its values.
+    fn never_line(&mut self, line: &[Token]) -> Option<NeverLine> {
+        let span = span_of(line);
+        let bad = |p: &mut Self, sp: Span, what: String| -> Option<NeverLine> {
+            p.err(
+                Diag::error("E141", tr!("`never` の行の形が違います", "A `never` line is not shaped like this"))
+                    .at(p.at(sp.line))
+                    .mark(sp, what)
+                    .note(tr!(
+                        "形は `never <名前> = <値>, <名前> >= <値>` です。条件はコンマで区切り、それぞれに名前を一つ書きます。値の集合は `状態 = 入金済み | 出荷済み`、否定は `状態 = not: 入金済み`、比較は `数 >= 1 < 5` と書きます。",
+                        "The shape is `never <name> = <value>, <name> >= <value>`: conditions separated by commas, each on one name. A set of values is `state = paid | shipped`, its opposite `state = not: paid`, and a comparison `count >= 1 < 5`."
+                    )),
+            );
+            None
+        };
+        if line.len() < 2 {
+            return bad(self, span, tr!("条件がありません", "there is no condition here"));
+        }
+        let mut conds = Vec::new();
+        for seg in line[1..].split(|t| t.is(&Kind::Comma)) {
+            let Some(first) = seg.first() else {
+                return bad(self, span, tr!("コンマの前後に条件がありません", "there is no condition beside this comma"));
+            };
+            let Some(word) = first.ident() else {
+                return bad(self, span_of(seg), tr!("条件は名前で始めてください", "a condition starts with a name"));
+            };
+            let name = Name { text: word.to_string(), ascii: None, span: first.span.clone() };
+            let rest = &seg[1..];
+            let written: &[Token] = match rest.first() {
+                Some(t) if t.is(&Kind::Eq) => &rest[1..],
+                Some(t) if matches!(t.kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt) || t.ident() == Some(crate::kw::STARTS_WITH) => rest,
+                _ => return bad(self, span_of(seg), tr!("`=` か比較がありません", "`=` or a comparison is expected here")),
+            };
+            if written.is_empty() {
+                return bad(self, span_of(seg), tr!("`=` の後に値がありません", "there is no value after `=`"));
+            }
+            // A set is written with `|`, and a cell's reader takes a set with commas.
+            let toks: Vec<Token> = written.iter().map(|t| if t.is(&Kind::Pipe) { Token { kind: Kind::Comma, span: t.span.clone() } } else { t.clone() }).collect();
+            let cell = self.cell(&toks)?;
+            if matches!(cell, Cell::DontCare) {
+                return bad(self, span_of(seg), tr!("`-` は何も外しません", "`-` leaves out nothing"));
+            }
+            conds.push(NeverCond { name, cell });
+        }
+        Some(NeverLine { conds, span })
+    }
+
     fn constraint(&mut self, line: &[Token]) -> Option<Constraint> {
         let span = span_of(line);
         let bad = |p: &mut Self, what: String| -> Option<Constraint> {

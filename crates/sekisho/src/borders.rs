@@ -502,6 +502,7 @@ fn precondition_text(p: &Precondition) -> String {
         Precondition::Sum { name, over, of, max } => format!("`{name}` ({of} over {over} <= {max})"),
         Precondition::Length { sequence, max } => format!("`{sequence}` (<= {max})"),
         Precondition::Days { input, date, .. } => format!("`{input}` ({date})"),
+        Precondition::Never { said, .. } => format!("`{said}`"),
     }
 }
 

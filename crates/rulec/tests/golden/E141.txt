@@ -1,0 +1,7 @@
+エラー[E141]: `never` の行に、知らない名前があります
+  --> tests/mutants/m_e141ja.rule:15 起こらない組み合わせ
+   |
+15 | never 区分 = 上位, 工具 = 0
+   |                    ^^^^ 工具 という入力も集計もありません
+   |
+ `never` に書けるのは、`inputs` に宣言した入力と、`elements` の集計（`count`・`sum`・`max`・`min`）です。

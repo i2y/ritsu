@@ -702,7 +702,7 @@ See also: [W201](#w201), [E201](#e201)
 
 ## W201 — Whether the values given to a rule keep its precondition cannot be decided
 
-**When**: rulec cannot decide whether a precondition (`constraint`) of the rule holds over the ranges given; the generated code checks it when it runs, and denies the request when it breaks.
+**When**: rulec cannot decide whether a precondition (`constraint` or `never`) of the rule holds over the ranges given; the generated code checks it when it runs, and denies the request when it breaks.
 
 **Fix**: Narrowing the ranges given can let it be decided.
 

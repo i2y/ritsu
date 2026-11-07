@@ -36,9 +36,10 @@
 //! finds nothing proves nothing, so it can only say `Yes`.
 
 use super::{Across, Contract, Ints, proto_ints, proto_strs, read, wire_constraint};
-use crate::ast::{AggDecl, AggKind, Cell, CmpOp, EnumSource, Item, Lit, ProjKind, RuleFile, ShapeDecl, VarDecl};
+use crate::ast::{AggDecl, AggKind, Cell, CmpOp, EnumSource, Item, Lit, NeverCond, NeverKind, NeverLine, ProjKind, RuleFile, ShapeDecl, VarDecl};
 use crate::diag::{Diag, FixKind, WVal};
-use crate::fourier::{Ineq, Lin};
+use crate::fourier::{Ineq, Lin, Origin};
+use crate::json::{Obj, arr};
 use crate::num::Rat;
 use crate::relation::{Extra, Found, Proof, Relation, Term};
 use crate::types::{Checked, Ty};
@@ -63,10 +64,23 @@ pub enum Possible {
     /// It occurs, and this is a collection that gives it: built and evaluated.
     Yes(Example),
     /// It does not, whichever elements there are: a case of the contract, or a case of a `max` or
-    /// a `min`, fails each way. The proofs are what a certificate would carry.
-    No(#[allow(dead_code)] Vec<Proof>),
+    /// a `min`, fails each way. What a certificate carries for it, one for each way of the
+    /// question.
+    No(Vec<Refuted>),
     /// Neither could be shown.
     Unknown,
+}
+
+/// Why one way of a question has no answer.
+#[derive(Debug, Clone)]
+pub struct Refuted {
+    /// The contract, or the sequence, that says so.
+    group: usize,
+    /// The `max` and `min` the question names: each is opened into where its value lies.
+    extremes: Vec<String>,
+    /// One for each combination of those: which way each of them goes, and a proof for each case
+    /// of the contract.
+    picks: Vec<(Vec<usize>, Vec<Proof>)>,
 }
 
 /// What a combination asks of a value that is not a number. A number is asked with an inequality
@@ -99,6 +113,30 @@ pub struct Shown {
 }
 
 impl Example {
+    /// The request as data, for `--format json`: the fields read directly, and each collection
+    /// with how many elements of each kind it holds.
+    pub fn json(&self) -> String {
+        use crate::json::Obj;
+        let value = |v: &str| crate::json::parse(v).map_or_else(|_| crate::json::quote(v), |j| j.compact());
+        let plain: Vec<String> = self.plain.iter().map(|(p, v)| Obj::new().str("path", p).raw("value", value(v)).finish()).collect();
+        let walks: Vec<String> = self
+            .walks
+            .iter()
+            .map(|w| {
+                let kinds: Vec<String> = w
+                    .elements
+                    .iter()
+                    .map(|(n, fields)| {
+                        let fs = fields.iter().fold(Obj::new(), |o, (k, v)| o.raw(k, value(v)));
+                        Obj::new().raw("count", n.to_string()).raw("fields", fs.finish()).finish()
+                    })
+                    .collect();
+                Obj::new().str("path", &w.path).raw("elements", crate::json::arr(&kinds)).finish()
+            })
+            .collect();
+        Obj::new().raw("fields", crate::json::arr(&plain)).raw("collections", crate::json::arr(&walks)).finish()
+    }
+
     /// The request in words: `` `order.lines` holding 1 element with `category` = "service" ``.
     pub fn request(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
@@ -956,6 +994,150 @@ fn element_passes(w: &Walk, values: &[Val]) -> bool {
     !matches!(w.each.find(&x, &name), Found::None(_))
 }
 
+fn val_json(v: &Val) -> String {
+    match v {
+        Val::Truth(b) => Obj::new().bool("truth", *b).finish(),
+        Val::Word(w) => Obj::new().str("word", w).finish(),
+        Val::Num(n) => Obj::new().str("num", rat_text(n)).finish(),
+    }
+}
+
+fn rat_text(r: &Rat) -> String {
+    if r.den == 1 { r.num.to_string() } else { format!("{}/{}", r.num, r.den) }
+}
+
+/// A number or nothing, as JSON.
+fn end_json(r: &Option<Rat>) -> String {
+    r.as_ref().map_or_else(|| "null".to_string(), |k| crate::json::quote(&rat_text(k)))
+}
+
+fn test_json(t: &Option<Test>) -> String {
+    match t {
+        None => "null".to_string(),
+        Some(Test::Among(vs, yes)) => Obj::new().raw("among", arr(&vs.iter().map(val_json).collect::<Vec<_>>())).bool("yes", *yes).finish(),
+        Some(Test::Cmp(ops)) => Obj::new()
+            .raw("cmp", arr(&ops.iter().map(|(o, k)| Obj::new().str("op", o.word()).str("value", rat_text(k)).finish()).collect::<Vec<_>>()))
+            .finish(),
+    }
+}
+
+fn dom_json(d: &Dom) -> String {
+    let frac_end = |e: &Option<(Rat, bool)>| e.as_ref().map_or_else(|| "null".to_string(), |(k, s)| Obj::new().str("at", rat_text(k)).bool("open", *s).finish());
+    match d {
+        Dom::Truth => Obj::new().str("kind", "truth").finish(),
+        Dom::Words { listed, .. } => Obj::new().str("kind", "words").raw("listed", listed.as_ref().map_or_else(|| "null".to_string(), |l| crate::json::strs(l))).finish(),
+        Dom::Whole(s) => {
+            let end = |e: &Option<i128>| e.map_or_else(|| "null".to_string(), |k| crate::json::quote(&k.to_string()));
+            Obj::new().str("kind", "whole").raw("spans", arr(&s.0.iter().map(|(l, h)| format!("[{},{}]", end(l), end(h))).collect::<Vec<_>>())).finish()
+        }
+        Dom::Frac { lo, hi } => Obj::new().str("kind", "frac").raw("lo", frac_end(lo)).raw("hi", frac_end(hi)).finish(),
+        Dom::Wide => Obj::new().str("kind", "wide").finish(),
+    }
+}
+
+/// What one collection is made of, as a re-checker reads it. The classes the element's condition
+/// leaves out are the ones a product of the parts does not list.
+fn walk_json(w: &Walk) -> String {
+    let fields: Vec<String> = w
+        .fields
+        .iter()
+        .map(|fd| {
+            let parts: Vec<String> = fd
+                .parts
+                .iter()
+                .map(|p| {
+                    let truth: Vec<String> = p.truth.iter().map(bool::to_string).collect();
+                    Obj::new()
+                        .raw("truth", arr(&truth))
+                        .raw("vals", arr(&p.vals.iter().map(val_json).collect::<Vec<_>>()))
+                        .bool("other", p.other)
+                        .raw("lo", end_json(&p.lo))
+                        .raw("hi", end_json(&p.hi))
+                        .finish()
+                })
+                .collect();
+            Obj::new()
+                .str("name", &fd.name)
+                .raw("dom", dom_json(&fd.dom))
+                .raw("tests", arr(&fd.tests.iter().map(test_json).collect::<Vec<_>>()))
+                .bool("of", fd.of)
+                .bool("summed", fd.summed)
+                .raw("parts", arr(&parts))
+                .finish()
+        })
+        .collect();
+    let classes: Vec<String> = w.classes.iter().map(|cl| arr(&cl.iter().map(usize::to_string).collect::<Vec<_>>())).collect();
+    let reads: Vec<String> = w
+        .reads
+        .iter()
+        .map(|r| {
+            let kind = match r.kind {
+                Kind::Any => "any",
+                Kind::All => "all",
+                Kind::Count => "count",
+                Kind::Sum => "sum",
+                Kind::Max => "max",
+                Kind::Min => "min",
+            };
+            let pass: Vec<String> = r.pass.iter().map(bool::to_string).collect();
+            let index = |i: Option<usize>| i.map_or_else(|| "null".to_string(), |k| k.to_string());
+            Obj::new()
+                .str("name", &r.name)
+                .str("kind", kind)
+                .str("said", &r.said)
+                .raw("test", r.test.map_or_else(|| "null".to_string(), |(fi, ti)| format!("[{fi},{ti}]")))
+                .raw("of", index(r.of))
+                .raw("empty", end_json(&r.empty))
+                .bool("readable", r.readable)
+                .raw("pass", arr(&pass))
+                .finish()
+        })
+        .collect();
+    let o = Obj::new().str("size", &w.size).bool("fine", w.fine).raw("fields", arr(&fields)).raw("classes", arr(&classes)).raw("reads", arr(&reads));
+    match w.cap {
+        Some(k) => o.int("cap", k).finish(),
+        None => o.finish(),
+    }
+}
+
+fn group_json(g: &Group) -> String {
+    let name = |t: &Term| g.name(t);
+    Obj::new()
+        .raw("atoms", crate::cert::atoms_json(&g.rel.atoms, &name))
+        .raw(
+            "cases",
+            arr(&g.rel.each().iter().map(|case| arr(&case.iter().map(usize::to_string).collect::<Vec<_>>())).collect::<Vec<_>>()),
+        )
+        .raw("walks", arr(&g.walks.iter().map(walk_json).collect::<Vec<_>>()))
+        .finish()
+}
+
+fn proof_json(p: &Proof, name: &dyn Fn(&Term) -> String) -> String {
+    match p {
+        Proof::Clash(t) => Obj::new().str("clash", name(t)).finish(),
+        Proof::Within => Obj::new().bool("within", true).finish(),
+        Proof::Whole => Obj::new().bool("whole", true).finish(),
+        Proof::Farkas(r) => {
+            let rows: Vec<String> = r
+                .used()
+                .into_iter()
+                .map(|(q, y)| {
+                    let o = Obj::new().str("y", rat_text(&y));
+                    if let Origin::Contract { atom, part } = &q.origin {
+                        return o.int("atom", *atom as i128).int("part", *part as i128).finish();
+                    }
+                    let mut ts = Obj::new();
+                    for (n, k) in q.terms.iter().filter(|(_, k)| k.num != 0) {
+                        ts = ts.str(n, rat_text(k));
+                    }
+                    o.raw("terms", ts.finish()).str("k", rat_text(&q.k)).bool("strict", q.strict).finish()
+                })
+                .collect();
+            Obj::new().raw("farkas", arr(&rows)).finish()
+        }
+    }
+}
+
 /// `a = b`, as the two inequalities it is.
 fn equal(a: Lin, b: &Lin) -> [Ineq; 2] {
     let d = a.plus(&b.clone().scale(Rat::int(-1)));
@@ -1138,6 +1320,14 @@ impl<'a> Walks<'a> {
                     out.push(p.group.clone());
                 }
             }
+            // A contract a `never` line reads fields of, with no collection read from it: the
+            // fields and what it says across them is all there is to ask (§15.282).
+            for n in f.nevers.iter().flat_map(|l| l.names()) {
+                let root = f.inputs.iter().find(|i| i.name.text == *n).and_then(|i| i.from.as_ref()).map(|p| p.root.text.clone());
+                if let Some(root) = root.filter(|r| contracts.contains_key(r) && !out.contains(r)) {
+                    out.push(root);
+                }
+            }
             out
         };
         for key in keys {
@@ -1219,7 +1409,7 @@ impl<'a> Walks<'a> {
         let mut out = Example::default();
         let mut unknown = false;
         let mut said = false;
-        for g in &self.groups {
+        for (gi, g) in self.groups.iter().enumerate() {
             let a: Vec<&(String, Ask)> = asks.iter().filter(|(n, _)| g.knows(n)).collect();
             let q: Vec<&Ineq> = ineqs.iter().filter(|q| ineq_names(q).all(|n| g.knows(n) || n.starts_with('\u{1}'))).filter(|q| ineq_names(q).any(|n| g.knows(n))).collect();
             if a.is_empty() && q.is_empty() {
@@ -1227,7 +1417,12 @@ impl<'a> Walks<'a> {
             }
             said = true;
             match ask_group(g, self.c, &a, &q) {
-                Possible::No(p) => return Possible::No(p),
+                Possible::No(mut p) => {
+                    for r in &mut p {
+                        r.group = gi;
+                    }
+                    return Possible::No(p);
+                }
                 Possible::Unknown => unknown = true,
                 Possible::Yes(ex) => {
                     out.values.extend(ex.values);
@@ -1244,6 +1439,121 @@ impl<'a> Walks<'a> {
             return Possible::Unknown;
         }
         Possible::Yes(out)
+    }
+
+    /// What the definitions say of a `never` line (§15.282): `No` when every way its cells can be
+    /// met fails, a request when one is given, and `Unknown` for all the rest, a cell this cannot
+    /// put as a question among them. Each `constraint` the names of the question are bound by
+    /// holds here, as it does at the door.
+    pub fn never_answer(&self, n: &NeverLine) -> Possible {
+        let Some(ways) = never_ways(n, self.c) else { return Possible::Unknown };
+        let held = self.constraints();
+        let mut proofs = Vec::new();
+        let mut unknown = false;
+        for (asks, mut ineqs) in ways {
+            ineqs.extend(held.iter().cloned());
+            match self.ask(&asks, &ineqs) {
+                // A name nothing here knows is left out of the question, and a request for what
+                // is left says nothing of that name.
+                Possible::Yes(_) if !n.names().all(|m| self.knows(m)) => unknown = true,
+                Possible::Yes(ex) => return Possible::Yes(ex),
+                Possible::No(p) => proofs.extend(p),
+                Possible::Unknown => unknown = true,
+            }
+        }
+        if unknown { Possible::Unknown } else { Possible::No(proofs) }
+    }
+
+    /// The proof of a `never` line that the definitions rule out, for a certificate (§15.282): what
+    /// the collections it reads are made of, and for each way of the question, each `max` and
+    /// `min` opened and each case of the contract, the inequalities that add up to something false.
+    /// A re-checker builds what may be used from the first, and holds the second to it.
+    pub fn never_proof_json(&self, n: &NeverLine) -> String {
+        let Possible::No(ways) = self.never_answer(n) else { return "null".to_string() };
+        let mut used: Vec<usize> = ways.iter().map(|w| w.group).collect();
+        used.sort_unstable();
+        used.dedup();
+        let groups: Vec<String> = used.iter().map(|gi| group_json(&self.groups[*gi])).collect();
+        let ways: Vec<String> = ways
+            .iter()
+            .map(|w| {
+                let g = &self.groups[w.group];
+                let name = |t: &Term| g.name(t);
+                let picks: Vec<String> = w
+                    .picks
+                    .iter()
+                    .map(|(pick, cases)| {
+                        let pick: Vec<String> = pick.iter().map(usize::to_string).collect();
+                        let cases: Vec<String> = cases.iter().map(|p| proof_json(p, &name)).collect();
+                        Obj::new().raw("pick", arr(&pick)).raw("cases", arr(&cases)).finish()
+                    })
+                    .collect();
+                Obj::new()
+                    .int("group", used.iter().position(|u| *u == w.group).unwrap_or(0) as i128)
+                    .raw("extremes", crate::json::strs(&w.extremes))
+                    .raw("picks", arr(&picks))
+                    .finish()
+            })
+            .collect();
+        Obj::new().raw("groups", arr(&groups)).raw("ways", arr(&ways)).finish()
+    }
+
+    /// The `never` line to write for a combination that does not occur (§15.282): the conditions
+    /// it does not need left out, and each comparison opened as far as the definitions allow, so
+    /// that one line takes what one reason takes. `None` when the combination is not shown not to
+    /// occur, or the line would name both inputs and summaries, which no door can read.
+    pub fn line_for(&self, conds: Vec<NeverCond>, span: &crate::diag::Span) -> Option<String> {
+        let never = |conds: Vec<NeverCond>| NeverLine { conds, span: span.clone() };
+        let no = |conds: &[NeverCond]| !conds.is_empty() && matches!(self.never_answer(&never(conds.to_vec())), Possible::No(_));
+        let mut conds = conds;
+        if !no(&conds) {
+            return None;
+        }
+        let mut i = conds.len();
+        while i > 0 {
+            i -= 1;
+            let mut fewer = conds.clone();
+            fewer.remove(i);
+            if no(&fewer) {
+                conds = fewer;
+            }
+        }
+        for i in 0..conds.len() {
+            let name = conds[i].name.text.clone();
+            for wider in wider_cells(&conds[i].cell).into_iter().filter(|w| self.opens(&name, w)) {
+                let mut tried = conds.clone();
+                tried[i].cell = wider;
+                if no(&tried) {
+                    conds = tried;
+                    break;
+                }
+            }
+        }
+        let is_input = |m: &String| self.f.inputs.iter().any(|x| x.name.text == *m);
+        let line = never(conds);
+        if line.names().any(is_input) && line.names().any(|m| self.f.is_summary(m)) {
+            return None;
+        }
+        Some(line.said())
+    }
+
+    /// Whether a comparison lets in a value besides the one it is opened from: `<= 0` on a name that
+    /// is never below 0 still says `= 0`, and `= 0` is what a person would write.
+    fn opens(&self, name: &str, wider: &Cell) -> bool {
+        let (Some(ty), Some((lo, hi))) = (self.c.ty_of(name), self.c.ranges.get(name).copied()) else { return true };
+        let Cell::Cmp(ops) = wider else { return true };
+        let [(op, l)] = ops.as_slice() else { return true };
+        let value = match l {
+            Lit::Num(n) => crate::types::lit_value_in_pub(n, &ty),
+            Lit::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
+            _ => None,
+        };
+        let same = |end: Option<Rat>| value.zip(end).is_some_and(|(v, e)| v.cmp_to(e).is_eq());
+        !match op {
+            CmpOp::Le => same(lo),
+            CmpOp::Ge => same(hi),
+            _ => false,
+        }
     }
 
     /// Why a combination that does not occur is still asked for: what its reads are, and who can
@@ -1326,6 +1636,7 @@ impl<'a> Walks<'a> {
         }
         let values_ja = values.join("、");
         let values_en = values.join(" and ");
+        d = d.request(ex.json());
         let at = ex.request();
         // A space only after a number or a name: `1 件のリクエスト`, `limit` が 3 のリクエスト.
         let at_ja = if at.ends_with(|c: char| c.is_ascii()) { format!("{at} ") } else { at.clone() };
@@ -1743,7 +2054,7 @@ impl Question<'_> {
         let unsure = classes_unsure(g, named);
         let name = |t: &Term| g.name(t);
         let extra = |ineqs: Vec<Ineq>| Extra { ineqs: tidied(ineqs), strs: x.strs.clone(), bools: x.bools.clone() };
-        let mut proofs = Vec::new();
+        let mut picks = Vec::new();
         let mut undecided = false;
         let mut pick = vec![0usize; ways.len()];
         loop {
@@ -1765,7 +2076,7 @@ impl Question<'_> {
                 }
             }
             match g.rel.find(&extra(one.clone()), &name) {
-                Found::None(p) => proofs.extend(p),
+                Found::None(p) => picks.push((pick.clone(), p)),
                 Found::Unknown => undecided = true,
                 Found::Point(at, strs, truth) => {
                     if !blind
@@ -1791,7 +2102,11 @@ impl Question<'_> {
                 break;
             }
         }
-        if undecided { Possible::Unknown } else { Possible::No(proofs) }
+        if undecided {
+            return Possible::Unknown;
+        }
+        let extremes = extremes.iter().map(|(_, r)| r.name.clone()).collect();
+        Possible::No(vec![Refuted { group: 0, extremes, picks }])
     }
 
     /// Small collections, tried one by one. The system is wider than the truth: it holds a total
@@ -2330,8 +2645,14 @@ pub fn impossible_rows(f: &RuleFile, c: &Checked, rule_path: &str, skip: &BTreeS
             continue;
         }
         let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let region = if f.nevers.is_empty() { None } else { crate::region::TableRegion::build(t, c, f) };
         for (ri, row) in t.rows.iter().enumerate() {
             if skip.contains(&(tname.clone(), row.index)) {
+                continue;
+            }
+            // A row a `never` line takes whole is the line's, as a row a `constraint` leaves out
+            // is the constraint's: nothing more is said of it here, and `coverage` names the line.
+            if region.as_ref().is_some_and(|g| g.never_takes_row(ri).is_some()) {
                 continue;
             }
             let mut asks: Vec<(String, Ask)> = Vec::new();
@@ -2421,14 +2742,190 @@ pub fn impossible_rows(f: &RuleFile, c: &Checked, rule_path: &str, skip: &BTreeS
                     "Every target works a summary out from the sequence, so no call reaches this row."
                 ));
             }
-            d = d.note(tr!(
-                "ヒント: この行を消しても E101 が出ないなら、消してください。E101 が出るなら、表の完全性にこの行が要るので、残してください。",
-                "hint: if E101 does not come back without this row, delete it. If it does, the table needs the row to be complete, so keep it."
-            ));
+            let conds: Vec<NeverCond> = t
+                .inputs
+                .iter()
+                .enumerate()
+                .filter(|(_, (col, _))| walks.knows(col))
+                .filter_map(|(ci, (col, _))| {
+                    let cell = row.cells.get(ci).filter(|x| !matches!(x, Cell::DontCare))?;
+                    Some(NeverCond { name: crate::ast::Name { text: col.clone(), ascii: None, span: row.span.clone() }, cell: cell.clone() })
+                })
+                .collect();
+            d = d.note(match walks.line_for(conds, &row.span) {
+                Some(line) => tr!(
+                    "ヒント: この行を消して、次の一行を書いてください: `{line}`",
+                    "hint: delete this row and write this line instead: `{line}`"
+                ),
+                None => tr!(
+                    "ヒント: この行を消しても E101 が出ないなら、消してください。E101 が出るなら、表の完全性にこの行が要るので、残してください。",
+                    "hint: if E101 does not come back without this row, delete it. If it does, the table needs the row to be complete, so keep it."
+                ),
+            });
             out.push(d);
         }
     }
     out
+}
+
+/// E142 and E143 (§15.282): a `never` line that stands on definitions has to be shown from them.
+/// A line a request breaks is wrong, and a line nothing shows either way would take a combination
+/// out of the tables on nobody's word: the page says a row was left out because it does not
+/// happen, and that sentence has to be true.
+pub fn never_lines(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    let is_input = |m: &String| f.inputs.iter().any(|i| i.name.text == *m);
+    // What the type check has said something about is left to it.
+    let mine: Vec<&NeverLine> = f
+        .nevers
+        .iter()
+        .filter(|n| f.never_kind(n) == NeverKind::Definitions)
+        .filter(|n| n.names().all(|m| is_input(m) || f.is_summary(m)))
+        .filter(|n| !(n.names().any(is_input) && n.names().any(|m| f.is_summary(m))))
+        .collect();
+    if mine.is_empty() {
+        return out;
+    }
+    let walks = Walks::of(f, c, rule_path);
+    for n in mine {
+        let said = n.said();
+        let at = tr!("{rule_path}:{} 起こらない組み合わせ", "{rule_path}:{} never", n.span.line);
+        match walks.never_answer(n) {
+            Possible::No(_) => {}
+            Possible::Yes(ex) => {
+                let request = ex.request();
+                let mut d = Diag::error("E142", tr!("`{said}` の組み合わせは、定義から起こります", "The definitions give the combination `{said}` rules out"))
+                    .at(at)
+                    .mark(n.span.clone(), tr!("この組み合わせは起こります", "this combination does occur"))
+                    .request(ex.json())
+                    .fix_kind(FixKind::None)
+                    .note(tr!("たとえば {request} のリクエストが、この組み合わせになります。", "A request with {request}, for one, gives this combination."));
+                for m in n.names() {
+                    if let Some(b) = ex.truths.get(m) {
+                        d = d.win(m.as_str(), WVal::Bool(*b));
+                    } else if let Some(v) = ex.values.get(m) {
+                        d = d.win(m.as_str(), WVal::Int(v.num / v.den));
+                    }
+                }
+                out.push(d.note(tr!(
+                    "ヒント: 条件が間違っているなら直してください。合っているなら、この行を消して、その組み合わせの答えを表で決めてください。",
+                    "hint: if a condition is wrong, correct it. If they are right, delete this line and decide in the tables what the rule answers for that combination."
+                )));
+            }
+            Possible::Unknown => {
+                let mut d = Diag::error("E143", tr!("`{said}` を定義から確かめられません", "`{said}` cannot be shown from the definitions"))
+                    .at(at)
+                    .mark(n.span.clone(), tr!("この組み合わせが起こらないとは示せません", "this cannot be shown not to occur"))
+                    .fix_kind(FixKind::None)
+                    .note(tr!(
+                        "表の検査が外すのは、確かめられた組み合わせだけです。起こるとも起こらないとも示せない行で表から外すと、ページに書く「起こらない」の説明がつきません。",
+                        "The check of a table takes out only what has been shown. Taking a combination out on a line that shows neither, the page's word that it does not happen would have nothing behind it."
+                    ));
+                for m in n.names() {
+                    if !walks.knows(m) {
+                        d = d.note(tr!("`{m}` の定義を読めません。", "The definition of `{m}` cannot be read."));
+                    }
+                }
+                out.push(d.note(tr!(
+                    "ヒント: この行を消して、その組み合わせの答えを表で決めてください。",
+                    "hint: delete this line and decide in the tables what the rule answers for that combination."
+                )));
+            }
+        }
+    }
+    out
+}
+
+/// The questions a `never` line comes to: one for each way its cells can be met, each what it asks
+/// of truth values and enums and what it asks of numbers. A set of numbers and the opposite of one
+/// are several ways, and there is no inequality for either. `None` for a cell that cannot be put
+/// as a question: a value of an optional name, whose absence no question here says anything of,
+/// or a prefix.
+#[allow(clippy::type_complexity)]
+fn never_ways(n: &NeverLine, c: &Checked) -> Option<Vec<(Vec<(String, Ask)>, Vec<Ineq>)>> {
+    let mut ways: Vec<(Vec<(String, Ask)>, Vec<Ineq>)> = vec![(Vec::new(), Vec::new())];
+    for (ci, k) in n.conds.iter().enumerate() {
+        let name = &k.name.text;
+        let ty = c.ty_of(name)?;
+        let here: Vec<(Option<Ask>, Vec<Ineq>)> = match &ty {
+            Ty::Opt(_) | Ty::Str => return None,
+            Ty::Bool => truths_of(&k.cell)?.into_iter().map(|b| (Some(Ask::Truth(b)), Vec::new())).collect(),
+            Ty::Enum(e) => {
+                let all = c.enums.get(e).cloned().unwrap_or_default();
+                let vs = match &k.cell {
+                    Cell::Ranked { values, .. } => values.clone(),
+                    cell => super::cell_values(cell, c, &all)?,
+                };
+                vec![(Some(Ask::Words(vs)), Vec::new())]
+            }
+            _ => number_ways(&k.cell, &ty, c.wire_scale(name), name, ci)?.into_iter().map(|q| (None, q)).collect(),
+        };
+        let mut next = Vec::new();
+        for (asks, ineqs) in &ways {
+            for (ask, q) in &here {
+                let (mut a, mut i) = (asks.clone(), ineqs.clone());
+                a.extend(ask.iter().map(|x| (name.clone(), x.clone())));
+                i.extend(q.iter().cloned());
+                next.push((a, i));
+            }
+        }
+        if next.len() > 64 {
+            return None;
+        }
+        ways = next;
+    }
+    Some(ways)
+}
+
+/// The truth values a cell on a boolean name takes.
+fn truths_of(cell: &Cell) -> Option<Vec<bool>> {
+    let word = |l: &Lit| match l {
+        Lit::Word(w) if w == crate::kw::TRUE => Some(true),
+        Lit::Word(w) if w == crate::kw::FALSE => Some(false),
+        _ => None,
+    };
+    match cell {
+        Cell::Lit(l) => Some(vec![word(l)?]),
+        Cell::Set(ls) => ls.iter().map(word).collect(),
+        Cell::Not(ls) => {
+            let out = ls.iter().map(word).collect::<Option<Vec<bool>>>()?;
+            Some([true, false].into_iter().filter(|b| !out.contains(b)).collect())
+        }
+        _ => None,
+    }
+}
+
+/// The inequalities of each way a cell on a number can be met.
+fn number_ways(cell: &Cell, ty: &Ty, sc: i128, name: &str, at: usize) -> Option<Vec<Vec<Ineq>>> {
+    let ineqs = |cell: &Cell| super::cell_ineqs(cell, ty, sc, name, at);
+    match cell {
+        Cell::Set(ls) => ls.iter().map(|l| ineqs(&Cell::Lit(l.clone()))).collect(),
+        Cell::Not(ls) => {
+            let value = |l: &Lit| match l {
+                Lit::Num(n) => crate::types::lit_value_in_pub(n, ty),
+                Lit::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
+                _ => None,
+            };
+            let mut ls: Vec<(Rat, Lit)> = ls.iter().map(|l| Some((value(l)?, l.clone()))).collect::<Option<_>>()?;
+            ls.sort_by(|a, b| a.0.cmp_to(b.0));
+            let (first, last) = (ls.first()?.1.clone(), ls.last()?.1.clone());
+            let mut pieces = vec![Cell::Cmp(vec![(CmpOp::Lt, first)])];
+            pieces.extend(ls.windows(2).map(|w| Cell::Cmp(vec![(CmpOp::Gt, w[0].1.clone()), (CmpOp::Lt, w[1].1.clone())])));
+            pieces.push(Cell::Cmp(vec![(CmpOp::Gt, last)]));
+            pieces.iter().map(ineqs).collect()
+        }
+        Cell::Lit(_) | Cell::Cmp(_) => Some(vec![ineqs(cell)?]),
+        _ => None,
+    }
+}
+
+/// A condition on a number opened at one end, the one that says the most first.
+fn wider_cells(cell: &Cell) -> Vec<Cell> {
+    match cell {
+        Cell::Lit(l @ Lit::Num(_)) | Cell::Lit(l @ Lit::Date(..)) => vec![Cell::Cmp(vec![(CmpOp::Ge, l.clone())]), Cell::Cmp(vec![(CmpOp::Le, l.clone())])],
+        Cell::Cmp(cs) if cs.len() == 2 => vec![Cell::Cmp(vec![cs[0].clone()]), Cell::Cmp(vec![cs[1].clone()])],
+        _ => Vec::new(),
+    }
 }
 
 /// The truth value a cell on a boolean column asks for, where it asks for one.

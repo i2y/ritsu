@@ -121,7 +121,7 @@ pub fn entries() -> Vec<Entry> {
             "E206",
             tr!("規則か日付に渡す値が、入力の範囲を外れるか、規則の前提を破りえます", "A value given to a rule or a date can be outside its input's range, or break a precondition of the rule"),
             tr!(
-                "計算した値で規則や日付の関数に渡す属性・input・定数の範囲が、その入力の範囲に収まらないとき。規則の、順序のある列挙の入力に範囲があるとき（`range >=basic <=gold`）は、渡す列挙の値が、範囲に入らない値になりうるとき。渡す値の範囲の中に、規則の前提（`constraint`）を破る例があるとき。",
+                "計算した値で規則や日付の関数に渡す属性・input・定数の範囲が、その入力の範囲に収まらないとき。規則の、順序のある列挙の入力に範囲があるとき（`range >=basic <=gold`）は、渡す列挙の値が、範囲に入らない値になりうるとき。渡す値の範囲の中に、規則の前提（`constraint` と `never`）を破る例があるとき。",
                 "The range of an attribute, an input or a constant a computed value gives to a rule or a date is not within the range of the input it is given to — for a rule's input of an ordered enum with a range (`range >=basic <=gold`), the value of an enum given can be one the range does not let in; or, over the ranges given, an example breaks a precondition (`constraint`) of the rule."
             ),
             tr!(
@@ -144,8 +144,8 @@ pub fn entries() -> Vec<Entry> {
             "W201",
             tr!("規則に渡す値が規則の前提を守るかを、決められません", "Whether the values given to a rule keep its precondition cannot be decided"),
             tr!(
-                "渡す値の範囲で、規則の前提（`constraint`）を守るかを rulec が決められないとき。生成するコードは、走らせたときに前提を確かめ、破ればリクエストを拒みます。",
-                "rulec cannot decide whether a precondition (`constraint`) of the rule holds over the ranges given; the generated code checks it when it runs, and denies the request when it breaks."
+                "渡す値の範囲で、規則の前提（`constraint` と `never`）を守るかを rulec が決められないとき。生成するコードは、走らせたときに前提を確かめ、破ればリクエストを拒みます。",
+                "rulec cannot decide whether a precondition (`constraint` or `never`) of the rule holds over the ranges given; the generated code checks it when it runs, and denies the request when it breaks."
             ),
             tr!("渡す値の範囲を狭めると、決められることがあります。", "Narrowing the ranges given can let it be decided."),
             Repro::Later,

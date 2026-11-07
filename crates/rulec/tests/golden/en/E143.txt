@@ -1,0 +1,8 @@
+error[E143]: A `never` line cannot be shown from the definitions
+  --> tests/mutants/m_e143.rule:17 never
+   |
+17 | never all_fees > 900USD
+   |       ^^^^^^^^ all_fees is a value the rule computes
+   |
+ The check of a table reads only lines it can hold to something, and a value the rule computes cannot be held to anything here, so this cannot take a combination out of the tables.
+ Write the `never` over the inputs the value is computed from, or write a row for the combination.

@@ -589,9 +589,9 @@ pub enum NoAnswer {
 /// answers over the points of the random inputs asks of each point. The inputs are taken to be
 /// inside their ranges and of their types; what this looks at is the rest of the door.
 pub fn answer(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Result<Vec<(String, Option<Val>)>, NoAnswer> {
-    if !f.constraints.is_empty() {
+    if !f.constraints.is_empty() || !f.nevers.is_empty() {
         let a: std::collections::BTreeMap<String, Val> = inputs.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        if !crate::vectors::allowed(f, &a) {
+        if !crate::vectors::allowed(f, c, &a) {
             return Err(NoAnswer::Refused);
         }
     }
@@ -1302,7 +1302,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
         // at the door, and the checker never demanded a row for it either.
         {
             let a: std::collections::BTreeMap<String, Val> = env.clone().into_iter().collect();
-            if !crate::vectors::allowed(f, &a) {
+            if !crate::vectors::allowed(f, c, &a) {
                 for k in &f.constraints {
                     if crate::vectors::constraint_holds(k, &|n| a.get(n)) {
                         continue;
@@ -1326,6 +1326,30 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                                 "例の値を直すか、その組み合わせが本当に起きるなら制約のほうを消してください。",
                                 "Correct the example's values, or drop the constraint if that combination really does happen."
                             )),
+                    );
+                }
+                for n in f.door_nevers() {
+                    if crate::vectors::never_clear(n, c, &|m| a.get(m)) {
+                        continue;
+                    }
+                    let said = n.said();
+                    let mut d = Diag::error("E019", tr!("例が、起こらないとした組み合わせです", "An example is a combination a `never` line rules out"))
+                        .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                        .mark(row.span.clone(), tr!("この入力は `{said}` に当たります", "this input falls under `{said}`"));
+                    for (col, _) in &ex.inputs {
+                        if let Some(v) = env.get(col) {
+                            d = d.win(col.clone(), wval(c, col, v));
+                        }
+                    }
+                    out.push(
+                        d.note(tr!(
+                            "`never` の行は「この組み合わせは起こらない」という宣言で、表はこの組み合わせの行を持たなくてよく、生成コードも入口で受け付けません。",
+                            "A `never` line declares that a combination does not happen: the tables need no row for it, and the generated code refuses it at the door."
+                        ))
+                        .note(tr!(
+                            "例の値を直すか、その組み合わせが本当に起こるなら `never` の行を消してください。",
+                            "Correct the example's values, or drop the `never` line if that combination really does happen."
+                        )),
                     );
                 }
                 continue;

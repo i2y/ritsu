@@ -364,6 +364,9 @@ pub enum Proof {
     Farkas(fourier::Refutation),
     /// The strings the case lets a term be are all among the ones asked for (§15.142).
     Within,
+    /// No whole number holds, which splitting the case into smaller ones settled; there is no one
+    /// refutation to show for that.
+    Whole,
 }
 
 /// What a search for a point found.
@@ -408,7 +411,7 @@ impl Relation {
     }
 
     /// The cases, or the single case with nothing in it when there were too many to open.
-    fn each(&self) -> Vec<Vec<usize>> {
+    pub fn each(&self) -> Vec<Vec<usize>> {
         self.cases.clone().unwrap_or_else(|| vec![Vec::new()])
     }
 
@@ -518,7 +521,7 @@ impl Relation {
                 }
                 // No whole point in this case, settled by splitting it; there is no single
                 // refutation to show for that, and none is needed to say there is no point.
-                Some(None) => {}
+                Some(None) => proofs.push(Proof::Whole),
                 None => unsure = true,
             }
         }

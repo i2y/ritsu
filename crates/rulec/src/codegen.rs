@@ -3262,8 +3262,30 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("{indent}{}\n", sp.close));
             }
         }
+        for n in self.f.door_nevers() {
+            let said = n.said();
+            let conds = self.never_conds(n, lang, local);
+            o.push_str(&format!("{indent}{} {}\n", sp.comment, tr!("起こらない組み合わせ: {said}", "does not happen: {said}")));
+            o.push_str(&format!("{indent}{}\n", (sp.if_head)(&conds.join(sp.and))));
+            o.push_str(&raise(&crate::door::never(&said)));
+            if !sp.close.is_empty() {
+                o.push_str(&format!("{indent}{}\n", sp.close));
+            }
+        }
         o.push_str(&self.day_guards(local, lang, indent, &raise));
         o
+    }
+
+    /// What one `never` line tests, one condition for each cell, as a row of a table tests it
+    /// (§15.282).
+    fn never_conds(&self, n: &crate::ast::NeverLine, lang: Lang, local: &dyn Fn(&str) -> String) -> Vec<String> {
+        n.conds
+            .iter()
+            .filter_map(|k| {
+                let name = &k.name.text;
+                self.cell(lang, &k.cell, &local(name), &self.ty_of(name), self.scale(name))
+            })
+            .collect()
     }
 
     /// The door for a date input whose range is the days of a koyomi date (§15.174): the checks
@@ -8136,6 +8158,12 @@ impl<'a> Gen<'a> {
                 let (a, b) = self.constraint_sides(k, &|n| name(n).unwrap_or_default(), false);
                 decls.push_str(&format!("        kani::assume({a} {} {b});\n", k.op.word()));
             }
+        }
+        // A `never` line is part of the declared domain the same way (§15.282).
+        for n in self.f.door_nevers() {
+            let name = |m: &str| self.f.inputs.iter().find(|i| i.name.text == m).map(|i| pub_name(&i.name)).unwrap_or_default();
+            let conds = self.never_conds(n, Lang::Rs, &name);
+            decls.push_str(&format!("        kani::assume(!({}));\n", conds.join(" && ")));
         }
         let mut unwind = String::new();
         let mut unwound = 0;

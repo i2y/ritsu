@@ -1018,6 +1018,37 @@ pub enum PreTest {
     /// input, the value the call gives it, the file and the date as the rule names them, and the
     /// days, `YYYY-MM-DD` in order
     Days { input: String, value: TExpr, file: String, date: String, days: Vec<String> },
+    /// a `never` line of the rule (rulec's §15.282), which holds when not all of its conditions do:
+    /// the line, and each condition as the input's name, the value the call gives it and its test
+    Never { said: String, conds: Vec<(String, TExpr, ritsu_ports::NeverTest)> },
+}
+
+/// How a platform's code writes the test of a `never` line.
+pub struct NeverCode<'a> {
+    /// A value, as the platform's code reads it.
+    pub expr: &'a dyn Fn(&TExpr) -> String,
+    /// A value given on the wire, as a literal.
+    pub lit: &'a dyn Fn(&ritsu_ports::Value) -> String,
+    /// `value in [literals]`, from the code of the value and the literals.
+    pub among: &'a dyn Fn(&str, &[String]) -> String,
+    pub not: &'a dyn Fn(&str) -> String,
+    pub and: &'a str,
+}
+
+/// The test of a `never` line as a platform's code writes it: it holds when not all its conditions do.
+pub fn never_code(conds: &[(String, TExpr, ritsu_ports::NeverTest)], w: &NeverCode) -> String {
+    let one = |(_, e, t): &(String, TExpr, ritsu_ports::NeverTest)| -> String {
+        let v = (w.expr)(e);
+        match t {
+            ritsu_ports::NeverTest::Among { values, yes } => {
+                let is = (w.among)(&v, &values.iter().map(|x| (w.lit)(x)).collect::<Vec<_>>());
+                if *yes { is } else { (w.not)(&is) }
+            }
+            ritsu_ports::NeverTest::Compare(ops) => ops.iter().map(|(op, k)| format!("{v} {op} {k}")).collect::<Vec<_>>().join(w.and),
+            ritsu_ports::NeverTest::Other => "true".to_string(),
+        }
+    };
+    (w.not)(&conds.iter().map(one).map(|c| format!("({c})")).collect::<Vec<_>>().join(w.and))
 }
 
 /// One side of a relation as the rule writes it: `asked`, or `discount + points`.
@@ -1036,6 +1067,7 @@ impl PreCheck {
         match &self.test {
             PreTest::Relation { left, right, .. } => left.iter().chain(right.iter()).map(|(_, e)| e).collect(),
             PreTest::Days { value, .. } => vec![value],
+            PreTest::Never { conds, .. } => conds.iter().map(|(_, e, _)| e).collect(),
         }
     }
 
@@ -1044,6 +1076,7 @@ impl PreCheck {
         match &self.test {
             PreTest::Relation { left, op, right } => format!("{} {op} {}", side_names(left), side_names(right)),
             PreTest::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
+            PreTest::Never { said, .. } => said.clone(),
         }
     }
 

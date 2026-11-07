@@ -511,6 +511,16 @@ awk '/^# 監査の計画が決めた割合/ { skip = 1 } skip && /^examples$/ { 
 # beside it. The share held to a tenth of the discount: a bill of one line takes all of it.
 awk '{ sub(/^  share : money\[JPY\]  round down\(1JPY\)  range >=0JPY <=1_000_000JPY$/, "  share : money[JPY]  round down(1JPY)  range >=0JPY <=100_000JPY"); print }' "$C/pro_rata_allocation.rule" > "$M/m_e140.rule"
 awk '{ sub(/^  配分額\(share\) : money\[円\]  round down\(1円\)  range >=0円 <=100万円$/, "  配分額(share) : money[円]  round down(1円)  range >=0円 <=10万円"); print }' "$C/比例配分.rule" > "$M/m_e140ja.rule"
+# --- `never` lines (§15.282). The English rule, and its Japanese version beside it.
+# A name the rule does not have
+awk '/^never tier = gold, tools = 0$/ { sub(/tools = 0/, "tool = 0") } { print }'               "$C/order_fee.rule"       > "$M/m_e141.rule"
+awk '/^never 区分 = 上位, 工具数 = 0$/ { sub(/工具数 = 0/, "工具 = 0") } { print }'                 "$C/注文の手数料.rule"     > "$M/m_e141ja.rule"
+# An order with four fragile lines said not to happen
+awk '{ print } /^never has_fragile = false, fragile >= 1$/ { print "never has_fragile = true, fragile = 4" }'  "$C/fragile_lines_fee.rule"     > "$M/m_e142.rule"
+awk '{ print } /^never 割れ物あり = false, 割れ物数 >= 1$/ { print "never 割れ物あり = true, 割れ物数 = 4" }'  "$C/割れ物の明細の手数料.rule" > "$M/m_e142ja.rule"
+# A column the rule computes
+awk '{ print } /^never tools = 0, total > 0USD$/ { print "never all_fees > 900USD" }'           "$C/order_fee.rule"       > "$M/m_e143.rule"
+awk '{ print } /^never 工具数 = 0, 合計 > 0USD$/ { print "never 全部の料金 > 900USD" }'           "$C/注文の手数料.rule"     > "$M/m_e143ja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

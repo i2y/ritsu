@@ -74,7 +74,7 @@ pub use flows::{
 };
 pub use maps::{MapFacts, MapRelationship, Maps, PublishedOperation};
 pub use programs::{At, CallVerdict, Crossing, Ends, Given, ProgramCrossings, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs, Seen, Verdicts};
-pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
+pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, NeverCond, NeverTest, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 
 use ritsu_base::text::Text;
 

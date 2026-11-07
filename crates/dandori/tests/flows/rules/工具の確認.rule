@@ -1,0 +1,32 @@
+rule 工具の確認(tool_route_ja) v1
+description "注文の工具をすぐに出すか、先に確かめるかを決める。呼ぶ側は三つの組み合わせを起こさない。工具のある注文は部品だけではなく、工具のない注文は工具を数えず、上位の注文は工具が一つ以上ある。"
+
+enum 経路(path) = すぐ(at_once) | 確認(review)
+enum 区分(tier) = 通常(basic) | 上位(gold)
+
+inputs
+  工具あり(has_tool)  : bool
+  全部部品(all_parts) : bool
+  工具数(tools)       : number  range >=0 <=5
+  区分(tier)          : 区分
+
+never 工具あり = true, 全部部品 = true
+never 工具あり = false, 工具数 >= 1
+never 区分 = 上位, 工具数 = 0
+
+outputs
+  行き先(route) : 経路
+
+table 振り分け(pick)
+policy unique
+| 工具あり | 区分 | 工具数 | -> 行き先 : 経路 |
+| true     | 通常 | <=2    | すぐ             |
+| true     | 通常 | >=3    | 確認             |
+| true     | 上位 | -      | すぐ             |
+| false    | -    | -      | すぐ             |
+
+examples
+| 工具あり | 全部部品 | 工具数 | 区分 | -> 行き先 |
+| true     | false    | 2      | 上位 | すぐ      |
+| true     | false    | 3      | 通常 | 確認      |
+| false    | true     | 0      | 通常 | すぐ      |

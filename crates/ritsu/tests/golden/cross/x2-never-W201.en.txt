@@ -1,0 +1,13 @@
+ok refund_route.rule
+warning[dandori W104]: refund.flow:22:1: nothing says what range `shipped` is in (the input `shipped` has no range), and `shipped` of the rule `check` takes `>=0 <=100`
+    22 |   let decision = check(shipped: shipped, asked: asked, express: express)
+refund.flow: ok (1 warning(s))
+warning[ritsu W201]: refund.flow:22:1: Whether the call of the rule check keeps its precondition `never shipped = 0, asked >= 1` cannot be decided
+    22 |   let decision = check(shipped: shipped, asked: asked, express: express)
+  = nothing says what range `shipped` is in
+  = The workflow's code that `ritsu dandori gen` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
+warning[ritsu W201]: refund.flow:22:1: Whether the call of the rule check keeps its precondition `never express = true, shipped >= 50` cannot be decided
+    22 |   let decision = check(shipped: shipped, asked: asked, express: express)
+  = ranges alone cannot show that the values given are never the combination of `never express = true, shipped >= 50`
+  = The workflow's code that `ritsu dandori gen` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
+ritsu check: 2 files (rulec 1, dandori 1): all pass (3 warnings); borders between the languages: 2 checked, 2 undecided

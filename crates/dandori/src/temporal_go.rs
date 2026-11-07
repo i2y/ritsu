@@ -3624,6 +3624,34 @@ impl<'a> Gen<'a> {
                         self.line(d + 1, &fail);
                         self.line(d, "}");
                     }
+                    PreTest::Never { conds, .. } => {
+                        // gofmt writes the conditions of an `&&` with spaces and parentheses as they are
+                        use ritsu_ports::{NeverTest, Value};
+                        let one = |(_, e, t): &(String, TExpr, NeverTest)| -> String {
+                            let v = self.expr(e);
+                            match t {
+                                NeverTest::Compare(ops) => ops.iter().map(|(op, k)| format!("ddNum({v}) {op} {k}")).collect::<Vec<_>>().join(" && "),
+                                NeverTest::Among { values, yes } => {
+                                    let is = values
+                                        .iter()
+                                        .map(|x| match x {
+                                            Value::Bool(b) => format!("{v} == any({b})"),
+                                            Value::Int(n) => format!("ddNum({v}) == {n}"),
+                                            Value::Str(s) | Value::Enum(s) | Value::Date(s) => format!("ddStr({v}) == {}", q(s)),
+                                            _ => "false".to_string(),
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join(" || ");
+                                    if *yes { is } else { format!("!({is})") }
+                                }
+                                NeverTest::Other => "true".to_string(),
+                            }
+                        };
+                        let all = conds.iter().map(|c| format!("({})", one(c))).collect::<Vec<_>>().join(" && ");
+                        self.line(d, &format!("if {all} {{"));
+                        self.line(d + 1, &fail);
+                        self.line(d, "}");
+                    }
                     PreTest::Days { value, days, .. } => {
                         self.line(d, &format!("switch ddStr({}) {{", self.expr(value)));
                         self.line(d, &format!("case {}:", days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")));

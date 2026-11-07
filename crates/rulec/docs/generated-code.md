@@ -316,7 +316,7 @@ Beside the module, `single_coupon_proof.rs` (`--extra proof`) holds proof harnes
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 143 rules it
+a flag because it is the one pass whose cost is noticeable: on the corpus of 149 rules it
 adds about 800 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
@@ -331,8 +331,8 @@ What it holds, over **every** input in the declared domain rather than the vecto
 
 The last one is separate because the overlap is *not* in the artifact: the if/else chain has
 already settled the priority, so the rows are counted beside it, from the same conditions.
-The harness assumes the declared domain — every `range`, and every `constraint` — and calls
-the generated function unchanged.
+The harness assumes the declared domain — every `range`, every `constraint` and every `never`
+line that names an input — and calls the generated function unchanged.
 
 A rule that walks a sequence gets the first three; its per-element tables and the ones that
 read a count cannot be replayed outside the walk, so no `rows_` is written for them. Two
@@ -1173,7 +1173,7 @@ def prize_lottery_chances(campaign: bool) -> Chances:
 the chance of the third prize out of a campaign is 50/1000. The counts are
 whole numbers, so the chance is exact, and a caller turns it into a fraction or a percentage as it
 needs. It is the rule's own function that is run, so the counts never disagree with it: a point
-the function refuses — one a `constraint` rules out, a drawn value past the weights — is no point,
+the function refuses — one a `constraint` or a `never` line rules out, a drawn value past the weights — is no point,
 and when no point is left, the function raises the last refusal, as the rule would. The answers
 come in the order they are first met: the first random input outermost, each from its lowest value
 (an enum's values in their order, `false` before `true`).
@@ -1597,8 +1597,9 @@ pointer of its own only where there is a value:
 checked against its declared `range`, and every enum input against its set of values — an
 ordered enum's with a `range` against the values the range lets in (§15.210); then
 every `constraint` — between two inputs, or between inputs added up and one more, the sum taken
-on the step the inputs share, which E108 has shown fits in int64 — and a date input that takes
-its range from a koyomi date against the days that date comes to. If the check were absent, a caller outside the
+on the step the inputs share, which E108 has shown fits in int64 — and every `never` line that names
+an input, with the line quoted (`this combination does not happen: never has_tool = true, all_parts
+= true`), and a date input that takes its range from a koyomi date against the days that date comes to. If the check were absent, a caller outside the
 declared domain would get a silently wrong number instead of an error — and the completeness
 proof says nothing about inputs the rule never declared.
 
@@ -1706,7 +1707,7 @@ value raised in some languages and was read as a value in others.
 
 The NumPy plan carries the same guard as data, in the language the code was generated in, and
 its evaluator checks a whole column at a time in the same order: each column's type, enum
-and range, then each constraint, then the days. It refuses the first element that fails,
+and range, then each constraint, then each `never` line, then the days. It refuses the first element that fails,
 with the sentence the other languages raise and the place of that element, so a caller
 can tell which one it was without parsing the text:
 

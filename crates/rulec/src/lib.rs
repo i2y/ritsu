@@ -288,6 +288,8 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
         shadow.confirm += r.shadow.confirm;
         nodes += r.nodes;
     }
+    // Whether each `never` line that stands on definitions really does (§15.282).
+    diags.extend(projection::walks::never_lines(f, &t, path));
     // A row the definitions of its reads never reach (§15.281), once the tables have said which
     // rows are dead already and the contract which ones it never lets through.
     {
@@ -412,7 +414,7 @@ fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked)
         // E131 (§15.227): an input whose terms put the open value outside the range it declares.
         let open_range = f.opens.iter().find(|o| o.span.same(&w.span)).and_then(|o| t.opens.get(&o.name.text)).copied();
         let hits = |a: &BTreeMap<String, Val>| -> bool {
-            if !vectors::allowed(f, a) || !vectors::days_ok(t, a) {
+            if !vectors::allowed(f, t, a) || !vectors::days_ok(t, a) {
                 return false;
             }
             let (_, _, b) = eval::run_bindings(f, t, a.clone().into_iter().collect());

@@ -1,0 +1,50 @@
+rule 注文の手数料(order_fee_ja) v1
+description "呼ぶ側が数えた値から、注文の手数料を決める。呼ぶ側は三つの組み合わせを渡さないので、表にその行は無い。それぞれを `never` の行に書くと、ページに載り、どの生成先も入口でその呼び出しを受け付けない"
+
+enum 区分(tier) = 通常(basic) | 上位(gold)
+
+inputs
+  工具あり(has_tool)    : bool
+  全部部品(all_parts)   : bool
+  区分(tier)            : 区分
+  工具数(tools)         : number  range >=0 <=5
+  合計(total)           : money[USD]  range >=0USD <=1000USD
+
+# 真偽は `constraint` に書けない。上位の注文にはかならず工具がある。
+never 工具あり = true, 全部部品 = true
+never 区分 = 上位, 工具数 = 0
+never 工具数 = 0, 合計 > 0USD
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table 取扱(handling)
+policy unique
+| 工具あり | 全部部品 | -> 取扱料(handling_fee) : money[USD] |
+| true     | false    | 5USD                                 |
+| false    | true     | 0USD                                 |
+| false    | false    | 2USD                                 |
+
+table 区分別(by_tier)
+policy unique
+| 区分 | 工具数 | -> 区分料(tier_fee) : money[USD] |
+| 通常 | 0      | 0USD                             |
+| 通常 | >=1    | 3USD                             |
+| 上位 | >=1    | 1USD                             |
+
+table 合計別(by_total)
+policy unique
+| 工具数 | 合計     | -> 合計料(total_fee) : money[USD] |
+| 0      | 0USD     | 0USD                              |
+| >=1    | <=100USD | 4USD                              |
+| >=1    | >100USD  | 0USD                              |
+
+define 全部の料金(all_fees) : money[USD] = 取扱料 + 区分料 + 合計料
+
+result 手数料 = 全部の料金
+
+examples
+| 工具あり | 全部部品 | 区分 | 工具数 | 合計   | -> 手数料 |
+| true     | false    | 上位 | 2      | 50USD  | 10USD     |
+| false    | true     | 通常 | 1      | 500USD | 3USD      |
+| false    | false    | 通常 | 0      | 0USD   | 2USD      |

@@ -692,6 +692,8 @@ pub struct Callee {
     /// (§15.230): held to the same checks of type and range an input's binding is.
     pub fields: Vec<(String, CalleeInput)>,
     pub constraints: Vec<Constraint>,
+    /// The `never` lines the callee's door reads (§15.282).
+    pub nevers: Vec<NeverLine>,
     /// Enum name → its values, for the mapping of a bound enum input.
     pub enums: Vec<(String, Vec<String>)>,
 }
@@ -1062,6 +1064,72 @@ pub struct Constraint {
     pub span: Span,
 }
 
+/// `never has_tool = true, all_parts = true` — a combination of values that does not happen
+/// (§15.282). The tables are not asked for a row there and no overlap is said there, and the door
+/// refuses it. A line of inputs and summaries that all have definitions is held to them; a line
+/// that names an input with no `from` is the caller's promise, as a `constraint` is.
+#[derive(Debug, Clone)]
+pub struct NeverLine {
+    pub conds: Vec<NeverCond>,
+    pub span: Span,
+}
+
+/// One condition of a `never` line: a name, and a cell of the kind a table's column takes.
+#[derive(Debug, Clone)]
+pub struct NeverCond {
+    pub name: Name,
+    pub cell: Cell,
+}
+
+/// What a `never` line stands on (§15.282).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NeverKind {
+    /// Every name is defined by a `from` or a summary, and the check showed the combination from
+    /// those definitions never comes.
+    Definitions,
+    /// Some name is an input with no `from`: nothing here defines it, so the caller promises it.
+    Caller,
+}
+
+impl NeverLine {
+    /// Every name the line tests, in the order written.
+    pub fn names(&self) -> impl Iterator<Item = &String> {
+        self.conds.iter().map(|c| &c.name.text)
+    }
+
+    /// The line as it is written, in one spelling: `never tools = 0, total >= 1`.
+    pub fn said(&self) -> String {
+        let conds: Vec<String> = self.conds.iter().map(NeverCond::said).collect();
+        format!("{} {}", crate::kw::NEVER, conds.join(", "))
+    }
+}
+
+impl NeverCond {
+    /// `tools = 0`, `state = paid | shipped`, `state = not: paid | shipped`, `total >= 1 < 5`.
+    pub fn said(&self) -> String {
+        let name = &self.name.text;
+        let bars = |ls: &[Lit]| ls.iter().map(lit_text).collect::<Vec<_>>().join(" | ");
+        match &self.cell {
+            Cell::Lit(l) => format!("{name} = {}", lit_text(l)),
+            Cell::Set(ls) => format!("{name} = {}", bars(ls)),
+            Cell::Not(ls) => format!("{name} = {}: {}", crate::kw::NOT, bars(ls)),
+            Cell::Nothing => format!("{name} = {}", crate::kw::NONE),
+            Cell::Cmp(ops) => {
+                let ops: Vec<String> = ops.iter().map(|(o, l)| format!("{} {}", o.word(), lit_text(l))).collect();
+                format!("{name} {}", ops.join(" "))
+            }
+            Cell::Ranked { ops, .. } => {
+                let ops: Vec<String> = ops.iter().map(|(o, w)| format!("{} {w}", o.word())).collect();
+                format!("{name} {}", ops.join(" "))
+            }
+            Cell::Prefix(ps) => {
+                format!("{name} {} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("{p:?}")).collect::<Vec<_>>().join(" | "))
+            }
+            Cell::DontCare => format!("{name} = -"),
+        }
+    }
+}
+
 impl Constraint {
     /// Every input the constraint names, the left side's first.
     pub fn names(&self) -> impl Iterator<Item = &String> {
@@ -1422,6 +1490,8 @@ pub struct RuleFile {
     pub examples: Vec<Table>,
     /// The relations between inputs that always hold (§15.55).
     pub constraints: Vec<Constraint>,
+    /// The combinations that do not happen (§15.282), under `kw::NEVER` outside a `machine`.
+    pub nevers: Vec<NeverLine>,
     /// The shapes of the caller's objects that inputs are projected from (§15.125).
     pub shapes: Vec<ShapeDecl>,
     /// The contract whose Connect service the rule is served as (§15.274), when it names one.
@@ -1488,6 +1558,29 @@ impl RuleFile {
     }
 
     /// The `count`, `sum`, `max` and `min` lines, in the order written.
+    pub fn is_summary(&self, name: &str) -> bool {
+        self.aggs().any(|d| d.name.text == name)
+    }
+
+    /// What a `never` line stands on (§15.282).
+    pub fn never_kind(&self, n: &NeverLine) -> NeverKind {
+        let promised = n.names().any(|m| self.inputs.iter().any(|i| i.name.text == *m && i.from.is_none()));
+        if promised { NeverKind::Caller } else { NeverKind::Definitions }
+    }
+
+    /// The `never` lines the generated code refuses at its door: those that name an input, whose
+    /// value the caller can pass. A line of summaries alone is worked out inside, so no call
+    /// breaks it (§15.282).
+    pub fn door_nevers(&self) -> impl Iterator<Item = &NeverLine> {
+        self.nevers.iter().filter(|n| n.names().any(|m| self.inputs.iter().any(|i| i.name.text == *m)))
+    }
+
+    /// The cells the `never` lines test a name with.
+    pub fn never_cells<'s>(&'s self, name: &'s str) -> impl Iterator<Item = &'s Cell> {
+        self.nevers.iter().flat_map(|n| n.conds.iter()).filter(move |k| k.name.text == name).map(|k| &k.cell)
+    }
+
+    /// The summaries of the rule.
     pub fn aggs(&self) -> impl Iterator<Item = &AggDecl> {
         self.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None })
     }

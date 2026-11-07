@@ -31,7 +31,9 @@ the same thing, and its generated code is called the same way and answers the sa
    legal. The words of the merging of files came this way: `open`, `combine`, `product`,
    `contribution`, `to`, `into` and `extend` are read by their place in the line, and a rule may
    name an input `open` or `to`. So did `implements`, read only at the head of a line outside
-   every block: a rule may name an input `implements`.
+   every block: a rule may name an input `implements`. `never` was on the list already, and heads a
+   line of its own outside `machine` only when a name, not a `:`, comes after it: a field of an element
+   may still be called `never`.
 3. **What the generated code answers.** For a rule that passes, the code generated in every
    language returns the same outputs for the same inputs under every 1.x, and so does the
    reference evaluator: a record replayed under a later 1.x gets the answer it got before.
@@ -93,7 +95,7 @@ as well: "the crate `rulec`", after `i2y/tap/ritsu` in Homebrew. -->
   the release notes name it.
 - **An input a door let through.** If the code generated in some language answered an input
   outside its contract that the reference evaluator refuses — a value of another kind, an input
-  that is not there, a combination a `constraint` rules out — the fix makes it refuse the input,
+  that is not there, a combination a `constraint` or a `never` line rules out — the fix makes it refuse the input,
   as the other languages do, so a call that was answered can fail from then on. The sentence a
   door says is prose. The release notes name the change.
 - **An input a door refused inside its contract.** If the code generated in some language, or

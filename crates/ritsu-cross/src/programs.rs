@@ -289,6 +289,8 @@ fn run_breaks(rules: &dyn Rules, rule: &Path, p: &Precondition, s: &Seen) -> boo
             _ => false,
         },
         Precondition::Days { input, days, .. } => s.given.iter().any(|(n, v)| n == input && day_of(v).is_some_and(|d| !days.contains(&d))),
+        // Every value the line names was given, and meets its condition.
+        Precondition::Never { conds, .. } => conds.iter().all(|k| s.given.iter().find(|(n, _)| *n == k.name).is_some_and(|(_, v)| k.test.holds(v) == Some(true))),
     }
 }
 
@@ -346,6 +348,13 @@ fn precondition(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, facts: &Rul
             match crate::preconditions::decide(rules, dates, &call.rule, p, &flows) {
                 Answer::Holds => ByRanges::Shown,
                 _ => ByRanges::Open(relation_open(rules, facts, call, p, &left.iter().chain(right.iter()).cloned().collect::<Vec<_>>(), &pre)),
+            }
+        }
+        Precondition::Never { conds, .. } => {
+            let flows: Vec<CallArg> = call.args.iter().map(as_flows).collect();
+            match crate::preconditions::decide(rules, dates, &call.rule, p, &flows) {
+                Answer::Holds => ByRanges::Shown,
+                _ => ByRanges::Open(relation_open(rules, facts, call, p, &conds.iter().map(|k| k.name.clone()).collect::<Vec<_>>(), &pre)),
             }
         }
         // kaname knows how many elements a list can have: the bound is asked with it
@@ -465,6 +474,7 @@ fn rule_call(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, call: &Program
                     Precondition::Sum { over, .. } => vec![over.clone()],
                     Precondition::Length { sequence, .. } => vec![sequence.clone()],
                     Precondition::Days { input, .. } => vec![input.clone()],
+                    Precondition::Never { conds, .. } => conds.iter().map(|k| k.name.clone()).collect(),
                 };
                 let at = names.iter().filter_map(|n| s.given.iter().find(|(m, _)| m == n).map(|(_, v)| format!("{n} = {}", value_text(v)))).collect::<Vec<_>>().join(", ");
                 let call_text = &s.call;

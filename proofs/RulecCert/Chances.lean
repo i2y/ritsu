@@ -2030,6 +2030,8 @@ structure RunClaim where
   randCols : List String
   draws : List RIn
   cons : List (List String × Cmp × List String)
+  /-- The `never` lines: the conditions of each, on the names it reads. -/
+  nevers : List (List (String × CCell)) := []
   ins : List (String × CCell)
   outs : List (String × CCell)
   rounds : String → Option Rat
@@ -2147,8 +2149,11 @@ def withValues (K : RunClaim) (inp : String → Option Val) (env : String → Op
 def callAt (K : RunClaim) (rnd : Rat → Rat → Rat) (xs rs : List Val) : String → Option Val :=
   K.withValues (K.inputs xs rs) (envAt rnd K.values (K.nums (K.inputs xs rs)))
 
-/-- The door the call passes: every `constraint` line holds of its inputs. -/
-def door (K : RunClaim) (xs rs : List Val) : Bool := K.cons.all (consHolds (K.inputs xs rs))
+/-- The door the call passes: every `constraint` line holds of its inputs, and no `never` line has all
+    its conditions met by them. -/
+def door (K : RunClaim) (xs rs : List Val) : Bool :=
+  K.cons.all (consHolds (K.inputs xs rs)) &&
+    K.nevers.all (fun line => !line.all (fun q => q.2.passes (K.inputs xs rs q.1)))
 
 /-- Whether the outputs of a call pass the claim's output cells. -/
 def passesAt (K : RunClaim) (rnd : Rat → Rat → Rat) (vals : String → Option Val) : Bool :=

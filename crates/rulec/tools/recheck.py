@@ -52,7 +52,8 @@ What it checks, per table:
   * the table is **complete**: the cover is a tree whose every internal node has one child
     per coordinate of the axis at its depth, so it tiles the space by shape; every leaf
     either names a row that takes the whole subtree, or says why no input reaches it — a
-    `constraint` that cannot hold there, a derived value whose coordinate lies outside
+    `constraint` that cannot hold there, a `never` line whose combination holds all of it, a
+    derived value whose coordinate lies outside
     what the derive can produce, or multipliers that add the box's ends, the derives and
     the constraints up to a contradiction (§15.141). All of those are re-checked here.
   * every numeric axis **tiles**, and on the step its column's values really take
@@ -62,6 +63,14 @@ What it checks, per table:
     pound cut every whole pound leaves the values between two coordinates to no row. Two
     intervals side by side, or one point written twice, are refused (§15.243): the first leaves
     the value they meet at to no row, the second puts it on two coordinates.
+
+What it checks, per `never` line (§15.282): the cells it is read with, that a line the document
+says the definitions prove names only inputs read with `from` or summaries of `elements`, and the
+proof itself. Each way the line can happen is built again here from the walks the certificate
+states, and its system of counts has to add up to a contradiction by the multipliers the
+certificate carries, on rows rebuilt here from those walks. A line that names an input with no
+`from` is the caller's promise and has no proof; the door has to refuse it. A draw under a line is
+not counted in a claim of `chances`.
 
 What it checks, per contract (§15.142): the rule's door — each numeric input's declared
 range at the scale the value travels at, each `constraint` between two of them, each enum
@@ -1310,6 +1319,8 @@ def point_ruled_out(t, path):
     for k in t.get("constraints", []):
         if constraint_rules_out(t, k, path):
             return True
+    if never_rules_out(t, path) is not None:
+        return True
     if any(day_rules_out(t, ai, path) for ai in range(len(path))):
         return True
     if any(truth_rules_out(t, ai, path) for ai in range(len(path))):
@@ -1317,6 +1328,17 @@ def point_ruled_out(t, path):
     if above_rules_out(t, path):
         return True
     return any(derived_rules_out(t, ai, path) for ai in range(len(path)))
+
+
+def never_rules_out(t, path):
+    """The `never` line that takes the whole of this box out, by its place among the table's, or
+    None: every axis the path has fixed is inside the line's box, and every other axis is wholly
+    inside it (rulec's §15.282)."""
+    boxes = t.get("_never_boxes", [])
+    for i, box in enumerate(boxes):
+        if all(path[ai] in box[ai] if ai < len(path) else len(box[ai]) == len(t["axes"][ai]["coords"]) for ai in range(len(t["axes"]))):
+            return i
+    return None
 
 
 def completions(axes, path):
@@ -1684,6 +1706,647 @@ def check_contract(cert, k):
     return f"contract {name}: {shown} of {len(doors)} things the door asks hold in all {len(cases)} cases"
 
 
+# --- `never` lines (rulec's §15.282) -------------------------------------------------------
+#
+# A `never` line takes a combination out of the tables, the way a `constraint` takes a part of
+# the space out. What a table does with it is held to in `check_cover` and `sieve_admits`. What
+# stands behind it is held to here: a line on an input with no definition is the caller's promise,
+# which the door refuses to break and nothing here can show; a line on definitions comes with a
+# proof. The proof says what the collections are made of, how many elements of each kind (a
+# class) there are, and which inequalities add up to something false. This program works out what
+# may be used from what the collections are made of, and never takes an inequality on trust.
+
+def never_cell_words(cert, ty, cell):
+    """The values of an enum a cell takes."""
+    all_values = cert.get("enums", {}).get(ty, [])
+    kind = cell["cell"]
+    if kind == "rank":
+        at = {w: i for i, w in enumerate(all_values)}
+        ops = {"<": lambda a, b: a < b, "<=": lambda a, b: a <= b, ">": lambda a, b: a > b, ">=": lambda a, b: a >= b}
+        if any(x["value"] not in at for x in cell["tests"]):
+            raise Bad(f"a `never` line compares {ty} against a value it does not have")
+        return [w for w in all_values if all(ops[x["op"]](at[w], at[x["value"]]) for x in cell["tests"])]
+    if kind not in ("is", "not"):
+        raise Bad(f"a `never` line reads {ty} with a cell of kind {kind}")
+    words = []
+    for w in cell["words"]:
+        words.extend(GROUPS.get(w, [w]))
+    return [w for w in all_values if w in words] if kind == "is" else [w for w in all_values if w not in words]
+
+
+def wire_scale(cert, name):
+    """The scale a name travels at: a rate's steps, and whole units for everything else."""
+    ty = (cert.get("types", {}).get(name) or "").rstrip("?")
+    return Fraction(cert.get("scales", {}).get(name, 100)) if ty == "rate" else Fraction(1)
+
+
+def form(terms=None, k=0):
+    """A linear form: the names with their coefficients, and what it adds to them."""
+    return (dict(terms or {}), Fraction(k))
+
+
+def form_add(a, b, by=1):
+    terms = dict(a[0])
+    for n, v in b[0].items():
+        terms[n] = terms.get(n, Fraction(0)) + by * v
+    return (terms, a[1] + by * b[1])
+
+
+def form_var(name):
+    return ({name: Fraction(1)}, Fraction(0))
+
+
+def row_le(f, strict=False):
+    """`f <= 0`, or `f < 0`."""
+    return (f[0], f[1], strict)
+
+
+def row_ge(f, strict=False):
+    return ({n: -v for n, v in f[0].items()}, -f[1], strict)
+
+
+def row_key(row):
+    """One inequality, the same whichever positive number it is written times."""
+    terms, k, strict = row
+    terms = {n: v for n, v in terms.items() if v != 0}
+    if not terms:
+        return ((), k, strict)
+    by = abs(terms[min(terms)])
+    return (tuple(sorted((n, v / by) for n, v in terms.items())), k / by, strict)
+
+
+def written_out(row, defs):
+    """A row with each name that stands for what classes come to written as those classes."""
+    out = form({}, row[1])
+    for n, v in row[0].items():
+        out = form_add(out, defs.get(n, form_var(n)), v)
+    return (out[0], out[1], row[2])
+
+
+def never_ways(cert, line):
+    """Each way a line's cells can be met: what it asks of truth values and enums, and of
+    numbers as inequalities at the scale they travel at. In the order the certificate gives."""
+    ways = [([], [])]
+    for k in line["conds"]:
+        name, cell = k["name"], k["cell"]
+        ty = cert.get("types", {}).get(name)
+        kind = cell["cell"]
+        if ty == "bool":
+            if kind not in ("is", "not") or any(w not in ("true", "false") for w in cell["words"]):
+                raise Bad(f"`{line['said']}`: {name} is a truth value and the cell does not say which")
+            if kind == "is":
+                here = [([{"bool": name, "value": w == "true"}], []) for w in cell["words"]]
+            else:
+                here = [([{"bool": name, "value": b}], []) for b in (True, False) if ("true" if b else "false") not in cell["words"]]
+        elif ty in cert.get("enums", {}):
+            here = [([{"str": name, "values": never_cell_words(cert, ty, cell), "in": True}], [])]
+        else:
+            sc = wire_scale(cert, name)
+            def equal_to(v):
+                d = form_add(form_var(name), form({}, v * sc), -1)
+                return [row_le(d), row_ge(d)]
+            def compare(op, v):
+                d = form_add(form_var(name), form({}, v * sc), -1)
+                return {"=": equal_to(v), "<=": [row_le(d)], "<": [row_le(d, True)], ">=": [row_ge(d)], ">": [row_ge(d, True)]}[op]
+            if kind == "cmp":
+                rows = []
+                for x in cell["tests"]:
+                    if num(x["value"]) is None:
+                        raise Bad(f"`{line['said']}`: {name} is compared with a value the certificate cannot say")
+                    rows.extend(compare(x["op"], num(x["value"])))
+                here = [([], rows)]
+            elif kind == "in":
+                here = [([], equal_to(num(v))) for v in cell["values"]]
+            elif kind == "not_in":
+                vs = sorted(num(v) for v in cell["values"])
+                pieces = [compare("<", vs[0])]
+                pieces.extend(compare(">", a) + compare("<", b) for a, b in zip(vs, vs[1:]))
+                pieces.append(compare(">", vs[-1]))
+                here = [([], rows) for rows in pieces]
+            else:
+                raise Bad(f"`{line['said']}`: a cell of kind {kind} on {name} has no proof to read")
+        ways = [(a + x, r + y) for a, r in ways for x, y in here]
+    return ways
+
+
+def test_holds(test, val):
+    """A `where` test on one value: `val` as the certificate writes it."""
+    if test is None:
+        return False
+    if "among" in test:
+        def same(a, b):
+            if "num" in a and "num" in b:
+                return num(a["num"]) == num(b["num"])
+            return a == b
+        return any(same(v, val) for v in test["among"]) == test["yes"]
+    if "num" not in val:
+        return False
+    x = num(val["num"])
+    ops = {"<=": x.__le__, "<": x.__lt__, ">=": x.__ge__, ">": x.__gt__}
+    return all(ops[c["op"]](num(c["value"])) for c in test["cmp"])
+
+
+def test_numbers(test):
+    if test is None:
+        return []
+    if "among" in test:
+        return [num(v["num"]) for v in test["among"] if "num" in v]
+    return [num(c["value"]) for c in test["cmp"]]
+
+
+def test_fits(test, dom):
+    """Whether a test can be asked of a value of this kind: the same as the proved checker says."""
+    kind = dom["kind"]
+    if kind == "wide" or test is None:
+        return False
+    if "cmp" in test:
+        return kind in ("whole", "frac")
+    key = {"truth": "truth", "words": "word", "whole": "num", "frac": "num"}[kind]
+    return all(key in v for v in test["among"])
+
+
+def check_never_field(where, fd):
+    """A field's parts cover what it can hold, and each says what every test answers there."""
+    dom, tests, parts = fd["dom"], fd["tests"], fd["parts"]
+    if any(len(p["truth"]) != len(tests) for p in parts):
+        raise Bad(f"{where}: a part of {fd['name']} does not say what every test answers")
+    answers = lambda val: [test_holds(t, val) for t in tests]
+    kind = dom["kind"]
+    told = [p["truth"] for p in parts]
+    if kind == "wide":
+        return
+    if kind == "truth" or kind == "words":
+        had = [v for p in parts for v in p["vals"]]
+        if kind == "truth":
+            want = [{"truth": True}, {"truth": False}]
+        else:
+            names = [v["word"] for t in tests if t and "among" in t for v in t["among"] if "word" in v]
+            want = [{"word": w} for w in (dom["listed"] if dom["listed"] is not None else names)]
+        for v in want:
+            if v not in had:
+                raise Bad(f"{where}: no part of {fd['name']} holds {v}")
+        for p in parts:
+            for v in p["vals"]:
+                if answers(v) != p["truth"]:
+                    raise Bad(f"{where}: a test on {fd['name']} does not answer {v} as its part says")
+        if kind == "words" and dom["listed"] is None:
+            other = {"word": "".join(chr(1) for _ in range(1))}
+            if not any(p["other"] and p["truth"] == answers(other) for p in parts):
+                raise Bad(f"{where}: no part of {fd['name']} holds a string no test names")
+        return
+    if kind == "whole":
+        values = set()
+        spans = [(num(a), num(b)) for a, b in dom["spans"]]
+        for a, b in spans:
+            values.update(v for v in (a, b) if v is not None)
+            if a is None and b is None:
+                values.add(Fraction(0))
+        for t in tests:
+            for q in test_numbers(t):
+                f = q.numerator // q.denominator
+                values.update(Fraction(f + d) for d in (-1, 0, 1, 2))
+        for p in parts:
+            values.update(num(e) for e in (p["lo"], p["hi"]) if e is not None)
+        inside = lambda v: any((a is None or a <= v) and (b is None or v <= b) for a, b in spans)
+        for v in sorted(values):
+            if not inside(v):
+                continue
+            want = answers({"num": str(v)})
+            here = [p for p in parts if (p["lo"] is None or num(p["lo"]) <= v) and (p["hi"] is None or v <= num(p["hi"]))]
+            if not any(p["truth"] == want for p in here):
+                raise Bad(f"{where}: {v} of {fd['name']} is in no part that answers its tests as it does")
+            if fd["of"] and len(here) != 1:
+                raise Bad(f"{where}: {v} of {fd['name']} is in {len(here)} parts, and a `sum` or a `max` needs one")
+        if fd["of"]:
+            at = [(None if p["lo"] is None else num(p["lo"]), None if p["hi"] is None else num(p["hi"])) for p in parts]
+            for (_, b), (c, _) in zip(at, at[1:]):
+                if b is None or c is None or c <= b:
+                    raise Bad(f"{where}: the parts of {fd['name']} do not lie one after another")
+            for a, b in spans:
+                ok = a is None or any((x is None or x <= a) and (y is None or a <= y) for x, y in at)
+                ok = ok and (b is None or any((x is None or x <= b) and (y is None or b <= y) for x, y in at))
+                gaps = any(y is not None and x is not None and y + 1 < x and (a is None or a <= y) and (b is None or x <= b) for (_, y), (x, _) in zip(at, at[1:]))
+                if not ok or gaps:
+                    raise Bad(f"{where}: the parts of {fd['name']} leave out a value it can hold")
+        return
+    if kind == "frac":
+        bounds = sorted({q for t in tests for q in test_numbers(t)} | {num(e["at"]) for e in (dom["lo"], dom["hi"]) if e})
+        tries = [Fraction(0)] if not bounds else [bounds[0] - 1, *bounds, *((a + b) / 2 for a, b in zip(bounds, bounds[1:])), bounds[-1] + 1]
+        lo, hi = dom["lo"], dom["hi"]
+        for v in tries:
+            if lo and (v <= num(lo["at"]) if lo["open"] else v < num(lo["at"])):
+                continue
+            if hi and (v >= num(hi["at"]) if hi["open"] else v > num(hi["at"])):
+                continue
+            if answers({"num": str(v)}) not in told:
+                raise Bad(f"{where}: {v} of {fd['name']} is in no part that answers its tests as it does")
+        return
+    raise Bad(f"{where}: {fd['name']} holds values of a kind this program does not know")
+
+
+def check_never_walk(where, w):
+    """One collection: its parts, its classes, and what each read passes."""
+    fields, classes = w["fields"], w["classes"]
+    for fd in fields:
+        check_never_field(where, fd)
+    made = set()
+    for cl in classes:
+        if len(cl) != len(fields) or any(not 0 <= p < len(fd["parts"]) for p, fd in zip(cl, fields)):
+            raise Bad(f"{where}: a class is not one part of every field")
+        if tuple(cl) in made:
+            raise Bad(f"{where}: a class is listed twice, and its elements would be counted twice")
+        made.add(tuple(cl))
+    every = 1
+    for fd in fields:
+        every *= len(fd["parts"])
+    if w["fine"] and every != len(classes):
+        STATED.append(f"{where}: the element's own condition rules out {every - len(classes)} kinds of element")
+    for r in w["reads"]:
+        readable = w["fine"]
+        if r["test"] is not None:
+            fi, ti = r["test"]
+            fd = fields[fi]
+            readable = readable and test_fits(fd["tests"][ti], fd["dom"])
+            want = [fd["parts"][cl[fi]]["truth"][ti] for cl in classes]
+        else:
+            want = [True] * len(classes)
+        if r["of"] is not None and fields[r["of"]]["dom"]["kind"] != "whole":
+            readable = False
+        if r["readable"] and not readable:
+            raise Bad(f"{where}: {r['name']} is said to be read, and its test cannot be asked of its field")
+        if r["pass"] != want:
+            raise Bad(f"{where}: the classes {r['name']} passes are not the ones its test passes")
+
+
+def walk_count(wi, w, which):
+    return form({f"\x01n:{wi}:{ci}": Fraction(1) for ci in range(len(w["classes"])) if which(ci)})
+
+
+def walk_lots(w):
+    """For each summed field, the classes no read of it tells apart, put together."""
+    out = {}
+    for fi, fd in enumerate(w["fields"]):
+        if not fd["summed"]:
+            continue
+        keys, lots = [], []
+        for ci, cl in enumerate(w["classes"]):
+            key = (cl[fi], tuple(r["pass"][ci] for r in w["reads"] if r["kind"] == "sum" and r["of"] == fi))
+            if key in keys:
+                lots[keys.index(key)].append(ci)
+            else:
+                keys.append(key)
+                lots.append([ci])
+        out[fi] = lots
+    return out
+
+
+def lot_part(w, fi, lot):
+    return w["fields"][fi]["parts"][w["classes"][lot[0]][fi]]
+
+
+def lot_total(wi, w, fi, cell, lot):
+    p = lot_part(w, fi, lot)
+    if p["lo"] is not None and p["lo"] == p["hi"]:
+        c = walk_count(wi, w, lambda ci: ci in lot)
+        return ({n: v * num(p["lo"]) for n, v in c[0].items()}, c[1])
+    return form_var(f"\x01s:{wi}:{fi}:{cell}")
+
+
+def walk_total(wi, w, fi, lots, which):
+    out = form()
+    for cell, lot in enumerate(lots.get(fi, [])):
+        if which(lot):
+            out = form_add(out, lot_total(wi, w, fi, cell, lot))
+    return out
+
+
+def group_facts(cert, g):
+    """What holds of a group's collections whatever is asked, and what each `count`, `sum` and
+    length comes to."""
+    rows, defs = [], {}
+    ranges = cert.get("ranges", {})
+    def range_rows(name, f):
+        out = []
+        r = ranges.get(name)
+        if r is None:
+            return out
+        sc = wire_scale(cert, name)
+        if num(r[0]) is not None:
+            out.append(row_ge(form_add(f, form({}, num(r[0]) * sc), -1)))
+        if num(r[1]) is not None:
+            out.append(row_le(form_add(f, form({}, num(r[1]) * sc), -1)))
+        return out
+    for wi, w in enumerate(g["walks"]):
+        if not w["fine"]:
+            continue
+        lots = walk_lots(w)
+        for ci in range(len(w["classes"])):
+            rows.append(row_ge(form_var(f"\x01n:{wi}:{ci}")))
+        length = walk_count(wi, w, lambda ci: True)
+        defs[w["size"]] = length
+        d = form_add(form_var(w["size"]), length, -1)
+        rows += [row_le(d), row_ge(d)]
+        if w.get("cap") is not None:
+            rows.append(row_le(form_add(length, form({}, w["cap"]), -1)))
+        for fi, its in lots.items():
+            for cell, lot in enumerate(its):
+                p = lot_part(w, fi, lot)
+                if p["lo"] is not None and p["lo"] == p["hi"]:
+                    continue
+                s, n = form_var(f"\x01s:{wi}:{fi}:{cell}"), walk_count(wi, w, lambda ci: ci in lot)
+                if p["lo"] is not None:
+                    rows.append(row_ge(form_add(s, n, -num(p["lo"]))))
+                if p["hi"] is not None:
+                    rows.append(row_le(form_add(s, n, -num(p["hi"]))))
+        for r in w["reads"]:
+            if not r["readable"]:
+                continue
+            name = r["name"]
+            if r["kind"] == "count":
+                f = walk_count(wi, w, lambda ci: r["pass"][ci])
+            elif r["kind"] == "sum":
+                if r["of"] is None:
+                    continue
+                f = walk_total(wi, w, r["of"], lots, lambda lot: r["pass"][lot[0]])
+            elif r["kind"] in ("max", "min"):
+                rows.extend(range_rows(name, form_var(name)))
+                continue
+            else:
+                continue
+            rows.extend(range_rows(name, f))
+            defs[name] = f
+            d = form_add(form_var(name), f, -1)
+            rows += [row_le(d), row_ge(d)]
+    for name in ranges:
+        rows.extend(range_rows(name, form_var(name)))
+    return rows, defs
+
+
+def extreme_ways(wi, w, r, lots):
+    """Where a `max` or a `min` can lie: no element passes, or one of the parts is the last one
+    an element that passes falls in. Each with what then holds; the first says whether no
+    element passed."""
+    fi = r["of"]
+    fd = w["fields"][fi]
+    v = form_var(r["name"])
+    passing = walk_count(wi, w, lambda ci: r["pass"][ci])
+    out = []
+    none = [row_le(passing)]
+    if r["empty"] is not None:
+        d = form_add(v, form({}, num(r["empty"])), -1)
+        none += [row_le(d), row_ge(d)]
+    out.append((True, none))
+    of_part = lambda ci, p: w["classes"][ci][fi] == p
+    for pi, p in enumerate(fd["parts"]):
+        if not any(r["pass"][ci] and of_part(ci, pi) for ci in range(len(w["classes"]))):
+            continue
+        way = [row_ge(form_add(walk_count(wi, w, lambda ci: r["pass"][ci] and of_part(ci, pi)), form({}, 1), -1))]
+        lo, hi = num(p["lo"]), num(p["hi"])
+        if lo is not None:
+            way.append(row_ge(form_add(v, form({}, lo), -1)))
+        if hi is not None:
+            way.append(row_le(form_add(v, form({}, hi), -1)))
+        for q in range(len(fd["parts"])):
+            if (q > pi) if r["kind"] == "max" else (q < pi):
+                way.append(row_le(walk_count(wi, w, lambda ci: r["pass"][ci] and of_part(ci, q))))
+        if fi in lots:
+            total = walk_total(wi, w, fi, lots, lambda lot: w["classes"][lot[0]][fi] == pi)
+            many = walk_count(wi, w, lambda ci: of_part(ci, pi))
+            def rest(k):
+                return form_add(v, form_add(many, form({}, 1), -1), k)
+            if lo is not None:
+                way.append(row_ge(form_add(total, rest(lo), -1)))
+            if hi is not None:
+                way.append(row_le(form_add(total, rest(hi), -1)))
+        out.append((False, way))
+    return out
+
+
+def never_case(atoms, case, rows, proof):
+    """Whether one proof shows one case of the contract fails. None when it does, or what is
+    wrong. `atoms` holds what the question asks at its end, and `case` names those too."""
+    if "clash" in proof:
+        n = proof["clash"]
+        bools = {atoms[i]["value"] for i in case if atoms[i].get("bool") == n}
+        if len(bools) == 2 or strings_clash(atoms, case, n):
+            return None
+        return f"the values of {n} in this case do not clash"
+    if proof.get("whole"):
+        STATED.append("a `never` line: a case with no whole numbers, settled by splitting it into smaller ones")
+        return None
+    if "farkas" not in proof:
+        return "a proof of a kind this program does not know"
+    total, k, strict = {}, Fraction(0), False
+    for ref in proof["farkas"]:
+        y = num(ref.get("y"))
+        if y is None or y < 0:
+            return "a multiplier is not a number at least zero"
+        if "atom" in ref:
+            i, part = ref["atom"], ref.get("part", 0)
+            if i not in case:
+                return f"it names atom {i}, which is not in this case"
+            a = atoms[i]
+            if "num" not in a or a.get("rel") not in ("le", "lt", "eq"):
+                return f"atom {i} is not an inequality"
+            terms, fk = {n: num(v) for n, v in a["num"].items()}, num(a["k"])
+            if a["rel"] == "eq" and part == 1:
+                terms, fk = {n: -v for n, v in terms.items()}, -fk
+            elif part != 0:
+                return f"atom {i} has no part {part}"
+            fs = a["rel"] == "lt"
+        else:
+            terms, fk, fs = {n: num(v) for n, v in ref["terms"].items()}, num(ref["k"]), bool(ref.get("strict"))
+            if row_key((terms, fk, fs)) not in rows:
+                shown = " + ".join(f"{v}*{n}" for n, v in sorted(terms.items())).replace(chr(1), "")
+                return f"it uses `{shown} + {fk} {'<' if fs else '<='} 0`, which nothing here gives"
+        for n, v in terms.items():
+            total[n] = total.get(n, Fraction(0)) + y * v
+        k += y * fk
+        strict = strict or (fs and y > 0)
+    if any(v != 0 for v in total.values()):
+        return "the names do not cancel"
+    if k > 0 or (k == 0 and strict):
+        return None
+    return "what is left is not false"
+
+
+def check_never_proof(cert, line):
+    """The definitions rule the line out: every way of it, in every case. Raises Bad otherwise."""
+    said, proof = line["said"], line.get("proof")
+    if not isinstance(proof, dict):
+        raise Bad(f"`{said}`: it stands on the definitions, and no proof comes with it")
+    ways = never_ways(cert, line)
+    if len(proof["ways"]) != len(ways):
+        raise Bad(f"`{said}`: {len(proof['ways'])} proofs for {len(ways)} ways the cells can be met")
+    for g in proof["groups"]:
+        for w in g["walks"]:
+            check_never_walk(f"`{said}`", w)
+    for (asks, cell_rows), way in zip(ways, proof["ways"]):
+        g = proof["groups"][way["group"]]
+        facts, defs = group_facts(cert, g)
+        allowed = set()
+        def allow(row):
+            allowed.add(row_key(row))
+            allowed.add(row_key(written_out(row, defs)))
+        for row in facts + cell_rows:
+            allow(row)
+        for c in cert.get("constraints", []):
+            d = form()
+            for n in side(c["left"]):
+                d = form_add(d, form_var(n), 1 / wire_scale(cert, n))
+            for n in side(c["right"]):
+                d = form_add(d, form_var(n), -1 / wire_scale(cert, n))
+            allow({"<=": row_le(d), "<": row_le(d, True), ">=": row_ge(d), ">": row_ge(d, True)}[c["op"]])
+        reads = {r["name"]: (wi, w, r) for wi, w in enumerate(g["walks"]) for r in w["reads"]}
+        ask_atoms = []
+        for a in asks:
+            name = a.get("bool") or a.get("str")
+            r = reads.get(name, (None, None, None))
+            if r[2] is None:
+                ask_atoms.append(a)
+                continue
+            wi, w, r = r
+            if not r["readable"] or "bool" not in a:
+                continue
+            yes = walk_count(wi, w, lambda ci: r["pass"][ci])
+            no = walk_count(wi, w, lambda ci: not r["pass"][ci])
+            one = form({}, 1)
+            if r["kind"] == "any":
+                allow(row_ge(form_add(yes, one, -1)) if a["value"] else row_le(yes))
+            elif r["kind"] == "all":
+                allow(row_le(no) if a["value"] else row_ge(form_add(no, one, -1)))
+        extremes = []
+        for n in way["extremes"]:
+            if n not in reads or reads[n][2]["kind"] not in ("max", "min") or not reads[n][2]["readable"]:
+                raise Bad(f"`{said}`: it opens {n}, which is no `max` or `min` it can read")
+            wi, w, r = reads[n]
+            extremes.append((wi, w, r, extreme_ways(wi, w, r, walk_lots(w))))
+        want = [[]]
+        for e in extremes:
+            want = [p + [i] for p in want for i in range(len(e[3]))]
+        if sorted(p["pick"] for p in way["picks"]) != sorted(want):
+            raise Bad(f"`{said}`: the proofs do not take every way a `max` or a `min` it names can lie")
+        atoms = list(g["atoms"]) + ask_atoms
+        asked = list(range(len(g["atoms"]), len(atoms)))
+        for pick in way["picks"]:
+            here = set(allowed)
+            for e, i in zip(extremes, pick["pick"]):
+                here.update(row_key(row) for row in e[3][i][1])
+            for a, ea in enumerate(extremes):
+                for b, eb in enumerate(extremes):
+                    (wa, _, ra, _), (wb, _, rb, _) = ea, eb
+                    if a == b or wa != wb or ra["of"] != rb["of"] or eb[3][pick["pick"][b]][0]:
+                        continue
+                    if any(rb["pass"][ci] and not ra["pass"][ci] for ci in range(len(ra["pass"]))):
+                        continue
+                    d = form_add(form_var(rb["name"]), form_var(ra["name"]), -1)
+                    here.add(row_key(row_le(d) if ra["kind"] == "max" else row_ge(d)))
+            if len(pick["cases"]) != len(g["cases"]):
+                raise Bad(f"`{said}`: {len(pick['cases'])} proofs for the {len(g['cases'])} cases of the contract")
+            for case, p in zip(g["cases"], pick["cases"]):
+                why = never_case(atoms, list(case) + asked, here, p)
+                if why is not None:
+                    raise Bad(f"`{said}`: {why}")
+
+
+def check_nevers(cert):
+    """Each `never` line: where it stands and who it says stands behind it. Returns a one-line
+    summary; raises Bad on a claim that fails."""
+    inputs = set(cert.get("inputs", []))
+    lines = cert.get("nevers", [])
+    shown = 0
+    for line in lines:
+        names = [k["name"] for k in line["conds"]]
+        if line["door"] != any(n in inputs for n in names):
+            raise Bad(f"`{line['said']}`: the door is said to read it, and it names {'no input' if not line['door'] else 'an input'}")
+        if line["by"] == "definitions":
+            check_never_proof(cert, line)
+            shown += 1
+        elif line["by"] != "caller" or not line["door"]:
+            raise Bad(f"`{line['said']}`: nothing stands behind it")
+    for t in cert.get("tables", []):
+        col = [a["column"] for a in t["axes"]]
+        for n in t.get("nevers", []):
+            if not isinstance(n.get("line"), int) or not 0 <= n["line"] < len(lines):
+                raise Bad(f"{t['table']}: it reads a `never` line the rule does not have")
+            line = lines[n["line"]]
+            if len(n["tests"]) != len(col):
+                raise Bad(f"{t['table']}: `{line['said']}` does not say a cell for every axis")
+            conds = {k["name"]: k["cell"] for k in line["conds"]}
+            if any(name not in col for name in conds):
+                raise Bad(f"{t['table']}: `{line['said']}` names something that is not a column of it")
+            for name, cell in zip(col, n["tests"]):
+                if cell != conds.get(name, {"cell": "any"}):
+                    raise Bad(f"{t['table']}: `{line['said']}` is read here as something else on {name}")
+    caller = len(lines) - shown
+    STATED.extend(f"`{line['said']}`: what each read of a collection tests, as the definitions say it" for line in lines if line["by"] == "definitions")
+    return f"never: {shown} lines shown from the definitions, {caller} the caller's promise, refused at the door"
+
+
+def split_commas(text):
+    """A line's text at its commas, outside its strings."""
+    out, cur, quoted = [], "", False
+    for ch in text:
+        if ch == '"':
+            quoted = not quoted
+        if ch in (",", "、", "，", "・") and not quoted:
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    out.append(cur)
+    return out
+
+
+def check_never_text(cert, path):
+    """Each `never` line is the one in the file, cell for cell. Returns how many cells were read."""
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read().split("\n")
+    read = 0
+    for line in cert.get("nevers", []):
+        where = f"`{line['said']}`"
+        at = line["line"]
+        if not isinstance(at, int) or not 0 < at <= len(text):
+            raise Bad(f"{where}: it is said to be at line {at}, which the file does not have")
+        src = text[at - 1]
+        quoted = False
+        for i in range(len(src)):
+            if src[i] == '"':
+                quoted = not quoted
+            if not quoted and src[i] == "#":
+                src = src[:i]
+                break
+        src = src.strip()
+        if not src.startswith("never") or not src[5:6].isspace():
+            raise Bad(f"{where}: line {at} of the file is not a `never` line")
+        conds = [c.strip() for c in split_commas(src[5:])]
+        if len(conds) != len(line["conds"]):
+            raise Bad(f"{where}: the file makes {len(conds)} conditions, the certificate states {len(line['conds'])}")
+        for c, k in zip(conds, line["conds"]):
+            name = k["name"]
+            if not c.startswith(name) or not (c[len(name):len(name) + 1].isspace() or c[len(name):len(name) + 1] in ("=", "<", ">", "≦", "≧", "＜", "＞")):
+                raise Bad(f"{where}: the file names another name than {name} here")
+            rest = c[len(name):].strip()
+            rest = rest[1:] if rest.startswith("=") else rest
+            shape = parse_cell(rest.replace("|", ","))
+            if shape is None:
+                raise Bad(f"{where}: the cell on {name} cannot be read")
+            ax = next((a for t in cert.get("tables", []) for a in t["axes"] if a["column"] == name), None)
+            if ax is None:
+                ax = {"column": name, "coords": [], "kind": "input"}
+            cell_agrees({"table": "never"}, ax, at, shape, k["cell"])
+            read += 1
+        # A line said to be the caller's has a name with no definition.
+        if line["by"] == "caller":
+            def bare(name):
+                inline = next((s for s in text if re.match(r"\s*" + re.escape(name) + r"(\s*\([^)]*\))?\s*:", s)), None)
+                return inline is not None and not re.search(r"(^|\s)from\s", inline)
+            inputs = set(cert.get("inputs", []))
+            if not any(k["name"] in inputs and bare(k["name"]) for k in line["conds"]):
+                raise Bad(f"{where}: it is said to be the caller's promise, and every name in it has a definition")
+    return read
+
+
 def axis_of(u, column):
     """Where a table cuts a column, or None."""
     return next((i for i, a in enumerate(u["axes"]) if a["column"] == column), None)
@@ -1815,7 +2478,7 @@ def check_cover(t):
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
     seen = {"rows": 0, "constraint": 0, "derived": 0, "define": 0, "truth": 0, "above": 0, "above_rows": 0,
-            "points": 0, "model": 0, "days": 0}
+            "points": 0, "model": 0, "days": 0, "never": 0}
 
     def walk(node, path):
         if "split" in node:
@@ -1845,6 +2508,15 @@ def check_cover(t):
             if not constraint_rules_out(t, k, path):
                 raise Bad(f"{t['table']}: {side_text(k['left'])} {k['op']} {side_text(k['right'])} can hold here, so the box is not impossible")
             seen["constraint"] += 1
+            return
+        if "never" in node:
+            i = node["never"]
+            if not isinstance(i, int) or not 0 <= i < len(t.get("_never_boxes", [])):
+                raise Bad(f"{t['table']}: a leaf names `never` line {i}, which is not one of this table's")
+            box = t["_never_boxes"][i]
+            if not all(path[ai] in box[ai] if ai < len(path) else len(box[ai]) == len(axes[ai]["coords"]) for ai in range(len(axes))):
+                raise Bad(f"{t['table']}: a `never` line is said to take out a box it does not take the whole of")
+            seen["never"] += 1
             return
         if "derived_axis" in node:
             ai = node["derived_axis"]
@@ -2339,6 +3011,8 @@ def sieve_admits(t, values, at):
         ok = {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[k["op"]]
         if not ok:
             return f"{side_text(k['left'])} {k['op']} {side_text(k['right'])} does not hold at {x}, {y}"
+    if never_rules_out(t, at) is not None:
+        return "a `never` line rules this point out"
     return None
 
 
@@ -2366,6 +3040,15 @@ def check_table(t):
             n = len(axes[ai]["coords"])
             if any(not isinstance(c, int) or c < 0 or c >= n for c in coords):
                 raise Bad(f"{name}: row {r['row']} names a coordinate axis {ai} does not have")
+
+    # A `never` line's box is the one its cells describe, read the way a row's is (§15.282).
+    boxes = []
+    for n in t.get("nevers", []):
+        got = box_from_cells(t, n, GROUPS)
+        if got is None:
+            raise Bad(f"{name}: a `never` line has a cell this program cannot read")
+        boxes.append(got)
+    t["_never_boxes"] = boxes
 
     # (0) The box each row states is the box its own cells describe — less the coordinates of a
     # column decided above whose values no table above writes (rulec's §15.253). rulec reads every
@@ -2554,7 +3237,8 @@ def check_table(t):
                         ("truth", "at a truth value a define never takes"),
                         ("above", "for the tables above"),
                         ("above_rows", "by the rows of a table above"), ("points", "point by point"),
-                        ("model", "by the linear model"), ("days", "outside koyomi's days")):
+                        ("model", "by the linear model"), ("days", "outside koyomi's days"),
+                        ("never", "by a `never` line")):
             if seen[k]:
                 cover_note += f" + {seen[k]} impossible {word}"
 
@@ -3133,6 +3817,7 @@ def check_machine(cert):
     coupled = bool(fixed_inputs) and (
         any(a["kind"] != "input" for a in axes)
         or any(n in fixed_inputs for kc in cert.get("constraints", []) for n in side(kc["left"]) + side(kc["right"]))
+        or any(k["name"] in fixed_inputs for line in cert.get("nevers", []) for k in line["conds"])
     )
 
     init, finals = m["initial"], set(m["finals"])
@@ -3731,6 +4416,9 @@ def check_carried(cert):
                 x, y = sum((env[n] for n in ls), Fraction(0)), sum((env[n] for n in rs), Fraction(0))
                 if not {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[kc["op"]]:
                     raise Bad(f"carried values: the call for row {row} breaks {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
+            for line in cert.get("nevers", []):
+                if line["door"] and all(k["name"] in env for k in line["conds"]) and never_hits(line, env):
+                    raise Bad(f"carried values: the call for row {row} breaks `{line['said']}`")
             at_values = [None if (a.get("bounds") or [None] * len(a["coords"]))[c] is None else str(env.get(a["column"]))
                          for a, c in zip(axes, at)]
             why = sieve_admits(t, at_values, at) or facts_hold(t, cert, at_values, [str(env[n]) if n in env else None for n in extras])
@@ -4078,6 +4766,12 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
+    if cert.get("nevers"):
+        try:
+            out.append("  " + check_nevers(cert))
+        except Bad as e:
+            out.append(f"  FAILED {e}")
+            ok = False
     if cert.get("machine"):
         try:
             out.append("  " + check_machine(cert))
@@ -4114,6 +4808,41 @@ def chance_value(v):
         return Fraction(v)
     except (ValueError, ZeroDivisionError):
         return v
+
+
+def never_cell_passes(cell, v):
+    """Whether a value of a call passes a condition of a `never` line, as the certificate writes it.
+    `None` for one this program cannot compare here (the order of an enum, a value it was not given)."""
+    kind = cell.get("cell")
+    if v is None:
+        return None
+    if kind == "any":
+        return True
+    if kind == "none":
+        return v == "none"
+    if kind in ("is", "not"):
+        return (str(v) in cell["words"]) == (kind == "is")
+    if kind == "prefix":
+        return any(str(v).startswith(p) for p in cell["words"])
+    x = chance_value(v)
+    if not isinstance(x, Fraction):
+        return False
+    if kind in ("in", "not_in"):
+        return any(x == Fraction(n) for n in cell["values"]) == (kind == "in")
+    if kind == "cmp":
+        ops = {"=": x.__eq__, "<=": x.__le__, "<": x.__lt__, ">=": x.__ge__, ">": x.__gt__}
+        return all(ops[t["op"]](Fraction(t["value"])) for t in cell["tests"])
+    return None
+
+
+def never_hits(line, env):
+    """Whether the values of a call meet every condition of a `never` line, so the door refuses it."""
+    said = [never_cell_passes(k["cell"], env.get(k["name"])) for k in line["conds"]]
+    if any(s is None for s in said):
+        if any(k["cell"].get("cell") == "rank" for k in line["conds"]):
+            raise Bad(f"`{line['said']}`: its comparison on the order of an enum is not read at a call here")
+        return False
+    return all(said)
 
 
 def cell_passes(cell, v):
@@ -4925,6 +5654,8 @@ def check_chances(cert, ch):
                         if a is None or b is None or not {"<=": a <= b, "<": a < b, ">=": a >= b, ">": a > b}[k["op"]]:
                             ok_door = False
                             break
+                    if ok_door and any(never_hits(line, env) for line in cert.get("nevers", [])):
+                        ok_door = False
                     if not ok_door:
                         continue
                     try:
@@ -5198,7 +5929,7 @@ def main(argv):
                         claimed = 0
                     try:
                         read, loose, apart = check_cells(cert, rule)
-                        read += claimed
+                        read += claimed + check_never_text(cert, rule)
                         rest = f", {loose} literals not pinned to a boundary" if loose else ""
                         rest += f", {apart} rows written in an applied rule" if apart else ""
                         if loose:

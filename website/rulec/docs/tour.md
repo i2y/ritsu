@@ -40,6 +40,7 @@ These are all the words that may start a line.
 | `derive` | a linear combination of inputs — **the only intermediate that can sit in a table column while still being a quantity** |
 | `define` | a boolean, or a computed intermediate |
 | `constraint` | a relation between inputs: which combinations **cannot happen** |
+| `never` | a combination that **cannot happen**, written out: `never has_tool = true, all_parts = true` |
 | `fold` | reduces a column of per-element verdicts to one answer |
 | `count` | how many elements of the sequence meet one test |
 | `sum` | the total of one column over the elements of a sequence |
@@ -446,8 +447,10 @@ Four things follow.
   contract never lets through is W124.
 - **The reads of one collection are held to their definitions.** A `constraint` over two counts
   that some request breaks is E123 too, with that request's elements as the example. A gap the
-  definitions never reach is still E101, with a note that says so, because a target that does not
-  read `from` takes whatever its caller worked out. A row only such a combination reaches is W133.
+  definitions never reach is still E101, because a target that does not read `from` takes whatever
+  its caller worked out; a note says so, and a hint shows the `never` line that takes it out. That
+  line is held to the definitions: E142 when they give the combination, E143 when it cannot be
+  shown. A row only such a combination reaches is W133.
 
 No check of the table changes. What comes out of a projection is a scalar input like any
 other, and completeness and overlap are decided as they would be without `from`.
@@ -838,6 +841,19 @@ The shape is `constraint <input> <comparison> <input>`, with one of `<=`,
 order — money, a quantity, a rate, a `number` or a `date`. Several lines
 hold at once, and `A = B` is the two lines `A <= B` and `A >= B`. An
 example that breaks a constraint is an error (E019), not a case.
+
+A combination that is not a comparison is written out, each condition
+holding what a cell of that column would:
+
+```rule
+never has_tool = true, all_parts = true
+never tier = gold | platinum, tools = 0
+```
+
+A line does the three things above. Over inputs read with `from`, or over
+summaries of `elements`, it is held to their definitions (E142, E143); a
+line that names an input with no `from` is the caller's promise. The page
+`rulec doc` writes says which is which.
 
 ## Taking a sequence whose length is not fixed
 

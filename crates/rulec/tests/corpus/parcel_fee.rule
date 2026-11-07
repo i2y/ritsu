@@ -1,0 +1,24 @@
+rule parcel_fee v1
+description "A fee from what a list of parcels adds up to. The summaries are worked out inside the rule, so no call can give a combination their definitions do not. The tables still say which ones they leave out, as `never` lines, and the check shows each from the definitions."
+
+elements parcels
+  fragile : bool
+  weight  : number  range >=1 <=100
+
+count fragile_parcels over parcels where fragile  range >=0 <=5
+sum total_weight over parcels of weight  range >=0 <=1000
+max heaviest over parcels of weight empty 0
+
+never total_weight = 0, heaviest >= 1
+never total_weight >= 1, heaviest = 0
+never fragile_parcels >= 1, total_weight = 0
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table fee_of
+policy unique
+| fragile_parcels | total_weight | heaviest | -> fee : money[USD] |
+| 0               | 0            | 0        | 0USD                |
+| >=1             | >=1          | >=1      | 5USD                |
+| 0               | >=1          | >=1      | 2USD                |

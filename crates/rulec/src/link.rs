@@ -1273,6 +1273,7 @@ fn empty_like(f: &RuleFile) -> RuleFile {
         result: None,
         examples: Vec::new(),
         constraints: Vec::new(),
+        nevers: Vec::new(),
         shapes: Vec::new(),
         implements: None,
         elements: Vec::new(),

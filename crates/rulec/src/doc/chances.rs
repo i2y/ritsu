@@ -38,7 +38,7 @@ pub(super) fn drawn_from(f: &RuleFile, c: &Checked, name: &str) -> Option<String
         }
     };
     // A constraint that ties a random input narrows the draw to the points that meet it (§15.224).
-    if f.constraints.iter().any(|k| k.names().any(|x| x == name)) {
+    if f.constraints.iter().any(|k| k.names().any(|x| x == name)) || f.nevers.iter().any(|k| k.names().any(|x| x == name)) {
         text.push_str(&tr!("（制約を満たす点の中で）", " (among the points the constraints let in)"));
     }
     Some(format!("`{}`: {text}", crate::kw::RANDOM))

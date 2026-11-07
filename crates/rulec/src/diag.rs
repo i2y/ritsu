@@ -285,6 +285,8 @@ pub struct Diag {
     /// Every row that takes part (both sides of an overlap, the rows an example fired).
     pub rows: Vec<RowRef>,
     pub witness: Witness,
+    /// A request that gives the combination, as JSON, where one was built (§15.282).
+    pub request: Option<String>,
     pub fix: Fix,
     pub severity: Severity,
     /// Stable code, e.g. "E101".
@@ -310,6 +312,7 @@ impl Diag {
             row: None,
             rows: Vec::new(),
             witness: Witness::default(),
+            request: None,
             fix: Fix::default(),
             severity: Severity::Error,
             code,
@@ -414,6 +417,12 @@ impl Diag {
     }
 
     /// A kind of edit with no single text (deleting a row, say).
+    /// A request that gives the combination, as JSON (§15.282).
+    pub fn request(mut self, json: String) -> Self {
+        self.request = Some(json);
+        self
+    }
+
     pub fn fix_kind(mut self, kind: FixKind) -> Self {
         self.fix = Fix { kind, text: None };
         self
@@ -640,6 +649,7 @@ pub fn render_json(d: &Diag, path: &str) -> String {
         .raw("where", where_)
         .raw("spans", crate::json::arr(&spans))
         .raw("witness", witness.finish())
+        .opt_raw("request", d.request.clone())
         .raw("rows", crate::json::arr(&rows))
         .raw("fix", fix)
         .opt_str("key", d.key.as_deref())

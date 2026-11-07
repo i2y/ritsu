@@ -7,5 +7,6 @@ error[E101]: Completeness gap: some input matches no row
  An input that matches no row: has_fragile = true, none_fragile = true
  This combination never comes out of the definitions (`has_fragile` is `any order.lines where fragile = true`, `none_fragile` is `all order.lines where fragile = false`).
  A row is still asked for because a call that does not read through `from` reaches it: the code generated for NumPy, Rust, Go, Swift, Java, SQL and Wasm does not read `from`, and takes whatever the caller worked out.
+ hint: a combination that does not happen comes out of the tables with this line, and no row: `never has_fragile = true, none_fragile = true`
  hint: add a row that matches this input.
  The shape of the row to add: `| true | true | 5USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.

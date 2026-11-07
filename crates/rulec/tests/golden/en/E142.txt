@@ -1,0 +1,8 @@
+error[E142]: The definitions give the combination `never has_fragile = true, fragile = 4` rules out
+  --> tests/mutants/m_e142.rule:15 never
+   |
+15 | never has_fragile = true, fragile = 4
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this combination does occur
+   |
+ A request with `order.lines` holding 4 elements with `fragile` = true, for one, gives this combination.
+ hint: if a condition is wrong, correct it. If they are right, delete this line and decide in the tables what the rule answers for that combination.

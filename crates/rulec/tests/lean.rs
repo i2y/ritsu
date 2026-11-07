@@ -1645,3 +1645,61 @@ fn held_to(base: &std::path::Path, rel: &str) -> String {
         _ => rel.to_string(),
     }
 }
+
+/// A draw under a `never` line is no draw (§15.282): the door the theorem on a claim counts behind
+/// is the rule's, lines and all, so the first prize with the campaign off is 10 tickets of 99.
+#[test]
+fn a_line_narrows_what_a_claim_counts_in_the_proved_checker() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let t = ritsu_testkit::TempDir::new("never-draw");
+    let rule = t.path().join("r.rule");
+    std::fs::write(&rule, "rule lucky_draw v1\n\nenum prize = first | no_prize\n\ninputs\n  ticket   : number  range >=0 <=99  random\n  campaign : bool\n\nnever ticket = 0, campaign = false\n\noutputs\n  prize : prize\n\ntable numbers\npolicy unique\n| ticket   | campaign | -> prize |\n| 0        | true     | first    |\n| >=1 <=10 | -        | first    |\n| >=11     | -        | no_prize |\n\nchances\n| campaign | -> prize | chance          |\n| true     | first    | 11%             |\n| false    | first    | >=10.1% <=10.2% |\n").unwrap();
+    let (c, cert) = rulec(&["certificate", rule.to_str().unwrap()]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rule.to_str().unwrap()));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("2 of 2 claims proved"), "{said}");
+}
+
+/// `never` (§15.282): what the proved checker reads of a line — which boxes it takes out of a table,
+/// that a table reads the line as it is written, whether the door holds it — and that it says a
+/// proof over definitions is stated rather than proved here (`tools/recheck.py` adds it up).
+#[test]
+fn a_tampered_line_fails_the_proved_checker() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let rule = "tests/corpus/fragile_lines_fee.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rule));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("never: 3 lines the definitions rule out, 0 the caller's promise"), "{said}");
+    assert!(said.contains("tools/recheck.py adds the proof up"), "{said}");
+    for (what, forged) in [
+        ("the cell a table reads the line as", cert.replacen(r#"{"line":1,"tests":[{"cell":"is","words":["true"]}"#, r#"{"line":1,"tests":[{"cell":"is","words":["false"]}"#, 1)),
+        // A box a row takes, said to be taken out by a line: no line takes it.
+        ("a leaf closed by a line that does not take its box", cert.replacen(r#"{"never":1},{"row":1}"#, r#"{"never":1},{"never":0}"#, 1)),
+        ("the door", cert.replacen(r#""door":true"#, r#""door":false"#, 1)),
+        ("a condition of the line", cert.replacen(r#""conds":[{"name":"has_fragile","cell":{"cell":"is","words":["true"]}}"#, r#""conds":[{"name":"has_fragile","cell":{"cell":"is","words":["false"]}}"#, 1)),
+        ("no proof", cert.replacen(r#""proof":{"#, r#""was_proof":{"#, 1)),
+        ("the place in the file", cert.replacen(r#""line":13,"by""#, r#""line":1,"by""#, 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: the certificate has another form now, and this forged nothing");
+        let (code, said) = lean(&bin, &forged, Some(rule));
+        assert_eq!(code, 1, "{what}: the forged certificate passes\n{said}");
+        assert!(said.contains("FAILED"), "{what}: it does not say what is wrong\n{said}");
+    }
+    // A line of the caller's: taken out of the tables with nothing stated, and held at the door.
+    let rule = "tests/corpus/order_fee.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rule));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("never: 0 lines the definitions rule out, 3 the caller's promise"), "{said}");
+    assert!(said.contains("every claim this program states was proved"), "{said}");
+    let f = cert.replacen(r#""by":"caller""#, r#""by":"definitions""#, 1);
+    assert_eq!(lean(&bin, &f, Some(rule)).0, 1, "a line with no proof passes as shown from definitions");
+}

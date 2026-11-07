@@ -27,7 +27,7 @@ down, and nothing here can check that reading.
 | **5. The seven coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every computed value at two values, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
-| **8. The repository's own tests** | 226 deliberately broken rules each produce the diagnostic they should; 143 rules are checked, generated and run on every commit | `cargo test` |
+| **8. The repository's own tests** | 232 deliberately broken rules each produce the diagnostic they should; 149 rules are checked, generated and run on every commit | `cargo test` |
 | **9. The source** | an amount that disagrees with the document the row cites fails | `rulec source fetch`, then `rulec check` |
 
 ---
@@ -137,7 +137,8 @@ reaches every row with the values behind it, the interval and the type every com
 is forced into — and where every cell stands in your file, down to the byte. Where no axis
 parts a pair, or no row takes a box, and the rule's derives and constraints rule it out
 together, it prints the multipliers that add those up to a contradiction; a re-checker does
-the addition. For a contract the rule reads its inputs from, it prints the contract's
+the addition. A box a `never` line takes out names the line, and a line shown from the definitions
+of a collection prints the same kind of multipliers, over how many elements of each class there are. For a contract the rule reads its inputs from, it prints the contract's
 condition opened into cases, and for each case why it keeps what the rule's door asks — each
 declared range, each `constraint` between two inputs, each enum's values — so that a request
 the caller's own validation lets through is one the rule takes. For a state machine, it prints
@@ -173,7 +174,8 @@ from the cells is worked out again rather than read: the interval of each value 
 computes, the values a table writes into a column of numbers, and the kind of each column. The
 range it states for each output, the one the other languages read the rule's answer in, is held
 to what decides the output put out to the grid it rounds to. Everything else in it — the declared
-ranges, the types, the groups, the constraints, each value's expression, the grid each output
+ranges, the types, the groups, the constraints, the conditions of the `never` lines, each value's
+expression, the grid each output
 rounds to — is the document's own word, and going behind that would take a parser for
 the rule. A checker that reads a rule the way rulec reads it is not
 independent of it. The reading of a contract — which inputs it feeds, which conditions it
@@ -187,15 +189,15 @@ the contract's text by a digest, and neither re-checker reads CEL or a schema.
 The five proofs come out of rulec's implementation, and **that implementation has not been
 proved correct**. What stands in for a proof is evidence, and it is kept deliberately:
 
-- **226 deliberately broken rules**, each producing the diagnostic it should — and the
+- **232 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
-- **143 rules** — 34 transcribed from a published source, 109 written to reach the corners of
+- **149 rules** — 34 transcribed from a published source, 115 written to reach the corners of
   the language — checked, generated and run on every commit, in every language that takes
   them.
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
   the generated-code page is held to the tool's own output, and the examples on this site are
   held to the corpus files they came from. A page that drifts is a failing test.
-- **Every diagnostic is in the ledger**: 140 codes, each with a smallest reproduction that is
+- **Every diagnostic is in the ledger**: 143 codes, each with a smallest reproduction that is
   run on every commit to check it still produces that code.
 
 ## 9. The source a rule was transcribed from

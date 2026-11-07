@@ -366,6 +366,20 @@ def _absent(a, env, n):
     return m if m is not None else np.asarray(env[a["of"]]).astype(str) == "none"
 
 
+def _never_hits(k, env, n):
+    """Where a `never` line's tests all hold: each read as a row's cell is."""
+    c = np.ones(n, dtype=bool)
+    for t in k["tests"]:
+        if "any" in t:
+            one = np.zeros(n, dtype=bool)
+            for s in t["any"]:
+                one = one | _test(s, env[s["col"]], env.get(("absent", s["col"])))
+            c = c & one
+        else:
+            c = c & _test(t, env[t["col"]], env.get(("absent", t["col"])))
+    return c
+
+
 def _test(t, v, absent=None):
     """One cell, over a whole column. `None` would be a `-`, which the plan leaves out.
 
@@ -468,6 +482,8 @@ class Rule:
             a, b = _side(env, k["left"], k["left_times"]), _side(env, k["right"], k["right_times"])
             op = k["op"]
             ok &= np.asarray(a <= b if op == "<=" else a < b if op == "<" else a >= b if op == ">=" else a > b, dtype=bool)
+        for k in self.plan.get("nevers", []):
+            ok &= ~_never_hits(k, env, n)
         if not ok.any():
             # No point is a draw: the door says why of the first.
             self._columns({k: v[:1] for k, v in cols.items()})
@@ -582,6 +598,11 @@ class Rule:
             op = k["op"]
             holds = a <= b if op == "<=" else a < b if op == "<" else a >= b if op == ">=" else a > b
             bad = ~np.asarray(holds, dtype=bool)
+            if bad.any():
+                raise refuse(k["what"], row=int(np.argmax(bad)))
+        # A combination a `never` line rules out, refused the same way.
+        for k in self.plan.get("nevers", []) if constraints else []:
+            bad = _never_hits(k, env, n)
             if bad.any():
                 raise refuse(k["what"], row=int(np.argmax(bad)))
         # A date of koyomi's days takes those days only.

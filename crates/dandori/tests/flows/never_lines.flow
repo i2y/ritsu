@@ -1,0 +1,36 @@
+workflow tool_orders v1
+description "Sends an order's tools out at once or holds them for a look first. ritsu cannot decide the rule's `never` lines here (what the order holds comes from tasks whose answers have no range, and a truth value has none), so the workflow checks each line as soon as its values are made."
+
+use rule tool_check from "rules/tool_route.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:tool-route"
+
+inputs
+  order : string
+  tier  : tool_check.tier
+
+task has_tool(order: string) -> bool
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:has-tool"
+  idempotent
+
+task all_parts(order: string) -> bool
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:all-parts"
+  idempotent
+
+task count_tools(order: string) -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:count-tools"
+  idempotent
+
+task send_out(order: string)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:send-out"
+  key
+
+flow
+  # never has_tool = true, all_parts = true is checked right after all_parts answers
+  let tool = has_tool(order: order)
+  let parts = all_parts(order: order)
+  # the two lines that name tools are checked right after count_tools answers
+  let tools = count_tools(order: order)
+  let decision = tool_check(has_tool: tool, all_parts: parts, tools: tools, tier: tier)
+  match decision.route
+    at_once => send_out(order: order)
+    review => pass

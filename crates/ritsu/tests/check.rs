@@ -484,3 +484,54 @@ fn the_modules_of_kaname_are_checked_as_kaname_checks_them() {
     let files: Vec<(&str, bool)> = v["files"].as_array().unwrap().iter().filter(|f| f["tool"] == "kaname").map(|f| (f["file"].as_str().unwrap(), f["ok"].as_bool().unwrap())).collect();
     assert_eq!(files, [("payout.ja.kn", true), ("payout.kn", false)]);
 }
+
+/// A rule's diagnostic keeps the request it shows, so that what reads the JSON of the whole project
+/// gets the same example as what reads `rulec check` (the rule's §15.282).
+#[test]
+fn a_rules_example_request_stays_in_the_json() {
+    let t = TempDir::new("request");
+    std::fs::write(
+        t.path().join("orders.schema.json"),
+        r##"{"$defs":{"Order":{"type":"object","required":["lines"],"additionalProperties":false,"properties":{"lines":{"type":"array","items":{"type":"object","required":["category"],"additionalProperties":false,"properties":{"category":{"enum":["tool","part","service"]}}}}}}}}"##,
+    )
+    .unwrap();
+    std::fs::write(
+        t.path().join("tool_fee.rule"),
+        r##"rule tool_fee v1
+description "Whether an order holds a tool, and whether it holds nothing but parts"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  has_tool  : bool  from any order.lines where category = "tool"
+  all_parts : bool  from all order.lines where category = "part"
+
+never has_tool = false, all_parts = false
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table fee_of
+policy unique
+| has_tool | all_parts | -> fee : money[USD] |
+| true     | true      | 5USD                |
+| true     | false     | 3USD                |
+| false    | true      | 0USD                |
+
+examples
+| has_tool | all_parts | -> fee |
+| true     | false     | 3USD   |
+| false    | true      | 0USD   |
+"##,
+    )
+    .unwrap();
+    let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    assert_eq!(code, 1, "{out}{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let d = v["diagnostics"].as_array().unwrap().iter().find(|d| d["code"] == "E142").unwrap_or_else(|| panic!("{out}"));
+    assert_eq!(d["tool"].as_str(), Some("rulec"), "{out}");
+    let c = &d["request"]["collections"][0];
+    assert_eq!(c["path"].as_str(), Some("order.lines"), "{out}");
+    let e = &c["elements"][0];
+    assert_eq!(e["fields"]["category"].as_str(), Some("service"), "{out}");
+}

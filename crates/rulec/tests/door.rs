@@ -62,7 +62,7 @@ struct Case {
     said: &'static str,
 }
 
-const CASES: [Case; 4] = [
+const CASES: [Case; 9] = [
     Case {
         rule: "tests/corpus/express_delivery_quote.rule",
         lang: "en",
@@ -90,6 +90,44 @@ const CASES: [Case; 4] = [
         alias: "hotel_stay_ja",
         broken: r#"{"in":{"チェックイン日":"2026-08-03","チェックアウト日":"2026-08-01"}}"#,
         said: "制約が成り立ちません: チェックイン日 <= チェックアウト日",
+    },
+    // `never` (§15.282): truth values, an enum beside a number, and a comparison on money, each
+    // the caller's promise; and a line the definitions show, which a caller who works the values
+    // out by hand can still break, as every target that does not read `from` lets it.
+    Case {
+        rule: "tests/corpus/order_fee.rule",
+        lang: "en",
+        alias: "order_fee",
+        broken: r#"{"in":{"has_tool":true,"all_parts":true,"tier":"basic","tools":1,"total":50}}"#,
+        said: "this combination does not happen: never has_tool = true, all_parts = true",
+    },
+    Case {
+        rule: "tests/corpus/order_fee.rule",
+        lang: "en",
+        alias: "order_fee",
+        broken: r#"{"in":{"has_tool":false,"all_parts":false,"tier":"gold","tools":0,"total":0}}"#,
+        said: "this combination does not happen: never tier = gold, tools = 0",
+    },
+    Case {
+        rule: "tests/corpus/order_fee.rule",
+        lang: "en",
+        alias: "order_fee",
+        broken: r#"{"in":{"has_tool":false,"all_parts":false,"tier":"basic","tools":0,"total":50}}"#,
+        said: "this combination does not happen: never tools = 0, total > 0USD",
+    },
+    Case {
+        rule: "tests/corpus/注文の手数料.rule",
+        lang: "ja",
+        alias: "order_fee_ja",
+        broken: r#"{"in":{"工具あり":false,"全部部品":false,"区分":"上位","工具数":0,"合計":0}}"#,
+        said: "起こらない組み合わせです: never 区分 = 上位, 工具数 = 0",
+    },
+    Case {
+        rule: "tests/corpus/fragile_lines_fee.rule",
+        lang: "en",
+        alias: "fragile_lines_fee",
+        broken: r#"{"in":{"has_fragile":true,"all_fragile":false,"fragile":0}}"#,
+        said: "this combination does not happen: never has_fragile = true, fragile = 0",
     },
 ];
 
@@ -245,6 +283,41 @@ fn numpy_names_the_element_it_refuses() {
         r#"[{"check_in":["2026-08-01","2026-08-03"],"check_out":["2026-08-03","2026-08-01"]},{"check_in":["2026-13-01"],"check_out":["2026-12-31"]}]"#,
     );
     assert_eq!(got, ["RuleInputError | the constraint does not hold: check_in <= check_out (row 1)", "RuleInputError | check_in is not a date: '2026-13-01' (row 0)"], "{got:?}");
+}
+
+/// The plan reads a `never` line as it reads a `constraint` (§15.282): the element under the line is
+/// the one refused, by its place, with the line quoted in the language the plan was written in.
+#[test]
+fn numpy_names_the_element_a_line_refuses() {
+    if !numpy_here() {
+        return;
+    }
+    let order = CASES.iter().find(|c| c.alias == "order_fee").unwrap();
+    let (_t, out) = generate(order);
+    let got = try_numpy(
+        &out,
+        "order_fee.json",
+        r#"[{"has_tool":[false,true],"all_parts":[false,true],"tier":["basic","basic"],"tools":[1,1],"total":[50,50]},
+            {"has_tool":[false,false],"all_parts":[false,false],"tier":["basic","gold"],"tools":[1,0],"total":[50,0]},
+            {"has_tool":[false],"all_parts":[false],"tier":["basic"],"tools":[0],"total":[0]}]"#,
+    );
+    assert_eq!(
+        got[..2],
+        [
+            "RuleInputError | this combination does not happen: never has_tool = true, all_parts = true (row 1)",
+            "RuleInputError | this combination does not happen: never tier = gold, tools = 0 (row 1)",
+        ],
+        "{got:?}"
+    );
+    assert!(got[2].starts_with("answered"), "{got:?}");
+    let japanese = CASES.iter().find(|c| c.alias == "order_fee_ja").unwrap();
+    let (_t, out) = generate(japanese);
+    let got = try_numpy(
+        &out,
+        "order_fee_ja.json",
+        r#"[{"工具あり":[true],"全部部品":[true],"区分":["通常"],"工具数":[1],"合計":[50]}]"#,
+    );
+    assert_eq!(got, ["RuleInputError | 起こらない組み合わせです: never 工具あり = true, 全部部品 = true (行 0)"], "{got:?}");
 }
 
 /// A number that is not whole is refused before its range is looked at, as every other door

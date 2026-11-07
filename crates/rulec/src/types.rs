@@ -1215,6 +1215,11 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         let values = order.iter().filter(|v| crate::ast::ranked_holds(order, &ops, v)).cloned().collect();
         *cell = Cell::Ranked { ops, values };
     };
+    for n in f.nevers.iter_mut() {
+        for cond in &mut n.conds {
+            rank(&mut cond.cell, declared.get(&cond.name.text).and_then(|(e, _)| e.as_ref()));
+        }
+    }
     for it in f.items.iter_mut() {
         let Item::Table(t) = it else { continue };
         let cols: Vec<Option<String>> = t.inputs.iter().map(|(n, _)| declared.get(n).and_then(|(e, _)| e.clone())).collect();
@@ -2524,6 +2529,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .note(tr!(
                         "比べられるのは、金額・数量・率・number・日付です。列挙や真偽に大小はありません。",
                         "Money, a quantity, a rate, a number and a date can be compared. An enum and a boolean have no order."
+                    ))
+                    .note(tr!(
+                        "列挙や真偽の組み合わせが起こらないと言いたいなら、`{} 値引きあり = true, 全額返金 = true` のように `{}` で書いてください。",
+                        "To say a combination of enums or booleans does not happen, write it with `{}`: `{} discounted = true, refunded = true`.",
+                        crate::kw::NEVER, crate::kw::NEVER
                     )),
             );
             continue;
@@ -2642,6 +2652,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
         }
+    }
+
+    // `never` (§15.282): each condition is a cell on one name, read as a table's column reads it.
+    // Whether the combination really does not come is `never_lines`' to say, from the definitions.
+    for n in &f.nevers {
+        c.never_line(n, f, path);
     }
 
     // The ranges of the outputs (§15.268): a range written on an output's line is held to what
@@ -4081,6 +4097,97 @@ impl Checked {
             d.name.text.clone(),
             Sym { ty, span: d.name.span.clone(), kind: SymKind::Derived, contract_only: false },
         );
+    }
+
+    /// The names and cells of one `never` line (§15.282).
+    fn never_line(&mut self, n: &NeverLine, f: &RuleFile, path: &str) {
+        let at = tr!("{path}:{} 起こらない組み合わせ", "{path}:{} never", n.span.line);
+        let said = n.said();
+        let shape = |title: String| Diag::error("E141", title).at(at.clone());
+        let mut seen: Vec<&str> = Vec::new();
+        let (mut input, mut summary) = (false, false);
+        for cond in &n.conds {
+            let name = cond.name.text.as_str();
+            let sp = &cond.name.span;
+            if seen.contains(&name) {
+                self.diags.push(
+                    shape(tr!("`never` の行に、同じ名前の条件が二つあります", "A `never` line has two conditions on one name"))
+                        .mark(sp.clone(), tr!("{name} の条件は前にもあります", "{name} has a condition already"))
+                        .note(tr!(
+                            "一つの名前の条件は一つにしてください。比較は `{name} >= 1 < 5`、値の集合は `{name} = a | b` と書けます。",
+                            "Keep one condition on a name. A comparison is written `{name} >= 1 < 5` and a set of values `{name} = a | b`."
+                        )),
+                );
+                continue;
+            }
+            seen.push(name);
+            let Some(sym) = self.syms.get(name).cloned() else {
+                self.diags.push(
+                    shape(tr!("`never` の行に、知らない名前があります", "A `never` line names something that is not there"))
+                        .mark(sp.clone(), tr!("{name} という入力も集計もありません", "there is no input or summary called {name}"))
+                        .note(tr!(
+                            "`never` に書けるのは、`inputs` に宣言した入力と、`elements` の集計（`count`・`sum`・`max`・`min`）です。",
+                            "A `never` line names inputs declared in `inputs` and summaries of `elements` (`count`, `sum`, `max`, `min`)."
+                        )),
+                );
+                continue;
+            };
+            let is_summary = f.is_summary(name);
+            if sym.kind == SymKind::Element {
+                self.diags.push(
+                    shape(tr!("`never` の行に、要素のフィールドがあります", "A `never` line names a field of an element"))
+                        .mark(sp.clone(), tr!("{name} は要素ごとの値です", "{name} is a value of each element"))
+                        .note(tr!(
+                            "`never` は一回の呼び出しの値の組み合わせを書きます。要素のフィールドは、`count`・`sum`・`max`・`min` で集計してから書いてください。",
+                            "A `never` line is about the values of one call. Summarise a field of an element with `count`, `sum`, `max` or `min`, and name the summary."
+                        )),
+                );
+                continue;
+            }
+            if sym.kind != SymKind::Input && !is_summary {
+                self.diags.push(
+                    Diag::error("E143", tr!("`never` の行を定義から確かめられません", "A `never` line cannot be shown from the definitions"))
+                        .at(at.clone())
+                        .mark(sp.clone(), tr!("{name} は規則が計算する値です", "{name} is a value the rule computes"))
+                        .note(tr!(
+                            "表の検査が読むのは、確かめられる行だけです。規則が計算する値は確かめられないので、このまま表から外すことはできません。",
+                            "The check of a table reads only lines it can hold to something, and a value the rule computes cannot be held to anything here, so this cannot take a combination out of the tables."
+                        ))
+                        .note(tr!(
+                            "その値を計算する元の入力で `never` を書くか、この組み合わせの行を表に書いてください。",
+                            "Write the `never` over the inputs the value is computed from, or write a row for the combination."
+                        )),
+                );
+                continue;
+            }
+            input |= sym.kind == SymKind::Input;
+            summary |= is_summary;
+            if matches!(cond.cell, Cell::Nothing) && !matches!(sym.ty, Ty::Opt(_)) {
+                self.diags.push(
+                    shape(tr!("`never` の行が、値の無いことを求めています", "A `never` line asks for an absent value"))
+                        .mark(sp.clone(), tr!("{name} は optional ではありません", "{name} is not optional"))
+                        .note(tr!("`none` が書けるのは、型が `T?` の名前だけです。", "`none` belongs to a name of type `T?`.")),
+                );
+                continue;
+            }
+            let sc = *self.scales.get(name).unwrap_or(&1);
+            self.cell(&cond.cell, sym.ty.present(), sc, sp, &at, true);
+            self.used.insert(name.to_string());
+        }
+        if input && summary {
+            self.diags.push(
+                shape(tr!("`never` の行に、入力と集計が混ざっています", "A `never` line names both inputs and summaries"))
+                    .mark(n.span.clone(), tr!("`{said}`", "`{said}`"))
+                    .note(tr!(
+                        "生成コードは、入力を入口で確かめてから集計を計算するので、両方を読む行を入口で確かめられません。",
+                        "The generated code holds the inputs at its door and works the summaries out after that, so no door can read both."
+                    ))
+                    .note(tr!(
+                        "同じ意味を、集計だけか入力だけで書けるならそう書いてください。書けないなら、この組み合わせの行を表に書いてください。",
+                        "If the same thing can be said over summaries alone or inputs alone, say it that way. If it cannot, write a row for the combination."
+                    )),
+            );
+        }
     }
 
     /// The value a test on a column of one element looks for (`count … where <column> = <value>`,

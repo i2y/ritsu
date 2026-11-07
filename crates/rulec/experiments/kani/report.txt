@@ -1,4 +1,5 @@
 rulec 0.28.0, Kani Rust Verifier 0.68.0 (standalone) CBMC 6.11.0 
+order_fee, fragile_lines_fee, parcel_fee and their Japanese twins measured at 0.44.0 (§15.282); the generated proofs of the others have not changed.
 
 apply_order                1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 average_price              0s  no harness written — see the head of average_price_proof.rs
@@ -44,6 +45,8 @@ expense_sampling           2s  Complete - 2 successfully verified harnesses, 0 f
 express_delivery_quote     2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 express_quote              3s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 food_storage_standard      4s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
+fragile_lines_fee_ja       3s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+fragile_lines_fee          2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 freight                    2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 goods_delivery             1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 goods_price                1s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
@@ -71,6 +74,8 @@ one_round                  1s  Complete - 2 successfully verified harnesses, 0 f
 one_time_perk              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 one_time_trial             2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 order_discount             3s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
+order_fee_ja               4s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
+order_fee                  3s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
 order_handling_fee        31s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 order_handling            34s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 order_lifecycle            2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
@@ -85,6 +90,8 @@ order_state                1s  Complete - 2 successfully verified harnesses, 0 f
 osha_excavation            1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 osha_extinguisher          2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 osha_noise                 1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+parcel_fee_ja              3s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+parcel_fee                 3s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 parcel_rate                5s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
 part_time_allowance        1s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 part_time_retirement_pay   2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
@@ -144,4 +151,4 @@ us_income_tax              1s  Complete - 2 successfully verified harnesses, 0 f
 yupack_base_fee            9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 yupack_fee                 9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 
-総計 777s
+総計 795s

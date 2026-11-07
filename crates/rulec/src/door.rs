@@ -86,6 +86,14 @@ pub fn constraint(said: &str) -> String {
     tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}")
 }
 
+/// A combination a `never` line rules out, said the way the rule writes it (§15.282). The line goes
+/// into a string of the generated code as it is, so it is written without the characters a string
+/// literal of some language would need escaped.
+pub fn never(said: &str) -> String {
+    let said = said.replace(['"', '\\', '`', '\'', '$'], "");
+    tr!("起こらない組み合わせです: {said}", "this combination does not happen: {said}")
+}
+
 /// A day a koyomi date does not come to. The file is written without the characters a string
 /// literal of some language would need escaped.
 pub fn not_a_day(name: &str, file: &str, date: &str) -> String {
@@ -275,6 +283,11 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
     for k in &f.constraints {
         if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
             return Some(input(constraint(&k.said())));
+        }
+    }
+    for n in f.door_nevers() {
+        if !crate::vectors::never_clear(n, c, &|m| vals.get(m)) {
+            return Some(input(never(&n.said())));
         }
     }
     let mut names: Vec<&String> = c.day_sets.keys().collect();

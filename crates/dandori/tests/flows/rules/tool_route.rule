@@ -1,0 +1,32 @@
+rule tool_route v1
+description "Whether an order's tools go out at once or are looked at first. The caller keeps three combinations from happening: an order with a tool does not hold only parts, an order with no tool counts none, and a gold order counts at least one."
+
+enum path = at_once | review
+enum tier = basic | gold
+
+inputs
+  has_tool  : bool
+  all_parts : bool
+  tools     : number  range >=0 <=5
+  tier      : tier
+
+never has_tool = true, all_parts = true
+never has_tool = false, tools >= 1
+never tier = gold, tools = 0
+
+outputs
+  route : path
+
+table pick
+policy unique
+| has_tool | tier  | tools | -> route : path |
+| true     | basic | <=2   | at_once         |
+| true     | basic | >=3   | review          |
+| true     | gold  | -     | at_once         |
+| false    | -     | -     | at_once         |
+
+examples
+| has_tool | all_parts | tools | tier  | -> route |
+| true     | false     | 2     | gold  | at_once  |
+| true     | false     | 3     | basic | review   |
+| false    | true      | 0     | basic | at_once  |

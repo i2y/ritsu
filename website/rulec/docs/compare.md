@@ -207,7 +207,8 @@ above has a `dest` that neither version has; `fixtures lint` against the
 old version names it.
 
 An input the new version does not take is not excluded either: a range
-it narrows, a value its enum no longer has, a `constraint` it adds, a
+it narrows, a value its enum no longer has, a `constraint` or a `never`
+line it adds, a
 step a recorded value is no whole number of. The record counts as
 compared and not matched, and the report lists it apart, by reason. Here
 a pull request caps the weight at 50lb:

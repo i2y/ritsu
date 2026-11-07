@@ -447,7 +447,86 @@ def checkBoxes (t : ReadTable) (r : Report) : Report := Id.run do
   if read > 0 then
     let less := if without > 0 then s!", {without} of them less the values no table above writes" else ""
     r := r.say s!"    {read} boxes read back from the cells they were written as{less}"
+  -- A `never` line's cells stand for what they say on the axes the way a row's do (rulec's §15.282).
+  for cells in t.neverCells do
+    if cells.length != t.columns.length then
+      r := r.fail s!"{t.name}: a `never` line does not state one cell per column"
+    else
+      for ai in [0 : cells.length] do
+        match cells[ai]! with
+        | CellTest.prefixOf ws =>
+          if !axisCovers t.prefixes[ai]! ws then
+            r := r.fail s!"{t.name}: a `never` line names a prefix {t.columns[ai]!} has no coordinate for"
+        | c =>
+          if !axisSplits t.spans[ai]! c then
+            r := r.fail s!"{t.name}: a `never` line compares {t.columns[ai]!} against a value that falls inside a coordinate"
   return r
+
+/-- A `never` line as the file writes it and as the certificate says it, with what does not change
+    what it means taken out: the comment, the white space, the colon of `not:`, and the other
+    spellings of a comparison and a comma. -/
+def neverWords (s : String) : String := Id.run do
+  let mut out := ""
+  let mut quoted := false
+  for ch in s.toList do
+    if ch == '"' then quoted := !quoted
+    if !quoted && ch == '#' then break
+    if quoted then out := out.push ch
+    else if ch.isWhitespace || ch == ':' then continue
+    else if ch == '≦' then out := out ++ "<="
+    else if ch == '≧' then out := out ++ ">="
+    else if ch == '＜' then out := out.push '<'
+    else if ch == '＞' then out := out.push '>'
+    else if ch == '、' || ch == '，' || ch == '・' then out := out.push ','
+    else out := out.push ch
+  return out
+
+/-- **What stands behind each `never` line** (rulec's §15.282). A line that names an input is one the
+    door reads, and a line on no definition is the caller's promise, which nothing here can show. A
+    line on definitions comes with a proof over the classes of each collection: `tools/recheck.py`
+    builds what may be used from the certificate and adds the proof up, and this program does not
+    read it, which the report says. What this program does hold to is the table's side: every line a
+    table reads is one of the rule's, with the same cell on every column it names. -/
+def checkNevers (cert : Json) (r : Report) : Report := Id.run do
+  let lines := fieldArr cert "nevers"
+  let mut r := r
+  let inputs := (fieldArr cert "inputs").toList.filterMap str
+  let mut caller := 0
+  let mut shown := 0
+  for line in lines do
+    let said := fieldStr line "said"
+    let names := (fieldArr line "conds").toList.map (fieldStr · "name")
+    let door := (field line "door").bind (fun d => (d.getBool?).toOption) == some true
+    if door != names.any inputs.contains then
+      r := r.fail s!"`{said}`: the certificate says the wrong thing about whether the door reads it"
+    match fieldStr line "by" with
+    | "definitions" =>
+      if ((field line "proof").getD Json.null).isNull then
+        r := r.fail s!"`{said}`: it stands on the definitions, and no proof comes with it"
+      else
+        shown := shown + 1
+        r := r.state s!"`{said}`: the definitions rule it out, as the certificate says (tools/recheck.py adds the proof up)"
+    | "caller" =>
+      caller := caller + 1
+      if !door then r := r.fail s!"`{said}`: the caller's promise, and it names no input"
+    | _ => r := r.fail s!"`{said}`: nothing stands behind it"
+  for t in fieldArr cert "tables" do
+    let columns := (fieldArr t "axes").toList.map (fieldStr · "column")
+    for n in fieldArr t "nevers" do
+      match (fieldNat n "line").bind (fun i => lines[i]?) with
+      | none => r := r.fail s!"{fieldStr t "table"}: it reads a `never` line the rule does not have"
+      | some line =>
+        let conds := fieldArr line "conds"
+        if conds.any (fun k => !columns.contains (fieldStr k "name")) then
+          r := r.fail s!"{fieldStr t "table"}: `{fieldStr line "said"}` names something that is not a column of it"
+        for (col, cell) in columns.zip (fieldArr n "tests").toList do
+          let want := match conds.find? (fun k => fieldStr k "name" == col) with
+            | some k => (field k "cell").getD Json.null
+            | none => Json.mkObj [("cell", Json.str "any")]
+          if cell.compress != want.compress then
+            r := r.fail s!"{fieldStr t "table"}: `{fieldStr line "said"}` is read here as something else on {col}"
+  if lines.isEmpty then return r
+  return r.say s!"  never: {shown} lines the definitions rule out, {caller} the caller's promise, taken out of the tables that read them"
 
 /-- Why a numeric axis does not tile, said for a reader: the first thing the check finds wrong. -/
 def tilingWhy (col : String) (said : String) (st : Rat) (lo hi : Option Rat) (xs : List Coord) : String := Id.run do
@@ -1717,7 +1796,8 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
   -- is then not shown to be one case's, and none is taken as proof.
   let coupled := !fixedInputs.isEmpty &&
     (axesJ.any (fun ax => fieldStr ax "kind" != "input") ||
-     (fieldArr cert "constraints").any (fun kc => (sideNames kc "left" ++ sideNames kc "right").any fixedInputs.contains))
+     (fieldArr cert "constraints").any (fun kc => (sideNames kc "left" ++ sideNames kc "right").any fixedInputs.contains) ||
+     (fieldArr cert "nevers").any (fun l => (fieldArr l "conds").any (fun k => fixedInputs.contains (fieldStr k "name"))))
   -- A machine that carries more than its state (§15.217): a path of the state's rows is not one
   -- case's, since each call moves the carried values too, and none is taken as proof. Its claims
   -- over the carried values are laid in `carried` and checked below (`checkCarried`, with the
@@ -2381,6 +2461,28 @@ def ccellOfJson (j : Json) : Option Chances.CCell :=
       some (op, v))).map .cmp
   else none
 
+/-- A condition of a `never` line as a cell of a claim, read from what the certificate says of the line.
+    A comparison on the order of an enum is not one of a claim's cells. -/
+def ccellOfNeverCell (j : Json) : Option Chances.CCell :=
+  let words : Option (List String) := (field j "words" >>= arr).map (fun a => a.toList.filterMap str)
+  let values : Option (List Rat) := (field j "values" >>= arr) >>= (fun a => a.toList.mapM optRat)
+  match fieldStr j "cell" with
+  | "any" => some .any
+  | "none" => some .nothing
+  | "is" => words.map .words
+  | "not" => words.map .notWords
+  | "prefix" => words.map .prefixes
+  | "in" => values.map .nums
+  | "not_in" => values.map .notNums
+  | "cmp" => do
+    let ts ← field j "tests" >>= arr
+    let parts ← ts.toList.mapM (fun t => do
+      let op ← cmpOfString (fieldStr t "op")
+      let v ← field t "value" >>= optRat
+      some (op, v))
+    some (.cmp parts)
+  | _ => none
+
 /-- The chance a claim writes, as the certificate states it. -/
 def chanceTestOfJson (j : Json) : Option Chances.ChanceTest :=
   match field j "is" >>= optRat with
@@ -2803,11 +2905,15 @@ def checkChances (cert : Json) (r : Report) : Report := Id.run do
       if !valuesRead || !inOrder then
         r := r.state s!"{where_}: a value the rule computes cannot be read here, or reads one listed after it"
         continue
+      let some neversL := (fieldArr cert "nevers").toList.mapM (fun l =>
+          (fieldArr l "conds").toList.mapM (fun k => (field k "cell" >>= ccellOfNeverCell).map (fun cc => (fieldStr k "name", cc))))
+        | r := r.state s!"{where_}: a `never` line compares on the order of an enum, which this program does not run"
+          continue
       let K : Chances.RunClaim := {
         tables := tables, fuel := fuel, values := valuesL, types := numTy
         fixedCols := fixedNames, fixedIn := fixedIn
         randCols := draws.map (·.1), draws := draws.map (·.2)
-        cons := consL, ins := ins, outs := outs, rounds := rounds, test := test }
+        cons := consL, nevers := neversL, ins := ins, outs := outs, rounds := rounds, test := test }
       -- How many points running it takes, before running any.
       let combos := K.combos
       let per := (draws.map (fun d => drawnCount d.2)).foldl (· * ·) 1
@@ -3143,6 +3249,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
           r := r.say s!"    {enumAxes} axes of an enum's input run over the values it takes"
         tables := tables.push t
     r := checkContracts cert r
+    r := checkNevers cert r
     r := checkMachine cert tables r
     -- Which values need which before them (rulec's §15.222): no cycle, every value but those no
     -- case can take reached from `start`, and an `ordered by` table's order kept along the edges
@@ -3212,6 +3319,14 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         for t in tables do
           let (r', n, a) := checkSpans t linesOf r curOf
           r := r'; read := read + n; apart := apart + a
+        -- Each `never` line is the one in the file (rulec's §15.282).
+        for line in fieldArr cert "nevers" do
+          let said := fieldStr line "said"
+          let at_ := (fieldNat line "line").getD 0
+          let text := (lines[at_ - 1]?).bind (fun b => String.fromUTF8? b)
+          if at_ == 0 || text.map neverWords != some (neverWords said) then
+            r := r.fail s!"`{said}` is not what line {at_} of the file says"
+          else read := read + 1
         let (r', mread) := checkMachineSpans cert lines r curOf
         r := r'; read := read + mread
         -- The claims of `chances` are the file's (rulec's §15.243).

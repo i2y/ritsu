@@ -144,7 +144,7 @@ fn no_input_reaches_the_row() {
             let mut walked = 0usize;
             'walk: loop {
                 let input: BTreeMap<String, Val> = axes.iter().zip(&at).map(|((n, vs), k)| (n.clone(), vs[*k].clone())).collect();
-                if rulec::vectors::allowed(&f, &input) {
+                if rulec::vectors::allowed(&f, &c, &input) {
                     walked += 1;
                     let (_, fired, _) = i18n::with(Lang::En, || rulec::eval::run_all(&f, &c, input.clone().into_iter().collect::<HashMap<_, _>>()));
                     assert!(!fired.contains(&dead), "{rel}: {dead} fires for {input:?}");
@@ -263,7 +263,7 @@ fn what_the_third_form_does_not_read_passes_as_before() {
             for l in 0..=100 {
                 for k in [true, false] {
                     let input: BTreeMap<String, Val> = [("amount", Val::Num(Rat::int(a))), ("limit", Val::Num(Rat::int(l))), ("k", Val::Bool(k))].into_iter().map(|(n, v)| (n.to_string(), v)).collect();
-                    if !rulec::vectors::allowed(&f, &input) {
+                    if !rulec::vectors::allowed(&f, &c, &input) {
                         continue;
                     }
                     let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());

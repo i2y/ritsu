@@ -8,7 +8,7 @@
 //! vector `rulec vectors` writes.
 
 use ritsu_base::json::Json;
-use ritsu_ports::{Answer, Column, ColumnType, Items, Precondition, References, RuleError, Rules, Value};
+use ritsu_ports::{Answer, Column, ColumnType, Items, NeverCond, NeverTest, Precondition, References, RuleError, Rules, Value};
 use rulec::ports::Engine;
 use std::path::{Path, PathBuf};
 
@@ -233,6 +233,31 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
                     }
                 }
                 "sum" => Precondition::Sum { name: st(p.get("name")), over: st(p.get("over")), of: st(p.get("of")), max: p.get("max").and_then(|x| x.as_int()).unwrap() },
+                "never" => Precondition::Never {
+                    said: st(p.get("said")),
+                    conds: arr(p.get("conds"))
+                        .iter()
+                        .map(|k| {
+                            let name = st(k.get("name"));
+                            let value = |v: &Json| match (v, c.ty_of(&name)) {
+                                (Json::Bool(b), _) => Value::Bool(*b),
+                                (Json::Int(n), _) => Value::Int(*n),
+                                (Json::Str(s), Some(rulec::types::Ty::Enum(_))) => Value::Enum(s.clone()),
+                                (Json::Str(s), Some(rulec::types::Ty::Date)) => Value::Date(s.clone()),
+                                (Json::Str(s), _) => Value::Str(s.clone()),
+                                _ => panic!("{path}: a condition's value: {v:?}"),
+                            };
+                            let test = if let Some(vs) = k.get("among").and_then(|x| x.as_arr()) {
+                                NeverTest::Among { values: vs.iter().map(value).collect(), yes: k.get("yes").and_then(|x| x.as_bool()).unwrap() }
+                            } else if let Some(ops) = k.get("compare").and_then(|x| x.as_arr()) {
+                                NeverTest::Compare(ops.iter().map(|o| (st(o.get("op")), o.get("value").and_then(|x| x.as_int()).unwrap())).collect())
+                            } else {
+                                NeverTest::Other
+                            };
+                            NeverCond { name, test }
+                        })
+                        .collect(),
+                },
                 _ => Precondition::Length { sequence: st(p.get("sequence")), max: p.get("max").and_then(|x| x.as_int()).unwrap() },
             })
             .collect();
@@ -336,7 +361,7 @@ fn 口の評価はどのベクタにもrulec_vectorsと同じ答えを返す() {
             match e.eval(Path::new(&path), &inputs) {
                 Ok(got) => assert_eq!(got, want, "{path}: {}", v.why),
                 // a vector the generated code refuses is one with no answer
-                Err(RuleError::Input(t)) | Err(RuleError::Contradiction(t)) => assert!(want.iter().any(|(_, x)| *x == Value::None) || !rulec::vectors::allowed(&f, &v.input), "{path}: {}: refused: {}", v.why, t.en),
+                Err(RuleError::Input(t)) | Err(RuleError::Contradiction(t)) => assert!(want.iter().any(|(_, x)| *x == Value::None) || !rulec::vectors::allowed(&f, &c, &v.input), "{path}: {}: refused: {}", v.why, t.en),
                 Err(e) => panic!("{path}: {e:?}"),
             }
             answered += 1;
@@ -946,7 +971,7 @@ fn an_output_over_ranges_is_what_every_input_inside_them_comes_to() {
             let mut at = vec![0usize; axes.len()];
             'walk: loop {
                 let input: BTreeMap<String, Val> = axes.iter().zip(&at).map(|((n, vs), i)| (n.clone(), vs[*i].clone())).collect();
-                if rulec::vectors::allowed(&f, &input) && rulec::vectors::days_ok(&c, &input) {
+                if rulec::vectors::allowed(&f, &c, &input) && rulec::vectors::days_ok(&c, &input) {
                     let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());
                     for (n, x) in outs {
                         if let (Some(seen), Some(x)) = (truth.get_mut(&n), x) {
@@ -1101,7 +1126,7 @@ fn an_output_over_values_is_what_every_input_held_to_them_comes_to() {
                     if let Some(name) = free {
                         input.insert(name.clone(), x);
                     }
-                    if !rulec::vectors::allowed(&f, &input) || !rulec::vectors::days_ok(&c, &input) {
+                    if !rulec::vectors::allowed(&f, &c, &input) || !rulec::vectors::days_ok(&c, &input) {
                         continue;
                     }
                     let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());
@@ -1503,7 +1528,7 @@ fn a_numeric_output_over_ranges_holds_what_every_input_inside_them_comes_to() {
                 let mut at = vec![0usize; axes.len()];
                 'walk: loop {
                     let input: BTreeMap<String, Val> = axes.iter().zip(&at).filter(|((_, vs), _)| !vs.is_empty()).map(|((n, vs), i)| (n.clone(), vs[*i].clone())).collect();
-                    if axes.iter().all(|(_, vs)| !vs.is_empty()) && rulec::vectors::allowed(&f, &input) && rulec::vectors::days_ok(&c, &input) {
+                    if axes.iter().all(|(_, vs)| !vs.is_empty()) && rulec::vectors::allowed(&f, &c, &input) && rulec::vectors::days_ok(&c, &input) {
                         let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());
                         for (o, x) in outs {
                             if let (Some(seen), Some(Val::Num(r))) = (seen.get_mut(&o), x) {

@@ -1,0 +1,24 @@
+rule 小包の手数料(parcel_fee_ja) v1
+description "小包の並びを集計した値から手数料を決める。集計は規則の中で計算するので、定義から起こらない組み合わせになる呼び出しは無い。それでも表が外す組み合わせを `never` の行に書き、検査が定義からそれぞれを確かめる"
+
+elements 小包(parcels)
+  割れ物(fragile) : bool
+  重さ(weight)    : number  range >=1 <=100
+
+count 割れ物の数(fragile_parcels) over 小包 where 割れ物  range >=0 <=5
+sum 総重量(total_weight) over 小包 of 重さ  range >=0 <=1000
+max 最大重量(heaviest) over 小包 of 重さ empty 0
+
+never 総重量 = 0, 最大重量 >= 1
+never 総重量 >= 1, 最大重量 = 0
+never 割れ物の数 >= 1, 総重量 = 0
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table 料金(fee_of)
+policy unique
+| 割れ物の数 | 総重量 | 最大重量 | -> 手数料 : money[USD] |
+| 0          | 0      | 0        | 0USD                   |
+| >=1        | >=1    | >=1      | 5USD                   |
+| 0          | >=1    | >=1      | 2USD                   |

@@ -68,3 +68,6 @@ Claude利用料.rule	claude_api_usage_fee.rule
 商品の料金.rule	product_price.rule
 商品の税.rule	product_tax.rule
 商品の配送.rule	product_shipping.rule
+注文の手数料.rule	order_fee.rule
+割れ物の明細の手数料.rule	fragile_lines_fee.rule
+小包の手数料.rule	parcel_fee.rule

@@ -552,6 +552,17 @@ impl<'a> Gen<'a> {
                 lit(&crate::door::constraint(&said))
             ));
         }
+        for n in self.f.door_nevers() {
+            let conds: Vec<String> = n
+                .conds
+                .iter()
+                .filter_map(|k| {
+                    let name = &k.name.text;
+                    self.sql_cell(&k.cell, &local(name), &self.ty_of(name), self.scale(name))
+                })
+                .collect();
+            guard.push(format!("WHEN {} THEN {}", conds.join(" AND "), lit(&crate::door::never(&n.said()))));
+        }
         // The days of a koyomi date (§15.174), refused as the other backends refuse them.
         let mut day_inputs: Vec<&String> = self.c.day_sets.keys().collect();
         day_inputs.sort();

@@ -1,0 +1,36 @@
+workflow 工具の注文 v1
+description "注文の工具をすぐに出すか、先に確かめるかを決める。規則の `never` の行は、ここでは ritsu が決められない（注文の中身は範囲の無いタスクの結果から来て、真偽には範囲が無い）ので、ワークフローが値のできたところですぐに確かめる。"
+
+use rule 確認 from "rules/工具の確認.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:tool-route"
+
+inputs
+  注文 : string
+  区分 : 確認.区分
+
+task 工具を調べる(注文: string) -> bool
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:has-tool"
+  idempotent
+
+task 部品を調べる(注文: string) -> bool
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:all-parts"
+  idempotent
+
+task 工具を数える(注文: string) -> int
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:count-tools"
+  idempotent
+
+task 出荷する(注文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send-out"
+  key
+
+flow
+  # never 工具あり = true, 全部部品 = true は、部品を調べるが答えた直後に確かめる
+  let 工具 = 工具を調べる(注文: 注文)
+  let 部品 = 部品を調べる(注文: 注文)
+  # 工具数の二つの行は、工具を数えるが答えた直後に確かめる
+  let 数 = 工具を数える(注文: 注文)
+  let 判断 = 確認(工具あり: 工具, 全部部品: 部品, 工具数: 数, 区分: 区分)
+  match 判断.行き先
+    すぐ => 出荷する(注文: 注文)
+    確認 => pass

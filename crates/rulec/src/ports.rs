@@ -285,6 +285,7 @@ fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Precondition> {
             crate::verify::Pre::Sum { name, over, of, max } => Precondition::Sum { name, over, of, max },
             crate::verify::Pre::Length { sequence, max } => Precondition::Length { sequence, max },
             crate::verify::Pre::Days { input, file, date, days } => Precondition::Days { input, file, date, days: days.into_iter().collect() },
+            crate::verify::Pre::Never { said, conds } => Precondition::Never { said, conds },
         })
         .collect()
 }
@@ -664,7 +665,65 @@ pub(crate) fn from_val(c: &Checked, name: &str, v: &crate::eval::Val) -> Value {
     }
 }
 
+/// The range a call gives a name, each end absent where it is open.
+type RangeOf<'a> = dyn Fn(&str) -> (Option<i128>, Option<i128>) + 'a;
+
 /// Whether `l op r` holds between two rationals.
+/// A `never` line over ranges (§15.282). One condition no value in its range meets keeps the line
+/// whatever the others do. Every condition met inside a closed range is an example that breaks it,
+/// and everything else cannot be told from ranges: a truth value or an enum has none, and an open
+/// end does not say a value goes there.
+fn never_kept(said: &str, conds: &[ritsu_ports::NeverCond], range: &RangeOf) -> Answer<Values> {
+    use ritsu_ports::NeverTest;
+    let mut example: Vec<(String, Value)> = Vec::new();
+    let mut open = false;
+    for k in conds {
+        let (lo, hi) = range(&k.name);
+        // The whole numbers of the range that meet the condition, as far as they can be told.
+        let one: Option<Option<i128>> = match &k.test {
+            NeverTest::Compare(ops) => {
+                let (mut a, mut b) = (lo, hi);
+                for (op, v) in ops {
+                    match op.as_str() {
+                        ">=" => a = Some(a.map_or(*v, |x| x.max(*v))),
+                        ">" => a = Some(a.map_or(*v + 1, |x| x.max(*v + 1))),
+                        "<=" => b = Some(b.map_or(*v, |x| x.min(*v))),
+                        _ => b = Some(b.map_or(*v - 1, |x| x.min(*v - 1))),
+                    }
+                }
+                match (a, b) {
+                    (Some(x), Some(y)) if x > y => Some(None),
+                    (Some(x), Some(_)) if lo.is_some() && hi.is_some() => Some(Some(x)),
+                    _ => None,
+                }
+            }
+            NeverTest::Among { values, yes: true } if !values.is_empty() && values.iter().all(|v| matches!(v, Value::Int(_))) => {
+                let inside = |n: i128| lo.is_none_or(|x| n >= x) && hi.is_none_or(|y| n <= y);
+                let first = values.iter().find_map(|v| if let Value::Int(n) = v { inside(*n).then_some(*n) } else { None });
+                match first {
+                    None => Some(None),
+                    Some(n) if lo.is_some() && hi.is_some() => Some(Some(n)),
+                    Some(_) => None,
+                }
+            }
+            _ => None,
+        };
+        match one {
+            Some(None) => return Answer::Holds,
+            Some(Some(n)) => example.push((k.name.clone(), Value::Int(n))),
+            None => open = true,
+        }
+    }
+    if open {
+        Answer::Undecided(ritsu_base::tr!(
+            "渡す値の範囲だけでは、`{said}` の組み合わせにならないとは言えません",
+            "ranges alone cannot show that the values given are never the combination of `{said}`"
+        ))
+    } else {
+        Answer::Fails(example)
+    }
+}
+
 fn holds(l: Rat, op: &str, r: Rat) -> bool {
     use std::cmp::Ordering::*;
     match (op, l.cmp_to(r)) {
@@ -785,6 +844,11 @@ impl ritsu_ports::Rules for Engine {
                         "`{input}` は koyomi の日付がとる日だけをとります。問い合わせには範囲しか入らないので、渡す日がその日のどれかであることまでは示せません",
                         "`{input}` takes only the days of a koyomi date, and a range alone cannot show that the day given is one of them"
                     )),
+                    Precondition::Never { said, conds } => never_kept(said, conds, &|name| {
+                        let sc = c.wire_scale(name);
+                        let (lo, hi) = range(name);
+                        (lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc)))
+                    }),
                 };
                 (p, a)
             })
@@ -915,6 +979,12 @@ impl ritsu_ports::Rules for Engine {
         for k in &f.constraints {
             if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
                 return Err(RuleError::Input(ritsu_base::tr!("`{}` が成り立ちません", "`{}` does not hold", k.said())));
+            }
+        }
+        for n in f.door_nevers() {
+            if !crate::vectors::never_clear(n, c, &|m| vals.get(m)) {
+                let said = n.said();
+                return Err(RuleError::Input(ritsu_base::tr!("起こらない組み合わせです: {said}", "this combination does not happen: {said}")));
             }
         }
         let (outs, _, _) = crate::eval::run_all(f, c, vals);

@@ -1,0 +1,8 @@
+ok refund_route.rule
+ok refund.kn: 1 function, fails rule
+error[ritsu E201]: refund.kn:7:3: The call of the rule check can give it values that break its precondition `never shipped = 0, asked >= 1`
+     7 |   check(shipped: shipped, asked: asked, express: express).route
+  = For example, `route(shipped: 0, asked: 10000, express: true)` gives the rule shipped = 0, asked = 10000.
+  = The rule's generated code refuses a call that breaks a precondition at its door, and the kaname function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or correct the ranges of the values given.
+ritsu check: 2 files (rulec 1, kaname 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

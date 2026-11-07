@@ -28,7 +28,8 @@ empty.
 
 A `constraint` narrows what completeness quantifies over: no row is demanded for a
 combination declared not to happen, and the generated code refuses one at the door
-instead. In a rule that walks a sequence, the same completeness check asks whether
+instead. A `never` line does the same for a combination that is not a comparison,
+`never has_tool = true, all_parts = true`. In a rule that walks a sequence, the same completeness check asks whether
 **every verdict the table can produce has an arm** in the fold (E024).
 
 A `derive` is checked against the values it can actually come to, not against the `range`
@@ -140,12 +141,52 @@ error[E123]: The contract lets `order.lines` through with values that break `con
 ```
 
 The `constraint` says every order line that is not a part is a tool, and an order with one service
-line passes the contract and stops at the door. A gap no definition can reach, such as `any` of the
-tools and `all` of the parts both true, is still **E101**, and a note says the combination never
-comes out of the definitions: the seven targets with no function that reads `from` take whatever
-their caller worked out. A row only such a combination reaches is **W133**. Summaries over a
-sequence of `elements` get the same note and the same warning. Nothing is said where it cannot be
-decided, and none of this moves a check of the table.
+line passes the contract and stops at the door.
+
+A gap no definition can reach, such as `any` of the tools and `all` of the parts both true, is still
+**E101**: the seven targets with no function that reads `from` take whatever their caller worked
+out, so a combination leaves the tables only where someone reads that it does. A note says the
+combination never comes out of the definitions, and a hint shows the line to write:
+
+```console
+$ rulec check rules/tool_fee.rule
+error[E101]: Completeness gap: some input matches no row
+  --> rules/tool_fee.rule:13 table tool_fee
+   |
+13 | table tool_fee
+   |       ^^^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: has_tool = true, all_parts = true
+ This combination never comes out of the definitions (`has_tool` is `any order.lines where category = tool`, `all_parts` is `all order.lines where category = part`).
+ A row is still asked for because a call that does not read through `from` reaches it: the code generated for NumPy, Rust, Go, Swift, Java, SQL and Wasm does not read `from`, and takes whatever the caller worked out.
+ hint: a combination that does not happen comes out of the tables with this line, and no row: `never has_tool = true, all_parts = true`
+ hint: add a row that matches this input.
+ The shape of the row to add: `| true | true | 5USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+```
+
+The line is then held to the same definitions. `never has_tool = true, all_parts = false` says an
+order with a tool holds nothing but parts, and the definitions give that combination, so it is
+**E142**, with the request:
+
+```console
+$ rulec check rules/tool_fee.rule
+error[E142]: The definitions give the combination `never has_tool = true, all_parts = false` rules out
+  --> rules/tool_fee.rule:10 never
+   |
+10 | never has_tool = true, all_parts = false
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this combination does occur
+   |
+ A request with `order.lines` holding 1 element with `category` = "tool", for one, gives this combination.
+ hint: if a condition is wrong, correct it. If they are right, delete this line and decide in the tables what the rule answers for that combination.
+```
+
+A line they cannot be shown not to give is **E143**, and so is one over a value the rule computes.
+A line that names an input with no `from` has no definitions to be held to: it is the caller's
+promise, as a `constraint` is, and it can say what a `constraint` cannot of truth values and enums
+(E018). A row only such a combination reaches is **W133**, and its hint is the same line: delete the
+row and write it. Summaries over a sequence of `elements` get the same note, the same line and the
+same warning. A combination that cannot be decided is passed over unless a line rests on it, and
+none of this moves a check of the table beyond the lines you write.
 
 A rule may also be served **as a service a contract declares**:
 `implements proto "<file>" <Service>` hands the names and the numbers of its Connect wire to a
@@ -314,7 +355,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 226 deliberately broken
+   and that implementation has not been proved correct. The evidence is 232 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

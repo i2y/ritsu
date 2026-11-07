@@ -146,6 +146,9 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E131](#e131) | error | A value put together leaves the range it declares |
 | [W132](#w132) | warning | A term of an open value changes nothing |
 | [W133](#w133) | warning | A row is reached only by a combination the definitions never give |
+| [E141](#e141) | error | A `never` line is not written as it can be |
+| [E142](#e142) | error | The definitions give a combination a `never` line rules out |
+| [E143](#e143) | error | A `never` line cannot be shown from the definitions |
 
 ## E001
 
@@ -206,7 +209,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -224,7 +227,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -567,7 +570,7 @@ Related codes: [E018](#e018)
 
 **When.** A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date. Every name a sum adds is held to the same.
 
-**Fix.** Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order.
+**Fix.** Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order. To say a combination does not happen, write a `never` line: `never has_tool = true, all_parts = true`.
 
 **Smallest reproduction**:
 
@@ -594,9 +597,9 @@ Related codes: [E017](#e017), [W111](#w111)
 
 `error` — **An example is an input the generated code refuses at its door**
 
-**When.** An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code.
+**When.** An example's inputs do not satisfy a `constraint` or fall under a `never` line, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code.
 
-**Fix.** Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint.
+**Fix.** Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint or `never` line.
 
 **Smallest reproduction**:
 
@@ -622,7 +625,7 @@ examples
 | 5 | 1 | true |
 ```
 
-Related codes: [E017](#e017), [E018](#e018), [E101](#e101)
+Related codes: [E017](#e017), [E018](#e018), [E101](#e101), [E141](#e141)
 
 ## E020
 
@@ -1643,9 +1646,9 @@ Related codes: [E041](#e041), [E043](#e043)
 
 `error` — **A value passed leaves the callee's range or constraint**
 
-**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, what the rows of a table write for its output (what a name can take, for a row that writes one), and, for a `max` or a `min` of two values, what the two can take that the answer can be (a `max` comes to nothing before the later of their first values, a `min` to nothing after the earlier of their last ones). A value a fold or another expression decides is taken to be any value of its enum, since check does not work out which ones those come to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. It is also a value that may be absent — an input or a field of an element declared `T?`, the output of a table a row of which answers `none`, a definition that only names one — passed to an input or a field of the callee that is not optional: the callee's tables have no answer for the absent value. Where `with none -> <value>` reads it as a value of the callee's, there is nothing to say. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
+**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` or `never` line of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, what the rows of a table write for its output (what a name can take, for a row that writes one), and, for a `max` or a `min` of two values, what the two can take that the answer can be (a `max` comes to nothing before the later of their first values, a `min` to nothing after the earlier of their last ones). A value a fold or another expression decides is taken to be any value of its enum, since check does not work out which ones those come to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. It is also a value that may be absent — an input or a field of an element declared `T?`, the output of a table a row of which answers `none`, a definition that only names one — passed to an input or a field of the callee that is not optional: the callee's tables have no answer for the absent value. Where `with none -> <value>` reads it as a value of the callee's, there is nothing to say. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
 
-**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`. For the absent value, read it as a value of the callee's with `with none -> <value>` (an enum), give this rule's name a type that is not optional where it always has a value, or decide the value in a table of this rule that answers `none` too and pass that. A number or a field of an element that can be absent needs the callee to take the absent value, which is a change to the callee.
+**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`. For a `never` line, write the same line in this rule. For the absent value, read it as a value of the callee's with `with none -> <value>` (an enum), give this rule's name a type that is not optional where it always has a value, or decide the value in a table of this rule that answers `none` too and pass that. A number or a field of an element that can be absent needs the callee to take the absent value, which is a change to the callee.
 
 **Smallest reproduction**:
 
@@ -3106,7 +3109,7 @@ Related codes: [E013](#e013), [E032](#e032), [E033](#e033)
 
 **When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there.
 
-**Fix.** Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
+**Fix.** If the combination does not happen, take it out of the tables with a `never` line rather than a row (a note shows the line, where the definitions show it). If it does, add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
 
 **Smallest reproduction**:
 
@@ -3128,7 +3131,7 @@ policy unique
 | b | false          |
 ```
 
-Related codes: [E102](#e102), [E105](#e105), [W111](#w111), [W133](#w133)
+Related codes: [E102](#e102), [E105](#e105), [W111](#w111), [W133](#w133), [E142](#e142)
 
 ## E102
 
@@ -5851,7 +5854,7 @@ Related codes: [E068](#e068), [E131](#e131)
 
 **When.** Among the columns a row's cells test is an input read with `from any`, `all`, `count`, `sum`, `max` or `min`, or a summary over `elements`, and no request gives the combination the cells ask for. `any … where category = tool` and `all … where category = part` both being true, for one, does not occur whatever the elements hold. Only the definitions and what the contract says of an element are read, and nothing is said where it cannot be decided. Completeness (E101) is not changed by this: the check of a table reads each column as a value of its own, and a target that does not read `from` is handed whatever the caller worked out.
 
-**Fix.** If E101 does not come back without the row, delete it. If it does, the table needs the row to be complete, so keep it. If the row's answer is for a call that does not read `from`, leave it: `check --diff-base` in CI reports only the ones that are new.
+**Fix.** Delete the row and write the `never` line the hint shows. The tables then have no row to write for that combination, and the generated code refuses it at the door when a caller works the values out by hand. Where no `never` line can be written from the definitions, delete the row if E101 does not come back without it, and keep it if E101 does. `check --diff-base` in CI reports only what is new.
 
 **Smallest reproduction**:
 
@@ -5882,4 +5885,108 @@ With `order.json` beside it:
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/Line"}}},"required":["lines"]},"Line":{"type":"object","properties":{"category":{"type":"string","enum":["tool","part","service"]}},"required":["category"]}}}
 ```
 
-Related codes: [E101](#e101), [E123](#e123), [W124](#w124)
+Related codes: [E101](#e101), [E123](#e123), [E142](#e142), [W124](#w124)
+
+## E141
+
+`error` — **A `never` line is not written as it can be**
+
+**When.** A `never` line names something that is neither an input nor a summary, has two conditions on one name, names a field of an element, writes `none` for a name that is not optional, or names both inputs and `elements` summaries. A summary is worked out past the door, so the door cannot read it, and its definition says nothing of an input's value.
+
+**Fix.** Correct the name. Conditions are separated by `,` and each is written as a table's cell is: `name = value`, `name = value | value`, `name = not: value`, `name >= 1 < 5`. A relation between an input and a summary has to be kept outside the rule.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  has_tool(has_tool)   : bool
+  all_parts(all_parts) : bool
+
+never has_tool = true, all_part = true
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| has_tool | all_parts | -> fee |
+| true     | false     | 5USD   |
+| false    | true      | 0USD   |
+| false    | false     | 2USD   |
+```
+
+Related codes: [E142](#e142), [E143](#e143), [E018](#e018)
+
+## E142
+
+`error` — **The definitions give a combination a `never` line rules out**
+
+**When.** Every name of a `never` line is an input read with `from` or a summary over `elements`, and a request the definitions and the contract allow gives the combination. The tables have no row to write for what the line takes out, so taking out what happens makes the generated code answer a good request with an error. A note shows such a request, and `--format json` has it under `request`.
+
+**Fix.** If a condition is wrong, correct it. If they are right, delete the line and decide in the tables what the rule answers for that combination.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  has_tool(has_tool) : bool  from any order.lines where category = tool
+  has_part(has_part) : bool  from any order.lines where category = part
+
+never has_tool = true, has_part = true
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| has_tool | has_part | -> fee |
+| true     | false    | 5USD   |
+| false    | true     | 0USD   |
+| false    | false    | 2USD   |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/Line"}}},"required":["lines"]},"Line":{"type":"object","properties":{"category":{"type":"string","enum":["tool","part","service"]}},"required":["category"]}}}
+```
+
+Related codes: [E143](#e143), [E123](#e123), [W133](#w133), [E101](#e101)
+
+## E143
+
+`error` — **A `never` line cannot be shown from the definitions**
+
+**When.** Every name of a `never` line has a definition and the definitions show neither that the combination happens nor that it does not (a contract that cannot be read, a summary over more than can be read, an optional or string value). Or the line reads a column the rule computes: a derived value, a `define`, a table's output. Taking a combination out of the tables on a line nothing shows would leave the page's word that it does not happen with nothing behind it.
+
+**Fix.** Delete the line and decide in the tables what the rule answers for that combination. For a relation of computed columns, write it as a relation of the inputs they read.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  weight(weight) : number  range >=0 <=100
+
+define extra(extra) : number = weight - 50
+
+never extra > 50
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table weight_fee(weight_fee)
+policy unique
+| weight | -> fee |
+| <=50   | 2USD   |
+| >50    | 5USD   |
+```
+
+Related codes: [E142](#e142), [E141](#e141), [E101](#e101)

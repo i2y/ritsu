@@ -1101,6 +1101,118 @@ policy unique
 | false    | true      | 0USD   |
 | false    | false     | 2USD   |
 "##;
+const X_E141: &str = r##"rule t(t) v1
+
+inputs
+  工具あり(has_tool)  : bool
+  全部部品(all_parts) : bool
+
+never 工具あり = true, 全部品 = true
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 工具料(tool_fee)
+policy unique
+| 工具あり | 全部部品 | -> 料金 |
+| true     | false    | 5USD    |
+| false    | true     | 0USD    |
+| false    | false    | 2USD    |
+"##;
+const X_E141_EN: &str = r##"rule t(t) v1
+
+inputs
+  has_tool(has_tool)   : bool
+  all_parts(all_parts) : bool
+
+never has_tool = true, all_part = true
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| has_tool | all_parts | -> fee |
+| true     | false     | 5USD   |
+| false    | true      | 0USD   |
+| false    | false     | 2USD   |
+"##;
+const X_E142: &str = r##"rule t(t) v1
+
+shape 注文(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  工具あり(has_tool) : bool  from any 注文.lines where category = tool
+  部品あり(has_part) : bool  from any 注文.lines where category = part
+
+never 工具あり = true, 部品あり = true
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 工具料(tool_fee)
+policy unique
+| 工具あり | 部品あり | -> 料金 |
+| true     | false    | 5USD    |
+| false    | true     | 0USD    |
+| false    | false    | 2USD    |
+"##;
+const X_E142_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  has_tool(has_tool) : bool  from any order.lines where category = tool
+  has_part(has_part) : bool  from any order.lines where category = part
+
+never has_tool = true, has_part = true
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| has_tool | has_part | -> fee |
+| true     | false    | 5USD   |
+| false    | true     | 0USD   |
+| false    | false    | 2USD   |
+"##;
+const X_E143: &str = r##"rule t(t) v1
+
+inputs
+  重さ(weight) : number  range >=0 <=100
+
+define 超過(extra) : number = 重さ - 50
+
+never 超過 > 50
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 重量料(weight_fee)
+policy unique
+| 重さ | -> 料金 |
+| <=50 | 2USD    |
+| >50  | 5USD    |
+"##;
+const X_E143_EN: &str = r##"rule t(t) v1
+
+inputs
+  weight(weight) : number  range >=0 <=100
+
+define extra(extra) : number = weight - 50
+
+never extra > 50
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table weight_fee(weight_fee)
+policy unique
+| weight | -> fee |
+| <=50   | 2USD   |
+| >50    | 5USD   |
+"##;
 const X_W124: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g\n  急ぎ(express) : bool  from 見積.express\n\noutputs\n  料金(fee) : money[円]  round up(10円)\n\ntable 料金表(fees)\npolicy first\n| 急ぎ  | 重さ | -> 料金 |\n| true  | >5kg | 3000円  |\n| true  | -    | 1500円  |\n| false | -    | 800円   |\n";
 const X_W124_EN: &str = r##"rule t(t) v1
 
@@ -3164,8 +3276,8 @@ pub fn ledger() -> Vec<Entry> {
                 "A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date. Every name a sum adds is held to the same."
             ),
             tr!(
-                "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書いてください。列挙や真偽に大小はありません。",
-                "Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order."
+                "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書いてください。列挙や真偽に大小はありません。起こらない組み合わせを言いたいなら、`never 工具あり = true, 全部部品 = true` のように `never` の行で書いてください。",
+                "Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order. To say a combination does not happen, write a `never` line: `never has_tool = true, all_parts = true`."
             ),
             X_E018,
             &["E017", "W111"],
@@ -3174,15 +3286,15 @@ pub fn ledger() -> Vec<Entry> {
             "E019",
             tr!("例が、生成コードが入口で受け付けない入力です", "An example is an input the generated code refuses at its door"),
             tr!(
-                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で受け付けません。そのため、規則はその入力の答えを決めていません。範囲の外の例と、二つの日付のあいだの `constraint` を破る例は、いままで検査を通り、その例から作ったベクタは、生成コードでエラーになっていました。",
-                "An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code."
+                "例の入力が `constraint` を満たしていないか `never` の行に当たるとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で受け付けません。そのため、規則はその入力の答えを決めていません。範囲の外の例と、二つの日付のあいだの `constraint` を破る例は、いままで検査を通り、その例から作ったベクタは、生成コードでエラーになっていました。",
+                "An example's inputs do not satisfy a `constraint` or fall under a `never` line, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code."
             ),
             tr!(
-                "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約を消してください。",
-                "Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint."
+                "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約か `never` の行を消してください。",
+                "Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint or `never` line."
             ),
             X_E019,
-            &["E017", "E018", "E101"],
+            &["E017", "E018", "E101", "E141"],
         ),
         err(
             "E020",
@@ -3538,12 +3650,12 @@ pub fn ledger() -> Vec<Entry> {
             "E043",
             tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
             tr!(
-                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。順のある列挙の入力の `range`（`range >=basic <=gold`）では、渡す値が取りうる列挙の値を `with` で元の規則の値に読み替えて、範囲に入らない値があるときです。取りうる値は、入力ならその範囲（範囲が無ければ列挙の全部）、リテラルならその値、表の出力なら行が書く値（名前を書く行は、その名前が取りうる値）、二つの値の `max` と `min` なら、二つが取りうる値のうち答えになりうるもの（`max` は二つの一番前の値の後のほうより前にならず、`min` は二つの一番後の値の前のほうより後にならない）です。`fold` の答えなどほかの式で決まる値は、check がその値を求めないので列挙の全部とし、範囲の外の値があれば、渡す値の取りうる値が分からないと言います。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。値の無いことがある値（`T?` の入力や要素のフィールド、`none` を書く行のある表の出力、それらを指すだけの定義）を、`?` の無い元の規則の入力やフィールドに渡すときにも出ます。元の規則の表には、値が無いときの答えがありません。`with none -> <値>` で値の無いことを元の規則の値に読み替えていれば出ません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
-                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, what the rows of a table write for its output (what a name can take, for a row that writes one), and, for a `max` or a `min` of two values, what the two can take that the answer can be (a `max` comes to nothing before the later of their first values, a `min` to nothing after the earlier of their last ones). A value a fold or another expression decides is taken to be any value of its enum, since check does not work out which ones those come to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. It is also a value that may be absent — an input or a field of an element declared `T?`, the output of a table a row of which answers `none`, a definition that only names one — passed to an input or a field of the callee that is not optional: the callee's tables have no answer for the absent value. Where `with none -> <value>` reads it as a value of the callee's, there is nothing to say. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
+                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` や `never` の行がこの規則の宣言から導けないとき。順のある列挙の入力の `range`（`range >=basic <=gold`）では、渡す値が取りうる列挙の値を `with` で元の規則の値に読み替えて、範囲に入らない値があるときです。取りうる値は、入力ならその範囲（範囲が無ければ列挙の全部）、リテラルならその値、表の出力なら行が書く値（名前を書く行は、その名前が取りうる値）、二つの値の `max` と `min` なら、二つが取りうる値のうち答えになりうるもの（`max` は二つの一番前の値の後のほうより前にならず、`min` は二つの一番後の値の前のほうより後にならない）です。`fold` の答えなどほかの式で決まる値は、check がその値を求めないので列挙の全部とし、範囲の外の値があれば、渡す値の取りうる値が分からないと言います。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。値の無いことがある値（`T?` の入力や要素のフィールド、`none` を書く行のある表の出力、それらを指すだけの定義）を、`?` の無い元の規則の入力やフィールドに渡すときにも出ます。元の規則の表には、値が無いときの答えがありません。`with none -> <値>` で値の無いことを元の規則の値に読み替えていれば出ません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
+                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` or `never` line of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, what the rows of a table write for its output (what a name can take, for a row that writes one), and, for a `max` or a `min` of two values, what the two can take that the answer can be (a `max` comes to nothing before the later of their first values, a `min` to nothing after the earlier of their last ones). A value a fold or another expression decides is taken to be any value of its enum, since check does not work out which ones those come to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. It is also a value that may be absent — an input or a field of an element declared `T?`, the output of a table a row of which answers `none`, a definition that only names one — passed to an input or a field of the callee that is not optional: the callee's tables have no answer for the absent value. Where `with none -> <value>` reads it as a value of the callee's, there is nothing to say. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
             ),
             tr!(
-                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。列挙なら、この規則の入力に同じ `range` を書くか（順のある列挙のとき）、範囲の中の値だけを書く表で値を決めて渡すか、`with` で範囲の中の値に読み替えてください。制約なら、同じ関係を `constraint` で宣言してください。値の無いことなら、`with none -> <値>` で元の規則の値に読み替えるか（列挙のとき）、値がいつもあるならこの規則の名前を `?` の無い型にするか、`none` にも答える表をこの規則に書いて値を決めて渡してください。数や要素のフィールドで値の無いことがあるなら、元の規則が値の無いことを受け付ける変更になります。",
-                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`. For the absent value, read it as a value of the callee's with `with none -> <value>` (an enum), give this rule's name a type that is not optional where it always has a value, or decide the value in a table of this rule that answers `none` too and pass that. A number or a field of an element that can be absent needs the callee to take the absent value, which is a change to the callee."
+                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。列挙なら、この規則の入力に同じ `range` を書くか（順のある列挙のとき）、範囲の中の値だけを書く表で値を決めて渡すか、`with` で範囲の中の値に読み替えてください。制約なら、同じ関係を `constraint` で宣言してください。`never` の行なら、同じ行をこの規則にも書いてください。値の無いことなら、`with none -> <値>` で元の規則の値に読み替えるか（列挙のとき）、値がいつもあるならこの規則の名前を `?` の無い型にするか、`none` にも答える表をこの規則に書いて値を決めて渡してください。数や要素のフィールドで値の無いことがあるなら、元の規則が値の無いことを受け付ける変更になります。",
+                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`. For a `never` line, write the same line in this rule. For the absent value, read it as a value of the callee's with `with none -> <value>` (an enum), give this rule's name a type that is not optional where it always has a value, or decide the value in a table of this rule that answers `none` too and pass that. A number or a field of an element that can be absent needs the callee to take the absent value, which is a change to the callee."
             ),
             X_E043,
             &["E041", "E042", "E101"],
@@ -3974,11 +4086,11 @@ pub fn ledger() -> Vec<Entry> {
                 "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there."
             ),
             tr!(
-                "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
-                "Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
+                "その組み合わせが起こらないなら、行を足さずに `never` の行で表から外してください（定義から確かめられるときは、書く行を注が示します）。起こるなら、それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
+                "If the combination does not happen, take it out of the tables with a `never` line rather than a row (a note shows the line, where the definitions show it). If it does, add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
             ),
             X_E101,
-            &["E102", "E105", "W111", "W133"],
+            &["E102", "E105", "W111", "W133", "E142"],
         ),
         err(
             "E102",
@@ -5017,14 +5129,60 @@ pub fn ledger() -> Vec<Entry> {
                 "Among the columns a row's cells test is an input read with `from any`, `all`, `count`, `sum`, `max` or `min`, or a summary over `elements`, and no request gives the combination the cells ask for. `any … where category = tool` and `all … where category = part` both being true, for one, does not occur whatever the elements hold. Only the definitions and what the contract says of an element are read, and nothing is said where it cannot be decided. Completeness (E101) is not changed by this: the check of a table reads each column as a value of its own, and a target that does not read `from` is handed whatever the caller worked out."
             ),
             tr!(
-                "行を消しても E101 が出ないなら、消してください。E101 が出るなら、表の完全性にこの行が要るので、残してください。行の答えが `from` を読まない呼び出しのためのものなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。",
-                "If E101 does not come back without the row, delete it. If it does, the table needs the row to be complete, so keep it. If the row's answer is for a call that does not read `from`, leave it: `check --diff-base` in CI reports only the ones that are new."
+                "この行を消して、案内の `never` の行を書いてください。表はその組み合わせに行を持たなくてよくなり、生成コードは手で計算した値のその組み合わせを入口で受け付けなくなります。定義から `never` の行を書けないときは、行を消しても E101 が出ないなら消し、E101 が出るなら残してください。CI の `check --diff-base` は、新しく生じたものだけを報告します。",
+                "Delete the row and write the `never` line the hint shows. The tables then have no row to write for that combination, and the generated code refuses it at the door when a caller works the values out by hand. Where no `never` line can be written from the definitions, delete the row if E101 does not come back without it, and keep it if E101 does. `check --diff-base` in CI reports only what is new."
             ),
             X_W133,
-            &["E101", "E123", "W124"],
+            &["E101", "E123", "E142", "W124"],
         )
         .with_files(LINES_OF_KINDS)
         .english(X_W133_EN),
+        err(
+            "E141",
+            tr!("`never` の行の書き方が違います", "A `never` line is not written as it can be"),
+            tr!(
+                "`never` の行に、入力でも集計でもない名前があるとき。同じ名前の条件が二つあるとき。要素のフィールドを書いたとき。optional でない名前に `none` を書いたとき。入力と `elements` の集計を一行に混ぜたとき。集計は入口のあとで計算するので、入口では確かめられず、定義からも入力の値と結びつけて確かめられません。",
+                "A `never` line names something that is neither an input nor a summary, has two conditions on one name, names a field of an element, writes `none` for a name that is not optional, or names both inputs and `elements` summaries. A summary is worked out past the door, so the door cannot read it, and its definition says nothing of an input's value."
+            ),
+            tr!(
+                "名前を直してください。条件は `,` で区切って、`名前 = 値`、`名前 = 値 | 値`、`名前 = not: 値`、`名前 >= 1 < 5` のように、表のセルと同じ書き方で書いてください。入力と集計の関係は、規則の外で確かめてください。",
+                "Correct the name. Conditions are separated by `,` and each is written as a table's cell is: `name = value`, `name = value | value`, `name = not: value`, `name >= 1 < 5`. A relation between an input and a summary has to be kept outside the rule."
+            ),
+            X_E141,
+            &["E142", "E143", "E018"],
+        )
+        .english(X_E141_EN),
+        err(
+            "E142",
+            tr!("`never` に書いた組み合わせが、定義から起こります", "The definitions give a combination a `never` line rules out"),
+            tr!(
+                "`never` の行の名前がどれも `from` で読む入力か `elements` の集計で、書いた組み合わせになるリクエストが定義と契約から作れるとき。表は、この行が外した組み合わせに行を持たなくてよくなるので、起こる組み合わせを外すと、生成コードが正しいリクエストにエラーを返します。リクエストの例が注に付き、`--format json` では `request` に入ります。",
+                "Every name of a `never` line is an input read with `from` or a summary over `elements`, and a request the definitions and the contract allow gives the combination. The tables have no row to write for what the line takes out, so taking out what happens makes the generated code answer a good request with an error. A note shows such a request, and `--format json` has it under `request`."
+            ),
+            tr!(
+                "条件が間違っているなら直してください。合っているなら、この行を消して、その組み合わせの答えを表で決めてください。",
+                "If a condition is wrong, correct it. If they are right, delete the line and decide in the tables what the rule answers for that combination."
+            ),
+            X_E142,
+            &["E143", "E123", "W133", "E101"],
+        )
+        .with_files(LINES_OF_KINDS)
+        .english(X_E142_EN),
+        err(
+            "E143",
+            tr!("`never` の行を定義から確かめられません", "A `never` line cannot be shown from the definitions"),
+            tr!(
+                "`never` の行の名前がどれも定義を持つのに、定義からは起こるとも起こらないとも示せないとき（読めない契約、並びの全部を読めない集計、optional や文字列の値）。または、行が導出や `define`、表の出力など、規則が計算する列を読んでいるとき。確かめられない行で表から外すと、ページの「起こらない」に根拠がなくなります。",
+                "Every name of a `never` line has a definition and the definitions show neither that the combination happens nor that it does not (a contract that cannot be read, a summary over more than can be read, an optional or string value). Or the line reads a column the rule computes: a derived value, a `define`, a table's output. Taking a combination out of the tables on a line nothing shows would leave the page's word that it does not happen with nothing behind it."
+            ),
+            tr!(
+                "この行を消して、その組み合わせの答えを表で決めてください。計算する列の関係なら、その列が読む入力の関係として書いてください。",
+                "Delete the line and decide in the tables what the rule answers for that combination. For a relation of computed columns, write it as a relation of the inputs they read."
+            ),
+            X_E143,
+            &["E142", "E141", "E101"],
+        )
+        .english(X_E143_EN),
     ]
 }
 

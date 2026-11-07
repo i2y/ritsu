@@ -609,6 +609,22 @@ impl<'a> Gen<'a> {
                     .finish()
             })
             .collect();
+        // A `never` line: the tests of a row, as data (§15.282).
+        let nevers: Vec<String> = self
+            .f
+            .door_nevers()
+            .map(|n| {
+                let tests: Vec<String> = n
+                    .conds
+                    .iter()
+                    .filter_map(|k| {
+                        let name = &k.name.text;
+                        self.np_cell(&k.cell, name, &self.ty_of(name), self.scale(name))
+                    })
+                    .collect();
+                Obj::new().raw("tests", format!("[{}]", tests.join(","))).str("what", crate::door::never(&n.said())).finish()
+            })
+            .collect();
         let mut day_inputs: Vec<&String> = self.c.day_sets.keys().collect();
         day_inputs.sort();
         let days: Vec<String> = day_inputs
@@ -633,6 +649,7 @@ impl<'a> Gen<'a> {
             .str("row", &tr!("行", "row"))
             .raw("inputs", format!("[{}]", inputs.join(",")))
             .opt_raw("constraints", (!constraints.is_empty()).then(|| format!("[{}]", constraints.join(","))))
+            .opt_raw("nevers", (!nevers.is_empty()).then(|| format!("[{}]", nevers.join(","))))
             .opt_raw("days", (!days.is_empty()).then(|| format!("[{}]", days.join(","))))
             .raw("outputs", format!("[{}]", outputs.join(",")))
             .raw("steps", format!("[{}]", steps.join(",")))

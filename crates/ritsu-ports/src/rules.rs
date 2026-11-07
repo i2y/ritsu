@@ -169,6 +169,49 @@ pub enum Precondition {
     /// A date input that takes only the days of a koyomi date (`range from koyomi`, rulec's
     /// §15.174): the file and the date as the rule names them, and the days.
     Days { input: String, file: String, date: String, days: crate::DaySet },
+    /// `never <conditions>`: a combination of values the rule says does not happen, which the code
+    /// generated from it refuses (rulec's §15.282). The line as the rule writes it, and what it
+    /// tests. The precondition is that not all of these hold at once. A line on `elements`
+    /// summaries alone is not here: nothing a caller gives reaches them.
+    Never { said: String, conds: Vec<NeverCond> },
+}
+
+/// One condition of a `never` line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NeverCond {
+    pub name: String,
+    pub test: NeverTest,
+}
+
+/// What a condition of a `never` line tests, on the wire.
+#[derive(Clone, Debug, PartialEq)]
+pub enum NeverTest {
+    /// One of these values, or with `yes` false, none of them.
+    Among { values: Vec<Value>, yes: bool },
+    /// All of these comparisons (`<=`, `<`, `>=`, `>`) against a whole number on the wire.
+    Compare(Vec<(String, i128)>),
+    /// A test only the rule's own door reads: `= none`, `starts_with`, a comparison of dates.
+    Other,
+}
+
+impl NeverTest {
+    /// Whether a value given meets the test; None for a test only the rule's own door reads.
+    pub fn holds(&self, v: &Value) -> Option<bool> {
+        match self {
+            NeverTest::Among { values, yes } => Some(values.contains(v) == *yes),
+            NeverTest::Compare(ops) => Some(match v {
+                Value::Int(n) => ops.iter().all(|(op, k)| match op.as_str() {
+                    "<=" => n <= k,
+                    "<" => n < k,
+                    ">=" => n >= k,
+                    ">" => n > k,
+                    _ => false,
+                }),
+                _ => false,
+            }),
+            NeverTest::Other => None,
+        }
+    }
 }
 
 /// The rule's Connect service (rulec's §15.112).

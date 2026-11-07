@@ -1,0 +1,33 @@
+rule fragile_lines_fee v1
+description "A fee read off an order's lines. Some combinations of the reads never come out of their definitions, and the table leaves them out by writing `never`: the check shows each line from the definitions and the contract, the page says so, and a caller who works the values out by hand is refused at the door."
+
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  has_fragile : bool  from any order.lines where fragile = true
+  all_fragile : bool  from all order.lines where fragile = true
+  fragile     : number  range >=0 <=20  from count order.lines where fragile = true
+
+# An order has at least one line, so "every line is fragile" means one of them is.
+never has_fragile = false, all_fragile = true
+never has_fragile = true, fragile = 0
+never has_fragile = false, fragile >= 1
+never has_fragile = true, fragile = 4
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table fragile_fee
+policy unique
+| has_fragile | all_fragile | fragile | -> fee : money[USD] |
+| true        | true        | >=1     | 9USD                |
+| true        | false       | 1       | 3USD                |
+| true        | false       | >=2     | 5USD                |
+| false       | false       | 0       | 0USD                |
+
+examples
+| has_fragile | all_fragile | fragile | -> fee |
+| true        | true        | 2       | 9USD   |
+| true        | false       | 1       | 3USD   |
+| true        | false       | 3       | 5USD   |
+| false       | false       | 0       | 0USD   |

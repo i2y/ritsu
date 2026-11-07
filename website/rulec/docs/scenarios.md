@@ -653,6 +653,8 @@ Every `rulec check` reads the contract's file and holds it to the rule. What it 
 | a `constraint` between two inputs is one the contract does not keep | E123 |
 | a row is reached only by a combination the contract never lets through | W124 |
 | a row is reached only by a combination the reads of one collection never give | W133 |
+| a `never` line over the reads of a contract rules out a combination the definitions give | E142 |
+| a `never` line cannot be shown from the definitions | E143 |
 
 The one met most is E122. A contract that puts no cap on an order's lines, for example:
 

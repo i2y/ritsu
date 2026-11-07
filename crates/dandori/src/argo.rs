@@ -685,6 +685,21 @@ impl<'a> Gen<'a> {
                 let holds = match &c.test {
                     PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &|e| self.ex(e)), side_code(right, &|e| self.ex(e))),
                     PreTest::Days { value, days, .. } => format!("{} in [{}]", self.ex(value), days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
+                    PreTest::Never { conds, .. } => {
+                        let lit = |v: &ritsu_ports::Value| match v {
+                            ritsu_ports::Value::Bool(b) => b.to_string(),
+                            ritsu_ports::Value::Int(n) => n.to_string(),
+                            ritsu_ports::Value::Str(s) | ritsu_ports::Value::Enum(s) | ritsu_ports::Value::Date(s) => q(s),
+                            _ => "nil".to_string(),
+                        };
+                        crate::model::never_code(conds, &crate::model::NeverCode {
+                            expr: &|e| self.ex(e),
+                            lit: &lit,
+                            among: &|v, ls| format!("{v} in [{}]", ls.join(", ")),
+                            not: &|c| format!("!({c})"),
+                            and: " && ",
+                        })
+                    }
                 };
                 let (ctl, error) = (Gen::ctl(depth), Gen::global_ref("dd_error", depth));
                 let failed = format!("toJson({{\"Error\": {}, \"Cause\": {}}})", q(crate::prechecks::ERROR), q(&c.cause(self.m)));

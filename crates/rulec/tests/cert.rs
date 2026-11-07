@@ -1027,3 +1027,88 @@ fn held_to(base: &std::path::Path, rel: &str) -> String {
         _ => rel.to_string(),
     }
 }
+
+/// The tampered forms of a certificate with `never` lines: what each of them would let through, if
+/// it passed. `tests/lean.rs` holds the proved checker to the ones it reads.
+fn never_forgeries(cert: &str) -> Vec<(&'static str, String)> {
+    vec![
+        // A table's reading of a line that takes something the line does not say.
+        ("the cell a table reads the line as", cert.replacen(r#"{"line":1,"tests":[{"cell":"is","words":["true"]}"#, r#"{"line":1,"tests":[{"cell":"is","words":["false"]}"#, 1)),
+        // A leaf closed by a line that does not take its box.
+        ("a leaf closed by another line", cert.replacen(r#"{"never":1}"#, r#"{"never":2}"#, 1)),
+        ("a box a row takes", cert.replacen(r#"{"never":1},{"row":1}"#, r#"{"never":1},{"never":0}"#, 1)),
+        // A leaf closed by a line that is not there.
+        ("a leaf closed by no line", cert.replacen(r#"{"never":1}"#, r#"{"never":9}"#, 1)),
+        // A line that is not held at the door though it names an input.
+        ("the door", cert.replacen(r#""door":true"#, r#""door":false"#, 1)),
+        // A line's condition moved, with what the tables read of it left alone.
+        ("a condition of the line", cert.replacen(r#""conds":[{"name":"has_fragile","cell":{"cell":"is","words":["true"]}}"#, r#""conds":[{"name":"has_fragile","cell":{"cell":"is","words":["false"]}}"#, 1)),
+        // A definitions line with its proof taken away.
+        ("no proof", cert.replacen(r#""proof":{"#, r#""was_proof":{"#, 1)),
+    ]
+}
+
+/// The proof of a line over definitions is added up here, not taken on trust: each tampered form
+/// fails, and so does a line said to stand on something it does not.
+/// A draw under a `never` line is no draw (§15.282): with the campaign off, ticket 0 does not happen,
+/// so the first prize is 10 tickets of 99 and not 11 of 100, and the re-checker counts it that way.
+#[test]
+fn a_line_narrows_what_a_claim_counts_in_the_recheck() {
+    if !ready(Need::Python, have_python, "python3 is not there") {
+        return;
+    }
+    let t = ritsu_testkit::TempDir::new("never-draw");
+    let rule = t.path().join("r.rule");
+    std::fs::write(&rule, "rule lucky_draw v1\n\nenum prize = first | no_prize\n\ninputs\n  ticket   : number  range >=0 <=99  random\n  campaign : bool\n\nnever ticket = 0, campaign = false\n\noutputs\n  prize : prize\n\ntable numbers\npolicy unique\n| ticket   | campaign | -> prize |\n| 0        | true     | first    |\n| >=1 <=10 | -        | first    |\n| >=11     | -        | no_prize |\n\nchances\n| campaign | -> prize | chance          |\n| true     | first    | 11%             |\n| false    | first    | >=10.1% <=10.2% |\n").unwrap();
+    let (c, cert) = rulec(&["certificate", rule.to_str().unwrap()]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = recheck_rule(&cert, rule.to_str().unwrap());
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("2 of 2 claims re-checked"), "{said}");
+    // A run with the line left out of the door counts 11 of 100, and the claim is no longer true.
+    let forged = cert.replacen(r#""door":true"#, r#""door":false"#, 1);
+    assert_ne!(forged, cert);
+    assert_eq!(recheck(&forged).0, 1);
+}
+
+#[test]
+fn a_tampered_line_fails_the_recheck() {
+    if !ready(Need::Python, have_python, "python3 is not there") {
+        return;
+    }
+    let rule = "tests/corpus/fragile_lines_fee.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    assert_eq!(recheck_rule(&cert, rule).0, 0, "{}", recheck_rule(&cert, rule).1);
+    let mut forged = never_forgeries(&cert);
+    forged.extend([
+        // A multiplier changed: the inequalities no longer add up to something false.
+        ("a multiplier", cert.replacen(r#"{"y":"1","terms""#, r#"{"y":"3","terms""#, 1)),
+        // A constant changed: an inequality nothing builds from the walks.
+        ("an inequality", cert.replacen(r#""k":"1","strict":false}"#, r#""k":"2","strict":false}"#, 1)),
+        // A way of the question left out.
+        ("the ways of the question", cert.replacen(r#""ways":["#, r#""ways":[],"was_ways":["#, 1)),
+        // What a read of a class of the elements says, against what its test says.
+        ("what a read takes", cert.replacen(r#""pass":[true,false]"#, r#""pass":[true,true]"#, 1)),
+        // The contract's lower bound on the length of the list, which the first line stands on.
+        ("the contract's cases", cert.replacen(r#""cases":[[0,1]]"#, r#""cases":[[0]]"#, 1)),
+        // A line said to be the caller's promise, though every name has a definition.
+        ("whose promise", cert.replacen(r#""by":"definitions""#, r#""by":"caller""#, 1)),
+        // The place of the line in the file.
+        ("the place in the file", cert.replacen(r#""line":13,"by""#, r#""line":1,"by""#, 1)),
+    ]);
+    for (what, f) in forged {
+        assert_ne!(f, cert, "{what}: the certificate has another form now, and this forged nothing");
+        let (code, said) = recheck_rule(&f, rule);
+        assert_ne!(code, 0, "{what}: the forged certificate passes\n{said}");
+        assert!(said.contains("FAILED"), "{what}: it does not say what is wrong\n{said}");
+    }
+    // A line of the caller's said to stand on definitions has no proof to show.
+    let rule = "tests/corpus/order_fee.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    assert_eq!(recheck_rule(&cert, rule).0, 0, "{}", recheck_rule(&cert, rule).1);
+    let f = cert.replacen(r#""by":"caller""#, r#""by":"definitions""#, 1);
+    assert_ne!(f, cert);
+    assert_ne!(recheck_rule(&f, rule).0, 0, "a line with no proof passes as shown from definitions");
+}

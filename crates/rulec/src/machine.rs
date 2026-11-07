@@ -667,6 +667,13 @@ fn coupled_inputs(f: &RuleFile, fixed: &[String], axes: &[Axis]) -> Vec<String> 
             }
         }
     }
+    for k in &f.nevers {
+        for x in fixed {
+            if k.names().any(|n| n == x) && !out.contains(x) {
+                out.push(x.clone());
+            }
+        }
+    }
     out
 }
 
@@ -1140,7 +1147,7 @@ pub fn analyze(f: &RuleFile, c: &Checked, budget: usize) -> Option<Analysis> {
         for (n, v) in &vals {
             inputs.insert(n.clone(), v.clone());
         }
-        if !crate::vectors::allowed(f, &inputs) {
+        if !crate::vectors::allowed(f, c, &inputs) {
             return (e, true);
         }
         let an = crate::vdiff::run(f, c, inputs.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
@@ -1723,7 +1730,7 @@ fn real_calls(a: &Analysis, f: &RuleFile, c: &Checked, m: &MachineDecl, walker: 
                         inp.insert(n.clone(), v.clone());
                     }
                 }
-                if !crate::vectors::allowed(f, &inp) {
+                if !crate::vectors::allowed(f, c, &inp) {
                     continue;
                 }
                 runs += 1;
@@ -2631,7 +2638,22 @@ pub fn check_scenarios(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 }
                 Some(_) => {}
             }
-            if !crate::vectors::allowed(f, &a) {
+            if !crate::vectors::allowed(f, c, &a) {
+                if let Some(said) = f.door_nevers().find(|n| !crate::vectors::never_clear(n, c, &|m| a.get(m))).map(|n| n.said()) {
+                    out.push(
+                        Diag::error(
+                            "E019",
+                            tr!("手順の例 {} の {} 回目の呼び出しは、`{}` に当たります", "Call {1} of scenario {0} falls under `{2}`", sc.name.text, k + 1, said),
+                        )
+                        .at(at(row.span.line))
+                        .mark(row.span.clone(), "")
+                        .note(tr!(
+                            "`never` の行は「この組み合わせは起こらない」という宣言で、生成コードはその組み合わせを入口で受け付けません。手順の例の値を直すか、その組み合わせが本当に起こるなら `never` の行を消してください。",
+                            "A `never` line declares that a combination does not happen, and the generated code refuses it at the door. Correct the scenario's values, or drop the `never` line if that combination really does happen."
+                        )),
+                    );
+                    break;
+                }
                 out.push(
                     Diag::error("E019", tr!("手順の例 {} の {} 回目の呼び出しが制約を破っています", "Call {1} of scenario {0} breaks a constraint", sc.name.text, k + 1))
                         .at(at(row.span.line))

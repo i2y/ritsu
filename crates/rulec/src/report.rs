@@ -98,7 +98,7 @@ pub struct Mismatch {
 }
 
 /// Why the new version does not take a record's input (§15.197): a stable kind for
-/// `--format json`, the input at fault (empty for a constraint, which is about two), and the
+/// `--format json`, the input at fault (empty for a constraint or a `never` line, which name several), and the
 /// reason as prose.
 #[derive(Debug, Clone)]
 pub struct Refusal {
@@ -606,7 +606,7 @@ pub fn moved_clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Clu
 /// renderings are built from these, as they are from [`Cluster`].
 pub struct RefusedCluster<'a> {
     pub kind: &'static str,
-    /// The input at fault; empty for a constraint.
+    /// The input at fault; empty for a constraint or a `never` line.
     pub field: String,
     /// The reason. **Prose.**
     pub what: String,

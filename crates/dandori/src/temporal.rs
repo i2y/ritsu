@@ -2964,6 +2964,21 @@ impl<'a> Gen<'a> {
                 let holds = match &c.test {
                     PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &|e| self.expr(e)), side_code(right, &|e| self.expr(e))),
                     PreTest::Days { value, days, .. } => format!("[{}].includes({})", days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", "), self.expr(value)),
+                    PreTest::Never { conds, .. } => {
+                        let lit = |v: &ritsu_ports::Value| match v {
+                            ritsu_ports::Value::Bool(b) => b.to_string(),
+                            ritsu_ports::Value::Int(n) => n.to_string(),
+                            ritsu_ports::Value::Str(s) | ritsu_ports::Value::Enum(s) | ritsu_ports::Value::Date(s) => q(s),
+                            _ => "null".to_string(),
+                        };
+                        crate::model::never_code(conds, &crate::model::NeverCode {
+                            expr: &|e| self.expr(e),
+                            lit: &lit,
+                            among: &|v, ls| format!("[{}].includes({v})", ls.join(", ")),
+                            not: &|c| format!("!({c})"),
+                            and: " && ",
+                        })
+                    }
                 };
                 self.line(d, &format!("// line {}: the precondition {} of the rule {}, which ritsu could not decide", c.call_line, c.text(), m.rules[c.rule].name));
                 self.line(d, &format!("if (!({holds})) throw dd.fail({}, {});", q(crate::prechecks::ERROR), q(&c.cause(m))));

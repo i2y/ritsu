@@ -1031,6 +1031,16 @@ impl Domain {
                     }
                 }
             }
+            // A `never` line ties what it names the same way (§15.282).
+            for n in f.door_nevers() {
+                if n.names().any(|m| names.contains(m)) {
+                    for m in n.names() {
+                        if !held.contains(m) {
+                            names.insert(m.clone());
+                        }
+                    }
+                }
+            }
             if names.len() == before {
                 break;
             }
@@ -1149,7 +1159,7 @@ pub fn exhaust_tie(f: &RuleFile, c: &Checked, name: &str, grid: Rat) -> Option<O
     let dom = Domain::of(f, c, &on)?;
     let mut found = None;
     dom.each(|_, a| {
-        if crate::vectors::allowed(f, &a) {
+        if crate::vectors::allowed(f, c, &a) {
             let (_, _, b) = eval::run_bindings(f, c, a.clone().into_iter().collect());
             if let Some(Val::Num(v)) = b.get(name) {
                 if crate::vectors::is_tie(*v, grid) {
@@ -1193,7 +1203,7 @@ pub fn exhaust_pair(
     let mut groups: Vec<HashMap<Vec<usize>, Vec<usize>>> = vec![HashMap::new(); dom.names.len()];
     let mut found = None;
     dom.each(|at, a| {
-        if !crate::vectors::allowed(f, &a) {
+        if !crate::vectors::allowed(f, c, &a) {
             return true;
         }
         let (outs, fired, b) = eval::run_all(f, c, a.clone().into_iter().collect());

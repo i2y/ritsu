@@ -44,6 +44,12 @@ fn rulec(args: &[&str]) -> String {
 /// times too large in all four languages while the suite stayed green. `コーパスは全部載っている`
 /// keeps the list honest.
 const CORPUS: &[(&str, &str)] = &[
+    ("tests/corpus/order_fee.rule", "order_fee"),
+    ("tests/corpus/注文の手数料.rule", "order_fee_ja"),
+    ("tests/corpus/fragile_lines_fee.rule", "fragile_lines_fee"),
+    ("tests/corpus/割れ物の明細の手数料.rule", "fragile_lines_fee_ja"),
+    ("tests/corpus/parcel_fee.rule", "parcel_fee"),
+    ("tests/corpus/小包の手数料.rule", "parcel_fee_ja"),
     ("tests/corpus/品番の扱い.rule", "sku_handling"),
     ("tests/corpus/買物かごの送料.rule", "cart_shipping"),
     ("tests/corpus/shipment_surcharge.rule", "shipment_surcharge"),

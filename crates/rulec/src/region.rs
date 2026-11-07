@@ -298,6 +298,16 @@ impl Axis {
     }
 }
 
+/// One `never` line as one table reads it (§15.282): each axis it tests, with the coordinates its
+/// cell takes there. The axes are cut at the line's own values, so a coordinate is wholly inside
+/// or wholly outside.
+#[derive(Debug, Clone)]
+pub struct NeverCut {
+    /// The line's place among the rule's `never` lines.
+    pub line: usize,
+    pub on: Vec<(usize, Vec<bool>)>,
+}
+
 /// Feasibility per §6.2. Because derived values get independent axes, the space contains points
 /// that cannot actually occur. The sieve drops those at reporting time, but once dependencies
 /// are involved it cannot always decide.
@@ -357,6 +367,9 @@ pub struct TableRegion {
     /// The rule's `constraint` lines (§15.55). A box that no input satisfying them can reach
     /// is not a gap and not an overlap: it is a combination the caller says does not happen.
     constraints: Vec<crate::ast::Constraint>,
+    /// The rule's `never` lines this table has a column for every name of (§15.282). A box they
+    /// take is a combination that does not happen.
+    nevers: Vec<NeverCut>,
     /// The rule's linear model around this table's numeric axes (§15.141): the defining
     /// equation of every linear `derive` the axes reach, the declared ranges, and every
     /// `constraint`, closed over the names they tie together — one system for each type of
@@ -452,6 +465,26 @@ fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec
     let mut v: Vec<Rat> = set.into_iter().map(|(n, d)| Rat { num: n, den: d }).filter(inside).collect();
     v.sort_by(|a, b| a.cmp_to(*b));
     (v, lo, hi)
+}
+
+/// The values a `never` line tests a column at, cut into its coordinates as a cell's are
+/// (§15.282): a line takes whole coordinates, or it could not take a box out of the table.
+fn never_bounds(b: &mut Vec<Rat>, (lo, hi): (Option<Rat>, Option<Rat>), f: &RuleFile, name: &str, want: &Ty) {
+    let inside = |x: &Rat| lo.is_none_or(|l| x.cmp_to(l) != std::cmp::Ordering::Less) && hi.is_none_or(|h| x.cmp_to(h) != std::cmp::Ordering::Greater);
+    for cell in f.never_cells(name) {
+        let lits: Vec<&Lit> = match cell {
+            Cell::Cmp(cs) => cs.iter().map(|(_, l)| l).collect(),
+            Cell::Lit(l) => vec![l],
+            Cell::Set(ls) | Cell::Not(ls) => ls.iter().collect(),
+            _ => Vec::new(),
+        };
+        for v in lits.into_iter().filter_map(|l| lit_rat(l, want)).filter(inside) {
+            if !b.iter().any(|x| x.cmp_to(v) == std::cmp::Ordering::Equal) {
+                b.push(v);
+            }
+        }
+    }
+    b.sort_by(|a, b| a.cmp_to(*b));
 }
 
 /// Build the coordinates. `quantum` is the smallest step a value can take (1 for `money[円]`,
@@ -1191,6 +1224,15 @@ impl TableRegion {
                             }
                         }
                     }
+                    for cell in f.never_cells(name) {
+                        if let Cell::Prefix(ps) = cell {
+                            for p in ps {
+                                if !patterns.contains(p) {
+                                    patterns.push(p.clone());
+                                }
+                            }
+                        }
+                    }
                     // Longest first, so that a class is "under this and under nothing
                     // longer" by position as well as by construction.
                     patterns.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
@@ -1215,6 +1257,7 @@ impl TableRegion {
                     if let Some(h) = crate::over::held(name) {
                         (lo, hi) = crate::over::narrow(&mut b, (lo, hi), h);
                     }
+                    never_bounds(&mut b, (lo, hi), f, name, &ty);
                     // A date's step is one day. Dates are serial day numbers, so adjacent days
                     // differ by 1.
                     Axis::Num {
@@ -1246,6 +1289,7 @@ impl TableRegion {
                     if let Some(h) = crate::over::held(name) {
                         (lo, hi) = crate::over::narrow(&mut b, (lo, hi), h);
                     }
+                    never_bounds(&mut b, (lo, hi), f, name, &ty);
                     let unit = match &ty {
                         Ty::Money { cur, .. } => cur.clone(),
                         Ty::Qty { unit, .. } => unit.clone(),
@@ -1375,6 +1419,24 @@ impl TableRegion {
             })
             .collect();
 
+        let nevers: Vec<NeverCut> = f
+            .nevers
+            .iter()
+            .enumerate()
+            .filter_map(|(line, n)| {
+                let on = n
+                    .conds
+                    .iter()
+                    .map(|k| {
+                        let ai = col_names.iter().position(|m| *m == k.name.text)?;
+                        let ty = c.ty_of(&k.name.text)?;
+                        Some((ai, cell_mask(&axes[ai], Some(&k.cell), ty.present(), c)))
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                Some(NeverCut { line, on })
+            })
+            .collect();
+
         let mut unreachable_row = Vec::new();
         let mut masks = Vec::new();
         for row in &t.rows {
@@ -1424,8 +1486,26 @@ impl TableRegion {
             masks,
             unanalyzable,
             constraints: f.constraints.clone(),
+            nevers,
             model,
         })
+    }
+
+    /// The `never` line that takes every point below `path`, by its place in this table's list
+    /// (§15.282). An axis the path has not fixed is one the line takes whole, or the line takes
+    /// only part of the box.
+    pub(crate) fn never_rules_out(&self, path: &[usize]) -> Option<usize> {
+        self.nevers.iter().position(|n| {
+            n.on.iter().all(|(ai, m)| match path.get(*ai) {
+                Some(&ci) => m[ci],
+                None => m.iter().all(|x| *x),
+            })
+        })
+    }
+
+    /// The `never` line that takes every point of a row, by its place among the rule's lines.
+    pub(crate) fn never_takes_row(&self, i: usize) -> Option<usize> {
+        self.nevers.iter().find(|n| n.on.iter().all(|(ai, m)| (0..m.len()).all(|ci| !self.masks[i][*ai][ci] || m[ci]))).map(|n| n.line)
     }
 
     /// The coordinates a path allows on each axis: the one it takes where it has fixed one,
@@ -1922,7 +2002,16 @@ impl TableRegion {
         let (asks, mut ineqs) = self.asks_of_gap(path, None, &walks);
         ineqs.extend(held.iter().cloned());
         match walks.ask(&asks, &ineqs) {
-            Possible::No(_) => (vals, walks.never_notes(&read)),
+            Possible::No(_) => {
+                let mut notes = walks.never_notes(&read);
+                if let Some(line) = self.never_for_gap(path, &walks) {
+                    notes.push(tr!(
+                        "ヒント: 起こらない組み合わせは、行を足さずに次の一行で表から外せます: `{line}`",
+                        "hint: a combination that does not happen comes out of the tables with this line, and no row: `{line}`"
+                    ));
+                }
+                (vals, notes)
+            }
             Possible::Unknown => (vals, Vec::new()),
             Possible::Yes(ex) => {
                 let Some(point) = vals.as_deref() else { return (vals, Vec::new()) };
@@ -1943,6 +2032,59 @@ impl TableRegion {
                 (moved, Vec::new())
             }
         }
+    }
+
+    /// The `never` line that takes a gap out (§15.282), when the definitions show it does not
+    /// occur: each axis the gap fixes and the definitions know of, at the coordinate it takes.
+    fn never_for_gap(&self, path: &[usize], walks: &crate::projection::walks::Walks) -> Option<String> {
+        use crate::ast::{Lit, Name, NeverCond};
+        let word = |w: &str| Cell::Lit(Lit::Word(w.to_string()));
+        let span = crate::diag::Span::new(1, 1, 1);
+        let mut conds = Vec::new();
+        for (ai, &ci) in path.iter().enumerate() {
+            let name = &self.col_names[ai];
+            if !walks.knows(name) {
+                continue;
+            }
+            let cell = match &self.axes[ai] {
+                Axis::Bool => word(if ci == 0 { crate::kw::TRUE } else { crate::kw::FALSE }),
+                Axis::Enum { values } => match values.get(ci).map(String::as_str) {
+                    None | Some(crate::kw::NONE) => return None,
+                    Some(v) => word(v),
+                },
+                Axis::Num { coords, date, unit, shown, .. } => {
+                    let lit = |v: Rat| -> Option<Lit> {
+                        if *date {
+                            let (y, m, d) = crate::types::ord_to_date(v);
+                            return Some(Lit::Date(y, m, d));
+                        }
+                        let text = format!("{}{unit}", v.mul(Rat::int(*shown)));
+                        let toks = crate::lex::lex_line_soft(1, &text).ok()?.0;
+                        match toks.as_slice() {
+                            [crate::lex::Token { kind: crate::lex::Kind::Num(n), .. }] => Some(Lit::Num(n.clone())),
+                            _ => None,
+                        }
+                    };
+                    match coords.get(ci)? {
+                        Coord::Absent => return None,
+                        Coord::Point(v) => Cell::Lit(lit(*v)?),
+                        Coord::Open(a, b) => {
+                            let mut cs = Vec::new();
+                            if let Some(a) = a {
+                                cs.push((CmpOp::Gt, lit(*a)?));
+                            }
+                            if let Some(b) = b {
+                                cs.push((CmpOp::Lt, lit(*b)?));
+                            }
+                            Cell::Cmp(cs)
+                        }
+                    }
+                }
+                Axis::Prefix { .. } => return None,
+            };
+            conds.push(NeverCond { name: Name { text: name.clone(), ascii: None, span: span.clone() }, cell });
+        }
+        walks.line_for(conds, &span)
     }
 
     /// The input behind a gap that lies on a column the rule computes (§15.190). The witness
@@ -3416,6 +3558,11 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
         let s = if other_lines.len() == 1 { "s" } else { "" };
         d = d.note(tr!("{ls} が許さない入力の組み合わせも来ません。", "The combinations of inputs that {ls} rule{s} out never come either."));
     }
+    if !w.nevers.is_empty() {
+        let lines: Vec<String> = w.nevers.iter().filter_map(|k| f.nevers.get(*k)).map(|n| format!("`{}`", n.said())).collect();
+        let ls = list(&lines);
+        d = d.note(tr!("{ls} が外した組み合わせも来ません。", "The combinations {ls} take out never come either."));
+    }
     if w.upstream {
         d = d.note(tr!("上流の表が同時には出さない値の組み合わせも来ません。", "The combinations of values the tables above never produce together never come either."));
     }
@@ -3804,6 +3951,8 @@ pub(crate) struct OutOfReach {
     truth: BTreeSet<usize>,
     /// The `constraint` lines (by index) that leave a point out, read one at a time.
     constraints: BTreeSet<usize>,
+    /// The `never` lines (by index) that leave a point out (§15.282).
+    nevers: BTreeSet<usize>,
     /// The axes of koyomi's days that leave a point out.
     days: BTreeSet<usize>,
     /// The tables above leave a point out, with no derived or `define` value taking part.
@@ -3968,6 +4117,10 @@ impl TableRegion {
                 why.constraints.insert(k);
                 return true;
             }
+        }
+        if let Some(n) = self.never_rules_out(path) {
+            why.nevers.insert(self.nevers[n].line);
+            return true;
         }
         if !leaf {
             return false;
@@ -4779,6 +4932,9 @@ impl TableRegion {
                 return Feasible::No;
             }
         }
+        if self.never_rules_out(path).is_some() {
+            return Feasible::No;
+        }
         let mut constrained: Vec<(usize, Vec<String>)> = Vec::new();
         for (ai, d) in self.derived.iter().enumerate() {
             let Some(((rl, rh), deps)) = d else { continue };
@@ -5217,6 +5373,9 @@ pub enum CertCell {
 
 /// What the certificate says about one table.
 pub struct CertTable {
+    /// The `never` lines this table reads (§15.282): the line's place among the rule's, and each
+    /// axis's cell. A column the line does not test holds `Any`.
+    pub nevers: Vec<(usize, Vec<CertCell>)>,
     pub name: String,
     pub policy: &'static str,
     /// How many columns the table writes to the right of `->`. A re-checker splits a row's
@@ -5303,7 +5462,7 @@ pub fn certificate_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) ->
 }
 
 /// One cell, resolved only as far as the units: the re-checker does the geometry.
-fn cert_cell(cell: Option<&Cell>, ty: Option<Ty>) -> CertCell {
+pub(crate) fn cert_cell(cell: Option<&Cell>, ty: Option<Ty>) -> CertCell {
     let word = |l: &Lit| match l {
         Lit::Word(w) => w.clone(),
         Lit::Str(s) => s.clone(),
@@ -5611,6 +5770,7 @@ impl TableRegion {
                 v
             },
             cover,
+            nevers: self.never_cert(f, chk),
             constraints: self.constraint_list(),
             model,
             model_extra,
@@ -5973,6 +6133,8 @@ pub enum Cover {
     /// No input reaches here: the sieve ruled the box out (§6.2) — by a `constraint`, or by
     /// a derived value whose coordinate lies outside what the derive can produce.
     ByConstraint(usize),
+    /// A `never` line takes the whole box, by its place in the table's list (§15.282).
+    ByNever(usize),
     ByDerived(usize),
     /// Every point of the box was asked about one at a time, and the sieve ruled each one
     /// out. The re-checker redoes exactly that (§15.98).
@@ -6065,6 +6227,9 @@ impl TableRegion {
                 return Some(Cover::ByConstraint(k));
             }
         }
+        if let Some(k) = self.never_rules_out(path) {
+            return Some(Cover::ByNever(k));
+        }
         for ai2 in 0..path.len() {
             if self.derived[ai2].is_some() && self.derived_out_of_reach(ai2, path) {
                 return Some(Cover::ByDerived(ai2));
@@ -6141,6 +6306,22 @@ impl TableRegion {
     /// that means anything. `None` at an end is unbounded.
     pub fn coord_bounds(&self, ai: usize) -> Vec<Option<(Option<Rat>, Option<Rat>)>> {
         (0..self.axes[ai].len()).map(|ci| self.coord_span(ai, ci)).collect()
+    }
+
+    /// The `never` lines of this table, as the re-checker reads them: each axis's cell.
+    fn never_cert(&self, f: &RuleFile, chk: &Checked) -> Vec<(usize, Vec<CertCell>)> {
+        self.nevers
+            .iter()
+            .map(|n| {
+                let line = &f.nevers[n.line];
+                let cells = self
+                    .col_names
+                    .iter()
+                    .map(|name| cert_cell(line.conds.iter().find(|k| k.name.text == *name).map(|k| &k.cell), chk.ty_of(name).map(|t| t.present().clone())))
+                    .collect();
+                (n.line, cells)
+            })
+            .collect()
     }
 
     /// The rule's `constraint` lines, as the certificate names them.

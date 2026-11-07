@@ -1017,6 +1017,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 })
                 .collect(),
             constraints: cf.constraints.clone(),
+            nevers: cf.door_nevers().cloned().collect(),
             // Every enum the callee's inputs can take, an imported one too (§15.182): a binding
             // between two inputs of the built-in divisions is checked against these values.
             enums: cc.enum_order.iter().filter_map(|e| cc.enums.get(e).map(|vs| (e.clone(), vs.clone()))).collect(),
@@ -1651,6 +1652,82 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         .mark(a.span.clone(), "")
                         .note(tr!("元の規則は `{kl}` と `{kr}` にその関係があると宣言していて、完全性はそれを前提に検査されています。この規則が渡すのは `{sl}` と `{sr}` です。", "The callee declares that relation between `{kl}` and `{kr}`, and its completeness was checked believing it. Here `{sl}` and `{sr}` are passed."))
                         .note(tr!("同じ関係を `{} {sl} {} {sr}` として宣言するか、範囲でそれが成り立つようにしてください。", "Declare the same relation as `{} {sl} {} {sr}`, or make the ranges imply it.", crate::kw::CONSTRAINT, k.op.word())),
+                );
+            }
+        }
+        // The callee's `never` lines (§15.282): its completeness was checked without rows for those
+        // combinations, and whatever a `from` says of its inputs does not hold of what is passed here.
+        // A line follows when this rule writes the same line over what it passes, or one condition
+        // cannot be met: a literal passed that does not meet it, or a range that lies outside it.
+        for n in &cal.nevers {
+            let bind = |m: &str| a.bindings.iter().find(|b| b.input == m);
+            let Some(bound) = n.conds.iter().map(|k| bind(&k.name.text).map(|b| (k, b))).collect::<Option<Vec<_>>>() else { continue };
+            // The same line, with the names of what is passed. An enum read through `with` is not the
+            // same word, so it does not count as written.
+            let renamed = |b: &Binding| match &b.value {
+                BindValue::Name(x) if b.map.is_empty() && c.ty_of(x).is_some() => Some(x.clone()),
+                _ => None,
+            };
+            // A word that names nothing here is a value of the callee's (`b = false`).
+            let word_passed = |b: &'_ Binding| match &b.value {
+                BindValue::Lit(Lit::Word(w)) => Some(w.clone()),
+                BindValue::Name(x) if c.ty_of(x).is_none() => Some(x.clone()),
+                _ => None,
+            };
+            let declared = f.nevers.iter().any(|mine| {
+                mine.conds.len() == bound.len()
+                    && bound.iter().all(|(k, b)| {
+                        renamed(b).is_some_and(|x| mine.conds.iter().any(|m| m.name.text == x && crate::ast::cell_text(&m.cell) == crate::ast::cell_text(&k.cell)))
+                    })
+            });
+            let misses = |k: &crate::ast::NeverCond, b: &Binding| -> bool {
+                let ty = callee_ty(cal, &b.input).unwrap_or(Ty::Unknown);
+                match (word_passed(b), &k.cell) {
+                    (Some(w), Cell::Lit(Lit::Word(x))) => w != *x,
+                    (Some(w), Cell::Set(ls)) => !ls.iter().any(|l| matches!(l, Lit::Word(x) if *x == w)),
+                    (Some(w), Cell::Not(ls)) => ls.iter().any(|l| matches!(l, Lit::Word(x) if *x == w)),
+                    (_, Cell::Cmp(ops)) => interval(b).is_some_and(|(lo, hi)| {
+                        ops.iter().any(|(op, l)| {
+                            let at = match l {
+                                Lit::Num(num) => crate::types::lit_value_in_pub(num, ty.present()),
+                                Lit::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
+                                _ => None,
+                            };
+                            at.is_some_and(|v| match op {
+                                CmpOp::Ge => hi.is_some_and(|h| h.cmp_to(v).is_lt()),
+                                CmpOp::Gt => hi.is_some_and(|h| h.cmp_to(v).is_le()),
+                                CmpOp::Le => lo.is_some_and(|x| x.cmp_to(v).is_gt()),
+                                CmpOp::Lt => lo.is_some_and(|x| x.cmp_to(v).is_ge()),
+                            })
+                        })
+                    }),
+                    (_, Cell::Lit(Lit::Num(num))) => interval(b).is_some_and(|(lo, hi)| {
+                        crate::types::lit_value_in_pub(num, ty.present()).is_some_and(|v| lo.is_some_and(|x| x.cmp_to(v).is_gt()) || hi.is_some_and(|h| h.cmp_to(v).is_lt()))
+                    }),
+                    _ => false,
+                }
+            };
+            if !declared && !bound.iter().any(|(k, b)| misses(k, b)) {
+                let said = n.said();
+                let line = {
+                    let conds: Vec<crate::ast::NeverCond> = bound
+                        .iter()
+                        .map(|(k, b)| {
+                            let mut k = (*k).clone();
+                            if let Some(x) = renamed(b) {
+                                k.name.text = x;
+                            }
+                            k
+                        })
+                        .collect();
+                    crate::ast::NeverLine { conds, span: n.span.clone() }.said()
+                };
+                out.push(
+                    Diag::error("E043", tr!("元の規則の `{said}` が、この規則の宣言から導けません", "The callee's `{said}` does not follow from this rule's declarations"))
+                        .at(at(a.span.line))
+                        .mark(a.span.clone(), "")
+                        .note(tr!("元の規則はこの組み合わせに行を書いていません。この規則から渡す値がその組み合わせになると、元の規則の入口で止まります。", "The callee has no row for this combination, and its door refuses it. The values passed here can be that combination."))
+                        .note(tr!("同じ関係を `{line}` として宣言するか、範囲か値でその組み合わせにならないようにしてください。", "Declare the same relation as `{line}`, or make the ranges or values keep out of the combination.")),
                 );
             }
         }

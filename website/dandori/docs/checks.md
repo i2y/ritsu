@@ -79,8 +79,9 @@ does `now` in a workflow that says the period it runs in (`now range …`), whic
 period. [Ranges](tour.md#ranges)
 
 **A rule's precondition.** Some of what a rule takes for granted its inputs' types cannot say: that
-one input stays at or below another (`constraint asked <= paid`), or that a day is one of the days a
-koyomi date comes to (`range from koyomi`). `ritsu check` holds each such precondition to the values
+one input stays at or below another (`constraint asked <= paid`), that a combination does not happen
+(`never has_tool = true, all_parts = true`), or that a day is one of the days a koyomi date comes to
+(`range from koyomi`). `ritsu check` holds each such precondition to the values
 the call can give (ritsu's E201, with an example that breaks it), and says when nothing decides it
 (W201). What it cannot decide, the code that `ritsu dandori gen` writes checks when the workflow
 runs, as soon as the values are made: right after the task whose answer they are, or later, where

@@ -257,6 +257,35 @@ fn x2_a_rules_preconditions_where_a_flow_calls_it() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// A rule with `never` lines where a workflow calls it (rulec's §15.282).
+const NEVER_RULE: &str = "rule refund_route v1\ndescription \"Whether a refund is paid back at once. An order with nothing shipped has nothing to refund, and an express order of 50 or more is held back before it is made.\"\n\nenum path = at_once | review\n\ninputs\n  shipped : number  range >=0 <=100\n  asked   : number  range >=0 <=10000\n  express : bool\n\nnever shipped = 0, asked >= 1\nnever express = true, shipped >= 50\n\noutputs\n  route : path\n\ntable pick\npolicy unique\n| asked | -> route : path |\n| <=100 | at_once         |\n| >100  | review          |\n";
+const NEVER_FLOW: &str = "workflow refund v1\ndescription \"Pays a refund back at once or sends it to review, as the rule decides\"\n\nuse rule check from \"refund_route.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:refund-route\"\n\ninputs\n  order   : string\n  shipped : int  range >=1 <=100\n  express : bool\n\ntask ask_amount(order: string) -> int range >=0 <=10000\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask-amount\"\n  idempotent\n\ntask pay_back(order: string, amount: int range >=0 <=10000)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:pay-back\"\n  key\n\nflow\n  let asked = ask_amount(order: order)\n  let decision = check(shipped: shipped, asked: asked, express: express)\n  match decision.route\n    at_once => pay_back(order: order, amount: asked)\n    review => pass\n";
+const NEVER_MODULE: &str = "module refund v1\ndescription \"Whether a refund is paid at once or reviewed, as the rule decides for what was shipped and what the customer asks for\"\n\nuse rule check from \"refund_route.rule\"\n\nfn route(shipped: number range >=1 <=49, asked: number range >=0 <=10000, express: bool) -> check.path\n  check(shipped: shipped, asked: asked, express: express).route\n";
+
+/// X2 with a rule's `never` lines (rulec's §15.282). A number that cannot meet its condition shows
+/// a line holds, whatever the truth value beside it; numbers that can all meet theirs are an example
+/// (E201); a truth value, or a number with no range, leaves it undecided (W201), and the workflow
+/// checks it when it runs (`crates/dandori/tests/flows/never_lines.flow`). kaname holds its calls to
+/// the lines the same way.
+#[test]
+fn x2_a_rules_never_lines_where_a_call_gives_it_values() {
+    let mut failures = Vec::new();
+    let rule = NEVER_RULE.to_string();
+    let files = |flow: &str| vec![("refund_route.rule", rule.clone()), ("refund.flow", flow.to_string())];
+    let few = NEVER_FLOW.replace("shipped : int  range >=1 <=100", "shipped : int  range >=1 <=49");
+    run("x2-never-held", &files(&few), 0, (2, 0, 0), &mut failures);
+    run("x2-never-truth-W201", &files(NEVER_FLOW), 0, (1, 0, 1), &mut failures);
+    let none = NEVER_FLOW.replace("shipped : int  range >=1 <=100", "shipped : int  range >=0 <=49");
+    run("x2-never-E201", &files(&none), 1, (1, 1, 0), &mut failures);
+    let open = NEVER_FLOW.replace("shipped : int  range >=1 <=100", "shipped : int");
+    run("x2-never-W201", &files(&open), 0, (0, 0, 2), &mut failures);
+    let module = |text: &str| vec![("refund_route.rule", rule.clone()), ("refund.kn", text.to_string())];
+    run("kaname-x2-never-held", &module(NEVER_MODULE), 0, (2, 0, 0), &mut failures);
+    let none = NEVER_MODULE.replace("shipped: number range >=1 <=49", "shipped: number range >=0 <=49");
+    run("kaname-x2-never-E201", &module(&none), 1, (1, 1, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// X2 with a sum on one side of the rule's `constraint` (rulec's §15.216): what the call gives the
 /// inputs it adds up is taken at the ends that try the relation hardest, and their sum against the
 /// other side's. Held, an example that breaks it (E201, every input of the sum named), and a value

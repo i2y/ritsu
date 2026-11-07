@@ -340,6 +340,42 @@ fn sep() -> &'static str {
 
 /// Render a rule that passed check. The caller rejects rules that do not pass
 /// (a clean rendering of a broken rule would be a lie; §1.6).
+/// The `never` lines, each with what stands behind it (§15.282): a combination the definitions rule
+/// out, which `check` showed, or one the caller promises and the generated code refuses. A reader
+/// has to tell the two apart, since only the second is theirs to answer for.
+fn never_section(f: &RuleFile) -> String {
+    if f.nevers.is_empty() {
+        return String::new();
+    }
+    let mut o = tr!("\n## この組み合わせは起こらない\n\n", "\n## These combinations do not happen\n\n");
+    o.push_str(&tr!(
+        "どの表も、これらの組み合わせに行を持っていません。\n\n",
+        "No table has a row for these combinations.\n\n"
+    ));
+    for n in &f.nevers {
+        let why = match f.never_kind(n) {
+            crate::ast::NeverKind::Definitions => {
+                if f.door_nevers().any(|d| d.span.line == n.span.line) {
+                    tr!(
+                        "定義から確かめました。計算した値を渡す呼び出しは、生成コードが入口で受け付けません。",
+                        "shown from the definitions. A call that passes values it worked out itself is refused at the door of the generated code."
+                    )
+                } else {
+                    tr!("定義から確かめました。", "shown from the definitions.")
+                }
+            }
+            crate::ast::NeverKind::Caller => tr!(
+                "呼ぶ側の約束です。生成コードは、破る呼び出しを入口で受け付けません。",
+                "the caller's promise. The generated code refuses a call that breaks it at its door."
+            ),
+        };
+        // A list item, so a bar stays a bar (a backslash in a code span would show).
+        o.push_str(&tr!("- `{}`：{why}\n", "- `{}`: {why}\n", n.said()));
+    }
+    o.push('\n');
+    o
+}
+
 pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     render_named(f, c, src, path, path)
 }
@@ -696,6 +732,7 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
         }
         o.push('\n');
     }
+    o.push_str(&never_section(f));
 
     // --- What the walks find. A reader reading the table below sees a column of numbers; this
     // is where those numbers come from, and how long a sequence the rule will take at all
@@ -2577,6 +2614,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             o.push_str(&format!("- `{}`\n", md_esc(&k.said())));
         }
     }
+    o.push_str(&never_section(f));
 
     // --- Values computed along the way, as written.
     let derived: Vec<&DerivedDecl> =

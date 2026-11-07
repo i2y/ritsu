@@ -188,6 +188,9 @@ golden!(e040_形の固定, "E040-signature", "tests/mutants/m_e040sigja.rule", "
 golden!(e044_準用の輪, "E044-ring", "tests/mutants/m_e044ringja.rule", "E044");
 golden!(w132_変えない項, "W132", "tests/mutants/m_w132ja.rule", "W132");
 golden!(w133_定義からは起こらない行, "W133", "tests/mutants/m_w133ja.rule", "W133");
+golden!(e141_知らない名前, "E141", "tests/mutants/m_e141ja.rule", "E141");
+golden!(e142_定義から起こる組み合わせ, "E142", "tests/mutants/m_e142ja.rule", "E142");
+golden!(e143_計算する列, "E143", "tests/mutants/m_e143ja.rule", "E143");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

@@ -7,7 +7,8 @@
 //! read out with an evaluator that shares nothing with `walks.rs`. Then every question the check
 //! could ask is put to it, and the answer is held to what the requests really come to:
 //!
-//! - "does not occur" has to be true of every request written out;
+//! - "does not occur" has to be true of every request written out, and a `never` line the check
+//!   takes (§15.282) has to be one, while a line it stops has to be given by a request;
 //! - "occurs" comes with a request, which is worked out here and has to give the combination and
 //!   pass the contract;
 //! - where the contract itself stops the collection at the size written out, the answer has to
@@ -875,6 +876,172 @@ fn hold_gaps(s: &S, tmp: &Path) -> (usize, usize) {
     (with_note, without)
 }
 
+// ── The sixth: `never` lines, held to the same requests ────────────────────────────────────
+
+/// A cell of [`cells_of`] as a condition of a `never` line.
+fn never_cond(r: &R, cell: &str) -> String {
+    if cell.starts_with(['<', '>']) { format!("{} {cell}", r.name) } else { format!("{} = {cell}", r.name) }
+}
+
+#[derive(Default)]
+struct Lines {
+    taken: usize,
+    occurs: usize,
+    unshown: usize,
+    mutated: usize,
+    rechecked: usize,
+}
+
+/// How many taken lines of a scenario go through the re-checker, which is a process each.
+const RECHECKED: usize = 10;
+
+/// The certificate of a rule with a line taken, through `tools/recheck.py` against the rule's text.
+fn recheck_line(s: &S, tmp: &Path, src: &str, path: &str) {
+    let (f, c) = i18n::with(Lang::En, || rulec::prepare(src, path)).unwrap_or_else(|d| panic!("{}: {d:#?}", s.tag));
+    let cert = i18n::with(Lang::En, || rulec::cert::certificate(&f, &c, src, path));
+    let at = tmp.join("cert.json");
+    std::fs::write(path, src).unwrap();
+    std::fs::write(&at, cert).unwrap();
+    let tool = Path::new(env!("CARGO_MANIFEST_DIR")).join("tools/recheck.py");
+    let o = Command::new("python3").arg("-B").arg(&tool).arg("--rule").arg(path).arg(&at).output().expect("cannot start python3");
+    assert!(o.status.success(), "{}: the re-checker refuses a line the check took:\n{src}\n{}{}", s.tag, String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+}
+
+/// Every line over one read and over two: a line the check takes does not occur in any request
+/// written out, a line it stops with E142 does occur and the request it shows gives it, and where the
+/// requests are all there are, the check is exact.
+fn hold_nevers(s: &S, tmp: &Path) -> Lines {
+    let reqs = s.requests();
+    let path = s.path(tmp);
+    let mut t = Lines::default();
+    let python = have_python();
+    let all_reads: Vec<usize> = (0..s.reads.len()).collect();
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    for a in 0..s.reads.len() {
+        groups.push(vec![a]);
+        for b in a + 1..s.reads.len() {
+            // A line over an input and a summary is a mistake of its own (E141).
+            if s.reads[a].summary.is_some() == s.reads[b].summary.is_some() {
+                groups.push(vec![a, b]);
+            }
+        }
+    }
+    for which in &groups {
+        let vals = s.values(&reqs, which);
+        let heads: Vec<&str> = which.iter().map(|i| s.reads[*i].name.as_str()).collect();
+        let table = format!("table k\npolicy first\n| {} | -> x : number |\n| {} | 1 |\n", heads.join(" | "), vec!["-"; which.len()].join(" | "));
+        let mut combos: Vec<Vec<usize>> = vec![Vec::new()];
+        let cells: Vec<Vec<Cell>> = which.iter().map(|i| cells_of(&s.reads[*i])).collect();
+        for cs in &cells {
+            combos = combos.iter().flat_map(|c| (0..cs.len()).map(move |k| c.iter().copied().chain([k]).collect::<Vec<usize>>())).collect();
+        }
+        for combo in combos {
+            let conds: Vec<String> = which.iter().zip(&cells).zip(&combo).map(|((i, cs), k)| never_cond(&s.reads[*i], &cs[*k].0)).collect();
+            let line = format!("never {}", conds.join(", "));
+            // With every read in the rule, as the questions are put: a count's range can be what
+            // holds a collection to the size written out. Where one of them stops the rule, with
+            // only the line's own, and the check need not be exact.
+            let every = s.rule(&all_reads, Some(&line), &table);
+            let ds = diags(&every, &path);
+            let whole = !ds.iter().any(|d| matches!(d.code, "E120" | "E121" | "E122" | "E123" | "E020"));
+            let (src, ds) = if whole {
+                (every, ds)
+            } else {
+                let src = s.rule(which, Some(&line), &table);
+                let ds = diags(&src, &path);
+                (src, ds)
+            };
+            if stopped(&ds) || ds.iter().any(|d| d.code == "E020") {
+                continue;
+            }
+            let tell = format!("{}: `{line}`", s.tag);
+            let hits = |v: &[f64]| which.iter().zip(&cells).zip(&combo).all(|((i, cs), k)| (cs[*k].1)(v[*i]));
+            let reached = vals.iter().any(|v| hits(v));
+            assert!(!ds.iter().any(|d| d.code == "E141"), "{tell}: {ds:#?}");
+            if ds.iter().any(|d| d.code == "E142") {
+                t.occurs += 1;
+                assert!(!(s.exact && whole) || reached, "{tell}: E142, and no request gives it");
+                // The request it shows has to give the combination, and pass the contract.
+                let ex = i18n::with(Lang::En, || {
+                    let (f, c) = rulec::prepare(&src, &path).unwrap();
+                    let walks = Walks::of(&f, &c, &path);
+                    match walks.never_answer(&f.nevers[0]) {
+                        Possible::Yes(ex) => ex,
+                        _ => panic!("{tell}: E142, and no example"),
+                    }
+                });
+                let q = s.request_of(&ex, &tell);
+                let got: Vec<f64> = s.reads.iter().enumerate().map(|(i, r)| if which.contains(&i) { (r.eval)(&q) } else { f64::NAN }).collect();
+                assert!(hits(&got), "{tell}: the request {q:?} does not give it: {got:?}");
+                if let Some(v) = s.valid
+                    && s.plain.iter().all(|f| q.top.contains_key(f.name))
+                {
+                    assert!(v(&q), "{tell}: the contract refuses the request {q:?}");
+                }
+            } else if ds.iter().any(|d| d.code == "E143") {
+                t.unshown += 1;
+                assert!(!s.exact || !whole || reached || not_linear(s, which), "{tell}: nothing gives it, and the check cannot show that: {ds:#?}");
+            } else {
+                t.taken += 1;
+                assert!(!reached, "{tell}: the check takes the line, and a request gives it");
+                if python && t.rechecked < RECHECKED && !ds.iter().any(|d| d.severity == rulec::diag::Severity::Error) {
+                    t.rechecked += 1;
+                    recheck_line(s, tmp, &src, &path);
+                }
+            }
+        }
+    }
+    t
+}
+
+/// A table that leaves one combination out passes with the line E101's note shows, and with a line
+/// one condition off it does not: the seeded mistake is stopped by E142, by E143, or by the gap it
+/// left where it was.
+fn hold_note_lines(s: &S, tmp: &Path, t: &mut Lines) {
+    let path = s.path(tmp);
+    let split = |r: &R| -> Vec<Cell> {
+        match r.sort {
+            Sort::Number => {
+                let (lo, _) = r.range.unwrap_or((0.0, 9.0));
+                vec![(r.cell("", lo), Box::new(move |v| key(v) == key(lo))), (r.cell(">", lo), Box::new(move |v| key(v) > key(lo)))]
+            }
+            _ => cells_of(r),
+        }
+    };
+    let errors = |ds: &[Diag]| ds.iter().any(|d| d.severity == rulec::diag::Severity::Error);
+    for a in 0..s.reads.len() {
+        for b in a + 1..s.reads.len() {
+            if s.reads[a].summary.is_some() != s.reads[b].summary.is_some() {
+                continue;
+            }
+            let (cas, cbs) = (split(&s.reads[a]), split(&s.reads[b]));
+            for left in 0..cas.len() * cbs.len() {
+                let mut rows = String::new();
+                for (i, (ca, _)) in cas.iter().enumerate() {
+                    for (j, (cb, _)) in cbs.iter().enumerate() {
+                        if i * cbs.len() + j != left {
+                            rows.push_str(&format!("| {ca} | {cb} | 1 |\n"));
+                        }
+                    }
+                }
+                let table = format!("table k\npolicy unique\n| {} | {} | -> x : number |\n{rows}", s.reads[a].name, s.reads[b].name);
+                let ds = diags(&s.rule(&[a, b], None, &table), &path);
+                let Some(gap) = ds.iter().find(|d| d.code == "E101") else { continue };
+                let said = gap.notes.join("\n");
+                let Some(line) = said.split("with this line, and no row: `").nth(1).and_then(|x| x.split('`').next()) else { continue };
+                let with_line = diags(&s.rule(&[a, b], Some(line), &table), &path);
+                assert!(!errors(&with_line), "{}: the line E101 shows does not pass: `{line}`: {with_line:#?}", s.tag);
+                t.mutated += 1;
+                // The same gap with the line naming another cell of the first read.
+                let (i, j) = (left / cbs.len(), left % cbs.len());
+                let off = format!("never {}, {}", never_cond(&s.reads[a], &cas[(i + 1) % cas.len()].0), never_cond(&s.reads[b], &cbs[j].0));
+                let with_off = diags(&s.rule(&[a, b], Some(&off), &table), &path);
+                assert!(errors(&with_off), "{}: `{off}` over a gap at `{}`, `{}` passes: {with_off:#?}", s.tag, cas[i].0, cbs[j].0);
+            }
+        }
+    }
+}
+
 // ── The fifth: the evaluator, held to the generated Python ─────────────────────────────────
 
 fn have_python() -> bool {
@@ -1032,6 +1199,12 @@ fn hold(s: S) {
     let (warned, told) = hold_rows(&s, tmp.path());
     let (noted, plain) = hold_gaps(&s, tmp.path());
     let read_back = hold_python(&s, tmp.path());
+    let mut lines = hold_nevers(&s, tmp.path());
+    hold_note_lines(&s, tmp.path(), &mut lines);
+    println!(
+        "compared {} never: taken {}, occurs {}, cannot be shown {}, mutated {}, re-checked {}",
+        s.tag, lines.taken, lines.occurs, lines.unshown, lines.mutated, lines.rechecked
+    );
     println!(
         "compared {}: {} requests; asked {} (yes {}, no {}, unknown {}, of them a sum beside an extreme {}); E123 fired {fired}, quiet {quiet}; W133 {warned}, told otherwise {told}; E101 with the note {noted}, without {plain}; Python {read_back}",
         s.tag,

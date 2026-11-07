@@ -218,15 +218,16 @@ def AskedBut (s : Sieve) (i : Nat) (p : Point) (v : List Rat) : Prop :=
   (∀ (j : Nat) (D : List Rat), j ≠ i → s.days[j]? = some (some D) → ∃ w, v[j]? = some w ∧ w ∈ D) ∧
   (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v) ∧
   (∀ (j : Nat) (T : Truth), s.truth[j]? = some (some T) → ∀ c, p[j]? = some c →
-    ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (c = T.trueAt ↔ T.op.holds x y))
+    ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (c = T.trueAt ↔ T.op.holds x y)) ∧
+  (∀ l ∈ s.lines, ¬ ∀ q ∈ l, ∃ c, p[q.1]? = some c ∧ c ∈ q.2)
 
 /-- A point is asked about when its values satisfy the rest and the axis `i` holds a day of its
     set. -/
 theorem asked_of_askedBut {s : Sieve} {i : Nat} {p : Point} {v : List Rat} {D : List Rat}
     {w : Rat} (hD : s.days[i]? = some (some D)) (hrest : AskedBut s i p v) (hw : v[i]? = some w)
     (hmem : w ∈ D) : s.asked p := by
-  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hrest
-  refine ⟨v, h1, h2, h3, h4, h5, h6, fun j D' hj => ?_, h8, h9⟩
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩ := hrest
+  refine ⟨v, h1, h2, h3, h4, h5, h6, fun j D' hj => ?_, h8, h9, h10⟩
   by_cases hji : j = i
   · subst hji
     rw [hD] at hj

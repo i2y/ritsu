@@ -144,6 +144,67 @@ fn others_hold(
     })
 }
 
+/// Whether a `never` line takes a boundary's side (§15.282): `col` at this value meets the line's
+/// condition on it, and every value the row's cell lets in on each other column the line names
+/// meets the line's condition there. A row that leaves one of them open lets in values the line
+/// does not take, so the side is one an input can still stand on.
+fn never_takes_side(f: &RuleFile, c: &Checked, t: &Table, row: &Row, col: &str, v: Rat) -> bool {
+    let meets = |cell: &Cell, val: &Val, name: &str| crate::eval::cell_matches(c, cell, val, &c.ty_of(name).unwrap_or(Ty::Unknown));
+    let of_lit = |l: &Lit, ty: &Ty| -> Option<Val> {
+        Some(match l {
+            Lit::Word(w) if w == crate::kw::TRUE => Val::Bool(true),
+            Lit::Word(w) if w == crate::kw::FALSE => Val::Bool(false),
+            Lit::Word(w) => Val::Enum(w.clone()),
+            Lit::Str(s) => Val::Str(s.clone()),
+            Lit::Num(n) => Val::Num(crate::types::lit_value_in_pub(n, ty)?),
+            Lit::Date(y, m, d) => Val::Date(*y, *m, *d),
+        })
+    };
+    f.nevers.iter().any(|n| {
+        n.names().any(|m| m == col)
+            && n.conds.iter().all(|k| {
+                let name = &k.name.text;
+                let Some(ty) = c.ty_of(name).map(|t| t.present().clone()) else { return false };
+                if name == col {
+                    let val = if ty == Ty::Date {
+                        let (y, m, d) = crate::types::ord_to_date(v);
+                        Val::Date(y, m, d)
+                    } else {
+                        Val::Num(v)
+                    };
+                    return meets(&k.cell, &val, name);
+                }
+                let Some(ci) = t.inputs.iter().position(|(m, _)| m == name) else { return false };
+                let all = |ls: &[Lit]| ls.iter().all(|l| of_lit(l, &ty).is_some_and(|val| meets(&k.cell, &val, name)));
+                match row.cells.get(ci) {
+                    Some(Cell::Lit(l)) => all(std::slice::from_ref(l)),
+                    Some(Cell::Set(ls)) => all(ls),
+                    // A comparison in the row inside a comparison of the line: `>100USD` inside
+                    // `> 0USD`. The line's cell is one interval, so the ends of the row's say it.
+                    Some(Cell::Cmp(ops)) if matches!(k.cell, Cell::Cmp(_)) => {
+                        let q = quantum(c, name, &ty);
+                        let Some((Some(mut lo), Some(mut hi))) = c.ranges.get(name).copied() else { return false };
+                        for (op, l) in ops {
+                            let Some(x) = of_lit(l, &ty).as_ref().and_then(ord) else { return false };
+                            use std::cmp::Ordering::*;
+                            match op {
+                                CmpOp::Ge if x.cmp_to(lo) == Greater => lo = x,
+                                CmpOp::Gt if x.add(q).cmp_to(lo) == Greater => lo = x.add(q),
+                                CmpOp::Le if x.cmp_to(hi) == Less => hi = x,
+                                CmpOp::Lt if x.sub(q).cmp_to(hi) == Less => hi = x.sub(q),
+                                _ => {}
+                            }
+                        }
+                        let at = |x: Rat| if ty == Ty::Date { let (y, m, d) = crate::types::ord_to_date(x); Val::Date(y, m, d) } else { Val::Num(x) };
+                        meets(&k.cell, &at(lo), name) && meets(&k.cell, &at(hi), name)
+                    }
+                    Some(cell) => crate::ast::cell_text(cell) == crate::ast::cell_text(&k.cell),
+                    None => false,
+                }
+            })
+    })
+}
+
 /// Whether no input reaches `col = v` with every other numeric cell of the row holding, the
 /// declared ranges and the rule's `constraint`s kept (§15.140). Under `申告額 <= 補償額`, the
 /// row `<=5万円 | <=5万円` has no input at 申告額 = 50001: the outside point of that boundary is
@@ -151,6 +212,9 @@ fn others_hold(
 /// elimination over the rationals, so a side some input does reach is never dropped. A rule
 /// with no `constraint` has nothing here the ranges have not already said.
 fn unreachable_side(f: &RuleFile, c: &Checked, t: &Table, row: &Row, col: &str, v: Rat) -> bool {
+    if never_takes_side(f, c, t, row, col, v) {
+        return true;
+    }
     if f.constraints.is_empty() {
         return false;
     }
@@ -446,7 +510,13 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                     // other row is one the vectors did not find an input for. Which of the two is
                     // said, rather than "usually the generator": a row of A08's kind, which no
                     // input reaches and nothing showed so, used to be put down to the generator.
-                    hint: if undecided.contains(&ri) {
+                    hint: if let Some(line) = crate::region::TableRegion::build(t, c, f).and_then(|g| g.never_takes_row(ri)) {
+                        let said = f.nevers[line].said();
+                        tr!(
+                            "この行の組み合わせは `{said}` が表から外しています。この行を削除するか、この組み合わせの答えを表で決めるなら `never` の行を削除してください。",
+                            "`{said}` takes this row's combination out of the tables. Delete this row, or, to decide in the tables what the rule answers for this combination, delete the `never` line."
+                        )
+                    } else if undecided.contains(&ri) {
                         tr!(
                             "check が W128 で言った行です。当たる入力が、この行を除いたときに完全性の検査が見つける穴の後ろにも見つからず、当たらないことも示せていません。当たる入力があるなら例に書き、無いならこの行を削除してください（削除して E101 が出るなら、行は残してかまいません）。",
                             "check named this row with W128: no input was found that reaches it, not even behind the gap the completeness check finds with the row taken out, and none was shown not to. If some input reaches it, write it as an example; if none does, delete the row (if deleting it brings E101, the row can stay)."

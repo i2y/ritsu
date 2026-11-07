@@ -65,6 +65,13 @@ A few shapes are worth knowing before the first draft:
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
   witness becomes a case somebody could really send, and the generated code refuses a
   violating input at the door (§6.1 of the grammar).
+- **A combination that is not a comparison is written out.** `never has_tool = true, all_parts =
+  true` says no call has all of these at once, each condition holding what a cell would, with `|`
+  between the members of a set. It does what a `constraint` does. Over inputs read with `from`, or
+  over summaries of `elements`, the line is held to the definitions: E142 with the request that
+  gives the combination, E143 when it cannot be shown. A line that names an input with no `from` is
+  the caller's promise. A wrong shape is E141. Only written lines take a combination out of the
+  tables: where E101 or W133 says the definitions never give one, the hint shows the line to write.
 - **A case may carry a sequence.** Where the number of things is not fixed — the rows of a tariff
   sheet, the candidates a filter left — `elements` declares what one element carries and `fold`
   says what each verdict does next: `next`, `stop with <value>`, `take_unique`, `take_first`,
@@ -203,7 +210,8 @@ meet while transcribing:
 
 - **E101 completeness gap** — some input matches no row, and the witness names it. Add a row
   that covers it, or mark the value `default` in the enum to let it fall through to a
-  catch-all. One row per run; run again for the next gap.
+  catch-all. One row per run; run again for the next gap. A combination that cannot happen gets a
+  `never` line instead of a row with a made-up amount.
 - **E105 overlap** / **W105 shadowing** — two rows match the same input. Under `policy
   unique` that is an error; under `policy first` the earlier row wins and you are being asked
   whether that is intended.

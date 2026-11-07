@@ -821,7 +821,7 @@ out as columns that have nothing to do with each other. The definitions do tie t
 `any … where category = tool` and `all … where category = part` are never both true, and a count
 of the lines that are not parts goes past a count of the tools as soon as one line is a service.
 `check` reads the definitions for this beside the table, with what the contract says of an element
-(its enums and ranges, and `minItems` and `maxItems` on the collection), and three things come of
+(its enums and ranges, and `minItems` and `maxItems` on the collection), and four things come of
 it.
 
 - A `constraint` over inputs read with `count`, `sum`, `max` or `min` that some request breaks is
@@ -829,17 +829,23 @@ it.
   holding 1 element with `category` = "service". The generated code would refuse that order at the
   door. Here `fix.kind` is `none`, because `filter` and `all` in a contract's CEL are not read and
   a promise written that way would not clear the error.
-- A gap in a table is still **E101** when the combination never comes out of the definitions, and a
-  note says so and gives each definition. The check of a table reads each column as a value of its
-  own, and the row is what a call that does not read through `from` gets: the seven targets with no
-  projection function, below, take whatever their caller worked out. A gap with a part that occurs
-  and a part that does not is shown by the part that occurs.
-- A row only such a combination reaches is **W133**. If E101 comes back without the row, keep it.
+- A `never` line (§6.1) over such inputs is held to the definitions as well. A combination they
+  give is **E142**, with the request that gives it, and one they cannot be shown not to give is
+  **E143**.
+- A gap in a table is still **E101** when the combination never comes out of the definitions. A
+  note says so and gives each definition, and a hint shows the line that takes it out:
+  `never has_tool = true, all_parts = true`. The check of a table reads each column as a value of
+  its own and takes out what a line on the page says and nothing else, because the row, or the
+  refusal at the door, is what a call that does not read through `from` gets: the seven targets with
+  no projection function, below, take whatever their caller worked out. A gap with a part that
+  occurs and a part that does not is shown by the part that occurs.
+- A row only such a combination reaches is **W133**. Delete the row and write the line it shows.
 
 Each of these says only what it has shown. A combination is called impossible only from conditions
 wider than the truth, and possible only from elements that were built and evaluated. What cannot be
 decided either way — a field cut into too many parts, a `sum` beside a `max` that no small
-collection gives — is passed over in silence. None of this moves a check of the table.
+collection gives — is passed over in silence, except on a `never` line, where it stops at E143: a
+line takes a gap out of the tables, so it has to be shown. None of this moves a check of the table.
 
 A field the contract lets an object leave out can only be taken by an optional input (`T?`),
 and the projection function reads a missing one — or a missing object on the way to it — as
@@ -1328,8 +1334,73 @@ The caller's guarantee has to be one the contract keeps, between inputs read wit
 That goes for counts, totals and extremes over a collection too: `constraint non_parts <= tools`,
 with `non_parts` a count of the lines that are not parts, says every such line is a tool, and when
 the contract lets a service line through it is E123, with that line in the example. `any` and `all`
-give a `bool`, which has no order, so a relation between them cannot be written here (E018). A row
-for a combination the definitions never give is W133.
+give a `bool`, which has no order, so a relation between them is a `never` line, below (E018 says
+so). A row for a combination the definitions never give is W133.
+
+### never
+
+A `constraint` compares two values that have an order. Any other combination that does not happen —
+two truth values, an enum and a count, a count and a total — is written out:
+
+```rule
+never has_tool = true, all_parts = true
+never tier = gold, tools = 0
+never tools = 0, total > 0USD
+```
+
+A line says **no call has all of these at once**. It names inputs, or summaries of `elements`
+(§6.3), and a condition on a name is what a cell of that column would hold:
+
+| written | it meets |
+|---|---|
+| `tier = gold`, `has_tool = true`, `tools = 0`, `total = 5USD` | that value |
+| `tier = gold \| silver` | one of these values |
+| `tier = not: gold \| silver` | any value but these |
+| `discount = none` | no value, on an optional input |
+| `tools >= 1`, `total > 0USD`, `tools >= 1 < 5` | what the comparisons let in |
+| `code starts_with "A" \| "B"` | a prefix, on a `string` |
+
+Commas divide the conditions, so the members of a set are divided by `|`, as an `enum` line divides
+its values. A name comes once on a line. A shape other than these, a name nothing declares, a field
+of an element, `none` on an input that is not optional, and an input and a summary on one line are
+E141. `rulec fmt` leaves a line as it is written, as it leaves a `constraint`. Under `machine` the
+word is the machine's own line (§6.4).
+
+How a line is held depends on what it names:
+
+| the line names | it is | what stops it |
+|---|---|---|
+| inputs read with `from`, all of them, or summaries of `elements`, all of them | **shown from the definitions** (§3.3, §6.3) | E142, with an example, when the definitions give the combination; E143 when it cannot be shown that they do not, a string or an optional among them included |
+| an input with no `from`, among others | **the caller's promise**, as a `constraint` is | nothing here; the door refuses it |
+| a value the rule computes (`derive`, `define`, a table's output) | nothing it can be held to | E143 |
+
+The check of a table reads the lines that are written and nothing else. It works nothing out of
+the definitions on its own, so what the tables leave out is always something the person approving
+the rule can read on the page.
+
+A line does everywhere what a `constraint` does:
+
+- **Completeness asks for no row for it, and overlap says nothing of it.** Two rows that meet only
+  inside a line do not overlap. A row wholly inside a line is what a `constraint` leaves unreached:
+  `check` is quiet about it, and `rulec coverage` names the line.
+- **Every input the checks and the vectors build keeps clear of it.** An `examples` row or a call of
+  a `scenario` under a line is E019, and a rule that calls this one with `apply` has to keep clear of
+  it (E043). A draw of a `random` input under a line is no draw, and a claim of `chances` counts the
+  others.
+- **The generated code refuses a call under it at the door**, in every target, with the line quoted:
+  `this combination does not happen: never has_tool = true, all_parts = true`. A line shown from the
+  definitions is refused too, because the seven targets with no projection function take whatever
+  their caller worked out. A line of summaries alone has no door: the values are worked out inside.
+- **`rulec doc` lists the lines** under "These combinations do not happen", each with whether it was
+  shown from the definitions or is the caller's promise.
+- **`rulec certificate` carries them**, and both re-checkers confirm that the table is complete with
+  the lines taken out. `tools/recheck.py` adds up the proof of a line shown from the definitions;
+  the Lean checker states it (§15.282).
+- **`rulec diff` reads them** as it reads a `constraint`: what both versions take out is nobody's
+  case, and an input only the new version takes out is reported apart, by its reason.
+- **`api` lists a line among `preconditions`.** Where a workflow or a function of kaname calls the
+  rule, `ritsu check` holds the call to it (ritsu's E201 and W201), and what it cannot decide a
+  workflow checks when it runs.
 
 ## 6.2 elements and fold
 
@@ -1681,9 +1752,11 @@ gets no walk at all.
 table reads each summary as a column, so with `tools`, a count of the elements where `is_tool`,
 `total`, a `sum` of `weight`, and `heaviest`, a `max` of `weight`, it asks for
 `tools = 0, total = 0, heaviest = 1`, though no sequence gives a total of 0 and a heaviest element
-of 1 when `weight` is at least 1. E101 keeps asking for the row, and a note says the combination
-never comes out of the definitions; a row only such a combination reaches is W133, as it is for
-the reads of `from` (§3.3).
+of 1 when `weight` is at least 1. E101 keeps asking for the row, a note says the combination never
+comes out of the definitions, and a hint shows the line that takes it out,
+`never total = 0, heaviest >= 1` (§6.1). A row only such a combination reaches is W133, as it is for
+the reads of `from` (§3.3). A line of summaries is held to their definitions and has no door, since
+the values are worked out inside.
 
 ## 6.4 machine and scenario
 
@@ -2526,8 +2599,8 @@ line per callee input binds it to an input, a derived value, a definition, a tab
 output of this rule, or a literal — every input, exactly once (E041). The types agree (E042);
 two enums are mapped with `with`, which covers every value of this rule's enum, values spelled
 the same on both sides mapping by themselves. What this rule passes has to stay inside the
-callee's declared ranges and satisfy its constraints (E043, never fixed by adding a row: the
-callee is another unit of approval). Where the callee's input is not optional, what is passed has
+callee's declared ranges, satisfy its constraints and keep clear of its `never` lines (E043, never
+fixed by adding a row: the callee is another unit of approval). Where the callee's input is not optional, what is passed has
 to have a value: one that may be absent — an input or a field of an element declared `T?`, the
 output of a table a row of which answers `none`, a definition that only names one — is E043 too.
 `with none -> <value>` reads this rule's absent value as a value of the callee's (`tier = member
@@ -2845,13 +2918,13 @@ when a target language takes it badly.
 
 An enum **value** never starts a line, so it may be any of them but eleven: `not` `none`
 `true` `false` `starts_with` (the words of a cell), `default` (the mark after a value in its
-`enum` line), `after` (which divides a `never` line), and `empty` `exhausted` `by` `with`
+`enum` line), `after` (which divides a machine's `never` line), and `empty` `exhausted` `by` `with`
 (the words of a `fold` arm). A state may be called `initial`, `held` or `final`.
 
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sum` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `machine` `scenario` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `never` `table` `fold` `count` `sum` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `machine` `scenario` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `starts_with` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
@@ -2860,7 +2933,7 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 | count and sum | `where` `of` (and `over`, above) |
 | clause body | `when` `then` `always` |
 | apply body | `except` (and `with`, above) |
-| machine body | `carry` `initial` `final` `never` `after` `once` (and `over` and `held`, above; `always` and `when`, which a `clause` has too) |
+| machine body | `carry` `initial` `final` `after` `once` (and `never`, `over` and `held`, above; `always` and `when`, which a `clause` has too) |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

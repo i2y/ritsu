@@ -202,6 +202,11 @@ structure Sieve where
   /-- One entry per axis: for a boolean `define` of one comparison whose two sides have intervals,
       the comparison read on the axis (rulec's §15.196); `none` on every other axis. -/
   truth : List (Option Truth) := []
+  /-- The rule's `never` lines this table reads (rulec's §15.282): each the coordinates it takes on
+      the axes it tests, read from its cells the way a row's box is. A point inside all of them is
+      a combination the rule says does not happen, whether a definition shows it or the door
+      refuses it. -/
+  lines : List (List (Nat × List Nat)) := []
 
 def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   match s.coords[i]? with
@@ -230,7 +235,8 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
     (∀ (i : Nat) (D : List Rat), s.days[i]? = some (some D) → ∃ w, v[i]? = some w ∧ w ∈ D) ∧
     (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v) ∧
     (∀ (i : Nat) (T : Truth), s.truth[i]? = some (some T) → ∀ c, p[i]? = some c →
-      ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (c = T.trueAt ↔ T.op.holds x y))
+      ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (c = T.trueAt ↔ T.op.holds x y)) ∧
+    (∀ l ∈ s.lines, ¬ ∀ q ∈ l, ∃ c, p[q.1]? = some c ∧ c ∈ q.2)
 
 /-! ## One constraint rules a box out -/
 
@@ -343,7 +349,7 @@ def truthRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
 /-- **A boolean `define` never stands at a truth value its comparison cannot take.** -/
 theorem not_asked_of_truth {s : Sieve} {i : Nat} {p : Point}
     (h : truthRulesOut s i p = true) : ¬ s.asked p := by
-  rintro ⟨v, _, _, _, _, _, _, _, _, ht⟩
+  rintro ⟨v, _, _, _, _, _, _, _, _, ht, _⟩
   unfold truthRulesOut at h
   split at h
   case _ c T hp hT =>
@@ -362,6 +368,33 @@ def neverRulesOut (s : Sieve) (p : Point) : Bool :=
 /-- Two coordinates the tables above cannot hold at once, both of them held here. -/
 def apartRulesOut (s : Sieve) (p : Point) : Bool :=
   s.apart.any (fun qr => p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2)
+
+/-- Whether a point lies inside one `never` line: on every axis the line tests, at a coordinate the
+    line takes. A path that has not fixed one of them is not said to lie inside it. -/
+def lineTakes (p : Point) (l : List (Nat × List Nat)) : Bool :=
+  l.all (fun q => match p[q.1]? with
+    | some c => q.2.contains c
+    | none => false)
+
+/-- A `never` line takes the point. -/
+def linesRulesOut (s : Sieve) (p : Point) : Bool :=
+  s.lines.any (lineTakes p)
+
+theorem lineTakes_iff {p : Point} {l : List (Nat × List Nat)} :
+    lineTakes p l = true ↔ ∀ q ∈ l, ∃ c, p[q.1]? = some c ∧ c ∈ q.2 := by
+  simp only [lineTakes, List.all_eq_true]
+  constructor
+  · intro h q hq
+    have hq' := h q hq
+    cases hp : p[q.1]? with
+    | none => simp [hp] at hq'
+    | some c =>
+      simp only [hp] at hq'
+      exact ⟨c, rfl, List.contains_iff_mem.1 hq'⟩
+  · intro h q hq
+    obtain ⟨c, hp, hc⟩ := h q hq
+    simp only [hp]
+    exact List.contains_iff_mem.2 hc
 
 /-- Whether a coordinate takes this value, read exactly: one value, or strictly between the
     two boundaries. -/
@@ -631,23 +664,32 @@ theorem not_asked_of_apart {s : Sieve} {p : Point} (h : apartRulesOut s p = true
   rintro ⟨_, _, _, _, _, hap, _⟩
   exact hap qr hqr ⟨hq, hr⟩
 
+theorem not_asked_of_lines {s : Sieve} {p : Point} (h : linesRulesOut s p = true) :
+    ¬ s.asked p := by
+  simp only [linesRulesOut, List.any_eq_true] at h
+  rcases h with ⟨l, hl, ht⟩
+  rintro ⟨_, _, _, _, _, _, _, _, _, _, hnv⟩
+  exact hnv l hl (lineTakes_iff.1 ht)
+
 def pointRuledOut (s : Sieve) (p : Point) : Bool :=
   s.cons.any (fun k => constraintRulesOut s k p) ||
     (List.range p.length).any (fun i => derivedRulesOut s i p) ||
     neverRulesOut s p || apartRulesOut s p ||
     (List.range p.length).any (fun i => daysRulesOut s i p) ||
-    (List.range p.length).any (fun i => truthRulesOut s i p)
+    (List.range p.length).any (fun i => truthRulesOut s i p) ||
+    linesRulesOut s p
 
 theorem not_asked_of_pointRuledOut {s : Sieve} {p : Point} (h : pointRuledOut s p = true) :
     ¬ s.asked p := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true] at h
-  rcases h with ((((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab) | ⟨i, _, hdy⟩) | ⟨i, _, htr⟩
+  rcases h with (((((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab) | ⟨i, _, hdy⟩) | ⟨i, _, htr⟩) | hl
   · exact not_asked_of_constraint hk hkr
   · exact not_asked_of_derived hir
   · exact not_asked_of_never (by simpa [neverRulesOut] using hn)
   · exact not_asked_of_apart (by simpa [apartRulesOut] using hab)
   · exact not_asked_of_days hdy
   · exact not_asked_of_truth htr
+  · exact not_asked_of_lines (by simpa [linesRulesOut] using hl)
 
 
 /-! ## A whole box, not one corner of it
@@ -737,16 +779,25 @@ theorem truthRulesOut_mono {s : Sieve} {i : Nat} {path p : Point}
   case _ c T hp hT => rw [prefix_getElem? hpre (lt_of_getElem? hp), hp, hT]; exact h
   case _ => exact absurd h (by simp)
 
+theorem linesRulesOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
+    (h : linesRulesOut s path = true) : linesRulesOut s p = true := by
+  simp only [linesRulesOut, List.any_eq_true] at h ⊢
+  rcases h with ⟨l, hl, ht⟩
+  refine ⟨l, hl, lineTakes_iff.2 (fun q hq => ?_)⟩
+  obtain ⟨c, hp, hc⟩ := lineTakes_iff.1 ht q hq
+  exact ⟨c, by rw [prefix_getElem? hpre (lt_of_getElem? hp)]; exact hp, hc⟩
+
 theorem pointRuledOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
     (h : pointRuledOut s path = true) : pointRuledOut s p = true := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true, List.mem_range] at h ⊢
-  rcases h with ((((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab) | ⟨i, hi, hdy⟩) | ⟨i, hi, htr⟩
-  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩))))
-  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩))))
-  · exact Or.inl (Or.inl (Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn)))))
-  · exact Or.inl (Or.inl (Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab))))
-  · exact Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, daysRulesOut_mono hpre hdy⟩)
-  · exact Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, truthRulesOut_mono hpre htr⟩
+  rcases h with (((((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab) | ⟨i, hi, hdy⟩) | ⟨i, hi, htr⟩) | hl
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩)))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩)))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn))))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab)))))
+  · exact Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, daysRulesOut_mono hpre hdy⟩))
+  · exact Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, truthRulesOut_mono hpre htr⟩)
+  · exact Or.inr (by simpa [linesRulesOut] using linesRulesOut_mono hpre (by simpa [linesRulesOut] using hl))
 
 /-- Every point the path opens onto. The walk stops where the axes do, so the list is the
     box below the path and nothing else. -/
@@ -936,13 +987,14 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
   (List.range p.length).all (fun i =>
     match p[i]?, s.truth[i]? with
     | some c, some (some T) => T.can (c == T.trueAt)
-    | _, _ => true)
+    | _, _ => true) &&
+  !linesRulesOut s p
 
 theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     (h : witnessOk s p v = true) : s.asked p := by
   simp only [witnessOk, Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩, hab⟩, htr⟩ := h
-  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩, hab⟩, htr⟩, hln⟩ := h
+  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro i c x hp hx
     have hi := List.all_eq_true.1 hco i (List.mem_range.2 (lt_of_getElem? hp))
     cases hv : v[i]? with
@@ -997,6 +1049,11 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     obtain ⟨x, y, h1, h2, h3, h4, hiff⟩ := Truth.exists_of_can hi
     rw [beq_iff_eq] at hiff
     exact ⟨x, y, h1, h2, h3, h4, hiff⟩
+  · intro l hl hall
+    have hout : linesRulesOut s p = true := by
+      simp only [linesRulesOut, List.any_eq_true]
+      exact ⟨l, hl, lineTakes_iff.2 hall⟩
+    simp [hout] at hln
 
 /-! ## A box the linear model leaves no values in (§15.141)
 

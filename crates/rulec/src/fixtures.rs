@@ -283,6 +283,8 @@ pub enum Shut {
     Day { name: String, value: String, from: String },
     /// A `constraint` that does not hold.
     Constraint { said: String },
+    /// A combination a `never` line rules out (§15.282).
+    Never { said: String },
 }
 
 impl Shut {
@@ -296,6 +298,7 @@ impl Shut {
             Shut::Step { .. } => "input_step",
             Shut::Day { .. } => "input_day",
             Shut::Constraint { .. } => "constraint",
+            Shut::Never { .. } => "never",
         }
     }
 
@@ -308,7 +311,7 @@ impl Shut {
             | Shut::Type { name, .. }
             | Shut::Step { name, .. }
             | Shut::Day { name, .. } => name,
-            Shut::Constraint { .. } => "",
+            Shut::Constraint { .. } | Shut::Never { .. } => "",
         }
     }
 
@@ -324,6 +327,7 @@ impl Shut {
             Shut::Step { name, ty } => tr!("{name} の値が、新しい版の {ty} の刻みに載りません", "{name} does not sit on the step of the new version's {ty}"),
             Shut::Day { name, from, .. } => tr!("{name} が、新しい版の {from} がとる日ではありません", "{name} is not a day the new version's {from} comes to"),
             Shut::Constraint { said } => tr!("新しい版の制約 `{said}` が成り立ちません", "the new version's constraint `{said}` does not hold"),
+            Shut::Never { said } => tr!("新しい版の `{said}` に当たります", "it falls under the new version's `{said}`"),
         }
     }
 }
@@ -389,10 +393,10 @@ pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<
             }
         }
     }
-    f.constraints
-        .iter()
-        .find(|k| !holds(k, input))
-        .map(|k| Shut::Constraint { said: k.said() })
+    if let Some(k) = f.constraints.iter().find(|k| !holds(k, input)) {
+        return Some(Shut::Constraint { said: k.said() });
+    }
+    f.door_nevers().find(|n| !crate::vectors::never_clear(n, c, &|m| input.get(m))).map(|n| Shut::Never { said: n.said() })
 }
 
 /// A value of one version's input, as another version of the rule takes it (§15.197). `diff`
@@ -730,6 +734,13 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
                     tr!(
                         "制約は、その組み合わせが起きないという宣言です。記録の値か、規則の制約を確かめてください。",
                         "A constraint declares that the combination does not happen; check the record's values, or the rule's constraint."
+                    ),
+                ),
+                Shut::Never { said } => (
+                    tr!("`in`: `{said}` に当たります", "`in`: it falls under `{said}`"),
+                    tr!(
+                        "`never` の行は、その組み合わせが起こらないという宣言です。記録の値か、規則の `never` の行を確かめてください。",
+                        "A `never` line declares that the combination does not happen; check the record's values, or the rule's `never` line."
                     ),
                 ),
                 // `door` says nothing else; the rest is what `carry` says about another version.

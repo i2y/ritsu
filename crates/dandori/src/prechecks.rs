@@ -110,6 +110,15 @@ fn test_of(p: &Precondition, args: &[(String, TExpr)]) -> Option<PreTest> {
         }
         Precondition::Days { input, file, date, days } => Some(PreTest::Days { input: input.clone(), value: arg(input)?, file: file.clone(), date: date.clone(), days: days.iter().map(|d| civil(*d)).collect() }),
         Precondition::Sum { .. } | Precondition::Length { .. } => None,
+        // A `never` line (rulec's §15.282). A test only the rule's own door reads, `= none` or
+        // `starts_with`, stays with the door.
+        Precondition::Never { said, conds } => {
+            if conds.iter().any(|k| matches!(k.test, ritsu_ports::NeverTest::Other)) {
+                return None;
+            }
+            let conds = conds.iter().map(|k| arg(&k.name).map(|e| (k.name.clone(), e, k.test.clone()))).collect::<Option<Vec<_>>>()?;
+            Some(PreTest::Never { said: said.clone(), conds })
+        }
     }
 }
 
@@ -194,6 +203,34 @@ pub fn holds(t: &PreTest, value: &dyn Fn(&TExpr) -> serde_json::Value) -> bool {
             }
         }
         PreTest::Days { value: v, days, .. } => value(v).as_str().is_some_and(|d| days.iter().any(|x| x == d)),
+        PreTest::Never { conds, .. } => !conds.iter().all(|(_, e, t)| never_meets(t, &value(e))),
+    }
+}
+
+/// Whether a value on the wire meets one condition of a `never` line.
+pub(crate) fn never_meets(t: &ritsu_ports::NeverTest, v: &serde_json::Value) -> bool {
+    use ritsu_ports::{NeverTest, Value};
+    match t {
+        NeverTest::Among { values, yes } => {
+            let is = values.iter().any(|x| match x {
+                Value::Bool(b) => v.as_bool() == Some(*b),
+                Value::Int(n) => v.as_i64().is_some_and(|m| i128::from(m) == *n),
+                Value::Str(s) | Value::Enum(s) | Value::Date(s) => v.as_str() == Some(s.as_str()),
+                _ => false,
+            });
+            is == *yes
+        }
+        NeverTest::Compare(ops) => v.as_i64().is_some_and(|m| {
+            let m = i128::from(m);
+            ops.iter().all(|(op, k)| match op.as_str() {
+                "<=" => m <= *k,
+                "<" => m < *k,
+                ">=" => m >= *k,
+                ">" => m > *k,
+                _ => false,
+            })
+        }),
+        NeverTest::Other => false,
     }
 }
 

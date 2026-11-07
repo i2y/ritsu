@@ -613,6 +613,62 @@ impl<'a> Ex<'a> {
                     self.holes[id].1 = Some(json!(n));
                 }
             }
+            // To break a `never` line every value left open goes where its condition holds; to keep it,
+            // the later one made goes where its condition does not.
+            PreTest::Never { conds, .. } => {
+                let meeting = |t: &ritsu_ports::NeverTest| -> Option<Value> {
+                    use ritsu_ports::{NeverTest, Value as V};
+                    let lit = |x: &V| match x {
+                        V::Bool(b) => Some(json!(b)),
+                        V::Int(n) => i64::try_from(*n).ok().map(|m| json!(m)),
+                        V::Str(s) | V::Enum(s) | V::Date(s) => Some(json!(s)),
+                        _ => None,
+                    };
+                    match t {
+                        NeverTest::Among { values, yes: true } => values.first().and_then(lit),
+                        NeverTest::Compare(ops) => {
+                            let mut tries: Vec<i128> = ops.iter().flat_map(|(_, k)| [*k, *k + 1, *k - 1]).collect();
+                            tries.dedup();
+                            tries.into_iter().find(|n| t.holds(&V::Int(*n)) == Some(true)).and_then(|n| i64::try_from(n).ok()).map(|m| json!(m))
+                        }
+                        _ => None,
+                    }
+                };
+                let missing = |t: &ritsu_ports::NeverTest| -> Option<Value> {
+                    use ritsu_ports::{NeverTest, Value as V};
+                    match t {
+                        NeverTest::Among { values, yes: true } => match values.first() {
+                            Some(V::Bool(b)) => Some(json!(!*b)),
+                            Some(V::Int(n)) => i64::try_from(*n + 1).ok().map(|m| json!(m)).filter(|_| values.len() == 1),
+                            _ => None,
+                        },
+                        NeverTest::Among { values, yes: false } => values.first().and_then(|x| match x {
+                            V::Bool(b) => Some(json!(*b)),
+                            V::Int(n) => i64::try_from(*n).ok().map(|m| json!(m)),
+                            V::Str(s) | V::Enum(s) | V::Date(s) => Some(json!(s)),
+                            _ => None,
+                        }),
+                        NeverTest::Compare(ops) => {
+                            let mut tries: Vec<i128> = ops.iter().flat_map(|(_, k)| [*k, *k + 1, *k - 1]).collect();
+                            tries.dedup();
+                            tries.into_iter().find(|n| t.holds(&V::Int(*n)) == Some(false)).and_then(|n| i64::try_from(n).ok()).map(|m| json!(m))
+                        }
+                        _ => None,
+                    }
+                };
+                if holds {
+                    let pick = conds.iter().filter_map(|(_, e, t)| Some((self.open_at(e)?, missing(t)?))).max_by_key(|(id, _)| *id);
+                    if let Some((id, v)) = pick {
+                        self.holes[id].1 = Some(v);
+                    }
+                } else {
+                    for (_, e, t) in conds {
+                        if let (Some(id), Some(v)) = (self.open_at(e), meeting(t)) {
+                            self.holes[id].1 = Some(v);
+                        }
+                    }
+                }
+            }
             PreTest::Days { value, days, .. } => {
                 let Some(id) = self.open_at(value) else { return };
                 let day = if holds { days.first().cloned() } else { ["1999-12-31", "2099-12-31"].iter().find(|d| !days.iter().any(|x| x == *d)).map(|d| d.to_string()) };

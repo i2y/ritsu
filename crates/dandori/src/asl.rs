@@ -527,6 +527,21 @@ impl<'a> Gen<'a> {
                 let holds = match &c.test {
                     PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &jsonata_expr), side_code(right, &jsonata_expr)),
                     PreTest::Days { value, days, .. } => format!("{} in [{}]", jsonata_expr(value), days.iter().map(|d| json!(d).to_string()).collect::<Vec<_>>().join(", ")),
+                    PreTest::Never { conds, .. } => {
+                        let lit = |v: &ritsu_ports::Value| match v {
+                            ritsu_ports::Value::Bool(b) => b.to_string(),
+                            ritsu_ports::Value::Int(n) => n.to_string(),
+                            ritsu_ports::Value::Str(s) | ritsu_ports::Value::Enum(s) | ritsu_ports::Value::Date(s) => json!(s).to_string(),
+                            _ => "null".to_string(),
+                        };
+                        crate::model::never_code(conds, &crate::model::NeverCode {
+                            expr: &jsonata_expr,
+                            lit: &lit,
+                            among: &|v, ls| format!("{v} in [{}]", ls.join(", ")),
+                            not: &|c| format!("$not({c})"),
+                            and: " and ",
+                        })
+                    }
                 };
                 let comment = format!("line {}: the precondition {text} of the rule {}, which ritsu could not decide", c.call_line, self.m.rules[c.rule].name);
                 self.states.insert(n.clone(), json!({ "Type": "Choice", "Comment": comment, "Choices": [ { "Condition": format!("{{% {holds} %}}"), "Next": cont } ], "Default": fail }));

@@ -90,7 +90,7 @@ fn every_input(f: &rulec::ast::RuleFile, c: &rulec::types::Checked) -> Vec<BTree
     let mut at = vec![0usize; axes.len()];
     'walk: loop {
         let input: BTreeMap<String, Val> = axes.iter().zip(&at).map(|((n, vs), k)| (n.clone(), vs[*k].clone())).collect();
-        if rulec::vectors::allowed(f, &input) {
+        if rulec::vectors::allowed(f, c, &input) {
             out.push(input);
         }
         for k in 0..at.len() {

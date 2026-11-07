@@ -298,6 +298,39 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
             Some(a) => days_kept(dates, a, days, file, date),
             None => Answer::Undecided(tr!("呼び出しが `{input}` を渡していません", "the call does not give `{input}`")),
         },
+        // A `never` line (rulec's §15.282): rulec decides it over the ranges of the numbers the
+        // call gives. A truth value or an enum has no range, so a line that names one is decided
+        // only when a number in it can never meet its condition.
+        Precondition::Never { said: line, conds } => {
+            let mut ranges = Vec::new();
+            let mut open = None;
+            for k in conds {
+                let Some(a) = arg(&k.name) else {
+                    let name = &k.name;
+                    return Answer::Undecided(tr!("呼び出しが `{name}` を渡していません", "the call does not give `{name}`"));
+                };
+                match a.range {
+                    Some((lo, hi)) => ranges.push((k.name.clone(), lo, hi)),
+                    None => open = open.or(Some(a.shown.clone())),
+                }
+            }
+            match rules.preconditions_hold(rule, &ranges, None) {
+                Err(_) => Answer::Undecided(tr!("rulec からこの規則の情報を得られません", "rulec does not answer for this rule")),
+                Ok(answers) => match answers.into_iter().find(|(q, _)| q == p).map(|(_, a)| a) {
+                    Some(Answer::Holds) => Answer::Holds,
+                    Some(Answer::Fails(_)) if open.is_some() => {
+                        let shown = open.unwrap_or_default();
+                        Answer::Undecided(tr!("`{shown}` の範囲が分かりません", "nothing says what range `{shown}` is in"))
+                    }
+                    Some(Answer::Fails(ex)) => {
+                        let at = ex.iter().map(|(n, v)| format!("{n} = {}", shown(v))).collect::<Vec<_>>().join(", ");
+                        Answer::Fails(tr!("{at} のとき、`{line}` の組み合わせになります", "at {at} the values are the combination of `{line}`"))
+                    }
+                    Some(Answer::Undecided(why)) => Answer::Undecided(why),
+                    None => Answer::Undecided(tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition")),
+                },
+            }
+        }
     }
 }
 
@@ -309,6 +342,7 @@ pub(crate) fn said(p: &Precondition) -> String {
         Precondition::Sum { name, max, .. } => format!("{name} <= {max}"),
         Precondition::Length { sequence, max } => format!("len({sequence}) <= {max}"),
         Precondition::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
+        Precondition::Never { said, .. } => said.clone(),
     }
 }
 

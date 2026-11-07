@@ -2,14 +2,14 @@
 //!
 //! An input marked `random` is drawn by the caller uniformly from what its declaration lets in —
 //! the whole numbers of its range in steps of its type, an enum's values, a truth value's two —
-//! independently of the other inputs, within what the `constraint` lines leave. Every chance is then
+//! independently of the other inputs, within what the `constraint` and `never` lines leave. Every chance is then
 //! a count of points over a count of points, and so an exact rational.
 //!
 //! The rows of a table are boxes, so the points need not be looked at one by one where the rule
 //! decides alike over a box. The inputs that are not random are cut into classes at the rule's own
 //! boundaries — the cells `diff` and the machine walk (§15.122, §15.148) — and so are the random
 //! inputs' axes. When nothing computed reads a random input together with one that is not, and no
-//! `constraint` ties the two, each cell of that walk is a class of the inputs that are not random
+//! `constraint` or `never` line ties the two, each cell of that walk is a class of the inputs that are not random
 //! crossed with a box of the random ones, and the number of points of the box is the product of the
 //! lengths of its intervals. An answer that is one value over a cell counts all of them at once,
 //! whatever the ranges. Only where an answer moves inside a cell, or where the two kinds of input are
@@ -127,6 +127,7 @@ pub fn method(f: &RuleFile) -> Method {
         }
         reads.contains(&draw)
     }) || f.constraints.iter().any(|k| k.names().any(|n| *n == draw))
+        || f.nevers.iter().any(|k| k.names().any(|n| *n == draw))
         || f.result.as_ref().is_some_and(|r| {
             let mut ns = Vec::new();
             crate::types::collect_names(&r.expr, &mut ns);
@@ -396,6 +397,12 @@ fn separable(f: &RuleFile, axes: &[Axis]) -> Option<Vec<bool>> {
             return None;
         }
     }
+    for n in &f.nevers {
+        let r = n.names().filter(|m| random.contains(*m)).count();
+        if r > 0 && r < n.names().count() {
+            return None;
+        }
+    }
     let mut out = Vec::new();
     for ax in axes {
         let rs = roots(f, &ax.col, &inputs, &mut BTreeSet::new());
@@ -518,7 +525,7 @@ fn by_classes(f: &RuleFile, c: &Checked, w: &mut Walker, kinds: &[bool], cap: u1
     // Counting a box by the product of its lengths asks that every random axis be an input's and that
     // no `constraint` name a random input.
     let random: BTreeSet<String> = f.random_inputs().map(|i| i.name.text.clone()).collect();
-    let pure = rand_ix.iter().all(|&i| random.contains(&axes[i].col)) && !f.constraints.iter().any(|k| k.names().any(|n| random.contains(n)));
+    let pure = rand_ix.iter().all(|&i| random.contains(&axes[i].col)) && pure_counts(f, &random);
     let combos = |ix: &[usize]| -> Vec<Vec<usize>> {
         let mut out: Vec<Vec<usize>> = vec![Vec::new()];
         for &i in ix {
@@ -729,7 +736,7 @@ fn by_classes(f: &RuleFile, c: &Checked, w: &mut Walker, kinds: &[bool], cap: u1
 /// Whether the number of points a combination of the inputs that are not random leaves is the same
 /// for all of them: no `constraint` names a random input.
 fn pure_counts(f: &RuleFile, random: &BTreeSet<String>) -> bool {
-    !f.constraints.iter().any(|k| k.names().any(|n| random.contains(n)))
+    !f.constraints.iter().any(|k| k.names().any(|n| random.contains(n))) && !f.nevers.iter().any(|k| k.names().any(|n| random.contains(n)))
 }
 
 /// A class written for a message: each axis that is not random, and its coordinate.

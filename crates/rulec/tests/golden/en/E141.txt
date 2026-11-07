@@ -1,0 +1,7 @@
+error[E141]: A `never` line names something that is not there
+  --> tests/mutants/m_e141.rule:15 never
+   |
+15 | never tier = gold, tool = 0
+   |                    ^^^^ there is no input or summary called tool
+   |
+ A `never` line names inputs declared in `inputs` and summaries of `elements` (`count`, `sum`, `max`, `min`).

@@ -425,6 +425,60 @@ pub enum Pre {
     /// A date input that takes only the days of a koyomi date (§15.174): the file and the date
     /// as the rule names them, and the days, as ordinals.
     Days { input: String, file: String, date: String, days: Vec<i64> },
+    /// A `never` line the door reads (§15.282): the line, and what it tests on the wire.
+    Never { said: String, conds: Vec<ritsu_ports::NeverCond> },
+}
+
+/// What one condition of a `never` line tests, on the wire: what a caller of the door can hold a
+/// value to before it calls.
+fn never_test(k: &crate::ast::NeverCond, c: &Checked) -> ritsu_ports::NeverTest {
+    use crate::ast::{Cell, Lit};
+    use ritsu_ports::{NeverTest, Value};
+    let name = &k.name.text;
+    let Some(ty) = c.ty_of(name) else { return NeverTest::Other };
+    let ty = ty.present().clone();
+    let sc = c.wire_scale(name);
+    let on_wire = |n: &crate::lex::Num| crate::types::lit_value_in_pub(n, &ty).map(|v| crate::types::wire_int(v, sc));
+    let value = |l: &Lit| -> Option<Value> {
+        Some(match l {
+            Lit::Word(w) if w == crate::kw::TRUE => Value::Bool(true),
+            Lit::Word(w) if w == crate::kw::FALSE => Value::Bool(false),
+            Lit::Word(w) => Value::Enum(w.clone()),
+            Lit::Str(s) => Value::Str(s.clone()),
+            Lit::Num(n) => Value::Int(on_wire(n)?),
+            Lit::Date(y, m, d) => Value::Date(format!("{y:04}-{m:02}-{d:02}")),
+        })
+    };
+    let among = |ls: &[Lit], yes: bool| -> NeverTest {
+        // A word can be a group of values (§6.3): the values, as the door takes them.
+        let mut values = Vec::new();
+        for l in ls {
+            match (l, c.groups.get(&crate::ast::lit_text(l))) {
+                (Lit::Word(_), Some((_, members))) => values.extend(members.iter().cloned().map(Value::Enum)),
+                _ => match value(l) {
+                    Some(v) => values.push(v),
+                    None => return NeverTest::Other,
+                },
+            }
+        }
+        NeverTest::Among { values, yes }
+    };
+    match &k.cell {
+        Cell::Lit(l) => among(std::slice::from_ref(l), true),
+        Cell::Set(ls) => among(ls, true),
+        Cell::Not(ls) => among(ls, false),
+        Cell::Ranked { values, .. } => NeverTest::Among { values: values.iter().cloned().map(Value::Enum).collect(), yes: true },
+        Cell::Cmp(ops) => {
+            let mut out = Vec::new();
+            for (op, l) in ops {
+                let Lit::Num(n) = l else { return NeverTest::Other };
+                let Some(v) = on_wire(n) else { return NeverTest::Other };
+                out.push((op.word().to_string(), v));
+            }
+            NeverTest::Compare(out)
+        }
+        _ => NeverTest::Other,
+    }
 }
 
 /// Every precondition of the rule, in the order a reader meets them: the declared relations
@@ -470,7 +524,29 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
             v.push(Pre::Days { input: i.name.text.clone(), file: fr.file.clone(), date: fr.date.clone(), days: d.days.clone() });
         }
     }
+    // The `never` lines the door reads (§15.282).
+    for n in f.door_nevers() {
+        let conds = n.conds.iter().map(|k| ritsu_ports::NeverCond { name: k.name.text.clone(), test: never_test(k, c) }).collect();
+        v.push(Pre::Never { said: n.said(), conds });
+    }
     v
+}
+
+/// One condition of a `never` line, as data.
+fn never_cond_json(k: &ritsu_ports::NeverCond) -> String {
+    use ritsu_ports::{NeverTest, Value};
+    let o = crate::json::Obj::new().str("name", &k.name);
+    let value = |v: &Value| match v {
+        Value::Bool(b) => b.to_string(),
+        Value::Int(n) => n.to_string(),
+        Value::Str(s) | Value::Date(s) | Value::Enum(s) => crate::json::quote(s),
+        _ => "null".to_string(),
+    };
+    match &k.test {
+        NeverTest::Among { values, yes } => o.raw("among", crate::json::arr(&values.iter().map(value).collect::<Vec<_>>())).bool("yes", *yes).finish(),
+        NeverTest::Compare(ops) => o.raw("compare", crate::json::arr(&ops.iter().map(|(op, v)| crate::json::Obj::new().str("op", op).int("value", *v).finish()).collect::<Vec<_>>())).finish(),
+        NeverTest::Other => o.bool("door_only", true).finish(),
+    }
 }
 
 /// The preconditions of §15.116, as data. Structured and not prose: a caller matches on the
@@ -501,6 +577,11 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
                     .str("kind", "length")
                     .str("sequence", sequence)
                     .int("max", *max)
+                    .finish(),
+                Pre::Never { said, conds } => crate::json::Obj::new()
+                    .str("kind", "never")
+                    .str("said", said)
+                    .raw("conds", crate::json::arr(&conds.iter().map(never_cond_json).collect::<Vec<_>>()))
                     .finish(),
                 Pre::Days { input, file, date, days } => crate::json::Obj::new()
                     .str("kind", "days")

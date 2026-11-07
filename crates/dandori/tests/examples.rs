@@ -2841,7 +2841,7 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
                     std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
                     by.insert(p, ru.info.path.clone());
                 }
-                let file = module.dir.join(format!("vectors-{}.jsonl", dandori::render::ident(&ru.name)));
+                let file = module.dir.join(format!("vectors-{k}-{}.jsonl", dandori::render::ident(&ru.name)));
                 std::fs::write(&file, glue_vectors(&m, *r)).unwrap();
                 vectors.push((dandori::render::rule_activity(&ru.name), file));
                 continue;
@@ -2854,7 +2854,7 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
                 std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
                 by.insert(p.clone(), ru.info.path.clone());
             }
-            let file = module.dir.join(format!("vectors-{}.jsonl", dandori::render::ident(&ru.name)));
+            let file = module.dir.join(format!("vectors-{k}-{}.jsonl", dandori::render::ident(&ru.name)));
             std::fs::write(&file, rulec_vectors(&ru.info.path)).unwrap();
             vectors.push((dandori::render::rule_activity(&ru.name), file));
         }

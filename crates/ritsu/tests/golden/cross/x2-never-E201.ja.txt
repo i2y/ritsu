@@ -1,0 +1,8 @@
+ok refund_route.rule
+refund.flow: 検査を通りました
+エラー[ritsu E201]: refund.flow:22:1: 規則 check を呼ぶところで、前提 `never shipped = 0, asked >= 1` を破る値を渡すことがあります
+    22 |   let decision = check(shipped: shipped, asked: asked, express: express)
+  = shipped = 0, asked = 1 のとき、`never shipped = 0, asked >= 1` の組み合わせになります
+  = 規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。
+  = 値を渡す前に前提を保つよう分岐するか、範囲を狭めてください（入力やタスクの結果の `range`）。
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

@@ -203,6 +203,7 @@ fn column_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
             }
         }
     }
+    out.extend(f.never_cells(col).cloned());
     out
 }
 
@@ -272,6 +273,7 @@ fn enum_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
             Item::Derived(d) => atoms(&d.expr, col, &mut out),
         }
     }
+    out.extend(f.never_cells(col).cloned());
     out
 }
 
@@ -360,6 +362,18 @@ fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
             Item::Derived(_) => {}
         }
     }
+    // The boundaries of a `never` line are boundaries of what the door takes (§15.282).
+    for cell in f.never_cells(col) {
+        let lits: Vec<&Lit> = match cell {
+            Cell::Cmp(cs) => cs.iter().map(|(_, l)| l).collect(),
+            Cell::Lit(l) => vec![l],
+            Cell::Set(ls) | Cell::Not(ls) => ls.iter().collect(),
+            _ => Vec::new(),
+        };
+        for v in lits.into_iter().filter_map(lit) {
+            push(v, &mut set);
+        }
+    }
     let mut v: Vec<Rat> = set.into_iter().map(|(n, d)| Rat { num: n, den: d }).collect();
     v.sort_by(|a, b| a.cmp_to(*b));
     v
@@ -404,12 +418,34 @@ fn satisfying(cell: &Cell, cands: &[Val], ty: &Ty, c: &Checked) -> Option<Val> {
 /// Every input at its first candidate. One column at a time is moved off it (§9.1), so a value
 /// here that annihilates the arithmetic downstream — a rate of 0% — leaves the whole boundary
 /// family computing zero. That is what `tie_search` is for: it does not sweep from the baseline.
-fn baseline(f: &RuleFile, cands: &BTreeMap<String, Vec<Val>>) -> BTreeMap<String, Val> {
-    f.inputs
+fn baseline(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> BTreeMap<String, Val> {
+    let mut base: BTreeMap<String, Val> = f.inputs
         .iter()
         .map(|i| i.name.text.clone())
         .map(|n| (n.clone(), cands[&n].first().cloned().unwrap()))
-        .collect()
+        .collect();
+    // The points around a row and the sweeps of one column hold every other input at the baseline,
+    // so a baseline under a `never` line (§15.282) would lose all of them: a truth value's first
+    // candidate is `true`, and `never a = true, b = true` is what a rule writes first. A line moves
+    // one of its own names, the last it can, to a candidate that clears every line, or failing that
+    // this one.
+    let under = |b: &BTreeMap<String, Val>| f.door_nevers().filter(|n| !never_clear(n, c, &|m| b.get(m))).count();
+    for _ in 0..=f.nevers.len() {
+        let Some(line) = f.door_nevers().find(|n| !never_clear(n, c, &|m| base.get(m))) else { break };
+        let mut moves: Vec<BTreeMap<String, Val>> = Vec::new();
+        for k in line.conds.iter().rev() {
+            for v in cands.get(&k.name.text).into_iter().flatten() {
+                let mut b = base.clone();
+                b.insert(k.name.text.clone(), v.clone());
+                if never_clear(line, c, &|m| b.get(m)) {
+                    moves.push(b);
+                }
+            }
+        }
+        let Some(best) = moves.into_iter().min_by_key(|b| under(b)) else { break };
+        base = best;
+    }
+    base
 }
 
 /// How far out from its starting point a tie is looked for before giving up.
@@ -440,7 +476,7 @@ fn tie_search(f: &RuleFile, c: &Checked, base: &BTreeMap<String, Val>, seeds: &[
     }
     let starts: Vec<&BTreeMap<String, Val>> = std::iter::once(base).chain(seeds.iter().copied()).collect();
     let lands = |a: &BTreeMap<String, Val>| {
-        allowed(f, a) && bind(f, c, a).get(name).and_then(as_rat).is_some_and(|v| is_tie(v, g))
+        allowed(f, c, a) && bind(f, c, a).get(name).and_then(as_rat).is_some_and(|v| is_tie(v, g))
     };
     if let Some(forms) = crate::grid::Grid::new(f, c).forms_of(name) {
         for s in &starts {
@@ -524,7 +560,7 @@ fn walk_to_tie(f: &RuleFile, c: &Checked, start: &BTreeMap<String, Val>, name: &
             }
             let t = floor0.add(g.mul(Rat::int(dir * step))).add(half);
             if let Some(a) = place(f, c, start, name, t, &BTreeSet::new()) {
-                if allowed(f, &a) {
+                if allowed(f, c, &a) {
                     return Some(a);
                 }
             }
@@ -590,7 +626,7 @@ fn value_pair(
     // What the auditor compares: the column's value and the rule's outputs (`value_moved`).
     type Seen = (Option<Val>, Vec<(String, Option<Val>)>);
     let on_row = |a: &BTreeMap<String, Val>| -> Option<Seen> {
-        if !allowed(f, a) {
+        if !allowed(f, c, a) {
             return None;
         }
         let (outs, fired, b) = eval::run_all(f, c, a.clone().into_iter().collect());
@@ -715,7 +751,7 @@ fn fold_pool(
     let fold = f.folds().next().expect("a rule with elements has a fold");
     let fields: Vec<String> =
         f.elements.iter().flat_map(|e| &e.fields).map(|i| i.name.text.clone()).collect();
-    let scalars: BTreeMap<String, Val> = baseline(f, cands)
+    let scalars: BTreeMap<String, Val> = baseline(f, c, cands)
         .into_iter()
         .filter(|(k, _)| !fields.contains(k))
         .collect();
@@ -907,7 +943,7 @@ pub fn second_walk_cases(f: &RuleFile, c: &Checked, s: usize) -> Vec<BTreeMap<St
     let cands = candidates(f, c);
     let Some(el) = f.elements.get(s) else { return Vec::new() };
     let fields: Vec<String> = f.element_fields().map(|i| i.name.text.clone()).collect();
-    let mut base: BTreeMap<String, Val> = baseline(f, &cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
+    let mut base: BTreeMap<String, Val> = baseline(f, c, &cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
     for (t, other) in f.elements.iter().enumerate() {
         if t != s {
             base.insert(other.name.text.clone(), Val::Seq(element_combos(other, &cands).into_iter().take(1).collect()));
@@ -955,7 +991,7 @@ pub fn second_walk_cases(f: &RuleFile, c: &Checked, s: usize) -> Vec<BTreeMap<St
         out.push(case(vec![x.clone(), y.clone()]));
         out.push(case(vec![y.clone(), x.clone()]));
     }
-    out.retain(|m| allowed(f, m) && days_ok(c, m));
+    out.retain(|m| allowed(f, c, m) && days_ok(c, m));
     out
 }
 
@@ -999,7 +1035,7 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
     use crate::types::Stage;
     let st = crate::types::stages(f);
     let fields: Vec<String> = f.element_fields().map(|i| i.name.text.clone()).collect();
-    let scalars: BTreeMap<String, Val> = baseline(f, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
+    let scalars: BTreeMap<String, Val> = baseline(f, c, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
     let combos: Vec<Vec<BTreeMap<String, Val>>> = f.elements.iter().map(|el| element_combos(el, cands)).collect();
     // Each sequence at rest: one element, its first candidate, so that a walk over it has one.
     let rest: Vec<Val> = combos.iter().map(|cs| Val::Seq(cs.first().cloned().into_iter().collect())).collect();
@@ -1369,7 +1405,7 @@ fn count_pool(
     let over = el.name.text.clone();
     let fields: Vec<String> = el.fields.iter().map(|i| i.name.text.clone()).collect();
     let scalars: BTreeMap<String, Val> =
-        baseline(f, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
+        baseline(f, c, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
 
     // Every element the fields' own candidates can make, as the fold pool builds them.
     let mut combos: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
@@ -1692,7 +1728,7 @@ fn held_pairs(
 
 fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
-    let base = baseline(f, cands);
+    let base = baseline(f, c, cands);
     let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), tr!("基準", "baseline"))];
     // Each row's own point, by (definition set, row). The value pairs and the rounding ties
     // start from here as well as from the baseline (§15.151).
@@ -1966,8 +2002,18 @@ pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
 /// A combination the caller says does not happen is not a test case: the generated code
 /// refuses it at the door, and the checker never demanded a row for it. Filtering here is
 /// what keeps the suite and the proof talking about the same set of inputs.
-pub fn allowed(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| constraint_holds(k, &|n| a.get(n)))
+pub fn allowed(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>) -> bool {
+    f.constraints.iter().all(|k| constraint_holds(k, &|n| a.get(n))) && f.door_nevers().all(|n| never_clear(n, c, &|m| a.get(m)))
+}
+
+/// Whether these values stay clear of a `never` line (§15.282): not every condition holds, each
+/// read as a table's cell is. A line with a name that has no value is not held to it, the way the
+/// door compares only what it was passed.
+pub fn never_clear<'v>(n: &crate::ast::NeverLine, c: &Checked, value: &dyn Fn(&str) -> Option<&'v Val>) -> bool {
+    !n.conds.iter().all(|k| {
+        let name = k.name.text.as_str();
+        value(name).is_some_and(|v| eval::cell_matches(c, &k.cell, v, &c.ty_of(name).unwrap_or(Ty::Unknown)))
+    })
 }
 
 /// Whether one `constraint` holds of the values its two sides take, each side's names read with
@@ -2013,7 +2059,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
 /// coverage.
 pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let cands = candidates(f, c);
-    let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, a) && days_ok(c, a)).collect();
+    let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, c, a) && days_ok(c, a)).collect();
 
     let key_of = |a: &BTreeMap<String, Val>| -> String {
         a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")
@@ -2086,7 +2132,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let fired_rows: BTreeSet<(String, usize)> = evaluated.iter().flat_map(|v| v.fired.iter().cloned()).collect();
     for (table, row, a) in crate::region::gap_inputs(f, c, &|tn, ri| fired_rows.contains(&(tn.to_string(), ri))) {
         let key = key_of(&a);
-        if seen_in.contains_key(&key) || !allowed(f, &a) || !days_ok(c, &a) {
+        if seen_in.contains_key(&key) || !allowed(f, c, &a) || !days_ok(c, &a) {
             continue;
         }
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
@@ -2222,6 +2268,11 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
     for k in &f.constraints {
         if let Some(obj) = breaking(f, c, k, &base) {
             push(obj, tr!("制約 {} を破る組み合わせ", "a combination the constraint {} rules out", k.said()));
+        }
+    }
+    for n in f.door_nevers() {
+        if let Some(obj) = inside_never(f, c, n, &base) {
+            push(obj, tr!("`{}` の組み合わせ", "the combination of `{}`", n.said()));
         }
     }
     for el in &f.elements {
@@ -2416,6 +2467,56 @@ fn breaking(f: &RuleFile, c: &Checked, k: &Constraint, base: &Json) -> Option<Js
     }
 }
 
+/// A combination inside a `never` line (§15.282): each name at a value its cell takes, the first
+/// combination the door refuses for this line and nothing before it. The values tried are the
+/// candidates the vectors take for the name, which stand on each side of every boundary its cells
+/// name.
+fn inside_never(f: &RuleFile, c: &Checked, n: &crate::ast::NeverLine, base: &Json) -> Option<Json> {
+    let said = crate::door::never(&n.said());
+    let cands = candidates(f, c);
+    let names: Vec<&String> = n.names().collect();
+    let lists: Vec<Vec<Json>> = n
+        .conds
+        .iter()
+        .map(|k| {
+            let name = &k.name.text;
+            let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+            cands
+                .get(name)
+                .into_iter()
+                .flatten()
+                .filter(|v| eval::cell_matches(c, &k.cell, v, &ty))
+                .filter_map(|v| crate::json::parse(&wire_value(c, name, v)).ok())
+                .collect()
+        })
+        .collect();
+    if lists.iter().any(|l| l.is_empty()) {
+        return None;
+    }
+    let mut at = vec![0usize; names.len()];
+    loop {
+        let mut obj = base.clone();
+        for (i, name) in names.iter().enumerate() {
+            obj = with(&obj, name, lists[i][at[i]].clone());
+        }
+        if crate::door::refusal(f, c, &obj).is_some_and(|x| x.error == said) {
+            return Some(obj);
+        }
+        let mut i = 0;
+        loop {
+            if i == at.len() {
+                return None;
+            }
+            at[i] += 1;
+            if at[i] < lists[i].len() {
+                break;
+            }
+            at[i] = 0;
+            i += 1;
+        }
+    }
+}
+
 fn date_text(ord: i128) -> String {
     let (y, m, d) = crate::types::ord_to_date(Rat::int(ord));
     format!("{y:04}-{m:02}-{d:02}")
@@ -2457,27 +2558,30 @@ pub fn to_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
 }
 
 /// The JSON object of the inputs, in declaration order, in the wire form of §10.2.
+/// One value, in the wire form of §10.2.
+pub fn wire_value(c: &Checked, name: &str, val: &Val) -> String {
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    // The absent value of an optional column is JSON `null` on the wire — which is what
+    // `rulec schema` declares and what the generated `_record` writes. The vectors wrote
+    // the word `none` instead, so even a runner that parsed it correctly would have
+    // disagreed with the record it produced (§15.88).
+    if matches!(val, Val::Enum(e) if e == crate::kw::NONE)
+        && matches!(c.ty_of(name), Some(Ty::Opt(_)))
+    {
+        return "null".into();
+    }
+    match val {
+        Val::Num(r) => format!("{}", crate::types::wire_int(*r, c.wire_scale(name))),
+        Val::Bool(b) => format!("{b}"),
+        other => format!("\"{}\"", esc(&show(other))),
+    }
+}
+
 pub fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    // One value, in the wire form of §10.2. A sequence is an array of objects, and each
-    // element's fields are written the same way (§15.56) — the wire gains a shape, not a
-    // second kind of number.
-    let scalar = |name: &str, val: &Val| -> String {
-        // The absent value of an optional column is JSON `null` on the wire — which is what
-        // `rulec schema` declares and what the generated `_record` writes. The vectors wrote
-        // the word `none` instead, so even a runner that parsed it correctly would have
-        // disagreed with the record it produced (§15.88).
-        if matches!(val, Val::Enum(e) if e == crate::kw::NONE)
-            && matches!(c.ty_of(name), Some(Ty::Opt(_)))
-        {
-            return "null".into();
-        }
-        match val {
-            Val::Num(r) => format!("{}", crate::types::wire_int(*r, c.wire_scale(name))),
-            Val::Bool(b) => format!("{b}"),
-            other => format!("\"{}\"", esc(&show(other))),
-        }
-    };
+    // A sequence is an array of objects, and each element's fields are written the same way
+    // (§15.56) — the wire gains a shape, not a second kind of number.
+    let scalar = |name: &str, val: &Val| -> String { wire_value(c, name, val) };
     let mut ins: Vec<String> = Vec::new();
     // A sequence is named by `elements`, whether a fold reads it or a count does (§15.58); each
     // comes before the inputs, in the order the rule declares them (§15.219).
@@ -2831,7 +2935,7 @@ pub fn no_row_takes(f: &RuleFile, c: &Checked, t: &Table, a: &BTreeMap<String, V
             None => false,
         }
     });
-    if !sendable || !allowed(f, a) || !days_ok(c, a) {
+    if !sendable || !allowed(f, c, a) || !days_ok(c, a) {
         return None;
     }
     let binds = bind(f, c, a);
@@ -3125,7 +3229,7 @@ pub fn rows_without_input(f: &RuleFile, c: &Checked, set: &crate::defset::DefSet
     let t = &set.table;
     let mut by_example: BTreeSet<usize> = BTreeSet::new();
     for a in example_inputs(f, c) {
-        if !allowed(f, &a) || !days_ok(c, &a) {
+        if !allowed(f, c, &a) || !days_ok(c, &a) {
             continue;
         }
         let (_, fired, _) = eval::run_bindings(f, c, a.into_iter().collect());
@@ -3143,7 +3247,7 @@ pub fn rows_without_input(f: &RuleFile, c: &Checked, set: &crate::defset::DefSet
         .iter()
         .copied()
         .filter(|ri| !by_example.contains(ri))
-        .filter(|&ri| !win_row(f, c, &cands, &seed, set, ri).is_some_and(|a| allowed(f, &a) && days_ok(c, &a)))
+        .filter(|&ri| !win_row(f, c, &cands, &seed, set, ri).is_some_and(|a| allowed(f, c, &a) && days_ok(c, &a)))
         .collect();
     if left.is_empty() {
         return left;
@@ -3169,7 +3273,7 @@ pub fn rows_without_input(f: &RuleFile, c: &Checked, set: &crate::defset::DefSet
     }
     let mut reached: BTreeSet<usize> = BTreeSet::new();
     for a in combos {
-        if !allowed(f, &a) || !days_ok(c, &a) {
+        if !allowed(f, c, &a) || !days_ok(c, &a) {
             continue;
         }
         let (_, fired, _) = eval::run_bindings(f, c, a.into_iter().collect());
@@ -3211,7 +3315,7 @@ pub fn pair_witness(
     // values the region's own sieve cannot apply the constraints — they are stated over
     // inputs, and those inputs are not columns — so this is the place that can (§15.126).
     let hold = |a: &BTreeMap<String, Val>| {
-        allowed(f, a) && row_holds(f, c, t, &t.rows[i], a) && row_holds(f, c, t, &t.rows[j], a)
+        allowed(f, c, a) && row_holds(f, c, t, &t.rows[i], a) && row_holds(f, c, t, &t.rows[j], a)
     };
     // Bring the columns in one by one. Fixing one can break an earlier one, so loop until
     // nothing breaks any more.

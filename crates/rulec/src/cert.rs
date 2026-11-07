@@ -103,6 +103,43 @@ fn constraint_json(left: &[String], op: &str, right: &[String]) -> String {
     Obj::new().raw("left", side(left)).str("op", op).raw("right", side(right)).finish()
 }
 
+/// The rule's `never` lines (§15.282), for a certificate: each as it is written, where it is, and
+/// what it stands on. `None` for a rule with none, whose certificate is what it was.
+fn nevers_json(f: &RuleFile, c: &Checked, rule_path: &str) -> Option<String> {
+    if f.nevers.is_empty() {
+        return None;
+    }
+    let walks = crate::projection::walks::Walks::of(f, c, rule_path);
+    Some(arr(&f
+        .nevers
+        .iter()
+        .map(|n| {
+            let kind = f.never_kind(n);
+            let o = Obj::new()
+                .str("said", n.said())
+                .int("line", n.span.line as i128)
+                .str("by", if kind == crate::ast::NeverKind::Caller { "caller" } else { "definitions" })
+                .bool("door", n.names().any(|m| f.inputs.iter().any(|i| i.name.text == *m)))
+                .raw(
+                    "conds",
+                    arr(&n
+                        .conds
+                        .iter()
+                        .map(|k| {
+                            let ty = c.ty_of(&k.name.text).map(|t| t.present().clone());
+                            Obj::new().str("name", &k.name.text).raw("cell", cell_json(&crate::region::cert_cell(Some(&k.cell), ty))).finish()
+                        })
+                        .collect::<Vec<_>>()),
+                );
+            if kind == crate::ast::NeverKind::Definitions {
+                o.raw("proof", walks.never_proof_json(n)).finish()
+            } else {
+                o.finish()
+            }
+        })
+        .collect::<Vec<_>>()))
+}
+
 /// Every named value the rule computes, with the expression, the interval the declared
 /// ranges force it into, and the integer that interval stores at its scale (§7.4, E108).
 /// Re-checking one is interval arithmetic over the same expression — which is why the
@@ -332,6 +369,7 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
                 .map(|k| constraint_json(&k.left, k.op.word(), &k.right))
                 .collect::<Vec<_>>()),
         )
+        .opt_raw("nevers", nevers_json(f, c, rule_path))
         .raw("enums", {
             let mut e = Obj::new();
             let mut names: Vec<&String> = c.enums.keys().collect();
@@ -1924,19 +1962,13 @@ fn coupled_fixed(f: &RuleFile, m: &crate::ast::MachineDecl, ct: &CertTable) -> V
     if ct.axes.iter().any(|a| a.kind != "input") {
         return fixed;
     }
-    fixed.into_iter().filter(|x| f.constraints.iter().any(|k| k.names().any(|n| n == x))).collect()
+    fixed.into_iter().filter(|x| f.constraints.iter().any(|k| k.names().any(|n| n == x)) || f.nevers.iter().any(|k| k.names().any(|n| n == x))).collect()
 }
 
-/// One contract's section (§15.142): the condition it places on what the rule reads, as
-/// atoms over named values opened into cases, and for each thing the rule's door asks — an
-/// end of an input's range, a `constraint`, an enum's values — why every case keeps it. A
-/// re-checker builds the door again from the rule; what it takes from here is the reading of
-/// the contract and the proofs.
-fn contract_json(k: &crate::projection::ContractCert) -> String {
-    use crate::relation::{Atom, Proof, Rel};
-    let name = |t: &crate::relation::Term| k.names.get(t).cloned().unwrap_or_else(|| format!("@{}", t.word()));
-    let atoms: Vec<String> = k
-        .atoms
+/// A contract's atoms, each over the name it goes by.
+pub(crate) fn atoms_json(atoms: &[crate::relation::Atom], name: &dyn Fn(&crate::relation::Term) -> String) -> String {
+    use crate::relation::{Atom, Rel};
+    let out: Vec<String> = atoms
         .iter()
         .map(|a| match a {
             Atom::Num(l, rel) => {
@@ -1957,9 +1989,22 @@ fn contract_json(k: &crate::projection::ContractCert) -> String {
             Atom::Unknown => Obj::new().bool("unknown", true).finish(),
         })
         .collect();
+    arr(&out)
+}
+
+/// One contract's section (§15.142): the condition it places on what the rule reads, as
+/// atoms over named values opened into cases, and for each thing the rule's door asks — an
+/// end of an input's range, a `constraint`, an enum's values — why every case keeps it. A
+/// re-checker builds the door again from the rule; what it takes from here is the reading of
+/// the contract and the proofs.
+fn contract_json(k: &crate::projection::ContractCert) -> String {
+    use crate::relation::Proof;
+    let name = |t: &crate::relation::Term| k.names.get(t).cloned().unwrap_or_else(|| format!("@{}", t.word()));
+    let atoms = atoms_json(&k.atoms, &name);
     let proof = |p: &Proof| match p {
         Proof::Clash(t) => Obj::new().str("clash", &name(t)).finish(),
         Proof::Within => Obj::new().bool("within", true).finish(),
+        Proof::Whole => Obj::new().bool("whole", true).finish(),
         Proof::Farkas(r) => Obj::new()
             .raw(
                 "farkas",
@@ -2011,7 +2056,7 @@ fn contract_json(k: &crate::projection::ContractCert) -> String {
                 .map(|(n, sc, path)| Obj::new().str("input", n).int("scale", *sc).str("from", path).finish())
                 .collect::<Vec<_>>()),
         )
-        .raw("atoms", arr(&atoms))
+        .raw("atoms", atoms)
         .raw(
             "cases",
             match &k.cases {
@@ -2242,6 +2287,20 @@ fn table_json(t: CertTable, main_src: &str, rule_path: &str) -> String {
     // The pairs the rows of a table above part (§15.196): the axis, and for each value both rows
     // take there, the rows that write it with why each fires nowhere in what both take. Written
     // only for a table that has them.
+    // The `never` lines this table reads, each by its place among the rule's and with a cell for
+    // every axis (§15.282). Written only for a table that reads some.
+    let o = if t.nevers.is_empty() {
+        o
+    } else {
+        o.raw(
+            "nevers",
+            arr(&t
+                .nevers
+                .iter()
+                .map(|(line, cells)| Obj::new().int("line", *line as i128).raw("tests", arr(&cells.iter().map(cell_json).collect::<Vec<_>>())).finish())
+                .collect::<Vec<_>>()),
+        )
+    };
     let o = if t.above_apart.is_empty() {
         o
     } else {
@@ -2373,6 +2432,7 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
         Cover::ByFarkas(r) => Obj::new().raw("farkas", farkas_json(r, model)).finish(),
         Cover::Row(r) => Obj::new().int("row", *r as i128).finish(),
         Cover::ByConstraint(k) => Obj::new().int("constraint", *k as i128).finish(),
+        Cover::ByNever(k) => Obj::new().int("never", *k as i128).finish(),
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
         Cover::ByUpstream(what, _) => Obj::new().str("upstream", what).finish(),
         Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),

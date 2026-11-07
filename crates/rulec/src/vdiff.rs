@@ -362,6 +362,15 @@ pub(crate) fn axis_with(
                         }
                     }
                 }
+                for cell in f.never_cells(col) {
+                    if let Cell::Prefix(ps) = cell {
+                        for p in ps {
+                            if !patterns.contains(p) {
+                                patterns.push(p.clone());
+                            }
+                        }
+                    }
+                }
             }
             patterns.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
             let mut coords: Vec<Coord> = patterns.into_iter().map(Coord::Word).collect();
@@ -397,6 +406,19 @@ pub(crate) fn axis_with(
                             None => *h,
                             Some(p) => if h.cmp_to(p) == Ordering::Less { *h } else { p },
                         });
+                    }
+                }
+                // A `never` line cuts where it tests, so that a coordinate is wholly on one side of
+                // it (§15.282).
+                for cell in f.never_cells(col) {
+                    let lits: Vec<&Lit> = match cell {
+                        Cell::Cmp(cs) => cs.iter().map(|(_, l)| l).collect(),
+                        Cell::Lit(l) => vec![l],
+                        Cell::Set(ls) | Cell::Not(ls) => ls.iter().collect(),
+                        _ => Vec::new(),
+                    };
+                    for v in lits.into_iter().filter_map(|l| lit_rat(l, ty)) {
+                        bounds.insert((v.num, v.den));
                     }
                 }
                 for t in tables_of(f) {
@@ -634,8 +656,8 @@ pub(crate) fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> An
 /// makes, not something the evaluator enforces, so a cell realized by inputs that break one
 /// is a cell no caller reaches (§15.55). Two dates compare by their day numbers, as the
 /// vectors' filter compares them (§15.198).
-fn constraints_hold(f: &RuleFile, m: &HashMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, &|n| m.get(n)))
+fn constraints_hold(f: &RuleFile, c: &Checked, m: &HashMap<String, Val>) -> bool {
+    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, &|n| m.get(n))) && f.door_nevers().all(|n| crate::vectors::never_clear(n, c, &|x| m.get(x)))
 }
 
 /// A value on the axis's own grid, inside the coordinate.
@@ -829,11 +851,9 @@ fn cone_of(axes: &[Axis], f: &RuleFile, c: &Checked, scalars: &[(String, Expr)])
         }
     }
     if !set.is_empty() {
-        for k in &f.constraints {
-            for n in k.names() {
-                if let Some(&i) = ax_of.get(n.as_str()) {
-                    set.insert(i);
-                }
+        for n in f.constraints.iter().flat_map(|k| k.names()).chain(f.nevers.iter().flat_map(|l| l.names())) {
+            if let Some(&i) = ax_of.get(n.as_str()) {
+                set.insert(i);
             }
         }
     }
@@ -973,7 +993,7 @@ fn realize(
                     try_.insert(d.clone(), Val::Num(want));
                     let Some(after) = num(&try_) else { continue };
                     // Take the move when it gets closer and keeps the caller's promises.
-                    if gap(after).cmp_to(gap(now)) == Ordering::Less && constraints_hold(f, &try_) {
+                    if gap(after).cmp_to(gap(now)) == Ordering::Less && constraints_hold(f, c, &try_) {
                         base = try_;
                         now = after;
                         progress = true;
@@ -993,7 +1013,7 @@ fn realize(
             break;
         }
     }
-    let mut settled = constraints_hold(f, &base);
+    let mut settled = constraints_hold(f, c, &base);
     // Every scalar derive has to hold at the same time, not one after another.
     if settled {
         for (name, expr) in scalars {
@@ -1373,6 +1393,7 @@ fn around_rows(f: &RuleFile, c: &Checked) -> Vec<String> {
             .iter()
             .map(|k| format!("constraint {}", k.said())),
     );
+    out.extend(f.nevers.iter().map(|n| n.said()));
     out.sort();
     out
 }
@@ -2085,7 +2106,8 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
             // Proved empty: the cell is not a case anybody can send, so it is passed over
             // exactly as one the shape ruled out is — counted nowhere and claimed nothing
             // about.
-            if !(linearly_empty(&axes, &cell, o) && linearly_empty(&axes, &cell, n)) {
+            let empty = |v: (&RuleFile, &Checked)| linearly_empty(&axes, &cell, v) || never_empties(&axes, &cell, v.0, v.1);
+            if !(empty(o) && empty(n)) {
                 out.unrealized += 1;
                 considered[at] = true;
                 unbuilt.push(at);
@@ -2935,7 +2957,9 @@ fn solved_point(
     // Only a cell whose computed columns are correlated is worth solving; where they are
     // not, the walk already reached whatever there was. A `constraint` between two inputs
     // correlates them too: the walk stands on one point of each coordinate, and where that
-    // point is on the wrong side of the constraint the cell may still hold others (§15.198).
+    // point is on the wrong side of the constraint the cell may still hold others (§15.198). A
+    // `never` line does not: the axes are cut at its literals, so a cell is wholly inside it or
+    // wholly outside (§15.282).
     let tied = f.constraints.iter().any(|k| k.names().filter(|n| axes.iter().any(|a| a.col == **n)).count() >= 2);
     if !tied && !scalars.iter().any(|(n, _)| axes.iter().any(|a| a.col == *n)) {
         return None;
@@ -2998,7 +3022,7 @@ fn solved_point(
         }
     }
     let _ = inputs;
-    (!out.is_empty() && constraints_hold(f, &out)).then_some(out)
+    (!out.is_empty() && constraints_hold(f, c, &out)).then_some(out)
 }
 
 /// Whether no input of this version reaches the cell, as far as linear arithmetic can tell
@@ -3093,6 +3117,17 @@ fn names_of(e: &Expr, out: &mut Vec<String>) {
     }
 }
 
+/// Whether a `never` line takes the whole of a cell (§15.282): every name of the line is a column
+/// here, and each coordinate is inside its condition. The axes are cut at the line's own values, so
+/// one value of a coordinate says it of all of them.
+fn never_empties(axes: &[Axis], cell: &[usize], f: &RuleFile, c: &Checked) -> bool {
+    f.door_nevers().any(|n| {
+        n.conds.iter().all(|k| {
+            axes.iter().position(|a| a.col == k.name.text).is_some_and(|ai| coord_val(&axes[ai], cell[ai]).is_some_and(|v| crate::eval::cell_matches(c, &k.cell, &v, &axes[ai].ty)))
+        })
+    })
+}
+
 fn feasible_shape(axes: &[Axis], cell: &[usize], f: &RuleFile, c: &Checked, scalars: &[(String, Expr)]) -> bool {
     let ax_of: HashMap<&str, usize> = axes.iter().enumerate().map(|(i, a)| (a.col.as_str(), i)).collect();
     for (name, expr) in scalars {
@@ -3134,7 +3169,7 @@ fn feasible_shape(axes: &[Axis], cell: &[usize], f: &RuleFile, c: &Checked, scal
                 return true;
             }
         }
-        let reachable = worlds.iter().filter(|w| constraints_hold(f, w)).any(|w| {
+        let reachable = worlds.iter().filter(|w| constraints_hold(f, c, w)).any(|w| {
             match crate::eval::Env::new(c, chained(w, scalars, c)).expr(expr) {
                 Some(Val::Num(r)) => {
                     let (lo, hi) = ival(&axes[ai].coords[cell[ai]], axes[ai].step);
@@ -3167,7 +3202,7 @@ fn true_if_crosses(
 ) -> bool {
     let mut lo: Option<Rat> = None;
     let mut hi: Option<Rat> = None;
-    for w in worlds.iter().filter(|w| constraints_hold(f, w)) {
+    for w in worlds.iter().filter(|w| constraints_hold(f, c, w)) {
         if let Some(Val::Num(r)) = crate::eval::Env::new(c, chained(w, scalars, c)).expr(expr) {
             lo = Some(match lo {
                 None => r,
@@ -3278,7 +3313,7 @@ impl<'a> Walker<'a> {
                 v
             }
         };
-        if !shaped || linearly_empty(&self.axes, cell, (self.f, self.c)) {
+        if !shaped || linearly_empty(&self.axes, cell, (self.f, self.c)) || never_empties(&self.axes, cell, self.f, self.c) {
             Settled::Empty
         } else {
             Settled::Unknown

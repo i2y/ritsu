@@ -1,0 +1,7 @@
+ok refund_route.rule
+refund.flow: 検査を通りました
+警告[ritsu W201]: refund.flow:22:1: 規則 check を呼ぶところで、前提 `never express = true, shipped >= 50` が保たれるかを決められません
+    22 |   let decision = check(shipped: shipped, asked: asked, express: express)
+  = 渡す値の範囲だけでは、`never express = true, shipped >= 50` の組み合わせにならないとは言えません
+  = `ritsu dandori gen` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 2 か所、決められない 1 か所
