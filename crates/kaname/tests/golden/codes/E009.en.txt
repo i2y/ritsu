@@ -1,3 +1,3 @@
-error[E009]: example.kn:4:35: `fed by` does not name a value: `sakai "shop.ctx" term order` holds no value. Nothing of sakai can be named: what can is a rule's output, a book's account, a date, a contract's field, a workflow's output, a field of a workflow's record or of a record of kaname's.
+error[E009]: example.kn:4:35: `fed by` does not name a value: `sakai "shop.ctx" term order` holds no value. Nothing of sakai can be named: what can is a rule's output, a book's account, a date, a contract's field, a workflow's output, a field of a workflow's record or of a record of kaname's, or a place that took the value first (an input of a rule, a dates file or a workflow, an attribute or an input of a gate).
      4 |   amount : number  range >=0 <=9  fed by sakai "shop.ctx" term order
   = The form is `fed by <tool> "<path>" <kind> <name>…`, read to the end of the line; the path is from this file's directory.

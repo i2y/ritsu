@@ -322,7 +322,7 @@ fn carried(g: &crate::model::Gate, fd: &crate::model::Field) -> ritsu_ports::Car
     use ritsu_ports::Carried;
     let one = match &fd.ty {
         FieldType::Bool => Carried::Bool,
-        FieldType::Enum(e) => Carried::Enum { name: g.enums[*e].named.alias.clone(), values: g.enums[*e].values.iter().map(|v| v.alias.clone()).collect() },
+        FieldType::Enum(e) => Carried::Enum { name: g.enums[*e].named.alias.clone(), values: g.enums[*e].values.iter().map(|v| ritsu_ports::Spelled { written: v.name.clone(), public: v.alias.clone() }).collect() },
         FieldType::Num { unit, written, lo, hi } => Carried::Num { written: written.clone(), unit: Some(unit.clone()), min: Some(*lo), max: Some(*hi) },
         FieldType::Date { lo, hi } => Carried::Date { min: Some(i64::from(*lo)), max: Some(i64::from(*hi)) },
         FieldType::Entity(t) => Carried::Other(g.types[*t].named.alias.clone()),
@@ -365,5 +365,28 @@ impl ritsu_ports::Feeds for Engine {
         }
         out.sort_by_key(|p| p.line);
         Ok(out)
+    }
+
+    /// An attribute of a principal or a resource, or an input of an action, for the next place the
+    /// code gives its value to.
+    fn holds(&self, root: &Path, file: &str, thing: &Name, _ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
+        if is_cedar(file) {
+            return Ok(None);
+        }
+        let items: Vec<(&str, &str)> = thing.items.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
+        let [(kind, owner), (child, n)] = items.as_slice() else { return Ok(None) };
+        // that the type is a principal or a resource as named is in what the file declares
+        let f = parsed(root, file)?;
+        let declared = crate::ast::fed_places(&f).iter().any(|(k, o, fd)| k == kind && o == owner && fd.name.text == *n);
+        let o = self.passing(root, file)?;
+        let Ok(x) = o.as_ref() else { unreachable!("a check that passes") };
+        let g = &x.walked.as_ref().expect("a file that passes is walked").gate;
+        let named = |h: &&crate::model::Field| h.named.is(n);
+        let held = match (*kind, *child) {
+            ("action", "input") => g.actions.iter().find(|a| a.named.is(owner)).and_then(|a| a.inputs.iter().find(named)),
+            ("principal" | "resource", "attribute") if declared => g.types.iter().find(|t| t.named.is(owner)).and_then(|t| t.attrs.iter().find(named)),
+            _ => None,
+        };
+        Ok(held.map(|h| carried(g, h)))
     }
 }

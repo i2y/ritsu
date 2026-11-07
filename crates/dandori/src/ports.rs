@@ -350,9 +350,8 @@ impl ritsu_ports::References for Engine {
     }
 }
 
-/// What a place of a flow holds, as the port of `fed by` says it (DESIGN 24): an enum of a rule's
-/// is the rule's public names of its values, which is what a rule answers with and what goes on the
-/// wire; a flow writes the rule's own names of them.
+/// What a place of a flow holds, as the port of `fed by` says it (DESIGN 24): a flow writes a rule's
+/// own names of an enum of the rule's, and what goes on the wire is the rule's public names of them.
 fn carried(m: &crate::model::Model, ports: &ritsu_ports::Ports, ty: &crate::model::Ty, rg: Option<&crate::model::Range>) -> ritsu_ports::Carried {
     use crate::model::Ty;
     use ritsu_ports::Carried;
@@ -372,7 +371,9 @@ fn carried(m: &crate::model::Model, ports: &ritsu_ports::Ports, ty: &crate::mode
                 let e = facts.enums.iter().find(|x| x.name == en)?.clone();
                 Some(values.iter().map(|v| e.values.iter().find(|x| &x.name == v).map_or_else(|| v.clone(), |x| x.public.clone())).collect::<Vec<_>>())
             });
-            Carried::Enum { name: def.name.clone(), values: public.unwrap_or(values) }
+            let public = public.unwrap_or_else(|| values.clone());
+            let values = values.into_iter().zip(public).map(|(written, public)| ritsu_ports::Spelled { written, public }).collect();
+            Carried::Enum { name: def.name.clone(), values }
         }
         Ty::Opt(t) => Carried::Opt(Box::new(carried(m, ports, t, rg))),
         t => Carried::Other(m.ty_name(t)),
@@ -406,13 +407,14 @@ impl ritsu_ports::Feeds for Engine {
         Ok(out)
     }
 
-    /// A workflow's output, or a field of a record it knows.
+    /// A workflow's input or output, or a field of a record it knows.
     fn holds(&self, root: &Path, file: &str, thing: &Naming, ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
         let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
         let items: Vec<(&str, &str)> = thing.items.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
         Ok(match items.as_slice() {
             [("output", n)] => m.outputs.iter().find(|(x, _)| x == n).map(|(_, t)| carried(&m, ports, t, m.output_ranges.get(*n))),
+            [("input", n)] => m.inputs.iter().find(|(x, _)| x == n).map(|(_, t)| carried(&m, ports, t, m.input_ranges.get(*n))),
             [("record", r), ("field", n)] => m.records.iter().find(|d| d.name == *r).and_then(|d| d.fields.iter().find(|(x, _)| x == n).map(|(_, t)| carried(&m, ports, t, d.ranges.get(*n)))),
             _ => None,
         })

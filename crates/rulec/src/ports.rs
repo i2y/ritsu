@@ -1211,7 +1211,6 @@ impl ritsu_ports::Feeds for Engine {
     /// Only what this file writes itself: a contribution becomes the rule it adds to, whose lines
     /// name their sources from that rule's directory and are asked of when that rule is.
     fn feeds(&self, root: &Path, file: &str, _ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Fed>, Vec<Said>> {
-        use ritsu_ports::Carried;
         let (path, src, got) = self.rule(&ritsu_base::paths::on_disk(root, file))?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
         let Some(own) = crate::parse::parse(&src, &path).file else { return Ok(Vec::new()) };
@@ -1232,22 +1231,7 @@ impl ritsu_ports::Feeds for Engine {
                 },
             };
             let Some(col) = columns.iter().find(|k| &k.name == n) else { continue };
-            let mut takes = Carried::of_column(&facts, &col.ty);
-            // What the facts do not say of a date: its range, or the days of a koyomi date.
-            let date = match &takes {
-                Carried::Date { .. } => Some(false),
-                Carried::Opt(t) if matches!(**t, Carried::Date { .. }) => Some(true),
-                _ => None,
-            };
-            if let Some(opt) = date {
-                let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
-                let (lo, hi) = c.ranges.get(n).copied().unwrap_or((None, None));
-                let dated = match c.day_sets.get(n) {
-                    Some(d) => Carried::Days(d.days.iter().copied().collect()),
-                    None => Carried::Date { min: day(lo), max: day(hi) },
-                };
-                takes = if opt { Carried::Opt(Box::new(dated)) } else { dated };
-            }
+            let takes = takes_of(&facts, c, n, &col.ty);
             out.push(ritsu_ports::Fed {
                 line: fb.span.line,
                 place: match el {
@@ -1261,4 +1245,35 @@ impl ritsu_ports::Feeds for Engine {
         }
         Ok(out)
     }
+
+    /// An input of the rule, for the next place the code gives its value to.
+    fn holds(&self, root: &Path, file: &str, thing: &Naming, _ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
+        let [(kind, n)] = thing.items.as_slice() else { return Ok(None) };
+        if kind != "input" {
+            return Ok(None);
+        }
+        let (path, src, got) = self.rule(&ritsu_base::paths::on_disk(root, file))?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        let facts = self.facts_of(f, c, &src, &path)?;
+        Ok(facts.inputs.iter().find(|k| &k.name == n).map(|col| takes_of(&facts, c, n, &col.ty)))
+    }
+}
+
+/// What an input or a field of an element takes: what the facts say, with what they do not say of a
+/// date, its range or the days of a koyomi date.
+fn takes_of(facts: &RuleFacts, c: &Checked, n: &str, ty: &ColumnType) -> ritsu_ports::Carried {
+    use ritsu_ports::Carried;
+    let takes = Carried::of_column(facts, ty);
+    let opt = match &takes {
+        Carried::Date { .. } => false,
+        Carried::Opt(t) if matches!(**t, Carried::Date { .. }) => true,
+        _ => return takes,
+    };
+    let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
+    let (lo, hi) = c.ranges.get(n).copied().unwrap_or((None, None));
+    let dated = match c.day_sets.get(n) {
+        Some(d) => Carried::Days(d.days.iter().copied().collect()),
+        None => Carried::Date { min: day(lo), max: day(hi) },
+    };
+    if opt { Carried::Opt(Box::new(dated)) } else { dated }
 }

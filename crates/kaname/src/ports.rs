@@ -414,8 +414,8 @@ fn carried(c: &Rc<Checked>, ports: &ritsu_ports::Ports, ty: &crate::ty::Ty, rang
         }
         Ty::Enum(id) => {
             let values = match &id.owner {
-                Owner::Module(_) => crate::value::Program::of(c).enum_info(id).map(|e| e.values.iter().map(|v| v.alias.as_ref().map_or_else(|| v.text.clone(), |(a, _)| a.clone())).collect()),
-                Owner::Rule(file) => ritsu_ports::Rules::facts(&*ports.rules, file).ok().and_then(|f| f.enums.iter().find(|e| e.name == id.name).map(|e| e.values.iter().map(|v| v.public.clone()).collect())),
+                Owner::Module(_) => crate::value::Program::of(c).enum_info(id).map(|e| e.values.iter().map(|v| ritsu_ports::Spelled { written: v.text.clone(), public: v.alias.as_ref().map_or_else(|| v.text.clone(), |(a, _)| a.clone()) }).collect()),
+                Owner::Rule(file) => ritsu_ports::Rules::facts(&*ports.rules, file).ok().and_then(|f| f.enums.iter().find(|e| e.name == id.name).map(|e| e.values.iter().map(|v| ritsu_ports::Spelled { written: v.name.clone(), public: v.public.clone() }).collect())),
             };
             Carried::Enum { name: id.name.clone(), values: values.unwrap_or_default() }
         }

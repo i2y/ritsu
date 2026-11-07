@@ -574,18 +574,32 @@ impl ritsu_ports::Feeds for Engine {
         for a in &f.inputs {
             let Some(fb) = &a.fed else { continue };
             let Some(i) = m.inputs.iter().find(|i| i.name == a.name.text) else { continue };
-            let takes = match i.ty {
-                crate::ast::Ty::Date => ritsu_ports::Carried::Date { min: Some(i.lo), max: Some(i.hi) },
-                crate::ast::Ty::Int => ritsu_ports::Carried::whole("int", Some(i.lo as i128), Some(i.hi as i128)),
-            };
             out.push(ritsu_ports::Fed {
                 line: fb.span.line,
                 place: Naming::file(Tool::Koyomi, file).with("input", &a.name.text),
-                takes,
+                takes: takes_of(i),
                 source: ritsu_base::fed::from_root(root, file, &fb.name),
                 written: fb.written.clone(),
             });
         }
         Ok(out)
+    }
+
+    /// An input of the dates file, for the next place the code gives its value to.
+    fn holds(&self, root: &Path, file: &str, thing: &Naming, _ports: &ritsu_ports::Ports) -> Result<Option<ritsu_ports::Carried>, Vec<Said>> {
+        let [(kind, n)] = thing.items.as_slice() else { return Ok(None) };
+        if kind != "input" {
+            return Ok(None);
+        }
+        let o = model(&ritsu_base::paths::on_disk(root, file))?;
+        Ok(dates(&o).inputs.iter().find(|i| &i.name == n).map(takes_of))
+    }
+}
+
+/// What an input takes: its type, with the range its line writes.
+fn takes_of(i: &crate::resolve::In) -> ritsu_ports::Carried {
+    match i.ty {
+        crate::ast::Ty::Date => ritsu_ports::Carried::Date { min: Some(i.lo), max: Some(i.hi) },
+        crate::ast::Ty::Int => ritsu_ports::Carried::whole("int", Some(i.lo as i128), Some(i.hi as i128)),
     }
 }

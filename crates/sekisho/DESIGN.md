@@ -2225,6 +2225,8 @@ import enum order_state from "rules/order_states.rule"
 - **ハッシュ。** `source_sha256`（`api`、Cedar、生成コードの頭）はこの形を除いたものから取る。Cedar と三つの生成コードは一字も変わらない。
 - `api` の属性と入力に `fed_by`。`Items` は本文からこの形を除き、`References` は `how: "fed by"` で返す。
 
+属性と `action` の入力は、ほかの場所の `fed by` の出どころにもなる（`sekisho "<ファイル>" resource <名前> attribute <名前>`、`principal` も、`sekisho "<ファイル>" action <名前> input <名前>`。口 `Feeds::holds`。手で書いた Cedar の組は答えない）。ゲートが先に受け取った値をコードがワークフローに渡すとき、ワークフローの入力がこの属性を指せる（根の DESIGN 7.16 の 2）。列挙の値は、`.gate` の名前か別名のどちらかが同じなら同じ値である（7.16 の 5）。
+
 ### 26.3 捨てたもの
 
 (1) `context` の行にも書く：上のとおり。(2) 属性の値を Cedar の `@doc` に載せる：Cedar を変えることになり、Cedar を読む人に確かめていないことを確かめたように見せる。

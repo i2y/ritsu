@@ -242,8 +242,8 @@ pub fn ledger() -> Ledger {
                 "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than one of `inputs` or a field of a `record`."
             ),
             tr!(
-                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。",
-                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`."
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field`、または先に値を受け取った場所（規則・日付・ワークフローの `input`、ゲートの `attribute` と `action … input`）のどれかにしてください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, a kaname `record … field`, or a place that took the value first (an `input` of a rule, a dates file or a workflow, or a gate's `attribute` or `action … input`)."
             ),
             Repro::File { body: "workflow w v1\n\ninputs\n  amount : int  range >=1 <=100  fed by sakai \"shop.ctx\" term order\n\nflow\n  wait 1 minutes\n", beside: &[] },
             &[],

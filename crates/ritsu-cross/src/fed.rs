@@ -24,7 +24,7 @@ use ritsu_base::naming::{Name, Tool};
 use ritsu_base::openapi::{self, Number, Schema};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
-use ritsu_ports::{Answer, Books, Carried, ColumnType, Dates, DaySet, Fed, Finding, Found, OutputValues, Ports, RuleFacts, Rules, Value, Values, day_text};
+use ritsu_ports::{Answer, Books, Carried, ColumnType, Dates, DaySet, Fed, Finding, Found, OutputValues, Ports, RuleFacts, Rules, Spelled, Value, Values, day_text};
 use ritsu_project::{Joined, Project};
 use ritsu_proto::validate::{self, Ints};
 use ritsu_proto::{Label, Protos, Resolved, Type};
@@ -59,9 +59,9 @@ enum Gives {
     /// Days in a range: ends a rule says it can name (or None), or the range a workflow or a module
     /// writes on a place, where any day in it can come.
     DayRange { min: Option<i64>, max: Option<i64>, declared: bool },
-    /// An enum, by its public names: all of them, and the ones its language says come, each with an
-    /// input for a rule's.
-    Enum { all: Vec<String>, reached: Found<Vec<(String, Values)>> },
+    /// An enum: all its values, and the ones its language says come, each by the name that language
+    /// answers with and with an input for a rule's.
+    Enum { all: Vec<Spelled>, reached: Found<Vec<(String, Values)>> },
     /// A number, with the spelling and the unit it is counted in; None for the integer of a contract,
     /// which is read as what goes on the wire of the place (as with E122, its unit is not compared).
     Num { unit: Option<(String, Option<Unit>)>, values: Numbers },
@@ -122,11 +122,16 @@ fn takes_text(c: &Carried) -> String {
             (Some(a), Some(b)) => format!("date ({} days from {} to {})", set.len(), day_text(*a), day_text(*b)),
             _ => "date (no day)".into(),
         },
-        Carried::Enum { name, values } => format!("enum {name} ({})", values.join(", ")),
+        Carried::Enum { name, values } => format!("enum {name} ({})", publics(values)),
         Carried::Num { written, min, max, .. } => with_ends(written, ends(*min, *max)),
         Carried::Opt(t) => format!("{}?", takes_text(t)),
         Carried::Other(w) => w.clone(),
     }
+}
+
+/// The values of an enum by their public names, as a message shows them.
+fn publics(values: &[Spelled]) -> String {
+    values.iter().map(|v| v.public.as_str()).collect::<Vec<_>>().join(", ")
 }
 
 /// The integers a contract or a book lets through: `>=1 <=50`, `1, 2, 3`.
@@ -152,7 +157,7 @@ fn gives_text(g: &Gives) -> String {
         Gives::Days(Found::Undecided(_), _) => "date (days not computed)".into(),
         Gives::DayRange { min, max, .. } => with_ends("date", ends(min.map(day_text), max.map(day_text))),
         Gives::Enum { reached: Found::Value(vs), .. } => format!("enum ({})", vs.iter().map(|(v, _)| v.as_str()).collect::<Vec<_>>().join(", ")),
-        Gives::Enum { all, .. } => format!("enum (of {})", all.join(", ")),
+        Gives::Enum { all, .. } => format!("enum (of {})", publics(all)),
         Gives::Num { unit, values } => {
             let word = unit.as_ref().map_or("integer", |(w, _)| w.as_str());
             match values {
@@ -305,7 +310,7 @@ fn fits(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Opti
             Answer::Undecided(tr!("{a} と {b} は、値を比べません", "{a} and {b} are not compared value by value"))
         }
         (Carried::Bool, Gives::Bool) | (Carried::Str, Gives::Str | Gives::Wire(_) | Gives::Enum { .. }) => Answer::Holds,
-        (Carried::Enum { values, .. }, Gives::Wire(Some(list))) => match list.iter().find(|v| !values.contains(v)) {
+        (Carried::Enum { values, .. }, Gives::Wire(Some(list))) => match list.iter().find(|v| !values.iter().any(|x| x.is(v))) {
             Some(v) => Answer::Fails(Against::value(format!("\"{v}\""), None)),
             None => Answer::Holds,
         },
@@ -313,12 +318,13 @@ fn fits(takes: &Carried, gives: &Gives, input: &dyn Fn(&Path, &str, i64) -> Opti
             Answer::Fails(Against::none(tr!("契約はどの文字列でも通しますが、受け取る側は列挙の値だけを受け取ります", "the contract lets any string through, and this place takes only the values of the enum")))
         }
         (Carried::Enum { values, .. }, Gives::Enum { all, reached }) => {
-            if all.iter().all(|v| values.contains(v)) {
+            let taken = |v: &Spelled| values.iter().any(|x| x.same(v));
+            if all.iter().all(taken) {
                 return Answer::Holds;
             }
             match reached {
                 Found::Undecided(why) => Answer::Undecided(why.clone()),
-                Found::Value(vs) => match vs.iter().find(|(v, _)| !values.contains(v)) {
+                Found::Value(vs) => match vs.iter().find(|(v, _)| !all.iter().find(|x| x.is(v)).map_or_else(|| values.iter().any(|x| x.is(v)), taken)) {
                     Some((v, inputs)) => Answer::Fails(Against::value(v.clone(), inputs_text(inputs))),
                     None => Answer::Holds,
                 },
@@ -410,7 +416,7 @@ fn output_gives(joined: &Joined, disk: &Path, output: &str, facts: &RuleFacts, t
             Gives::DayRange { min, max, declared: false }
         }
         ColumnType::Enum { name, .. } => {
-            let all = facts.enums.iter().find(|e| &e.name == name).map(|e| e.values.iter().map(|v| v.public.clone()).collect()).unwrap_or_default();
+            let all = facts.enums.iter().find(|e| &e.name == name).map(|e| e.values.iter().map(|v| Spelled { written: v.name.clone(), public: v.public.clone() }).collect()).unwrap_or_default();
             let unread = || tr!("rulec が出力の値を答えません", "rulec does not answer for the output's values");
             let reached = match joined.rulec.outputs_over(disk, output, &[]) {
                 Ok(Found::Value(vs)) => Found::Value(
@@ -446,7 +452,7 @@ fn carried_gives(c: Carried) -> Gives {
         Carried::Date { min, max } => Gives::DayRange { min, max, declared: true },
         Carried::Days(set) => Gives::Days(Found::Value(set), None),
         Carried::Enum { values, .. } => {
-            let reached = values.iter().map(|v| (v.clone(), Vec::new())).collect();
+            let reached = values.iter().map(|v| (v.public.clone(), Vec::new())).collect();
             Gives::Enum { all: values, reached: Found::Value(reached) }
         }
         Carried::Num { written, unit, min, max } => Gives::Num { unit: Some((written, unit)), values: Numbers::Declared(min, max) },
@@ -520,17 +526,37 @@ fn document_gives(root: &Path, source: &Name) -> Asked {
         return Asked::Missing(tr!("{shown} を文書の中に見つけられません", "the document does not hold {shown}"));
     };
     let load = |p: &str| ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, p)).ok();
-    let Some(s) = l.root(&e.file).and_then(|top| openapi::schema_at(&e.file, top, &e.pointer, &load)) else {
+    // where it is in the end: a pointer goes on through the `$ref`s on its way
+    let found = document::locate(&l, &e.file, &e.pointer);
+    let Some((s, at_file, at_pointer)) = found.and_then(|(f, p, _)| {
+        let s = l.root(&f).and_then(|top| openapi::schema_at(&f, top, &p, &load))?;
+        Some((s, f, p))
+    }) else {
         return Asked::Missing(tr!("{shown} を文書の中に見つけられません", "the document does not hold {shown}"));
     };
     let gives = schema_gives(&s);
     Asked::Gives(if s.nullable {
         Gives::Opt(Box::new(gives), tr!("契約は null を通します", "the contract lets null through"))
-    } else if e.required == Some(false) {
+    } else if e.required.or_else(|| listed_as_required(&l, &at_file, &at_pointer)) == Some(false) {
         Gives::Opt(Box::new(gives), tr!("契約の `required` にこのプロパティが無く、省略できます", "the contract's `required` does not list this property, so it can be left out"))
     } else {
         gives
     })
+}
+
+/// Whether the object a pointer's property stands in lists it in `required`; None for a pointer that
+/// lands on anything but a property. A naming by `… property` has this from what it looked up.
+fn listed_as_required(l: &Loaded, file: &str, pointer: &str) -> Option<bool> {
+    let tokens = ritsu_base::yaml::pointer_tokens(pointer)?;
+    let [.., properties, name] = tokens.as_slice() else { return None };
+    if properties != "properties" {
+        return None;
+    }
+    let (object, _) = pointer.rsplit_once("/properties/")?;
+    let (file, pointer, object) = document::locate(l, file, object)?;
+    let (_, _, object) = document::definition(l, &file, &pointer, object);
+    let listed = object.get("required").and_then(|r| r.as_seq()).unwrap_or_default();
+    Some(listed.iter().any(|x| x.as_str() == Some(name)))
 }
 
 /// What a language says when a file does not pass it.
@@ -556,6 +582,7 @@ fn ask(project: &Project, joined: &Joined, ports: &Ports, source: &Name) -> Aske
     let item = |i: usize| source.items.get(i).map_or("", |(_, v)| v.as_str());
     let names = |ns: Vec<&str>| ns.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
     match source.tool {
+        Tool::Rulec | Tool::Koyomi if takes_a_value(source) => place_holds(root, joined, ports, source),
         Tool::Rulec => {
             let Ok(facts) = joined.rulec.facts(&disk) else { return unanswered(source.tool, file) };
             let output = item(0);
@@ -597,19 +624,29 @@ fn ask(project: &Project, joined: &Joined, ports: &Ports, source: &Name) -> Aske
             }
         },
         Tool::Openapi | Tool::Jsonschema => document_gives(root, source),
-        Tool::Dandori | Tool::Kaname => {
-            let Some(feeds) = joined.feeds(source.tool) else { return unanswered(source.tool, file) };
-            match feeds.holds(root, file, source, ports) {
-                Ok(Some(c)) => Asked::Gives(carried_gives(c)),
-                Ok(None) => {
-                    let shown = source.text();
-                    Asked::Missing(tr!("{file} に {shown} がありません", "{file} does not hold {shown}"))
-                }
-                Err(_) => unanswered(source.tool, file),
-            }
-        }
+        Tool::Dandori | Tool::Kaname | Tool::Sekisho => place_holds(root, joined, ports, source),
         // what the form takes (`fed::shapes`): a language stops any other at its own check
         _ => unanswered(source.tool, file),
+    }
+}
+
+/// Whether a source is a place that takes a value, of a language that also has answers of its own
+/// to give: what comes from it is then what its line writes, not what its language computes.
+fn takes_a_value(source: &Name) -> bool {
+    matches!(source.tool, Tool::Rulec | Tool::Koyomi) && source.items.first().is_some_and(|(k, _)| k == "input")
+}
+
+/// What a place holds, as its language says it.
+fn place_holds(root: &Path, joined: &Joined, ports: &Ports, source: &Name) -> Asked {
+    let file = &source.path;
+    let Some(feeds) = joined.feeds(source.tool) else { return unanswered(source.tool, file) };
+    match feeds.holds(root, file, source, ports) {
+        Ok(Some(c)) => Asked::Gives(carried_gives(c)),
+        Ok(None) => {
+            let shown = source.text();
+            Asked::Missing(tr!("{file} に {shown} がありません", "{file} does not hold {shown}"))
+        }
+        Err(_) => unanswered(source.tool, file),
     }
 }
 
@@ -633,8 +670,9 @@ fn date_input(joined: &Joined, disk: &Path, date: &str, day: i64) -> Option<Stri
 }
 
 /// What would decide a border that cannot be, by who answers for the source.
-fn what_decides(tool: Tool) -> Option<Text> {
-    match tool {
+fn what_decides(source: &Name) -> Option<Text> {
+    match source.tool {
+        Tool::Rulec | Tool::Koyomi if takes_a_value(source) => Some(tr!("出どころの行に範囲を書けば、決められます。", "Write the range on the source's line, and it can be decided.")),
         Tool::Rulec => Some(tr!(
             "規則が出力の端を数えられるように書くか（`min(…, 上限)` など）、受け取る側の範囲を広げれば、決められます。",
             "Write the rule so that rulec counts the output's ends (`min(…, <the limit>)`, say), or widen what this place takes, and it can be decided."
@@ -643,7 +681,7 @@ fn what_decides(tool: Tool) -> Option<Text> {
             "契約がとりうる値を並べれば（JSON Schema の `enum`、Protovalidate の `in`）、決められます。",
             "A contract that lists its values (`enum` in a schema, `in` in Protovalidate) can be decided."
         )),
-        Tool::Dandori | Tool::Kaname => Some(tr!("出どころの行に範囲を書けば、決められます。", "Write the range on the source's line, and it can be decided.")),
+        Tool::Dandori | Tool::Kaname | Tool::Sekisho => Some(tr!("出どころの行に範囲を書けば、決められます。", "Write the range on the source's line, and it can be decided.")),
         _ => None,
     }
 }
@@ -752,7 +790,7 @@ fn one(project: &Project, joined: &Joined, ports: &Ports, f: &ritsu_project::Fil
         }
         Answer::Undecided(why) => {
             let mut d = base("W207", tr!("`{what}` が出どころ {written} の値を受け取るかを決められません", "Whether `{what}` takes what can come from {written} cannot be decided")).note(why);
-            if let Some(n) = what_decides(source.tool) {
+            if let Some(n) = what_decides(&source) {
                 d = d.note(n);
             }
             Some(Finding::of(&d, Some(f.rel.clone()), lang))

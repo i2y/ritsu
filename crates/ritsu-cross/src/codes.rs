@@ -592,8 +592,8 @@ pub fn ledger() -> Ledger {
             "E208",
             tr!("`fed by` の出どころがありません", "The source of a `fed by` is not there"),
             tr!(
-                "`fed by` が指すファイルが無いとき、そのファイルに指すものが無いとき（規則の出力、勘定、日付、message のフィールド、スキーマのプロパティ、ワークフローの出力やレコードのフィールド）、文書や `.proto` を読めないとき。参照の形と、値の無いものを指していないことは、書いた言語の単独の検査が言います。単独の検査はほかのファイルを読まないので、先があるかは `ritsu check` が言います。",
-                "The file a `fed by` names is not there, or does not hold what it names (a rule's output, an account, a date, a field of a message, a property of a schema, a workflow's output or a field of its record), or a document or a `.proto` does not read. The form of the naming, and that it names something with a value, are said by the check of the language it is written in. That check reads no other file, so that the thing is there is said by `ritsu check`."
+                "`fed by` が指すファイルが無いとき、そのファイルに指すものが無いとき（規則の出力、勘定、日付、message のフィールド、スキーマのプロパティ、ワークフローの出力やレコードのフィールド、先に値を受け取る入力や属性）、文書や `.proto` を読めないとき。参照の形と、値の無いものを指していないことは、書いた言語の単独の検査が言います。単独の検査はほかのファイルを読まないので、先があるかは `ritsu check` が言います。",
+                "The file a `fed by` names is not there, or does not hold what it names (a rule's output, an account, a date, a field of a message, a property of a schema, a workflow's output or a field of its record, an input or an attribute that takes the value first), or a document or a `.proto` does not read. The form of the naming, and that it names something with a value, are said by the check of the language it is written in. That check reads no other file, so that the thing is there is said by `ritsu check`."
             ),
             tr!(
                 "パスは、書いたファイルのディレクトリからです。名前を直すか、出どころを足してください。",

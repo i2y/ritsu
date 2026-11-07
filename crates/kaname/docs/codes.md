@@ -186,7 +186,7 @@ See also: [E007](#e007), [E008](#e008)
 
 **When**: The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand somewhere other than the line of a field of a `record` or a function's parameter; or a `)` follows a parameter's `fed by` on the same line.
 
-**Fix**: Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. Put each parameter with a `fed by` on a line of its own, and the closing bracket on the next line.
+**Fix**: Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, a kaname `record … field`, or a place that took the value first (an `input` of a rule, a dates file or a workflow, or a gate's `attribute` or `action … input`). Put each parameter with a `fed by` on a line of its own, and the closing bracket on the next line.
 
 **Example**:
 

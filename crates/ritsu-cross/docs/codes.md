@@ -1193,7 +1193,7 @@ See also: [E207](#e207)
 
 ## E208 — The source of a `fed by` is not there
 
-**When**: The file a `fed by` names is not there, or does not hold what it names (a rule's output, an account, a date, a field of a message, a property of a schema, a workflow's output or a field of its record), or a document or a `.proto` does not read. The form of the naming, and that it names something with a value, are said by the check of the language it is written in. That check reads no other file, so that the thing is there is said by `ritsu check`.
+**When**: The file a `fed by` names is not there, or does not hold what it names (a rule's output, an account, a date, a field of a message, a property of a schema, a workflow's output or a field of its record, an input or an attribute that takes the value first), or a document or a `.proto` does not read. The form of the naming, and that it names something with a value, are said by the check of the language it is written in. That check reads no other file, so that the thing is there is said by `ritsu check`.
 
 **Fix**: A path goes from the directory of the file it is written in. Put the name right, or add what it names.
 

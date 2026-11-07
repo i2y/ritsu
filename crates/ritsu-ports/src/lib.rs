@@ -71,7 +71,7 @@ pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, Re
 pub use sources::{Source, SourceKind, Sources};
 pub use dates::{day_of, day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
 pub use dates::CalendarFacts;
-pub use feeds::{Carried, Fed, Feeds};
+pub use feeds::{Carried, Fed, Feeds, Spelled};
 pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
 pub use flows::{

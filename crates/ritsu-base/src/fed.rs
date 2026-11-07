@@ -172,18 +172,20 @@ impl Problem {
     }
 }
 
-/// The shapes of a naming that holds a value, for a tool (DESIGN 7.16): what `fed by` can name.
+/// The shapes of a naming that holds a value, for a tool (DESIGN 7.16): what `fed by` can name. A
+/// place that takes a value is one too: what the code gave it is what the code gives the next.
 pub fn shapes(tool: Tool) -> &'static [&'static [&'static str]] {
     match tool {
-        Tool::Rulec => &[&["output"]],
+        Tool::Rulec => &[&["output"], &["input"]],
         Tool::Chobo => &[&["account"]],
-        Tool::Koyomi => &[&["date"]],
+        Tool::Koyomi => &[&["date"], &["input"]],
         Tool::Proto => &[&["message", "field"]],
-        Tool::Openapi => &[&["schema", "property"]],
+        Tool::Openapi => &[&["schema", "property"], &["pointer"]],
         Tool::Jsonschema => &[&["def"], &["def", "property"], &["pointer"]],
-        Tool::Dandori => &[&["output"], &["record", "field"]],
+        Tool::Dandori => &[&["output"], &["input"], &["record", "field"]],
         Tool::Kaname => &[&["record", "field"]],
-        Tool::Geas | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Yuen | Tool::Sakai | Tool::Sekisho => &[],
+        Tool::Sekisho => &[&["principal", "attribute"], &["resource", "attribute"], &["action", "input"]],
+        Tool::Geas | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Yuen | Tool::Sakai => &[],
     }
 }
 
@@ -195,7 +197,7 @@ fn listed(tool: Tool) -> Vec<String> {
 fn sources_ja(tool: Tool) -> String {
     let own = listed(tool);
     if own.is_empty() {
-        format!("{} の中に、指せるものはありません。指せるのは規則の出力、帳簿の勘定、日付、契約のフィールド、ワークフローの出力とレコードのフィールド、kaname のレコードのフィールドです。", tool.word())
+        format!("{} の中に、指せるものはありません。指せるのは規則の出力、帳簿の勘定、日付、契約のフィールド、ワークフローの出力とレコードのフィールド、kaname のレコードのフィールド、それと先に値を受け取った場所（規則・日付・ワークフローの入力、ゲートの属性と入力）です。", tool.word())
     } else {
         format!("{} で指せるのは {} です。", tool.word(), own.join("、"))
     }
@@ -204,7 +206,7 @@ fn sources_ja(tool: Tool) -> String {
 fn sources_en(tool: Tool) -> String {
     let own = listed(tool);
     if own.is_empty() {
-        format!("Nothing of {} can be named: what can is a rule's output, a book's account, a date, a contract's field, a workflow's output, a field of a workflow's record or of a record of kaname's.", tool.word())
+        format!("Nothing of {} can be named: what can is a rule's output, a book's account, a date, a contract's field, a workflow's output, a field of a workflow's record or of a record of kaname's, or a place that took the value first (an input of a rule, a dates file or a workflow, an attribute or an input of a gate).", tool.word())
     } else {
         format!("Of {}, what can be named is {}.", tool.word(), own.join(", "))
     }

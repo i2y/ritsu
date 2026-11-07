@@ -304,7 +304,7 @@ inputs
 
 **When**: The naming of a `fed by` does not read in the form the toolchain names things (`<tool> "<path>" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than one of `inputs`.
 
-**Fix**: Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`.
+**Fix**: Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, a kaname `record … field`, or a place that took the value first (an `input` of a rule, a dates file or a workflow, or a gate's `attribute` or `action … input`).
 
 **Example**:
 

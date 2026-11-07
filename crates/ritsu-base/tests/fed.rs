@@ -79,6 +79,13 @@ fn what_a_naming_can_name() {
         "dandori \"x.flow\" output o",
         "dandori \"x.flow\" record R field f",
         "kaname \"x.kn\" record R field f",
+        // a place that took the value first
+        "rulec \"x.rule\" input a",
+        "koyomi \"x.cal\" input i",
+        "dandori \"x.flow\" input i",
+        "sekisho \"x.gate\" principal P attribute a",
+        "sekisho \"x.gate\" resource R attribute a",
+        "sekisho \"x.gate\" action A input i",
         // a path out of the directory, and a dependency's, are for the language to join
         "rulec \"../x.rule\" output y",
         "rulec \"@pricing/rules/x.rule\" output y",
@@ -91,11 +98,10 @@ fn what_a_naming_can_name() {
     }
     // what names no value: each says what can be named
     for (text, says) in [
-        ("rulec \"x.rule\"", "Of rulec, what can be named is `rulec \"…\" output …`."),
-        ("rulec \"x.rule\" input a", "Of rulec, what can be named is"),
+        ("rulec \"x.rule\"", "Of rulec, what can be named is `rulec \"…\" output …`, `rulec \"…\" input …`."),
         ("rulec \"x.rule\" table t", "Of rulec, what can be named is"),
         ("chobo \"x.book\" transfer t", "Of chobo, what can be named is `chobo \"…\" account …`."),
-        ("koyomi \"x.cal\" input i", "Of koyomi, what can be named is `koyomi \"…\" date …`."),
+        ("koyomi \"x.cal\" claim c", "Of koyomi, what can be named is `koyomi \"…\" date …`, `koyomi \"…\" input …`."),
         ("proto \"x.proto\" message M", "Of proto, what can be named is"),
         ("openapi \"x.yaml\" schema S", "Of openapi, what can be named is"),
         ("openapi \"x.yaml\" operation o", "Of openapi, what can be named is"),
@@ -103,7 +109,7 @@ fn what_a_naming_can_name() {
         ("sakai \"x.ctx\" context C", "Nothing of sakai can be named"),
         ("geas \"x.geas\" claim c", "Nothing of geas can be named"),
         ("yuen \"x.req\" requirement r", "Nothing of yuen can be named"),
-        ("sekisho \"x.gate\" action a", "Nothing of sekisho can be named"),
+        ("sekisho \"x.gate\" action a", "Of sekisho, what can be named is `sekisho \"…\" principal … attribute …`, `sekisho \"…\" resource … attribute …`, `sekisho \"…\" action … input …`."),
         ("cedar \"x.cedar\" policy p", "Nothing of cedar can be named"),
         ("asyncapi \"x.yaml\" schema S property p", "Nothing of asyncapi can be named"),
         ("file \"x.txt\"", "Nothing of file can be named"),

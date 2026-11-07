@@ -276,9 +276,13 @@ can. `ritsu check` asks the two languages:
 | a date of a dates file | `koyomi "<file>" date <name>` |
 | a field of a `.proto` message | `proto "<file>" message <name> field <name>` |
 | a property of an OpenAPI schema | `openapi "<file>" schema <name> property <name>` |
+| what an operation of OpenAPI writes in place (a request body, a parameter) | `openapi "<file>" pointer "<pointer>"` |
 | a property of a JSON Schema | `jsonschema "<file>" def <name> property <name>`, or `jsonschema "<file>" pointer <pointer>` |
 | an output of a workflow, or a field of its record | `dandori "<file>" output <name>`, `dandori "<file>" record <name> field <name>` |
 | a field of a kaname record | `kaname "<file>" record <name> field <name>` |
+| a place that took the value first | `rulec "<file>" input <name>`, `koyomi "<file>" input <name>`, `dandori "<file>" input <name>`, `sekisho "<file>" resource <name> attribute <name>` (or `principal`), `sekisho "<file>" action <name> input <name>` |
+
+A contract often leaves a bound to the code, which checks it by hand and then gives the value to a gate and to a workflow. The second can name the first: what comes from a place is what its own line writes. Two places that name each other say they take the same values, so whichever of the two moves, one of them stops.
 
 `ritsu check` asks the language on each side, and comes to one of three answers:
 
@@ -288,7 +292,7 @@ can. `ritsu check` asks the two languages:
 
 E208 says the source is not there: its file, or the name in it.
 
-Numbers are compared in one unit and one step, and another unit does not hold. An enum is compared by the public names of its values, a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
+Numbers are compared in one unit and one step, and another unit does not hold. The values of two enums are the same when they share a name, as a file writes it or as its public name, since the code that carries one turns one spelling into the other; a date by its days, a bool or a string by its type alone. An end the place does not write is not compared. A contract with no upper or no lower bound lets through a value beyond what the place takes, as with a rule's `from` (E122), and does not hold. So does an account of a book with no `at most`, which goes as far as chobo's limit (2⁶³ − 1).
 
 sakai counts a `fed by` as a reference, so one that crosses a boundary needs a relationship. Nothing
 generated changes, and neither does the `meaning` hash or a version yuen pins.

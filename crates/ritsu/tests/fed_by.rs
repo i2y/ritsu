@@ -11,6 +11,8 @@
 //! - The three answers (P5) over each kind of source and of value: units, steps and tax, the values
 //!   of an enum, days, a contract's open end, an end a rule does not count, `required` and `null`, a
 //!   `.proto`'s field, a workflow's and a module's places.
+//! - A place that took the value first as the source of the next, and an enum that two files spell
+//!   differently for the wire.
 //! - What stops at the language that holds the place, for what names no value and for a place with
 //!   no type to hold it to; a file or a thing that is not there; a place fed by its own output, and
 //!   two rules that feed each other.
@@ -327,6 +329,51 @@ fn what_it_says_in_both_languages() {
             golden(&format!("{name}.{lang}.txt"), &out, &mut failures);
         }
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The page on what no file says shows this: when no value goes between two sides, the side with the
+/// limit says what it needs at the other side's number.
+#[test]
+fn a_gate_held_at_a_rules_number() {
+    let gate = r#"gate refunds v1
+description "Who may approve a refund"
+namespace Shop
+
+enum request_state = waiting | paid
+
+role clerk
+  can approve
+
+principal User
+  roles clerk
+
+resource Request
+  attributes
+    amount : money[JPY]  range >=1JPY <=1000000JPY
+    state : request_state
+
+action approve
+  principal User
+  resource Request
+
+permit clerks_approve_up_to_a_limit
+  description "A clerk approves a waiting request, up to a limit"
+  principal in clerk
+  action approve
+  when resource.amount <= 5000JPY and resource.state is waiting
+
+expect allow clerks_approve_what_the_routing_rule_sends_them
+  description "The routing rule sends a clerk up to 10,000 yen, and a clerk has to be able to approve it"
+  principal in clerk
+  action approve
+  when resource.amount <= 10000JPY and resource.state is waiting
+"#;
+    let mut failures = Vec::new();
+    let t = Files::none().with("refunds.gate", gate).lay_out("fed-gate-at-a-number");
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    golden("gate-at-a-number.en.txt", &out, &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -647,6 +694,139 @@ fn a_workflow_and_a_module_as_sources() {
     stops(&files, "fed-places-missing", &[against("r.rule", "input v", "E208", None)]);
 }
 
+/// A gate with a resource, a principal and an action that each take a value, for a place to name.
+fn desk(amount: &str, line: &str) -> String {
+    format!(
+        "gate desk v1\ndescription \"x\"\nnamespace Desk\n\nrole clerk\n  description \"x\"\n  can look\n\nprincipal User\n  description \"x\"\n  roles clerk\n  attributes\n    limit : number  range >=0 <=500\n\nresource Order\n  description \"x\"\n  attributes\n    amount : number  range {amount}{line}\n\naction look\n  description \"x\"\n  principal User\n  resource Order\n  input\n    note_count : number  range >=0 <=5\n\npermit clerks\n  description \"x\"\n  principal in clerk\n  action look\n"
+    )
+}
+
+/// A workflow with one input, and nothing else to hold.
+fn taking(line: &str) -> String {
+    format!("workflow w v1\n\ninputs\n  {line}\n\noutputs\n  done : bool\n\nflow\n  succeed done = true\n")
+}
+
+/// A contract need not bound a value for the code to: it checks the amount by hand, asks the gate
+/// with it and starts the workflow with it. What the gate took is then what can come to the workflow.
+/// What a place holds is what its line writes, whichever language it is in.
+#[test]
+fn a_place_that_took_the_value_first() {
+    let from_gate = "amount : int  range >=1 <=1000  fed by sekisho \"desk.gate\" resource Order attribute amount";
+    let files = Files::none().with("desk.gate", &desk(">=1 <=1000", "")).with("w.flow", &taking(from_gate));
+    holds(&files, "fed-first", 1);
+    // a place wider than what took it first has nothing to fear; a narrower one refuses what passed
+    holds(&files.clone().edit("w.flow", ">=1 <=1000", ">=0 <=5000"), "fed-first-wider", 1);
+    let (_, v) = stops(&files.clone().edit("w.flow", ">=1 <=1000", ">=1 <=100"), "fed-first-narrow", &[against("w.flow", "input amount", "E207", Some("1000"))]);
+    assert_eq!(record(&v, "input amount")["gives"], "number >=1 <=1000");
+
+    // Two places that name each other say they take the same values: whichever moves, one stops.
+    let both = Files::none()
+        .with("desk.gate", &desk(">=1 <=1000", "  fed by dandori \"w.flow\" input amount"))
+        .with("w.flow", &taking(from_gate));
+    holds(&both, "fed-first-both", 2);
+    stops(&both.clone().edit("w.flow", ">=1 <=1000", ">=1 <=100"), "fed-first-both-flow", &[against("w.flow", "input amount", "E207", Some("1000"))]);
+    stops(&both.clone().edit("desk.gate", ">=1 <=1000", ">=1 <=100"), "fed-first-both-gate", &[against("desk.gate", "resource Order attribute amount", "E207", Some("1000"))]);
+
+    // each kind of place, in each language that has one
+    let rule = "rule first v1\n\ninputs\n  x : number  range >=0 <=9\n  open : number\n  on : date  range >=2026-01-01 <=2026-12-31\n\noutputs\n  z : bool\n\ntable t1\npolicy unique\n| x | -> z : bool |\n| - | true       |\n";
+    let due = DUE;
+    let held = Files::none()
+        .with("first.rule", rule)
+        .with("terms.cal", due)
+        .with("desk.gate", &desk(">=1 <=1000", ""))
+        .with("a.rule", &taker("v : number  range >=0 <=9  fed by rulec \"first.rule\" input x"))
+        .with("b.rule", &taker("v : number  range >=0 <=500  fed by sekisho \"desk.gate\" principal User attribute limit"))
+        .with("c.rule", &taker("v : number  range >=0 <=5  fed by sekisho \"desk.gate\" action look input note_count"))
+        .with("d.rule", &taker("v : date  range >=2026-01-01 <=2026-12-31  fed by koyomi \"terms.cal\" input received"))
+        .with("e.rule", &taker("v : date  range >=2026-01-01 <=2026-12-31  fed by rulec \"first.rule\" input on"))
+        .with("f.rule", &taker("v : number  range >=1 <=1000  fed by dandori \"w.flow\" input amount"))
+        .with("w.flow", &taking("amount : int  range >=1 <=1000"));
+    holds(&held, "fed-first-kinds", 6);
+    let narrow = held
+        .clone()
+        .edit("a.rule", "<=9", "<=8")
+        .edit("b.rule", "<=500", "<=400")
+        .edit("c.rule", "<=5", "<=4")
+        .edit("d.rule", "<=2026-12-31", "<=2026-12-30")
+        .edit("e.rule", "<=2026-12-31", "<=2026-12-30")
+        .edit("f.rule", "<=1000", "<=999");
+    stops(
+        &narrow,
+        "fed-first-kinds-narrow",
+        &[
+            against("a.rule", "input v", "E207", Some("9")),
+            against("b.rule", "input v", "E207", Some("500")),
+            against("c.rule", "input v", "E207", Some("5")),
+            against("d.rule", "input v", "E207", Some("2026-12-31")),
+            against("e.rule", "input v", "E207", Some("2026-12-31")),
+            against("f.rule", "input v", "E207", Some("1000")),
+        ],
+    );
+
+    // no range on the source's line: the end cannot be said to hold
+    let open = Files::none().with("first.rule", rule).with("a.rule", &taker("v : number  range >=0 <=9  fed by rulec \"first.rule\" input open"));
+    let (text, _) = stops(&open, "fed-first-open", &[against("a.rule", "input v", "W207", None)]);
+    assert!(text.contains("Write the range on the source's line"), "{text}");
+
+    // not there
+    for (name, tag) in [
+        ("rulec \"first.rule\" input nothing", "fed-first-none-rule"),
+        ("koyomi \"terms.cal\" input nothing", "fed-first-none-cal"),
+        ("dandori \"w.flow\" input nothing", "fed-first-none-flow"),
+        ("sekisho \"desk.gate\" resource Order attribute nothing", "fed-first-none-attribute"),
+        // a principal named as a resource, and the other way round
+        ("sekisho \"desk.gate\" resource User attribute limit", "fed-first-none-resource"),
+        ("sekisho \"desk.gate\" principal Order attribute amount", "fed-first-none-principal"),
+        ("sekisho \"desk.gate\" action look input nothing", "fed-first-none-input"),
+    ] {
+        let files = Files::none()
+            .with("first.rule", rule)
+            .with("terms.cal", due)
+            .with("desk.gate", &desk(">=1 <=1000", ""))
+            .with("w.flow", &taking("amount : int  range >=1 <=1000"))
+            .with("a.rule", &taker(&format!("v : number  range >=0 <=9  fed by {name}")));
+        stops(&files, tag, &[against("a.rule", "input v", "E208", None)]);
+    }
+
+    // a gate its language does not pass answers for nothing
+    let bad = Files::none().with("desk.gate", &desk(">=1 <=1000", "").replace("can look", "can nothing_like_that")).with("w.flow", &taking(from_gate));
+    let (_, text, v) = bad.check("fed-first-unpassed");
+    assert_eq!(not_held(&v), vec![against("w.flow", "input amount", "W207", None)], "{text}");
+}
+
+/// A workflow writes its states one way, and a gate gives the same ones another name for the wire.
+/// The two are the same values: the code that carries one to the other turns the names, and what
+/// the check holds is that each value has a place to go.
+#[test]
+fn an_enum_goes_by_either_of_its_names() {
+    let flow = "workflow w v1\n\nenum state = waiting | refused | paid\n\noutputs\n  state : state\n\nflow\n  succeed state = paid\n";
+    let gate = |line: &str| format!(
+        "gate g v1\ndescription \"x\"\nnamespace G\n\nenum state(request_state) = waiting(w) | refused(r) | paid(p)\n\nrole clerk\n  description \"x\"\n  can look\n\nprincipal User\n  description \"x\"\n  roles clerk\n\nresource Order\n  description \"x\"\n  attributes\n    state : state{line}\n\naction look\n  description \"x\"\n  principal User\n  resource Order\n\npermit clerks\n  description \"x\"\n  principal in clerk\n  action look\n"
+    );
+    let fed = "  fed by dandori \"w.flow\" output state";
+    let files = Files::none().with("w.flow", flow).with("g.gate", &gate(fed));
+    holds(&files, "fed-spelled", 1);
+    // one side renames a value, and the value has no place to go; the message shows the public names
+    let (text, _) = stops(&files.clone().edit("w.flow", "waiting | refused | paid", "waiting | denied | paid"), "fed-spelled-renamed", &[against("g.gate", "resource Order attribute state", "E207", Some("denied"))]);
+    assert!(text.contains("enum request_state (w, r, p)"), "{text}");
+
+    // the same by the public name: a rule's alias against what another file writes
+    let rule = |values: &str| format!("rule tiers v1\n\nenum tier = {values}\n\ninputs\n  x : number  range >=0 <=2\n\noutputs\n  t : tier\n\ntable t1\npolicy unique\n| x   | -> t : tier |\n| 0   | gold        |\n| >=1 | silver      |\n");
+    let taking_tier = |values: &str| format!("rule r v1\n\nenum tier = {values}\n\ninputs\n  v : tier  fed by rulec \"tiers.rule\" output t\n\noutputs\n  z : bool\n\ntable t1\npolicy unique\n| v | -> z : bool |\n| - | true       |\n");
+    holds(&Files::none().with("tiers.rule", &rule("gold(G) | silver(S)")).with("r.rule", &taking_tier("G | S")), "fed-spelled-public", 1);
+    holds(&Files::none().with("tiers.rule", &rule("gold(G) | silver(S)")).with("r.rule", &taking_tier("gold | silver")), "fed-spelled-written", 1);
+    // a value the rule can come to has no place to go, and it is that one the message names
+    stops(&Files::none().with("tiers.rule", &rule("gold(G) | silver(S)")).with("r.rule", &taking_tier("G")), "fed-spelled-one-short", &[against("r.rule", "input v", "E207", Some("S"))]);
+    // what the rule's table never answers is no fault of the place's
+    holds(&Files::none().with("tiers.rule", &rule("gold(G) | silver(S) | bronze(B)")).with("r.rule", &taking_tier("G | S")), "fed-spelled-unreached", 1);
+
+    // a contract's list against the two names of a place's
+    let doc = "{ \"$defs\": { \"Req\": { \"type\": \"object\", \"required\": [\"state\"], \"properties\": { \"state\": { \"type\": \"string\", \"enum\": [\"w\", \"refused\"] } } } } }\n";
+    let files = Files::none().with("s.json", doc).with("g.gate", &gate("  fed by jsonschema \"s.json\" def Req property state"));
+    holds(&files, "fed-spelled-contract", 1);
+    stops(&files.clone().edit("s.json", "\"refused\"", "\"denied\""), "fed-spelled-contract-renamed", &[against("g.gate", "resource Order attribute state", "E207", Some("\"denied\""))]);
+}
+
 // ── What stops, and what is not there ──────────────────────────────────────────────────────────
 
 /// What names no value stops at the language of the place, each with its code, and so does a form
@@ -712,6 +892,38 @@ fn where_the_form_cannot_be_written() {
 
 /// A file or a thing that is not there, by each language that answers for it, and a file of another
 /// language's.
+/// A body an operation writes in place has no name of a schema, so its pointer names it: what the
+/// contract lets through is held to the place, and so is whether the object requires the property.
+#[test]
+fn a_body_written_in_place_by_its_pointer() {
+    const API: &str = r#"{ "openapi": "3.1.0", "info": { "title": "orders", "version": "1" }, "paths": { "/orders/{id}/lines": { "post": {
+  "operationId": "addLine",
+  "requestBody": { "required": true, "content": { "application/json": { "schema": {
+    "type": "object", "required": ["amount"],
+    "properties": { "amount": { "type": "integer", "minimum": 1, "maximum": 100 }, "note": { "type": "integer", "minimum": 0, "maximum": 5 } } } } } },
+  "responses": { "200": { "description": "added" } } } } } }
+"#;
+    let at = |p: &str| format!("openapi \"api.json\" pointer \"/paths/~1orders~1{{id}}~1lines/post/requestBody/content/application~1json/schema/properties/{p}\"");
+    let files = |line: String| Files::none().with("api.json", API).with("r.rule", &taker(&line));
+    holds(&files(format!("v : number  range >=1 <=100  fed by {}", at("amount"))), "fed-pointer-holds", 1);
+    let (_, v) = stops(&files(format!("v : number  range >=1 <=99  fed by {}", at("amount"))), "fed-pointer-narrow", &[against("r.rule", "input v", "E207", Some("100"))]);
+    assert_eq!(not_held(&v).len(), 1);
+    // a property the object does not require can be left out: the place takes none, or it says so
+    stops(&files(format!("v : number  range >=0 <=5  fed by {}", at("note"))), "fed-pointer-absent", &[against("r.rule", "input v", "E207", Some("none"))]);
+    holds(&files(format!("v : number?  range >=0 <=5  fed by {}", at("note"))), "fed-pointer-optional", 1);
+    // the object it stands in, through a `$ref`
+    const THROUGH: &str = r##"{ "openapi": "3.1.0", "info": { "title": "orders", "version": "1" }, "paths": { "/orders": { "post": {
+  "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Body" } } } },
+  "responses": { "200": { "description": "added" } } } } },
+  "components": { "schemas": { "Body": { "type": "object", "required": ["amount"], "properties": { "amount": { "type": "integer", "minimum": 1, "maximum": 100 } } } } } }
+"##;
+    let through = Files::none().with("api.json", THROUGH).with("r.rule", &taker("v : number  range >=1 <=100  fed by openapi \"api.json\" pointer \"/paths/~1orders/post/requestBody/content/application~1json/schema/properties/amount\""));
+    holds(&through, "fed-pointer-through", 1);
+    // the operation, and what is not there
+    let (_, v) = stops(&files("v : number  range >=0 <=9  fed by openapi \"api.json\" pointer /paths/~1nothing".to_string()), "fed-pointer-missing", &[against("r.rule", "input v", "E208", None)]);
+    assert!(v.to_string().contains("the document does not hold"), "{v}");
+}
+
 #[test]
 fn a_source_that_is_not_there() {
     let cases: [(&str, &str); 7] = [

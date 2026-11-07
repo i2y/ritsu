@@ -5219,8 +5219,8 @@ pub fn ledger() -> Vec<Entry> {
                 "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand on a line other than an input's or a field of `elements`; or they are written together with `random`, or with a `from` the generated code works out from a list (`count`, `any`, `sum` and their kin); or the input is one a machine carries."
             ),
             tr!(
-                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。生成コードが並びから求める値なら、`fed by` を `elements` のフィールドに書いてください。",
-                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. If the generated code works the value out from a list, write `fed by` on a field of `elements`."
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field`、または先に値を受け取った場所（規則・日付・ワークフローの `input`、ゲートの `attribute` と `action … input`）のどれかにしてください。生成コードが並びから求める値なら、`fed by` を `elements` のフィールドに書いてください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, a kaname `record … field`, or a place that took the value first (an `input` of a rule, a dates file or a workflow, or a gate's `attribute` or `action … input`). If the generated code works the value out from a list, write `fed by` on a field of `elements`."
             ),
             X_E144,
             &["E121", "E122"],

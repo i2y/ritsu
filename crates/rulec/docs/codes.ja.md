@@ -5998,7 +5998,7 @@ policy unique
 
 **いつ出るか。** `fed by` の参照が処理系の書き方（`<ツール> "<パス>" <種類> <名前>…`）で読めないとき、値を持たないものを指すとき（規則の表、sakai の用語、geas の主張など）、`inputs` の行と `elements` のフィールドの行でない場所に書いたとき、生成コードが並びから求める `from`（`count`、`any`、`sum` など）や `random` と一緒に書いたとき、ステートマシンが持ち越す入力に書いたとき。
 
-**直し方。** 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。生成コードが並びから求める値なら、`fed by` を `elements` のフィールドに書いてください。
+**直し方。** 参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field`、または先に値を受け取った場所（規則・日付・ワークフローの `input`、ゲートの `attribute` と `action … input`）のどれかにしてください。生成コードが並びから求める値なら、`fed by` を `elements` のフィールドに書いてください。
 
 **最小の再現**:
 

@@ -1,0 +1,5 @@
+error[sekisho E304]: refunds.gate:28:1: The expectation `clerks_approve_what_the_routing_rule_sends_them` does not hold: 1 of the 2 combinations it picks is denied
+    28 | expect allow clerks_approve_what_the_routing_rule_sends_them
+  = For example: User holding clerk, Request (amount: 5,001JPY to 10,000JPY, state: waiting); denied: no permit applies.
+  = Fix the policies, or the expectation if it says more than is meant.
+ritsu check: 1 file (sekisho 1): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

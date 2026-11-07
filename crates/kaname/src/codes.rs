@@ -167,8 +167,8 @@ pub fn ledger() -> Ledger {
                 "The naming of a `fed by` does not read in the form the toolchain names things (`<tool> \"<path>\" <kind> <name>…`); or it names something that holds no value (a table of a rule, a term of sakai, a claim of geas); or the words stand somewhere other than the line of a field of a `record` or a function's parameter; or a `)` follows a parameter's `fed by` on the same line."
             ),
             tr!(
-                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field` のどれかにしてください。引数の `fed by` は、引数を一行ずつに分け、閉じ括弧を次の行に書いてください。",
-                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, or a kaname `record … field`. Put each parameter with a `fed by` on a line of its own, and the closing bracket on the next line."
+                "参照を、規則の `output`、帳簿の `account`、`date`、`.proto` の `message … field`、OpenAPI の `schema … property`、JSON Schema の `def` か `pointer`、ワークフローの `output` や `record … field`、kaname の `record … field`、または先に値を受け取った場所（規則・日付・ワークフローの `input`、ゲートの `attribute` と `action … input`）のどれかにしてください。引数の `fed by` は、引数を一行ずつに分け、閉じ括弧を次の行に書いてください。",
+                "Name a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or `record … field`, a kaname `record … field`, or a place that took the value first (an `input` of a rule, a dates file or a workflow, or a gate's `attribute` or `action … input`). Put each parameter with a `fed by` on a line of its own, and the closing bracket on the next line."
             ),
             "module t v1\n\nrecord order\n  amount : number  range >=0 <=9  fed by sakai \"shop.ctx\" term order\n",
             "module 注文(t) v1\n\nrecord 注文明細(order)\n  額(amount) : number  range >=0 <=9  fed by sakai \"店.ctx\" term 注文\n",
