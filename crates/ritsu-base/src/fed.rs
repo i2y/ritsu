@@ -38,8 +38,7 @@ impl Cut {
 /// names in a row where a name goes.
 pub fn cut(line: &str) -> Option<Cut> {
     let (mut in_str, mut escaped, mut blank_before) = (false, false, false);
-    let mut chars = line.char_indices();
-    while let Some((i, c)) = chars.next() {
+    for (i, c) in line.char_indices() {
         if in_str {
             match c {
                 _ if escaped => escaped = false,
@@ -215,7 +214,7 @@ fn sources_en(tool: Tool) -> String {
 /// Whether a naming holds a value that can come from it.
 pub fn holds_a_value(n: &Name) -> bool {
     let kinds: Vec<&str> = n.items.iter().map(|(k, _)| k.as_str()).collect();
-    shapes(n.tool).iter().any(|s| *s == kinds.as_slice())
+    shapes(n.tool).contains(&kinds.as_slice())
 }
 
 /// Read what `fed by` holds, in a file wherever it is: the naming with its path as written, from
