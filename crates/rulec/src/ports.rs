@@ -106,29 +106,10 @@ impl Seen {
         self.0.iter().all(Look::holds)
     }
 
-    /// What a rule of the text `src` checked with these reads rests on ([`ritsu_ports::Rules::rests_on`]):
-    /// a digest of the text and of every file read with its bytes, in the order of the paths.
-    fn rests_on(&self, src: &str) -> String {
-        let mut read: Vec<(&Path, &Option<Vec<u8>>)> = self.0.iter().filter_map(|l| if let Look::Read(p, b) = l { Some((p.as_path(), b)) } else { None }).collect();
-        read.sort_by(|a, b| a.0.cmp(b.0));
-        read.dedup_by(|a, b| a.0 == b.0);
-        fn put(all: &mut Vec<u8>, b: &[u8]) {
-            all.extend_from_slice(&(b.len() as u64).to_le_bytes());
-            all.extend_from_slice(b);
-        }
-        let mut all = Vec::new();
-        put(&mut all, src.as_bytes());
-        for (p, b) in read {
-            put(&mut all, p.as_os_str().as_encoded_bytes());
-            match b {
-                Some(b) => {
-                    all.push(1);
-                    put(&mut all, b);
-                }
-                None => all.push(0),
-            }
-        }
-        crate::sha256::hex(&all)
+    /// What the rule at `rule`, of the text `src`, checked with these reads rests on
+    /// ([`ritsu_ports::Rules::rests_on`]).
+    fn rests_on(&self, rule: &Path, src: &str) -> String {
+        ritsu_ports::rests_on(rule, Some(src), self.0.iter().filter_map(|l| if let Look::Read(p, b) = l { Some((p.as_path(), b.as_deref())) } else { None }))
     }
 }
 
@@ -737,7 +718,7 @@ impl ritsu_ports::Rules for Engine {
     /// The text and every file the check read, from the check kept for the files read now.
     fn rests_on(&self, rule: &Path) -> Option<String> {
         let (_, src, _, seen) = self.joined(|| self.rule_here(rule)).ok()?;
-        Some(seen.rests_on(&src))
+        Some(seen.rests_on(rule, &src))
     }
 
     fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>> {

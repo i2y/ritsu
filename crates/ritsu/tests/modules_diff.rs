@@ -966,6 +966,42 @@ fn the_same_version_and_what_stops_a_diff() {
     assert_eq!(code, 0, "{out}");
 }
 
+/// Two versions of a module at two places, a file beside a gate with a date condition changed, and
+/// the module's version raised: the gate's answers do not move. With its dates file changed, they do.
+#[test]
+fn a_gate_with_a_date_moves_only_with_what_its_answers_rest_on() {
+    let d = TempDir::new("modules-diff-gate-dates");
+    let example = here().join("../sekisho/examples/refunds");
+    let manifest = |version: &str| format!("module example.com/acme/refunds\nversion {version}\ndescription \"Refunds\"\n");
+    let (one, two) = (d.path().join("one"), d.path().join("a/b/two"));
+    for (at, version) in [(&one, "1.0.0"), (&two, "1.0.1")] {
+        copy_dir(&example, at);
+        std::fs::write(at.join("ritsu.mod"), manifest(version)).unwrap();
+    }
+    std::fs::write(two.join("notes.txt"), "a file nothing reads\n").unwrap();
+    let args = |a: &Path, b: &Path| [a.display().to_string(), b.display().to_string()];
+    let gate_of = |out: &str| -> serde_json::Value {
+        let j = json(out);
+        j["behavior"].as_array().unwrap().iter().find(|b| b["file"] == "refunds.gate").unwrap_or_else(|| panic!("{out}")).clone()
+    };
+    let [a, b] = args(&one, &two);
+    let (_, out, err) = ritsu_in(d.path(), d.path(), &["mod", "diff", &a, &b, "--format", "json"]);
+    assert_eq!(err, "");
+    let gate = gate_of(&out);
+    for action in gate["result"]["actions"].as_array().unwrap() {
+        assert_eq!((&action["gained"], &action["lost"]), (&serde_json::json!([]), &serde_json::json!([])), "{gate}");
+    }
+    replace(&two, "dates/refund_terms.cal", "+ 30 days ", "+ 31 days ");
+    replace(&two, "dates/refund_terms.cal", "paid_on + 30 days", "paid_on + 31 days");
+    replace(&two, "dates/refund_terms.cal", "| 2026-10-06 | 2026-11-05  |", "| 2026-10-06 | 2026-11-06  |");
+    let (_, out, err) = ritsu_in(d.path(), d.path(), &["mod", "diff", &a, &b, "--format", "json"]);
+    assert_eq!(err, "");
+    let gate = gate_of(&out);
+    let order = gate["result"]["actions"].as_array().unwrap().iter().find(|x| x["action"] == "refund_order").unwrap().clone();
+    assert!(!order["gained"].as_array().unwrap().is_empty(), "{gate}");
+    assert_eq!(order["lost"], serde_json::json!([]), "{gate}");
+}
+
 /// A version whose `result` comes to more, with no range written on the output's line (rulec's
 /// DESIGN §15.271): `api` gives the output the range its `result` comes to, so the interface says
 /// that range changed in every language, each a change that may break a user, and the behavior

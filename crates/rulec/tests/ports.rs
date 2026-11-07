@@ -607,6 +607,21 @@ fn a_kept_check_holds_while_what_it_read_reads_the_same() {
     assert_eq!(on(&passes), on(&view("small")));
     assert_ne!(on(&passes), on(&fails));
     assert_eq!(e.checks() - before, 1);
+    // the same files at another place, with a comment and another description: the same
+    let elsewhere = |sizes: &str| {
+        let m = std::rc::Rc::new(ritsu_base::fs::Memory::new("/far/away/shop"));
+        m.add("sizes.rule", sizes.to_string());
+        m.add("refund.rule", ritsu_base::fs::with(passes.clone(), || ritsu_base::fs::read_to_string(rule)).unwrap());
+        m
+    };
+    let there = |m: &std::rc::Rc<ritsu_base::fs::Memory>| ritsu_base::fs::with(m.clone(), || ritsu_ports::Rules::rests_on(&e, Path::new("/far/away/shop/refund.rule")));
+    let sizes = ritsu_base::fs::with(passes.clone(), || ritsu_base::fs::read_to_string(Path::new("/shop/sizes.rule"))).unwrap();
+    assert_eq!(on(&passes), there(&elsewhere(&sizes)));
+    let noted = format!("# the sizes\n{}", sizes.replace("The sizes of an order, and", "Each size of an order, and"));
+    assert_ne!(noted, sizes);
+    assert_eq!(on(&passes), there(&elsewhere(&noted)));
+    // and with what it reads changed, not the same
+    assert_ne!(on(&passes), there(&elsewhere(&sizes.replace("group refundable = small", "group refundable = small, medium"))));
 }
 
 /// The values a question over ranges answers, in its order.

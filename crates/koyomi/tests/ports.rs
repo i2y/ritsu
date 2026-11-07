@@ -366,6 +366,32 @@ fn a_file_is_checked_once_while_nothing_it_read_changes() {
     assert_eq!(Engine.checks() - before, 2);
 }
 
+/// What a file's answers rest on is the same for a copy at another place, and with a comment or
+/// another description; it is not with a file it reads changed.
+#[test]
+fn what_a_file_rests_on_is_said_wherever_it_is() {
+    use ritsu_ports::Dates;
+    let (near, far) = (ritsu_testkit::TempDir::new("koyomi-rests-near"), ritsu_testkit::TempDir::new("koyomi-rests-far"));
+    for f in NET30 {
+        let bytes = std::fs::read(root().join("examples").join(f)).unwrap();
+        near.write(f, &bytes);
+        far.write(&format!("a/b/c/{f}"), &bytes);
+    }
+    let (here, there) = (near.path().join("net30.cal"), far.path().join("a/b/c/net30.cal"));
+    let on = Engine.rests_on(&here);
+    assert!(on.is_some());
+    assert_eq!(on, Engine.rests_on(&there));
+    let text = std::fs::read_to_string(&there).unwrap();
+    let noted = format!("# the terms\n{text}\n# the end\n");
+    std::fs::write(&there, noted.replacen("description \"", "description \"Reworded: ", 1)).unwrap();
+    assert_eq!(on, Engine.rests_on(&there));
+    // the calendar it reads closes another day
+    let cal = far.path().join("a/b/c").join(NET30[1]);
+    let calendar = std::fs::read_to_string(&cal).unwrap();
+    std::fs::write(&cal, format!("{calendar}closed 2026-12-30 \"A day closed for the test\"\n")).unwrap();
+    assert_ne!(on, Engine.rests_on(&there));
+}
+
 /// The check kept is the one of what the thread reads: files in memory (what a page in the browser
 /// hands over) are checked from memory and checked again when the memory holds another text, and
 /// the same path on the disk, where nothing is, is not answered from memory.

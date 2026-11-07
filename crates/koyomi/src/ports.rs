@@ -227,30 +227,12 @@ impl Engine {
 }
 
 impl ritsu_ports::Dates for Engine {
-    /// Every file the check kept for the files read now read, in the order of the paths, with its
-    /// bytes.
+    /// Every file the check kept for the files read now read ([`ritsu_ports::rests_on`]).
     fn rests_on(&self, file: &Path) -> Option<String> {
         checked_file(file).ok()?;
         let path = file.to_string_lossy().to_string();
         let reads = KEPT.with(|k| k.borrow().get(&path).map(|(_, r)| r.clone()))?;
-        let mut read: Vec<&(PathBuf, Option<Vec<u8>>)> = reads.iter().collect();
-        read.sort_by(|a, b| a.0.cmp(&b.0));
-        fn put(all: &mut Vec<u8>, b: &[u8]) {
-            all.extend_from_slice(&(b.len() as u64).to_le_bytes());
-            all.extend_from_slice(b);
-        }
-        let mut all = Vec::new();
-        for (p, b) in read {
-            put(&mut all, p.as_os_str().as_encoded_bytes());
-            match b {
-                Some(b) => {
-                    all.push(1);
-                    put(&mut all, b);
-                }
-                None => all.push(0),
-            }
-        }
-        Some(ritsu_base::sha256::hex(&all))
+        Some(ritsu_ports::rests_on(file, None, reads.iter().map(|(p, b)| (p.as_path(), b.as_deref()))))
     }
 
     fn facts(&self, file: &Path) -> Result<DateFacts, Vec<Said>> {

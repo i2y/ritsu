@@ -12,7 +12,9 @@
 //! both versions compute the same way (the same file, given the same values, its answers resting on
 //! the same text and the same files read: the ports' `rests_on`) are one value; computed another
 //! way, every pair of their values for the same values read is walked, and a pair is certain only
-//! where one version comes to one value there.
+//! where one version comes to one value there; any other pair is tried, and one nothing reaches is
+//! no combination (a rule with concrete inputs, [`try_both`]; dates over every value they read and
+//! every day of today, [`date_pairs`]).
 //!
 //! Each combination is decided by both versions (`eval::decide`) and is one of four: allowed now
 //! and denied before (gained), denied now and allowed before (lost), the same answer decided by
@@ -599,6 +601,28 @@ fn axes(o: &Walked, fo: &Frame, n: &Walked, fnew: &Frame) -> Vec<Axis> {
         let new_only = !new_keys.is_subset(&old_keys) || only(&|k| k.starts_with("new "));
         out.push(Axis { old: olds, new: news, points: acc, old_only, new_only });
     }
+    // a value each version computes otherwise, its two versions on two axes: they read nothing the
+    // other reads, so every pair is walked, and nothing says a pair can happen unless one version
+    // comes to one value
+    let values_at = |a: &Axis, key: &str| -> BTreeSet<Cv> { a.points.iter().filter_map(|p| p.values.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())).collect() };
+    let mut loose: BTreeSet<usize> = BTreeSet::new();
+    for (i, a) in out.iter().enumerate() {
+        let keys = a.points.first().map(|p| p.values.iter().filter_map(|(k, _)| k.strip_prefix("old ")).collect::<Vec<_>>()).unwrap_or_default();
+        for name in keys {
+            let (mine, other) = (format!("old {name}"), format!("new {name}"));
+            for (j, b) in out.iter().enumerate() {
+                if i != j && values_at(a, &mine).len() > 1 && values_at(b, &other).len() > 1 {
+                    loose.extend([i, j]);
+                }
+            }
+        }
+    }
+    for i in loose {
+        for p in &mut out[i].points {
+            p.joint = false;
+            p.exact = false;
+        }
+    }
     out
 }
 
@@ -731,13 +755,269 @@ fn tried(lo: i128, hi: i128) -> (Vec<i128>, bool) {
     (v, false)
 }
 
+/// What the dates of the two versions of a frame can come to together.
+enum Met {
+    /// Nothing to say: a version's frame has no dates, or both compute them the same way.
+    Free,
+    /// Every pair of the values of the two versions' date factors that one request on one day
+    /// brings them to.
+    Pairs(BTreeSet<(Vec<Val>, Vec<Val>)>),
+    /// Too many to walk, or a language gave no answer.
+    Unknown,
+}
+
+/// What a place of a date factor comes to for the values read, before the day is known.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Comes {
+    Day(i64),
+    /// A calendar's answer, which is the day's.
+    Open,
+    Absent,
+    /// A number's cell.
+    Value(Val),
+}
+
+/// The date factor of a frame, at most one (`walk`'s `date_factor`).
+fn date_factor(f: &Frame) -> Option<&Factor> {
+    f.factors.iter().find(|x| matches!(x.kind, FactorKind::Dates))
+}
+
+/// The attribute or input a value given in a frame reads, by name, with its field.
+fn read_of(w: &Walked, f: &Frame, src: &Source) -> Option<(walk::Place, Field)> {
+    match src {
+        Source::Attr(ow, name) => w.g.owner_type(*ow, f.principal, f.resource).attr(name).map(|(_, fd)| (walk::Place::Attr(*ow, fd.named.name.clone()), fd.clone())),
+        Source::Input(name) => w.g.actions[w.space.action].input(name).map(|(_, fd)| (walk::Place::Input(fd.named.name.clone()), fd.clone())),
+        Source::Lit(_) | Source::Today => None,
+    }
+}
+
+/// The attribute or input at a place of a frame, by name, with its field.
+fn read_at(w: &Walked, f: &Frame, at: usize) -> Option<(walk::Place, Field)> {
+    match f.slots.get(at)? {
+        Slot::Attr(ow, i) => {
+            let fd = w.g.owner_type(*ow, f.principal, f.resource).attrs.get(*i)?;
+            Some((walk::Place::Attr(*ow, fd.named.name.clone()), fd.clone()))
+        }
+        Slot::Input(i) => {
+            let fd = w.g.actions[w.space.action].inputs.get(*i)?;
+            Some((walk::Place::Input(fd.named.name.clone()), fd.clone()))
+        }
+        _ => None,
+    }
+}
+
+/// What a date factor reads, each with its field, and whether a date of it is given today.
+fn date_reads(w: &Walked, f: &Frame, x: &Factor) -> (Vec<(walk::Place, Field)>, bool) {
+    let mut reads = Vec::new();
+    let mut given_today = false;
+    for &at in &x.places {
+        let Some((act, ci, link)) = f.computed_at(w.space.action, at) else {
+            reads.extend(read_at(w, f, at));
+            continue;
+        };
+        match &w.g.actions[act].computed[ci].how {
+            How::Date { of: DateOf::Call { args, .. }, .. } => {
+                for (_, src) in args {
+                    let Some(src) = f.mapped(link, w.g, src) else { continue };
+                    given_today |= src == Source::Today;
+                    reads.extend(read_of(w, f, &src));
+                }
+            }
+            How::Date { of: DateOf::Attr(ow, name), .. } => reads.extend(read_of(w, f, &Source::Attr(*ow, name.clone()))),
+            How::Open { .. } | How::Rule { .. } => {}
+        }
+    }
+    (reads, given_today)
+}
+
+/// What each place of a date factor comes to for the values read, and `today` for a date given it;
+/// None when a language gives no answer. Each day of a dates file is asked once.
+fn comes(w: &Walked, f: &Frame, x: &Factor, raw: &dyn Fn(&walk::Place) -> Option<i64>, today: Option<i64>, asked: &mut DatesAsked) -> Option<Vec<Comes>> {
+    let mut out = Vec::with_capacity(x.places.len());
+    for (k, &at) in x.places.iter().enumerate() {
+        let Some((act, ci, link)) = f.computed_at(w.space.action, at) else {
+            // a number a policy compares: its cell, among the factor's
+            let v = read_at(w, f, at).and_then(|(place, _)| raw(&place));
+            let cell = v.and_then(|v| x.points.iter().find_map(|p| matches!(&p.vals[k], Val::Cell(c) if c.contains(v as i128)).then(|| p.vals[k].clone())));
+            out.push(cell.map_or(Comes::Absent, Comes::Value));
+            continue;
+        };
+        let value_of = |src: &Source| -> Option<i64> {
+            match &f.mapped(link, w.g, src)? {
+                Source::Lit(Literal::Date(d)) => Some(*d),
+                Source::Lit(Literal::Num(num)) if num.value.is_int() => Some(num.value.num as i64),
+                Source::Lit(_) => None,
+                Source::Today => today,
+                other => raw(&read_of(w, f, other)?.0),
+            }
+        };
+        out.push(match &w.g.actions[act].computed[ci].how {
+            How::Open { .. } => Comes::Open,
+            How::Date { of: DateOf::Attr(ow, name), .. } => value_of(&Source::Attr(*ow, name.clone())).map_or(Comes::Absent, Comes::Day),
+            How::Date { of: DateOf::Call { args, .. }, .. } => {
+                let Some(Kn::Date { file, function, .. }) = w.known.computed.get(&(act, ci)) else { return None };
+                let inputs: Option<Vec<(String, i64)>> = args.iter().map(|(name, src)| value_of(src).map(|v| (name.clone(), v))).collect();
+                match inputs {
+                    None => Comes::Absent,
+                    Some(inputs) => {
+                        let key = (file.clone(), inputs);
+                        let dates = asked.entry(key).or_insert_with_key(|(file, inputs)| w.ask.dates(file, inputs).ok());
+                        match dates.as_ref()?.iter().find(|(name, _)| name == function) {
+                            Some((_, ritsu_ports::DateValue::Day(d))) => Comes::Day(*d),
+                            // the date stops there: the generated code refuses the request
+                            _ => Comes::Absent,
+                        }
+                    }
+                }
+            }
+            How::Rule { .. } => Comes::Absent,
+        });
+    }
+    Some(out)
+}
+
+/// What a date factor's places come to on the day `t` (the values of its points).
+fn truths(w: &Walked, f: &Frame, x: &Factor, came: &[Comes], t: i64) -> Option<Vec<Val>> {
+    let mut out = Vec::with_capacity(came.len());
+    for (&at, c) in x.places.iter().zip(came) {
+        if let Comes::Value(v) = c {
+            out.push(v.clone());
+            continue;
+        }
+        let Some((act, ci, _)) = f.computed_at(w.space.action, at) else {
+            out.push(Val::Absent);
+            continue;
+        };
+        out.push(match (&w.g.actions[act].computed[ci].how, c) {
+            (How::Open { .. }, _) => match w.known.computed.get(&(act, ci))? {
+                Kn::Open { data, closed } if t >= data.0 && t <= data.1 => Val::Bool(!closed.contains(&t)),
+                Kn::Open { .. } => Val::Absent,
+                _ => return None,
+            },
+            (How::Date { op, .. }, Comes::Day(d)) => Val::Bool(crate::cells::holds(*op, t, *d)),
+            _ => Val::Absent,
+        });
+    }
+    Some(out)
+}
+
+/// The days of a dates file each version has been asked for, by file and input.
+type DatesAsked = HashMap<(std::path::PathBuf, Vec<(String, i64)>), Option<Vec<(String, ritsu_ports::DateValue)>>>;
+
+/// Every pair of values the dates of two versions of a frame come to for one request on one day:
+/// the walk of `walk`'s `date_factor`, over both versions at once.
+fn date_pairs(o: &Walked, fo: &Frame, n: &Walked, fnew: &Frame, budget: u128) -> Met {
+    let (Some(xo), Some(xn)) = (date_factor(fo), date_factor(fnew)) else { return Met::Free };
+    // both compute every date the same way: the walk has already joined them
+    let same_way = |a: &Walked, fa: &Frame, xa: &Factor, b: &Walked, fb: &Frame, xb: &Factor| {
+        xa.places.iter().filter(|&&at| a.computed(fa, at)).all(|&at| {
+            let key = a.key(fa, at);
+            xb.places.iter().find(|&&other| b.key(fb, other) == key).is_some_and(|&other| matches!((a.computation(fa, at), b.computation(fb, other)), (Some(x), Some(y)) if x == y))
+        })
+    };
+    if same_way(o, fo, xo, n, fnew, xn) && same_way(n, fnew, xn, o, fo, xo) {
+        return Met::Free;
+    }
+    let (Some(to), Some(tn)) = (o.g.today.as_ref(), n.g.today.as_ref()) else { return Met::Unknown };
+    let (lo, hi) = (to.lo.max(tn.lo), to.hi.min(tn.hi));
+    let days = (hi - lo + 1).max(0) as u128;
+    // what either reads, each over the values both take
+    let (reads_o, today_o) = date_reads(o, fo, xo);
+    let (reads_n, today_n) = date_reads(n, fnew, xn);
+    let span = |fd: &Field| -> Option<(i128, i128)> {
+        match &fd.ty {
+            FieldType::Date { lo, hi } => Some((*lo as i128, *hi as i128)),
+            FieldType::Num { lo, hi, .. } => Some((*lo, *hi)),
+            _ => None,
+        }
+    };
+    let mut raws: Vec<(walk::Place, i128, i128, bool)> = Vec::new();
+    for (place, fd) in reads_o.iter().chain(&reads_n) {
+        let Some((a, b)) = span(fd) else { return Met::Unknown };
+        match raws.iter_mut().find(|(p, ..)| p == place) {
+            Some(r) => {
+                r.1 = r.1.max(a);
+                r.2 = r.2.min(b);
+                r.3 &= fd.optional;
+            }
+            None => raws.push((place.clone(), a, b, fd.optional)),
+        }
+    }
+    let width = |r: &(walk::Place, i128, i128, bool)| ((r.2 - r.1 + 1).max(0) as u128).saturating_add(r.3 as u128);
+    let assignments = raws.iter().fold(1u128, |m, r| m.saturating_mul(width(r)));
+    let given_today = today_o || today_n;
+    if assignments > budget || (given_today && assignments.saturating_mul(days) > budget) {
+        return Met::Unknown;
+    }
+    let (mut asked_o, mut asked_n) = (DatesAsked::new(), DatesAsked::new());
+    let mut pairs: BTreeSet<(Vec<Val>, Vec<Val>)> = BTreeSet::new();
+    let mut seen: BTreeSet<(Vec<Comes>, Vec<Comes>)> = BTreeSet::new();
+    // the values of the reads, a place at a time: each counted up from the first
+    let mut at: Vec<i128> = raws.iter().map(|r| r.1).collect();
+    let mut absent = vec![false; raws.len()];
+    loop {
+        let raw = |place: &walk::Place| raws.iter().position(|r| r.0 == *place).and_then(|k| (!absent[k]).then_some(at[k] as i64));
+        if given_today {
+            for t in lo..=hi {
+                let (Some(a), Some(b)) = (o.side.within(|| comes(o, fo, xo, &raw, Some(t), &mut asked_o)), n.side.within(|| comes(n, fnew, xn, &raw, Some(t), &mut asked_n))) else { return Met::Unknown };
+                let (Some(a), Some(b)) = (truths(o, fo, xo, &a, t), truths(n, fnew, xn, &b, t)) else { return Met::Unknown };
+                pairs.insert((a, b));
+            }
+        } else {
+            let (Some(a), Some(b)) = (o.side.within(|| comes(o, fo, xo, &raw, None, &mut asked_o)), n.side.within(|| comes(n, fnew, xn, &raw, None, &mut asked_n))) else { return Met::Unknown };
+            seen.insert((a, b));
+        }
+        // the next values
+        let mut k = raws.len();
+        let more = loop {
+            if k == 0 {
+                break false;
+            }
+            k -= 1;
+            if !absent[k] && at[k] < raws[k].2 {
+                at[k] += 1;
+                break true;
+            }
+            if !absent[k] && raws[k].3 {
+                absent[k] = true;
+                break true;
+            }
+            at[k] = raws[k].1;
+            absent[k] = false;
+        };
+        if !more {
+            break;
+        }
+    }
+    if (seen.len() as u128).saturating_mul(days) > budget {
+        return Met::Unknown;
+    }
+    for t in lo..=hi {
+        for (a, b) in &seen {
+            let (Some(a), Some(b)) = (truths(o, fo, xo, a, t), truths(n, fnew, xn, b, t)) else { return Met::Unknown };
+            pairs.insert((a, b));
+        }
+    }
+    Met::Pairs(pairs)
+}
+
 /// Try concrete inputs on a combination of both versions whose rule outputs either version could not
 /// vouch for, or whose pair of outputs is not certain: an input of the attributes and the inputs the
 /// outputs read (each held to the combination's value where a version cuts it) on which every rule
 /// output of both versions comes to the combination's value. Each version's rules are asked through
 /// its own files.
-fn try_both(o: &Walked, fo: &Frame, ko: &Kept, n: &Walked, fnew: &Frame, kn: &Kept) -> Tried {
+fn try_both(o: &Walked, fo: &Frame, ko: &Kept, n: &Walked, fnew: &Frame, kn: &Kept, met: &Met) -> Tried {
     use ritsu_ports::Value;
+    match met {
+        Met::Free => {}
+        Met::Unknown => return Tried::None { exhaustive: false },
+        Met::Pairs(pairs) => {
+            let point = |f: &Frame, k: &Kept| f.factors.iter().zip(&k.idx).find(|(x, _)| matches!(x.kind, FactorKind::Dates)).map(|(x, &i)| x.points[i].vals.clone()).unwrap_or_default();
+            if !pairs.contains(&(point(fo, ko), point(fnew, kn))) {
+                return Tried::None { exhaustive: true };
+            }
+        }
+    }
     // the rule outputs to come to, by version: the place and the value
     let mut wants: Vec<(bool, usize, Val)> = Vec::new();
     // what they read, by name, with the field (and whether it is the new version's) and the value a
@@ -842,7 +1122,11 @@ fn try_both(o: &Walked, fo: &Frame, ko: &Kept, n: &Walked, fnew: &Frame, kn: &Ke
                     Source::Lit(Literal::Bool(b)) => Some(Value::Bool(*b)),
                     Source::Lit(Literal::Word(word)) => Some(Value::Enum(word.clone())),
                     Source::Lit(Literal::Date(d)) => Some(Value::Date(ritsu_ports::day_text(*d))),
-                    Source::Today => return false,
+                    // the day is not one of the things tried: what is not found is not ruled out
+                    Source::Today => {
+                        failed.set(true);
+                        return false;
+                    }
                     Source::Attr(ow, name) => {
                         let name = w.g.owner_type(*ow, f.principal, f.resource).attr(name).map(|(_, fd)| fd.named.name.clone()).unwrap_or_default();
                         raws.iter().position(|(p, _, _, _)| *p == walk::Place::Attr(*ow, name.clone())).and_then(|p| assignment[p].clone())
@@ -928,6 +1212,7 @@ fn action(o: &Walked, n: &Walked, budget: u128, keep: bool) -> Result<ActionDiff
     }
     let mut groups: BTreeMap<(Change, Vec<String>, Vec<String>), Group> = BTreeMap::new();
     let mut confirmed: HashMap<(Kept, Kept), Option<bool>> = HashMap::new();
+    let mut met: HashMap<(usize, usize), Met> = HashMap::new();
     for (fi, fj, ax) in &walks {
         let (fo, fnew) = (&o.space.frames[*fi], &n.space.frames[*fj]);
         if ax.iter().any(|a| a.points.is_empty()) {
@@ -976,7 +1261,8 @@ fn action(o: &Walked, n: &Walked, budget: u128, keep: bool) -> Result<ActionDiff
                     true
                 } else {
                     let key = (ko.clone(), kn.clone());
-                    let t = *confirmed.entry(key).or_insert_with(|| match try_both(o, fo, &ko, n, fnew, &kn) {
+                    let dates = met.entry((*fi, *fj)).or_insert_with(|| date_pairs(o, fo, n, fnew, budget));
+                    let t = *confirmed.entry(key).or_insert_with(|| match try_both(o, fo, &ko, n, fnew, &kn, dates) {
                         Tried::Found => Some(true),
                         Tried::None { exhaustive: true } => None,
                         Tried::None { exhaustive: false } => {

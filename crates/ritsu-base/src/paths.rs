@@ -182,6 +182,14 @@ pub fn between(from: &Path, to: &Path) -> String {
     if out.is_empty() { ".".to_string() } else { out.join("/") }
 }
 
+/// The path from the directory `file` is in to `other`, both folded as [`absolute`] folds them: how
+/// a file names what it reads wherever the two are held, so that a copy of a tree at another place
+/// names the same files.
+pub fn seen_from(file: &Path, other: &Path) -> String {
+    let file = absolute(file);
+    between(file.parent().unwrap_or(&file), &absolute(other))
+}
+
 /// How a run writes a path from the root for a person (DESIGN 6.2, item 8): from where the
 /// tool runs, the way the path given to it was written — the shortest relative path when it
 /// was relative, absolute when it was absolute.

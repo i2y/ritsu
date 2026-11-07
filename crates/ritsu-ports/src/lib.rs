@@ -62,6 +62,7 @@ mod gates;
 mod index;
 mod maps;
 mod programs;
+mod rests;
 mod rules;
 mod sources;
 
@@ -79,6 +80,7 @@ pub use flows::{
     RuleCall, Secret, Send, TransferCall, Undecided, UndecidedPrecondition,
 };
 pub use maps::{MapFacts, MapRelationship, Maps, PublishedOperation};
+pub use rests::rests_on;
 pub use programs::{At, CallVerdict, Crossing, Ends, Given, ProgramCrossings, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs, Seen, Verdicts};
 pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, NeverCond, NeverTest, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 

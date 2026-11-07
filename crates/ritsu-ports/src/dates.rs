@@ -147,9 +147,9 @@ pub trait Dates {
         Err(unanswered(file, ritsu_base::tr!("この口はページを作りません", "this port draws no page")))
     }
 
-    /// What the file's answers rest on, as one string: every file its check read (the file itself,
-    /// the calendars it uses, their tables of holidays), with what the file held, as
-    /// `Rules::rests_on` says of a rule. The default is None, for a port that cannot say.
+    /// What the file's answers rest on, as one string ([`crate::rests_on`]): every file its check
+    /// read (the file itself, the calendars it uses, their tables of holidays), with what the file
+    /// held, as `Rules::rests_on` says of a rule. The default is None, for a port that cannot say.
     fn rests_on(&self, file: &Path) -> Option<String> {
         let _ = file;
         None

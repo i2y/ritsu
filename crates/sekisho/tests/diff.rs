@@ -413,6 +413,15 @@ fn a_side_at_a_git_revision() {
     assert_eq!(group(&d, "refund_order", Change::Gained, &[], &["clerks_refund_small_amounts"]).map(|g| g.count), Some(1), "{}", diff::text(&d, Lang::En));
 }
 
+const PRICING_MOD: &str = "module example.com/acme/pricing\nversion 1.0.0\ndescription \"The sizes of an order\"\n";
+const SHOP_MOD: &str = "module example.com/acme/shop\nversion 0.1.0\ndescription \"Refunds by the size of an order\"\n\nrequire pricing path \"../pricing\"\n";
+const REFUND_RULE: &str = "rule refund v1\ndescription \"Whether a clerk refunds an order: the sizes pricing calls refundable\"\n\nimport enum size from \"@pricing/sizes.rule\"\n\ninputs\n  size : size\n\noutputs\n  allowed : bool\n\ntable allowed\npolicy unique\n| size            | -> allowed |\n| refundable      | true       |\n| not: refundable | false      |\n";
+const REFUNDS_GATE: &str = "gate refunds v1\ndescription \"A clerk refunds an order of a size the rule lets through\"\nnamespace Shop\n\nuse rule refund from \"refund.rule\"\n\nenum size = small | medium | large\n\nrole clerk\n  description \"Answers customers\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nresource Order\n  description \"An order of the shop\"\n  attributes\n    size : size\n\naction refund_order\n  description \"Refund an order\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\naction refund_by_hand\n  description \"Refund an order by hand\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\npermit clerks_refund\n  description \"A clerk refunds an order the rule lets through\"\n  principal in clerk\n  action refund_order\n  when refundable\n\npermit clerks_refund_by_hand\n  description \"A clerk refunds by hand an order the rule lets through\"\n  principal in clerk\n  action refund_by_hand\n  when refundable\n\nforbid large_orders_by_hand\n  description \"No one refunds a large order by hand\"\n  principal is User\n  action refund_by_hand\n  when resource.size is large\n";
+
+fn sizes(refundable: &str) -> String {
+    format!("enums sizes v1\ndescription \"The sizes of an order, and the ones a clerk refunds\"\n\nenum size = small | medium | large\ngroup refundable = {refundable}\n")
+}
+
 /// A rule the same on both sides, at the same path and with the same text, whose enums come from a
 /// dependency by a path in the repository that differs between the revisions: each side reads its
 /// own enums, though one rulec answers both (its port keeps a check only while every file the check
@@ -440,20 +449,11 @@ fn a_rule_the_same_on_both_sides_whose_dependency_differs() {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, text).unwrap();
     };
-    let sizes = |refundable: &str| {
-        format!("enums sizes v1\ndescription \"The sizes of an order, and the ones a clerk refunds\"\n\nenum size = small | medium | large\ngroup refundable = {refundable}\n")
-    };
-    write("pricing/ritsu.mod", "module example.com/acme/pricing\nversion 1.0.0\ndescription \"The sizes of an order\"\n");
+    write("pricing/ritsu.mod", PRICING_MOD);
     write("pricing/sizes.rule", &sizes("small"));
-    write("shop/ritsu.mod", "module example.com/acme/shop\nversion 0.1.0\ndescription \"Refunds by the size of an order\"\n\nrequire pricing path \"../pricing\"\n");
-    write(
-        "shop/refund.rule",
-        "rule refund v1\ndescription \"Whether a clerk refunds an order: the sizes pricing calls refundable\"\n\nimport enum size from \"@pricing/sizes.rule\"\n\ninputs\n  size : size\n\noutputs\n  allowed : bool\n\ntable allowed\npolicy unique\n| size            | -> allowed |\n| refundable      | true       |\n| not: refundable | false      |\n",
-    );
-    write(
-        "shop/refunds.gate",
-        "gate refunds v1\ndescription \"A clerk refunds an order of a size the rule lets through\"\nnamespace Shop\n\nuse rule refund from \"refund.rule\"\n\nenum size = small | medium | large\n\nrole clerk\n  description \"Answers customers\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nresource Order\n  description \"An order of the shop\"\n  attributes\n    size : size\n\naction refund_order\n  description \"Refund an order\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\naction refund_by_hand\n  description \"Refund an order by hand\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\npermit clerks_refund\n  description \"A clerk refunds an order the rule lets through\"\n  principal in clerk\n  action refund_order\n  when refundable\n\npermit clerks_refund_by_hand\n  description \"A clerk refunds by hand an order the rule lets through\"\n  principal in clerk\n  action refund_by_hand\n  when refundable\n\nforbid large_orders_by_hand\n  description \"No one refunds a large order by hand\"\n  principal is User\n  action refund_by_hand\n  when resource.size is large\n",
-    );
+    write("shop/ritsu.mod", SHOP_MOD);
+    write("shop/refund.rule", REFUND_RULE);
+    write("shop/refunds.gate", REFUNDS_GATE);
     git(&["init", "-q"]);
     git(&["add", "."]);
     git(&["commit", "-q", "-m", "sizes"]);
@@ -481,6 +481,142 @@ fn a_rule_the_same_on_both_sides_whose_dependency_differs() {
             assert_eq!(group(&got, action, Change::Gained, &[], &[permit]).map(|g| g.count), Some(1), "new first: {new_first}\n{}", diff::text(&got, Lang::En));
         }
     }
+}
+
+/// A copy of a directory of the crate, written to `to`.
+fn copied(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        if e.file_type().unwrap().is_dir() {
+            copied(&e.path(), &to.join(e.file_name()));
+        } else {
+            std::fs::copy(e.path(), to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
+fn file_diff(old: &Path, new: &Path) -> Diff {
+    let suite = common::joined();
+    let side = |p: &Path| diff::side(&p.display().to_string(), &suite, &Options::default()).unwrap_or_else(|t| panic!("{}: {}", p.display(), t.en));
+    let (o, n) = (side(old), side(new));
+    diff::diff(&o, &n, &suite, sekisho::check::DEFAULT_BUDGET as u128).unwrap_or_else(|t| panic!("{}", t.en))
+}
+
+/// Each change of a diff, as (action, how it changes, count).
+fn changes(d: &Diff) -> Vec<(String, Change, u64)> {
+    d.actions.iter().flat_map(|a| a.groups.iter().map(|g| (a.name.clone(), g.change, g.count as u64))).collect()
+}
+
+fn edit(file: &Path, change: impl FnOnce(String) -> String) {
+    let was = std::fs::read_to_string(file).unwrap();
+    let now = change(was.clone());
+    assert_ne!(was, now, "{}", file.display());
+    std::fs::write(file, now).unwrap();
+}
+
+/// The gate of the example, which reads a rule and a dates file and a calendar: the same at another
+/// place, with its dates file and its rule noted and described again, and in a module whose version
+/// is raised (nothing here is computed another way); each is the same at the rule's and the dates
+/// file's answers, so no combination is said to change.
+#[test]
+fn what_cannot_change_an_answer_changes_no_decision() {
+    let t = ritsu_testkit::TempDir::new("sekisho-diff-alike");
+    let example = Path::new("examples/refunds");
+    let (near, far) = (t.path().join("near"), t.path().join("a/b/far"));
+    copied(example, &near);
+    copied(example, &far);
+    let (old, new) = (near.join("refunds.gate"), far.join("refunds.gate"));
+    assert_eq!(changes(&file_diff(&old, &new)), [], "the same files at another place");
+    let dates = far.join("dates/refund_terms.cal");
+    edit(&dates, |x| format!("# the terms\n{}\n# the end\n", x.replacen("description \"", "description \"Reworded: ", 1)));
+    assert_eq!(changes(&file_diff(&old, &new)), [], "a comment and a description of the dates file");
+    edit(&far.join("rules/refund_limit.rule"), |x| format!("# the band\n{x}\n# the end\n"));
+    let d = file_diff(&old, &new);
+    assert_eq!(changes(&d), [], "a comment of the rule\n{}", diff::text(&d, Lang::En));
+
+    // a rule whose enums come from a dependency: raising the version of either module changes
+    // nothing it computes
+    for side in ["near", "a/b/far"] {
+        let base = t.path().join(side);
+        std::fs::create_dir_all(base.join("pricing")).unwrap();
+        std::fs::create_dir_all(base.join("shop")).unwrap();
+        std::fs::write(base.join("pricing/ritsu.mod"), PRICING_MOD).unwrap();
+        std::fs::write(base.join("pricing/sizes.rule"), sizes("small")).unwrap();
+        std::fs::write(base.join("shop/ritsu.mod"), SHOP_MOD).unwrap();
+        std::fs::write(base.join("shop/refund.rule"), REFUND_RULE).unwrap();
+        std::fs::write(base.join("shop/refunds.gate"), REFUNDS_GATE).unwrap();
+    }
+    let (old, new) = (t.path().join("near/shop/refunds.gate"), t.path().join("a/b/far/shop/refunds.gate"));
+    assert_eq!(changes(&file_diff(&old, &new)), [], "the same modules at another place");
+    edit(&t.path().join("a/b/far/shop/ritsu.mod"), |x| x.replace("version 0.1.0", "version 0.2.0"));
+    edit(&t.path().join("a/b/far/pricing/ritsu.mod"), |x| x.replace("version 1.0.0", "version 1.0.1"));
+    let d = file_diff(&old, &new);
+    assert_eq!(changes(&d), [], "the versions of the modules\n{}", diff::text(&d, Lang::En));
+    // what the dependency holds does count
+    edit(&t.path().join("a/b/far/pricing/sizes.rule"), |_| sizes("small, medium"));
+    let d = file_diff(&old, &new);
+    assert_eq!(changes(&d).iter().map(|(a, c, n)| (a.as_str(), *c, *n)).collect::<Vec<_>>(), [("refund_order", Change::Gained, 1), ("refund_by_hand", Change::Gained, 1)], "{}", diff::text(&d, Lang::En));
+}
+
+/// Two versions that compute a value otherwise, with no value both read to bring them together: only
+/// a pair some request on some day comes to is a change. A rule that lets more through gains and
+/// loses nothing; a date moved later only gains; moved earlier, it only loses.
+#[test]
+fn only_the_pairs_something_reaches_are_changes() {
+    let t = ritsu_testkit::TempDir::new("sekisho-diff-pairs");
+    let write = |rel: &str, text: &str| {
+        let p = t.path().join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    let rule = |refundable: &str| {
+        format!(
+            "rule refund v1\ndescription \"Whether an order is refunded\"\n\nenum size = small | medium | large | huge\ngroup refundable = {refundable}\n\ninputs\n  size : size\n\noutputs\n  allowed : bool\n\ntable allowed\npolicy unique\n| size            | -> allowed |\n| refundable      | true       |\n| not: refundable | false      |\n"
+        )
+    };
+    let gate = "gate refunds v1\ndescription \"A clerk refunds an order the rule lets through\"\nnamespace Shop\n\nuse rule refund from \"refund.rule\"\n\nenum size = small | medium | large | huge\n\nrole clerk\n  description \"Answers customers\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nresource Order\n  description \"An order of the shop\"\n  attributes\n    size : size\n\naction refund_order\n  description \"Refund an order\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\npermit clerks_refund\n  description \"A clerk refunds an order the rule lets through\"\n  principal in clerk\n  action refund_order\n  when refundable\n";
+    for side in ["old", "new", "less"] {
+        write(&format!("{side}/refunds.gate"), gate);
+    }
+    write("old/refund.rule", &rule("small, medium"));
+    write("new/refund.rule", &rule("small, medium, large"));
+    write("less/refund.rule", &rule("small"));
+    let (old, new, less) = (t.path().join("old/refunds.gate"), t.path().join("new/refunds.gate"), t.path().join("less/refunds.gate"));
+    let d = file_diff(&old, &new);
+    assert_eq!(changes(&d), [("refund_order".to_string(), Change::Gained, 1)], "{}", diff::text(&d, Lang::En));
+    let d = file_diff(&old, &less);
+    assert_eq!(changes(&d), [("refund_order".to_string(), Change::Lost, 1)], "{}", diff::text(&d, Lang::En));
+    let d = file_diff(&old, &old);
+    assert_eq!(changes(&d), []);
+
+    // the dates of the example, the days of the period moved
+    let (near, later, sooner) = (t.path().join("near"), t.path().join("later"), t.path().join("sooner"));
+    let example = Path::new("examples/refunds");
+    copied(example, &near);
+    copied(example, &later);
+    copied(example, &sooner);
+    let moved = |to: &Path, days: &str| {
+        edit(&to.join("dates/refund_terms.cal"), |x| {
+            let upto = x.find("\nclaims").unwrap_or(x.len());
+            format!("{}\n", x[..upto].replace("+ 30 days", &format!("+ {days} days")))
+        })
+    };
+    moved(&later, "31");
+    moved(&sooner, "29");
+    let kinds = |d: &Diff| {
+        let mut k: Vec<Change> = changes(d).iter().filter(|(a, ..)| a == "refund_order").map(|(_, c, _)| *c).collect();
+        k.sort();
+        k.dedup();
+        k
+    };
+    let old = near.join("refunds.gate");
+    let d = file_diff(&old, &later.join("refunds.gate"));
+    let got = kinds(&d);
+    assert!(got.contains(&Change::Gained) && !got.contains(&Change::Lost), "{got:?}\n{}", diff::text(&d, Lang::En));
+    let d = file_diff(&old, &sooner.join("refunds.gate"));
+    let got = kinds(&d);
+    assert!(got.contains(&Change::Lost) && !got.contains(&Change::Gained), "{got:?}\n{}", diff::text(&d, Lang::En));
 }
 
 /// The disk, its current directory said apart from the process's.
