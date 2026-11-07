@@ -1221,6 +1221,7 @@ for (let l = line(); l !== null; l = line()) {
             ("shop", vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0"], &empty, &curl, false),
             ("tax-push", vec!["mod", "push"], &empty, &curl, false),
             ("shop", vec!["mod", "report", "--base", "HEAD"], &full, &git, false),
+            ("shop", vec!["impact", "--base", "HEAD"], &full, &git, false),
             (".", vec!["mod", "site", "modules.list", "--out", "site"], &empty, &programs, false),
             ("signed", vec!["mod", "fetch"], &full, &cosign, false),
             // a dependency from a git repository

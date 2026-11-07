@@ -172,7 +172,7 @@ pub(crate) fn checked(a: &Args, lang: Lang, cmd: &str, suite: &Suite, err: &mut 
     checked_paths(&a.pos, a.get("--root"), lang, cmd, suite, err)
 }
 
-fn checked_paths(paths: &[String], root: Option<&str>, lang: Lang, cmd: &str, suite: &Suite, err: &mut dyn Write) -> Result<crate::check::Checked, u8> {
+pub(crate) fn checked_paths(paths: &[String], root: Option<&str>, lang: Lang, cmd: &str, suite: &Suite, err: &mut dyn Write) -> Result<crate::check::Checked, u8> {
     if paths.is_empty() {
         return Err(refuse(err, tr!("`yuen {cmd}` には .req のファイルかディレクトリが要ります", "`yuen {cmd}` needs .req files or directories"), lang));
     }

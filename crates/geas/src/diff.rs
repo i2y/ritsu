@@ -49,7 +49,7 @@ pub fn sides(f: &FileDiff, root: &Path) -> Result<(Blob, Blob), Text> {
     if let (Some(a), Some(b)) = (&f.old_blob, &f.new_blob) {
         return Ok((from_index(a), from_index(b)));
     }
-    let read = |p: &str| std::fs::read(root.join(p)).ok().map(|b| Content::of(&b));
+    let read = |p: &str| ritsu_base::fs::read(root.join(p)).ok().map(|b| Content::of(&b));
     let disk = read(f.path());
     if f.hunks.is_empty() {
         // a rename or a change of mode: the same bytes on both sides

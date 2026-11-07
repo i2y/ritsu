@@ -1528,6 +1528,34 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     code
 }
 
+/// What `ritsu gen --check` comes to for the module whose root is `root`, for `ritsu impact`.
+pub(crate) enum Fresh {
+    /// Every file of the targets of its `target` line is what `ritsu gen` writes.
+    Same,
+    /// Those that are not, as the run writes them.
+    Stale(Vec<String>),
+    /// It could not say (the project does not pass its check, say), with why.
+    Unknown(Text),
+}
+
+/// `ritsu gen --check`, with its `target` line and every default, of the module whose root is `root`
+/// (the packages under `<root>/generated`), on the disk. Nothing is written.
+pub(crate) fn fresh(root: &Path, lang: Lang) -> Fresh {
+    let table = cli::table();
+    let cmd = table.command("gen").expect("gen is in the table");
+    let at = root.to_string_lossy().into_owned();
+    let out = root.join("generated").to_string_lossy().into_owned();
+    let args: Vec<String> = vec![at.clone(), "--root".into(), at, "--check".into(), "--out".into(), out.clone(), "--format".into(), "json".into()];
+    let mut answer = Answer { root: None, check: true, out, targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
+    let code = generate(&args, &table, cmd, lang, true, &mut answer);
+    match (code, answer.error) {
+        (0, _) => Fresh::Same,
+        (_, Some((_, why))) => Fresh::Unknown(Text::same(why)),
+        (1, None) if !answer.silent => Fresh::Stale(answer.files.into_iter().filter(|f| matches!(f.state, "missing" | "stale" | "left")).map(|f| f.path).collect()),
+        _ => Fresh::Unknown(tr!("`ritsu gen --check` がモジュールを読めませんでした", "`ritsu gen --check` could not read the module")),
+    }
+}
+
 /// [`command`], the answer kept for the JSON as it goes.
 fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::cli::Cmd, lang: Lang, json: bool, answer: &mut Answer) -> u8 {
     // Nothing generated: the text says why on the standard error; the JSON keeps it.

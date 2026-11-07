@@ -135,6 +135,10 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 
 只安装一种语言、在 GitHub Actions 中使用，以及 npm 包，见英文首页的 [Install](../#install)。
 
+## 变更的去向
+
+`ritsu impact --base <revision>` 把一次变更有没有改变答案、与谁相关汇总成一份报告，再由你自己写的规则决定变更的去向：[Where a change goes](../impact/)（英文）、[日文版](../ja/impact/)。
+
 ## 面向 AI 智能体
 
 ritsu 及其语言是为 AI 智能体使用而设计的。[skills/](https://github.com/i2y/ritsu/tree/main/skills) 中有十个 [Agent Skills](https://agentskills.io)：[skills/ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu) 用于包含多种语言的项目，其余九个各对应一种语言。`ritsu skills install` 会把它们写入项目的 `.claude/skills/`。其他安装方式见 [skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md)（英文）。

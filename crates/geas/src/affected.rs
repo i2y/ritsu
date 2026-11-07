@@ -419,7 +419,7 @@ impl Disk {
     fn new(root: &Path) -> Disk {
         let mut files = BTreeMap::new();
         for p in tree::sources(root).unwrap_or_default() {
-            if let Ok(b) = std::fs::read(root.join(&p)) {
+            if let Ok(b) = ritsu_base::fs::read(root.join(&p)) {
                 files.insert(p, hash::blob(&b));
             }
         }

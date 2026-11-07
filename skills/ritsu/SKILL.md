@@ -435,3 +435,28 @@ you hand over one with hand-written code between the languages, follow [between.
 each language what it answers, find the relations nobody states, put each where a language can hold
 it (`fed by`, `import enum`, `claims`), break each one once, and report what held, what failed and
 what was left open.
+
+## 11. Where a change goes
+
+`ritsu impact --base <revision>` says whether a change moved any answer and who it concerns, whether
+or not the project has a `ritsu.mod`: the files changed, the diagnostics only the head has, every input
+whose answer differs in a rule, a date or a gate, the requirements that moved and their owners, the
+claims it touches and the changed lines no claim runs, and whether the generated files are current. It
+runs no claim and writes nothing, and the head is the working tree unless `--head` names a revision.
+
+```text
+The answers moved (rule_changes 1, allow_gained 1, policies_moved 2); route: route = owner_reads, person_reads = true; owners: finance.
+```
+
+Show the person that sentence before they merge, and read `--format json` for the rest: `facts` holds
+each count by name and `route.outputs` what the rule answered. It exits 1 on an error only the head has
+and 2 on what could not be compared or decided, and prints the JSON to its end in both.
+
+With `--route <file.rule>` a rule the project keeps says where the change goes. Its inputs are named
+after the facts, and `ritsu impact --help` lists them. Write what a route promises as a table the check
+holds, as in `crates/ritsu/examples/impact/route.rule`, whose second table has no row for a change that
+moved an answer and goes to merge. Where the route says a person reads, that stays with the person
+(§7): do not record a review with `yuen review` to get past `new_errors`. `merge` says only that no
+person has to read it: run the tests and the claims as well, for `ritsu impact` runs none.
+
+The site's page, https://i2y.github.io/ritsu/impact/, lists the facts and has the workflow.

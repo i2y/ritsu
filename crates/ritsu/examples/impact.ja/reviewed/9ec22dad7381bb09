@@ -1,0 +1,5 @@
+permit 責任者は期間内に返金できる(managers_refund_large_amounts)
+  description "責任者は期間内にどの点数でも返金できる"
+  principal in 責任者
+  action 返金する
+  when 期間内

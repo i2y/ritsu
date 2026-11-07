@@ -1,0 +1,21 @@
+rule refund_band(refund_band) v1
+description "How large a refund is, by the items sent back: an example for ritsu impact, written for it and copied from no document"
+
+enum band(band) = small | large
+
+inputs
+  items : number  range >=1 <=60
+
+outputs
+  band : band
+
+table band
+policy unique
+| items | -> band : band |
+| <=20  | small          |
+| >20   | large          |
+
+examples
+| items | -> band |
+| 20    | small   |
+| 21    | large   |

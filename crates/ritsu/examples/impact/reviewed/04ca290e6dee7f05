@@ -1,0 +1,5 @@
+table band
+policy unique
+| items | -> band : band |
+| <=20  | small          |
+| >20   | large          |

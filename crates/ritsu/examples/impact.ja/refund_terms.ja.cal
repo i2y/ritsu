@@ -1,0 +1,18 @@
+dates 返金の期限(refund_terms) v1
+description "返金を申し出られる最後の日。支払いから 30 日後か、そのあと事務所が開く最初の日"
+use calendar "office.ja.cal"
+
+inputs
+  支払日(paid_on) : date  range >=2027-01-01 <=2027-11-30
+
+date 最終日(last_day) = 支払日
+  + 30 days
+  roll following
+
+claims
+  開いている日に終わる : 最終日 is open
+  遅い支払は遅い最終日 : 最終日 is monotonic
+
+examples
+| 支払日     | -> 最終日  |
+| 2027-01-04 | 2027-02-03 |

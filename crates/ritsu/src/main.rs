@@ -8,8 +8,10 @@
 //! their languages (DESIGN 7.9); `ritsu gen` writes a project as one package for each of
 //! TypeScript, Python, Go and Rust (DESIGN 9.3); `ritsu skills` writes the ten Agent Skills the binary
 //! carries where an agent reads them (PLAN F.3); `ritsu mod …` is the commands of the modules, with a
-//! table of their own (DESIGN 17.19).
+//! table of their own (DESIGN 17.19); `ritsu impact` says what a change moved between two revisions,
+//! who it concerns, and where the project's own rule sends it.
 
+mod impact;
 mod modules;
 mod package;
 
@@ -255,6 +257,11 @@ fn run() -> ExitCode {
             let mut rest: Vec<String> = args[..at].to_vec();
             rest.extend(args[at + 1..].iter().cloned());
             ExitCode::from(run::command(&rest, lang))
+        }
+        "impact" => {
+            let mut rest: Vec<String> = args[..at].to_vec();
+            rest.extend(args[at + 1..].iter().cloned());
+            ExitCode::from(impact::command(&rest, lang))
         }
         "mod" => {
             let mut rest: Vec<String> = args[..at].to_vec();

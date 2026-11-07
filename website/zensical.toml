@@ -35,6 +35,7 @@ nav = [
   ] },
   { "ritsu in Node" = "node.md" },
   { Modules = "modules.md" },
+  { "Where a change goes" = "impact.md" },
   { "Publishing libraries" = "libraries.md" },
 ]
 

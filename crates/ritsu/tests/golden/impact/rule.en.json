@@ -1,0 +1,515 @@
+{
+  "ritsu": "<version>",
+  "base": {
+    "rev": "base"
+  },
+  "head": {
+    "rev": null
+  },
+  "files": [
+    {
+      "path": "refund_band.rule",
+      "change": "changed",
+      "from": null,
+      "kind": "spec",
+      "tool": "rulec",
+      "lines": 0
+    },
+    {
+      "path": "refunds.req",
+      "change": "changed",
+      "from": null,
+      "kind": "spec",
+      "tool": "yuen",
+      "lines": 0
+    },
+    {
+      "path": "reviewed/04ca290e6dee7f05",
+      "change": "removed",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    },
+    {
+      "path": "reviewed/a0f09fd2f2de810c",
+      "change": "added",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    },
+    {
+      "path": "reviewed/bd1b5f808ea30970",
+      "change": "added",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    },
+    {
+      "path": "reviewed/d505d62dbace6e27",
+      "change": "removed",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    }
+  ],
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "new": [],
+    "gone": [],
+    "trouble": {
+      "base": [],
+      "head": []
+    }
+  },
+  "behavior": [
+    {
+      "file": "office.cal",
+      "tool": "koyomi",
+      "result": {
+        "koyomi": "0.44.0",
+        "kind": "calendar",
+        "old": {
+          "file": "base/office.cal",
+          "name": "office",
+          "version": "1"
+        },
+        "new": {
+          "file": "office.cal",
+          "name": "office",
+          "version": "1"
+        },
+        "compared": {
+          "from": "0001-01-01",
+          "to": "9999-12-31",
+          "days": 3652059
+        },
+        "changes": [],
+        "renamed": [],
+        "known": {
+          "old": {
+            "from": "0001-01-01",
+            "to": "9999-12-31"
+          },
+          "new": {
+            "from": "0001-01-01",
+            "to": "9999-12-31"
+          }
+        },
+        "offset": null,
+        "same_elsewhere": true,
+        "total": {
+          "changed_days": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "refund_band.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "refund_band",
+        "old": "base/refund_band.rule",
+        "new": "refund_band.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 7,
+        "feasible": 7,
+        "same": 5,
+        "differing": 2,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [],
+        "changes": [
+          {
+            "region": [
+              {
+                "column": "items",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "21",
+                    "to": "29"
+                  },
+                  {
+                    "from": "30",
+                    "to": "30"
+                  }
+                ],
+                "text": "items >=21 <=30"
+              }
+            ],
+            "text": "items >=21 <=30",
+            "outputs": [
+              {
+                "output": "band",
+                "old": "large",
+                "new": "small"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "band",
+                "row": 2
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "band",
+                "row": 1
+              }
+            ],
+            "witness": [
+              {
+                "input": "items",
+                "value": "21"
+              }
+            ],
+            "cells": 2
+          }
+        ],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    },
+    {
+      "file": "refund_terms.cal",
+      "tool": "koyomi",
+      "result": {
+        "koyomi": "0.44.0",
+        "kind": "dates",
+        "old": {
+          "file": "base/refund_terms.cal",
+          "name": "refund_terms",
+          "version": "1"
+        },
+        "new": {
+          "file": "refund_terms.cal",
+          "name": "refund_terms",
+          "version": "1"
+        },
+        "inputs": {
+          "compared": [
+            {
+              "name": "paid_on",
+              "type": "date",
+              "from": "2027-01-01",
+              "to": "2027-11-30",
+              "old": {
+                "from": "2027-01-01",
+                "to": "2027-11-30"
+              },
+              "new": {
+                "from": "2027-01-01",
+                "to": "2027-11-30"
+              }
+            }
+          ],
+          "only_old": [],
+          "only_new": []
+        },
+        "comparable": true,
+        "combinations": 334,
+        "dates": {
+          "compared": [
+            "last_day"
+          ],
+          "only_old": [],
+          "only_new": []
+        },
+        "changes": [],
+        "same_elsewhere": true,
+        "total": {
+          "combinations_changed": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "refunds.gate",
+      "tool": "sekisho",
+      "result": {
+        "sekisho": "0.44.0",
+        "old": {
+          "file": "base/refunds.gate",
+          "name": "refunds",
+          "version": "v1"
+        },
+        "new": {
+          "file": "refunds.gate",
+          "name": "refunds",
+          "version": "v1"
+        },
+        "actions": [
+          {
+            "action": "refund_order",
+            "combinations": 32,
+            "gained": [
+              {
+                "count": 1,
+                "old_policies": [],
+                "new_policies": [
+                  "clerks_refund_small_amounts"
+                ],
+                "examples": [
+                  {
+                    "principal": "User",
+                    "clerk": "yes",
+                    "manager": "no",
+                    "resource": "Order",
+                    "size": "small",
+                    "in_period": "yes",
+                    "old size": "large"
+                  }
+                ]
+              }
+            ],
+            "lost": [],
+            "reasons": [
+              {
+                "count": 2,
+                "old_policies": [
+                  "managers_refund_large_amounts"
+                ],
+                "new_policies": [
+                  "clerks_refund_small_amounts",
+                  "managers_refund_large_amounts"
+                ],
+                "examples": [
+                  {
+                    "principal": "User",
+                    "clerk": "yes",
+                    "manager": "yes",
+                    "resource": "Order",
+                    "size": "small",
+                    "in_period": "yes",
+                    "old size": "large"
+                  },
+                  {
+                    "principal": "User",
+                    "clerk": "yes",
+                    "manager": "yes",
+                    "resource": "Order",
+                    "size": "small",
+                    "in_period": "yes",
+                    "old size": "large"
+                  }
+                ]
+              }
+            ],
+            "unknown": [],
+            "frames_only_old": [],
+            "frames_only_new": [],
+            "same_elsewhere": true
+          }
+        ],
+        "only_old": {
+          "actions": [],
+          "roles": [],
+          "attributes": [],
+          "inputs": [],
+          "types": []
+        },
+        "only_new": {
+          "actions": [],
+          "roles": [],
+          "attributes": [],
+          "inputs": [],
+          "types": []
+        },
+        "total": {
+          "gained": 1,
+          "lost": 0,
+          "reasons": 2,
+          "unknown": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "route.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "route",
+        "old": "base/route.rule",
+        "new": "route.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 1,
+        "feasible": 1,
+        "same": 1,
+        "differing": 0,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [],
+        "changes": [],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    }
+  ],
+  "interface": {
+    "files": [
+      {
+        "file": "refund_band.rule",
+        "tool": "rulec",
+        "how": "api",
+        "version": null,
+        "changes": [],
+        "breaks": [],
+        "note": null
+      }
+    ],
+    "requires": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "requirements": {
+    "known": true,
+    "note": null,
+    "moved": [
+      {
+        "name": "bands_of_a_refund",
+        "version": 1,
+        "file": "refunds.req",
+        "line": 7,
+        "owner": "finance",
+        "from": [],
+        "decided": {
+          "date": "2027-01-04",
+          "by": "finance",
+          "why": "Written for this example"
+        }
+      },
+      {
+        "name": "who_refunds",
+        "version": 1,
+        "file": "refunds.req",
+        "line": 16,
+        "owner": "finance",
+        "from": [],
+        "decided": {
+          "date": "2027-01-04",
+          "by": "finance",
+          "why": "Written for this example"
+        }
+      }
+    ],
+    "owners": [
+      "finance"
+    ],
+    "unknown": [],
+    "why": [
+      {
+        "file": "refunds.req",
+        "line": 7,
+        "requirement": "bands_of_a_refund",
+        "change": "changed",
+        "text": {
+          "old": "A refund of up to 20 items is small, and a larger one is large",
+          "new": "A refund of up to 20 items is small, and a larger one is large"
+        },
+        "in_force": {
+          "old": null,
+          "new": null
+        },
+        "owner": {
+          "old": "finance",
+          "new": "finance"
+        },
+        "decided": [],
+        "from": [],
+        "links": [
+          {
+            "role": "satisfied",
+            "artifact": "rulec \"refund_band.rule\" table band",
+            "path": "refund_band.rule",
+            "change": null
+          },
+          {
+            "role": "verified",
+            "artifact": "rulec \"refund_band.rule\"",
+            "path": "refund_band.rule",
+            "change": "changed"
+          }
+        ],
+        "waivers": [],
+        "looked": [
+          {
+            "date": "2027-01-05",
+            "by": "development"
+          }
+        ],
+        "unsettled": 0
+      }
+    ]
+  },
+  "claims": {
+    "known": false,
+    "note": "this project has no `.geas`",
+    "specs": [],
+    "touched": [],
+    "unclaimed": []
+  },
+  "generated": {
+    "checked": false,
+    "stale": [],
+    "note": "not checked: `ritsu.mod` has no `target` line"
+  },
+  "undecided": [],
+  "facts": {
+    "spec_files": 2,
+    "generated_files": 0,
+    "code_files": 0,
+    "doc_files": 0,
+    "other_files": 4,
+    "code_lines": 0,
+    "new_errors": 0,
+    "new_warnings": 0,
+    "rule_changes": 1,
+    "date_changes": 0,
+    "allow_gained": 1,
+    "allow_lost": 0,
+    "policies_moved": 2,
+    "book_changes": 0,
+    "interface_changes": 0,
+    "interface_breaks": 0,
+    "undecided": 0,
+    "opaque_specs": 0,
+    "requirements_moved": 2,
+    "requirements_unknown": 0,
+    "claims_touched": 0,
+    "unclaimed_lines": 0,
+    "claims_known": false,
+    "generated_stale": false,
+    "generated_checked": false,
+    "generated_unchecked": 0
+  },
+  "route": {
+    "file": "route.rule",
+    "outputs": {
+      "route": "owner_reads",
+      "person_reads": true
+    }
+  },
+  "markdown": "## ritsu impact: `base` → the working tree\n\nThe answers moved (`rule_changes 1`, `allow_gained 1`, `policies_moved 2`); route: `route = owner_reads`, `person_reads = true`; owners: `finance`.\n\n| Route | Value |\n|---|---|\n| `route` | `owner_reads` |\n| `person_reads` | `true` |\n\n| Check | Errors | Warnings |\n|---|---|---|\n| `base` | 0 | 0 |\n| The working tree | 0 | 0 |\n\n### Files\n\n6 changed (2 spec, 0 generated, 0 code, 0 doc, 4 other); 0 changed lines of code written by hand\n\n<details><summary>The list</summary>\n\n| Change | File | Kind |\n|---|---|---|\n| changed | `refund_band.rule` | spec, rulec |\n| changed | `refunds.req` | spec, yuen |\n| removed | `reviewed/04ca290e6dee7f05` | other |\n| added | `reviewed/a0f09fd2f2de810c` | other |\n| added | `reviewed/bd1b5f808ea30970` | other |\n| removed | `reviewed/d505d62dbace6e27` | other |\n\n</details>\n\n### Behavior\n\n<details><summary><code>refund_band.rule</code> (rulec): the answers differ</summary>\n\n**Version diff (over the whole input space)**\n\n`base/refund_band.rule` → `refund_band.rule`\n\n| where they differ | answer | example | cells |\n|---|---|---|---|\n| items >=21 <=30 | band: large → small | items=21 | 2 |\n\nOutside this region the two versions answer alike.\n\n</details>\n\n<details><summary><code>refunds.gate</code> (sekisho): the answers differ</summary>\n\n**sekisho diff: gate `refunds` v1 → v1**\n\n- Old: `base/refunds.gate`\n- New: `refunds.gate`\n\n**`refund_order`**\n\n32 combinations walked over both versions.\n\n| Change | Combinations | Old deciding policies | New deciding policies | Example |\n|---|---|---|---|---|\n| allow gained (deny → allow) | 1 | none | clerks_refund_small_amounts | User holding clerk, Order, size: small, in_period: yes (in the old version: size: large) |\n| the same answer, decided by other policies | 2 | managers_refund_large_amounts | clerks_refund_small_amounts, managers_refund_large_amounts | User holding manager, Order, size: small, in_period: yes (in the old version: size: large) |\n\nFor every other combination, every action is decided the same.\n\n</details>\n\n### Interface\n\n- The interface of `refund_band.rule` is the same\n\n### Requirements\n\n- **`bands_of_a_refund`** (`refunds.req`): changed\n  - A refund of up to 20 items is small, and a larger one is large\n  - Met by `rulec \"refund_band.rule\" table band`\n  - Checked by `rulec \"refund_band.rule\"`: changed\n  - Looked at 2027-01-05 by development\n\nThese are the words of the module's requirements file. ritsu checks that what they were written against has not moved since someone looked, not that they are right.\n\n3 other files answer the same.\n\n### Requirements and owners\n\n- `bands_of_a_refund v1` (`refunds.req:7`), owner `finance`\n- `who_refunds v1` (`refunds.req:16`), owner `finance`\n\n### Claims\n\n- Not known: this project has no `.geas`\n\n**Generated files**: not checked: `ritsu.mod` has no `target` line\n\n<details><summary>Facts</summary>\n\n| Name | Value |\n|---|---|\n| `spec_files` | 2 |\n| `generated_files` | 0 |\n| `code_files` | 0 |\n| `doc_files` | 0 |\n| `other_files` | 4 |\n| `code_lines` | 0 |\n| `new_errors` | 0 |\n| `new_warnings` | 0 |\n| `rule_changes` | 1 |\n| `date_changes` | 0 |\n| `allow_gained` | 1 |\n| `allow_lost` | 0 |\n| `policies_moved` | 2 |\n| `book_changes` | 0 |\n| `interface_changes` | 0 |\n| `interface_breaks` | 0 |\n| `undecided` | 0 |\n| `opaque_specs` | 0 |\n| `requirements_moved` | 2 |\n| `requirements_unknown` | 0 |\n| `claims_touched` | 0 |\n| `unclaimed_lines` | 0 |\n| `claims_known` | false |\n| `generated_stale` | false |\n| `generated_checked` | false |\n| `generated_unchecked` | 0 |\n\n</details>\n\nNo new error, and nothing was left undecided.\n"
+}

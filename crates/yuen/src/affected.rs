@@ -185,7 +185,7 @@ pub fn command(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
         Ok(c) => c,
         Err(code) => return code,
     };
-    let answer = match answer(&c, &files, &bytes, &diff_shown, &maps) {
+    let answer = match answer(&c, &files, &[], &bytes, &diff_shown, &maps) {
         Ok(x) => x,
         Err(msg) => return refuse(err, msg, lang),
     };
@@ -196,6 +196,19 @@ pub fn command(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
         let _ = write!(out, "{}", render(p, &answer, lang));
     }
     answer.exit()
+}
+
+/// What a diff (its bytes, and the name it is shown by) comes to, as `yuen affected --format json`
+/// writes it, for `ritsu impact`: of the `.req` files under `paths`, with `moved` (files from the
+/// root whose answers moved, though the diff need not touch them: a gate that reads a calendar that
+/// changed) read as files the diff touches. Err, with what yuen said, when the requirements cannot
+/// be read.
+pub fn of_diff(paths: &[String], root: Option<&str>, bytes: &[u8], diff_shown: &str, moved: &[String], suite: &Suite, lang: Lang) -> Result<Value, Text> {
+    let files = udiff::parse(bytes).map_err(|(line, why)| tr!("差分を読めません（{diff_shown}:{line}）: {}", "The diff cannot be read ({diff_shown}:{line}): {}", why.ja; why.en))?;
+    let mut said = Vec::new();
+    let c = crate::run::checked_paths(paths, root, lang, "affected", suite, &mut said).map_err(|_| Text::same(String::from_utf8_lossy(&said).trim().to_string()))?;
+    let a = answer(&c, &files, moved, bytes, diff_shown, &[])?;
+    Ok(to_json(c.project.as_ref().unwrap(), &a))
 }
 
 /// The lines of a `.req` on disk the diff changes, by its own numbering, whichever side of the
@@ -312,7 +325,7 @@ struct Of {
     spec: bool,
 }
 
-fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps: &[(PathBuf, String)]) -> Result<Answer, Text> {
+fn answer(c: &Checked, files: &[FileDiff], moved: &[String], bytes: &[u8], diff_shown: &str, maps: &[(PathBuf, String)]) -> Result<Answer, Text> {
     let p = c.project.as_ref().unwrap();
     let m = c.model.as_ref().unwrap();
     let named_links = links(p);
@@ -536,23 +549,25 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
 
     // 3. the files the links name
     let mut named: Vec<Named> = Vec::new();
-    for f in files {
-        for path in paths_of(f) {
-            let mut by_file: Vec<Named> = Vec::new();
-            for (n, r, side) in &named_links {
-                if n.path != path || n.tool == Tool::Geas {
-                    continue;
-                }
-                let file = Name { tool: n.tool, path: n.path.clone(), items: vec![] };
-                match by_file.iter_mut().find(|x| x.file == file) {
-                    Some(x) => push(&mut x.reqs, (*r, Some(*side))),
-                    None => by_file.push(Named { file, reqs: vec![(*r, Some(*side))] }),
-                }
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for path in files.iter().flat_map(paths_of).chain(moved.iter().cloned()) {
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+        let mut by_file: Vec<Named> = Vec::new();
+        for (n, r, side) in &named_links {
+            if n.path != path || n.tool == Tool::Geas {
+                continue;
             }
-            if !by_file.is_empty() {
-                consumed.insert(path.clone());
-                named.extend(by_file);
+            let file = Name { tool: n.tool, path: n.path.clone(), items: vec![] };
+            match by_file.iter_mut().find(|x| x.file == file) {
+                Some(x) => push(&mut x.reqs, (*r, Some(*side))),
+                None => by_file.push(Named { file, reqs: vec![(*r, Some(*side))] }),
             }
+        }
+        if !by_file.is_empty() {
+            consumed.insert(path.clone());
+            named.extend(by_file);
         }
     }
 

@@ -51,6 +51,11 @@ impl Engine {
     pub fn checked(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
         crate::cli::checked(root, files, lang)
     }
+
+    /// What each spec says with no claim run ([`crate::cli::read_only`]).
+    pub fn read_only(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Finding> {
+        crate::cli::read_only(root, files, lang)
+    }
 }
 
 impl ritsu_ports::Claims for Engine {

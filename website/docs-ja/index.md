@@ -246,6 +246,8 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 
 プロジェクトは、ほかのモジュールをディレクトリや OCI のレジストリから足して、そのファイルを `@<名前>/…` のパスで読めます（[モジュール](modules.md)）。`ritsu gen` は、プロジェクトのコードを言語ごとのパッケージにして書きます。`--library` を付けると、モジュールを npm、PyPI、Go が受け取るライブラリにして書き、依存のモジュールはそのライブラリから名前で import します（[ライブラリとして公開する](libraries.md)）。
 
+`ritsu impact` は、変更で答えが動いたかと誰に関わるかをまとめ、自分で書いた規則が変更の行き先を決めます（[変更の行き先](impact.md)）。
+
 全体の設計は [DESIGN.md](https://github.com/i2y/ritsu/blob/main/DESIGN.md) にあります。ライセンスは MIT と Apache-2.0 のどちらかを選べます。
 
 ## AI エージェント向け

@@ -1,0 +1,47 @@
+gate refunds v1
+description "Who may refund an order: an example for ritsu impact"
+namespace Shop
+
+use rule refund_band from "refund_band.rule"
+use dates refund_terms from "refund_terms.cal"
+
+today range >=2027-01-01 <=2028-01-31 offset +00:00
+
+role clerk
+  description "Answers customers"
+
+role manager
+  description "Refunds what a clerk cannot"
+  includes clerk
+
+principal User
+  description "A member of the staff"
+  roles clerk, manager
+
+resource Order
+  description "An order of the shop"
+  attributes
+    paid_on : date  range >=2027-01-01 <=2027-11-30
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    items : number  range >=1 <=60
+  context
+    size = refund_band(items: items).band
+    in_period = today <= refund_terms.last_day(paid_on: resource.paid_on)
+
+permit clerks_refund_small_amounts
+  description "A clerk refunds a small refund within the period"
+  principal in clerk
+  action refund_order
+  when size is small
+  when in_period
+
+permit managers_refund_large_amounts
+  description "A manager refunds any refund within the period"
+  principal in manager
+  action refund_order
+  when in_period

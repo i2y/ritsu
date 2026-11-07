@@ -1,0 +1,34 @@
+requirements 返金 v1
+description "返金の窓口が答えること。ritsu impact の例"
+
+role 経理 "誰が何を返金するかを決める"
+role 開発 "窓口を書く"
+
+requirement 返金の区分(bands_of_a_refund)
+  text "20 点までの返金は少数、それより多いものは多数"
+  owner 経理
+  decided 2027-01-04 by 経理 "この例のために書いた"
+  satisfied by rulec "refund_band.ja.rule" table 区分を決める
+    reviewed 2027-01-04 by 開発 sha256:248c88cddbf48e02 -> sha256:065045fbdf8715b9
+  verified by rulec "refund_band.ja.rule"
+    reviewed 2027-01-04 by 開発 sha256:248c88cddbf48e02 -> sha256:0c9a511a604558c8
+
+requirement 返金できる人(who_refunds)
+  text "係は少数を、責任者はどの点数でも、どちらも期間内に返金できる"
+  owner 経理
+  decided 2027-01-04 by 経理 "この例のために書いた"
+  satisfied by sekisho "refunds.ja.gate" policy 係は期間内に少数を返金できる
+    reviewed 2027-01-04 by 開発 sha256:17126c2a208db158 -> sha256:a663caa5787ab52e
+  satisfied by sekisho "refunds.ja.gate" policy 責任者は期間内に返金できる
+    reviewed 2027-01-04 by 開発 sha256:17126c2a208db158 -> sha256:9ec22dad7381bb09
+  verified by sekisho "refunds.ja.gate"
+    reviewed 2027-01-04 by 開発 sha256:17126c2a208db158 -> sha256:2a0a13b33ee07bf7
+
+requirement 返金の期間(refund_period)
+  text "支払いから 30 日後か、そのあと事務所が開く最初の日まで返金を申し出られる"
+  owner 経理
+  decided 2027-01-04 by 経理 "この例のために書いた"
+  satisfied by koyomi "refund_terms.ja.cal" date 最終日
+    reviewed 2027-01-04 by 開発 sha256:ae9798b883221a9f -> sha256:ccb62bee039469da
+  verified by koyomi "refund_terms.ja.cal" claim 開いている日に終わる
+    reviewed 2027-01-04 by 開発 sha256:ae9798b883221a9f -> sha256:c8dc1b74425bcafa

@@ -53,7 +53,7 @@ use std::rc::Rc;
 pub const LIMIT: usize = 60_000;
 
 /// The most rows of a table of behavior or of an interface in the Markdown.
-const ROWS: usize = 50;
+pub(crate) const ROWS: usize = 50;
 
 /// `ritsu mod report`: the exit code. `--base` is required, and this function is the one to say so.
 pub fn report(ctx: &Ctx, a: &Args) -> u8 {
@@ -374,7 +374,7 @@ impl Report {
 }
 
 /// How a diagnostic is matched between the two checks: its tool, code, file, line and text.
-fn key(d: &Json) -> (String, String, String, String, String) {
+pub(crate) fn key(d: &Json) -> (String, String, String, String, String) {
     let s = |k: &str| d.get(k).map(|v| v.as_str().map_or_else(|| v.compact(), str::to_string)).unwrap_or_default();
     (s("tool"), s("code"), s("file"), s("line"), s("message"))
 }
@@ -383,44 +383,75 @@ fn key(d: &Json) -> (String, String, String, String, String) {
 /// its JSON writes them, and how many errors and warnings. Err, with what it said, when it could
 /// not check (exit 2).
 fn check(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, lang: Lang) -> Result<(Vec<Json>, Counts), Vec<Text>> {
-    // a module with no file of ritsu's languages of its own (one that only gathers dependencies) has
-    // nothing for the check to say, which `ritsu check` stops on: no diagnostic, and the modules are
-    // compared all the same
-    let mut under = Vec::new();
-    diff::within(files.clone(), || ritsu_base::paths::walk(root, ".", &[], &mut under));
-    if !under.iter().any(|f| ritsu_project::project::kind_of(f).is_some()) {
-        return Ok((Vec::new(), Counts::default()));
+    let args = check_args(root, budget);
+    // the claims are not run: a revision is not on the disk, and a report starts no service
+    match check_ran(files, root, lang, |o, e| ritsu_project::project::without_own_claims(|| ritsu::check::run(&args, lang, o, e))) {
+        Ran { code: 0 | 1, found: Some(found), .. } => Ok(found),
+        Ran { said, .. } => Err(said),
     }
+}
+
+/// The command line of [`check`].
+pub(crate) fn check_args(root: &Path, budget: Option<u64>) -> Vec<String> {
     let at = root.to_string_lossy().into_owned();
     let mut args: Vec<String> = vec![at.clone(), "--root".into(), at, "--format".into(), "json".into(), "--deps-warnings".into()];
     if let Some(b) = budget {
         args.push("--budget".into());
         args.push(b.to_string());
     }
+    args
+}
+
+/// What one run of `ritsu check` came to: its exit code, its diagnostics when it printed its JSON,
+/// and what it said on the standard error.
+pub(crate) struct Ran {
+    pub code: u8,
+    pub found: Option<(Vec<Json>, Counts)>,
+    pub said: Vec<Text>,
+}
+
+/// `run` (`ritsu check --format json`) reading `files`, and what it came to.
+pub(crate) fn check_ran(files: Option<Rc<dyn Files>>, root: &Path, lang: Lang, run: impl FnOnce(&mut Vec<u8>, &mut Vec<u8>) -> u8) -> Ran {
+    // a module with no file of ritsu's languages of its own (one that only gathers dependencies), or
+    // only `.geas` files (their claims are not run here), has nothing for the check to say, which
+    // `ritsu check` stops on: no diagnostic, and the modules are compared all the same
+    let mut under = Vec::new();
+    diff::within(files.clone(), || ritsu_base::paths::walk(root, ".", &[], &mut under));
+    if !under.iter().any(|f| diff::tool_of(f).is_some_and(|t| t != Tool::Geas)) {
+        return Ran { code: 0, found: Some((Vec::new(), Counts::default())), said: Vec::new() };
+    }
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = diff::within(files, || ritsu::check::run(&args, lang, &mut out, &mut err));
-    let v = match (code, ritsu_base::json::parse(String::from_utf8_lossy(&out).trim())) {
-        (0 | 1, Ok(v)) => v,
-        _ => {
-            let head = if lang == Lang::Ja { "エラー: " } else { "error: " };
-            let said: Vec<Text> = String::from_utf8_lossy(&err).lines().filter(|l| !l.trim().is_empty()).map(|l| Text::same(l.strip_prefix(head).unwrap_or(l))).collect();
-            return Err(if said.is_empty() { vec![tr!("`ritsu check` がモジュールを検査できませんでした", "`ritsu check` could not check the module")] } else { said });
-        }
-    };
-    let diags: Vec<Json> = v.get("diagnostics").and_then(Json::as_arr).map(<[Json]>::to_vec).unwrap_or_default();
-    let count = |sev: &str| diags.iter().filter(|d| d.get("severity").and_then(Json::as_str) == Some(sev)).count();
-    let counts = Counts { errors: count("error"), warnings: count("warning") };
-    Ok((diags, counts))
+    let code = diff::within(files, || run(&mut out, &mut err));
+    let head = if lang == Lang::Ja { "エラー: " } else { "error: " };
+    let mut said: Vec<Text> = String::from_utf8_lossy(&err).lines().filter(|l| !l.trim().is_empty()).map(|l| Text::same(l.strip_prefix(head).unwrap_or(l))).collect();
+    if said.is_empty() && code > 1 {
+        said.push(tr!("`ritsu check` がモジュールを検査できませんでした", "`ritsu check` could not check the module"));
+    }
+    let found = ritsu_base::json::parse(String::from_utf8_lossy(&out).trim()).ok().map(|v| {
+        let diags: Vec<Json> = v.get("diagnostics").and_then(Json::as_arr).map(<[Json]>::to_vec).unwrap_or_default();
+        let count = |sev: &str| diags.iter().filter(|d| d.get("severity").and_then(Json::as_str) == Some(sev)).count();
+        let counts = Counts { errors: count("error"), warnings: count("warning") };
+        (diags, counts)
+    });
+    if found.is_none() && said.is_empty() {
+        said.push(tr!("`ritsu check` がモジュールを検査できませんでした", "`ritsu check` could not check the module"));
+    }
+    Ran { code, found, said }
 }
 
 /// A book's E050 or E051, or a file's E310, against its old version, as the check's JSON writes a
 /// diagnostic: the tool whose code it is, the file from the module at hand's root, and the
 /// dependency it is in after it.
 fn break_json(m: &Changed, tool: &str, file: &str, f: &ritsu_ports::Finding) -> Json {
-    let path = format!("{}/{file}", m.prefix);
+    break_json_in(Some(&m.prefix), tool, file, f)
+}
+
+/// [`break_json`] of a file of the dependency whose prefix is `prefix`, or of the module at hand.
+pub(crate) fn break_json_in(prefix: Option<&str>, tool: &str, file: &str, f: &ritsu_ports::Finding) -> Json {
+    let path = prefix.map_or_else(|| file.to_string(), |p| format!("{p}/{file}"));
     let put = |o: &mut Vec<(String, Json)>| {
         o.push(("file".into(), Json::str(path.as_str())));
-        o.push(("dependency".into(), Json::str(m.prefix.as_str())));
+        o.push(("dependency".into(), Json::opt_str(prefix)));
     };
     let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str(tool))];
     match &f.json {
@@ -868,7 +899,7 @@ impl Report {
         .to_string()
     }
 
-    fn counts_line(c: Counts, lang: Lang) -> String {
+    pub(crate) fn counts_line(c: Counts, lang: Lang) -> String {
         if lang == Lang::Ja {
             format!("エラー {} 件、警告 {} 件", diff::n(c.errors), diff::n(c.warnings))
         } else {
@@ -878,7 +909,7 @@ impl Report {
 
     /// A diagnostic of the check's JSON in a line: `error[dandori E002] orders/place_order.flow:49:
     /// the text`.
-    fn diag_line(d: &Json) -> String {
+    pub(crate) fn diag_line(d: &Json) -> String {
         let s = |k: &str| d.get(k).and_then(Json::as_str).unwrap_or_default();
         let at = match d.get("line").and_then(Json::as_int) {
             Some(l) => format!("{}:{l}", s("file")),
@@ -1095,6 +1126,13 @@ impl Report {
 
     /// A table of diagnostics, with the changed modules each new one is about when `owners`.
     fn diag_table(&self, ds: &[Json], owners: bool, lang: Lang) -> String {
+        let of = |i: usize| self.modules.iter().filter(|m| m.diagnostics.contains(&i)).map(|m| format!("`{}`", m.module)).collect::<Vec<String>>().join(", ");
+        Report::table_of(ds, owners.then_some(&of as &dyn Fn(usize) -> String), lang)
+    }
+
+    /// A table of diagnostics, with a column of `owners`, when given, for each one's changed modules.
+    pub(crate) fn table_of(ds: &[Json], owner_of: Option<&dyn Fn(usize) -> String>, lang: Lang) -> String {
+        let owners = owner_of.is_some();
         let mut t = format!(
             "\n| {} | {} | {} | {} | {} |",
             tr!("種類", "Severity").get(lang),
@@ -1113,9 +1151,8 @@ impl Report {
             let file = s("file");
             let file = if file.is_empty() { String::new() } else { format!("`{}`", diff::cell(&file)) };
             t.push_str(&format!("| {} | `{} {}` | {file} | {line} | {} |", s("severity"), s("tool"), s("code"), diff::cell(&s("message"))));
-            if owners {
-                let of: Vec<String> = self.modules.iter().filter(|m| m.diagnostics.contains(&i)).map(|m| format!("`{}`", m.module)).collect();
-                t.push_str(&format!(" {} |", of.join(", ")));
+            if let Some(of) = owner_of {
+                t.push_str(&format!(" {} |", of(i)));
             }
             t.push('\n');
         }
@@ -1190,7 +1227,7 @@ impl Report {
 
 /// A sentence as it starts: with a capital in English, as it is in Japanese (which may start with a
 /// revision in lower case).
-fn sentence(s: &str, lang: Lang) -> String {
+pub(crate) fn sentence(s: &str, lang: Lang) -> String {
     if lang == Lang::Ja { s.to_string() } else { capitalize(s) }
 }
 
@@ -1198,14 +1235,19 @@ fn sentence(s: &str, lang: Lang) -> String {
 /// fence and the folds they leave open closed after them, and a line that says it was cut and where
 /// all of it is.
 pub fn fit(md: &str, limit: usize, lang: Lang) -> String {
+    fit_for(md, limit, lang, "ritsu mod report")
+}
+
+/// [`fit`], its last line naming `command`, whose `--format json` has all of it.
+pub(crate) fn fit_for(md: &str, limit: usize, lang: Lang, command: &str) -> String {
     if md.chars().count() <= limit {
         return md.to_string();
     }
     let note = format!(
         "\n{}\n",
         tr!(
-            "_この報告は 60,000 字で切りました（PR のコメントに入る長さ）。全部は `ritsu mod report --format json` にあります。_",
-            "_This report is cut at 60,000 characters, for the length a comment of a pull request holds; `ritsu mod report --format json` has all of it._"
+            "_この報告は 60,000 字で切りました（PR のコメントに入る長さ）。全部は `{command} --format json` にあります。_",
+            "_This report is cut at 60,000 characters, for the length a comment of a pull request holds; `{command} --format json` has all of it._"
         )
         .get(lang)
     );
@@ -1287,6 +1329,10 @@ mod tests {
         }
         let short = "## ritsu mod report\n\nnothing\n";
         assert_eq!(fit(short, LIMIT, Lang::En), short);
+        // what it says to read instead is the command it was cut for
+        let long = "a line\n".repeat(1000);
+        assert!(fit(&long, 1000, Lang::En).contains("`ritsu mod report --format json`"));
+        assert!(fit_for(&long, 1000, Lang::En, "ritsu impact").contains("`ritsu impact --format json`"));
     }
 
     #[test]

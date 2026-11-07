@@ -604,6 +604,40 @@ npm のパッケージは、モジュールの依存を、置き場と、`ritsu 
 
 `ritsu mod` の 15 のコマンドは `ritsu mod --help` が並べます。モジュールの書き方、足し方、git での共有のしかた、送り出し方、署名の付け方は、ritsu のサイトの[モジュール](https://i2y.github.io/ritsu/ja/modules/)にあります。
 
+## 変更の行き先
+
+`ritsu impact --base <版>` は、変更で答えが動いたかと誰に関わるかを、一つの報告にまとめます。変わったファイル、head にだけあるエラーと警告、規則・日付・ゲートで答えが変わる入力のすべて（読んでいる暦が変わったゲートも入ります）、動いた要件とその持ち主、変更に触れる主張とどの主張も走らない変更行、生成物が新しいかどうかです。head は `--head` で版を指さなければ作業ツリーで、`ritsu.mod` のないプロジェクトでも動きます。
+
+`--route <file.rule>` を付けると、自分で書いた規則が変更の行き先を決めます。規則の入力の名前が報告の事実の名前で、ほかの規則と同じ検査を通ります。[`crates/ritsu/examples/impact.ja/route.ja.rule`](crates/ritsu/examples/impact.ja/route.ja.rule) では、二つ目の表に「答えが動いた変更がそのままマージへ行く」行がありません。一つ目の表がそこへ送ると `ritsu check` が止まります（E101）。
+
+```rule
+table 経路を決める
+policy unique
+| 生成物が古い | 新しいエラー | 動いた数 | 読まれない数 | -> 経路 : 行き先 |
+| true         | -            | -        | -            | 止める           |
+| false        | >=1          | -        | -            | 止める           |
+| false        | 0            | >=1      | -            | 持ち主が読む     |
+| false        | 0            | 0        | >=1          | 持ち主が読む     |
+| false        | 0            | 0        | 0            | マージ           |
+
+table 誰が読むか
+policy unique
+| 動いた数 | 経路                 | -> 人が読む : bool |
+| >=1      | 持ち主が読む, 止める | true               |
+| 0        | 持ち主が読む, 止める | true               |
+| 0        | マージ               | false              |
+```
+
+この例の `refund_band.ja.rule` の区分を 20 点から 30 点に動かすと、次のように出ます。
+
+```
+ritsu impact：base → 作業ツリー
+
+答えが動きました（rule_changes 1、allow_gained 1、policies_moved 2）。行き先は 経路 = 持ち主が読む、人が読む = true。持ち主は 経理。
+```
+
+`ritsu impact` は主張を走らせず、何も書きません。exit は、base になくて head にあるエラーがあれば 1、比べられないものや決められないものがあれば 2、ほかは 0 です。規則が決めた行き先で exit は変わりません。事実の一覧と、プルリクエストに報告を載せてラベルを付けるワークフローは、サイトの[変更の行き先](https://i2y.github.io/ritsu/ja/impact/)にあります。
+
 ## セキュリティの検査
 
 各言語の検査は、セキュリティの誤りも探します。ファイルに直に書いた鍵、暗号化しない通信、認証の指定が無い操作、契約が秘密と印を付けた値をワークフローが履歴に残したり外へ送ったりすることです。どれもネットワークを使わず、何も実行しません。依存の脆弱性をデータベースで調べるものではなく、プロジェクトのファイルに書いてあることを読みます。
@@ -670,6 +704,7 @@ ritsu gen --target …              プロジェクト全体を、指定した�
 ritsu gen --check …               パッケージが今の状態に合っているか。--format json ならファイルごとに
 ritsu gen --library …             モジュールを、npm、PyPI、Go のライブラリにする
 ritsu mod <コマンド> …            モジュールのコマンド（add、lock、fetch、push、diff、report など）
+ritsu impact --base …     変更で答えが動いたか、誰に関わるか、規則が決める行き先
 ritsu explain <コード>            診断の意味と再現
 ritsu skills install              Agent Skills を、エージェントが読む場所に書く
 ritsu <言語> …                    各言語のコマンド（例：ritsu rulec doc fee.rule）

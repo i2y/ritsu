@@ -1,0 +1,515 @@
+{
+  "ritsu": "<version>",
+  "base": {
+    "rev": "base"
+  },
+  "head": {
+    "rev": null
+  },
+  "files": [
+    {
+      "path": "refund_band.ja.rule",
+      "change": "changed",
+      "from": null,
+      "kind": "spec",
+      "tool": "rulec",
+      "lines": 0
+    },
+    {
+      "path": "refunds.ja.req",
+      "change": "changed",
+      "from": null,
+      "kind": "spec",
+      "tool": "yuen",
+      "lines": 0
+    },
+    {
+      "path": "reviewed/065045fbdf8715b9",
+      "change": "removed",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    },
+    {
+      "path": "reviewed/0c9a511a604558c8",
+      "change": "removed",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    },
+    {
+      "path": "reviewed/50d530478e548bef",
+      "change": "added",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    },
+    {
+      "path": "reviewed/cc1f64aeed4a0e68",
+      "change": "added",
+      "from": null,
+      "kind": "other",
+      "tool": null,
+      "lines": 0
+    }
+  ],
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "new": [],
+    "gone": [],
+    "trouble": {
+      "base": [],
+      "head": []
+    }
+  },
+  "behavior": [
+    {
+      "file": "office.ja.cal",
+      "tool": "koyomi",
+      "result": {
+        "koyomi": "0.44.0",
+        "kind": "calendar",
+        "old": {
+          "file": "base/office.ja.cal",
+          "name": "事務所",
+          "version": "1"
+        },
+        "new": {
+          "file": "office.ja.cal",
+          "name": "事務所",
+          "version": "1"
+        },
+        "compared": {
+          "from": "0001-01-01",
+          "to": "9999-12-31",
+          "days": 3652059
+        },
+        "changes": [],
+        "renamed": [],
+        "known": {
+          "old": {
+            "from": "0001-01-01",
+            "to": "9999-12-31"
+          },
+          "new": {
+            "from": "0001-01-01",
+            "to": "9999-12-31"
+          }
+        },
+        "offset": null,
+        "same_elsewhere": true,
+        "total": {
+          "changed_days": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "refund_band.ja.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "返金の区分",
+        "old": "base/refund_band.ja.rule",
+        "new": "refund_band.ja.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 7,
+        "feasible": 7,
+        "same": 5,
+        "differing": 2,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [],
+        "changes": [
+          {
+            "region": [
+              {
+                "column": "点数",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "21",
+                    "to": "29"
+                  },
+                  {
+                    "from": "30",
+                    "to": "30"
+                  }
+                ],
+                "text": "点数 >=21 <=30"
+              }
+            ],
+            "text": "点数 >=21 <=30",
+            "outputs": [
+              {
+                "output": "区分",
+                "old": "多数",
+                "new": "少数"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "区分を決める",
+                "row": 2
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "区分を決める",
+                "row": 1
+              }
+            ],
+            "witness": [
+              {
+                "input": "点数",
+                "value": "21"
+              }
+            ],
+            "cells": 2
+          }
+        ],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    },
+    {
+      "file": "refund_terms.ja.cal",
+      "tool": "koyomi",
+      "result": {
+        "koyomi": "0.44.0",
+        "kind": "dates",
+        "old": {
+          "file": "base/refund_terms.ja.cal",
+          "name": "返金の期限",
+          "version": "1"
+        },
+        "new": {
+          "file": "refund_terms.ja.cal",
+          "name": "返金の期限",
+          "version": "1"
+        },
+        "inputs": {
+          "compared": [
+            {
+              "name": "支払日",
+              "type": "date",
+              "from": "2027-01-01",
+              "to": "2027-11-30",
+              "old": {
+                "from": "2027-01-01",
+                "to": "2027-11-30"
+              },
+              "new": {
+                "from": "2027-01-01",
+                "to": "2027-11-30"
+              }
+            }
+          ],
+          "only_old": [],
+          "only_new": []
+        },
+        "comparable": true,
+        "combinations": 334,
+        "dates": {
+          "compared": [
+            "最終日"
+          ],
+          "only_old": [],
+          "only_new": []
+        },
+        "changes": [],
+        "same_elsewhere": true,
+        "total": {
+          "combinations_changed": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "refunds.ja.gate",
+      "tool": "sekisho",
+      "result": {
+        "sekisho": "0.44.0",
+        "old": {
+          "file": "base/refunds.ja.gate",
+          "name": "返金",
+          "version": "v1"
+        },
+        "new": {
+          "file": "refunds.ja.gate",
+          "name": "返金",
+          "version": "v1"
+        },
+        "actions": [
+          {
+            "action": "返金する",
+            "combinations": 32,
+            "gained": [
+              {
+                "count": 1,
+                "old_policies": [],
+                "new_policies": [
+                  "係は期間内に少数を返金できる"
+                ],
+                "examples": [
+                  {
+                    "principal": "職員",
+                    "係": "はい",
+                    "責任者": "いいえ",
+                    "resource": "注文",
+                    "大きさ": "少数",
+                    "期間内": "はい",
+                    "old 大きさ": "多数"
+                  }
+                ]
+              }
+            ],
+            "lost": [],
+            "reasons": [
+              {
+                "count": 2,
+                "old_policies": [
+                  "責任者は期間内に返金できる"
+                ],
+                "new_policies": [
+                  "係は期間内に少数を返金できる",
+                  "責任者は期間内に返金できる"
+                ],
+                "examples": [
+                  {
+                    "principal": "職員",
+                    "係": "はい",
+                    "責任者": "はい",
+                    "resource": "注文",
+                    "大きさ": "少数",
+                    "期間内": "はい",
+                    "old 大きさ": "多数"
+                  },
+                  {
+                    "principal": "職員",
+                    "係": "はい",
+                    "責任者": "はい",
+                    "resource": "注文",
+                    "大きさ": "少数",
+                    "期間内": "はい",
+                    "old 大きさ": "多数"
+                  }
+                ]
+              }
+            ],
+            "unknown": [],
+            "frames_only_old": [],
+            "frames_only_new": [],
+            "same_elsewhere": true
+          }
+        ],
+        "only_old": {
+          "actions": [],
+          "roles": [],
+          "attributes": [],
+          "inputs": [],
+          "types": []
+        },
+        "only_new": {
+          "actions": [],
+          "roles": [],
+          "attributes": [],
+          "inputs": [],
+          "types": []
+        },
+        "total": {
+          "gained": 1,
+          "lost": 0,
+          "reasons": 2,
+          "unknown": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "route.ja.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "経路",
+        "old": "base/route.ja.rule",
+        "new": "route.ja.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 1,
+        "feasible": 1,
+        "same": 1,
+        "differing": 0,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [],
+        "changes": [],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    }
+  ],
+  "interface": {
+    "files": [
+      {
+        "file": "refund_band.ja.rule",
+        "tool": "rulec",
+        "how": "api",
+        "version": null,
+        "changes": [],
+        "breaks": [],
+        "note": null
+      }
+    ],
+    "requires": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "requirements": {
+    "known": true,
+    "note": null,
+    "moved": [
+      {
+        "name": "返金の区分",
+        "version": 1,
+        "file": "refunds.ja.req",
+        "line": 7,
+        "owner": "経理",
+        "from": [],
+        "decided": {
+          "date": "2027-01-04",
+          "by": "経理",
+          "why": "この例のために書いた"
+        }
+      },
+      {
+        "name": "返金できる人",
+        "version": 1,
+        "file": "refunds.ja.req",
+        "line": 16,
+        "owner": "経理",
+        "from": [],
+        "decided": {
+          "date": "2027-01-04",
+          "by": "経理",
+          "why": "この例のために書いた"
+        }
+      }
+    ],
+    "owners": [
+      "経理"
+    ],
+    "unknown": [],
+    "why": [
+      {
+        "file": "refunds.ja.req",
+        "line": 7,
+        "requirement": "返金の区分",
+        "change": "changed",
+        "text": {
+          "old": "20 点までの返金は少数、それより多いものは多数",
+          "new": "20 点までの返金は少数、それより多いものは多数"
+        },
+        "in_force": {
+          "old": null,
+          "new": null
+        },
+        "owner": {
+          "old": "経理",
+          "new": "経理"
+        },
+        "decided": [],
+        "from": [],
+        "links": [
+          {
+            "role": "satisfied",
+            "artifact": "rulec \"refund_band.ja.rule\" table 区分を決める",
+            "path": "refund_band.ja.rule",
+            "change": null
+          },
+          {
+            "role": "verified",
+            "artifact": "rulec \"refund_band.ja.rule\"",
+            "path": "refund_band.ja.rule",
+            "change": "changed"
+          }
+        ],
+        "waivers": [],
+        "looked": [
+          {
+            "date": "2027-01-05",
+            "by": "開発"
+          }
+        ],
+        "unsettled": 0
+      }
+    ]
+  },
+  "claims": {
+    "known": false,
+    "note": "このプロジェクトに `.geas` はありません",
+    "specs": [],
+    "touched": [],
+    "unclaimed": []
+  },
+  "generated": {
+    "checked": false,
+    "stale": [],
+    "note": "`ritsu.mod` に `target` の行が無いので、確かめていません"
+  },
+  "undecided": [],
+  "facts": {
+    "spec_files": 2,
+    "generated_files": 0,
+    "code_files": 0,
+    "doc_files": 0,
+    "other_files": 4,
+    "code_lines": 0,
+    "new_errors": 0,
+    "new_warnings": 0,
+    "rule_changes": 1,
+    "date_changes": 0,
+    "allow_gained": 1,
+    "allow_lost": 0,
+    "policies_moved": 2,
+    "book_changes": 0,
+    "interface_changes": 0,
+    "interface_breaks": 0,
+    "undecided": 0,
+    "opaque_specs": 0,
+    "requirements_moved": 2,
+    "requirements_unknown": 0,
+    "claims_touched": 0,
+    "unclaimed_lines": 0,
+    "claims_known": false,
+    "generated_stale": false,
+    "generated_checked": false,
+    "generated_unchecked": 0
+  },
+  "route": {
+    "file": "route.ja.rule",
+    "outputs": {
+      "route": "owner_reads",
+      "person_reads": true
+    }
+  },
+  "markdown": "## ritsu impact：`base` → 作業ツリー\n\n答えが動きました（`rule_changes 1`、`allow_gained 1`、`policies_moved 2`）。行き先は `経路 = 持ち主が読む`、`人が読む = true`。持ち主は `経理`。\n\n| 行き先 | 値 |\n|---|---|\n| `経路` | `持ち主が読む` |\n| `人が読む` | `true` |\n\n| 検査 | エラー | 警告 |\n|---|---|---|\n| `base` | 0 | 0 |\n| 作業ツリー | 0 | 0 |\n\n### 変わったファイル\n\n6 個（仕様 2、生成物 0、手書きのコード 0、文書 0、その他 4）。手書きのコードの変わった行 0\n\n<details><summary>一覧</summary>\n\n| 変わり方 | ファイル | 種類 |\n|---|---|---|\n| 変えた | `refund_band.ja.rule` | 仕様, rulec |\n| 変えた | `refunds.ja.req` | 仕様, yuen |\n| 消した | `reviewed/065045fbdf8715b9` | その他 |\n| 消した | `reviewed/0c9a511a604558c8` | その他 |\n| 足した | `reviewed/50d530478e548bef` | その他 |\n| 足した | `reviewed/cc1f64aeed4a0e68` | その他 |\n\n</details>\n\n### 振る舞い\n\n<details><summary><code>refund_band.ja.rule</code> (rulec)：答えが変わります</summary>\n\n**版の差分（入力の全体で比べたもの）**\n\n`base/refund_band.ja.rule` → `refund_band.ja.rule`\n\n| 違いが出る入力 | 答え | 例 | 通り |\n|---|---|---|---|\n| 点数 >=21 <=30 | 区分: 多数 → 少数 | 点数=21 | 2 |\n\nここに挙げた入力のほかでは、二つの版は同じ答えを返します。\n\n</details>\n\n<details><summary><code>refunds.ja.gate</code> (sekisho)：答えが変わります</summary>\n\n**sekisho diff：ゲート `返金` v1 → v1**\n\n- 古い版：`base/refunds.ja.gate`\n- 新しい版：`refunds.ja.gate`\n\n**`返金する`**\n\n両方の版を合わせて 32 通りをたどりました。\n\n| 変わり方 | 通り | 古い版で効いたポリシー | 新しい版で効いたポリシー | 例 |\n|---|---|---|---|---|\n| 許可が増えた（拒否 → 許可） | 1 | なし | 係は期間内に少数を返金できる | 係を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数） |\n| 答えは同じで、効いたポリシーが変わった | 2 | 責任者は期間内に返金できる | 係は期間内に少数を返金できる、責任者は期間内に返金できる | 責任者を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数） |\n\nほかの組み合わせでは、どの action も同じ決定になります。\n\n</details>\n\n### インターフェース\n\n- `refund_band.ja.rule` のインターフェースは変わりません\n\n### 要件\n\n- **`返金の区分`** (`refunds.ja.req`)：変わった\n  - 20 点までの返金は少数、それより多いものは多数\n  - 満たすもの `rulec \"refund_band.ja.rule\" table 区分を決める`\n  - 確かめるもの `rulec \"refund_band.ja.rule\"`：変わった\n  - 確認（2027-01-05、開発）\n\nこれはモジュールの要件のファイルの言葉です。ritsu が確かめるのは、書かれた相手が確認のあとで動いていないことで、書かれたことが正しいかどうかではありません。\n\nほかの 3 個のファイルは答えが同じです。\n\n### 要件と持ち主\n\n- `返金の区分 v1` (`refunds.ja.req:7`), 持ち主 `経理`\n- `返金できる人 v1` (`refunds.ja.req:16`), 持ち主 `経理`\n\n### 主張\n\n- 分かりません：このプロジェクトに `.geas` はありません\n\n**生成物**：`ritsu.mod` に `target` の行が無いので、確かめていません\n\n<details><summary>事実</summary>\n\n| 名前 | 値 |\n|---|---|\n| `spec_files` | 2 |\n| `generated_files` | 0 |\n| `code_files` | 0 |\n| `doc_files` | 0 |\n| `other_files` | 4 |\n| `code_lines` | 0 |\n| `new_errors` | 0 |\n| `new_warnings` | 0 |\n| `rule_changes` | 1 |\n| `date_changes` | 0 |\n| `allow_gained` | 1 |\n| `allow_lost` | 0 |\n| `policies_moved` | 2 |\n| `book_changes` | 0 |\n| `interface_changes` | 0 |\n| `interface_breaks` | 0 |\n| `undecided` | 0 |\n| `opaque_specs` | 0 |\n| `requirements_moved` | 2 |\n| `requirements_unknown` | 0 |\n| `claims_touched` | 0 |\n| `unclaimed_lines` | 0 |\n| `claims_known` | false |\n| `generated_stale` | false |\n| `generated_checked` | false |\n| `generated_unchecked` | 0 |\n\n</details>\n\n新しいエラーはなく、決められなかったものもありません。\n"
+}

@@ -885,6 +885,28 @@ fn a_module_with_no_file_of_a_language() {
     assert!(text.contains("the check with the lock of one: 0 errors, 0 warnings\nthe check with the lock of the working tree: 0 errors, 0 warnings\n"), "{text}");
 }
 
+/// A module with claims of its own: the report reads them and does not run them, as `ritsu mod push`
+/// does not (a revision is not on the disk, and a report starts no service).
+#[test]
+fn a_module_with_claims_is_read_and_not_run() {
+    if !has_git() {
+        return;
+    }
+    let t = TempDir::new("report-claims");
+    let repo = t.path().join("greeter");
+    copy_dir(&here().join("../geas/examples/greeter"), &repo);
+    std::fs::write(repo.join("ritsu.mod"), "module example.com/acme/greeter\nversion 0.1.0\ndescription \"A greeter\"\n").unwrap();
+    git(&repo, &["init", "-q"]);
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "one"]);
+    git(&repo, &["tag", "one"]);
+    let (code, out, err) = ritsu_in(&repo, t.path(), &["mod", "report", "--base", "one", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let v = json(&out);
+    assert_eq!(v["check"]["head"]["errors"].as_u64(), Some(0), "{out}");
+    assert!(!repo.join(".geas/greeter.journal.jsonl").exists(), "no claim ran");
+}
+
 // ── A long report, and what stops one ───────────────────────────────────
 
 /// A module of many rules, each of whose answers moves between its two versions: the Markdown is cut

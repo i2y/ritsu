@@ -876,3 +876,33 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
     }
     out
 }
+
+/// What can be said of each spec without running a claim: a file that cannot be read, what does not
+/// parse, and the keys written in it (W901). `ritsu impact` compares two versions of a project, one
+/// of which may not be on the disk at all, and runs nothing.
+pub fn read_only(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Finding> {
+    let finding = |file: &str, d: &Diag, text: String| ritsu_ports::Finding {
+        code: d.code.to_string(),
+        severity: d.severity,
+        file: ritsu_base::paths::from_root(root, Path::new(file)),
+        line: d.line,
+        text,
+        json: ritsu_base::json::parse(&d.json_in(file, lang)).unwrap_or(ritsu_base::json::Json::Null),
+    };
+    let mut out = Vec::new();
+    for file in files {
+        let src = match ritsu_base::fs::read_to_string(file) {
+            Ok(s) => s,
+            Err(e) => {
+                let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
+                out.push(finding(file, &d, d.shown(file, "", lang)));
+                continue;
+            }
+        };
+        out.extend(diag::keys(&src).iter().map(|d| finding(file, d, d.shown(file, &src, lang))));
+        if let Err(diags) = parse::parse(&src) {
+            out.extend(diags.iter().map(|d| finding(file, d, d.shown(file, &src, lang))));
+        }
+    }
+    out
+}

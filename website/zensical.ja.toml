@@ -33,6 +33,7 @@ nav = [
   ] },
   { "Node で使う" = "node.md" },
   { "モジュール" = "modules.md" },
+  { "変更の行き先" = "impact.md" },
   { "ライブラリとして公開する" = "libraries.md" },
 ]
 

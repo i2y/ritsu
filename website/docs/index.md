@@ -338,6 +338,9 @@ by `@<name>/…` paths: [Modules](modules.md). `ritsu gen` writes a project's co
 each language. With `--library`, it writes a module as libraries that npm, PyPI and Go take, which
 import their dependencies' libraries by name: [Publishing libraries](libraries.md).
 
+`ritsu impact` says whether a change moved any answer and who it concerns, and a rule of your own
+says where the change goes: [Where a change goes](impact.md).
+
 The design of the whole is in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/DESIGN.md), in
 Japanese. ritsu is MIT OR Apache-2.0.
 

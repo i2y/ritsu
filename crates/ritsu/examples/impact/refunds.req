@@ -1,0 +1,34 @@
+requirements refunds v1
+description "What the refund desk answers: an example for ritsu impact"
+
+role finance "Decides who refunds what"
+role development "Writes the desk"
+
+requirement bands_of_a_refund
+  text "A refund of up to 20 items is small, and a larger one is large"
+  owner finance
+  decided 2027-01-04 by finance "Written for this example"
+  satisfied by rulec "refund_band.rule" table band
+    reviewed 2027-01-04 by development sha256:dafed228c7f4357e -> sha256:04ca290e6dee7f05
+  verified by rulec "refund_band.rule"
+    reviewed 2027-01-04 by development sha256:dafed228c7f4357e -> sha256:d505d62dbace6e27
+
+requirement who_refunds
+  text "A clerk refunds a small refund, a manager any refund, both within the period"
+  owner finance
+  decided 2027-01-04 by finance "Written for this example"
+  satisfied by sekisho "refunds.gate" policy clerks_refund_small_amounts
+    reviewed 2027-01-04 by development sha256:5d2aca104b34af3e -> sha256:66ccbc13852555f5
+  satisfied by sekisho "refunds.gate" policy managers_refund_large_amounts
+    reviewed 2027-01-04 by development sha256:5d2aca104b34af3e -> sha256:4241808da575ed4e
+  verified by sekisho "refunds.gate"
+    reviewed 2027-01-04 by development sha256:5d2aca104b34af3e -> sha256:ff07f41255792187
+
+requirement refund_period
+  text "A refund is asked for within 30 days of the payment, or by the next day the office is open"
+  owner finance
+  decided 2027-01-04 by finance "Written for this example"
+  satisfied by koyomi "refund_terms.cal" date last_day
+    reviewed 2027-01-04 by development sha256:6b973f9dcfed922d -> sha256:b6a6176decb78eab
+  verified by koyomi "refund_terms.cal" claim on_an_open_day
+    reviewed 2027-01-04 by development sha256:6b973f9dcfed922d -> sha256:8f34ac8b2bb3a9c4

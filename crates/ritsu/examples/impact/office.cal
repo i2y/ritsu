@@ -1,0 +1,6 @@
+calendar office(office) v1
+description "The days the office is open: an example for ritsu impact"
+offset +00:00
+
+closed weekly sat, sun
+closed every 12-25..12-26 "Christmas"

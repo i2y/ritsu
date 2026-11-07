@@ -1,0 +1,47 @@
+gate 返金(refunds) v1
+description "注文を返金できる人。ritsu impact の例"
+namespace Shop
+
+use rule 返金の区分 from "refund_band.ja.rule"
+use dates 返金の期限 from "refund_terms.ja.cal"
+
+today range >=2027-01-01 <=2028-01-31 offset +09:00
+
+role 係(clerk)
+  description "お客さまに答える"
+
+role 責任者(manager)
+  description "係が返金できないものを返金する"
+  includes 係
+
+principal 職員(User)
+  description "店の職員"
+  roles 係, 責任者
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    支払日(paid_on) : date  range >=2027-01-01 <=2027-11-30
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+  input
+    点数(items) : number  range >=1 <=60
+  context
+    大きさ(size) = 返金の区分(点数: 点数).区分
+    期間内(in_period) = today <= 返金の期限.最終日(支払日: resource.支払日)
+
+permit 係は期間内に少数を返金できる(clerks_refund_small_amounts)
+  description "係は期間内に少数を返金できる"
+  principal in 係
+  action 返金する
+  when 大きさ is 少数
+  when 期間内
+
+permit 責任者は期間内に返金できる(managers_refund_large_amounts)
+  description "責任者は期間内にどの点数でも返金できる"
+  principal in 責任者
+  action 返金する
+  when 期間内

@@ -1,0 +1,21 @@
+rule 返金の区分(refund_band) v1
+description "返品の点数で決める返金の区分。ritsu impact の例のために書いたもので、どの文書の転記でもない"
+
+enum 区分(band) = 少数(small) | 多数(large)
+
+inputs
+  点数(items) : number  range >=1 <=60
+
+outputs
+  区分(band) : 区分
+
+table 区分を決める
+policy unique
+| 点数 | -> 区分 : 区分 |
+| <=20 | 少数           |
+| >20  | 多数           |
+
+examples
+| 点数 | -> 区分 |
+| 20   | 少数    |
+| 21   | 多数    |

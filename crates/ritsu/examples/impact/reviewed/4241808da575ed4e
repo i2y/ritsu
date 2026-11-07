@@ -1,0 +1,5 @@
+permit managers_refund_large_amounts
+  description "A manager refunds any refund within the period"
+  principal in manager
+  action refund_order
+  when in_period

@@ -1,0 +1,98 @@
+ritsu impact：base → 作業ツリー
+
+答えが動きました（rule_changes 1、allow_gained 1、policies_moved 2）。行き先は 経路 = 持ち主が読む、人が読む = true。持ち主は 経理。
+
+変わったファイル：6 個（仕様 2、生成物 0、手書きのコード 0、文書 0、その他 4）。手書きのコードの変わった行 0
+  変えた：refund_band.ja.rule (仕様, rulec)
+  変えた：refunds.ja.req (仕様, yuen)
+  消した：reviewed/065045fbdf8715b9 (その他)
+  消した：reviewed/0c9a511a604558c8 (その他)
+  足した：reviewed/50d530478e548bef (その他)
+  足した：reviewed/cc1f64aeed4a0e68 (その他)
+
+base の検査：エラー 0 件、警告 0 件
+作業ツリーの検査：エラー 0 件、警告 0 件
+新しい診断：ありません
+消えた診断：ありません
+
+振る舞い：
+  refund_band.ja.rule (rulec)：答えが変わります
+    規則 返金の区分 v1 → v1
+    入力の組み合わせ 7 通り。うち起きうるのは 7 通りで、同じ 5 / 違う 2 / 決められず 0 / 入力を作れず 0
+
+      点数 >=21 <=30
+        区分: 多数 → 少数
+        当たる行: 表 区分を決める 行2 → 表 区分を決める 行1
+        例: 点数=21
+
+    ここに挙げた入力のほかでは、二つの版は同じ答えを返します。
+  refunds.ja.gate (sekisho)：答えが変わります
+    sekisho diff：ゲート 返金 v1 → v1
+      古い版：base/refunds.ja.gate
+      新しい版：refunds.ja.gate
+
+    返金する：両方の版を合わせて 32 通り
+      許可が増えた（拒否 → 許可）：1 通り
+        効いたポリシー：なし → 係は期間内に少数を返金できる
+        - 係を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数）
+      答えは同じで、効いたポリシーが変わった：2 通り
+        効いたポリシー：責任者は期間内に返金できる → 係は期間内に少数を返金できる、責任者は期間内に返金できる
+        - 責任者を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数）
+        - 係と責任者を持つ職員、注文、大きさ：少数、期間内：はい（古い版では大きさ：多数）
+
+    ほかの組み合わせでは、どの action も同じ決定になります。
+
+インターフェース：
+  refund_band.ja.rule のインターフェースは変わりません
+
+要件：
+  返金の区分 (refunds.ja.req)：変わった
+    20 点までの返金は少数、それより多いものは多数
+    満たすもの rulec "refund_band.ja.rule" table 区分を決める
+    確かめるもの rulec "refund_band.ja.rule"：変わった
+    確認（2027-01-05、開発）
+  これはモジュールの要件のファイルの言葉です。ritsu が確かめるのは、書かれた相手が確認のあとで動いていないことで、書かれたことが正しいかどうかではありません。
+ほかの 3 個のファイルは答えが同じです。
+
+要件と持ち主：
+  返金の区分 v1 (refunds.ja.req:7), 持ち主 経理
+  返金できる人 v1 (refunds.ja.req:16), 持ち主 経理
+
+主張：
+  分かりません：このプロジェクトに `.geas` はありません
+
+生成物：`ritsu.mod` に `target` の行が無いので、確かめていません
+
+事実：
+  spec_files = 2
+  generated_files = 0
+  code_files = 0
+  doc_files = 0
+  other_files = 4
+  code_lines = 0
+  new_errors = 0
+  new_warnings = 0
+  rule_changes = 1
+  date_changes = 0
+  allow_gained = 1
+  allow_lost = 0
+  policies_moved = 2
+  book_changes = 0
+  interface_changes = 0
+  interface_breaks = 0
+  undecided = 0
+  opaque_specs = 0
+  requirements_moved = 2
+  requirements_unknown = 0
+  claims_touched = 0
+  unclaimed_lines = 0
+  claims_known = false
+  generated_stale = false
+  generated_checked = false
+  generated_unchecked = 0
+
+行き先 (route.ja.rule)：
+  経路 = 持ち主が読む
+  人が読む = true
+
+新しいエラーはなく、決められなかったものもありません。

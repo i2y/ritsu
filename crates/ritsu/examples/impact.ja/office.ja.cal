@@ -1,0 +1,6 @@
+calendar 事務所(office) v1
+description "事務所が開いている日。ritsu impact の例"
+offset +09:00
+
+closed weekly sat, sun
+closed every 12-29..01-03 "年末年始"

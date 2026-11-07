@@ -283,6 +283,27 @@ impl Module {
         Spot { read: self.root.join(rel).to_string_lossy().into_owned(), shown: self.shown(rel, mark), through: self.through.clone() }
     }
 
+    /// The project whose root is `root`, shown as `label`, read through `files`: a module when it has
+    /// a `ritsu.mod`; else every file a walk reaches (DESIGN 4.7), with a manifest that requires
+    /// nothing. `ritsu impact` compares two versions of either, and only the files of ritsu's languages
+    /// and the two of the modules are held.
+    pub(crate) fn project(root: &Path, label: String, files: Option<Rc<dyn Files>>) -> Result<Module, Text> {
+        let has = within(files.clone(), || ritsu_base::fs::raw::metadata(&root.join(manifest::FILE)).is_ok_and(|m| m.is_file()));
+        let mut m = if has {
+            Module::through(root, label, None, files)?
+        } else {
+            let held = within(files.clone(), || {
+                let mut under = Vec::new();
+                ritsu_base::paths::walk(root, ".", &[], &mut under);
+                under.into_iter().filter(|f| tool_of(f).is_some()).filter_map(|f| ritsu_base::fs::raw::read(&root.join(&f)).ok().map(|b| (f, b))).collect::<BTreeMap<String, Vec<u8>>>()
+            });
+            let blank = manifest::parse(b"module example.com/project\n", manifest::FILE).map_err(|_| tr!("空のマニフェストを作れません", "cannot make an empty manifest"))?;
+            Module { label, root: root.to_path_buf(), name: String::new(), version: None, digest: None, commit: None, manifest: blank, files: held, through: files }
+        };
+        m.files.retain(|k, _| tool_of(k).is_some() || k == manifest::FILE || k == ritsu_base::modules::lock::FILE);
+        Ok(m)
+    }
+
     /// The digest of its files: of the tar of what it carries, as a lock writes `files`. None when
     /// they make no tar (a file over the size a module carries, in a directory at hand).
     pub fn files_digest(&self) -> Option<String> {
@@ -407,7 +428,7 @@ pub struct Behavior {
 
 impl Behavior {
     /// Whether the language's own text is worth showing under the file.
-    pub(super) fn shows(&self) -> bool {
+    pub(crate) fn shows(&self) -> bool {
         self.result.as_ref().is_ok_and(|s| s.differs || !s.total || s.more)
     }
 }
@@ -543,12 +564,12 @@ impl ModDiff {
 // ── Comparing ───────────────────────────────────────────────────────────
 
 /// The language whose diff of behavior a file has: rulec, koyomi, sekisho.
-pub(super) fn behaves(rel: &str) -> Option<Tool> {
+pub(crate) fn behaves(rel: &str) -> Option<Tool> {
     [Tool::Rulec, Tool::Koyomi, Tool::Sekisho].into_iter().find(|t| t.extensions().iter().any(|e| rel.ends_with(e)))
 }
 
 /// The language of a file, by its ending.
-pub(super) fn tool_of(rel: &str) -> Option<Tool> {
+pub(crate) fn tool_of(rel: &str) -> Option<Tool> {
     [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Sekisho, Tool::Kaname, Tool::Yuen, Tool::Sakai, Tool::Dandori, Tool::Geas, Tool::Proto]
         .into_iter()
         .find(|t| t.extensions().iter().any(|e| rel.ends_with(e)))
@@ -582,6 +603,13 @@ fn requires(o: &manifest::Manifest, n: &manifest::Manifest) -> Requires {
 
 /// Two versions of a module.
 pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: &Joined) -> ModDiff {
+    compared(o, n, budget, lang, joined, false)
+}
+
+/// [`modules`]; with `always`, every file both sides have is compared though no file of the sides
+/// differs: what `ritsu impact` needs of a module whose files it does not all hold, and of one a
+/// path dependency moved under.
+pub(crate) fn compared(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: &Joined, always: bool) -> ModDiff {
     let (of, nf) = (o.files_digest(), n.files_digest());
     // two sides of one name (a tag that moved, a module a path reaches read at two revisions) are
     // told apart by their digests
@@ -609,7 +637,7 @@ pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: 
     }
     d.files.added = n.files.keys().filter(|k| !o.files.contains_key(*k)).cloned().collect();
     // nothing changed: the same answers, which need no walk
-    let moved = !d.files.added.is_empty() || !d.files.removed.is_empty() || !d.files.changed.is_empty();
+    let moved = always || !d.files.added.is_empty() || !d.files.removed.is_empty() || !d.files.changed.is_empty();
     for rel in o.files.keys().filter(|k| moved && n.files.contains_key(*k)) {
         let Some(tool) = behaves(rel) else { continue };
         let result = behavior(tool, &o.spot(rel, om.as_deref()), &n.spot(rel, nm.as_deref()), budget, lang, joined);
@@ -1170,16 +1198,16 @@ fn compare_items(a: &[(String, String)], b: &[(String, String)]) -> Vec<IChange>
 
 // ── Saying it ───────────────────────────────────────────────────────────
 
-pub(super) fn colon(lang: Lang) -> &'static str {
+pub(crate) fn colon(lang: Lang) -> &'static str {
     if lang == Lang::Ja { "：" } else { ": " }
 }
 
 /// The colon after a heading whose lines follow it.
-pub(super) fn ends(lang: Lang) -> &'static str {
+pub(crate) fn ends(lang: Lang) -> &'static str {
     if lang == Lang::Ja { "：" } else { ":" }
 }
 
-pub(super) fn n(k: usize) -> String {
+pub(crate) fn n(k: usize) -> String {
     ritsu_base::text::count(k as u64)
 }
 
@@ -1227,7 +1255,7 @@ fn files_line(f: &FileLists, lang: Lang) -> String {
     parts.join(if lang == Lang::Ja { "、" } else { ", " })
 }
 
-pub(super) fn change_word(h: How, lang: Lang) -> &'static str {
+pub(crate) fn change_word(h: How, lang: Lang) -> &'static str {
     match (h, lang) {
         (How::Added, Lang::Ja) => "足した",
         (How::Removed, Lang::Ja) => "消した",
@@ -1248,7 +1276,7 @@ fn change_head(l: &Line, lang: Lang) -> String {
 }
 
 /// The require lines that changed.
-fn require_lines(r: &Requires, lang: Lang) -> Vec<String> {
+pub(crate) fn require_lines(r: &Requires, lang: Lang) -> Vec<String> {
     let c = colon(lang);
     let mut out = Vec::new();
     for x in &r.added {
@@ -1264,7 +1292,7 @@ fn require_lines(r: &Requires, lang: Lang) -> Vec<String> {
 }
 
 /// What a language's diff came to, in a few words.
-pub(super) fn verdict(b: &Behavior, lang: Lang) -> String {
+pub(crate) fn verdict(b: &Behavior, lang: Lang) -> String {
     match &b.result {
         Ok(s) if s.differs => tr!("答えが変わります", "the answers differ"),
         Ok(s) if !s.total => tr!("違いは見つかりませんでした（調べきれなかった入力があります）", "no difference shown (some inputs were not settled)"),
@@ -1464,7 +1492,7 @@ fn candidates(lang: Lang) -> String {
     .to_string()
 }
 
-pub(super) fn indent(s: &str, by: &str) -> String {
+pub(crate) fn indent(s: &str, by: &str) -> String {
     s.lines().map(|l| if l.is_empty() { String::new() } else { format!("{by}{l}") }).collect::<Vec<_>>().join("\n") + "\n"
 }
 
@@ -1477,7 +1505,7 @@ fn file_rows(f: &FileLists) -> Vec<(How, &String)> {
     rows
 }
 
-pub(super) fn more_line(k: usize, lang: Lang) -> String {
+pub(crate) fn more_line(k: usize, lang: Lang) -> String {
     tr!("ほか {} 件（JSON に全部あります）", "and {} more (the JSON has them all)", n(k)).get(lang).to_string()
 }
 
@@ -1514,6 +1542,15 @@ pub fn body_text(d: &ModDiff, lang: Lang) -> String {
             }
         }
     }
+    o.push_str(&sections_text(d, lang));
+    o.push_str(&format!("\n{}\n", closing(d, lang)));
+    o
+}
+
+/// The behavior, the interfaces and the requirements of a diff, as text.
+pub(crate) fn sections_text(d: &ModDiff, lang: Lang) -> String {
+    let c = colon(lang);
+    let mut o = String::new();
     if !d.behavior.is_empty() {
         o.push_str(&format!("\n{}{}\n", tr!("振る舞い", "behavior").get(lang), ends(lang)));
         for b in &d.behavior {
@@ -1558,16 +1595,15 @@ pub fn body_text(d: &ModDiff, lang: Lang) -> String {
         o.push_str(&format!("\n{}{}\n", tr!("要件", "requirements").get(lang), ends(lang)));
         o.push_str(&why::text(&d.why, lang));
     }
-    o.push_str(&format!("\n{}\n", closing(d, lang)));
     o
 }
 
 /// A cell of a Markdown table: `|` escaped, on one line.
-pub(super) fn cell(s: &str) -> String {
+pub(crate) fn cell(s: &str) -> String {
     s.replace('|', "\\|").replace('\n', " ")
 }
 
-pub(super) fn html(s: &str) -> String {
+pub(crate) fn html(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
@@ -1583,7 +1619,7 @@ pub fn markdown(d: &ModDiff, lang: Lang) -> String {
 
 /// A language's Markdown with each table held to `rows` rows, and a line after a table cut, saying
 /// how many more rows the JSON has.
-pub(super) fn capped(md: &str, rows: usize, lang: Lang) -> String {
+pub(crate) fn capped(md: &str, rows: usize, lang: Lang) -> String {
     let lines: Vec<&str> = md.lines().collect();
     let mut out = Vec::new();
     let mut i = 0;
@@ -1680,7 +1716,7 @@ pub fn guarded(md: &str) -> String {
 
 /// A language's Markdown inside a fold: its headings as bold lines, so that they do not stand among
 /// the headings of the page.
-pub(super) fn folded(md: &str) -> String {
+pub(crate) fn folded(md: &str) -> String {
     let mut fence = false;
     let mut out = Vec::new();
     for l in md.trim_end().lines() {
@@ -1696,7 +1732,7 @@ pub(super) fn folded(md: &str) -> String {
 }
 
 /// The require lines that changed, as Markdown list items.
-fn require_items(r: &Requires, lang: Lang) -> Vec<String> {
+pub(crate) fn require_items(r: &Requires, lang: Lang) -> Vec<String> {
     let c = colon(lang);
     let mut out = Vec::new();
     for x in &r.added {
@@ -1715,7 +1751,6 @@ fn require_items(r: &Requires, lang: Lang) -> Vec<String> {
 /// module. Every path is in backticks.
 pub fn body_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> String {
     let c = colon(lang);
-    let h = "#".repeat(level);
     let mut o = String::new();
     if !d.of_files {
         o.push_str(&format!("- {}{c}{}\n", tr!("ファイル", "Files").get(lang), files_line(&d.files, lang)));
@@ -1739,6 +1774,16 @@ pub fn body_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> Stri
             }
         }
     }
+    o.push_str(&sections_markdown(d, lang, level, rows));
+    o.push_str(&format!("\n{}\n", ritsu_base::text::capitalize(&closing(d, lang))));
+    o
+}
+
+/// The behavior, the interfaces and the requirements of a diff, as Markdown under headings of `level`.
+pub(crate) fn sections_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> String {
+    let c = colon(lang);
+    let h = "#".repeat(level);
+    let mut o = String::new();
     if !d.behavior.is_empty() {
         o.push_str(&format!("\n{h} {}\n\n", tr!("振る舞い", "Behavior").get(lang)));
         let mut listing = false;
@@ -1808,7 +1853,6 @@ pub fn body_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> Stri
         o.push_str(&format!("\n{h} {}\n", tr!("要件", "Requirements").get(lang)));
         o.push_str(&why::markdown(&d.why, lang));
     }
-    o.push_str(&format!("\n{}\n", ritsu_base::text::capitalize(&closing(d, lang))));
     o
 }
 

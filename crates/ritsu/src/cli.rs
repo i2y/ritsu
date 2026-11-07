@@ -14,6 +14,45 @@ pub fn global_flags() -> Vec<Flag> {
 /// of the others.
 pub const LANGUAGES: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
 
+/// What kind of value a fact of `ritsu impact` is, and so what type a rule takes it as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FactKind {
+    /// A whole number, 0 or more: `number`.
+    Count,
+    /// `bool`.
+    Yes,
+}
+
+/// The facts of `ritsu impact`, by which the inputs of a route rule are named.
+pub const FACTS: [(&str, FactKind); 26] = [
+    ("spec_files", FactKind::Count),
+    ("generated_files", FactKind::Count),
+    ("code_files", FactKind::Count),
+    ("doc_files", FactKind::Count),
+    ("other_files", FactKind::Count),
+    ("code_lines", FactKind::Count),
+    ("new_errors", FactKind::Count),
+    ("new_warnings", FactKind::Count),
+    ("rule_changes", FactKind::Count),
+    ("date_changes", FactKind::Count),
+    ("allow_gained", FactKind::Count),
+    ("allow_lost", FactKind::Count),
+    ("policies_moved", FactKind::Count),
+    ("book_changes", FactKind::Count),
+    ("interface_changes", FactKind::Count),
+    ("interface_breaks", FactKind::Count),
+    ("undecided", FactKind::Count),
+    ("opaque_specs", FactKind::Count),
+    ("requirements_moved", FactKind::Count),
+    ("requirements_unknown", FactKind::Count),
+    ("claims_touched", FactKind::Count),
+    ("unclaimed_lines", FactKind::Count),
+    ("claims_known", FactKind::Yes),
+    ("generated_stale", FactKind::Yes),
+    ("generated_checked", FactKind::Yes),
+    ("generated_unchecked", FactKind::Count),
+];
+
 /// Whether `ritsu <name> …` is a language's own command.
 pub fn is_language(name: &str) -> bool {
     LANGUAGES.contains(&name)
@@ -270,10 +309,68 @@ pub fn commands() -> Vec<Cmd> {
         examples: vec!["ritsu explain E101", "ritsu explain --all --format markdown --lang ja"],
         codes: vec![],
     });
+    cmds.push(impact());
     cmds.push(skills());
     cmds.push(modules());
     cmds.extend(LANGUAGES.into_iter().map(language));
     cmds
+}
+
+/// The names of the facts: those that are counts, and those that are a yes or no.
+fn fact_names() -> (String, String) {
+    let of = |k: FactKind| FACTS.iter().filter(|(_, x)| *x == k).map(|(n, _)| *n).collect::<Vec<_>>().join(", ");
+    (of(FactKind::Count), of(FactKind::Yes))
+}
+
+/// `ritsu impact`: what a change moved between two revisions, who it concerns, and where the
+/// project's own rule sends it.
+fn impact() -> Cmd {
+    Cmd {
+        usage: Some("ritsu impact --base <revision> [--head <revision>] [--route <file.rule>] [--format text|markdown|json] [--budget <n>] [--root <dir>] [--lang ja|en]"),
+        name: "impact",
+        args: "--base <revision>",
+        purpose: tr!(
+            "二つの版のあいだで答えが動いたかと誰に関わるかをまとめ、その事実を入力に、利用者の規則で行き先を決める。プロジェクトを読むだけで、主張を走らせず、何も書かない",
+            "say whether a change between two revisions moved any answer and who it concerns, and from those facts let the project's own rule say where the change goes. It only reads the project: no claim is run and nothing is written"
+        ),
+        params: vec![],
+        flags: vec![
+            flag("--base", Some("<revision>"), tr!("比べる前の git の版（必ず書く）", "the git revision to compare with (required)")),
+            flag("--head", Some("<revision>"), tr!("比べたあとの git の版。無ければ作業ツリー", "the git revision after the change; else the working tree")),
+            flag(
+                "--route",
+                Some("<file.rule>"),
+                {
+                    let (counts, yes) = fact_names();
+                    Text::new(
+                        format!("行き先を決める規則。入力の名前が事実の名前で、出力を全部出す。number で受ける事実: {counts}。bool で受ける事実: {yes}"),
+                        format!("the rule that says where the change goes: its inputs are named after the facts, and all its outputs are given. The facts taken as number: {counts}. The facts taken as bool: {yes}"),
+                    )
+                },
+            ),
+            flag("--format", Some("text|markdown|json"), tr!("出す形。markdown は PR のコメントに入る長さ、json は同じ Markdown も持つ", "the form: markdown fits a comment of a pull request, json holds that Markdown too")).choices(&["text", "markdown", "json"]).default("text"),
+            flag(
+                "--budget",
+                Some("<n>"),
+                tr!("検査と比較が調べる量の上限（`ritsu check --budget` と同じ）", "the cap on how much the checks and the comparisons walk, as `ritsu check --budget`"),
+            ),
+            flag("--root", Some("<dir>"), tr!("プロジェクトのルート。無ければ `ritsu check` と同じ決め方", "the project's root; else found as `ritsu check` finds it")),
+        ],
+        exits: vec![
+            (0, tr!("新しいエラーがなく、比べられないものも決められないものもない", "no new error, and nothing that could not be compared or decided")),
+            (1, tr!("head にだけあるエラーがある", "an error only the head has")),
+            (2, tr!(
+                "比べられないものか決められないものがある。または引数の誤り、経路の規則の誤り（通らない規則、知らない入力の名前、型の違い、範囲の外の事実）。行き先の値では exit は変わらない",
+                "something could not be compared or decided; or bad arguments, or a route rule that cannot be used (it does not pass its check, an input no fact is named, another type, a fact outside its range). Where the rule sends the change does not change the exit code"
+            )),
+        ],
+        examples: vec![
+            "ritsu impact --base main",
+            "ritsu impact --base main --route route.rule --format json",
+            "ritsu impact --base v1.2.0 --head v1.3.0 --format markdown --lang ja",
+        ],
+        codes: vec![],
+    }
 }
 
 /// `ritsu mod` (DESIGN 17.19): the commands of the modules, with a table of their own, which `ritsu

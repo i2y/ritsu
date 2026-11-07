@@ -1,0 +1,18 @@
+dates refund_terms(refund_terms) v1
+description "The last day to ask for a refund: 30 days after the payment, or the next day the office is open"
+use calendar "office.cal"
+
+inputs
+  paid_on : date  range >=2027-01-01 <=2027-11-30
+
+date last_day = paid_on
+  + 30 days
+  roll following
+
+claims
+  on_an_open_day : last_day is open
+  later_payment_later_day : last_day is monotonic
+
+examples
+| paid_on    | -> last_day |
+| 2027-01-04 | 2027-02-03  |

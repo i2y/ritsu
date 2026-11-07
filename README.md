@@ -745,6 +745,52 @@ copy in the module with `ritsu mod vendor`.
 [Modules](https://i2y.github.io/ritsu/modules/) on ritsu's site says how to write, require, share by
 git, push and sign a module.
 
+## Where a change goes
+
+`ritsu impact --base <revision>` says whether a change moved any answer and who it concerns, in one
+report: the files changed, the errors and warnings only the head has, every input whose answer
+differs in a rule, a date or a gate (a gate that reads a changed calendar among them), the
+requirements that moved and their owners, the claims the change touches and the changed lines no
+claim runs, and whether the generated files are current. The head is the working tree unless
+`--head` names a revision, and the project needs no `ritsu.mod`.
+
+With `--route <file.rule>`, a rule of your own says where the change goes. Its inputs are named after
+the facts of the report, and it passes the same checks as any other rule. In
+[`crates/ritsu/examples/impact/route.rule`](crates/ritsu/examples/impact/route.rule), the second
+table has no row for a change that moved an answer and goes straight to merge, so a first table that
+sends one there stops `ritsu check` (E101):
+
+```rule
+table route
+policy unique
+| generated_stale | new_errors | moved | unread | -> route : destination |
+| true            | -          | -     | -      | stop                   |
+| false           | >=1        | -     | -      | stop                   |
+| false           | 0          | >=1   | -      | owner_reads            |
+| false           | 0          | 0     | >=1    | owner_reads            |
+| false           | 0          | 0     | 0      | merge                  |
+
+table who_reads
+policy unique
+| moved | route             | -> person_reads : bool |
+| >=1   | owner_reads, stop | true                   |
+| 0     | owner_reads, stop | true                   |
+| 0     | merge             | false                  |
+```
+
+Moving a band of that example's `refund_band.rule` from 20 items to 30 gives:
+
+```
+ritsu impact: base → the working tree
+
+The answers moved (rule_changes 1, allow_gained 1, policies_moved 2); route: route = owner_reads, person_reads = true; owners: finance.
+```
+
+`ritsu impact` runs no claim and writes nothing. It exits 1 when the head has an error the base does
+not, 2 when something could not be compared or decided, and 0 otherwise; where the rule sends the
+change does not change the exit. [Where a change goes](https://i2y.github.io/ritsu/impact/) on ritsu's
+site lists the facts and has a workflow that posts the report on a pull request and labels it.
+
 ## Security checks
 
 The languages also read their files for what leaves a secret or a service exposed: a key written
@@ -846,6 +892,7 @@ ritsu gen --target …      one package of the whole project per language: TypeS
 ritsu gen --check …       whether the packages are current; with --format json, file by file
 ritsu gen --library …     a module as libraries for npm, PyPI and Go
 ritsu mod <command> …     modules: add, lock, fetch, push, diff, report and the rest
+ritsu impact --base …     whether a change moved an answer, who it concerns, where a rule sends it
 ritsu explain <code>      what a diagnostic means, with a reproduction
 ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule

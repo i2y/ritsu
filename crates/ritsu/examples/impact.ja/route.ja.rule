@@ -1,0 +1,59 @@
+rule 経路(route) v1
+description "変更の行き先を、ritsu impact の事実から決める。入力の別名が事実の名前になる。二つ目の表が約束を持つ。答えが動いた変更がそのままマージへ行く行を持たないので、経路の表がそこへ送ると検査が止まる（E101）"
+
+enum 行き先(destination) = マージ(merge) | 持ち主が読む(owner_reads) | 止める(stop)
+
+inputs
+  新しいエラー(new_errors)                  : number  range >=0
+  新しい警告(new_warnings)                  : number  range >=0
+  決められない(undecided)                   : number  range >=0
+  生成物が古い(generated_stale)             : bool
+  確かめていない生成物(generated_unchecked) : number  range >=0
+  規則の変化(rule_changes)                  : number  range >=0
+  日付の変化(date_changes)                  : number  range >=0
+  増えた許可(allow_gained)                  : number  range >=0
+  減った許可(allow_lost)                    : number  range >=0
+  動いたポリシー(policies_moved)            : number  range >=0
+  帳簿の変化(book_changes)                  : number  range >=0
+  インターフェースの変化(interface_changes) : number  range >=0
+  壊すもの(interface_breaks)                : number  range >=0
+  動いた要件(requirements_moved)            : number  range >=0
+  中身を比べない(opaque_specs)              : number  range >=0
+  主張が走らない行(unclaimed_lines)         : number  range >=0
+  その他のファイル(other_files)             : number  range >=0
+
+outputs
+  経路(route)            : 行き先
+  人が読む(person_reads) : bool
+
+define 動いた数 : number = 規則の変化 + 日付の変化 + 増えた許可 + 減った許可 + 動いたポリシー + 帳簿の変化 + インターフェースの変化 + 壊すもの + 動いた要件
+define 読まれない数 : number = 決められない + 確かめていない生成物 + 中身を比べない + 主張が走らない行 + その他のファイル + 新しい警告
+
+table 経路を決める
+policy unique
+| 生成物が古い | 新しいエラー | 動いた数 | 読まれない数 | -> 経路 : 行き先 |
+| true         | -            | -        | -            | 止める           |
+| false        | >=1          | -        | -            | 止める           |
+| false        | 0            | >=1      | -            | 持ち主が読む     |
+| false        | 0            | 0        | >=1          | 持ち主が読む     |
+| false        | 0            | 0        | 0            | マージ           |
+
+table 誰が読むか
+policy unique
+| 動いた数 | 経路                 | -> 人が読む : bool |
+| >=1      | 持ち主が読む, 止める | true               |
+| 0        | 持ち主が読む, 止める | true               |
+| 0        | マージ               | false              |
+
+examples
+| 新しいエラー | 新しい警告 | 決められない | 生成物が古い | 確かめていない生成物 | 規則の変化 | 日付の変化 | 増えた許可 | 減った許可 | 動いたポリシー | 帳簿の変化 | インターフェースの変化 | 壊すもの | 動いた要件 | 中身を比べない | 主張が走らない行 | その他のファイル | -> 経路      | -> 人が読む |
+| 0            | 0          | 0            | false        | 0                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | マージ       | false       |
+| 0            | 0          | 0            | false        | 0                    | 2          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | 持ち主が読む | true        |
+| 0            | 0          | 0            | false        | 0                    | 0          | 0          | 0          | 1          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | 持ち主が読む | true        |
+| 0            | 0          | 0            | false        | 0                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 1          | 0              | 0                | 0                | 持ち主が読む | true        |
+| 0            | 0          | 0            | false        | 0                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 3                | 0                | 持ち主が読む | true        |
+| 0            | 0          | 0            | false        | 0                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 1                | 持ち主が読む | true        |
+| 0            | 0          | 0            | false        | 1                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | 持ち主が読む | true        |
+| 1            | 0          | 0            | false        | 0                    | 2          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | 止める       | true        |
+| 0            | 0          | 0            | true         | 0                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | 止める       | true        |
+| 0            | 0          | 1            | false        | 0                    | 0          | 0          | 0          | 0          | 0              | 0          | 0                      | 0        | 0          | 0              | 0                | 0                | 持ち主が読む | true        |
