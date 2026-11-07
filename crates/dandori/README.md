@@ -128,6 +128,7 @@ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|tempora
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal-typescript|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
+dandori api <file.flow>
 dandori explain <CODE> | --all [--format markdown|json]
 dandori <command> --help
 dandori --version

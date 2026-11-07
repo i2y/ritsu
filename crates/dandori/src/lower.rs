@@ -173,6 +173,23 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             moment_texts: vec![],
             source_reached: file.to_string_lossy().to_string(),
             spellings: Vec::new(),
+            uses: {
+                let mut uses: Vec<crate::model::UseLine> = Vec::new();
+                for u in &prog.uses {
+                    uses.push(crate::model::UseLine { kind: "rule", name: u.name.0.clone(), path: u.path.clone(), line: u.name.1.line, url: None, plaintext: u.plaintext.as_ref().map(|(w, _)| w.clone()) });
+                }
+                for u in &prog.dates {
+                    uses.push(crate::model::UseLine { kind: "dates", name: u.name.0.clone(), path: u.path.clone(), line: u.name.1.line, url: None, plaintext: None });
+                }
+                for u in &prog.books {
+                    uses.push(crate::model::UseLine { kind: "book", name: u.name.0.clone(), path: u.path.clone(), line: u.name.1.line, url: None, plaintext: None });
+                }
+                for u in &prog.apis {
+                    uses.push(crate::model::UseLine { kind: u.kind.word(), name: u.name.0.clone(), path: u.path.clone(), line: u.name.1.line, url: u.url.clone(), plaintext: u.plaintext.as_ref().map(|(w, _)| w.clone()) });
+                }
+                uses.sort_by_key(|u| u.line);
+                uses
+            },
         },
         enum_ix: BTreeMap::new(),
         record_ix: BTreeMap::new(),

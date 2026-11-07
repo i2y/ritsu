@@ -2854,3 +2854,35 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
 - Python のワークフローのクラスは、前と同じく `py_name(&m.name)` の名前になる。
 - 二冊の帳簿が Go の `Books` の一つのフィールドになる形（`a_b` と `aB`）は言わない。
 - JSONata の関数を避けた変数（22.3 の 11）は、`tools/asl-run.mjs`（JSONata 2.0.6）で確かめた。本物の Step Functions と LocalStack では確かめていない。
+
+## 23. `dandori api`：ワークフローが宣言していることを JSON で（2026-11-07）
+
+### 23.1 きっかけ
+
+`.flow` の中身を JSON で取り出す口は無く、`doc` のページしか無かった。タスクの期限、エラー、呼び先、レコードの範囲、終わり方は、道具もエージェントも、ソースを読まないと分からない。koyomi、sekisho、kaname、chobo、sakai には `api` があり、同じ形で読める。
+
+### 23.2 決定
+
+1. **`dandori api <file.flow>`**。検査を通った `Model`（生成器が読むもの）から作り、プラットフォームの違いは混ぜない。検査を通らないファイルには `check` と同じ診断を標準エラーに出し（`--format json` なら標準出力に診断の JSON）、1 で終わる。規則、日付のファイル、帳簿を使うフローは `ritsu dandori api`（単体の dandori は E018 で 2）。
+2. **載せるもの。** `dandori`（版）、`file`、`workflow`（名前、版、説明、`sha256`、`kind`）、`implements`（サービスと、メソッドの印）、`period`、`history_encrypted`、`uses`（行ごとに種類、名前、書いたとおりのパス、行。規則は名前と版、`sha256`、入力と出力の型と範囲、`lambda`・`local`・`connect`・`connection`。日付のファイルは日付と引数。帳簿は振替）、`inputs`、`outputs`、`enums`、`records`、`tasks`、`cases`、`children`、`fails`、`succeeds`、`on_failure`、`on_cancel`。タスクは種類（`http`、`connect`、`aws`、`lambda`、`agent`、`jev`、`book`、`workflow`、`state_machine`、`durable_function`、`argo_template`、`image`、`event`、自分で実装する `own`）と呼び先、引数と戻り（型、範囲、秘密）、`timeout`、`deadline`、`retry`、`key`、`idempotent`、`changes_things`、`callback`、`errors`（状態か例外）、`refused_as`、`machine`、`discloses`。範囲は `.flow` に書くとおりの `text` と、データとしての `min` と `max`（日と時刻は文字列、順序のある列挙は値の名前と通す値の全部）。
+3. **パスにこの機械のものを入れない。** `uses` は書いたとおり、API の記述は `.flow` のディレクトリからの相対にする。
+4. **`Model` に `uses` を足した。** `use` の行は `Model` に残っていなかった（API の名前とパスはタスクの `api_file` だけだった）。`lower` が行の順に作る。生成器は読まない。
+
+### 23.3 捨てたもの
+
+- 生成した各プラットフォームのコードから作ること。違いを混ぜず、検査を通ったプログラムが言うことだけを出す。
+- 子のフローの全体を入れ子に入れること。`children` は、タスク、ファイル、名前、入力と出力までにした。子の `api` は、そのファイルに尋ねる。
+- 終わり方を別の形に畳むこと。`fails` と `succeeds` は、書いた文を書いた順に、ブロック（`flow`、`on failure`、`on cancel`）と行を付けて並べる。
+
+### 23.4 変わること
+
+`dandori` のコマンドに `api` が増える。`dandori --help` の一覧、サイトのコマンドの表（英日）、README、スキルの `commands.md`（`skills/sync.sh`）に載る。`Model::uses` が増えた。
+
+### 23.5 確かめたこと
+
+`tests/api.rs`。例と `tests/flows` の `.flow` 57 本（英日、Temporal の版、全部のプラットフォームの版）が JSON として読め、タスク 249 件が `task` の行と同じ名前を同じ順で持ち、入力と出力の名前がファイルの `inputs` と `outputs` と同じで、書いた `fail` の名前が全部 `fails` に入り、`use` の行の数が `uses` の数と同じで、この機械のパスが無い。ホテルの例は全文を `tests/api/hotel_stay.json` と比べる（`DANDORI_BLESS=1`）。タスクごとの値（種類、呼び先、再試行、エラー、`refused_as`、`event` の期限、案件の外部のイベント）は、ファイルの宣言と突き合わせる。検査を通らないファイルは JSON を出さず 1、読めないファイルとファイル無しと二つは 2。
+
+### 23.6 残したこと
+
+- 暗号化の印の位置（レコードの中のどの項目か）は、タスクの引数と戻りの `secret` までで、レコードの項目の行は `null`。
+- `Model` に残っていない `.flow` の細部（コメント、書いた順の `enum` の行）は載せない。

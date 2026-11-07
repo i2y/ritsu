@@ -9,6 +9,7 @@
 #[macro_use]
 extern crate ritsu_base;
 
+pub mod api;
 pub mod apis;
 pub mod argo;
 pub mod asl;

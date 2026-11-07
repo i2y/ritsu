@@ -133,6 +133,20 @@ pub fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
+            usage: None,
+            name: "api",
+            args: "<file.flow>",
+            purpose: tr!(
+                "ワークフローが宣言していることを、ソースを読まずに知る。入力と出力（型と範囲）、読むファイル、タスクの呼び先・期限・再試行・エラー、案件の追う状態機械、終わり方（`fail` の名前と `succeed` の値）、実装するサービスのメソッド、子のフローを JSON で出す",
+                "know what the workflow declares without reading the source: its inputs and outputs with their types and ranges, the files it reads, each task's callee, deadline, retries and errors, the machines its cases follow, every way it ends (the names of its `fail`s and the values of its `succeed`s), the methods of the service it implements, and its child flows, as JSON"
+            ),
+            params: vec![("<file.flow>", tr!("検査を通る .flow のファイル", "a .flow file that passes check"))],
+            flags: vec![diagnostics_format()],
+            exits: exits(tr!("JSON を出した", "the JSON is out")),
+            examples: vec!["dandori api examples/hotel/temporal/hotel.flow", "dandori api examples/review/aws/review.flow | jq '.tasks[].name'"],
+            codes: vec![],
+        },
+        Cmd {
             usage: Some("dandori explain <CODE> | --all [--format markdown|json]"),
             name: "explain",
             args: "<CODE>",
@@ -356,6 +370,7 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         "run" => cmd_run(&a, out, err),
         "scenarios" => cmd_scenarios(&a, out, err),
         "doc" => cmd_doc(&a, out, err),
+        "api" => cmd_api(&a, out, err),
         "explain" => cmd_explain(&parsed, lang, out, err),
         _ => unreachable!("every command in the table is dispatched"),
     }
@@ -630,6 +645,38 @@ fn cmd_scenarios(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
             let _ = writeln!(out, "{}", serde_json::to_string_pretty(&list).unwrap());
         }
     }
+    0
+}
+
+/// `dandori api`: what a workflow that passes declares, as JSON on standard output. The diagnostics
+/// go where `check` puts them; a workflow that does not pass has no `api`.
+fn cmd_api(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let file = match a.files.as_slice() {
+        [f] => f.clone(),
+        _ => {
+            let _ = writeln!(err, "{}", usage("api"));
+            return 2;
+        }
+    };
+    let (src, checked) = match check::check_file(&file) {
+        Ok(x) => x,
+        Err(msg) => {
+            let _ = writeln!(err, "{msg}");
+            return 2;
+        }
+    };
+    let shown = file.display().to_string();
+    if a.format_json && checked.model.is_none() {
+        let v: Vec<_> = checked.diags.iter().map(|d| d.to_json(a.lang)).collect();
+        let _ = writeln!(out, "{}", serde_json::to_string_pretty(&serde_json::json!({ "file": shown, "diagnostics": v })).unwrap());
+    } else {
+        let _ = write!(err, "{}", commands::render(&checked.diags, &shown, &src, a.lang));
+    }
+    if checked.diags.iter().any(|d| d.code == "E018") {
+        return 2;
+    }
+    let Some(model) = checked.model else { return 1 };
+    let _ = writeln!(out, "{}", crate::api::json(&model).pretty());
     0
 }
 

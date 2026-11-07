@@ -1290,6 +1290,22 @@ pub struct Model {
     pub source_reached: String,
     /// the names a target's code cannot keep (DESIGN 22), which `check` says and `gen` stops at
     pub spellings: Vec<crate::spellings::Found>,
+    /// the `use` lines, in the order they are written: what `api` lists beside what each one reads
+    pub uses: Vec<UseLine>,
+}
+
+/// A `use` line of the `.flow`: what it reads (`rule`, `dates`, `book`, or the kind of API
+/// description: `openapi`, `smithy`, `proto`), the name it is given, the path as written, where.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UseLine {
+    pub kind: &'static str,
+    pub name: String,
+    pub path: String,
+    pub line: usize,
+    /// `url "<base>"` of an API
+    pub url: Option<String>,
+    /// `plaintext "<why>"` of a rule, or of an API
+    pub plaintext: Option<String>,
 }
 
 impl Model {

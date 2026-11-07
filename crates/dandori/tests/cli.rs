@@ -58,6 +58,8 @@ fn a_flow_without_rules_runs_as_it_does_with_rulec() {
             vec!["check", flow, "--lang", "ja"],
             vec!["check", flow, "--format", "json"],
             vec!["scenarios", flow],
+            vec!["api", flow],
+            vec!["api", flow, "--lang", "ja"],
             vec!["doc", flow],
             vec!["doc", flow, "--format", "html", "--lang", "ja"],
             vec!["gen", flow, "--target", "temporal-typescript", "--out", "@"],
