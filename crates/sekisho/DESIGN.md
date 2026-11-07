@@ -126,7 +126,7 @@ ritsu は、Cedar のポリシーとスキーマを、proto や OpenAPI と同�
 
 ### 2.1 ファイルの形
 
-`.gate` は一つの種類だけで、節の順は決まっている。見出し、`description`、`namespace`、`use`（いくつでも）、`today`、`enum`、`role`、`principal`、`workflow`、`resource`、`action`、`permit` と `forbid`（混ぜてよい）、`expect`、`separate` の順である（違えば E003）。`description`・`namespace`・`today` は一度まで。字下げは空白で、そろっていなければ E004（koyomi と同じ）。`#` から行末まではコメント。
+`.gate` は一つの種類だけで、節の順は決まっている。見出し、`description`、`namespace`、`use`（いくつでも）、`today`、`import enum` と `enum`（混ぜてよい。25 章）、`role`、`principal`、`workflow`、`resource`、`action`、`permit` と `forbid`（混ぜてよい）、`expect`、`separate` の順である（違えば E003）。`description`・`namespace`・`today` は一度まで。字下げは空白で、そろっていなければ E004（koyomi と同じ）。`#` から行末まではコメント。
 
 一つのファイルが、一つの Cedar の名前空間の、一つのまとまり（action とそのポリシー）を書く。ほかの `.gate` が宣言した役割や型を使うときは `use gate "people.gate"` で読む（2.10）。
 
@@ -1131,7 +1131,7 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
 
 | 相手 | 口と問い | 使うところ |
 |---|---|---|
-| rulec | `Rules::facts`（入力と出力の型と範囲、列挙、生成物の呼び方）、`preconditions_hold`、`eval`、`doc`、`outputs_over`（段階 A で足した） | 計算した値の型と範囲（E105、E206）、とりうる値（4.1）、参照の評価、ページ |
+| rulec | `Rules::facts`（入力と出力の型と範囲、列挙、生成物の呼び方。`import enum` が読む `enums` ファイルの列挙もここから）、`preconditions_hold`、`eval`、`doc`、`outputs_over`（段階 A で足した） | 計算した値の型と範囲（E105、E206）、とりうる値（4.1）、参照の評価、ページ |
 | koyomi | `Dates::facts`、`eval`、`values`、`calendar` と `doc`（段階 A で足した） | 日付の述語の型と範囲（E206、E207）、起こりうる真偽の組（4.1）、ページ |
 | 契約 | OpenAPI と AsyncAPI の文書（`ritsu_base::openapi`。8.6）、`.proto`（ritsu-proto） | `guards`、`input`、`from`（E202〜E204） |
 | dandori | `Flows::crossings`（`.flow` が dandori の検査を通るか。通らなければ dandori が言うこと）、`Items`（フローが持つもの） | `workflow`（E208） |
@@ -1145,7 +1145,7 @@ sekisho は受け取る側の言語である（dandori、yuen、sakai と同じ�
 
 - **`Gates`**（新しい口。8.3）：action と守る操作、ワークフロー、ポリシーと期待の一覧、ある principal がある action をどれだけ許されるか。答えるのは sekisho の `Engine`（`src/ports.rs`）で、`.gate` と、`.cedar` と `.cedarschema` の組（1.3）の両方に答える。
 - **`Items`**：種類 `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate`。定義の文は、宣言の塊の行（コメントと前後の空白を除き、続いた空白を一つにし、字下げを深さごとに空白二つに直したもの。dandori と同じ。ritsu の DESIGN 3.2）。
-- **`References`**：`use rule|dates|calendar|openapi|proto|asyncapi|book|gate` の先、`workflow … from` の先、`guards` の先（操作）。sakai が境界を越える参照として確かめ、yuen が `trace` でたどる。どれもルートからのパスの参照で、ルートの外のファイルは参照にしない（その `.gate` は E201 か E208 になる。2.6）。`guards` の先は検査が見つけた操作（`Action::references`）なので、名前の検査を通らないファイルと、見つからない操作（E202）は出さない。行は、`use` と `workflow` と `guards` の行。手で書いた Cedar の組には、スキーマの `@guards` の参照を、action の行で出す（ポリシーのファイルは何も参照しない）。
+- **`References`**：`use rule|dates|calendar|openapi|proto|asyncapi|book|gate` の先、`import enum` の先（`rulec "<ファイル>" enum <列挙>`）、`workflow … from` の先、`guards` の先（操作）。sakai が境界を越える参照として確かめ、yuen が `trace` でたどる。どれもルートからのパスの参照で、ルートの外のファイルは参照にしない（その `.gate` は E201 か E208 になる。2.6）。`guards` の先は検査が見つけた操作（`Action::references`）なので、名前の検査を通らないファイルと、見つからない操作（E202）は出さない。行は、`use` と `workflow` と `guards` の行。手で書いた Cedar の組には、スキーマの `@guards` の参照を、action の行で出す（ポリシーのファイルは何も参照しない）。
 
 ### 8.3 ritsu-ports に足す型
 
@@ -1334,7 +1334,7 @@ requirement refunds_within_limit
 
 - `.gate` は一式の成果物で、`dir` か `sekisho "…"` でコンテキストに属する。手で書いた Cedar のファイル（`.cedar`、`.cedarschema`、`.cedarschema.json`）は、`owns` の `cedar "…"` の項で書いたものだけが成果物になる（`dir` の下にあるだけのものは、どのコンテキストのものでもない）。
 - 操作を守る参照（`.gate` の `guards` と、Cedar のスキーマの `@guards`）が、ほかのコンテキストの契約の操作を指せば、関係によらず sakai の E211 である。
-- `use rule`・`use dates`・`use calendar`・`use gate` は、境界を越えれば、二つの共有カーネルに並べたものだけを読める（関係が無ければ E201、あれば E202）。ゲートから生成したコードが規則と日付から生成したコードを呼び、`use gate` はほかのゲートの宣言を読むので、使うのは相手の内側だからである。
+- `use rule`・`use dates`・`use calendar`・`use gate`・`import enum` は、境界を越えれば、二つの共有カーネルに並べたものだけを読める（関係が無ければ E201、あれば E202）。ゲートから生成したコードが規則と日付から生成したコードを呼び、`use gate` はほかのゲートの宣言を読み、`import enum` は `enums` ファイルの列挙を丸ごと自分の列挙にするので、使うのは相手の内側だからである。
 - `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow … from` は、境界を越える参照に数えない。契約は `guards` が守る操作のために読み（その操作は E211 で確かめる）、ワークフローは呼ぶ側の名前で、ワークフロー自身の呼び出しはそのフローの参照として確かめるからである。
 
 ### 8.6 `ritsu_base::cedar` との分担、OpenAPI の操作の読み手
@@ -1353,12 +1353,13 @@ requirement refunds_within_limit
 
 | 位置 | 語 |
 |---|---|
-| 行頭 | `gate` `description` `namespace` `use` `today` `enum` `role` `principal` `workflow` `resource` `action` `permit` `forbid` `expect` `separate` |
+| 行頭 | `gate` `description` `namespace` `use` `today` `import` `enum` `role` `principal` `workflow` `resource` `action` `permit` `forbid` `expect` `separate` |
 | `use` | `rule` `dates` `calendar` `openapi` `proto` `asyncapi` `book` `gate` `from` |
+| `import` | `enum` `from` |
 | 塊の中 | `includes` `can` `roles` `attributes` `guards` `principal` `resource` `from` `nobody` `input` `context` `action` `actions` `when` `unless` |
 | 条件 | `in` `is` `not` `and` `or` `any` `workflow` `open` `today` `allow` `deny` `allowed` |
 | 型と範囲 | `bool` `date` と rulec の単位の型（`money[…]`、`mass[…]` など）、`range`、`offset` |
-| 記号 | `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|`、`#`（行末までコメント） |
+| 記号 | `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `->`、`#`（行末までコメント） |
 
 `principal` と `resource` は、行頭（宣言）と、ポリシーの塊の中（スコープ）と、式の中（`principal.suspended`）に出る。どれも同じ語で、位置で意味が決まる（Cedar と同じ）。
 
@@ -1369,7 +1370,7 @@ requirement refunds_within_limit
 ### 9.2 EBNF
 
 ```ebnf
-file        = header, [description], [namespace], {use}, [today], {enum}, {role}, {principal}, {workflow},
+file        = header, [description], [namespace], {use}, [today], {enum | import_enum}, {role}, {principal}, {workflow},
               {resource}, {action}, {policy}, {expect}, {separate} ;
 header      = "gate", name, version, NL ;
 version     = "v", digit, {digit} ;
@@ -1379,6 +1380,7 @@ use         = "use", ("rule" | "dates" | "calendar" | "openapi" | "proto" | "asy
             | "use", "gate", string, NL ;
 today       = "today", range, "offset", utc_offset, NL ;          (* range >=2026-10-01 <=2028-10-31、offset +00:00 *)
 enum        = "enum", name, "=", name, {"|", name}, NL ;
+import_enum = "import", "enum", word, "from", string, ["->", name], NL ;   (* 25 章 *)
 
 (* ブロックの中の行は、ここに書いた順に書く（違えば E003）。一度だけの行を二度書いても E003 *)
 role        = "role", name, NL, [INDENT, [description], ["includes", refs, NL], ["can", refs, NL], DEDENT] ;
@@ -1455,10 +1457,10 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | E003 | 節やブロックの中の行の順が違う、一度しか書けない節や行を二度書いた、ブロックに要る行（action の `principal` と `resource`、ポリシーと期待の `action`、`separate` の `actions`）が無い、`attributes`・`input`・`context` の下に行が無い、ファイルが `gate` の行で始まらない |
 | E004 | 字下げがそろっていない、タブ |
 | E005 | その場所に書けない行、その語の取る形でない行 |
-| E006 | 同じ名前を二度宣言した |
+| E006 | 同じ名前を二度宣言した（`import enum` が持ってきた列挙と、その `->` の名前も） |
 | E007 | Cedar に出る名前に ASCII の別名が無い、別名の形が違う |
 | E008 | 別名が Cedar の予約語（`if`・`then`・`else`・`like`・`has`。`true`・`false`・`in`・`is` は E002）か、生成先の言語の予約語（TypeScript の予約語と strict モードの予約語、Python のキーワード、Go のキーワード）と同じ。型の名前が、Cedar の `Action`（スキーマに宣言できない）、組み込みの型（`Bool`・`Long`・`String`。`cedar validate` が警告する）、JSON のスキーマが型に使う語（`Boolean`・`Entity`・`Extension`・`Record`・`Set`）、sekisho が宣言する `Role`・`Workflow` と同じ（Cedar 4.13.0 で確かめた） |
-| E101 | 知らない名前（役割、型、属性、列挙の値、action、`input`、計算した値、規則の出力） |
+| E101 | 知らない名前（役割、型、属性、列挙の値、action、`input`、計算した値、規則の出力、`import enum` が読むファイルに無い列挙） |
 | E102 | 型が合わない（列挙を数と比べる、単位の違う数を比べる。単位は ritsu-units で比べる） |
 | E103 | 範囲の誤り（`range` が無い、定数が範囲の外、整数にならない定数、±(2⁵³ − 1) を超える範囲） |
 | E104 | v1 で書けない関係（二段以上たどる、型の違う二つの属性を比べる。2.5） |
@@ -1468,7 +1470,7 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | E108 | 役割の `includes` が輪になる（`clerk → manager → clerk` のように、輪の役割を順に示す。輪一つにつき一度） |
 | E109 | ポリシーの `allowed` が action のあいだで輪になる（自分を尋ねるものを含む。輪の action を順に示す。輪一つにつき一度。期待の `allowed` は数えない。2.11） |
 | E110 | `allowed` の入力と型：省けない入力に何も渡らない、型か単位か範囲が入力に合わない値や、無いことがある値を省けない入力に渡す、計算した値を渡す、この action のとる型のどれかが持たない属性を渡す、この action のとる principal か resource の型を尋ねる action がとらない、一つの action で同じ action を二通りの入力で尋ねる、`allowed_<別名>` がこの action の入力か計算した値と同じ名前（2.11） |
-| E201 | `use` のファイルが、その言語の検査を通らないか、読めない（その言語の言うことを注に）。`use rule` と `use dates` は名前の検査が口で事実を読むときに、`use calendar` と `use book` は検査がカレンダーと帳簿を読むときに、`use gate` は sekisho が読むときに出す。`use gate` が輪になっているときも。`use` のファイルがルートの外にあるときも（gate が読むファイルは、守る操作も `@doc` も口も、ルートからのパスで参照する。2.6） |
+| E201 | `use` のファイルが、その言語の検査を通らないか、読めない（その言語の言うことを注に）。`use rule` と `use dates` は名前の検査が口で事実を読むときに、`use calendar` と `use book` は検査がカレンダーと帳簿を読むときに、`use gate` は sekisho が読むときに出す。`use gate` が輪になっているときも。`use` のファイルがルートの外にあるときも（gate が読むファイルは、守る操作も `@doc` も口も、ルートからのパスで参照する。2.6）。`import enum` のファイルが `enums` ファイルでなく規則であるとき、rulec の検査を通らないときも、この番号（25 章）。 |
 | E202 | `guards` の操作が契約の文書に無い（文書のパスと、書いた組で言う。2.6） |
 | E203 | `input` が操作の受け取るものに無いか、型か範囲が操作と合わない（dandori の E016 と同じ読み方） |
 | E204 | `from` の引数が操作のパスかクエリの引数に無い |
@@ -1477,7 +1479,7 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | W201 | 規則の前提を守るかを決められない（生成したコードが走らせたときに確かめる） |
 | E207 | カレンダーのデータの範囲が、`today` の範囲か、日付の関数が返しうる日を覆わない |
 | E208 | `workflow` の `.flow` が dandori の検査を通らないか、読めないか、ルートの外にある（2.6） |
-| E209 | sekisho のクレートのバイナリはほかの言語を持たない（`ritsu sekisho …` で走らせるよう言い、exit 2。dandori の E018 と同じ形）。`use rule`・`use dates`・`use calendar`・`use book`・`workflow … from` の最初の一行で一度だけ出し、ほかの診断は出さない。契約（`use openapi`・`use proto`・`use asyncapi`）と `use gate` は、sekisho のクレートが土台の読み手で読むので出さない |
+| E209 | sekisho のクレートのバイナリはほかの言語を持たない（`ritsu sekisho …` で走らせるよう言い、exit 2。dandori の E018 と同じ形）。`use rule`・`import enum`・`use dates`・`use calendar`・`use book`・`workflow … from` の最初の一行で一度だけ出し、ほかの診断は出さない。契約（`use openapi`・`use proto`・`use asyncapi`）と `use gate` は、sekisho のクレートが土台の読み手で読むので出さない |
 | E210 | `use gate` で読んだファイルの名前空間が、読む側と違う |
 | E211 | `use gate` で読んだ二つのファイルが、同じ名前か別名の型・列挙・役割・ワークフローを宣言している（あとから読んだファイルの `use gate` の行に出る） |
 | E301 | どの組み合わせでも、どの permit も action を許さない（`nobody "<理由>"` で通す） |
@@ -2161,3 +2163,42 @@ rulec、koyomi、chobo は、書いた名前が生成先で一つの識別子に
 - `ritsu gen` は止まるが、文が違う。`crates/ritsu/src/package.rs` は `generate` のエラーを sekisho の不具合として包んで exit 2 にするので、E401 の文がそのまま届かない。koyomi のように、先に `sekisho::spellings::stops` を読む形にするのは ritsu の側の直しである。
 - `ident::unique` のほかにも、名前をよける所が二つ残っている。TypeScript の `entity_field` は属性を `roles` と `member_of` からよけ（`ident::aside`）、Python の `record` は自分のフィールドをよける（属性 `roles` は `roles_`）。どちらもエンティティのデータの中のキーか、クラスの中の名前で、組めて答えも同じなので、今回は外していない。
 - `GLOBALS` は表ごと見るので、モジュールがそのグローバルを読まないゲートでも、その名前の型は W402 になる。読むかどうかはゲートで変わり、多めに止める側に倒した。
+
+## 25. `enums` ファイルの列挙を読む（`import enum`。2026-11-07）
+
+### 25.1 きっかけ
+
+注文の状態のような列挙は、ワークフローも、ゲートも、規則も使う。規則は `enums` ファイルに列挙を一度だけ書き、`import enum` で読めるが、`.gate` と `.flow` は自分で `enum` を書くしかなかった。同じ状態を二か所に書くと、片方の値の名前だけを変えても、どちらの検査も黙る。ワークフローの `不可` を `拒否` に変えた試しで、そのとおりになった。
+
+### 25.2 決め
+
+```gate
+import enum order_state from "rules/order_states.rule"
+```
+
+名前を付け替えるときは、行の終わりに `-> status` を付ける。
+
+- 形は rulec と同じ。`import enum <列挙> from "<ファイル>" [-> <名前>]` で、パスは `.gate` のあるディレクトリから書く（`use` と同じ）。置く場所は `enum` と同じで、二つは混ぜてよい。違う場所は E003。
+- **読むのは口だけ。** `Rules::facts` に尋ねる。`enums` ファイルにも rulec の口は規則と同じに答え、その列挙の値、順、表示名、別名を言う。`enums` ファイルが `import proto` や `import jsonschema` で値を確かめているなら、その検査も rulec のものとしてそのまま効く。sekisho は `enums` ファイルの読み方を持たない（P4）。ブラウザの試すページも、ほかの `use` と同じ仮想ファイルから読む。
+- **読んだあとは、その場で書いた `enum` と同じ。** 読んだ列挙は、`.gate` の列挙の並びに、`import enum` を書いた行の位置で入る。名前の検査、Cedar、生成する三つのコード、ベクタ、`doc`、`api` は、どこから来た列挙かを知らずに動く（2 章の `enum` と同じ）。`use gate` で読まれたときも同じに見える。
+- **値の名前。** 値は、`enums` ファイルの名前と、その別名（丸括弧の中）で書ける。Cedar に出るのは別名で、別名が無ければ名前である。生成するコードの `WithinLimit` のような綴りでは書けない（`use rule` の出力を読むときは書けるが、`.gate` の列挙の値は、`enum` に書いたものも名前か別名だけである）。
+- **順。** rulec の列挙には `<` で順を持つものがある。`.gate` の列挙は値の順を使わない（比べる式が無い）ので、順は持ってこない。ただし `doc` と `api` は、順があるものだと言う。
+- **持ち物にしない。** 読んだ列挙は `Items` に出さない。その列挙を持つのは `enums` ファイルである。代わりに `References` が `import enum` として、`rulec "<ファイル>" enum <列挙>` を返す。sakai はこれを境界を越える参照として確かめ、yuen は影響をたどる。
+- **間違い。** ファイルが無い、`enums` ファイルでなく規則である、rulec の検査を通らない（E201）。その列挙が無い（E101。ファイルにある列挙を注に並べる）。`-> <名前>` か名前が、同じファイルの `enum` や別の `import enum` と重なる（E006）。名前か値が Cedar の名前の形でない（E007、E008。注が、直すのは `enums` ファイルの側だと言う。`->` で付けた名前は、そのままこの行で直す）。rulec をつながない sekisho では E209。診断はどれも `import enum` の行（ファイルの間違いは文字列、列挙の間違いは列挙の名前）に付く。
+- **見せ方。** `doc` は「ほかのファイルから読んだ列挙」の節に、値と読んだファイルと順の有無を出す（読んだ列挙があるときだけ）。`api` は新しい `enums` に、全部の列挙の値と、読んだものには `from`（ファイルと、そこでの名前）と `ordered` を出す。
+
+### 25.3 捨てたもの
+
+(1) `use rule` の列挙を `use rule … enum` のように読ませる：`enums` ファイルは呼ぶ規則ではない（`enums` ファイルの出力を読むのは E101）。(2) 値を一つずつ `.gate` に書き写させて、突き合わせる検査を足す：同じ一覧を二か所に持つ形が残る。(3) 順を持ち込み、`<` で比べられるようにする：`.gate` には列挙を比べる式が無く、足すのは別の話である。
+
+### 25.4 変わること
+
+節の順に `import enum` が加わる（E003 の文）。キーワードに `import` が加わる（行頭に一語、`import` の次に `enum` と `from`）。`Gates` は変わらない。
+
+### 25.5 確かめたこと
+
+`tests/imports.rs`：読める、別名と順、`->`、五つの間違い、`Items` と `References`、`doc` と `api`、書いた `enum` と読んだ `enum` で、Cedar・TypeScript・Python・Go の生成物が同じ（先頭のハッシュの行を除く）。`tests/mutants` に四つ（E201、E101、E006、E209。英日）。例 `examples/order_states`（ワークフローとゲートが同じ `enums` ファイルから状態を読む）は、`ritsu check` で通り、`enums` ファイルの値の名前を変えると、ワークフローとゲートの、その値を書いた所で止まる。ritsu の `tests/sakai.rs`：コンテキストをまたいで読むと、sakai が関係を見る（関係が無ければ E201、パートナーの内側なら E202、共有カーネルに並べれば通る）。
+
+### 25.6 残したこと
+
+`.gate` の列挙の順を使う式。`enums` ファイルの列挙の値の表示名（`"Same city"`）を `doc` に出すこと。

@@ -112,6 +112,10 @@ fn checked_text(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, V
         let name = &u.name.0;
         cannot.push((u.name.1, tr!("この dandori は規則を読めません。このフローは規則 `{name}` を使います", "this dandori cannot read rules, and the flow uses the rule `{name}`")));
     }
+    if let (Some(im), false) = (prog.imports.first(), crate::sources::rules_joined()) {
+        let name = &im.enum_name.0;
+        cannot.push((im.span, tr!("この dandori は規則の `enums` ファイルを読めません。このフローは列挙 `{name}` を読みます", "this dandori cannot read rules' `enums` files, and the flow reads the enum `{name}`")));
+    }
     if let (Some(u), false) = (prog.dates.first(), crate::sources::dates_joined()) {
         let name = &u.name.0;
         cannot.push((u.name.1, tr!("この dandori は日付のファイルを読めません。このフローは日付のファイル `{name}` を使います", "this dandori cannot read dates files, and the flow uses the dates file `{name}`")));

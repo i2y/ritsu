@@ -72,6 +72,9 @@ pub struct Program {
     /// `use book <name> from "<path>"`: the books whose transfers the tasks run (chobo's)
     pub books: Vec<UseBook>,
     pub enums: Vec<EnumDecl>,
+    /// `import enum <enum> from "<file>" [-> <name>]`: an enum of an `enums` file, which the flow
+    /// uses as one it writes with `enum`
+    pub imports: Vec<ImportEnum>,
     pub records: Vec<RecordDecl>,
     pub inputs: Vec<Field>,
     pub outputs: Vec<Field>,
@@ -133,6 +136,20 @@ pub struct UseApi {
     pub url_at: Option<Span>,
     /// `plaintext "<why>"`: the API is reached without encryption on purpose
     pub plaintext: Option<(String, Span)>,
+}
+
+/// `import enum region from "rules/regions.rule" -> delivery_region`.
+#[derive(Clone, Debug)]
+pub struct ImportEnum {
+    /// The enum's name in the `enums` file, as written.
+    pub enum_name: Name,
+    /// The file as written, and where the string is.
+    pub path: String,
+    pub path_at: Span,
+    /// `-> <name>`: the name the flow calls it by. None: the enum's own.
+    pub rename: Option<Name>,
+    /// Where `import` is.
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -817,7 +834,7 @@ struct Parser {
 }
 
 const KEYWORDS: &[&str] = &[
-    "workflow", "implements", "description", "kind", "use", "rule", "from", "enum", "record", "inputs", "outputs", "task", "case",
+    "workflow", "implements", "description", "kind", "use", "import", "rule", "from", "enum", "record", "inputs", "outputs", "task", "case",
     "follows", "flow", "on", "let", "match", "wait", "repeat", "break", "succeed", "fail", "leaving", "lambda", "http",
     "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
@@ -1480,6 +1497,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         dates: vec![],
         books: vec![],
         enums: vec![],
+        imports: vec![],
         records: vec![],
         inputs: vec![],
         outputs: vec![],
@@ -1684,6 +1702,16 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 }
                 prog.uses.push(UseRule { name, path, lambda, local, connect, connection, plaintext });
             }
+            "import" => {
+                cur.expect_kw("enum")?;
+                let enum_name = cur.ident(tr!("列挙の名前", "the enum's name"))?;
+                cur.expect_kw("from")?;
+                let (path, path_at) = cur.string(tr!("`enums` ファイルのパス", "the path of the `enums` file"))?;
+                let rename = if cur.eat_sym("->") { Some(cur.ident(tr!("この flow での列挙の名前", "the enum's name in this flow"))?) } else { None };
+                cur.expect_end()?;
+                p.pos += 1;
+                prog.imports.push(ImportEnum { enum_name, path, path_at, rename, span: sp });
+            }
             "enum" => {
                 let name = cur.ident(tr!("列挙の名前", "the enum's name"))?;
                 cur.expect_sym("=")?;
@@ -1875,7 +1903,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
             other => {
                 return Err(err(
                     sp,
-                    tr!("`{other}` で始まる宣言はありません（workflow・description・kind・use・enum・record・inputs・outputs・task・case・flow・on failure・on cancel）", "`{other}` does not start a declaration; expected workflow, description, kind, use, enum, record, inputs, outputs, task, case, flow, on failure or on cancel"),
+                    tr!("`{other}` で始まる宣言はありません（workflow・description・kind・use・import・enum・record・inputs・outputs・task・case・flow・on failure・on cancel）", "`{other}` does not start a declaration; expected workflow, description, kind, use, import, enum, record, inputs, outputs, task, case, flow, on failure or on cancel"),
                 ))
             }
         }

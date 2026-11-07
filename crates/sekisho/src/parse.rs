@@ -691,7 +691,7 @@ fn top_rank(w: &str) -> Option<u8> {
         kw::NAMESPACE => 2,
         kw::USE => 3,
         kw::TODAY => 4,
-        kw::ENUM => 5,
+        kw::IMPORT | kw::ENUM => 5,
         kw::ROLE => 6,
         kw::PRINCIPAL => 7,
         kw::WORKFLOW => 8,
@@ -706,8 +706,8 @@ fn top_rank(w: &str) -> Option<u8> {
 
 fn top_order() -> Text {
     tr!(
-        "ファイルは、見出し（`gate`）、`description`、`namespace`、`use`、`today`、`enum`、`role`、`principal`、`workflow`、`resource`、`action`、`permit` と `forbid`、`expect`、`separate` の順に書いてください。",
-        "A file goes: the heading (`gate`), `description`, `namespace`, `use`, `today`, `enum`, `role`, `principal`, `workflow`, `resource`, `action`, `permit` and `forbid`, `expect`, `separate`."
+        "ファイルは、見出し（`gate`）、`description`、`namespace`、`use`、`today`、`import enum` と `enum`、`role`、`principal`、`workflow`、`resource`、`action`、`permit` と `forbid`、`expect`、`separate` の順に書いてください。",
+        "A file goes: the heading (`gate`), `description`, `namespace`, `use`, `today`, `import enum` and `enum`, `role`, `principal`, `workflow`, `resource`, `action`, `permit` and `forbid`, `expect`, `separate`."
     )
 }
 
@@ -808,6 +808,7 @@ impl<'a> Parser<'a> {
             uses: vec![],
             today: None,
             enums: vec![],
+            imports: vec![],
             roles: vec![],
             principals: vec![],
             workflows: vec![],
@@ -1103,6 +1104,29 @@ impl<'a> Parser<'a> {
                 f.today = Some(Today { span, range, offset: (text, Span { line: line.no, col }) });
                 Ok(Block::None)
             }
+            kw::IMPORT => {
+                let form_note = tr!(
+                    "`import enum <列挙> from \"<ファイル>\"` のように書きます。この file で別の名前にするなら、最後に `-> <名前>` を付けます。",
+                    "Write it like `import enum <enum> from \"<file>\"`; to call it something else here, end the line with `-> <name>`."
+                );
+                if !c.is_word(kw::ENUM) {
+                    let fd = c.found();
+                    return Err(form(c.col(), tr!("`import` のあとには `enum` を書いてください（{}）", "`import` is followed by `enum` ({})", fd.ja; fd.en)).note(form_note));
+                }
+                c.bump();
+                let enum_name = c.name(&tr!("読む列挙", "the enum to read"))?;
+                c.want_word(kw::FROM)?;
+                let path = c.string(&tr!("`enums` ファイル", "the `enums` file"))?;
+                let mut rename = None;
+                if c.peek() == Some(&Tok::Minus) {
+                    c.bump();
+                    c.want(&Tok::Gt, "->")?;
+                    rename = Some(c.declared(&tr!("この file での列挙", "the enum as this file calls it"))?);
+                }
+                c.done()?;
+                f.imports.push(ImportEnum { enum_name, path, rename, span });
+                Ok(Block::None)
+            }
             kw::ENUM => {
                 let name = c.declared(&tr!("列挙", "the enum"))?;
                 c.want(&Tok::Eq, "=")?;
@@ -1111,7 +1135,7 @@ impl<'a> Parser<'a> {
                     values.push(c.declared(&tr!("列挙の値", "a value of the enum"))?);
                 }
                 c.done()?;
-                f.enums.push(EnumDecl { name, span, values });
+                f.enums.push(EnumDecl { name, span, values, from: None });
                 Ok(Block::None)
             }
             kw::ROLE => {

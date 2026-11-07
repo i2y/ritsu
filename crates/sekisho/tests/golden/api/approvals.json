@@ -21,6 +21,33 @@
     "schema_json": "cedar/approvals.cedarschema.json",
     "policies_json": "cedar/approvals.policies.json"
   },
+  "enums": [
+    {
+      "name": "purchase_status",
+      "alias": "purchase_status",
+      "line": 7,
+      "values": [
+        {
+          "name": "draft",
+          "alias": "draft"
+        },
+        {
+          "name": "submitted",
+          "alias": "submitted"
+        },
+        {
+          "name": "approved",
+          "alias": "approved"
+        },
+        {
+          "name": "rejected",
+          "alias": "rejected"
+        }
+      ],
+      "ordered": false,
+      "from": null
+    }
+  ],
   "roles": [
     {
       "name": "employee",

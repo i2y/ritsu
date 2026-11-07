@@ -1,0 +1,6 @@
+エラー[E201]: tests/mutants/E201_import_enumに規則を指す.gate:5:21: `tests/mutants/read/返金の窓口.rule` は `enums` ファイルではなく、規則です
+     5 | import enum 状態 from "read/返金の窓口.rule"
+  = `import enum` が読めるのは、`enums <名前> v1` で始まるファイルの列挙です。規則の出力として使う列挙は、`use rule` で読みます。
+エラー[E101]: tests/mutants/E201_import_enumに規則を指す.gate:18:18: 型 `状態` はありません
+    18 |     状態(status) : 状態
+  = 型に書けるのは、`bool`、`date`、数の型（`money[…]` など）、このファイルか `use gate` で読んだファイルの列挙と、principal と resource の型です。

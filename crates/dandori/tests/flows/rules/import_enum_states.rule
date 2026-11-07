@@ -1,0 +1,5 @@
+enums import_enum_states v1
+description "The states of an order, read by import_enum.flow as an enum of its own"
+
+enum order_state = paid | shipped | returned | refunded
+enum tier = basic < silver < gold

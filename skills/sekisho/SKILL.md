@@ -147,6 +147,10 @@ separate refunding_and_auditing
 - Cedar's meaning: what no policy allows is denied, and a forbid that applies wins over every
   permit. `principal in <role>` follows `includes`.
 - A name that is not ASCII carries an alias for Cedar: `返金する(refund_order)`.
+- An enum the gate shares with a workflow or a rule is written once in an `enums` file and read with
+  `import enum order_state from "rules/order_states.rule"` (`-> <name>` renames it here): the
+  gate then uses it as an `enum` it writes, and a value renamed in the file stops the gate where it
+  is written.
 - Every attribute counts finitely: `bool`, an enum, a number of a unit type with both ends of its
   `range`, a `date` with a range, an entity type, `T?`. There are no free strings.
 - `guards` names an operation of a document a `use` line reads: an `operationId` (or `"POST

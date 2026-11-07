@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_import_enumにファイルに無い列挙.gate:6:13: `tests/mutants/read/注文の状態.rule` has no enum `状態の別名`
+     6 | import enum 状態の別名 from "read/注文の状態.rule"
+  = The enums in that file: `段階`, `状態`.

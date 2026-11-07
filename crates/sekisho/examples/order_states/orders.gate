@@ -1,0 +1,31 @@
+gate order_access v1
+description "Who may ship an order. The states of an order are read from the enums file the shipping flow reads too, so the two cannot name them differently"
+namespace Shop
+
+import enum order_state from "rules/order_states.rule"
+
+role clerk
+  can ship_order
+
+principal User
+  roles clerk
+
+workflow shipping from "shipping.flow"
+
+resource Order
+  attributes
+    state : order_state
+
+action ship_order
+  principal User, Workflow
+  resource Order
+
+permit clerks_ship_paid_orders
+  principal in clerk
+  action ship_order
+  when resource.state is paid
+
+permit the_workflow_ships_paid_orders
+  principal is workflow shipping
+  action ship_order
+  when resource.state is paid

@@ -224,12 +224,14 @@ $ sekisho explain E302 --lang ja
   `approvals.ja.gate` は、同じゲートを日本語の名前で書いたもので、日本語の版の規則を読みます。
 - [examples/documents](examples/documents)：二つの操作のうち弱いほうを先に使わせる例です。アーカイブできる文書は消せません（`forbid … when allowed archive_document`）。
   `documents.ja.gate` は、同じゲートを日本語の名前で書いたものです。
+- [examples/order_states](examples/order_states)：ワークフローとゲートが、注文の状態を一つの `enums` ファイルから `import enum` で読む例です。一方が、もう一方の知らない状態を名指すことはできません。
+  `orders.ja.gate` と `shipping.ja.flow` は、同じものを日本語の名前で書いたものです。
 
 ## どう確かめているか
 
 `cargo test -p sekisho` が、言語を変異と例に当て、本物の Cedar を走らせます。
 
-- 148 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 74 には、それぞれ英語の名前の対があります。
+- 156 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 78 には、それぞれ英語の名前の対があります。
 - 例とテストの材料のうち検査を通るすべてのゲートから生成した Cedar を、公式の Cedar の CLI 4.13.0 にかけます。`cedar validate` の strict の検証が何も言わないこと、`cedar format --check` が通ること、`cedar run-tests` がすべての組み合わせを sekisho の参照の評価と同じ答え、同じ決めたポリシーで答えること、JSON の形が `cedar translate-schema` と `translate-policy` の出力と一字も違わないことを確かめます。
 - 手で書いた Cedar に sekisho が返す答えも、公式の CLI の答えと同じです。ポリシーとスキーマの組（`tests/cedar_in/` に置いたものと、それを一か所ずつ変えたもの、検査を通るすべてのゲートから生成した Cedar を手で書いたものとして読ませたもの）について、sekisho が数えるすべての組み合わせをリクエストとエンティティにして `cedar run-tests` にかけ、許すか拒むかと決めたポリシーが同じになることを確かめます。sekisho が決められない問いでは、ポリシーのどの部分を数えないのかを理由に挙げます。
 - TypeScript、Python、Go に生成したコードで、すべての組み合わせのリクエストを生の値から組み立て、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 に尋ね、参照の評価と同じ答えになることを確かめます。生成したコードは `tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ります。

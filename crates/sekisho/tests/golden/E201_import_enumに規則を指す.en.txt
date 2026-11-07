@@ -1,0 +1,6 @@
+error[E201]: tests/mutants/E201_import_enumに規則を指す.gate:5:21: `tests/mutants/read/返金の窓口.rule` is a rule, not an `enums` file
+     5 | import enum 状態 from "read/返金の窓口.rule"
+  = `import enum` reads the enums of a file that starts `enums <name> v1`; the enum of a rule's output is read with `use rule`.
+error[E101]: tests/mutants/E201_import_enumに規則を指す.gate:18:18: There is no type `状態`
+    18 |     状態(status) : 状態
+  = A type is `bool`, `date`, a number's type (`money[…]` and the like), or an enum, a principal's or a resource's type of the file or of one it reads with `use gate`.

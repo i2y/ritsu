@@ -114,8 +114,8 @@ pub fn ledger() -> Ledger {
                 "The file does not start with a `gate` line; the sections are out of their order; a section written once (`description`, `namespace`, `today`) or a line written once in a block is written twice; a line a block needs is missing (an action's `principal` and `resource`, the `action` of a policy or an expectation, the `actions` of a `separate`); or `attributes`, `input` or `context` has nothing under it."
             ),
             tr!(
-                "ファイルは、見出し（`gate`）、`description`、`namespace`、`use`、`today`、`enum`、`role`、`principal`、`workflow`、`resource`、`action`、`permit` と `forbid`、`expect`、`separate` の順に書いてください。ブロックの中の順は、診断の注に出ます。",
-                "A file goes: the heading (`gate`), `description`, `namespace`, `use`, `today`, `enum`, `role`, `principal`, `workflow`, `resource`, `action`, `permit` and `forbid`, `expect`, `separate`; the order of a block's lines is in the diagnostic's note."
+                "ファイルは、見出し（`gate`）、`description`、`namespace`、`use`、`today`、`import enum` と `enum`、`role`、`principal`、`workflow`、`resource`、`action`、`permit` と `forbid`、`expect`、`separate` の順に書いてください。ブロックの中の順は、診断の注に出ます。",
+                "A file goes: the heading (`gate`), `description`, `namespace`, `use`, `today`, `import enum` and `enum`, `role`, `principal`, `workflow`, `resource`, `action`, `permit` and `forbid`, `expect`, `separate`; the order of a block's lines is in the diagnostic's note."
             ),
             "gate t v1\n\nresource Order\n\nrole clerk\n",
             "gate t v1\n\nresource 注文(Order)\n\nrole 係(clerk)\n",
@@ -153,8 +153,8 @@ pub fn ledger() -> Ledger {
             "E006",
             tr!("同じ名前を二度宣言しています", "A name is declared twice"),
             tr!(
-                "同じ種類のもの（型と列挙、役割、列挙の値、型の属性、ワークフロー、action、action の入力と計算した値、ポリシー、期待、職務の分離、`use` の名前）のあいだで、名前か別名が重なるとき。`use gate` で読んだファイルの宣言とも比べます。規則の入力に二度値を渡したとき、`actions` に同じ action を二度並べたときも出ます。",
-                "A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), also against what a file read with `use gate` declares; or an input of a rule is given twice, or `actions` lists an action twice."
+                "同じ種類のもの（型と列挙、役割、列挙の値、型の属性、ワークフロー、action、action の入力と計算した値、ポリシー、期待、職務の分離、`use` の名前）のあいだで、名前か別名が重なるとき。`import enum` で読んだ列挙は、`enum` に書いたものと同じに比べます（`-> <名前>` で付けた名前も）。`use gate` で読んだファイルの宣言とも比べます。規則の入力に二度値を渡したとき、`actions` に同じ action を二度並べたときも出ます。",
+                "A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), an enum read with `import enum` as one written with `enum` (its name after `->` too), also against what a file read with `use gate` declares; or an input of a rule is given twice, or `actions` lists an action twice."
             ),
             tr!("どちらかの名前か別名を変えてください。", "Rename one of them, or give it another alias."),
             "gate t v1\n\nrole clerk\nrole clerk\n",
@@ -165,8 +165,8 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("Cedar に出る名前に ASCII の別名がありません", "A name that goes to Cedar has no ASCII alias, or one of the wrong form"),
             tr!(
-                "Cedar に出る名前（ファイル、列挙と値、役割、principal と resource の型、属性、ワークフロー、action、入力、計算した値、ポリシー）が別名の形の ASCII でなく、丸括弧の別名も無いとき、別名の形が違うとき、名前空間が ASCII の識別子でないとき。型の別名は `[A-Z][A-Za-z0-9]*`、ほかは `[a-z][a-z0-9_]*` です。期待と職務の分離は Cedar に出ないので、別名は要りません。",
-                "A name that goes to Cedar (the file, an enum and its values, a role, a principal's or a resource's type, an attribute, a workflow, an action, an input, a computed value, a policy) is not ASCII of the form of an alias and has no alias in parentheses; or its alias is not of the form; or the namespace is not an ASCII identifier. A type's alias is `[A-Z][A-Za-z0-9]*`, any other `[a-z][a-z0-9_]*`. An expectation and a separation do not go to Cedar, and need none."
+                "Cedar に出る名前（ファイル、列挙と値、役割、principal と resource の型、属性、ワークフロー、action、入力、計算した値、ポリシー）が別名の形の ASCII でなく、丸括弧の別名も無いとき、別名の形が違うとき、名前空間が ASCII の識別子でないとき。型の別名は `[A-Z][A-Za-z0-9]*`、ほかは `[a-z][a-z0-9_]*` です。期待と職務の分離は Cedar に出ないので、別名は要りません。`import enum` で読んだ列挙の名前と値も同じ形で、形が違えば、`import enum` の行に出ます（直すのは `enums` ファイルの側です）。",
+                "A name that goes to Cedar (the file, an enum and its values, a role, a principal's or a resource's type, an attribute, a workflow, an action, an input, a computed value, a policy) is not ASCII of the form of an alias and has no alias in parentheses; or its alias is not of the form; or the namespace is not an ASCII identifier. A type's alias is `[A-Z][A-Za-z0-9]*`, any other `[a-z][a-z0-9_]*`. An expectation and a separation do not go to Cedar, and need none. The names of an enum read with `import enum` and of its values are held to the same form; where one is not, it is said at the `import enum` line, and corrected in the `enums` file."
             ),
             tr!("`返金する(refund_order)` のように、丸括弧で別名を付けてください。", "Give it an alias in parentheses, like `返金する(refund_order)`."),
             "gate t v1\n\nrole Clerk\n",
@@ -189,8 +189,8 @@ pub fn ledger() -> Ledger {
             "E101",
             tr!("知らない名前です", "A name names nothing"),
             tr!(
-                "参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。",
-                "A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; or a policy or an expectation names an action of another file."
+                "参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。`import enum` が読む `enums` ファイルに、その列挙が無いときも出ます。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。",
+                "A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; an enum an `import enum` reads is not in its `enums` file; or a policy or an expectation names an action of another file."
             ),
             tr!(
                 "書き違いを直すか、宣言を足してください。注に、書ける名前が並びます。規則と日付のファイルの名前は、`.gate` に書ける形で並びます（名前を書けないときは別名で）。名前でも別名でも書けないものには、そのファイルの側で別名を付けてください。",
@@ -348,8 +348,8 @@ pub fn ledger() -> Ledger {
             "E201",
             tr!("`use` のファイルが検査を通らないか、読めないか、ルートの外にあります", "A file a `use` reads does not pass its language's check, cannot be read, or is outside the root"),
             tr!(
-                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。",
-                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it."
+                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`import enum` のファイルが `enums` ファイルでなく規則であるとき、rulec の検査を通らないときも出ます。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。",
+                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file an `import enum` reads is a rule and no `enums` file, or does not pass rulec's check; or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it."
             ),
             tr!(
                 "そのファイルを、その言語の検査が通るように直してください。ルートの外にあるファイルなら、そのファイルを含むディレクトリを `--root` でルートにしてください。",
@@ -431,8 +431,8 @@ pub fn ledger() -> Ledger {
             "E209",
             tr!("ほかの言語を読めない sekisho で、それを読むファイルを確かめています", "A file that reads another language, checked with a sekisho that reads none"),
             tr!(
-                "sekisho 単独のバイナリ（`sekisho`）で、`use rule`、`use dates`、`use calendar`、`use book`、`workflow … from` のあるファイルを確かめるとき。このバイナリには rulec、koyomi、chobo、dandori が入っていません。最初の一行で一度だけ出し、ほかの診断は出しません。exit code は 2 です（ファイルの誤りではなく、走らせ方の問題なので）。",
-                "A file with `use rule`, `use dates`, `use calendar`, `use book` or `workflow … from`, checked with the binary of sekisho's own crate (`sekisho`), which holds none of rulec, koyomi, chobo and dandori. It is said once, at the first such line, and nothing else is said. The exit code is 2: it is how the command is run, not what the file says."
+                "sekisho 単独のバイナリ（`sekisho`）で、`use rule`、`import enum`、`use dates`、`use calendar`、`use book`、`workflow … from` のあるファイルを確かめるとき。このバイナリには rulec、koyomi、chobo、dandori が入っていません。最初の一行で一度だけ出し、ほかの診断は出しません。exit code は 2 です（ファイルの誤りではなく、走らせ方の問題なので）。",
+                "A file with `use rule`, `import enum`, `use dates`, `use calendar`, `use book` or `workflow … from`, checked with the binary of sekisho's own crate (`sekisho`), which holds none of rulec, koyomi, chobo and dandori. It is said once, at the first such line, and nothing else is said. The exit code is 2: it is how the command is run, not what the file says."
             ),
             tr!(
                 "同じコマンドを `ritsu sekisho` で走らせてください（`ritsu sekisho check refunds.gate`）。`ritsu sekisho` は、規則、日付のファイル、カレンダー、帳簿、フローを同じプロセスの中で読みます。",

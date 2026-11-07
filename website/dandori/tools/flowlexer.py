@@ -27,7 +27,7 @@ from pygments.token import Comment, Keyword, Name, Number, Operator, Punctuation
 
 __all__ = ["FlowLexer"]
 
-KEYWORDS = ("workflow", "implements", "description", "kind", "use", "rule", "from", "enum",
+KEYWORDS = ("workflow", "implements", "description", "kind", "use", "import", "rule", "from", "enum",
     "record", "inputs", "outputs", "task", "case", "follows", "flow", "on", "let", "match", "wait",
     "repeat", "break", "succeed", "fail", "leaving", "lambda", "http", "aws", "connection",
     "queue", "machine", "durable", "function", "image", "template", "errors", "retry",

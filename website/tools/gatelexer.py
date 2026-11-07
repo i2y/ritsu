@@ -58,9 +58,11 @@ __all__ = ["GateLexer"]
 
 # The words, by where they are written: kw.rs's TABLE, word for word and in its order.
 TABLE = (
-    ("line", ("gate", "description", "namespace", "use", "today", "enum", "role", "principal",
-              "workflow", "resource", "action", "permit", "forbid", "expect", "separate")),
+    ("line", ("gate", "description", "namespace", "use", "today", "import", "enum", "role",
+              "principal", "workflow", "resource", "action", "permit", "forbid", "expect",
+              "separate")),
     ("use", ("rule", "dates", "calendar", "openapi", "proto", "asyncapi", "book", "gate", "from")),
+    ("import", ("enum", "from")),
     ("block", ("description", "includes", "can", "roles", "attributes", "guards", "principal",
                "resource", "from", "nobody", "input", "context", "action", "actions", "when",
                "unless")),
@@ -111,12 +113,14 @@ def _of(place, chosen):
 # The lines at the left margin: the patterns below write out the ones with a shape of their own, and
 # the ones that declare a name and nothing else (DECLARING); every word of the place starts a line
 # as a keyword.
-_of("line", ("gate", "namespace", "use", "today", "enum", "workflow", "expect"))
+_of("line", ("gate", "namespace", "use", "today", "import", "enum", "workflow", "expect"))
 DECLARING = _of("line", ("role", "principal", "resource", "action", "permit", "forbid", "separate"))
 LINES = _PLACES["line"]
 # What a `use` reads (`use rule refund_limit from "…"`); `use gate "…"` gives no name.
 USE_KINDS = tuple(w for w in _PLACES["use"] if w not in ("gate", "from"))
 _of("use", ("gate", "from"))
+# `import enum order_state from "…" -> status`: the word after `import`, and `from`.
+_of("import", ("enum", "from"))
 # The words an indented line starts with; `from` is the one of the place written after the types of
 # an action's `resource` line, and `resource` and `guards` take lines of their own below.
 _of("block", ("from",))
@@ -196,6 +200,8 @@ class GateLexer(RegexLexer):
             (rf"^(use)({_WS})({_alt(USE_KINDS)})({_WS})({NAME})({_WS})(from)\b",
              bygroups(Keyword, Whitespace, Keyword, Whitespace, Name.Namespace, Whitespace, Keyword)),
             (rf"^(use)({_WS})(gate)\b", bygroups(Keyword, Whitespace, Keyword)),
+            (rf"^(import)({_WS})(enum)({_WS}){_NAME}(?:({_WS})(from)\b)?",
+             bygroups(Keyword, Whitespace, Keyword, Whitespace, *_NAMED, Whitespace, Keyword)),
             (r"^(today)\b", Keyword, "today"),
             (rf"^(enum)({_WS}){_NAME}", bygroups(Keyword, Whitespace, *_NAMED), "enum"),
             (rf"^(workflow)({_WS}){_NAME}(?:({_WS})(from)\b)?", bygroups(Keyword, Whitespace, *_NAMED, Whitespace, Keyword)),

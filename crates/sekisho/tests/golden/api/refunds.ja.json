@@ -44,6 +44,33 @@
     "schema_json": "cedar/refunds_ja.cedarschema.json",
     "policies_json": "cedar/refunds_ja.policies.json"
   },
+  "enums": [
+    {
+      "name": "注文の状態",
+      "alias": "order_status",
+      "line": 14,
+      "values": [
+        {
+          "name": "支払済",
+          "alias": "paid"
+        },
+        {
+          "name": "発送済",
+          "alias": "shipped"
+        },
+        {
+          "name": "返品済",
+          "alias": "returned"
+        },
+        {
+          "name": "返金済",
+          "alias": "refunded"
+        }
+      ],
+      "ordered": false,
+      "from": null
+    }
+  ],
   "roles": [
     {
       "name": "係",

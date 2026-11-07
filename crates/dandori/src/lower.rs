@@ -217,6 +217,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.dates(base);
     lw.books(base);
     lw.apis(base);
+    lw.import_enums(base);
     lw.local_types();
     lw.period();
     lw.io();
@@ -332,6 +333,56 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// The enums the `import enum` lines bring in (DESIGN 1.21): each is asked of rulec through the
+    /// port, which answers for an `enums` file as for a rule, and becomes an enum of the flow named
+    /// as the line says, with the values of the file (rulec's names of them) and, where the file
+    /// writes them in order, the order. From here on it is one the flow writes with `enum`: nothing
+    /// after this knows where it came from. The file that cannot be read, or is a rule, is E005; an
+    /// enum the file does not have is E002; a name the flow gives twice is E006 (`local_types`
+    /// says it for an `enum` of the same name).
+    fn import_enums(&mut self, base: &Path) {
+        for im in &self.prog.imports {
+            let (word, wsp) = &im.enum_name;
+            let Some(path) = self.follow(base, &im.path, "E005", im.path_at) else { continue };
+            let info = match rulec::load(&path) {
+                Ok(i) => i,
+                Err(said) => {
+                    let d = e("E005", im.path_at, tr!("`enums` ファイル `{}` を読めませんでした", "could not read the `enums` file `{}`", im.path));
+                    self.push(outside(crate::sources::said_notes(&said).into_iter().fold(d, Diag::note), base, &im.path, &path));
+                    continue;
+                }
+            };
+            if !info.outputs.is_empty() {
+                self.push(e("E005", im.path_at, tr!("`{}` は `enums` ファイルではなく、規則です", "`{}` is a rule, not an `enums` file", im.path)).note(tr!(
+                    "`import enum` が読めるのは、`enums <名前> v1` で始まるファイルの列挙です。規則の出力にある列挙は、`use rule` で読み、`<規則>.<列挙>` と書きます。",
+                    "`import enum` reads the enums of a file that starts `enums <name> v1`; the enum of a rule's output is read with `use rule` and written `<rule>.<enum>`."
+                )));
+                continue;
+            }
+            let Some((en, values)) = info.enums.iter().find(|(n, _)| n == word) else {
+                let have: Vec<String> = info.enums.iter().map(|(n, _)| format!("`{n}`")).collect();
+                self.push(e("E002", *wsp, tr!("`{}` に列挙 `{word}` はありません", "`{}` has no enum `{word}`", im.path)).note(tr!(
+                    "そのファイルにある列挙: {}。",
+                    "The enums in that file: {}.",
+                    have.join("、");
+                    have.join(", ")
+                )));
+                continue;
+            };
+            let (name, sp) = im.rename.clone().unwrap_or_else(|| (en.clone(), *wsp));
+            if self.enum_ix.contains_key(&name) || self.prog.records.iter().any(|r| r.name.0 == name) {
+                self.push(e("E006", sp, tr!("`{name}` が二度宣言されています", "`{name}` is declared twice")).note(tr!(
+                    "`import enum` の列挙は、`-> <名前>` でこの flow での名前を付け替えられます。",
+                    "An enum of an `import enum` can be given another name in this flow with `-> <name>`."
+                )));
+                continue;
+            }
+            self.enum_ix.insert(name.clone(), self.m.enums.len());
+            self.made_at.entry(name.clone()).or_insert(sp);
+            self.m.enums.push(EnumDef { name, values: values.clone(), ordered: info.ordered.contains(en), from: Some((im.path.clone(), en.clone())) });
+        }
+    }
+
     fn rules(&mut self, base: &Path) {
         for u in &self.prog.uses {
             let (name, sp) = &u.name;
@@ -374,7 +425,7 @@ impl<'a> Lowerer<'a> {
             for (en, values) in &info.enums {
                 let q = format!("{name}.{en}");
                 self.enum_ix.insert(q.clone(), self.m.enums.len());
-                self.m.enums.push(EnumDef { name: q, values: values.clone(), ordered: info.ordered.contains(en) });
+                self.m.enums.push(EnumDef { name: q, values: values.clone(), ordered: info.ordered.contains(en), from: None });
             }
             let fields: Vec<(String, Ty)> = info.outputs.iter().map(|c| (c.name.clone(), self.rty(name, &c.ty))).collect();
             let ranges = info.outputs.iter().filter_map(|c| Some((c.name.clone(), c.range()?))).collect();
@@ -530,7 +581,7 @@ impl<'a> Lowerer<'a> {
                 let rname = format!("{name}.{}", t.name);
                 let state = self.m.enums.len();
                 self.enum_ix.insert(format!("{rname}.{}", mc.state_enum), state);
-                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone(), ordered: false });
+                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone(), ordered: false, from: None });
                 // the key's parameters, in the order the transfer declares them: what a post and a void take
                 let mut fields: Vec<(String, Ty)> = t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| (p.name.clone(), Ty::Str)).collect();
                 fields.push(("state".to_string(), Ty::Enum(state)));
@@ -654,7 +705,7 @@ impl<'a> Lowerer<'a> {
                 }
             }
             self.enum_ix.insert(name.clone(), self.m.enums.len());
-            self.m.enums.push(EnumDef { name: name.clone(), values, ordered: false });
+            self.m.enums.push(EnumDef { name: name.clone(), values, ordered: false, from: None });
         }
         // records: names first, so that a field can have a record type declared further down
         for r in &self.prog.records {
@@ -872,7 +923,7 @@ impl<'a> Lowerer<'a> {
         self.enum_ix.insert(name.clone(), ix);
         self.made_enums.insert(ix);
         self.made_at.entry(name.clone()).or_insert(sp);
-        self.m.enums.push(EnumDef { name, values, ordered: false });
+        self.m.enums.push(EnumDef { name, values, ordered: false, from: None });
         ix
     }
 
@@ -2796,7 +2847,7 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E007", *vsp, tr!("`{v}` は範囲 `{w}` の外の値なので、Jev には尋ねません。この意味は外してください", "`{v}` is outside the range `{w}`, so Jev is not asked about it; leave its meaning out")));
                         return None;
                     }
-                    def = EnumDef { name: format!("{} range {w}", def.name), values: takes, ordered: def.ordered };
+                    def = EnumDef { name: format!("{} range {w}", def.name), values: takes, ordered: def.ordered, from: None };
                 }
                 if let Some(ssp) = ask.score {
                     // the levels are the values, each with what it means, from the lowest; TypeSafe's

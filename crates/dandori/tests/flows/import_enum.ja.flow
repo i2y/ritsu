@@ -1,0 +1,28 @@
+workflow 列挙を読む v1
+description "注文の状態と顧客の段階を enums のファイルから import enum で読み、自分で書いた列挙として使う。状態への match、状態を持つレコード、順のある段階への範囲。どの出力先のコードも、同じ列挙をフローに書いたときのコードと同じ。import_enum.flow の日本語の版"
+
+import enum 注文の状態 from "rules/注文の状態の列挙.rule"
+import enum 段階 from "rules/注文の状態の列挙.rule" -> 等級
+
+record 注文
+  番号 : string
+  状態 : 注文の状態
+
+task 発送する(注文番号: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:ship"
+
+inputs
+  注文 : 注文
+  等級 : 等級  range >=基本 <=銀
+
+outputs
+  状態 : 注文の状態
+
+flow
+  match 注文.状態
+    支払済 =>
+      発送する(注文番号: 注文.番号)
+      succeed 状態 = 発送済
+    発送済 => succeed 状態 = 発送済
+    返品済 => succeed 状態 = 返品済
+    返金済 => succeed 状態 = 返金済

@@ -1,0 +1,6 @@
+エラー[E201]: tests/mutants/E201_import_enum_from_a_rule.gate:5:31: `tests/mutants/read/refund_desk.rule` は `enums` ファイルではなく、規則です
+     5 | import enum order_status from "read/refund_desk.rule"
+  = `import enum` が読めるのは、`enums <名前> v1` で始まるファイルの列挙です。規則の出力として使う列挙は、`use rule` で読みます。
+エラー[E101]: tests/mutants/E201_import_enum_from_a_rule.gate:18:14: 型 `order_status` はありません
+    18 |     status : order_status
+  = 型に書けるのは、`bool`、`date`、数の型（`money[…]` など）、このファイルか `use gate` で読んだファイルの列挙と、principal と resource の型です。

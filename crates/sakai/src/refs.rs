@@ -59,6 +59,10 @@ pub enum Kind {
     /// dates file, bundled or deployed as a function, so it is the dates file itself, as a gate's
     /// and a module's `use dates` are (DESIGN 19).
     FlowDates { how: String },
+    /// A workflow's `import enum`: an enum read whole from an `enums` file, which the workflow uses
+    /// as one it writes with `enum`. The code a workflow is made into holds the enum as a type of
+    /// its own, with the file's values, so it is the file itself (dandori's DESIGN 1.21).
+    FlowImportEnum,
     /// A workflow's `use proto`: the `.proto` its tasks call the services of.
     FlowProto,
     /// A task's `connect`: a method of a service of a `.proto`.
@@ -77,9 +81,10 @@ pub enum Kind {
     /// A rule's `import jsonschema`, or its `shape` of a JSON Schema, from an OpenAPI or AsyncAPI
     /// document.
     RuleJsonSchema { how: String },
-    /// A gate's `use rule`, `use dates`, `use calendar` or `use gate` (sekisho's DESIGN 8.5): the
-    /// code a gate is made into calls the code made of the rule and of the dates, and a gate reads
-    /// another's declarations, so each is the thing itself.
+    /// A gate's `use rule`, `use dates`, `use calendar`, `use gate` or `import enum` (sekisho's
+    /// DESIGN 8.5, 2.12): the code a gate is made into calls the code made of the rule and of the
+    /// dates, a gate reads another's declarations, and an enum read from an `enums` file is one of
+    /// the gate's own with the file's values, so each is the thing itself.
     GateUse { how: String },
     /// A module's `use rule`, `use dates` or `use module` (kaname's DESIGN 14.6): the code a module
     /// is made into calls the code made of the rule, of the dates and of the other module, so each is
@@ -104,6 +109,7 @@ impl Kind {
             Kind::CalendarUse => "use calendar".into(),
             Kind::FlowRule { how, .. } => how.clone(),
             Kind::FlowDates { how } => how.clone(),
+            Kind::FlowImportEnum => "import enum".into(),
             Kind::FlowProto => "use proto".into(),
             Kind::FlowConnect => "connect".into(),
             Kind::FlowChild => "flow".into(),
@@ -307,6 +313,8 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 // a dates file a workflow reads, bundled or as a function: the file itself, as a
                 // gate's and a module's (DESIGN 19)
                 (Tool::Dandori, h) if h.starts_with("use dates") => Kind::FlowDates { how: h.to_string() },
+                // an `enums` file a workflow reads an enum from: the file itself, as a rule's is
+                (Tool::Dandori, "import enum") => Kind::FlowImportEnum,
                 (Tool::Dandori, "use proto") => Kind::FlowProto,
                 (Tool::Dandori, "connect") => Kind::FlowConnect,
                 (Tool::Dandori, "flow") => Kind::FlowChild,
@@ -318,7 +326,7 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 // a gate's rules, dates, calendars and other gates; its contracts (`use openapi` and
                 // the rest) are read for the operations its actions guard, which `guards` names; and a
                 // workflow it names is who calls, which the workflow's own calls are held for
-                (Tool::Sekisho, h @ ("use rule" | "use dates" | "use calendar" | "use gate")) => Kind::GateUse { how: h.to_string() },
+                (Tool::Sekisho, h @ ("use rule" | "use dates" | "use calendar" | "use gate" | "import enum")) => Kind::GateUse { how: h.to_string() },
                 (Tool::Sekisho | Tool::Cedar, "guards") => Kind::GateGuards,
                 // a module's rules, dates and other modules; its books, as a gate's and a workflow's,
                 // are what the host applies its transfers to
@@ -657,7 +665,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 .find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q))
                 .map(|pl| pl.package.clone())
                 .or_else(|| implemented(read, &q).and_then(|(pf, _)| published_package(m, y, &pf))),
-            Kind::FlowRule { connect: false, .. } | Kind::FlowDates { .. } | Kind::RuleApply | Kind::RuleImportEnum | Kind::RuleRangeFromKoyomi | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
+            Kind::FlowRule { connect: false, .. } | Kind::FlowDates { .. } | Kind::FlowImportEnum | Kind::RuleApply | Kind::RuleImportEnum | Kind::RuleRangeFromKoyomi | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
             // the operation a gate guards, of a document or a `.proto`
@@ -782,6 +790,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                     "ワークフローから生成したコードは、日付のファイルから生成したコードを、同梱して呼ぶか Lambda の関数として呼びます。使うのは日付のファイルそのもの（「{yn}」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
                     "The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside {yn}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel."
                 ),
+                Kind::FlowImportEnum => tr!(
+                    "`import enum` は、`enums` のファイルの列挙を丸ごと読み、ワークフローに書いた列挙と同じに使います。ワークフローから生成したコードはその列挙を自分の型として持つので、使うのは `enums` のファイルそのもの（「{yn}」の内側）です。境界の向こうの列挙は、`enums` のファイルを二つの共有カーネルに並べて読むか、「{yn}」に公表された言語の proto に置いてもらってください。",
+                    "An `import enum` reads an enum whole from the `enums` file and uses it as an enum written in the workflow, and the code a workflow is made into holds the enum as a type of its own: the `enums` file itself, inside {yn}. An enum across the boundary is read from an `enums` file in the two's shared kernel, or {yn} puts it in a `.proto` of a published language."
+                ),
                 Kind::CalendarUse => tr!(
                     "カレンダーは公表された言語にできません。境界の向こうのカレンダーを読めるのは、二つの共有カーネルに並べたときだけです。",
                     "A calendar cannot be a published language; a calendar across the boundary is read only from the two's shared kernel."
@@ -797,6 +809,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::GateUse { how } if how == "use gate" => tr!(
                     "`use gate` は、ほかの .gate の型と役割と forbid を読みます。使うのは .gate そのもの（「{yn}」の内側）で、.gate は公表された言語にできません。境界の向こうの .gate は、二つの共有カーネルに並べてください。",
                     "A `use gate` reads another .gate's types, roles and forbids: the .gate itself, inside {yn}, and a .gate cannot be a published language. A .gate across the boundary is read from the two's shared kernel."
+                ),
+                Kind::GateUse { how } if how == "import enum" => tr!(
+                    "`import enum` は、`enums` のファイルの列挙を丸ごと読み、ゲートに書いた列挙と同じに使います。使うのは `enums` のファイルそのもの（「{yn}」の内側）です。境界の向こうの列挙は、`enums` のファイルを二つの共有カーネルに並べて読んでください。",
+                    "An `import enum` reads an enum whole from the `enums` file and uses it as an enum written in the gate: the `enums` file itself, inside {yn}. An enum across the boundary is read from an `enums` file in the two's shared kernel."
                 ),
                 Kind::GateUse { .. } => tr!(
                     "ゲートから生成したコードは、日付とカレンダーから生成したコードを呼びます。日付のファイルとカレンダーは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",

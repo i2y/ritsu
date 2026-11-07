@@ -77,6 +77,9 @@ pub struct File {
     pub uses: Vec<Use>,
     pub today: Option<Today>,
     pub enums: Vec<EnumDecl>,
+    /// The `import enum` lines, as written. [`names::check`](crate::names::check) reads each one
+    /// and puts the enum it brings into `enums`, marked with where it came from.
+    pub imports: Vec<ImportEnum>,
     pub roles: Vec<RoleDecl>,
     pub principals: Vec<EntityDecl>,
     pub workflows: Vec<WorkflowDecl>,
@@ -175,6 +178,37 @@ pub struct EnumDecl {
     pub name: Name,
     pub span: Span,
     pub values: Vec<Name>,
+    /// Where the enum was read from, when it is an `import enum`'s: it behaves as one written in
+    /// the file, but the names are the `enums` file's, so they are not held to the form a name
+    /// written here takes (they were, when the import was read), and the file does not own it.
+    pub from: Option<EnumOrigin>,
+}
+
+/// `import enum <enum> from "<file>" [-> <name>]`.
+#[derive(Clone, Debug)]
+pub struct ImportEnum {
+    /// The enum's name in the `enums` file, as written, and where.
+    pub enum_name: (String, Span),
+    /// The file as written (from the `.gate`'s directory), and where the string is.
+    pub path: (String, Span),
+    /// `-> <name>`: the name this file calls it by. None: the enum's own.
+    pub rename: Option<Name>,
+    /// Where `import` is.
+    pub span: Span,
+}
+
+/// Where an imported enum was declared.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EnumOrigin {
+    /// The `enums` file as written in the import, and the enum's name there.
+    pub path: String,
+    pub enum_name: String,
+    /// Whether its values are ordered there (`<`). A gate's enums carry no order; this is said by
+    /// `doc` and `api`.
+    pub ordered: bool,
+    /// Whether the `import enum` renames it with `->`: the enum's name is then the file's own
+    /// writing, and the values' are still the `enums` file's.
+    pub renamed: bool,
 }
 
 impl EnumDecl {

@@ -350,6 +350,41 @@ refunds.ja.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expecta
 ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 2 checked, 0 undecided
 ```
 
+### One enum for the workflow and the gate
+
+The states of an order are the workflow's and the gate's too. Written twice, one of them can be
+renamed and the check of the other says nothing. Written once in an `enums` file of rulec's, they
+are read by both with `import enum`:
+
+```gate
+import enum order_state from "rules/order_states.rule"
+```
+
+```flow
+import enum order_state from "rules/order_states.rule"
+```
+
+Each uses the enum as one it wrote itself, and neither can name a state the file does not have:
+
+```console
+$ cd crates/sekisho/examples/order_states
+$ ritsu check .
+ok rules/order_states.rule
+ok rules/注文の状態.rule
+shipping.flow: ok
+shipping.ja.flow: ok
+orders.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+orders.ja.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+ritsu check: 6 files (rulec 2, dandori 2, sekisho 2): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+Rename `paid` in the file (to `settled`, say), and `ritsu check` stops both where they write it: the
+flow at `paid =>` (dandori's E003) and the gate at each `is paid` (sekisho's E101), where two copies
+of the enum would have said nothing.
+
+If the file belongs to another context of the map, sakai holds the line to a relationship, as it
+holds a rule's.
+
 ### The map
 
 When sakai's map says a context opens an operation to the others (`open host service`),

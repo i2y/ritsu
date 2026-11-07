@@ -201,6 +201,10 @@ pub struct EnumDef {
     /// can hold a value to a range (`range >=basic <=gold`). A `.flow`'s own enums and a `.proto`'s
     /// have no order.
     pub ordered: bool,
+    /// the `enums` file an `import enum` read it from: the path as written, and the enum's name
+    /// there. Nothing but the page for people (`doc`) reads it; to everything else the enum is one
+    /// the flow wrote.
+    pub from: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

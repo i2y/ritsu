@@ -155,3 +155,25 @@ fn sekisho_reads_through_the_languages_joined_once() {
     assert!(g.flows.crossings(&shop.join(flow), &g.ports()).is_ok());
     assert!(g.items.items(&shop, flow).unwrap().iter().any(|i| i.kind() == "task"));
 }
+
+/// A workflow's and a gate's `import enum` are references to the enum of the `enums` file, and
+/// each lands on it: the index of rulec's items holds the enum there, as sakai and yuen look it up
+/// (sekisho's `examples/order_states`).
+#[test]
+fn an_import_enum_lands_on_the_enum_of_its_file() {
+    let p = load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../sekisho/examples/order_states"));
+    let j = Joined::new();
+    let (refs, refused) = p.references(&j);
+    assert!(refused.is_empty(), "{refused:?}");
+    let mut seen: Vec<String> = refs.iter().filter(|r| r.how == "import enum").map(|r| format!("{}:{} {} ({}): {}", r.from.rel, r.line, r.target.text(), if r.in_project { "in the project" } else { "outside it" }, landing(&r.landing))).collect();
+    seen.sort();
+    assert_eq!(
+        seen,
+        [
+            "orders.gate:5 rulec \"rules/order_states.rule\" enum order_state (in the project): found at line 4",
+            "orders.ja.gate:5 rulec \"rules/注文の状態.rule\" enum 注文の状態 (in the project): found at line 4",
+            "shipping.flow:4 rulec \"rules/order_states.rule\" enum order_state (in the project): found at line 4",
+            "shipping.ja.flow:4 rulec \"rules/注文の状態.rule\" enum 注文の状態 (in the project): found at line 4",
+        ]
+    );
+}

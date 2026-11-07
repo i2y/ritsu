@@ -6,7 +6,9 @@
 //! (each as its reference, in the JSON of a reference that sakai's `api` writes too: ritsu's DESIGN
 //! 6.2) and its context (with whether each action a policy asks with `allowed` is allowed, the
 //! action and what its inputs are given: DESIGN 2.11), each policy with its `@id`, and the
-//! expectations and the separations, each with its line.
+//! expectations and the separations, each with its line. The enums come first among them: each with
+//! its values, and, for one read with `import enum`, the `enums` file it came from and whether its
+//! values are ordered there (a gate's enum carries no order).
 
 use crate::cedar::{self, Shape};
 use crate::checks::Checked;
@@ -79,6 +81,17 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
         Kind::Resource => "resource",
         Kind::Workflow => "workflow",
     };
+    let enums = g.enums.iter().map(|e| {
+        let from = e.from.as_ref().map(|o| Json::obj([("path", Json::str(o.path.clone())), ("enum", Json::str(o.enum_name.clone()))])).unwrap_or(Json::Null);
+        Json::obj([
+            ("name", Json::str(e.named.name.clone())),
+            ("alias", Json::str(e.named.alias.clone())),
+            ("line", line(e.named.line)),
+            ("values", Json::arr(e.values.iter().map(|v| Json::obj([("name", Json::str(v.name.clone())), ("alias", Json::str(v.alias.clone()))])))),
+            ("ordered", Json::Bool(e.from.as_ref().is_some_and(|o| o.ordered))),
+            ("from", from),
+        ])
+    });
     let roles = g.roles.iter().enumerate().map(|(ri, r)| {
         Json::obj([
             ("name", Json::str(r.named.name.clone())),
@@ -214,6 +227,7 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
                 ("policies_json", Json::str(format!("cedar/{alias}.policies.json"))),
             ]),
         ),
+        ("enums", Json::arr(enums)),
         ("roles", Json::arr(roles)),
         ("types", Json::arr(types)),
         ("workflows", Json::arr(workflows)),

@@ -131,6 +131,7 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang, format: Format, calls: Optio
     }
     let mut b = Builder::new(o, scope, checked, suite, lang, format);
     b.head();
+    b.enums();
     b.actions();
     b.policies();
     b.computed();
@@ -527,6 +528,35 @@ impl<'a> Builder<'a> {
             )));
         }
         out.join(if self.ja() { "" } else { " " })
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // 1b. The enums read from other files
+
+    /// The enums the gate brings in with `import enum`: each with its values and the file it is
+    /// read from. A gate's own enums are shown with the attributes that take them.
+    fn enums(&mut self) {
+        let read: Vec<&Enum> = self.g.enums.iter().filter(|e| e.from.is_some()).collect();
+        if read.is_empty() {
+            return;
+        }
+        self.heading(2, self.t(tr!("ほかのファイルから読んだ列挙", "Enums read from other files")), "enums".into());
+        self.push(Block::Para(self.t(tr!(
+            "`import enum` で、`enums` ファイルから読んだ列挙です。値は、そのファイルの列挙が持つものを、ここに書いた列挙と同じに使います。そのファイルで値を足したり名前を変えたりすると、この gate の検査はそれを読み直します。gate の列挙は値の順を持たないので、順のある列挙の順はここでは使いません。",
+            "The enums `import enum` reads from `enums` files. Their values are the file's, used as an enum written here would be; when the file adds a value or renames one, this gate's check reads it again. A gate's enum carries no order, so the order of an ordered enum is not used here."
+        ))));
+        let rows: Vec<Vec<String>> = read
+            .iter()
+            .filter_map(|e| {
+                let o = e.from.as_ref()?;
+                let vs: Vec<String> = e.values.iter().map(|v| code(&v.name)).collect();
+                let order = if o.ordered { self.t(tr!("あり（使わない）", "yes (not used)")) } else { self.t(tr!("なし", "no")) };
+                Some(vec![named(self.lang, &e.named), joined(self.lang, &vs), code(&o.path), code(&o.enum_name), order])
+            })
+            .collect();
+        let marks = vec![Mark::Plain; rows.len()];
+        let head = vec![self.t(tr!("列挙", "Enum")), self.t(tr!("値", "Values")), self.t(tr!("ファイル", "File")), self.t(tr!("そこでの名前", "Name there")), self.t(tr!("順", "Ordered"))];
+        self.push(Block::Table { head, rows, marks });
     }
 
     // -----------------------------------------------------------------------------------------

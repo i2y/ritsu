@@ -1,0 +1,4 @@
+enums 注文の状態(order_states) v1
+description "注文の状態。注文を動かすフローと、だれが注文に触れるかを決めるゲートが、一度書いたものを分け合う。order_states.rule の日本語の版"
+
+enum 注文の状態(order_state) = 支払済(paid) | 発送済(shipped) | 返品済(returned) | 返金済(refunded)

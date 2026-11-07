@@ -87,7 +87,7 @@ A `.flow` has no comparison or arithmetic. It branches only by matching an enum,
 value that may be absent, which a rule or a task answered. A task says how it is called,
 the errors it comes back with, how it is retried, whether it takes an idempotency `key`, and what
 it does to a case (`starts`, `sends`, `observes`). What a task takes and answers is written as
-records and enums, or taken from the description of the API it calls: a message of a `.proto` is a
+records and enums (an enum several languages share is written once in an `enums` file of rulec's and read with `import enum`), or taken from the description of the API it calls: a message of a `.proto` is a
 type as it is (`warehouse.ReserveResponse`), and the task is held to the same description. The
 workflow's own entry can be a service of a `.proto`, from which clients in other languages are made
 (`workflow fulfillment v1 implements shop.FulfillmentService`); the checker holds the workflow to

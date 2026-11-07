@@ -21,6 +21,7 @@
     "schema_json": "cedar/papers.cedarschema.json",
     "policies_json": "cedar/papers.policies.json"
   },
+  "enums": [],
   "roles": [
     {
       "name": "member",

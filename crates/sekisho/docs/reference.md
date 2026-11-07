@@ -25,7 +25,7 @@ The parts of a file come in this order (E003 otherwise):
 | `namespace <Name>` | Cedar's namespace (`Shop`, or `Shop::Refunds`), in ASCII, once; without it, the file's alias in Pascal case |
 | `use …` | the files the gate reads, any number |
 | `today range … offset …` | the days a request may come on, once |
-| `enum` | enums |
+| `import enum`, `enum` | enums: read from an `enums` file, or written here; the two may be mixed |
 | `role` | roles |
 | `principal`, `workflow` | who asks |
 | `resource` | what is asked about |
@@ -123,6 +123,35 @@ read `today`; an action that reads no date answers on any day. A file that reads
 ```gate
 enum order_status = paid | shipped | returned | refunded
 ```
+
+### Reading an enum from an `enums` file
+
+An enum that a workflow, a gate and a rule all use is written once, in an `enums` file of rulec's,
+and read with `import enum`:
+
+```gate
+import enum order_state from "rules/order_states.rule"
+```
+
+`import enum <enum> from "<file>"` takes the enum by its name in the file (or its alias there); end
+the line with `-> <name>` to call it something else in this file. The path is written from the
+directory of the `.gate`, and the line stands where `enum` stands. sekisho reads nothing of the
+file itself: rulec says what the enum has, so the `import proto` and `import jsonschema` lines an
+`enums` file checks its values by hold here too.
+
+From there on it is an enum written in the gate: an attribute takes it, a condition compares
+with its values, and the Cedar and the code generated for it are those of the same enum written
+with `enum`. A value is written by its name in the file or by the alias in parentheses after it
+(Cedar's string is the alias, else the name). The order an enum has there (`a < b < c`) is not
+used: a gate has no expression that compares values; `doc` and `api` say it is ordered.
+The enum belongs to the `enums` file, not to the gate: `references` names it as `import enum`
+(`rulec "rules/order_states.rule" enum order_state`), and the items of the gate do not list it.
+
+A file that is not there or is a rule, or that does not pass rulec's check, is E201 (with what
+rulec says in the notes); an enum the file does not have is E101, which lists the ones it has; a
+name that is already an enum's, a type's or another import's is E006; a name or a value that
+Cedar or the generated code cannot take is E007 or E008, said at the line, with a note that the
+`enums` file is where a value is corrected. Where rulec is not joined, the line is E209.
 
 ## Roles
 
@@ -518,13 +547,14 @@ guards.
 
 | Where | Words |
 |---|---|
-| at the start of a line | `gate` `description` `namespace` `use` `today` `enum` `role` `principal` `workflow` `resource` `action` `permit` `forbid` `expect` `separate` |
+| at the start of a line | `gate` `description` `namespace` `use` `today` `import` `enum` `role` `principal` `workflow` `resource` `action` `permit` `forbid` `expect` `separate` |
 | after `use` | `rule` `dates` `calendar` `openapi` `proto` `asyncapi` `book` `gate` `from` |
+| after `import` | `enum` `from` |
 | in a block | `description` `includes` `can` `roles` `attributes` `guards` `principal` `resource` `from` `nobody` `input` `context` `action` `actions` `when` `unless` |
 | in a condition | `in` `is` `not` `and` `or` `any` `workflow` `open` `today` `allow` `deny` `allowed` `principal` `resource` `true` `false` |
 | types and ranges | `bool` `date` `number` `rate` `money` `mass` `length` `area` `volume` `duration` `temperature` `sound` `range` `offset` |
 
-The symbols are `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `?`, and `#` for a comment. Cedar's
+The symbols are `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `?` `->`, and `#` for a comment. Cedar's
 `==`, `!=`, `&&`, `||` and `!` are not sekisho's: E001 says what to write instead (`is`, `is not`,
 `and`, `or`, `not`).
 
@@ -601,7 +631,7 @@ English) and `--help`.
 
 `api` prints what the gate declares, each with its line: `sekisho` (the version), `name`, `alias`,
 `version`, `source_sha256`, `description`, `namespace`, `uses`, `today`, `cedar` (the four files
-`gen` writes), `roles` (each role's entity in Cedar, `includes`, `can`), `types` (each type's
+`gen` writes), `enums` (each enum's values, whether they are ordered where it was read from, and `from`, the `enums` file and the enum's name there, for one read with `import enum`), `roles` (each role's entity in Cedar, `includes`, `can`), `types` (each type's
 entity type, its roles, its attributes and whether each goes into Cedar), `workflows`, `actions`
 (the operations each guards, as references written from the root, the types it takes, its input,
 its context and how each computed value is computed, with `asks` for an `allowed`: the action

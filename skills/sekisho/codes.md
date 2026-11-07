@@ -43,7 +43,7 @@ See also: [E007](#e007)
 
 **When**: The file does not start with a `gate` line; the sections are out of their order; a section written once (`description`, `namespace`, `today`) or a line written once in a block is written twice; a line a block needs is missing (an action's `principal` and `resource`, the `action` of a policy or an expectation, the `actions` of a `separate`); or `attributes`, `input` or `context` has nothing under it.
 
-**Fix**: A file goes: the heading (`gate`), `description`, `namespace`, `use`, `today`, `enum`, `role`, `principal`, `workflow`, `resource`, `action`, `permit` and `forbid`, `expect`, `separate`; the order of a block's lines is in the diagnostic's note.
+**Fix**: A file goes: the heading (`gate`), `description`, `namespace`, `use`, `today`, `import enum` and `enum`, `role`, `principal`, `workflow`, `resource`, `action`, `permit` and `forbid`, `expect`, `separate`; the order of a block's lines is in the diagnostic's note.
 
 **Example**:
 
@@ -99,7 +99,7 @@ See also: [E003](#e003), [E004](#e004)
 
 ## E006 — A name is declared twice
 
-**When**: A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), also against what a file read with `use gate` declares; or an input of a rule is given twice, or `actions` lists an action twice.
+**When**: A name or an alias is declared twice among the things of one kind (the types and the enums, the roles, an enum's values, a type's attributes, the workflows, the actions, an action's inputs and computed values, the policies, the expectations, the separations, the names of the `use` lines), an enum read with `import enum` as one written with `enum` (its name after `->` too), also against what a file read with `use gate` declares; or an input of a rule is given twice, or `actions` lists an action twice.
 
 **Fix**: Rename one of them, or give it another alias.
 
@@ -118,7 +118,7 @@ See also: [E007](#e007)
 
 ## E007 — A name that goes to Cedar has no ASCII alias, or one of the wrong form
 
-**When**: A name that goes to Cedar (the file, an enum and its values, a role, a principal's or a resource's type, an attribute, a workflow, an action, an input, a computed value, a policy) is not ASCII of the form of an alias and has no alias in parentheses; or its alias is not of the form; or the namespace is not an ASCII identifier. A type's alias is `[A-Z][A-Za-z0-9]*`, any other `[a-z][a-z0-9_]*`. An expectation and a separation do not go to Cedar, and need none.
+**When**: A name that goes to Cedar (the file, an enum and its values, a role, a principal's or a resource's type, an attribute, a workflow, an action, an input, a computed value, a policy) is not ASCII of the form of an alias and has no alias in parentheses; or its alias is not of the form; or the namespace is not an ASCII identifier. A type's alias is `[A-Z][A-Za-z0-9]*`, any other `[a-z][a-z0-9_]*`. An expectation and a separation do not go to Cedar, and need none. The names of an enum read with `import enum` and of its values are held to the same form; where one is not, it is said at the `import enum` line, and corrected in the `enums` file.
 
 **Fix**: Give it an alias in parentheses, like `返金する(refund_order)`.
 
@@ -154,7 +154,7 @@ See also: [E007](#e007)
 
 ## E101 — A name names nothing
 
-**When**: A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; or a policy or an expectation names an action of another file.
+**When**: A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; an enum an `import enum` reads is not in its `enums` file; or a policy or an expectation names an action of another file.
 
 **Fix**: Correct the spelling, or declare it; the note lists the names there are. The names of a rule or a dates file are listed as a `.gate` writes them, by the alias where the name cannot be written; one that can be written by neither needs an alias in that file.
 
@@ -443,7 +443,7 @@ See also: [E109](#e109), [E101](#e101)
 
 ## E201 — A file a `use` reads does not pass its language's check, cannot be read, or is outside the root
 
-**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it.
+**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file an `import enum` reads is a rule and no `enums` file, or does not pass rulec's check; or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it.
 
 **Fix**: Correct that file until its language's check passes it. For a file outside the root, give `--root` a directory that holds it.
 
@@ -832,7 +832,7 @@ See also: [E201](#e201)
 
 ## E209 — A file that reads another language, checked with a sekisho that reads none
 
-**When**: A file with `use rule`, `use dates`, `use calendar`, `use book` or `workflow … from`, checked with the binary of sekisho's own crate (`sekisho`), which holds none of rulec, koyomi, chobo and dandori. It is said once, at the first such line, and nothing else is said. The exit code is 2: it is how the command is run, not what the file says.
+**When**: A file with `use rule`, `import enum`, `use dates`, `use calendar`, `use book` or `workflow … from`, checked with the binary of sekisho's own crate (`sekisho`), which holds none of rulec, koyomi, chobo and dandori. It is said once, at the first such line, and nothing else is said. The exit code is 2: it is how the command is run, not what the file says.
 
 **Fix**: Run the same command as `ritsu sekisho` (`ritsu sekisho check refunds.gate`), which reads the rules, the dates files, the calendars, the books and the flows in the same process.
 

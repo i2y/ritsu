@@ -291,6 +291,36 @@ refunds.ja.gate: ok — action 3、ポリシー 10（permit 7、forbid 3）、�
 ritsu check: ファイル 8 個（rulec 2、koyomi 3、dandori 1、sekisho 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
 
+### ワークフローとゲートで一つの列挙
+
+注文の状態は、ワークフローのものであり、ゲートのものでもあります。二か所に書くと、片方だけ名前を変えても、もう片方の検査は何も言いません。規則の `enums` ファイルに一度だけ書き、両方が `import enum` で読めば、そうなりません。
+
+```gate
+import enum 注文の状態 from "rules/注文の状態.rule"
+```
+
+```flow
+import enum 注文の状態 from "rules/注文の状態.rule"
+```
+
+どちらも、読んだ列挙を自分で書いた列挙として使います。ファイルに無い状態は、どちらも書けません。
+
+```console
+$ cd crates/sekisho/examples/order_states
+$ ritsu check . --lang ja
+ok rules/order_states.rule
+ok rules/注文の状態.rule
+shipping.flow: 検査を通りました
+shipping.ja.flow: 検査を通りました
+orders.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+orders.ja.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+ritsu check: ファイル 6 個（rulec 2、dandori 2、sekisho 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
+ファイルの `支払済` の名前を変える（たとえば `決済済` にする）と、`ritsu check` は両方を、その値を書いた所で止めます。フローは `支払済 =>` の行で（dandori の E003）、ゲートは `is 支払済` の行ごとに（sekisho の E101）止まります。二か所に列挙を書いていたときは、どちらも何も言いませんでした。
+
+列挙のファイルが地図のほかのコンテキストのものなら、sakai は規則を読むときと同じに、この行を関係に当てて確かめます。
+
 ### 地図
 
 sakai の地図で、あるコンテキストがほかのコンテキストに操作を公開している（`open host service`）とき、`ritsu check` は、その操作を守る action がどこかのゲートにあるかを確かめます。だれでも呼べると契約に書いた操作は除きます。コンテキストのほかの操作には守る action があるのに、守る action の無い操作があればエラー（E907）、コンテキストのどの操作にもまだ守る action が無ければ警告（W907）です。この例には地図がありませんが、ブラウザで試すページの通販には地図があります。

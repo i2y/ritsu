@@ -16,6 +16,7 @@ pub const GATE: &str = "gate";
 pub const DESCRIPTION: &str = "description";
 pub const NAMESPACE: &str = "namespace";
 pub const USE: &str = "use";
+pub const IMPORT: &str = "import";
 pub const TODAY: &str = "today";
 pub const ENUM: &str = "enum";
 pub const ROLE: &str = "role";
@@ -80,8 +81,9 @@ pub const OFFSET: &str = "offset";
 /// The words, by where they are written, as DESIGN 9.1 lists them. The words of the units are
 /// rulec's (`ritsu_units`): `money[…]`, `mass[…]`, `length[…]` and the rest.
 pub const TABLE: &[(&str, &[&str])] = &[
-    ("line", &[GATE, DESCRIPTION, NAMESPACE, USE, TODAY, ENUM, ROLE, PRINCIPAL, WORKFLOW, RESOURCE, ACTION, PERMIT, FORBID, EXPECT, SEPARATE]),
+    ("line", &[GATE, DESCRIPTION, NAMESPACE, USE, TODAY, IMPORT, ENUM, ROLE, PRINCIPAL, WORKFLOW, RESOURCE, ACTION, PERMIT, FORBID, EXPECT, SEPARATE]),
     ("use", &[RULE, DATES, CALENDAR, OPENAPI, PROTO, ASYNCAPI, BOOK, GATE, FROM]),
+    ("import", &[ENUM, FROM]),
     ("block", &[DESCRIPTION, INCLUDES, CAN, ROLES, ATTRIBUTES, GUARDS, PRINCIPAL, RESOURCE, FROM, NOBODY, INPUT, CONTEXT, ACTION, ACTIONS, WHEN, UNLESS]),
     ("condition", &[IN, IS, NOT, AND, OR, ANY, WORKFLOW, OPEN, TODAY, ALLOW, DENY, ALLOWED, PRINCIPAL, RESOURCE, TRUE, FALSE]),
     ("type and range", &[BOOL, DATE, NUMBER, RATE, MONEY, "mass", "length", "area", "volume", "duration", "temperature", "sound", RANGE, OFFSET]),

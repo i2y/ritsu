@@ -1295,6 +1295,17 @@ pub fn markdown(i: &Input) -> String {
         }
         o.push('\n');
     }
+    let read = enums_read(i.m, lang);
+    if !read.is_empty() {
+        let _ = writeln!(o, "## {}\n", tr(lang, "Enums read from other files", "ほかのファイルから読んだ列挙"));
+        let _ = writeln!(o, "{}\n", enums_read_note(lang));
+        let _ = writeln!(o, "{}", tr(lang, "| Enum | Values | File | Name there | Ordered |", "| 列挙 | 値 | ファイル | そこでの名前 | 順 |"));
+        o.push_str("|---|---|---|---|---|\n");
+        for r in &read {
+            let _ = writeln!(o, "| `{}` | {} | `{}` | `{}` | {} |", r.name, r.values.iter().map(|v| format!("`{v}`")).collect::<Vec<_>>().join(sep(lang)), r.path, r.there, r.ordered);
+        }
+        o.push('\n');
+    }
     let docs = rule_docs(i, false);
     if !docs.is_empty() {
         let _ = writeln!(o, "## {}\n", tr(lang, "Rules", "規則"));
@@ -2008,6 +2019,28 @@ fn calls_table(rows: &[CallRow], cased: bool, lang: Lang) -> String {
     o
 }
 
+/// An enum the flow reads with `import enum`, as the page shows it.
+struct EnumRead {
+    name: String,
+    values: Vec<String>,
+    path: String,
+    there: String,
+    ordered: String,
+}
+
+/// The enums the flow reads with `import enum`, in the order of the model.
+fn enums_read(m: &Model, lang: Lang) -> Vec<EnumRead> {
+    m.enums.iter().filter_map(|e| e.from.as_ref().map(|(path, there)| EnumRead { name: e.name.clone(), values: e.values.clone(), path: path.clone(), there: there.clone(), ordered: if e.ordered { tr(lang, "yes", "あり") } else { tr(lang, "no", "なし") } })).collect()
+}
+
+fn enums_read_note(lang: Lang) -> String {
+    tr(
+        lang,
+        "The enums `import enum` reads from `enums` files. Their values are the file's, used as an enum written in the flow is; when the file adds a value or renames one, `dandori check` reads it again.",
+        "`import enum` で、`enums` ファイルから読んだ列挙です。値は、そのファイルの列挙が持つものを、flow に書いた列挙と同じに使います。そのファイルで値を足したり名前を変えたりすると、`dandori check` はそれを読み直します。",
+    )
+}
+
 fn ends_table(i: &Input, rows: &[EndRow]) -> String {
     let lang = i.lang;
     let mut o = format!("<table><thead><tr><th>{}</th><th>{}</th>", tr(lang, "Line", "行"), tr(lang, "End", "終わり方"));
@@ -2208,6 +2241,14 @@ pub fn html(i: &Input) -> String {
     let _ = write!(o, "<section class=\"tables\"><h2>{}</h2>{}", tr(lang, "Calls", "呼び出し"), calls_table(&page.rows, !m.cases.is_empty(), lang));
     if !ends.is_empty() {
         let _ = write!(o, "<h2>{}</h2>{}", tr(lang, "Ends", "終わり方"), ends_table(i, &ends));
+    }
+    let read = enums_read(m, lang);
+    if !read.is_empty() {
+        let _ = write!(o, "<h2>{}</h2><p class=\"note\">{}</p><table><thead><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>", tr(lang, "Enums read from other files", "ほかのファイルから読んだ列挙"), inline(&enums_read_note(lang)), tr(lang, "Enum", "列挙"), tr(lang, "Values", "値"), tr(lang, "File", "ファイル"), tr(lang, "Name there", "そこでの名前"), tr(lang, "Ordered", "順"));
+        for r in &read {
+            let _ = write!(o, "<tr><td><code>{}</code></td><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>", esc(&r.name), r.values.iter().map(|v| format!("<code>{}</code>", esc(v))).collect::<Vec<_>>().join(sep(lang)), esc(&r.path), esc(&r.there), r.ordered);
+        }
+        o.push_str("</tbody></table>");
     }
     o.push_str("</section>\n");
     // the detail pane's pages

@@ -1,0 +1,30 @@
+gate shop v1
+description "Who may look at an order of the shop"
+namespace Shop
+
+import enum order_status from "read/order_states.rule"
+import enum state from "read/order_states.rule"
+
+role clerk
+  description "Answers customers"
+  can view_order
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order of the shop"
+  attributes
+    status : order_status
+
+action view_order
+  description "Look at an order"
+  principal User
+  resource Order
+
+permit staff_view_paid_orders
+  description "The staff look at an order that is paid"
+  principal in clerk
+  action view_order
+  when resource.status is paid

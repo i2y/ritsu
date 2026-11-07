@@ -118,6 +118,19 @@ pub struct Today {
 pub struct Enum {
     pub named: Named,
     pub values: Vec<Named>,
+    /// Where it was read from, for an `import enum`'s; None for one written in the file.
+    pub from: Option<EnumFrom>,
+}
+
+/// The `enums` file an enum was imported from.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EnumFrom {
+    /// The path as the `import enum` writes it.
+    pub path: String,
+    /// The enum's name in that file.
+    pub enum_name: String,
+    /// Whether its values are ordered there (`<`). The gate's enum carries no order.
+    pub ordered: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -555,7 +568,8 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
     for x in &scope {
         let xdir = std::path::Path::new(&x.path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
         for e in &x.enums {
-            enums.push(Enum { named: named(&e.name), values: e.values.iter().map(named).collect() });
+            let from = e.from.as_ref().map(|o| EnumFrom { path: o.path.clone(), enum_name: o.enum_name.clone(), ordered: o.ordered });
+            enums.push(Enum { named: named(&e.name), values: e.values.iter().map(named).collect(), from });
         }
         roles_ast.extend(x.roles.iter());
         principals.extend(x.principals.iter());

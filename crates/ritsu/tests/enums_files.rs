@@ -116,3 +116,34 @@ fn a_gate_finds_no_output_in_an_enums_file_and_a_module_cannot_call_one() {
         assert_eq!(out, format!("ok {module}: 2 functions, total\n"), "{module}");
     }
 }
+
+/// A workflow and a gate read the states of an order from one `enums` file with `import enum`
+/// (`sekisho/examples/order_states`, English first, the Japanese versions beside it). The project
+/// passes `ritsu check`; rename a value in the `enums` file and both stop where they write it, which
+/// two copies of the enum in the workflow and in the gate would not do.
+#[test]
+fn a_workflow_and_a_gate_read_one_enum_and_stop_when_a_value_is_renamed() {
+    let example = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sekisho/examples/order_states");
+    let (code, out) = ritsu_in(&example, &["check", "."]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.ends_with("ritsu check: 6 files (rulec 2, dandori 2, sekisho 2): all pass; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    for (file, from, to, flow, gate, flow_line, gate_lines) in [
+        ("rules/order_states.rule", "paid |", "settled |", "shipping.flow", "orders.gate", 17, [26, 31]),
+        ("rules/注文の状態.rule", "支払済(paid)", "決済済(paid)", "shipping.ja.flow", "orders.ja.gate", 17, [26, 31]),
+    ] {
+        let t = ritsu_testkit::TempDir::new("enums-files-states");
+        ritsu_testkit::tmp::copy_dir(&example, t.path());
+        let p = t.path().join(file);
+        let text = std::fs::read_to_string(&p).unwrap();
+        assert!(text.contains(from), "{file} has no {from:?}");
+        std::fs::write(&p, text.replacen(from, to, 1)).unwrap();
+        let (code, out) = ritsu_in(t.path(), &["check", "."]);
+        assert_eq!(code, 1, "{file}: {out}");
+        assert!(out.contains(&format!("error[dandori E003]: {flow}:{flow_line}:5: ")), "{file}: {out}");
+        for l in gate_lines {
+            assert!(out.contains(&format!("error[sekisho E101]: {gate}:{l}:")), "{file}: {out}");
+        }
+        assert_eq!(out.matches("error[").count(), 3, "{file}: {out}");
+        assert!(out.contains("2 fail (3 errors)"), "{file}: {out}");
+    }
+}

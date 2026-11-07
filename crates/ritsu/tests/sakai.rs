@@ -373,3 +373,128 @@ fn a_workflow_a_gate_a_module_and_a_rule_read_across_a_boundary_alike_in_japanes
     };
     read_alike(&shop, (&DELIVERY_READS_JA, &DELIVERY_RULE_JA), (&ORDERING_READS_JA, &ORDERING_RULE_JA));
 }
+
+// ── An enum of an `enums` file across a boundary: a workflow's and a gate's `import enum`, held
+// as a rule's ──
+
+/// An `enums` file and the two files that read it with `import enum`, a workflow and a gate, as
+/// (path, text, the line of the `import enum`). `from` is the path of the `enums` file from the
+/// workflow, and from the gate (one directory further down).
+struct EnumReads {
+    enums: (&'static str, &'static str),
+    flow: (&'static str, String, usize),
+    gate: (&'static str, String, usize),
+}
+
+/// A workflow and a gate in `dir` that read `enums` (a path from the root) with `import enum`.
+fn enum_readers(dir: &str, enums: (&'static str, &'static str), ja: bool) -> EnumReads {
+    let (flow_path, gate_path) = if ja { (format!("{dir}/支払いの引き継ぎ.flow"), format!("{dir}/gates/支払いの引き継ぎ.gate")) } else { (format!("{dir}/pay.flow"), format!("{dir}/gates/pay.gate")) };
+    let up = |n: usize| "../".repeat(n);
+    let flow_from = format!("{}{}", up(1), enums.0);
+    let gate_from = format!("{}{}", up(2), enums.0);
+    let (flow, gate) = if ja {
+        (
+            format!("workflow 支払いの引き継ぎ v1\ndescription \"荷物の代金の払い方を引き継ぐ\"\n\nimport enum 払い方 from \"{flow_from}\"\n\ninputs\n  方法 : 払い方\n\noutputs\n  方法 : 払い方\n\nflow\n  succeed 方法 = 方法\n"),
+            format!("gate 支払いの引き継ぎ(pay_ja) v1\n\nimport enum 払い方 from \"{gate_from}\"\n\nrole 配達員(courier)\n\nprincipal 配達の担当(Courier)\n  roles 配達員\n\nresource 荷物(Parcel)\n  attributes\n    払い方(paid_by) : 払い方\n\naction 受け取る(collect)\n  principal 配達の担当\n  resource 荷物\n\npermit 代金引換の荷物は受け取る(couriers_collect_what_is_paid_on_delivery)\n  principal in 配達員\n  action 受け取る\n  when resource.払い方 is 代金引換\n"),
+        )
+    } else {
+        (
+            format!("workflow pay v1\ndescription \"Passes on the way a parcel was paid for\"\n\nimport enum payment_method from \"{flow_from}\"\n\ninputs\n  method : payment_method\n\noutputs\n  method : payment_method\n\nflow\n  succeed method = method\n"),
+            format!("gate pay v1\n\nimport enum payment_method from \"{gate_from}\"\n\nrole courier\n\nprincipal Courier\n  roles courier\n\nresource Parcel\n  attributes\n    paid_by : payment_method\n\naction collect\n  principal Courier\n  resource Parcel\n\npermit couriers_collect_what_is_paid_on_delivery\n  principal in courier\n  action collect\n  when resource.paid_by is cash_on_delivery\n"),
+        )
+    };
+    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    EnumReads { enums, flow: (leak(flow_path), flow, 4), gate: (leak(gate_path), gate, 3) }
+}
+
+/// sakai holds a workflow's and a gate's `import enum` to the map as it holds a rule's (sakai's
+/// DESIGN 19, 20): Delivery's read Billing's `enums` file, and Billing is Delivery's customer, the
+/// other way round (E201); Ordering's read Delivery's, a partner's inside (E202, each with the
+/// note of its language). With Billing's `enums` file in the shared kernel of Billing and
+/// Delivery, Delivery's two pass and are counted by their languages, and `api` names the
+/// crossing `import enum`.
+fn enums_read_alike(shop: &Shop, billing_enums: (&'static str, &'static str), delivery_enums: (&'static str, &'static str), ja: bool) {
+    let [o, d, b] = shop.names;
+    let (dr, or) = (enum_readers("delivery", billing_enums, ja), enum_readers("ordering", delivery_enums, ja));
+    let lay = |readers: &[&EnumReads], kernel: bool| {
+        let t = TempDir::new("sakai-enums");
+        ritsu_testkit::tmp::copy_dir(&sakai_dir().join(shop.dir), t.path());
+        for r in readers {
+            t.write(r.enums.0, r.enums.1);
+            t.write(r.flow.0, &r.flow.1);
+            t.write(r.gate.0, &r.gate.1);
+        }
+        if kernel {
+            let listed = format!("{}  rulec \"../{}\"\n", shop.calendar, dr.enums.0);
+            for f in shop.kernel {
+                let p = t.path().join(f);
+                let s = std::fs::read_to_string(&p).unwrap();
+                assert!(s.contains(shop.calendar), "{f} has no {:?}", shop.calendar);
+                std::fs::write(&p, s.replacen(shop.calendar, &listed, 1)).unwrap();
+            }
+        }
+        t
+    };
+    let t = lay(&[&dr, &or], false);
+    let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", shop.map]);
+    assert_eq!(code, 1, "{out}{err}");
+    let mut got: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
+    let mut want: Vec<String> = [&dr.flow, &dr.gate].iter().map(|(f, _, l)| format!("error[E201]: {f}:{l}:1: The file {f} of {d} refers to {} of {b} (import enum), which {d} has no relationship with", dr.enums.0)).collect();
+    want.extend([&or.flow, &or.gate].iter().map(|(f, _, l)| format!("error[E202]: {f}:{l}:1: The file {f} of {o} refers to {} (import enum), which is inside {d}", or.enums.0)));
+    got.sort();
+    want.sort();
+    assert_eq!(got, want, "{out}");
+    for note in [
+        format!("  = An `import enum` reads an enum whole from the `enums` file and uses it as an enum written in the workflow, and the code a workflow is made into holds the enum as a type of its own: the `enums` file itself, inside {d}. An enum across the boundary is read from an `enums` file in the two's shared kernel, or {d} puts it in a `.proto` of a published language.\n"),
+        format!("  = An `import enum` reads an enum whole from the `enums` file and uses it as an enum written in the gate: the `enums` file itself, inside {d}. An enum across the boundary is read from an `enums` file in the two's shared kernel.\n"),
+    ] {
+        assert!(out.contains(&note), "{note}{out}");
+    }
+    // in the shared kernel: a workflow's and a gate's crossing, counted by their languages
+    let t = lay(&[&dr], true);
+    let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", shop.map]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("crossings checked (") && out.contains("dandori") && out.contains("sekisho"), "{out}");
+    let (code, out, err) = ritsu_in(t.path(), &["sakai", "api", shop.map, "--root", "."]);
+    assert_eq!(code, 0, "{err}");
+    let api: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let mut through: Vec<(String, String, String)> = api["crossings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["to"]["path"] == dr.enums.0)
+        .map(|c| (c["from"]["tool"].as_str().unwrap().to_string(), c["via"].as_str().unwrap().to_string(), c["allowed_by"]["relationship"].as_str().unwrap().to_string()))
+        .collect();
+    through.sort();
+    let kernel = |tool: &str| (tool.to_string(), "import enum".to_string(), "shared_kernel".to_string());
+    assert_eq!(through, [kernel("dandori"), kernel("sekisho")]);
+}
+
+#[test]
+fn a_workflow_and_a_gate_read_an_enum_across_a_boundary_as_a_rule_does() {
+    let shop = Shop {
+        dir: "examples/shop",
+        map: "shop.ctx",
+        names: ["Ordering", "Delivery", "Billing"],
+        terms: "billing/payment_terms.cal",
+        ship: "delivery/ship_date.cal",
+        kernel: ["contexts/billing.ctx", "contexts/delivery.ctx"],
+        calendar: "  koyomi \"../calendars/tokyo_business_days.cal\"\n",
+    };
+    enums_read_alike(&shop, DELIVERY_RULE.enums, ORDERING_RULE.enums, false);
+}
+
+/// The same on the example of Japanese names.
+#[test]
+fn a_workflow_and_a_gate_read_an_enum_across_a_boundary_as_a_rule_does_in_japanese() {
+    let shop = Shop {
+        dir: "examples/shop.ja",
+        map: "通販.ctx",
+        names: ["受注", "配送", "請求"],
+        terms: "billing/支払条件.cal",
+        ship: "delivery/出荷日.cal",
+        kernel: ["contexts/請求.ctx", "contexts/配送.ctx"],
+        calendar: "  koyomi \"../calendars/東京の営業日.cal\"\n",
+    };
+    enums_read_alike(&shop, DELIVERY_RULE_JA.enums, ORDERING_RULE_JA.enums, true);
+}

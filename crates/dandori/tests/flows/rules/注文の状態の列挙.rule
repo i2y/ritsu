@@ -1,0 +1,5 @@
+enums 注文の状態の列挙(import_enum_states_ja) v1
+description "注文の状態。import_enum.ja.flow が、自分の列挙として読む"
+
+enum 注文の状態(order_state) = 支払済(paid) | 発送済(shipped) | 返品済(returned) | 返金済(refunded)
+enum 段階(tier) = 基本(basic) < 銀(silver) < 金(gold)

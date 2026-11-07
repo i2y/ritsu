@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_import_enum_the_file_does_not_have.gate:6:13: `tests/mutants/read/order_states.rule` has no enum `state`
+     6 | import enum state from "read/order_states.rule"
+  = The enums in that file: `order_status`, `tier`.

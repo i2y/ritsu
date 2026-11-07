@@ -32,6 +32,25 @@
     "schema_json": "cedar/asked.cedarschema.json",
     "policies_json": "cedar/asked.policies.json"
   },
+  "enums": [
+    {
+      "name": "level",
+      "alias": "level",
+      "line": 10,
+      "values": [
+        {
+          "name": "low",
+          "alias": "low"
+        },
+        {
+          "name": "high",
+          "alias": "high"
+        }
+      ],
+      "ordered": false,
+      "from": null
+    }
+  ],
   "roles": [
     {
       "name": "clerk",

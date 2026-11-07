@@ -414,6 +414,20 @@ An `enums` file of rulec's has no outputs, and nothing is generated from it to c
 its enums as types (`<rule>.<enum>`); only a call of it stops, where it is made, whatever way of
 calling `use rule` writes (E005).
 
+A flow reads an enum of an `enums` file as one it wrote itself with `import enum`, which is how an
+enum is shared with a gate of sekisho or a rule without writing it twice:
+
+```flow
+import enum order_state from "rules/import_enum_states.rule"
+import enum tier from "rules/import_enum_states.rule" -> grade
+```
+
+The enum keeps its values, and its order if the file writes it with `<`, so a range over it
+(`range >=basic <=silver`) is written as for an enum of the flow. `-> <name>` gives it another name
+in this flow. A file that is not there, is a rule, or does not pass rulec's check is E005; an enum the
+file does not have is E002; a name the flow already has is E006. The code of every platform is that
+of the same enum written in the flow.
+
 The order example for AWS calls its urgency rule this way
 ([order.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/order/aws/order.flow)), and the tests
 send the services `rulec gen` writes what dandori sends them ([How it is checked](assurance.md)).

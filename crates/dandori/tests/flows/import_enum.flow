@@ -1,0 +1,28 @@
+workflow import_enum v1
+description "Reads the states of an order and the tiers of a customer from an enums file with import enum, and uses them as enums it writes itself: a match over the states, a record that holds one, a range over the ordered tiers. The code of every platform is the code of the same enums written in the flow"
+
+import enum order_state from "rules/import_enum_states.rule"
+import enum tier from "rules/import_enum_states.rule" -> grade
+
+record Order
+  id    : string
+  state : order_state
+
+task ship(order_id: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:ship"
+
+inputs
+  order : Order
+  grade : grade  range >=basic <=silver
+
+outputs
+  state : order_state
+
+flow
+  match order.state
+    paid =>
+      ship(order_id: order.id)
+      succeed state = shipped
+    shipped => succeed state = shipped
+    returned => succeed state = returned
+    refunded => succeed state = refunded

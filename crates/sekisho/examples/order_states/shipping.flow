@@ -1,0 +1,22 @@
+workflow shipping v1
+description "Ships a paid order, and says the state the order is in. The states are read from the enums file the gate reads too"
+
+import enum order_state from "rules/order_states.rule"
+
+task mark_shipped(order_id: string)
+
+inputs
+  order_id : string
+  state    : order_state
+
+outputs
+  state : order_state
+
+flow
+  match state
+    paid =>
+      mark_shipped(order_id: order_id)
+      succeed state = shipped
+    shipped => succeed state = shipped
+    returned => succeed state = returned
+    refunded => succeed state = refunded

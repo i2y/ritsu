@@ -1,0 +1,4 @@
+enums order_states v1
+description "The states of an order, written once for the flow that moves an order and the gate that says who may touch it"
+
+enum order_state = paid | shipped | returned | refunded

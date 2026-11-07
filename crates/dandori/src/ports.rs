@@ -266,7 +266,8 @@ impl ritsu_ports::Items for Engine {
 impl ritsu_ports::References for Engine {
     /// The rules a flow calls (`use rule`, with the ways written under it: `use rule … lambda`,
     /// `use rule … connect`, `use rule … local`), the dates files and the books it reads (`use
-    /// dates`, `use book`, with the ways written under them too), the descriptions of the APIs its
+    /// dates`, `use book`, with the ways written under them too), the enum each `import enum` reads
+    /// from its `enums` file, the descriptions of the APIs its
     /// tasks call (`use proto`, `use openapi`, `use smithy`), the service of a `.proto` it implements
     /// (`implements`), each method of one a task calls (`connect`), each transfer of a book a task
     /// runs an operation of (`book`), and the `.flow` of each child workflow (`flow`). A service is
@@ -282,6 +283,11 @@ impl ritsu_ports::References for Engine {
             let ways: Vec<&str> = [(u.lambda.is_some(), "lambda"), (u.connect.is_some(), "connect"), (u.local, "local")].into_iter().filter(|(w, _)| *w).map(|(_, n)| n).collect();
             let how = if ways.is_empty() { "use rule".to_string() } else { format!("use rule … {}", ways.join(", ")) };
             out.push(Reference { line: u.name.1.line, target: Naming::file(Tool::Rulec, p), how });
+        }
+        // an `import enum` names the enum it brings, in the file it is read from
+        for im in &prog.imports {
+            let Some(p) = from_root(&im.path) else { continue };
+            out.push(Reference { line: im.span.line, target: Naming::file(Tool::Rulec, p).with("enum", &im.enum_name.0), how: "import enum".into() });
         }
         for u in &prog.dates {
             let Some(p) = from_root(&u.path) else { continue };

@@ -1,0 +1,30 @@
+gate 店(shop) v1
+description "店の注文をだれが見られるか"
+namespace Shop
+
+import enum 状態 from "read/注文の状態.rule"
+import enum 状態の別名 from "read/注文の状態.rule"
+
+role 係(clerk)
+  description "お客さまに答える"
+  can 注文を見る
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(status) : 状態
+
+action 注文を見る(view_order)
+  description "注文を見る"
+  principal 職員
+  resource 注文
+
+permit 職員は支払済の注文を見る(staff_view_paid_orders)
+  description "職員は、支払済の注文を見る"
+  principal in 係
+  action 注文を見る
+  when resource.状態 is 支払済

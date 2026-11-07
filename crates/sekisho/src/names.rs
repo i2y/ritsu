@@ -339,6 +339,11 @@ fn held_paths(f: &File, diags: &mut Vec<Diag>) {
             diags.push(Diag::error("E201", &f.path, u.path.1.line, u.path.1.col, t).source(&f.src));
         }
     }
+    for im in &f.imports {
+        if let Some(t) = said(&im.path.0) {
+            diags.push(Diag::error("E201", &f.path, im.path.1.line, im.path.1.col, t).source(&f.src));
+        }
+    }
     for w in &f.workflows {
         if let Some(t) = said(&w.flow.0) {
             diags.push(Diag::error("E208", &f.path, w.flow.1.line, w.flow.1.col, t).source(&f.src));
@@ -543,6 +548,12 @@ fn unjoined(f: &File, suite: &Suite) -> Option<Diag> {
             take(u.span, tr!("この sekisho は{}を読めません（{tool} が入っていません）。このファイルは `{name}` を読みます", "this sekisho cannot read {} ({tool} is not in it), and the file reads `{name}`", what.ja; what.en));
         }
     }
+    if let Some(im) = f.imports.first()
+        && !suite.joins(Language::Rulec)
+    {
+        let name = &im.enum_name.0;
+        take(im.span, tr!("この sekisho は rulec の `enums` ファイルを読めません（rulec が入っていません）。このファイルは列挙 `{name}` を読みます", "this sekisho cannot read rulec's `enums` files (rulec is not in it), and the file reads the enum `{name}`"));
+    }
     if let Some(w) = f.workflows.first()
         && !suite.joins(Language::Dandori)
     {
@@ -574,6 +585,8 @@ fn check_reading(file: File, suite: &Suite, reading: &mut Vec<PathBuf>) -> Named
     }
     let mut diags = Vec::new();
     held_paths(&file, &mut diags);
+    let mut file = file;
+    import_enums(&mut file, suite, &mut diags);
     let mut scope = Scope { files: vec![file], rules: BTreeMap::new(), dates: BTreeMap::new() };
     read_gates(&mut scope, suite, reading, &mut diags);
     // a file read with `use gate` reads what this run cannot: that alone is said (E209), as for this file
@@ -733,28 +746,88 @@ fn same_in_two_files(scope: &Scope, via: &[Span], path: &str, src: &str, diags: 
     }
 }
 
+/// E201 for a file another language does not pass (or cannot read), at the string that names it:
+/// what the language says, three of it at most, each with its code first and its place after it, as
+/// for a gate read (`read_gates`).
+fn refused_by(path: &str, src: &str, at: Span, shown: &str, tool: &str, said: &[Said]) -> Diag {
+    let mut d = Diag::error("E201", path, at.line, at.col, tr!("`{shown}` は {tool} の検査を通りません", "`{shown}` does not pass {tool}'s check")).source(src);
+    for s in said.iter().take(3) {
+        let at = match s.line {
+            Some(l) => format!("{}:{l}", s.file),
+            None => s.file.clone(),
+        };
+        let (ja, en) = (&s.message.ja, capitalize(&s.message.en));
+        d = d.note(match (s.code.as_str(), at.is_empty()) {
+            ("", true) => s.message.clone(),
+            ("", false) => tr!("{ja}（{at}）", "{en} ({at})"),
+            (code, true) => tr!("{code}: {ja}", "{code}: {en}"),
+            (code, false) => tr!("{code}: {ja}（{at}）", "{code}: {en} ({at})"),
+        });
+    }
+    d.note(tr!("そのファイルを、{tool} の検査が通るように直してください。", "Correct that file until {tool}'s check passes it."))
+}
+
+/// What the `import enum` lines of a file bring in (DESIGN 25): each is asked of rulec through the
+/// port, which answers for an `enums` file as it does for a rule, and the enum it names is put
+/// among the file's `enums`, in the line it is written on, as if it were written there. The file is
+/// not read here; what rulec says of it is. A file that is not there or outside the module is
+/// E201 already ([`held_paths`]); one rulec refuses, or that is a rule, is E201; an enum the file
+/// does not have is E101.
+fn import_enums(f: &mut File, suite: &Suite, diags: &mut Vec<Diag>) {
+    let Some(rules) = &suite.rules else { return };
+    let (path, src) = (f.path.clone(), f.src.clone());
+    let mut brought = Vec::new();
+    for im in f.imports.clone() {
+        let Ok(target) = beside(&path, &im.path.0) else { continue };
+        if said_already(&path, &im.path.0) {
+            continue;
+        }
+        let shown = target.display().to_string();
+        let facts = match rules.facts(&target) {
+            Ok(x) => x,
+            Err(said) => {
+                diags.push(with_outside(refused_by(&path, &src, im.path.1, &shown, "rulec", &said), &path, &im.path.0, &target));
+                continue;
+            }
+        };
+        let (word, wspan) = &im.enum_name;
+        if facts.connect.is_some() {
+            diags.push(Diag::error("E201", &path, im.path.1.line, im.path.1.col, tr!("`{shown}` は `enums` ファイルではなく、規則です", "`{shown}` is a rule, not an `enums` file")).source(&src).note(tr!(
+                "`import enum` が読めるのは、`enums <名前> v1` で始まるファイルの列挙です。規則の出力として使う列挙は、`use rule` で読みます。",
+                "`import enum` reads the enums of a file that starts `enums <name> v1`; the enum of a rule's output is read with `use rule`."
+            )));
+            continue;
+        }
+        let Some(e) = facts.enums.iter().find(|e| e.name == *word || e.alias == *word || e.public == *word) else {
+            let have: Vec<String> = facts.enums.iter().map(|e| format!("`{}`", e.name)).collect();
+            diags.push(Diag::error("E101", &path, wspan.line, wspan.col, tr!("`{shown}` に列挙 `{word}` はありません", "`{shown}` has no enum `{word}`")).source(&src).note(tr!(
+                "そのファイルにある列挙: {}。",
+                "The enums in that file: {}.",
+                have.join("、");
+                have.join(", ")
+            )));
+            continue;
+        };
+        // the names are the file's own: where they cannot be a name here, the check of names says
+        // it at this line, with a note that says where to correct it
+        let at = im.span;
+        let named = |text: &str, public: &str| Name { text: text.to_string(), alias: (public != text).then(|| (public.to_string(), at)), span: at };
+        let name = match &im.rename {
+            Some(n) => n.clone(),
+            None => named(&e.name, &e.public),
+        };
+        let values = e.values.iter().map(|v| named(&v.name, &v.public)).collect();
+        brought.push(EnumDecl { name, span: at, values, from: Some(EnumOrigin { path: im.path.0.clone(), enum_name: e.name.clone(), ordered: e.ordered, renamed: im.rename.is_some() }) });
+    }
+    f.enums.extend(brought);
+    f.enums.sort_by_key(|e| e.span.line);
+}
+
 /// What rulec says of each `use rule`, and koyomi of each `use dates`: into the scope, or E201.
 fn read_facts(scope: &mut Scope, suite: &Suite, diags: &mut Vec<Diag>) {
     let f = &scope.files[0];
     let (path, src) = (f.path.clone(), f.src.clone());
-    let refused = |u: &Use, shown: &str, tool: &str, said: &[Said]| -> Diag {
-        let mut d = Diag::error("E201", &path, u.path.1.line, u.path.1.col, tr!("`{shown}` は {tool} の検査を通りません", "`{shown}` does not pass {tool}'s check")).source(&src);
-        // each with its code first and its place after it, as for a gate read (`read_gates`)
-        for s in said.iter().take(3) {
-            let at = match s.line {
-                Some(l) => format!("{}:{l}", s.file),
-                None => s.file.clone(),
-            };
-            let (ja, en) = (&s.message.ja, capitalize(&s.message.en));
-            d = d.note(match (s.code.as_str(), at.is_empty()) {
-                ("", true) => s.message.clone(),
-                ("", false) => tr!("{ja}（{at}）", "{en} ({at})"),
-                (code, true) => tr!("{code}: {ja}", "{code}: {en}"),
-                (code, false) => tr!("{code}: {ja}（{at}）", "{code}: {en} ({at})"),
-            });
-        }
-        d.note(tr!("そのファイルを、{tool} の検査が通るように直してください。", "Correct that file until {tool}'s check passes it."))
-    };
+    let refused = |u: &Use, shown: &str, tool: &str, said: &[Said]| -> Diag { refused_by(&path, &src, u.path.1, shown, tool, said) };
     for u in f.uses.clone() {
         let Some((name, _)) = &u.name else { continue };
         let Ok(target) = beside(&path, &u.path.0) else { continue };
@@ -909,12 +982,27 @@ impl<'a> Ck<'a> {
             }
         }
         for e in &f.enums {
+            let mut first = self.diags.len();
             self.name(&e.name, Kind::Enum);
             self.unique(&mut types, &e.name, Kind::Enum);
+            // a name the `import enum` gives with `->` is the file's own, and corrected there
+            if e.from.as_ref().is_some_and(|o| o.renamed) {
+                first = self.diags.len();
+            }
             let mut values = Space::default();
             for v in &e.values {
                 self.name(v, Kind::Value);
                 self.unique(&mut values, v, Kind::Value);
+            }
+            if let Some(o) = &e.from {
+                // the names are the `enums` file's: say where they are corrected
+                let (p, n) = (&o.path, &o.enum_name);
+                for d in &mut self.diags[first..] {
+                    d.notes.push(tr!(
+                        "この列挙は `{p}` の `{n}` で、名前はそのファイルのものです。列挙は `-> <名前>` で、この file での名前を付け替えられます。値の名前は `enums` ファイルで別名（`<名前>(<別名>)`）を付けて直します。",
+                        "This enum is `{n}` of `{p}`, and its names are that file's: `-> <name>` gives the enum another name here; a value is corrected in the `enums` file, by an alias (`<name>(<alias>)`)."
+                    ));
+                }
             }
         }
         for r in &f.roles {

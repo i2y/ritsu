@@ -353,7 +353,7 @@ fn api_says_what_the_gate_declares() {
         assert_eq!(code, 0, "{path}");
         let v = ritsu_base::json::parse(&out).unwrap();
         let keys: Vec<&str> = v.as_obj().unwrap().iter().map(|(k, _)| k.as_str()).collect();
-        assert_eq!(keys, vec!["sekisho", "name", "alias", "version", "source_sha256", "description", "namespace", "uses", "today", "cedar", "roles", "types", "workflows", "actions", "policies", "expects", "separations"]);
+        assert_eq!(keys, vec!["sekisho", "name", "alias", "version", "source_sha256", "description", "namespace", "uses", "today", "cedar", "enums", "roles", "types", "workflows", "actions", "policies", "expects", "separations"]);
         let shown = out.replacen(&format!("\"sekisho\": \"{}\"", env!("CARGO_PKG_VERSION")), "\"sekisho\": \"<version>\"", 1);
         ritsu_testkit::golden(format!("tests/golden/api/{golden}"), &shown);
     }

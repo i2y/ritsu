@@ -1,0 +1,31 @@
+gate 注文の権限(order_access_ja) v1
+description "だれが注文を発送できるか。注文の状態は、発送のフローも読む enums のファイルから読むので、二つが別の名前で呼ぶことはない。orders.gate の日本語の版"
+namespace ShopJa
+
+import enum 注文の状態 from "rules/注文の状態.rule"
+
+role 係(clerk)
+  can 注文を発送する
+
+principal 職員(User)
+  roles 係
+
+workflow 発送(shipping) from "shipping.ja.flow"
+
+resource 注文(Order)
+  attributes
+    状態(state) : 注文の状態
+
+action 注文を発送する(ship_order)
+  principal 職員, Workflow
+  resource 注文
+
+permit 係は支払済の注文を発送できる(clerks_ship_paid_orders)
+  principal in 係
+  action 注文を発送する
+  when resource.状態 is 支払済
+
+permit フローは支払済の注文を発送できる(the_workflow_ships_paid_orders)
+  principal is workflow 発送
+  action 注文を発送する
+  when resource.状態 is 支払済

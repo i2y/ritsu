@@ -251,7 +251,8 @@ impl ritsu_ports::Items for Engine {
 
 impl ritsu_ports::References for Engine {
     /// The files a gate reads (`use rule`, `use dates`, `use calendar`, `use openapi`, `use proto`,
-    /// `use asyncapi`, `use book`, `use gate`), the `.flow` of each workflow it names (`workflow`),
+    /// `use asyncapi`, `use book`, `use gate`), the enum each `import enum` reads from its `enums`
+    /// file (`import enum`, the target is the file and the enum), the `.flow` of each workflow it names (`workflow`),
     /// and each operation its actions guard (`guards`), as the check found it: an operation is named
     /// as the contract names it (its `operationId`, the service from the `.proto`'s package), so the
     /// operations a gate does not find (E202) and those of a gate whose names do not hold are not
@@ -276,6 +277,12 @@ impl ritsu_ports::References for Engine {
                 crate::ast::UseKind::Gate => Tool::Sekisho,
             };
             out.push(Reference { line: u.span.line, target: Name::file(tool, p), how: format!("use {}", u.kind.word()) });
+        }
+        // an `import enum` names the enum it brings, in the file it is read from (rulec's `Rules`
+        // answers for an `enums` file as for a rule)
+        for im in &f.imports {
+            let Some(p) = from_root(&im.path.0) else { continue };
+            out.push(Reference { line: im.span.line, target: Name::file(Tool::Rulec, p).with("enum", &im.enum_name.0), how: "import enum".into() });
         }
         for w in &f.workflows {
             if let Some(p) = from_root(&w.flow.0) {

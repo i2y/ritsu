@@ -44,6 +44,33 @@
     "schema_json": "cedar/refunds.cedarschema.json",
     "policies_json": "cedar/refunds.policies.json"
   },
+  "enums": [
+    {
+      "name": "order_status",
+      "alias": "order_status",
+      "line": 14,
+      "values": [
+        {
+          "name": "paid",
+          "alias": "paid"
+        },
+        {
+          "name": "shipped",
+          "alias": "shipped"
+        },
+        {
+          "name": "returned",
+          "alias": "returned"
+        },
+        {
+          "name": "refunded",
+          "alias": "refunded"
+        }
+      ],
+      "ordered": false,
+      "from": null
+    }
+  ],
   "roles": [
     {
       "name": "clerk",

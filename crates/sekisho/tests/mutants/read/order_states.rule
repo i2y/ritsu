@@ -1,0 +1,5 @@
+enums order_states v1
+description "The states of an order, shared by the gates and the flows that read them"
+
+enum order_status = paid | shipped | returned | refunded
+enum tier = basic < silver < gold

@@ -737,9 +737,9 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | proto | `import` の行（行番号つき）、フィールドとメソッドの型 | 別の proto のファイルと、使っている要素 |
 | rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）、`import enum`（行と、`enums` のファイルの列挙）、`range from koyomi`（行と、日付のファイルの日付）、`implements`（行と、proto のサービス。26 章）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から。20 章 | proto のファイルと、列挙と値、メッセージ、規則、`enums` のファイル、日付のファイル |
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
-| dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
+| dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`import enum`（29 章）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
-| sekisho のゲート（`.gate`） | sekisho の `References` の `use rule`・`use dates`・`use calendar`・`use gate`（行と、先のファイル）、`guards`（行と、守る操作の参照）。17 章 | 規則、日付のファイルとカレンダー、ほかの `.gate`、契約の操作 |
+| sekisho のゲート（`.gate`） | sekisho の `References` の `use rule`・`use dates`・`use calendar`・`use gate`・`import enum`（行と、先のファイル）、`guards`（行と、守る操作の参照）。17 章 | 規則、日付のファイルとカレンダー、ほかの `.gate`、契約の操作 |
 | 手で書いた Cedar のスキーマ | sekisho の `References` の `guards`（action の `@guards` の参照と、action の行）。17 章 | 契約の操作 |
 | kaname のモジュール（`.kn`） | kaname の `References` の `use rule`・`use dates`・`use module`（行と、先のファイル）。18 章 | 規則、日付のファイル、ほかのモジュール |
 | Rust のクレート（`[package]` のある `Cargo.toml`） | Cargo が言う、パスで書いたほかのクレートへの依存（`[dependencies]` と `[build-dependencies]`。行は依存を書いたマニフェストの行）。7.7 | クレート（その `Cargo.toml`） |
@@ -812,8 +812,8 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 | rulec | `Items`（索引で） | 入力、出力、列挙と値の名前 | 語の `means` の先（E007） |
 | rulec | `References`（索引で） | `import proto`、`shape`、`apply`、`import enum`、`range from koyomi`（3.3、20 章）、`implements`（26 章） | 境界を越える参照、E208 |
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
-| dandori | `References`（索引で） | `use rule`、`use dates`、`use proto`、`connect`、`flow`、`implements`（4.7、19 章） | 境界を越える参照、E207〜E209 |
-| sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
+| dandori | `References`（索引で） | `use rule`、`use dates`、`import enum`、`use proto`、`connect`、`flow`、`implements`（4.7、19 章、29 章） | 境界を越える参照、E207〜E209 |
+| sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate`・`import enum` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
 | kaname | `References`（索引で） | `.kn` の `use rule`・`use dates`・`use module`（18 章） | 境界を越える参照 |
 | koyomi | `Dates`（`facts`） | 日付の名前と、使うカレンダーの名前とデータの範囲 | doc のコンテキストのページ（4.4） |
 | chobo | `Books`（`facts`） | 勘定と振替の名前 | doc のコンテキストのページ（4.5） |
@@ -2859,3 +2859,15 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 - 出荷日と梱包待ちの比較：関係があると書いた成果物がないので、穴と言えない。
 - `payment_terms.cal` と `ship_date.cal` を読むコードやフローがない：`next_business_day` を呼ぶ手書きのコードが代わりにある。
 - 確定（`post_stock`）や知らせる（`notify`）が処理されないエラーで失敗したときは、押さえたぶんを戻さない。確定が途中まで通った後で戻すのが正しいかが決まらない。
+
+## 31. ワークフローとゲートの `import enum`（2026-11-07）
+
+**きっかけ**：`.flow` と `.gate` が `import enum` で `enums` ファイルの列挙を読めるようになった（dandori の DESIGN 1.21、sekisho の DESIGN 25 章）。二つの `References` は `import enum` を、規則のものと同じ形（`rulec "<ファイル>" enum <列挙>`）で出す。sakai が数えなければ、関係の無いコンテキストの `enums` ファイルを読んでも、20 章の規則で見つけた穴と同じに、黙って通る。
+
+**決定**：参照の種類 `Kind::FlowImportEnum`（ワークフロー）を足し、ゲートの `import enum` は `Kind::GateUse { how: "import enum" }` で数える。確かめ方は規則の `import enum`（20 章）と同じ：境界の向こうの `enums` ファイルは、二つのコンテキストの共有カーネルに並べたときだけ読める（関係が無ければ E201、パートナーや上流の内側なら E202）。注は、言語ごとの文を足した。ワークフローは、読んだ列挙を自分の型として持つ（生成するコードは `rulec` のコードを読み込まない）ので、公表された言語の proto に置いてもらう道（`import proto` に当たるものは `.flow` に無い）は言わず、proto に置くことだけを言う。ゲートは `enums` ファイルそのものを使うので、共有カーネルだけを言う。`via` は `import enum` のままである。
+
+**捨てたもの**：列挙を `published language` の rulec の塊に並べて通すこと。20 章のとおり、`enums` ファイルには呼ぶものが無い。
+
+**確かめたこと**：ritsu の `tests/sakai.rs`（通販の例の英語と日本語）：配送のワークフローとゲートが請求の `enums` ファイルを読むと E201（二つ）、受注のものが配送の `enums` ファイルを読むと E202（二つ。注つき）、請求の `enums` ファイルを共有カーネルに並べると通り、`api` の `crossings` に `dandori` と `sekisho` の `import enum` が `shared_kernel` で出る。
+
+**残したこと**：kaname のモジュールは `import enum` を持たず、`References` も出さないので、この章では数えていない。
