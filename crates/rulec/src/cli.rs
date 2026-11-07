@@ -341,6 +341,46 @@ fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
+            name: "run",
+            args: "<file.rule> [name=value]...",
+            purpose: tr!(
+                "規則に入力を一つ渡して、答えを聞く。生成したコードと突き合わせている参照インタプリタが答える。範囲の外、`constraint` が断る、列挙にない値は、生成したコードの入口と同じ理由で断る",
+                "give a rule one input and ask for its answer, in the reference evaluator the generated code is held to; an input out of range, ruled out by a `constraint`, or naming a value the enum does not have is refused for the reason the door of the generated code gives"
+            ),
+            params: vec![
+                ("<file.rule>", tr!("検査を通る規則ファイル", "a rule file that passes check")),
+                (
+                    "name=value",
+                    tr!(
+                        "入力を一つずつ。値は `vectors` の `in` と同じに書く（金額や量は単位を付けない整数、率は刻みの数の整数、日付は YYYY-MM-DD、列挙は値の名前、真偽は true か false、無い値は null）。列を入力に取る規則は `--input` で渡す",
+                        "one input each, a value written as the `in` of `vectors` writes it (money and quantities a whole number of their unit with no unit, a rate a whole number of its steps, a date YYYY-MM-DD, an enum the name of a value, a bool true or false, an absent value null); a rule that reads a sequence takes it by `--input`"
+                    ),
+                ),
+            ],
+            flags: vec![
+                flag(
+                    "--input",
+                    Some("<file.json|->"),
+                    tr!(
+                        "入力を、入力の名前をキーにした JSON のオブジェクトで渡す（- は標準入力）。形は `rulec vectors` の `in` と同じで、ベクタの `in` をそのまま渡せる。`name=value` と一緒に書いたときは、`name=value` が勝つ",
+                        "the inputs, a JSON object with a key for each input (- reads standard input), written as the `in` of `rulec vectors` is, so that the `in` of a vector can be given as it is; a `name=value` beside it wins"
+                    ),
+                ),
+                flag("--trace", None, tr!("通った表と行、計算の経過も出す", "also print the rows that were taken and the steps of the calculation")),
+                flag("--format", Some("json"), tr!("一つの JSON（答え、断ったときはその種類と理由）", "one JSON object: the answer, or the kind of refusal and its reason")).choices(&["json"]),
+            ],
+            exits: vec![
+                (0, tr!("最後まで評価した（答えか、入口の断り）", "evaluated to the end: the answer, or the refusal of the door")),
+                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (2, tr!("引数の誤り、読めないファイルや入力、規則に無い入力の名前", "bad arguments, a file or an input that cannot be read, or a name that is no input of the rule")),
+            ],
+            examples: vec![
+                tr!("rulec run rules/送料.rule weight=1200 zone=north", "rulec run rules/member_shipping_fee.rule weight=1200 zone=north"),
+                tr!("rulec run rules/送料.rule --input one.json --format json --trace", "rulec run rules/member_shipping_fee.rule --input one.json --format json --trace"),
+            ],
+            codes: vec![],
+        },
+        Cmd {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
@@ -1126,6 +1166,10 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
         && let Err(t) = ritsu_base::modules::given_all(&a.pos)
     {
         return refuse(crate::i18n::text(&t));
+    }
+
+    if cmd.name == "run" {
+        return run_rule(&a);
     }
 
     // The CI of §12 writes `rulec check rules/`. A directory expands to the `.rule` files
@@ -2148,6 +2192,170 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
                 }
             }
             None => print!("{body}"),
+        }
+    }
+    ExitCode::from(0)
+}
+
+/// `rulec run`: one input to the reference evaluator, through the door the generated code has.
+/// The input is read by [`crate::door::read`], which `vectors` uses to say what the door refuses,
+/// so the interpreter is not written twice; what it answers is `run_all_traced`, the call the
+/// vectors' expected values come from.
+fn run_rule(a: &Args) -> ExitCode {
+    use crate::json::Json;
+    let Some(path) = a.pos.first() else {
+        return need_args(&commands().into_iter().find(|c| c.name == "run").expect("run is in the table"));
+    };
+    if let Err(t) = ritsu_base::modules::given_all(std::slice::from_ref(path)) {
+        return refuse(crate::i18n::text(&t));
+    }
+    let assigns = &a.pos[1..];
+    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
+        eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
+        return ExitCode::from(2);
+    };
+    // The input is read before the rule is checked, so that a bad command line is 2 whatever the rule is.
+    let mut given: Vec<(String, Json)> = Vec::new();
+    if let Some(at) = a.get("--input") {
+        let text = if at == "-" {
+            let mut s = String::new();
+            if std::io::Read::read_to_string(&mut std::io::stdin(), &mut s).is_err() {
+                return refuse(tr!("標準入力を読めません", "cannot read standard input"));
+            }
+            s
+        } else {
+            match ritsu_base::fs::read_to_string(at) {
+                Ok(s) => s,
+                Err(_) => return refuse(tr!("`{at}` を読めません", "cannot read `{at}`")),
+            }
+        };
+        match crate::json::parse(&text) {
+            Ok(Json::Obj(ps)) => given = ps,
+            Ok(other) => {
+                let k = crate::json::kind(&other);
+                return refuse(tr!(
+                    "`--input` は入力の名前をキーにしたオブジェクトで渡してください（渡されたのは{k}です）",
+                    "`--input` takes an object with a key for each input (it was given {k})"
+                ));
+            }
+            Err(e) => {
+                let shown = if at == "-" { tr!("標準入力", "standard input") } else { at.to_string() };
+                return refuse(tr!("{shown} は JSON として読めません: {e}", "{shown} is not JSON: {e}"));
+            }
+        }
+    }
+    let (f, c) = match checked(&src, path) {
+        Ok(x) => x,
+        Err(e) => return e,
+    };
+    for kv in assigns {
+        let Some((word, raw)) = kv.split_once('=') else {
+            return refuse(tr!(
+                "`{kv}` は `name=value` の形ではありません。入力は `name=value` か `--input` で渡します",
+                "`{kv}` is not of the form `name=value`; the inputs are given as `name=value` or by `--input`"
+            ));
+        };
+        // An input is named by its name or by its alias, and goes in under the name `vectors` writes.
+        let spelled = |n: &crate::ast::Name| n.text == word || n.ascii.as_deref() == Some(word);
+        let name = f.inputs.iter().map(|i| &i.name).find(|n| spelled(n)).map(|n| n.text.as_str()).unwrap_or(word);
+        if f.elements.iter().any(|el| spelled(&el.name)) {
+            return refuse(tr!(
+                "`{name}` は列です。`name=value` では渡せないので、`--input` で渡してください",
+                "`{name}` is a sequence, which `name=value` cannot give; give it by `--input`"
+            ));
+        }
+        if !f.inputs.iter().any(|i| i.name.text == name) {
+            let names: Vec<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
+            let names = names.join(", ");
+            return refuse(tr!(
+                "`{name}` はこの規則の入力ではありません。入力は {names} です",
+                "`{name}` is no input of this rule; the inputs are {names}"
+            ));
+        }
+        let ty = c.ty_of(name).unwrap_or(crate::types::Ty::Unknown);
+        let numeric = |s: &str| -> Option<Json> {
+            let digits = s.strip_prefix('-').unwrap_or(s);
+            let (int, frac) = digits.split_once('.').map_or((digits, None), |(i, f)| (i, Some(f)));
+            let all = |x: &str| !x.is_empty() && x.bytes().all(|b| b.is_ascii_digit());
+            if !all(int) || frac.is_some_and(|f| !all(f)) {
+                return None;
+            }
+            match frac {
+                None => s.parse::<i128>().ok().map(Json::Int),
+                Some(_) => Some(Json::Frac(s.to_string())),
+            }
+        };
+        let value = if raw == "null" && matches!(ty, crate::types::Ty::Opt(_)) {
+            Json::Null
+        } else {
+            match ty.present() {
+                crate::types::Ty::Money { .. } | crate::types::Ty::Qty { .. } | crate::types::Ty::Rate | crate::types::Ty::Number => {
+                    numeric(raw).unwrap_or_else(|| Json::Str(raw.to_string()))
+                }
+                crate::types::Ty::Bool => match raw {
+                    "true" => Json::Bool(true),
+                    "false" => Json::Bool(false),
+                    _ => Json::Str(raw.to_string()),
+                },
+                _ => Json::Str(raw.to_string()),
+            }
+        };
+        given.retain(|(k, _)| k != name);
+        given.push((name.to_string(), value));
+    }
+    let input = Json::Obj(given);
+    let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+    let head = |extra: Vec<(&str, Json)>| -> String {
+        let mut fields: Vec<(String, Json)> = vec![
+            ("rulec".into(), Json::str(env!("CARGO_PKG_VERSION"))),
+            ("file".into(), Json::str(path.as_str())),
+            ("rule".into(), Json::str(alias.clone())),
+            ("input".into(), input.clone()),
+        ];
+        fields.extend(extra.into_iter().map(|(k, v)| (k.to_string(), v)));
+        Json::Obj(fields).pretty()
+    };
+    let json = a.get("--format") == Some("json");
+    let vals = match crate::door::read(&f, &c, &input) {
+        Ok(v) => v,
+        Err(r) => {
+            if json {
+                println!("{}", head(vec![("refused", Json::str(r.kind)), ("error", Json::str(r.error))]));
+            } else {
+                println!("{}", tr!("断った（{}）: {}", "refused ({}): {}", r.kind, r.error));
+            }
+            return ExitCode::from(0);
+        }
+    };
+    let (outs, trace, fired, _) = crate::eval::run_all_traced(&f, &c, vals.into_iter().collect());
+    let answer = crate::json::parse(&crate::vectors::observed_json(&c, &outs)).unwrap_or(Json::Null);
+    let rows = || -> Json {
+        Json::arr(fired.iter().map(|(t, r)| {
+            let mut ps = vec![("table", Json::str(t.as_str())), ("row", Json::int(*r as i128))];
+            if let Some(l) = c.label_of(t, *r) {
+                ps.push(("label", Json::str(l)));
+            }
+            Json::obj(ps)
+        }))
+    };
+    if json {
+        let mut extra = vec![("answer", answer)];
+        if a.has("--trace") {
+            extra.push(("rows", rows()));
+            extra.push(("trace", Json::arr(trace.iter().map(|t| Json::str(t.as_str())))));
+        }
+        println!("{}", head(extra));
+        return ExitCode::from(0);
+    }
+    for (n, v) in &outs {
+        match v {
+            Some(v) => println!("{n} = {}", v.show(&c.ty_of(n).unwrap_or(crate::types::Ty::Unknown))),
+            None => println!("{n} = {}", crate::kw::NONE),
+        }
+    }
+    if a.has("--trace") {
+        for t in &trace {
+            println!("  {t}");
         }
     }
     ExitCode::from(0)

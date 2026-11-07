@@ -393,6 +393,57 @@ mismatch. `out_of_reach` lists those values apart, by output, in the shape of a 
 (`field`, `count`, `example`, `what`, `hint`), because a record written before a step or a unit
 changed looks the same and `--read-as` reads it (DESIGN §15.199). What the rule can produce is the range its answers lie in, as `api` gives it (§15.271): an answer at an end put out to the grid the output rounds to is in reach.
 
+## `run`
+
+One input, asked of the reference evaluator: the evaluator the generated code is held to, reached
+through the same door `vectors` states the refusals of, so the command answers where a generated
+door answers and refuses where it refuses, for the same reason. It does not write a second
+interpreter, and the answer of a row of `rulec vectors` is what `rulec run` says of that row's
+`in`.
+
+```console
+$ rulec run rules/member_tier_shipping.rule member=silver campaign=basic subtotal=30 --trace
+shipping = 5USD
+effective = silver
+lifted = false
+  table shipping_fee row 3
+$ rulec run rules/member_tier_shipping.rule member=silver campaign=platinum subtotal=30
+refused (input): campaign is out of range
+```
+
+The input is `name=value` words, a JSON object by `--input <file|->` (`-` is standard input), or
+both, where a `name=value` wins. The object is the `in` of a vector, written as the wire form of
+`vectors` has it: a whole number of its unit for money and quantities, of its steps for a rate,
+`"YYYY-MM-DD"` for a date, the name of a value for an enum, `null` for the absent value of an
+optional. A sequence an `elements` declaration reads is an array of objects, and only `--input`
+can give it. With `--format json`:
+
+```json
+{"rulec":"0.44.0","file":"rules/member_tier_shipping.rule","rule":"member_tier_shipping",
+ "input":{"member":"silver","campaign":"basic","subtotal":30},
+ "answer":{"shipping":5,"effective":"silver","lifted":false}}
+```
+
+`answer` is the `observed` of a record: each output by its declared name, in the order declared,
+on the wire. An input the door refuses has no `answer`; it has `refused` and `error` instead, the
+two keys of a line of `vectors/<alias>.refused.jsonl`:
+
+```json
+{"rulec":"0.44.0","file":"rules/member_tier_shipping.rule","rule":"member_tier_shipping",
+ "input":{"member":"silver","campaign":"platinum","subtotal":30},
+ "refused":"input","error":"campaign is out of range"}
+```
+
+`refused` is `input` (the caller's side of the contract: missing, of another kind, out of range,
+not a value of the enum, a `constraint` that does not hold, a day a koyomi date does not have) or
+`contradiction` (the rule's own: two elements took under `take_unique`). `error` is prose that
+moves with `--lang`. `--trace` adds `rows`, the rows taken as `{"table","row"}` (with `label` where
+the row has one), and `trace`, the same rows as the `trace` of a vector says them. The exit code is
+0 when the evaluation came to an end, whether it answered or the door refused, as `kaname run`
+does, so a caller tells them apart by `answer` and `refused`; 1 when the rule does not pass
+`check`; 2 for a bad command line, a file or an input that cannot be read, or a name that is no
+input of the rule.
+
 ## `api`
 
 One object per rule file, one to a line. It says how to call the generated code without reading

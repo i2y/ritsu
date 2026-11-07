@@ -219,6 +219,14 @@ pub fn civil(s: &str) -> Option<(i32, u32, u32)> {
 /// a koyomi date; and last the rule's own contradiction, two elements taking under
 /// `take_unique`. `None` when the input is answered. `input` is the object a vector's `in` is.
 pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
+    read(f, c, input_obj).err()
+}
+
+/// The input as the values the rule is run on, or what the door refuses it for: the same walk
+/// as [`refusal`], which is this with the values dropped. `rulec run` runs the reference
+/// evaluator on what this gives, so it answers where a generated door answers and refuses where
+/// it refuses (the sequences are in the map by their name, as `Val::Seq`).
+pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<String, Val>, Refusal> {
     let get = |k: &str| input_obj.get(k);
     let mut vals: BTreeMap<String, Val> = BTreeMap::new();
     for i in &f.inputs {
@@ -228,26 +236,26 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
             Ok(v) => {
                 vals.insert(name.clone(), v);
             }
-            Err(e) => return Some(input(e)),
+            Err(e) => return Err(input(e)),
         }
     }
     // Each sequence, in the order the rule declares them (§15.219).
     for el in &f.elements {
         let seq = &el.name.text;
         let items = match get(seq) {
-            None | Some(Json::Null) => return Some(input(missing(seq))),
+            None | Some(Json::Null) => return Err(input(missing(seq))),
             Some(Json::Arr(xs)) => xs,
-            Some(_) => return Some(input(not_sequence(seq))),
+            Some(_) => return Err(input(not_sequence(seq))),
         };
         if let Some(cap) = count_cap(f, c, seq) {
             if items.len() as i128 > cap {
-                return Some(input(too_many(seq, cap)));
+                return Err(input(too_many(seq, cap)));
             }
         }
         let mut elems = Vec::new();
         for x in items {
             if !matches!(x, Json::Obj(_)) {
-                return Some(input(not_object(seq)));
+                return Err(input(not_object(seq)));
             }
             let mut e = BTreeMap::new();
             for fd in &el.fields {
@@ -257,7 +265,7 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
                     Ok(v) => {
                         e.insert(name.clone(), v);
                     }
-                    Err(err) => return Some(input(err)),
+                    Err(err) => return Err(input(err)),
                 }
             }
             elems.push(e);
@@ -275,19 +283,19 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
                 _ => t,
             });
             if total.cmp_to(hi) == std::cmp::Ordering::Greater {
-                return Some(input(out_of_range(&d.name.text)));
+                return Err(input(out_of_range(&d.name.text)));
             }
         }
         vals.insert(seq.clone(), Val::Seq(elems));
     }
     for k in &f.constraints {
         if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
-            return Some(input(constraint(&k.said())));
+            return Err(input(constraint(&k.said())));
         }
     }
     for n in f.door_nevers() {
         if !crate::vectors::never_clear(n, c, &|m| vals.get(m)) {
-            return Some(input(never(&n.said())));
+            return Err(input(never(&n.said())));
         }
     }
     let mut names: Vec<&String> = c.day_sets.keys().collect();
@@ -298,25 +306,25 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
             let ord = crate::types::date_ord(*y, *m, *d);
             if set.days.binary_search(&(ord.num as i64)).is_err() {
                 let (file, date) = set.from.as_ref().map(|fr| (fr.file.clone(), fr.date.clone())).unwrap_or_default();
-                return Some(input(not_a_day(name, &file, &date)));
+                return Err(input(not_a_day(name, &file, &date)));
             }
         }
     }
     // A sum over what a table decides per element, past the top of its range once the walk is
     // over (§15.100): the generated code refuses it there.
     if let Some(n) = crate::eval::sum_past_range(f, c, vals.clone().into_iter().collect()) {
-        return Some(input(out_of_range(&n)));
+        return Err(input(out_of_range(&n)));
     }
     // A drawn value not below the total of the weights of a pick by weight (§15.226).
     if let Some(n) = crate::eval::drawn_past(f, c, vals.clone().into_iter().collect()) {
-        return Some(input(draw_past(&n)));
+        return Err(input(draw_past(&n)));
     }
-    if let Some(i) = crate::eval::contradiction(f, c, vals.into_iter().collect()) {
+    if let Some(i) = crate::eval::contradiction(f, c, vals.clone().into_iter().collect()) {
         if let Some(crate::ast::Item::Fold(fold)) = f.items.get(i) {
-            return Some(Refusal { kind: "contradiction", error: fold_contradiction(&fold.verdict) });
+            return Err(Refusal { kind: "contradiction", error: fold_contradiction(&fold.verdict) });
         }
     }
-    None
+    Ok(vals)
 }
 
 /// The `sum`s the rule declares, over any of its sequences.

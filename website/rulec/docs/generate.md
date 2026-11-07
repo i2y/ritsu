@@ -606,6 +606,24 @@ stdout takes, such as Fastly Compute or Spin. [Targeting a language rulec does n
 generate](backends.md#a-wasm-host-shopify-functions) says which shape a platform takes — a
 Shopify Function takes the `Wasm` one, a named export — and where its boundary runs.
 
+## Asking the rule one question
+
+```console
+$ rulec run rules/member_shipping_fee.rule dest=Hokkaido weight=2001 total=0 member=basic --trace
+fee = 1800JPY
+  table base row 2
+  table payer row 3
+$ rulec run rules/member_shipping_fee.rule dest=Hokkaido weight=0 total=0 member=basic
+refused (input): weight is out of range
+```
+
+`rulec run` gives the reference evaluator one input and prints its answer, without generating
+anything. It is the evaluator the generated code is held to, reached through the door the generated
+code has, so an input out of range, ruled out by a `constraint` or naming a value the enum does
+not have is refused for the reason a generated door gives. `--input <file|->` takes the input as the
+`in` of a line of `rulec vectors`, and `--format json` gives `answer`, or `refused` and `error`, as
+one object ([the format](formats.md#run)).
+
 ## Is the vector suite itself complete?
 
 ```console

@@ -319,6 +319,14 @@ language, a spreadsheet formula — you need no backend and give up no compariso
 `rulec api`, wrap it in the adapter protocol, and hold it to the rule with `rulec verify`
 ([backends.md](backends.md) runs that loop end to end).
 
+### `rulec run <file.rule> [name=value]... [--input <file.json|->] [--trace] [--format json]`
+
+One input to the reference evaluator, and its answer: to see what the rule says of a case without
+generating anything. It goes through the door the generated code has, so an input out of range, ruled
+out by a `constraint`, or naming a value the enum does not have is refused for the reason a generated
+door gives, and is exit 0 with `refused` and `error` (an answer with `answer`). The inputs are the
+`in` of a vector, so a line of `rulec vectors` can be given as it is ([formats.md](formats.md)).
+
 ### `rulec certificate <file.rule>`
 
 The evidence behind all five proofs, as one JSON object something other than rulec can re-check:

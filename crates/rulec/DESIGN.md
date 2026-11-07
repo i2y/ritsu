@@ -6427,6 +6427,27 @@ inputs
 - `rulec fmt` は行の中の空白を直さない。
 - エラーの文の行では、文字列の引用符を落とす（`code starts_with A | B`）。
 
+### 15.283 `rulec run`：入力を一つ渡して、参照インタプリタに答えを聞く（2026-11-07）
+
+**きっかけ**：規則に一つの入力を尋ねる口が無かった。koyomi には `eval`、kaname と chobo と dandori には `run` があるが、rulec には `test`（生成物とベクタの突き合わせ）と `vectors`（ベクタを出す）しかなく、規則の側の答えを確かめたい人やエージェントは、ベクタを出して探すか、生成したコードを自分で呼ぶしかなかった。ほかの言語をつなぐ側が規則に問いを渡すとき、問いの渡し先もこの口になる。
+
+**決定**：
+
+- **`rulec run <file.rule> [name=value]... [--input <file.json|->] [--trace] [--format json]`。** 入力は `name=value` か、入力の名前をキーにした JSON のオブジェクト（`--input`。`-` は標準入力）で、両方書けば `name=value` が勝つ。JSON の形は `rulec vectors` の `in` と同じなので、ベクタの一行の `in` をそのまま渡せる。`name=value` の値も同じ書き方（金額と量は単位を付けない整数、率は刻みの数、日付は `YYYY-MM-DD`、列挙は値の名前、無い値は `null`）で、入力は名前か別名のどちらでも指せる。列を入力に取る規則は `--input` で渡す。
+- **インタプリタを二つにしない。** 入口は `door::read` で、`vectors` と `gen` が拒否の理由を言うのに使う `door::refusal` を、値を捨てずに返す形に割ったものである（`refusal` は `read` の `Err` を返すだけになった）。答えは、ベクタの期待値を作るのと同じ `eval::run_all_traced` である。範囲の外、`constraint`、列挙にない値、日、`take_unique` の矛盾、和の範囲、重みを超えた抽選は、生成したコードの入口と同じ理由と文で断る。`never` など、第 2 段で足される形は、入口の関数が見るので自然に乗る。
+- **出力。** テキストは `名前 = 値` を出力ごとに（金額や量は単位つき）。`--trace` は通った表と行を足す。`--format json` は `{"rulec", "file", "rule", "input", "answer"}`、断ったときは `answer` の代わりに `refused`（`input` か `contradiction`）と `error`、`--trace` は `rows`（表と行と、あれば行の名前）と `trace` を足す。`answer` は記録の `observed` と同じ書き方。
+- **終了コードは `kaname run` に揃える。** 最後まで評価できれば、答えでも入口の断りでも 0。規則が検査を通らなければ 1。引数の誤り、読めないファイルや入力、規則に無い入力の名前は 2。断りが 0 なのは、断りも規則の答えの一つだからで、呼び手は `answer` と `refused` で見分ける。
+
+**捨てたもの**：
+
+- 入力の検査を `run` の中で書き直すこと。生成したコードの入口と食い違う二つ目の実装になる。
+- 断りを 1 で終わらせること。`kaname run` の失敗が 0 であることと食い違い、規則が検査を通らない 1 と区別できなくなる。
+- 値の型を推し量って `name=value` を JSON にすること。宣言した型で決める（文字列の入力に `123` と書けば文字列）。
+
+**確かめたこと**：`tests/run.rs`。規則 11 本（表だけのもの、`machine` が二本、列を歩くもの（`earliest_due`）、列の和（`cart_shipping_fee`）、`apply`、`constraint`、`take_unique` で矛盾する畳み込み、そして `machine`・列の和・畳み込みの日本語の版三本）で、`rulec vectors` の全 369 行について、`rulec run --input -` の `answer` がベクタの `out` と、`input` がベクタの `in` と一致する。`gen --extra vectors` が書く断る入力 116 件（種類は `input` と `contradiction`）について、`refused` と `error` が一行の中身と一致する。`name=value` と `--input` が同じ答えを返す、規則に無い名前、`name=value` でない語、オブジェクトでない `--input`、読めないファイルは 2。`--trace` は、ベクタの `trace` と同じ行を言う。
+
+**残したこと**：列を入力に取る規則に `name=value` では渡せない。列挙の値を別名で書くことは、入口がまだ受け付けない（`vectors` の `in` と同じ）。歩く規則で、出力が全部 `none` になるときに入口が断る理由は、`eval::answer` が見るもので、`run` はまだ言わない。
+
 ### 15.284 `->` の先に列挙が無いとき（2026-11-07）
 
 **きっかけ。** `import jsonschema "s.schema.json" "#/$defs/K" -> no_such_enum` が通っていた。`->` の右は、ファイルの値と突き合わせる列挙を名指す唯一の場所なので、綴りを誤ると突き合わせが誰にもかからないまま `ok` と出る。`compare` は「E012 がすでに言っている」としていたが、この名前を読むほかの検査は無く、E012 は出ていなかった。
@@ -6435,7 +6456,7 @@ inputs
 
 **変わること。** いままで黙って通っていた行が止まる。止まるのは、突き合わせがかかっていなかった行だけである。別名（`enum 段階(tier)` の `tier`）を `->` の右に書いた行も同じで、宣言した名前を書く。
 
-**確かめたこと。** `crates/rulec/tests/jsonschema.rs` の `an_arrow_to_no_enum_stops`（proto と JSON Schema、正しい名前では通る）。木の `.rule` は全部試験を通るまま。
+**確かめたこと。** `crates/rulec/tests/jsonschema.rs` の `an_arrow_to_no_enum_stops`（proto と JSON Schema、正しい名前では通る）。木の `.rule` のうち `import proto`、`import jsonschema` のある 16 本は、この E012 で止まらない。
 
 ## 16. この設計で最も危うい点
 

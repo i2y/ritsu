@@ -232,6 +232,7 @@ $ rulec check rules/*.rule                         # --format json, --terse, --d
 $ rulec fmt --check rules/*.rule                   # the gofmt convention
 $ rulec gen rules/*.rule --target python           # into generated/; more --target, --extra runner, --check
 $ rulec vectors | coverage | test                  # the test cases, their coverage, the run
+$ rulec run rules/parcel.rule weight=1200 zone=north    # one input, one answer (--input, --trace, --format json)
 $ rulec adapter | schema | verify                  # against a legacy implementation
 $ rulec fixtures lint | replay | diff              # against past records
 $ rulec diff rules/parcel.rule@HEAD rules/parcel.rule  # …and with no records: which inputs move

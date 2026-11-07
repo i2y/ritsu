@@ -589,7 +589,7 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
     let f = p.to_str().unwrap();
 
     // What the proofs are about waits for them.
-    for cmd in ["check", "gen", "doc", "certificate", "api", "vectors", "coverage"] {
+    for cmd in ["check", "gen", "doc", "certificate", "api", "vectors", "coverage", "run"] {
         // `gen` with no `--target` stops at its arguments, before the rule is read (§15.277).
         let targets: &[&str] = if cmd == "gen" { rulec::targets::UP_TO_0_40 } else { &[] };
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))

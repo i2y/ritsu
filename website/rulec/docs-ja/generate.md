@@ -341,6 +341,19 @@ ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
 
 `Rust, WASI` の行と `Wasm` の行は別のものです。`Rust, WASI` は Rust の runner そのものを `wasm32-wasip1` 向けにコンパイルして wasmtime で走らせたもので、Fastly Compute や Spin のように標準入出力でやり取りする実行環境の形です。Shopify Functions が取るのは `Wasm` のほう、名前の付いた関数を export する形です。どの実行環境がどちらの形を取り、その境界をどこで切るかは、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions)にまとめてあります。
 
+## 規則に一つだけ尋ねる
+
+```console
+$ rulec run rules/送料.rule 届け先=北海道 weight=2001 total=0 会員=一般 --trace --lang ja
+送料 = 1800円
+  表 基本送料 行2
+  表 負担判定 行3
+$ rulec run rules/送料.rule 届け先=北海道 weight=0 total=0 会員=一般 --lang ja
+断った（input）: 重量 が範囲の外です
+```
+
+`rulec run` は、入力を一つ渡して、参照インタプリタの答えを出します。何も生成しません。生成したコードが突き合わされているのと同じインタプリタを、生成したコードの入口と同じ入口を通して呼ぶので、範囲の外、`constraint` が断る入力、列挙にない値は、生成したコードの入口と同じ理由で断ります。`--input <ファイル|->` には `rulec vectors` の一行の `in` をそのまま渡せます。`--format json` なら、`answer` か、`refused` と `error` を一つのオブジェクトで返します（[形式](formats.md#run)）。
+
 ## テストケースの側は足りているか
 
 ```console
