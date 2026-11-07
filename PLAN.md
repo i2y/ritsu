@@ -2244,26 +2244,30 @@ rulec の `from any`・`all`・`count`・`sum`・`max`・`min` はそれぞれ�
 
 前は通っていた規則が E123 で止まることがある変更である。木の 1,023 の `.rule` に止まるものは無かった。`never` はもとから予約語で、語の一覧は増やしていない。
 
-残したこと：表が計算する列を読む問いは決まらないことが多く、そうした行は E143 で止まる。`sum` と最大・最小が並ぶ問いは線形でなく、示せないと E143 になる。文字列と `T?` を定義の行で問う形も E143 である。X2 は真偽と列挙の行を決めず、W201 と実行時の確かめに回す。行に丸ごと入る表の行は、`constraint` で届かない行と同じく `check` が言わず、`coverage` が言う。
+残したこと：表が計算する列を読む問いは決まらないことが多く、そうした行は E143 で止まる。`sum` と最大・最小が並ぶ問いは線形でなく、示せないと E143 になる。文字列と `T?` を定義の行で問う形も E143 である。X2 は真偽と列挙の行を決めず、W201 と実行時の確かめに回す。行に丸ごと入る表の行は、`constraint` で届かない行と同じく `check` が言わず、`coverage` が言う。Lean は定義からの証明を述べただけで、E101 の JSON に `request` は足していない。
+
+このあと、何も外さない `never` の行を W134 で言うようにした（rulec の §15.286）。値の種類に無い条件、ほかの行や `constraint` がもう外している行、どの表にも読まれない集計の行の三つである。Step Functions（LocalStack）と Argo、Kani の全部は、出す候補を決めるときに回す。
 
 ### 7.94 世界のあいだの関係を、それぞれの言語の側に書く（2026-11-07）
 
-rulec や chobo などで表現されたものを、それぞれ一つの閉じた世界とし、世界のあいだをつなぐ。そのために関係だけを書く別の言語（案の名は conifold、`.link`）を作るか、世界の側に足すかを、四つのプロジェクトと 70 の壊し方で測った（DESIGN 7.17）。`ritsu check` が黙る 29 件のうち、`.link` が止めたのは 10 件、壊さない変更への指摘は 3/20。言語の側に形を足して手順のページを読んだ担当が止めたのは、一回目が 2 件、ページと出どころを直した二回目が 10 件（`ritsu check` で 6 件、書いた試験で 4 件）で、指摘は 0/20。10 件のうち 7 件は同じである。今の判断は、`.link` を作らず、関係は言語の側に書く。変わる条件は DESIGN 7.17 に書いた。
+rulec や chobo などで表現されたものを、それぞれ一つの閉じた世界とし、世界のあいだをつなぐ。そのために関係だけを書く別の言語（案の名は conifold、`.link`）を作るか、世界の側に足すかを、四つのプロジェクトと 70 の壊し方で測った（DESIGN 7.17）。`ritsu check` が黙る 29 件のうち、`.link` が止めたのは 10 件、壊さない変更への指摘は 3/20。言語の側に形を足して手順のページを読んだ担当が止めたのは、一回目が 2 件、ページと出どころを直した二回目が 10 件（`ritsu check` で 6 件、書いた試験で 4 件）で、指摘は 0/20。10 件のうち 7 件は同じである。`.link` は作らず、関係は言語の側に書くと決めた。変わる条件は DESIGN 7.17 に書いた。
 
-足したもの：世界に尋ねる口（`rulec run`、`dandori api`、`sakai vectors`。各言語の DESIGN に節がある）。`.gate` と `.flow` の `import enum`（sekisho DESIGN 25 章、dandori DESIGN 1.21、sakai DESIGN 29 章）。`fed by`（X17、DESIGN 7.16）。先に値を受け取った場所と `openapi … pointer` を出どころにすること、列挙を二つの名前で比べること。手順のページ `skills/ritsu/between.md`。通販の例の穴（売り越し、確定の口、行の ID、`STOCK_CONFLICT`、梱包の欠品、範囲、層の既定。sakai DESIGN 30 章。境界を越える参照は 9 件から 10 件）。不具合が二つ（`->` が列挙を指さない `import` の E012、`ritsu gen` の `range from koyomi`）。
+足したもの：世界に尋ねる口（`rulec run`、`dandori api`、`sakai vectors`。各言語の DESIGN に節がある）。`.gate` と `.flow` の `import enum`（sekisho DESIGN 25 章、dandori DESIGN 1.21、sakai DESIGN 29 章）。`fed by`（X17、DESIGN 7.16）。先に値を受け取った場所と `openapi … pointer` を出どころにすること、列挙を二つの名前で比べること。手順のページ `skills/ritsu/between.md`。通販の例の穴（売り越し、確定の口、行の ID、`STOCK_CONFLICT`、梱包の欠品、範囲、層の既定、失敗した注文の取り消し。sakai DESIGN 30 章。境界を越える参照は 9 件から 10 件）。不具合が二つ（`->` が列挙を指さない `import` の E012、`ritsu gen` の `range from koyomi`）。
 
-確かめたこと：`crates/ritsu/tests/fed_by.rs`（37 件）と、触ったクレートの試験。測り方の実物は DESIGN 7.17 の数のとおりで、担当が書き込んだ写しに同じ壊し方を当てた。
+確かめたこと：`crates/ritsu/tests/fed_by.rs`（37 件）と、触ったクレートの試験。`crates/ritsu/tests/run.rs` は、通販のフローの終わり方を英日で 6 通りずつ `ritsu run` で流し、押さえを戻したか、注文を取り消したか、何を知らせたかを確かめる。測り方の実物は DESIGN 7.17 の数のとおりで、担当が書き込んだ写しに同じ壊し方を当てた。
 
-決まっていないこと：
+決めたこと：
 
-- `.link` を作らないという判断そのもの。
-- 成り立たないと分かった関係の範囲（DESIGN 7.17 の残したことの最後）。持ち主が決めるので変えていない。
-- 通販の例で、失敗した注文の状態と請求（どの世界も言っていない）。`STOCK_CONFLICT` を `OutOfStock` と分けるか。
-- ゲームの `province_income.rule` の範囲と mod の `silo`、`academy`。営業の `Order.financeApproved`。
+- 成り立たないと分かった関係は、DESIGN 7.17 の表のとおりに決めた。返金の契約に範囲を足し、営業の `required` を足し、ゲームは `flat_food` を狭めて `tech.learning` を広げた。
+- 通販の例では、失敗した注文を `CANCELLED` にして請求せず、`STOCK_CONFLICT` は `OutOfStock` と分ける（sakai DESIGN 30 章）。
+- `fed by` は契約の日付の `formatMinimum` を読まず、sakai に JSON Schema の持ち主を足さない（DESIGN 7.16）。
+- `elements` のフィールドの範囲の外の E101 は今回は変えない。
 
 残したこと：
 
 - どちらでも止まらない 16 件。うち 11 件が手書きのコードである。
+- `sum` の範囲と mod の行を比べる検査。学問を足しすぎる mod は `ritsu check` を通り、ゲームが実行時に止まる（DESIGN 7.17）。
+- 営業の `required` に無い残りの 4 つのプロパティ。
 - 数を二つの言語で分け合う形。`expect` と `examples` は相手の数を写すだけで、一覧の `import enum` に当たるものが数には無い。
 - `crates/rulec/src/region.rs` の数と日付の軸は `f.inputs` だけから範囲を取る。`elements` のフィールドの表は、フィールドの範囲の外で E101 になる（安全な側。証明書、`tools/recheck.py`、Lean に関わる）。
 - kaname の `import enum`、`doc` の値の表示名。
