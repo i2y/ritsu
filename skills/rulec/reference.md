@@ -1443,6 +1443,12 @@ The check of a table reads the lines that are written and nothing else. It works
 the definitions on its own, so what the tables leave out is always something the person approving
 the rule can read on the page.
 
+A line that rules out nothing is W134: a condition no value of its name meets (a number past the
+range, a value the enum no longer has), a line other lines or a `constraint` already hold whole, or
+a line of summaries alone that no table has all the names of as columns. A line that names an input
+is refused at the door, so it does something with no table at all. W134 is a warning: no answer and
+nothing generated moves with it.
+
 A line does everywhere what a `constraint` does:
 
 - **Completeness asks for no row for it, and overlap says nothing of it.** Two rows that meet only

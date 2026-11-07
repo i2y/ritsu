@@ -188,6 +188,11 @@ row and write it. Summaries over a sequence of `elements` get the same note, the
 same warning. A combination that cannot be decided is passed over unless a line rests on it, and
 none of this moves a check of the table beyond the lines you write.
 
+A line that rules out nothing is **W134**. The condition may ask for what no value of the name is,
+which is what a line comes to when the range it was written against moves. Other lines or a
+`constraint` may already take everything it takes. Or it may name summaries alone, with no table
+that has them all as columns: a line of summaries has no door, so a table is the only place it acts.
+
 A rule may also be served **as a service a contract declares**:
 `implements proto "<file>" <Service>` hands the names and the numbers of its Connect wire to a
 `.proto` that keeps them. Every `rulec check` reads that contract and holds its service to the
@@ -355,7 +360,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 234 deliberately broken
+   and that implementation has not been proved correct. The evidence is 236 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

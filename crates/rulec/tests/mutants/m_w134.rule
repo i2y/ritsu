@@ -1,0 +1,29 @@
+rule tool_fee v1
+description "A fee by the tools an order holds, which the caller has already counted"
+
+inputs
+  has_tool  : bool
+  all_parts : bool
+  tools     : number  range >=0 <=5
+  low       : number  range >=0 <=9
+  high      : number  range >=0 <=9
+
+constraint low <= high
+
+never has_tool = true, all_parts = true
+# The tools were capped at 5, and this line was written when they went to 9.
+never tools >= 6
+# The line above takes all of this one.
+never has_tool = true, all_parts = true, tools = 1
+# The constraint takes all of this one.
+never low = 9, high = 1
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table fee_of
+policy unique
+| has_tool | all_parts | -> fee : money[USD] |
+| true     | false     | 5USD                |
+| false    | true      | 0USD                |
+| false    | false     | 2USD                |

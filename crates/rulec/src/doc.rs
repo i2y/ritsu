@@ -209,7 +209,7 @@ fn ty_text(c: &Checked, name: &str) -> String {
     }
 }
 
-fn range_text(c: &Checked, name: &str) -> String {
+pub(crate) fn range_text(c: &Checked, name: &str) -> String {
     // An input of an ordered enum held to a range (§15.210): its first and its last value.
     if let Some((lo, hi)) = c.enum_ranges.get(name).and_then(|vs| Some((vs.first()?, vs.last()?))) {
         return tr!("{lo} 〜 {hi}", "{lo} to {hi}");

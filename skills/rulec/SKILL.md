@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E144, W105, W110, W111, W114-W133, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E144, W105, W110, W111, W114-W134, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -101,6 +101,7 @@ A few shapes are worth knowing before the first draft:
   gives the combination, E143 when it cannot be shown. A line that names an input with no `from` is
   the caller's promise. A wrong shape is E141. Only written lines take a combination out of the
   tables: where E101 or W133 says the definitions never give one, the hint shows the line to write.
+  A line that rules out nothing is W134.
 - **A case may carry a sequence.** Where the number of things is not fixed — the rows of a tariff
   sheet, the candidates a filter left — `elements` declares what one element carries and `fold`
   says what each verdict does next: `next`, `stop with <value>`, `take_unique`, `take_first`,

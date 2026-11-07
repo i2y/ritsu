@@ -367,6 +367,8 @@ fn 変異は決めたコードだけを出す() {
         ("m_e142ja.rule", &[("E142", 1)], "上と同じ規則の日本語の版"),
         ("m_e143.rule", &[("E143", 1)], "規則が計算する列を `never` の行に書いた"),
         ("m_e143ja.rule", &[("E143", 1)], "上と同じ規則の日本語の版"),
+        ("m_w134.rule", &[("W134", 3)], "範囲を 5 までに直したのに 6 以上の行を残し、ほかの行が含む行と constraint が外す行を書いた"),
+        ("m_w134ja.rule", &[("W134", 3)], "上と同じ規則の日本語の版"),
         ("m_e144.rule", &[("E144", 1)], "`from count` のある入力に `fed by` も書いた"),
         ("m_e144ja.rule", &[("E144", 1)], "上と同じ規則の日本語の版"),
     ];
@@ -826,6 +828,10 @@ fn 変異はコーパスから作り直せる() {
         // §15.285: `fed by` names another file, and no corpus rule has one.
         "m_e144.rule",
         "m_e144ja.rule",
+        // §15.286: every `never` line of the corpus takes something, as the corpus is made of rules
+        // that are right.
+        "m_w134.rule",
+        "m_w134ja.rule",
         "m_e116.rule",
         "m_w120.rule",
         "m_e032.rule",

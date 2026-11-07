@@ -146,6 +146,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E131](#e131) | error | A value put together leaves the range it declares |
 | [W132](#w132) | warning | A term of an open value changes nothing |
 | [W133](#w133) | warning | A row is reached only by a combination the definitions never give |
+| [W134](#w134) | warning | A `never` line rules out nothing |
 | [E141](#e141) | error | A `never` line is not written as it can be |
 | [E142](#e142) | error | The definitions give a combination a `never` line rules out |
 | [E143](#e143) | error | A `never` line cannot be shown from the definitions |
@@ -5887,6 +5888,36 @@ With `order.json` beside it:
 ```
 
 Related codes: [E101](#e101), [E123](#e123), [E142](#e142), [W124](#w124)
+
+## W134
+
+`warning` — **A `never` line rules out nothing**
+
+**When.** A `never` line takes nothing out, for one of three reasons. No value of a name meets its condition: a number outside the range, a value the enum no longer has. Other lines or `constraint`s already take every combination it takes. Or it names summaries of `elements` alone and no table has them all as columns: a line of summaries alone has no door. No answer changes and nothing generated does, but whoever reads the line takes it to say something.
+
+**Fix.** If the range or the values of the enum have moved, write the line for what they are now. If other lines take it, delete this one. A line of summaries: if a table is to read it, make every name a column of that table, and otherwise delete it.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  tools(tools) : number  range >=0 <=5
+
+never tools >= 6
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| tools | -> fee |
+| 0     | 0USD   |
+| >=1   | 5USD   |
+```
+
+Related codes: [E141](#e141), [E142](#e142), [E143](#e143), [W133](#w133)
 
 ## E141
 

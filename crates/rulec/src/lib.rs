@@ -288,8 +288,12 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
         shadow.confirm += r.shadow.confirm;
         nodes += r.nodes;
     }
-    // Whether each `never` line that stands on definitions really does (§15.282).
-    diags.extend(projection::walks::never_lines(f, &t, path));
+    // Whether each `never` line that stands on definitions really does (§15.282), and once they
+    // do, which lines rule out nothing (§15.286).
+    let lines = projection::walks::never_lines(f, &t, path);
+    let idle = if lines.is_empty() { region::idle_nevers(f, &t, path) } else { Vec::new() };
+    diags.extend(lines);
+    diags.extend(idle);
     // A row the definitions of its reads never reach (§15.281), once the tables have said which
     // rows are dead already and the contract which ones it never lets through.
     {

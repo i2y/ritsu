@@ -1,0 +1,24 @@
+warning[W134]: `never tools >= 6` rules out nothing: no value meets `tools >= 6`
+  --> tests/mutants/m_w134.rule:15 never
+   |
+15 | never tools >= 6
+   | ^^^^^^^^^^^^^^^^ no value of `tools` meets this condition
+   |
+ `tools` takes 0 to 5.
+ hint: if the range or the values of the enum have moved, write the line for what they are now. If it is not needed, delete it.
+
+warning[W134]: `never has_tool = true, all_parts = true, tools = 1` rules out nothing: other lines take all of it
+  --> tests/mutants/m_w134.rule:17 never
+   |
+17 | never has_tool = true, all_parts = true, tools = 1
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ already taken out by `never has_tool = true, all_parts = true`
+   |
+ hint: delete this line. What is taken out stays the same without it.
+
+warning[W134]: `never low = 9, high = 1` rules out nothing: other lines take all of it
+  --> tests/mutants/m_w134.rule:19 never
+   |
+19 | never low = 9, high = 1
+   | ^^^^^^^^^^^^^^^^^^^^^^^ already taken out by `constraint low <= high`
+   |
+ hint: delete this line. What is taken out stays the same without it.

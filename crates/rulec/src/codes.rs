@@ -1101,6 +1101,38 @@ policy unique
 | false    | true      | 0USD   |
 | false    | false     | 2USD   |
 "##;
+const X_W134: &str = r##"rule t(t) v1
+
+inputs
+  工具数(tools) : number  range >=0 <=5
+
+never 工具数 >= 6
+
+outputs
+  料金(fee) : money[USD]  round up(1USD)
+
+table 工具料(tool_fee)
+policy unique
+| 工具数 | -> 料金 |
+| 0      | 0USD    |
+| >=1    | 5USD    |
+"##;
+const X_W134_EN: &str = r##"rule t(t) v1
+
+inputs
+  tools(tools) : number  range >=0 <=5
+
+never tools >= 6
+
+outputs
+  fee(fee) : money[USD]  round up(1USD)
+
+table tool_fee(tool_fee)
+policy unique
+| tools | -> fee |
+| 0     | 0USD   |
+| >=1   | 5USD   |
+"##;
 const X_E141: &str = r##"rule t(t) v1
 
 inputs
@@ -5165,6 +5197,21 @@ pub fn ledger() -> Vec<Entry> {
         )
         .with_files(LINES_OF_KINDS)
         .english(X_W133_EN),
+        warn(
+            "W134",
+            tr!("`never` の行が何も外しません", "A `never` line rules out nothing"),
+            tr!(
+                "`never` の行が、何も外していないとき。理由は三つです。一つは、条件に当たる値がその名前に無いこと（範囲の外の数、列挙に無くなった値）。一つは、行が取る組み合わせを、ほかの行か `constraint` がすでに全部外していること。もう一つは、`elements` の集計だけの行で、名前を全部列に持つ表が無いこと（集計だけの行には入口がありません）。答えは変わらず、生成コードも変わりません。行を読む人には何かを言っているように見えます。",
+                "A `never` line takes nothing out, for one of three reasons. No value of a name meets its condition: a number outside the range, a value the enum no longer has. Other lines or `constraint`s already take every combination it takes. Or it names summaries of `elements` alone and no table has them all as columns: a line of summaries alone has no door. No answer changes and nothing generated does, but whoever reads the line takes it to say something."
+            ),
+            tr!(
+                "範囲か列挙の値が動いたのなら、行をいまの値に合わせてください。ほかの行が外しているなら、この行を消してください。集計だけの行は、表が読むなら名前を全部その表の列にし、読まないなら消してください。",
+                "If the range or the values of the enum have moved, write the line for what they are now. If other lines take it, delete this one. A line of summaries: if a table is to read it, make every name a column of that table, and otherwise delete it."
+            ),
+            X_W134,
+            &["E141", "E142", "E143", "W133"],
+        )
+        .english(X_W134_EN),
         err(
             "E141",
             tr!("`never` の行の書き方が違います", "A `never` line is not written as it can be"),

@@ -6,7 +6,7 @@
 //! completeness, unreachable rows, and overlaps all reduce to finite set operations.
 
 use crate::ast::*;
-use crate::diag::{Diag, Span};
+use crate::diag::{Diag, FixKind, Span};
 use crate::num::Rat;
 use crate::types::{Checked, Ty};
 use std::collections::{BTreeMap, BTreeSet};
@@ -378,6 +378,180 @@ pub struct TableRegion {
     /// an input no table has a column for needs. Empty when it would say nothing the ranges
     /// do not.
     model: Vec<crate::fourier::Ground>,
+}
+
+/// Why a `never` line rules out nothing (W134, §15.286).
+enum NeverIdle {
+    /// No value the name can take meets this condition of the line, by its place in the line.
+    NoValue(usize),
+    /// Everything it takes is out already: by these other lines and these `constraint`s, by their
+    /// places among the rule's.
+    TakenAlready { lines: BTreeSet<usize>, constraints: BTreeSet<usize> },
+    /// It has no door, and no table has all of its names as columns.
+    Unread,
+}
+
+/// More combinations than this in one line are not walked (W134): the line stays unsaid.
+const NEVER_IDLE_POINTS: usize = 4096;
+
+/// What a line takes is read as a table of one row reads it: the line's names as the columns, its
+/// cells as the row. The axes then hold what the table's check would hold, the ranges and the other
+/// lines' values among them, so the line's combinations are those coordinates and none of them cut.
+fn never_idle(place: usize, n: &crate::ast::NeverLine, f: &RuleFile, c: &Checked, told: &BTreeSet<usize>) -> Option<NeverIdle> {
+    let row = Row {
+        cells: n.conds.iter().map(|k| k.cell.clone()).collect(),
+        cell_spans: n.conds.iter().map(|k| k.name.span.clone()).collect(),
+        outs: Vec::new(),
+        out_spans: Vec::new(),
+        span: n.span.clone(),
+        index: 1,
+        cite: None,
+        label: None,
+        origin: None,
+    };
+    let table = Table {
+        name: None,
+        policy: Policy::Unique,
+        inputs: n.conds.iter().map(|k| (k.name.text.clone(), k.name.span.clone())).collect(),
+        outputs: Vec::new(),
+        rows: vec![row],
+        span: n.span.clone(),
+        overrides: Vec::new(),
+        clause: false,
+        cite: None,
+        applied: None,
+        open: None,
+        contributed: None,
+    };
+    let reg = TableRegion::build(&table, c, f)?;
+    if reg.unanalyzable.is_some() {
+        return None;
+    }
+    let picks: Vec<Vec<usize>> = reg.masks[0]
+        .iter()
+        .enumerate()
+        .map(|(ai, m)| (0..m.len()).filter(|ci| m[*ci] && reg.axes[ai].holds_a_day(*ci)).collect())
+        .collect();
+    if let Some(ai) = picks.iter().position(Vec::is_empty) {
+        return n.conds.iter().position(|k| k.name.text == reg.col_names[ai]).map(NeverIdle::NoValue);
+    }
+    if picks.iter().try_fold(1usize, |all, p| all.checked_mul(p.len())).is_some_and(|all| all <= NEVER_IDLE_POINTS) {
+        let (mut lines, mut constraints) = (BTreeSet::new(), BTreeSet::new());
+        let mut at = vec![0usize; picks.len()];
+        let taken = loop {
+            let path: Vec<usize> = at.iter().zip(&picks).map(|(k, p)| p[*k]).collect();
+            if let Some(k) = reg.constraints.iter().position(|k| reg.constraint_impossible(k, &path)) {
+                constraints.insert(k);
+            } else if let Some(other) = reg.nevers.iter().find(|m| m.line != place && !told.contains(&m.line) && m.on.iter().all(|(ai, mask)| mask[path[*ai]])) {
+                lines.insert(other.line);
+            } else {
+                break false;
+            }
+            // The next combination, the last axis moving fastest.
+            let mut ai = picks.len();
+            loop {
+                if ai == 0 {
+                    break;
+                }
+                ai -= 1;
+                at[ai] += 1;
+                if at[ai] < picks[ai].len() {
+                    ai = usize::MAX;
+                    break;
+                }
+                at[ai] = 0;
+            }
+            if ai != usize::MAX {
+                break true;
+            }
+        };
+        if taken {
+            return Some(NeverIdle::TakenAlready { lines, constraints });
+        }
+    }
+    let door = f.door_nevers().any(|d| std::ptr::eq(d, n));
+    let read = c.sets.iter().any(|set| n.names().all(|m| set.table.inputs.iter().any(|(col, _)| col == m)));
+    (!door && !read).then_some(NeverIdle::Unread)
+}
+
+/// W134 (§15.286): the `never` lines that rule out nothing. A line that takes nothing is a line the
+/// person who approves the page reads as saying something: a condition written against a range that
+/// has since moved, a value the enum no longer has, or a line another one holds whole. Two lines
+/// that take the same are told from the last, so that the first stays with nothing said of it.
+pub fn idle_nevers(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
+    let mut told = BTreeSet::new();
+    let mut found = Vec::new();
+    for (place, n) in f.nevers.iter().enumerate().rev() {
+        if let Some(why) = never_idle(place, n, f, c, &told) {
+            told.insert(place);
+            found.push((n, why));
+        }
+    }
+    found.reverse();
+    found.into_iter().map(|(n, why)| idle_never_diag(n, &why, f, c, rule_path)).collect()
+}
+
+fn idle_never_diag(n: &crate::ast::NeverLine, why: &NeverIdle, f: &RuleFile, c: &Checked, rule_path: &str) -> Diag {
+    let said = n.said();
+    let at = tr!("{rule_path}:{} 起こらない組み合わせ", "{rule_path}:{} never", n.span.line);
+    let d = |title: String, label: String| Diag::warning("W134", title).at(at.clone()).key(format!("W134\u{1}{said}")).fix_kind(FixKind::None).mark(n.span.clone(), label);
+    match why {
+        NeverIdle::NoValue(k) => {
+            let cond = n.conds[*k].said();
+            let name = &n.conds[*k].name.text;
+            let mut d = d(
+                tr!("`{said}` は何も外しません。`{cond}` に当たる値がありません", "`{said}` rules out nothing: no value meets `{cond}`"),
+                tr!("`{name}` の値は、この条件に当たりません", "no value of `{name}` meets this condition"),
+            );
+            if let Some(whole) = name_takes(name, c) {
+                d = d.note(tr!("`{name}` が取るのは {whole} です。", "`{name}` takes {whole}."));
+            }
+            d.note(tr!(
+                "ヒント: 範囲か列挙の値が動いたのなら、行をいまの値に合わせてください。要らないなら、この行を消してください。",
+                "hint: if the range or the values of the enum have moved, write the line for what they are now. If it is not needed, delete it."
+            ))
+        }
+        NeverIdle::TakenAlready { lines, constraints } => {
+            let mut those: Vec<String> = lines.iter().filter_map(|k| f.nevers.get(*k)).map(|m| format!("`{}`", m.said())).collect();
+            those.extend(constraints.iter().filter_map(|k| f.constraints.get(*k)).map(|k| format!("`{} {}`", crate::kw::CONSTRAINT, k.said())));
+            let ls = those.join(tr!("、", ", ").as_str());
+            d(
+                tr!("`{said}` は何も外しません。ほかの行がすでに外しています", "`{said}` rules out nothing: other lines take all of it"),
+                tr!("この組み合わせは {ls} がすでに外しています", "already taken out by {ls}"),
+            )
+            .note(tr!(
+                "ヒント: この行を消してください。消しても、外れるものは変わりません。",
+                "hint: delete this line. What is taken out stays the same without it."
+            ))
+        }
+        NeverIdle::Unread => d(
+            tr!("`{said}` は何も外しません。読む表がありません", "`{said}` rules out nothing: no table reads it"),
+            tr!("名前を全部列に持つ表がありません", "no table has all of these names as columns"),
+        )
+        .note(tr!(
+            "集計だけの行には入口がなく、効くのは名前が全部列にある表だけです。",
+            "A line of summaries alone has no door. It acts only on a table with all of its names as columns."
+        ))
+        .note(tr!(
+            "ヒント: 表がこの組み合わせを読むなら、名前を全部その表の列にしてください。読まないなら、この行を消してください。",
+            "hint: if a table is to read this combination, make every name a column of it. If none is, delete this line."
+        )),
+    }
+}
+
+/// What a name can be, in words, for a line that asks something else of it. `None` when there is
+/// nothing to say that the line does not say: a truth value, a name with no ends.
+fn name_takes(name: &str, c: &Checked) -> Option<String> {
+    match c.ty_of(name)?.present() {
+        Ty::Enum(e) => {
+            let all = c.enum_ranges.get(name).cloned().or_else(|| c.enums.get(e).cloned())?;
+            Some(all.join(", "))
+        }
+        _ => {
+            let whole = crate::doc::range_text(c, name);
+            (!whole.is_empty()).then_some(whole)
+        }
+    }
 }
 
 fn lit_rat(l: &Lit, want: &Ty) -> Option<Rat> {

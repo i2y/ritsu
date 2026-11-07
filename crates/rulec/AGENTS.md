@@ -72,6 +72,7 @@ A few shapes are worth knowing before the first draft:
   gives the combination, E143 when it cannot be shown. A line that names an input with no `from` is
   the caller's promise. A wrong shape is E141. Only written lines take a combination out of the
   tables: where E101 or W133 says the definitions never give one, the hint shows the line to write.
+  A line that rules out nothing is W134.
 - **A case may carry a sequence.** Where the number of things is not fixed — the rows of a tariff
   sheet, the candidates a filter left — `elements` declares what one element carries and `fold`
   says what each verdict does next: `next`, `stop with <value>`, `take_unique`, `take_first`,

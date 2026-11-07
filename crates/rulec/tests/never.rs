@@ -411,3 +411,201 @@ fn a_line_over_definitions_holds_through_from_and_at_the_door() {
     let lines: Vec<&str> = said.lines().collect();
     assert_eq!(lines, ["through from [0, 3, 5, 9]", "refused this combination does not happen: never has_fragile = true, fragile = 0"], "{said}");
 }
+
+// ── W134 (§15.286): a line that rules out nothing ───────────────────────────────────────────
+
+/// A rule of every kind of name, with the lines to try put in where `LINES` stands.
+const IDLE: &str = r#"rule idle v1
+
+enum kind = basic | silver | gold
+enum tier = low < middle < high
+
+inputs
+  a      : bool
+  b      : bool
+  kind   : kind
+  tier   : tier  range >=low <=middle
+  tools  : number  range >=0 <=5
+  low    : number  range >=0 <=9
+  high   : number  range >=0 <=9
+  spare  : number?  range >=1 <=3
+  placed : date  range >=2026-01-01 <=2026-12-31
+
+constraint low <= high
+
+LINES
+
+outputs
+  fee : number  round down(1)
+
+table t
+policy unique
+| a | -> fee : number |
+| - | 1               |
+"#;
+
+/// The lines W134 is said of, as they are written, in order.
+fn idle_lines(lines: &str) -> Vec<String> {
+    let src = IDLE.replace("LINES", lines);
+    let ds = diags(&src, Lang::En);
+    assert_eq!(codes(&ds), Vec::<&str>::new(), "{lines}: {ds:#?}");
+    ds.iter()
+        .filter(|d| d.code == "W134")
+        .map(|d| d.title.split('`').nth(1).unwrap_or_default().to_string())
+        .collect()
+}
+
+/// A condition no value of its name meets takes nothing, whichever kind of name it is on.
+#[test]
+fn w134_a_condition_no_value_meets() {
+    for line in [
+        "never tools >= 6",
+        "never tools > 5",
+        "never tools < 0",
+        "never tools = 6",
+        "never tools = 6 | 7",
+        "never tools >= 6 < 9",
+        "never tools = not: 0 | 1 | 2 | 3 | 4 | 5",
+        "never kind = not: basic | silver | gold",
+        "never tier = high",
+        "never placed >= 2027-01-01",
+        "never placed = 2025-12-31",
+        "never spare >= 4",
+        "never a = true, tools >= 6",
+    ] {
+        assert_eq!(idle_lines(line), [line], "{line}");
+    }
+    for line in [
+        "never tools >= 5",
+        "never tools > 4",
+        "never tools <= 0",
+        "never tools = 5",
+        "never tools = 5 | 6",
+        "never tools = not: 0 | 1 | 2 | 3 | 4",
+        "never kind = not: basic | silver",
+        "never tier = middle",
+        "never placed >= 2026-12-31",
+        "never spare = none",
+        "never spare >= 3",
+        "never a = true, b = true",
+    ] {
+        assert_eq!(idle_lines(line), Vec::<String>::new(), "{line}");
+    }
+    let ds = diags(&IDLE.replace("LINES", "never tools >= 6"), Lang::En);
+    let d = one(&ds, "W134");
+    assert!(d.notes.iter().any(|n| n.contains("`tools` takes 0 to 5.")), "{:#?}", d.notes);
+    let ds = diags(&IDLE.replace("LINES", "never kind = not: basic | silver | gold"), Lang::En);
+    assert!(one(&ds, "W134").notes.iter().any(|n| n.contains("`kind` takes basic, silver, gold.")), "{ds:#?}");
+}
+
+/// A line another holds whole is told, whichever comes first. Two lines may hold a third between
+/// them, and of two that take the same only the later is told: delete it and the first still stands.
+#[test]
+fn w134_a_line_the_others_hold_whole() {
+    let narrow = "never a = true, b = true, tools = 1";
+    let wide = "never a = true, b = true";
+    assert_eq!(idle_lines(&format!("{wide}\n{narrow}")), [narrow]);
+    assert_eq!(idle_lines(&format!("{narrow}\n{wide}")), [narrow]);
+    assert_eq!(idle_lines(&format!("{wide}\n{wide}")), [wide]);
+    assert_eq!(
+        idle_lines("never tools <= 2\nnever tools >= 3\nnever tools = 1 | 4"),
+        ["never tools = 1 | 4"],
+    );
+    // The first two take everything between them, and neither takes the other.
+    assert_eq!(idle_lines("never tools <= 2\nnever tools >= 3"), Vec::<String>::new());
+    // Each line is told against the lines that stand, so three that take the same leave one.
+    assert_eq!(idle_lines("never b = true\nnever b = true\nnever b = true"), ["never b = true", "never b = true"]);
+    // What takes only part of a line says nothing of it.
+    assert_eq!(idle_lines("never tools = 1\nnever a = true, tools <= 2"), Vec::<String>::new());
+    assert_eq!(idle_lines("never a = true, tools = 1\nnever tools <= 2"), ["never a = true, tools = 1"]);
+    let ds = diags(&IDLE.replace("LINES", &format!("{wide}\n{narrow}")), Lang::En);
+    assert!(one(&ds, "W134").marks.iter().any(|m| m.label.contains(wide)), "{ds:#?}");
+}
+
+/// A `constraint` that leaves none of a line's combinations takes the line's place.
+#[test]
+fn w134_a_line_a_constraint_holds_whole() {
+    for line in ["never low = 9, high = 1", "never low > 5, high < 3", "never low >= 1, high = 0"] {
+        assert_eq!(idle_lines(line), [line], "{line}");
+    }
+    for line in ["never low = 1, high = 9", "never low >= 5, high <= 5", "never low = 9", "never high = 0"] {
+        assert_eq!(idle_lines(line), Vec::<String>::new(), "{line}");
+    }
+    let ds = diags(&IDLE.replace("LINES", "never low = 9, high = 1"), Lang::En);
+    assert!(one(&ds, "W134").marks.iter().any(|m| m.label.contains("constraint low <= high")), "{ds:#?}");
+}
+
+const SUMMARIES: &str = r#"rule idle_summaries v1
+
+elements parcels
+  fragile : bool
+  weight  : number  range >=1 <=100
+
+inputs
+  rush : bool
+
+count fragile_parcels over parcels where fragile  range >=0 <=5
+sum total_weight over parcels of weight  range >=0 <=1000
+
+never total_weight = 0, fragile_parcels >= 1
+
+outputs
+  fee : number  round down(1)
+
+table t
+policy unique
+COLUMNS
+"#;
+
+/// A line of summaries alone has no door, so it does nothing but in a table with all its names. A
+/// line that names an input is refused at the door, with a table or without one.
+#[test]
+fn w134_a_line_of_summaries_no_table_reads() {
+    let read = SUMMARIES.replace(
+        "COLUMNS",
+        "| total_weight | fragile_parcels | -> fee : number |\n| 0            | 0               | 0               |\n| >=1          | -               | 1               |",
+    );
+    let ds = diags(&read, Lang::En);
+    assert_eq!(codes(&ds), Vec::<&str>::new(), "{ds:#?}");
+    assert!(!ds.iter().any(|d| d.code == "W134"), "{ds:#?}");
+
+    let unread = SUMMARIES.replace("COLUMNS", "| rush | -> fee : number |\n| -    | 1               |");
+    let ds = diags(&unread, Lang::En);
+    let d = one(&ds, "W134");
+    assert!(d.title.contains("no table reads it"), "{}", d.title);
+    assert!(d.notes.iter().any(|n| n.contains("has no door")), "{:#?}", d.notes);
+
+    assert_eq!(idle_lines("never a = true, b = true"), Vec::<String>::new());
+}
+
+/// A wrong line is said first. Nothing is said of a line that may go, of a file that has one the
+/// check stopped.
+#[test]
+fn w134_waits_for_a_line_that_is_wrong() {
+    let src = text("fragile_lines_fee");
+    let wrong = src.replace("never has_fragile = true, fragile = 0\n", "never has_fragile = true, fragile = 1\n");
+    let ds = diags(&wrong, Lang::En);
+    assert!(ds.iter().any(|d| d.code == "E142"), "{ds:#?}");
+    assert!(!ds.iter().any(|d| d.code == "W134"), "{ds:#?}");
+}
+
+/// It stays a warning: `check` passes, the key follows the line for `--diff-base`, and the JSON has it.
+#[test]
+fn w134_passes_and_is_keyed_by_the_line() {
+    let ds = diags(&IDLE.replace("LINES", "never tools >= 6"), Lang::En);
+    assert_eq!(one(&ds, "W134").key.as_deref(), Some("W134\u{1}never tools >= 6"));
+    let (code, out, err) = run("en", &["check", "tests/mutants/m_w134.rule"]);
+    assert_eq!(code, 0, "{out}{err}");
+    let (code, out, _) = run("en", &["check", "tests/mutants/m_w134.rule", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("\"W134\""), "{out}");
+}
+
+/// Every line of the corpus's rules takes something.
+#[test]
+fn w134_says_nothing_of_the_lines_of_the_corpus() {
+    for name in ["order_fee", "parcel_fee", "fragile_lines_fee", "注文の手数料", "小包の手数料", "割れ物の明細の手数料"] {
+        let ds = diags(&text(name), Lang::En);
+        assert!(!ds.iter().any(|d| d.code == "W134"), "{name}: {ds:#?}");
+    }
+}

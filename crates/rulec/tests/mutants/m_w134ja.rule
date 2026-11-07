@@ -1,0 +1,29 @@
+rule 工具の手数料(tool_fee) v1
+description "呼ぶ側が数えた工具の数で決まる手数料"
+
+inputs
+  工具あり(has_tool)  : bool
+  全部部品(all_parts) : bool
+  工具数(tools)       : number  range >=0 <=5
+  下(low)             : number  range >=0 <=9
+  上(high)            : number  range >=0 <=9
+
+constraint 下 <= 上
+
+never 工具あり = true, 全部部品 = true
+# 工具の上限を 5 に直した。この行は 9 まであった頃のもの。
+never 工具数 >= 6
+# 一つ上の行がこの行を全部含む。
+never 工具あり = true, 全部部品 = true, 工具数 = 1
+# constraint がこの行を全部外す。
+never 下 = 9, 上 = 1
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table 手数料の表(fee_of)
+policy unique
+| 工具あり | 全部部品 | -> 手数料 : money[USD] |
+| true     | false    | 5USD                   |
+| false    | true     | 0USD                   |
+| false    | false    | 2USD                   |
