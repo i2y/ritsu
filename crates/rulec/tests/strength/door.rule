@@ -1,0 +1,43 @@
+rule door v1
+description "How a door moves on one action: a push strong enough opens it, a bolt locks it, and unbolting it costs a call-out fee. An example written for the purpose of what a file's claims leave open"
+
+enum door_state = closed | open | locked
+enum door_action = push | bolt | unbolt
+
+inputs
+  state  : door_state
+  action : door_action
+  force  : number  range >=0 <=10
+
+outputs
+  next_state : door_state
+  moved      : bool
+  fee        : money[USD]  range >=0USD <=5USD  round down(1USD)
+
+table step
+policy unique
+| state  | action     | force | -> next_state | moved | fee  |
+| closed | push       | <5    | state         | false | 0USD |
+| closed | push       | >=5   | open          | true  | 0USD |
+| closed | bolt       | -     | locked        | true  | 0USD |
+| closed | unbolt     | -     | state         | false | 0USD |
+| locked | unbolt     | -     | closed        | true  | 2USD |
+| locked | push, bolt | -     | state         | false | 0USD |
+| open   | -          | -     | state         | false | 0USD |  # an open door stays open: nothing here closes it
+
+machine door over step
+  carry   state -> next_state
+  initial closed
+  final   open
+  never   locked after open
+
+# A bolted door has to be unbolted before it can be pushed open.
+scenario unbolted_first
+| action | force | -> next_state | moved | fee  |
+| bolt   | 0     | locked        | true  | 0USD |
+| unbolt | 0     | closed        | true  | 2USD |
+| push   | 7     | open          | true  | 0USD |
+
+examples
+| state  | action | force | -> next_state | moved | fee  |
+| closed | push   | 4     | closed        | false | 0USD |

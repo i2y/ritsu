@@ -3032,6 +3032,139 @@ expected value the rule does not answer is.
 An example naming an enum value is **not** a row for it: W111 still asks which values no table
 names.
 
+## 9.1 What the claims leave open: `rulec strength`
+
+`rulec check` says the table breaks none of the file's claims. It does not say the claims decide the
+table: a table that does nothing keeps every `never`, and a cell may be changed with nothing in the
+file objecting. `rulec strength` makes the changes and shows who notices.
+
+```
+rulec strength <file.rule> [--format text|json] [--budget <n>] [--at-most <n>] [--other <path>] [--claims-only]
+```
+
+Every row of every table and clause of the file is changed, one place at a time, in the source text,
+and each result goes through the same check as `rulec check`:
+
+- **An output cell becomes another value.** An enum's other values and the inputs of that enum (the
+  row that stays where it is); a boolean's other value; for anything else what else that output's
+  cells write in the file, and a literal one step to either side, unless the output's `range` leaves
+  it out. A `T?` output can also become `none`.
+- **A row is taken out**, or a clause, or a table of one row, whole.
+- **A boundary of a column moves.** `<65` and `>=65` write one boundary, and so do `<=1` and `>=2` on a
+  column of whole numbers. It moves in every row at once, and across the tables and clauses that define
+  the same output, one step to either side and to each other boundary of the column, inside the
+  column's range. A date column moves by a day, an ordered enum along its order. Moving one row alone
+  leaves a gap or an overlap, which is stopped for that and says nothing, so it is not tried; a boundary
+  with a point cell (`3`) against it stays where it is for the same reason, and so does a value at the
+  edge of the column's range (`>=0` under `range >=0`), which lies between no two rows.
+
+A change that gets no call a different answer is the same rule written another way, and is counted
+apart: `state` on a row that only matches `closed`, written `closed`. `rulec diff` is what decides that,
+walking the inputs one by one where its cells could not settle it. Each of the others falls into one class:
+
+| class | when |
+|---|---|
+| claims and checks | an error with the scenarios and the examples taken out |
+| only a scenario or an example | an error, gone when they are taken out |
+| only a warning | no error, and a warning the file does not already have |
+| nothing | nobody notices |
+
+```console
+$ rulec strength tests/strength/door.rule
+tests/strength/door.rule: 14 of 48 changes to the rule are noticed by nothing.
+  14 noticed by the claims and checks
+  20 noticed only by a scenario or an example
+   0 noticed only by a warning
+  14 noticed by nothing
+   4 change no answer
+
+Noticed by nothing:
+  table step column force: the boundary <5, >=5 -> <6, >=6
+    Calls (from closed):
+      1. at closed, action = push, force = 5 → next_state = open, moved = true, fee = 0USD
+         with this change, next_state = closed, moved = false
+  table step row 4 (state = closed, action = unbolt): next_state state -> open | locked
+    Calls (from closed):
+      1. at closed, action = unbolt, force = 0 → next_state = closed, moved = false, fee = 0USD
+         with this change, next_state = open
+  table step row 4 (state = closed, action = unbolt): moved false -> true
+    Calls (from closed):
+      1. at closed, action = unbolt, force = 0 → next_state = closed, moved = false, fee = 0USD
+         with this change, moved = true
+  table step row 4 (state = closed, action = unbolt): fee 0USD -> 2USD | 1USD
+    Calls (from closed):
+      1. at closed, action = unbolt, force = 0 → next_state = closed, moved = false, fee = 0USD
+         with this change, fee = 2USD
+  table step row 6 (state = locked, action = push, bolt): next_state state -> closed | open
+    Calls (from closed):
+      1. at closed, action = bolt, force = 0 → next_state = locked, moved = true, fee = 0USD
+      2. at locked, action = push, force = 0 → next_state = locked, moved = false, fee = 0USD
+         with this change, next_state = closed
+  table step row 6 (state = locked, action = push, bolt): moved false -> true
+    Calls (from closed):
+      1. at closed, action = bolt, force = 0 → next_state = locked, moved = true, fee = 0USD
+      2. at locked, action = push, force = 0 → next_state = locked, moved = false, fee = 0USD
+         with this change, moved = true
+  table step row 6 (state = locked, action = push, bolt): fee 0USD -> 2USD | 1USD
+    Calls (from closed):
+      1. at closed, action = bolt, force = 0 → next_state = locked, moved = true, fee = 0USD
+      2. at locked, action = push, force = 0 → next_state = locked, moved = false, fee = 0USD
+         with this change, fee = 2USD
+  table step row 7 (state = open): moved false -> true
+    Calls (from closed):
+      1. at closed, action = push, force = 5 → next_state = open, moved = true, fee = 0USD
+      2. at open, action = push, force = 0 → next_state = open, moved = false, fee = 0USD
+         with this change, moved = true
+  table step row 7 (state = open): fee 0USD -> 2USD | 1USD
+    Calls (from closed):
+      1. at closed, action = push, force = 5 → next_state = open, moved = true, fee = 0USD
+      2. at open, action = push, force = 0 → next_state = open, moved = false, fee = 0USD
+         with this change, fee = 2USD
+
+Another table keeps everything the file says and differs in at least 8 of 21 output cells. One boundary is moved.
+  Changes that pass only together were not looked for, so this is not said to be the most different one.
+  rulec strength tests/strength/door.rule --other other.rule writes it.
+```
+
+Under each change that nothing notices is one call that shows it. For a machine, it is the shortest
+sequence of calls from the initial state that gets there, in the form E126 has them: each one is a row of
+the scenario that would pin the change down. One place shows the call of its first value. When the only
+call that shows a change is one no case reaches from the initial state, it says so.
+
+The result is the same every run, in the order of the tables, their rows and their columns. **The exit
+code is 0 whatever is unnoticed**, so the count is a report until a limit is given: with `--at-most <n>`
+more than `n` unnoticed changes exit 1, which is a gate for CI. A file with an error in it exits 2, and
+says to fix it first: what is noticed about a change to a broken file means nothing. So do bad arguments.
+
+### The other table
+
+The changes that nothing notices alone are piled up, in order, cells first: each is checked on top of
+the ones before it, and dropped if anything has an error or a new warning. The result is checked again
+from the beginning. `--other <path>` writes it, with the comments and the order of the file as they
+were: `rulec check <path>` passes and `rulec diff <file> <path>` shows where the two part.
+
+The count is **at least** that many cells. Two changes that pass only together are not looked for, so
+this is a table that exists and not the most different one. Rows taken out count their cells; a moved
+boundary counts none, and is said apart. A rule that reads other files reads them from where it is, so
+the other table is written in the same directory, and refused (exit 2) where it would not pass.
+
+### `--claims-only`
+
+The same with the scenarios and the examples taken out of the file first, the comment right above each
+with it, and out of the other table too: how far the claims alone decide the table. There is no class for
+a test then. A file that does not pass without them (exit 2) says so.
+
+### What it reads and does not
+
+Only the file's own tables: what it `apply`s is that file's to change, and the rules that apply it are
+not looked at. A contribution is changed in its own scope, as `rulec check` takes it. `fold`, `chances`,
+`define` and `derive` are not changed, nor are the claims. It generates nothing, and `rulec check` prints
+what it printed. One change is one check and one comparison: a file of a few dozen rows takes well
+under a minute. Over 10,000 changes it says how many on stderr, and goes on. `--budget` is `check`'s, for
+each check; a change whose own check runs out of it is not counted as noticed.
+
+The JSON is in [formats.md](formats.md#strength).
+
 ## 10. What cannot be written
 
 - Nested objects (`order.shipping.prefecture`). Flatten at the boundary and pass the scalar in.

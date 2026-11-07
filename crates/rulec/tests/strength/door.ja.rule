@@ -1,0 +1,43 @@
+rule 扉(door) v1
+description "扉が一回の操作でどう動くか。十分に強く押せば開き、閂を掛ければ施錠され、外すには出張料がかかる。ファイルの主張が残すものを見るために書いた例"
+
+enum 扉の状態(door_state) = 閉(closed) | 開(opened) | 施錠(locked)
+enum 操作(door_action) = 押す(push) | 掛ける(bolt) | 外す(unbolt)
+
+inputs
+  状態(state)  : 扉の状態
+  手順(action) : 操作
+  力(force)    : number  range >=0 <=10
+
+outputs
+  次の状態(next_state) : 扉の状態
+  動いた(moved)        : bool
+  料金(fee)            : money[円]  range >=0円 <=500円  round down(1円)
+
+table 一歩(step)
+policy unique
+| 状態 | 手順           | 力  | -> 次の状態 | 動いた | 料金 |
+| 閉   | 押す           | <5  | 状態        | false  | 0円  |
+| 閉   | 押す           | >=5 | 開          | true   | 0円  |
+| 閉   | 掛ける         | -   | 施錠        | true   | 0円  |
+| 閉   | 外す           | -   | 状態        | false  | 0円  |
+| 施錠 | 外す           | -   | 閉          | true   | 200円 |
+| 施錠 | 押す, 掛ける   | -   | 状態        | false  | 0円  |
+| 開   | -              | -   | 状態        | false  | 0円  |  # 開いた扉は開いたまま。ここには閉めるものがない
+
+machine 扉(door) over 一歩
+  carry   状態 -> 次の状態
+  initial 閉
+  final   開
+  never   施錠 after 開
+
+# 閂を掛けた扉は、外してからでないと押しても開かない。
+scenario 外してから(unbolted_first)
+| 手順   | 力 | -> 次の状態 | 動いた | 料金 |
+| 掛ける | 0  | 施錠        | true   | 0円  |
+| 外す   | 0  | 閉          | true   | 200円 |
+| 押す   | 7  | 開          | true   | 0円  |
+
+examples
+| 状態 | 手順 | 力 | -> 次の状態 | 動いた | 料金 |
+| 閉   | 押す | 4  | 閉          | false  | 0円  |

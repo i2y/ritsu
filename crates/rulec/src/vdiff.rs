@@ -1671,6 +1671,41 @@ pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -
     d
 }
 
+/// Walks every input of two versions the cells could not settle, where there are few enough
+/// (§15.288): a cell whose answers agree wherever they were asked may still be the same rule, and a
+/// table row that writes the state's own name in place of `status` is. Nothing changes when there
+/// are too many to walk. When every input was walked, what was unsettled is settled either way.
+pub fn settle_by_walking(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &mut VDiff) {
+    let mut differs = |a: &BTreeMap<String, Val>| {
+        if !crate::vectors::allowed(o.0, o.1, a) || !crate::vectors::days_ok(o.1, a) {
+            return false;
+        }
+        let env: HashMap<String, Val> = a.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let (ao, an) = (run(o.0, o.1, env.clone()), run(n.0, n.1, env));
+        !answers_alike(o.1, &ao.outs, n.1, &an.outs)
+    };
+    for v in [o, n] {
+        let cols: Vec<String> = v.0.outputs.iter().map(|x| x.name.text.clone()).collect();
+        match crate::grid::exhaust_input(v.0, v.1, &cols, &BTreeMap::new(), &BTreeSet::new(), &mut differs) {
+            None => return,
+            Some(None) => {}
+            Some(Some(w)) => {
+                let env: HashMap<String, Val> = w.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let (ao, an) = (run(o.0, o.1, env.clone()), run(n.0, n.1, env));
+                let (outs, shown) = outs_of(o.1, &ao, n.1, &an);
+                let region: Region = d.axes.iter().map(|ax| (0..ax.len()).collect()).collect();
+                d.changes.push(Change { region, outs, shown, uniform: false, old_rows: ao.rows, new_rows: an.rows, witness: w, cells: 1 });
+                return;
+            }
+        }
+    }
+    d.unknown.clear();
+    d.unsettled = 0;
+    d.unrealized = 0;
+    d.over_budget = false;
+    d.blocked = None;
+}
+
 /// The machine's half of a diff (§15.148). `None` unless both versions carry the same input
 /// back as the same output.
 /// The values of the `held` inputs one world's calls are made with (§15.149).
@@ -1679,7 +1714,7 @@ fn world_values(a: &crate::machine::Analysis, w: &[usize]) -> Option<BTreeMap<St
     Some(a.held.iter().filter_map(|n| e.inputs.get(n).map(|v| (n.clone(), v.clone()))).collect())
 }
 
-fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, budget: usize) -> Option<MachineDiff> {
+pub(crate) fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, budget: usize) -> Option<MachineDiff> {
     let (om, nm) = (o.0.machine.as_ref()?, n.0.machine.as_ref()?);
     let (ocarry, ncarry) = (om.carried()?, nm.carried()?);
     if ocarry != ncarry || om.more() != nm.more() {
@@ -1899,7 +1934,7 @@ fn mstep_text(c: &Checked, st: &MStep, cin: &str, cout: &str, k: usize) -> Strin
     }
 }
 
-fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -> VDiff {
+pub(crate) fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -> VDiff {
     let mut out = VDiff {
         rule: n.0.name.text.clone(),
         old_version: o.0.version.clone(),

@@ -92,6 +92,10 @@ pub mod runtest;
 /// headers.
 pub use ritsu_base::sha256;
 pub mod sources;
+/// `rulec strength`: which changes to a table anything notices, and another table that keeps
+/// everything the file says (§15.288). Everywhere the command is.
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub mod strength;
 /// What `rulec gen` writes: the targets it is given, and the extras beside them (§15.277).
 pub mod targets;
 pub mod types;

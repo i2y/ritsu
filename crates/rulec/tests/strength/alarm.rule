@@ -1,0 +1,25 @@
+rule alarm v1
+description "How an alarm climbs on what its sensor says: a noise raises it a level, a quiet moment lowers it from alert, and a siren stays on. An example written for the purpose of what a file's claims leave open"
+
+enum level = calm | alert | siren
+enum signal = quiet | noise
+
+inputs
+  level  : level
+  signal : signal
+
+outputs
+  next_level : level
+
+table step
+policy unique
+| level | signal | -> next_level |
+| calm  | quiet  | level         |
+| calm  | noise  | alert         |
+| alert | quiet  | calm          |
+| alert | noise  | siren         |
+| siren | -      | level         |
+
+machine alarm over step
+  carry   level -> next_level
+  initial calm

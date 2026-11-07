@@ -332,11 +332,12 @@ fn 鍵は言語で変わらない() {
         vec!["fmt", "--check", "tests/mutants/m_e102.rule", "--format", "json"],
         rulec::targets::up_to_0_40(&["gen", "tests/corpus/送料.rule", "--out", &d, "--check", "--format", "json"]),
         vec!["coverage", "tests/corpus/送料.rule", "--format", "json"],
+        vec!["strength", "tests/strength/door.rule", "--format", "json"],
         vec!["explain", "--all", "--format", "json"],
     ];
     // `test` runs the generated code: the tools level's (ritsu's DESIGN 10.2).
     if need(Need::Python) {
-        cases.insert(4, vec!["test", &d, "--format", "json"]);
+        cases.insert(5, vec!["test", &d, "--format", "json"]);
     }
     for case in &cases {
         let mut ja: Vec<&str> = case.clone();
@@ -365,7 +366,7 @@ fn 鍵は言語で変わらない() {
 #[test]
 fn 形式の文書が全コマンドを載せている() {
     let doc = std::fs::read_to_string(root().join("docs/formats.md")).unwrap();
-    for cmd in ["check", "explain", "fmt", "gen", "coverage", "test", "verify", "replay", "diff", "fixtures lint"] {
+    for cmd in ["check", "explain", "fmt", "gen", "coverage", "strength", "test", "verify", "replay", "diff", "fixtures lint"] {
         assert!(doc.contains(&format!("## `{cmd}`")) || doc.contains(cmd), "docs/formats.md に {cmd} が無い");
     }
 }

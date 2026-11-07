@@ -710,6 +710,35 @@ fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
+            name: "strength",
+            args: "<file.rule>",
+            purpose: tr!(
+                "表を一か所ずつ変えて検査に通し、誰も気づかない変更と、ファイルに書いてあることを全部守る別の表を出す",
+                "change a table one place at a time and check each: which changes nothing notices, and another table that keeps everything the file says"
+            ),
+            params: vec![(
+                "<file.rule>",
+                tr!("規則ファイルを一つ。表と節の全部の行を変える", "one rule file; every row of its tables and clauses is changed"),
+            )],
+            flags: vec![
+                flag("--format", Some("text|json"), tr!("端末向けの text（既定）、または機械向けの JSON（docs/formats.md）", "text for a terminal (the default), or machine-facing JSON (docs/formats.md)")).choices(&["text", "json"]),
+                flag("--budget", Some("<n>"), tr!("検査が一回で訪れるノード数の上限（check と同じ）", "cap on the nodes one check visits, as for check")).default(crate::region::DEFAULT_BUDGET.to_string()),
+                flag("--at-most", Some("<n>"), tr!("誰も気づかない変更がこの数を超えたら 1 で終わる", "exit 1 when more changes than this are noticed by nothing")),
+                flag("--other", Some("<path>"), tr!("別の表をここに書き出す。読み込むファイルがある規則は、元と同じディレクトリに", "write the other table here; a rule that reads other files writes it in its own directory")),
+                flag("--claims-only", None, tr!("シナリオと例を抜いたファイルで同じことをする。主張だけで表がどこまで決まっているかを見る", "do the same with the scenarios and the examples taken out: how far the claims alone decide the table")),
+            ],
+            exits: vec![
+                (0, tr!("走りきった（--at-most を付ければ、誰も気づかない変更がその数まで）", "the run finished (with --at-most, no more unnoticed changes than that)")),
+                (1, tr!("誰も気づかない変更が --at-most を超えた", "more changes are noticed by nothing than --at-most allows")),
+                (2, tr!("ファイルが検査を通らない、引数の誤り、読めないファイル、書けない --other", "the file does not pass check, bad arguments, a file that cannot be read, or an --other that cannot be written")),
+            ],
+            examples: vec![
+                "rulec strength rules/order_lifecycle.rule".into(),
+                "rulec strength rules/order_lifecycle.rule --claims-only --other other.rule --at-most 10".into(),
+            ],
+            codes: vec![],
+        },
+        Cmd {
             name: "diff",
             args: "<old> <new>",
             purpose: tr!(
@@ -1193,7 +1222,7 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     // function, an adapter for it, the records it answered, the answers two versions give, a
     // page to try a case on or to publish for customers — is not there to give, and is not made
     // up from nothing.
-    let about_a_decision = matches!(cmd.name, "schema" | "adapter" | "verify" | "replay" | "diff" | "fixtures")
+    let about_a_decision = matches!(cmd.name, "schema" | "adapter" | "verify" | "replay" | "diff" | "fixtures" | "strength")
         || (cmd.name == "doc" && (a.get("--format") == Some("html") || a.get("--audience") == Some("customer")));
     if about_a_decision {
         if let Some(p) = files.iter().find(|p| crate::enums::is_enums_file(p)) {
@@ -1307,6 +1336,7 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
         }
         "replay" => replay_cmd(&files, &a, markdown, json),
         "diff" => diff_cmd(&files, &a, markdown, json),
+        "strength" => strength_cmd(&files, &a, json),
         "test" => {
             let Some(dir) = files.first() else { return need_args(cmd) };
             match crate::runtest::run_with(std::path::Path::new(dir.as_str()), a.has("--proofs")) {
@@ -2130,6 +2160,75 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
         print!("{}", crate::report::render(&rep, &nf, &nc, terse));
     }
     ExitCode::from(u8::from(rep.differs() || rep.compared_nothing()))
+}
+
+/// `rulec strength` (§15.288).
+fn strength_cmd(files: &[&String], a: &Args, json: bool) -> ExitCode {
+    let [path] = files else {
+        return refuse(tr!(
+            "`rulec strength` は一度に一つのファイルを読みます（{} 個渡されました）",
+            "`rulec strength` reads one file at a time ({} were given)",
+            files.len()
+        ));
+    };
+    let budget = match a.get("--budget") {
+        Some(v) => match v.parse::<i64>() {
+            Ok(n) if n > 0 => n,
+            _ => return refuse(tr!("`--budget {v}` は正の整数ではありません", "`--budget {v}` is not a positive integer")),
+        },
+        None => crate::region::DEFAULT_BUDGET,
+    };
+    let at_most = match a.get("--at-most") {
+        Some(v) => match v.parse::<usize>() {
+            Ok(n) => Some(n),
+            Err(_) => return refuse(tr!("`--at-most {v}` は 0 以上の整数ではありません", "`--at-most {v}` is not a whole number of 0 or more")),
+        },
+        None => None,
+    };
+    let other = a.get("--other").map(str::to_string);
+    if other.as_deref().is_some_and(|o| std::path::Path::new(o) == std::path::Path::new(path.as_str())) {
+        return refuse(tr!("`--other` が `{path}` そのものです。元のファイルには書きません", "`--other` is `{path}` itself; the file is not written over"));
+    }
+    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
+        return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+    };
+    let opts = crate::strength::Options { budget, claims_only: a.has("--claims-only"), other: other.clone() };
+    let s = match crate::strength::measure(&src, path, &opts) {
+        Ok(s) => s,
+        Err(crate::strength::Refused::Said(m)) => return refuse(m),
+        Err(crate::strength::Refused::NotPassing(ds, text)) => {
+            let lines: Vec<String> = text.lines().map(str::to_string).collect();
+            for d in &ds {
+                eprint!("{}", render(d, &lines));
+                eprintln!();
+            }
+            let about = if a.has("--claims-only") {
+                tr!("シナリオと例を抜くと検査を通りません", "does not pass check with its scenarios and examples taken out")
+            } else {
+                tr!("は検査を通っていません", "does not pass check")
+            };
+            return refuse(tr!("`{path}` {about}。直してから走らせてください", "`{path}` {about}; fix it first"));
+        }
+    };
+    let written = match (&other, &s.other.text) {
+        (Some(p), Some(t)) => {
+            if let Err(e) = ritsu_base::fs::write(p, t) {
+                return refuse(tr!("`{p}` に書けません: {e}", "cannot write `{p}`: {e}"));
+            }
+            Some(p.as_str())
+        }
+        (Some(p), None) => {
+            eprintln!("{}", tr!("note {path}: 守りながら変えられる行が無いので、`{p}` には何も書いていません", "note {path}: no change could be kept, so nothing is written to `{p}`"));
+            None
+        }
+        _ => None,
+    };
+    if json {
+        println!("{}", crate::strength::render_json(&s, written));
+    } else {
+        print!("{}", crate::strength::render(&s, written));
+    }
+    ExitCode::from(u8::from(at_most.is_some_and(|n| s.nothing() > n)))
 }
 
 /// §9.2: decide whether the generated vectors meet the three coverage criteria. The

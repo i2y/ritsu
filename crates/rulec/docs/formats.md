@@ -389,6 +389,58 @@ The two answers are meant to be held against each other: every record whose answ
 under `--fixtures` falls inside one of these regions. `tests/vdiff.rs` does exactly that
 over the corpus.
 
+## `strength`
+
+One object: what `rulec strength` (reference §9.1) found for the file. Its counts are exact, and
+its lists are in the order of the tables, their rows and their columns, the same every run.
+
+```json
+{"file":"tests/strength/door.rule","claims_only":false,
+ "changes":48,"claims":14,"tests":20,"warnings":0,"nothing":14,"same_answers":4,
+ "unnoticed":[{"table":"step","clause":false,"row":6,"kind":"output","output":"next_state","column":null,
+   "from":"state","to":"closed","when":"state = locked, action = push, bolt",
+   "call":{"inputs":{"action":"push","force":0,"state":"locked"},
+           "outputs":[{"output":"next_state","old":"locked","new":"closed"},
+                      {"output":"moved","old":"false","new":"false"},
+                      {"output":"fee","old":"0","new":"0"}]},
+   "calls":[{"inputs":{"action":"bolt","force":0,"state":"closed"},
+             "old":{"next_state":"locked","moved":true,"fee":0},
+             "new":{"next_state":"locked","moved":true,"fee":0}},
+            {"inputs":{"action":"push","force":0,"state":"locked"},
+             "old":{"next_state":"locked","moved":false,"fee":0},
+             "new":{"next_state":"closed","moved":false,"fee":0}}]},
+  …],
+ "noticed":[{"table":"step","clause":false,"row":1,"kind":"boundary","output":null,"column":"force",
+   "from":"<5, >=5","to":"<4, >=4","when":"state = closed, action = push, force <5",
+   "class":"tests","by":["E107"],"call":{…},"calls":null},
+  …],
+ "same":[{"table":"step","clause":false,"row":1,"kind":"output","output":"next_state","column":null,
+   "from":"state","to":"closed","when":"…","call":null,"calls":null},
+  …],
+ "other":{"cells":8,"of":21,"rows":0,"boundaries":1,"written":null}}
+```
+
+| field | meaning |
+|---|---|
+| `changes` | every change but those in `same`: `claims + tests + warnings + nothing` |
+| `claims` | an error with the scenarios and the examples taken out |
+| `tests` | an error that goes with them. Always 0 with `claims_only` |
+| `warnings` | no error, and a warning the file does not already have. A warning is the same one if its code and its title are, with the digits of the title left out, so that a row number that moved does not make it new |
+| `nothing` | nobody notices |
+| `same_answers` | how many get no call a different answer. Where the comparison could not settle that, the change is counted by who notices it, with `call` null |
+| `unnoticed`, `noticed`, `same` | the changes of those counts |
+| `table`, `clause` | the table or clause, and which it is |
+| `row` | the row, 1-based as in a diagnostic. For `boundary`, the first row that writes it |
+| `kind` | `output`, `row` or `boundary` |
+| `output` | the output of an `output` change, else null |
+| `column` | the column of a `boundary` change, else null |
+| `from`, `to` | as written: the two cells; the row as it reads and null for a `row` change; the comparisons that write the boundary, each way of writing once, for a `boundary` change |
+| `when` | the row's conditions, as they read |
+| `class`, `by` | on `noticed`: `claims`, `tests` or `warnings`, and the codes of what noticed it, sorted. For `warnings`, those new ones |
+| `call` | one input that shows it: `inputs` as a call sends them, `outputs` in the shape of `diff`'s (every output, the two answers as strings). Null where none could be worked out, which is also the case where the changed file could not be read for comparing |
+| `calls` | on `unnoticed`, for a machine: the shortest sequence of calls from the initial state that gets there, each with its `inputs` and its `old` and `new` answers, as `machine.shortest` of `diff`. Empty when no sequence gets there; null where the file is no machine, and on the other lists |
+| `other` | the table that keeps everything the file says: `cells` of the `of` output cells differ, at least; `rows` taken out (their cells among `cells`); `boundaries` moved; `written` the path `--other` wrote it to, or null. All 0 when no change could be kept, and nothing is written then |
+
 ## `fixtures lint`
 
 One object for the run.

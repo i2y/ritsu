@@ -1,0 +1,33 @@
+rule fare v1
+description "What a ride costs: a child rides at half, a booking costs less before the first of July, and a gold member books for nothing. An example written for the purpose of what a file's claims leave open"
+
+enum tier = basic < silver < gold
+
+inputs
+  age    : number  range >=0 <=120
+  member : tier
+  ride   : date    range >=2026-01-01 <=2026-12-31
+
+outputs
+  share   : rate[step 1%]  range >=0% <=100%  round down(1%)
+  booking : money[USD]?  range >=0USD <=10USD  round down(1USD)
+
+clause child -> share
+  when age <13
+  then 50%
+
+clause adult -> share
+  when age >=13
+  then 100%
+
+# A gold member books for nothing, so a booking may have no fee at all.
+table booking_fee
+policy unique
+| member | ride         | -> booking |
+| <gold  | <=2026-06-30 | 3USD       |
+| <gold  | >=2026-07-01 | 4USD       |
+| >=gold | -            | none       |
+
+examples
+| age | member | ride       | -> share | booking |
+| 12  | gold   | 2026-01-05 | 50%      | none    |
