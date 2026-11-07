@@ -429,6 +429,8 @@ examples
 | domestic | 9lb    | 8USD   |
 ```
 
+What is to happen goes in the same way, as `possible` lines (`possible delivered` in a `machine`, `possible event = cancel, refund = 500JPY` for one call): `check` stops with E146 when no call makes it happen, and `check --show-possible` prints the calls when one does. Then `rulec strength rules/<name>.rule` lists the changes to the table that no claim, scenario or example notices, each with a call that shows it. The person decides which of them matter, and the agent adds a claim or an example for those ([What the claims leave open](checks.md#what-the-claims-leave-open)).
+
 ### 3-4. Render the pages for people and for customers
 
 Who: rulec (rulec doc). The people who check the rule and the customer read

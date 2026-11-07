@@ -1,4 +1,4 @@
-rule 注文の起きること(order_happens) v1
+rule 注文の起きること(order_happens_ja) v1
 description "通販の注文が、出来事ごとにどの状態に移るか。表が仕事をしていると言うために起きなければならないこと（配達、入金か出荷のあとの取消、出荷のあとの返金）も書く。`never` と `once` の行だけなら、何もしない表でも守れる（なんでも取り消す注文を参照）。"
 
 enum 状態(order_state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 配達済(delivered) | 取消(cancelled)

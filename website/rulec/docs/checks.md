@@ -287,6 +287,14 @@ whether the walk took the values one by one or cut them into intervals. Where it
 one, the certificate also gives a path of calls that really happen from every place to a final
 state, and the Lean re-checker proves from it that every case can still finish.
 
+The claims above say what must not happen, so a table that does nothing passes all of them. A
+`possible` line says what **is to happen**: `possible delivered`, `possible refund >0JPY after
+shipped`, or, for one call outside a `machine`, `possible event = cancel, refund = 500JPY`.
+`check` looks for the shortest calls that really make it happen (`--show-possible` prints them)
+and stops with **E146** when everything a case can reach was looked at and it is not there. A
+line that is written wrongly is **E145**, and one that could be neither found nor ruled out is
+**W127** (in a `machine`) or **W135**, never a pass.
+
 Some values of an enum can be had only after others — a course after the courses it requires, a
 certification after the one below it. A `prerequisites` block says which, once for every value:
 `start` for the ones that need nothing, one `<value> requires …` line for each of the rest (`,`
@@ -360,7 +368,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 236 deliberately broken
+   and that implementation has not been proved correct. The evidence is 242 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -477,6 +485,46 @@ Related codes: E102 E105 W111
 exactly what [Diagnostics](codes.md) on this site is built from. Every
 reproduction in it is run by the test suite, so an example cannot rot
 into something that reads well and is no longer true.
+
+## What the claims leave open
+
+`check` passing says the claims hold, not that they decide the table. `rulec strength` changes every
+output cell, every row and every boundary between rows of a rule, one place at a time, puts each change
+through the same checks, and sorts it by who noticed: the claims and checks, only a scenario or an
+example, only a warning, or nothing. A change that leaves every answer where it was is counted
+apart, since nobody could notice it.
+
+```console
+$ rulec strength rules/order_lifecycle.rule --other other.rule
+rules/order_lifecycle.rule: 15 of 93 changes to the rule are noticed by nothing.
+  35 noticed by the claims and checks
+  43 noticed only by a scenario or an example
+   0 noticed only by a warning
+  15 noticed by nothing
+   5 change no answer
+
+Noticed by nothing:
+  table step row 2 (state = received, event = cancel): refund 0JPY -> amount_paid
+    Calls (from received):
+      1. at received, event = cancel, amount_paid = 1JPY → next_state = cancelled, refund = 0JPY, accepted = true
+         with this change, refund = 1JPY
+  ...
+
+Another table keeps everything the file says and differs in at least 9 of 30 output cells.
+  Changes that pass only together were not looked for, so this is not said to be the most different one.
+  It is written to `other.rule`: `rulec check other.rule` passes, and `rulec diff rules/order_lifecycle.rule other.rule` shows where the two part.
+```
+
+Each change that nothing notices comes with a call that shows it. Whether it matters is a decision:
+a claim or a scenario for the ones that do, and a question to the person who owns the rule for the
+ones the file cannot settle. `--claims-only` takes the scenarios and examples out first and shows how far the
+claims alone decide the table (`44 of 93` for this rule). `--at-most <n>` exits 1 when more than `n`
+changes are noticed by nothing, which makes the count a gate in CI, and `--other <path>` writes the
+other table: the changes nobody notices, laid over one another where they still pass `check`, so
+`rulec diff` shows what the file leaves to chance. The number says "at least this many cells
+differ", never "this is the furthest table". It is a measure of one file against its own claims, not of
+the rule: a table with many large amounts in its cells has many changes the claims never mention.
+`--format json` is described in the [formats](https://github.com/i2y/ritsu/blob/main/crates/rulec/docs/formats.md).
 
 ## Only what is new
 

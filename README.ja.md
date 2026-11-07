@@ -32,6 +32,8 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 
 規則は、表と、そのまわりの計算、例外、ただし書きで書きます。`rulec check` は、宣言した範囲のすべての入力に答えがちょうど一つあることを証明し、単位とお金を確かめ、Lean の証明が検査し直す証明書を書きます。数字は、転記した元の出典に固定でき、出典が変われば検査が止まります。検査を通った規則だけが、Python、NumPy、TypeScript、JavaScript、Rust、Ruby、PHP、Go、Swift、Java、SQL、Wasm の普通の関数になります。
 
+主張が通っても、表が主張で決まっているとは限りません。`possible` の行は**起きるはずのこと**を書くもので、`rulec check --show-possible` が、起きる最短の呼び出しの並びを見せます（注文を全部取り消す表は `never` を全部通りますが、`possible delivered` を足すと E146 で止まります）。`rulec strength` は表を一か所ずつ変えて、主張、シナリオか例だけ、誰も、のどれが気づくかを出します。気づかれない変更には答えが変わる呼び出しが付き、`--other` を付けると、ファイルに書いてあることを全部守る別の表も書き出します。どちらも [rulec の README](crates/rulec/README.md) にあります。
+
 ```rule
 rule paypal_fee v1
 description "The PayPal Checkout fee on one payment in the United States. Transcribed from PayPal's published merchant fees"

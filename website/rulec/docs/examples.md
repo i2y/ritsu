@@ -1402,6 +1402,61 @@ examples
 - **The generated code gets the initial state and a test for a final one** (`INITIAL` and `is_final` in Python). The vectors get sequences of calls, and `rulec test` has each language hand the state it answered to its own next call.
 - **A revision is compared in terms of the cases in progress.** `rulec diff` between two versions gives the shortest sequence of calls the two answer differently, and the states from which a case can no longer finish. `replay` plays a log's records through the new version one case at a time, a case being the records that share a `tag`.
 
+## Saying what is to happen, beside what must not (possible)
+
+The order of the previous example with what has to happen written in. `never` and `once` only say that bad things do not happen, so a table in which every event cancels the order passes them. A `possible` line writes the other side.
+
+```rule
+rule order_happens v1
+description "How a mail order moves on with each event, and what has to happen for the table to be doing its job: a delivery, a cancellation after payment or shipping, a refund after shipping. The `never` and `once` lines alone are kept by a table that does nothing (see order_cancels_everything)."
+
+enum order_state = received | paid | shipped | delivered | cancelled
+enum happening = pay | ship | deliver | cancel
+
+inputs
+  state : order_state
+  event : happening
+
+outputs
+  next_state : order_state
+  refund     : money[JPY]  round down(1JPY)
+
+table step
+policy unique
+| state     | event         | -> next_state | refund |
+| received  | pay           | paid          | 0JPY   |
+| received  | cancel        | cancelled     | 0JPY   |
+| received  | ship, deliver | state         | 0JPY   |
+| paid      | ship          | shipped       | 0JPY   |
+| paid      | cancel        | cancelled     | 500JPY |
+| paid      | pay, deliver  | state         | 0JPY   |
+| shipped   | deliver       | delivered     | 0JPY   |
+| shipped   | cancel        | cancelled     | 300JPY |
+| shipped   | pay, ship     | state         | 0JPY   |
+| delivered | -             | state         | 0JPY   |
+| cancelled | -             | state         | 0JPY   |
+
+machine order over step
+  carry    state -> next_state
+  initial  received
+  final    delivered, cancelled
+  never    shipped after cancelled
+  once     refund >0JPY
+  possible delivered
+  possible cancelled after paid, shipped
+  possible refund >0JPY after shipped
+
+# Outside the machine, one call: a cancellation that pays back.
+possible event = cancel, refund = 500JPY
+```
+
+**What this one shows**
+
+- **`possible delivered` passes only when a sequence of calls that makes it happen is found.** Pay, ship, deliver. `rulec check --show-possible` prints the calls, with the table row each one used. Add the same line to the table in which every event cancels (`order_cancels_everything.rule`) and `check` stops with E146.
+- **`possible cancelled after paid, shipped` is one claim for each state.** That the order can be cancelled from either is checked separately.
+- **`possible refund >0JPY after shipped` is a line about an output's cell.** It shows the calls in which a cancellation after shipment really pays something back.
+- **Outside a `machine`, a line is the conditions that hold together in one call.** `possible event = cancel, refund = 500JPY` is found at an order that has been paid and is cancelled.
+
 ## Shipping by membership tier
 
 The tiers have an order (basic < silver < gold < platinum), and the cells compare against a tier. A campaign lifts a member to the campaign's tier for that order alone.

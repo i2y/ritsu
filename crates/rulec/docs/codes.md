@@ -148,6 +148,9 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W133](#w133) | warning | A row is reached only by a combination the definitions never give |
 | [W134](#w134) | warning | A `never` line rules out nothing |
 | [E141](#e141) | error | A `never` line is not written as it can be |
+| [E145](#e145) | error | A `possible` line is not written as it can be |
+| [E146](#e146) | error | What a `possible` line says does not happen, whatever the calls |
+| [W135](#w135) | warning | A `possible` line could not be settled |
 | [E142](#e142) | error | The definitions give a combination a `never` line rules out |
 | [E143](#e143) | error | A `never` line cannot be shown from the definitions |
 | [E144](#e144) | error | `fed by` does not read, or stands where it cannot |
@@ -211,7 +214,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -229,7 +232,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -4886,7 +4889,7 @@ machine k(k) over m
   initial p
 ```
 
-Related codes: [W114](#w114), [E128](#e128)
+Related codes: [W114](#w114), [E128](#e128), [E146](#e146)
 
 ## W128
 
@@ -5950,6 +5953,116 @@ policy unique
 ```
 
 Related codes: [E142](#e142), [E143](#e143), [E018](#e018)
+
+## E145
+
+`error` — **A `possible` line is not written as it can be**
+
+**When.** A `possible` line under `machine` has a word that is not a state, a name it does not know, or a cell its type cannot hold; mixes a list of states with cells; has both `after` and `when`; writes `when` on an output's cell or `after` on a carried value's; or names something that is both an output and a carried input, so that which one it means cannot be read. Outside `machine`: a name that is neither an input, an output nor a summary, two conditions on one name, a field of an element, or a cell its type cannot hold.
+
+**Fix.** Under `machine` there are three forms: `possible <state>, … [after <state>, …]`, `possible <output> <cell> [after <state>, …]` and `possible <carried input> <cell> [and …] [when <state>, …]`. Outside `machine` it is written as a `never` line is: `possible name = value, name > value`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum state(state) = received(received) | shipped(shipped) | delivered(delivered)
+enum step(step) = ship(ship) | deliver(deliver)
+
+inputs
+  state_now(state_now) : state
+  step_now(step_now)   : step
+
+outputs
+  next_state(next_state) : state
+
+table moves(moves)
+policy first
+| state_now | step_now | -> next_state |
+| received  | ship     | shipped       |
+| shipped   | deliver  | delivered     |
+| -         | -        | state_now     |
+
+machine order(order) over moves
+  carry    state_now -> next_state
+  initial  received
+  final    delivered
+  possible arrived
+```
+
+Related codes: [E146](#e146), [W135](#w135), [W127](#w127), [E141](#e141)
+
+## E146
+
+`error` — **What a `possible` line says does not happen, whatever the calls**
+
+**When.** What a `possible` line says was not found anywhere a case can get to (no cell was left unsettled, and over the intervals too where carried values are walked in intervals). A table that does nothing keeps every `never`, `once` and `always`; this line is what shows the table does its job. Outside `machine`: every cell of the inputs was looked at and no one call has the conditions together. Only calls a `constraint`, a `never` line and the ranges of the inputs take are counted. There is no bad sequence to show, so the finding says what is there instead: the states reached after that state, the values the calls answered.
+
+**Fix.** Correct the rows that decide where a case goes and what it answers. If this need not happen, drop the `possible` line. `rulec check --show-possible` shows the calls of the lines that hold.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum state(state) = received(received) | shipped(shipped) | delivered(delivered) | cancelled(cancelled)
+enum step(step) = ship(ship) | deliver(deliver) | cancel(cancel)
+
+inputs
+  state_now(state_now) : state
+  step_now(step_now)   : step
+
+outputs
+  next_state(next_state) : state
+
+table moves(moves)
+policy first
+| state_now | step_now | -> next_state |
+| received  | cancel   | cancelled     |
+| -         | -        | state_now     |
+
+machine order(order) over moves
+  carry    state_now -> next_state
+  initial  received
+  final    delivered, cancelled
+  never    shipped after cancelled
+  possible delivered
+```
+
+Related codes: [E145](#e145), [E126](#e126), [W125](#w125), [W127](#w127), [W135](#w135)
+
+## W135
+
+`warning` — **A `possible` line could not be settled**
+
+**When.** A `possible` line outside `machine` has no call found that meets it and none shown that it cannot. It happens where an answer is computed from the inputs and moves inside a cell, where the inputs cut into more cells than the budget covers, or where the rule reads a `fold`. A line under `machine` says this as W127. What was not settled is not said to hold.
+
+**Fix.** Raise `--budget`, or write the call down in `examples`. For a computed value, a condition on an answer a table decides (`approved = true`) can often be settled.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  qty(qty)     : number  range >=1 <=1000000
+  price(price) : number  range >=1 <=1000000
+
+define raw_total(raw_total) : number = qty * price
+
+outputs
+  total(total) : number  round down(1)
+
+table totals(totals)
+policy first
+| -> total  |
+| raw_total |
+
+possible total = 80779853376
+```
+
+Related codes: [E145](#e145), [E146](#e146), [W127](#w127)
 
 ## E142
 

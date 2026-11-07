@@ -46,6 +46,14 @@ to the published source it was copied from, so that a change in the source stops
 Only a rule that passes compiles, into plain functions in Python, NumPy, TypeScript,
 JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm.
 
+A claim that passes does not mean the table is decided by its claims. A `possible` line says what
+**is to happen**, and `rulec check --show-possible` prints the shortest calls that make it
+happen (a table that cancels every order passes `never`, and stops with E146 once `possible
+delivered` is added). `rulec strength` changes the table one place at a time and says who
+notices, the claims, only a scenario or an example, or nothing, with a call that shows each
+unnoticed change and, with `--other`, another table that keeps everything the file says. Both
+are in [rulec's README](crates/rulec/README.md).
+
 ```rule
 rule paypal_fee v1
 description "The PayPal Checkout fee on one payment in the United States. Transcribed from PayPal's published merchant fees"

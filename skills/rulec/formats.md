@@ -61,6 +61,29 @@ still means the same thing, and `v` says which version wrote the line.
 | `fix` | `kind` from the closed set below, and `text`: the rewritten form, ready to paste. Language independent, no prose |
 | `key` | the identity `--diff-base` compares on. Two runs that name the same finding use the same key |
 
+**A file with `possible` lines has one more line** (§15.287), after its findings, and it is the only
+line without `severity`; read `kind` first. A file with no such line prints nothing more.
+
+```json
+{"v":2,"kind":"possible","file":"tests/corpus/order_happens.rule","possible":[
+ {"line":36,"claim":"possible delivered","result":"holds",
+  "witness":{"inputs":{"state":"shipped","event":"deliver"},"outputs":{"next_state":"delivered","refund":0},
+             "trace":[{"inputs":{"state":"received","event":"pay"},"outputs":{"next_state":"paid","refund":0},"rows":[{"table":"step","row":1}]},…]}},
+ {"line":41,"claim":"possible event = cancel, refund = 500JPY","result":"holds",
+  "witness":{"inputs":{"state":"paid","event":"cancel"},"outputs":{"next_state":"cancelled","refund":500}}}]}
+```
+
+| field | meaning |
+|---|---|
+| `line` | the line of the file |
+| `claim` | the claim as it reads, one per pair: `possible cancelled after paid` |
+| `result` | `holds`, `absent` (E146) or `undecided` (W127, W135) |
+| `witness` | where it holds: `trace` as E126 has it, and `inputs` and `outputs` of the last call. A line outside a `machine` has one call and no `trace`. A case that starts there takes no call, and `witness` is `{}` |
+| `why` | where it does not: **prose**, the same note the finding gives |
+
+The line is written only when the tables hold (§15.148): a file stopped before the machine's claims has
+findings and no such line.
+
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
 `add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`,
 `flip_bound`, `narrow_contract`, `rewrite_literal`, `none`. `rewrite_literal` is one literal as
@@ -365,6 +388,58 @@ nothing out of the description.
 The two answers are meant to be held against each other: every record whose answer moves
 under `--fixtures` falls inside one of these regions. `tests/vdiff.rs` does exactly that
 over the corpus.
+
+## `strength`
+
+One object: what `rulec strength` (reference §9.1) found for the file. Its counts are exact, and
+its lists are in the order of the tables, their rows and their columns, the same every run.
+
+```json
+{"file":"tests/strength/door.rule","claims_only":false,
+ "changes":48,"claims":14,"tests":20,"warnings":0,"nothing":14,"same_answers":4,
+ "unnoticed":[{"table":"step","clause":false,"row":6,"kind":"output","output":"next_state","column":null,
+   "from":"state","to":"closed","when":"state = locked, action = push, bolt",
+   "call":{"inputs":{"action":"push","force":0,"state":"locked"},
+           "outputs":[{"output":"next_state","old":"locked","new":"closed"},
+                      {"output":"moved","old":"false","new":"false"},
+                      {"output":"fee","old":"0","new":"0"}]},
+   "calls":[{"inputs":{"action":"bolt","force":0,"state":"closed"},
+             "old":{"next_state":"locked","moved":true,"fee":0},
+             "new":{"next_state":"locked","moved":true,"fee":0}},
+            {"inputs":{"action":"push","force":0,"state":"locked"},
+             "old":{"next_state":"locked","moved":false,"fee":0},
+             "new":{"next_state":"closed","moved":false,"fee":0}}]},
+  …],
+ "noticed":[{"table":"step","clause":false,"row":1,"kind":"boundary","output":null,"column":"force",
+   "from":"<5, >=5","to":"<4, >=4","when":"state = closed, action = push, force <5",
+   "class":"tests","by":["E107"],"call":{…},"calls":null},
+  …],
+ "same":[{"table":"step","clause":false,"row":1,"kind":"output","output":"next_state","column":null,
+   "from":"state","to":"closed","when":"…","call":null,"calls":null},
+  …],
+ "other":{"cells":8,"of":21,"rows":0,"boundaries":1,"written":null}}
+```
+
+| field | meaning |
+|---|---|
+| `changes` | every change but those in `same`: `claims + tests + warnings + nothing` |
+| `claims` | an error with the scenarios and the examples taken out |
+| `tests` | an error that goes with them. Always 0 with `claims_only` |
+| `warnings` | no error, and a warning the file does not already have. A warning is the same one if its code and its title are, with the digits of the title left out, so that a row number that moved does not make it new |
+| `nothing` | nobody notices |
+| `same_answers` | how many get no call a different answer. Where the comparison could not settle that, the change is counted by who notices it, with `call` null |
+| `unnoticed`, `noticed`, `same` | the changes of those counts |
+| `table`, `clause` | the table or clause, and which it is |
+| `row` | the row, 1-based as in a diagnostic. For `boundary`, the first row that writes it |
+| `kind` | `output`, `row` or `boundary` |
+| `output` | the output of an `output` change, else null |
+| `column` | the column of a `boundary` change, else null |
+| `from`, `to` | as written: the two cells; the row as it reads and null for a `row` change; the comparisons that write the boundary, each way of writing once, for a `boundary` change |
+| `when` | the row's conditions, as they read |
+| `class`, `by` | on `noticed`: `claims`, `tests` or `warnings`, and the codes of what noticed it, sorted. For `warnings`, those new ones |
+| `call` | one input that shows it: `inputs` as a call sends them, `outputs` in the shape of `diff`'s (every output, the two answers as strings). Null where none could be worked out, which is also the case where the changed file could not be read for comparing |
+| `calls` | on `unnoticed`, for a machine: the shortest sequence of calls from the initial state that gets there, each with its `inputs` and its `old` and `new` answers, as `machine.shortest` of `diff`. Empty when no sequence gets there; null where the file is no machine, and on the other lists |
+| `other` | the table that keeps everything the file says: `cells` of the `of` output cells differ, at least; `rows` taken out (their cells among `cells`); `boundaries` moved; `written` the path `--other` wrote it to, or null. All 0 when no change could be kept, and nothing is written then |
 
 ## `fixtures lint`
 
@@ -791,6 +866,18 @@ after the first, and `always`, one per line; neither key is there otherwise:
 with a module gives it. The NumPy plan lists the same under `machine.more`, each
 `{"in":…,"out":…,"initial":…}`.
 
+A machine with `possible` lines (§15.287) adds `possible`, one entry per line as written, and a rule
+with such lines outside its `machine` carries `possible` at the top level. Neither key is there
+otherwise. `check` has found the calls; these are the lines:
+
+```json
+"machine":{…,"possible":[{"said":"possible delivered","states":["delivered"],"after":[]},
+  {"said":"possible refund >0JPY after shipped","output":"refund","cell":">0JPY","after":["shipped"]},
+  {"said":"possible attempts = 2 when pending","tests":[{"input":"attempts","cell":"2"}],"when":["pending"]}]},
+"possible":[{"said":"possible event = cancel, refund = 500JPY",
+  "conds":[{"name":"event","cell":"= cancel"},{"name":"refund","cell":"= 500JPY"}]}]
+```
+
 A file with a `prerequisites` block (§15.222) — a rule, or an `enums` file — carries
 `prerequisites` at the top level, one entry per block; the key is absent otherwise:
 
@@ -1087,6 +1174,18 @@ certificate hands over, so it holds of the rule too. A world is `Machine.world`,
 with the rows that do not take its coordinates left out, and `stepIn_world` and
 `reachesIn_world` say that every call and every state of a case of the world is one of that
 machine's — so the theorems above, applied to it, speak for the cases of the world.
+
+A `possible` line (§15.287) is `machine.possible`, one entry per pair: `line`, `said`, `after`, `world`, `path`,
+and `form` with what it asks: `state` with `state`, or `output` with `answer`, what a `once` line's entry
+holds. `path` is calls in the shape of a finish path's. A checker walks them from the initial state, each
+one a call that really happens (`Machine.callOk`) in one world, and holds the end to the line:
+`happens_of_reachedOk` and `answers_of_answeredOk` say what a pass settles. An answer stands only on a row
+that writes a value the test takes; a row that works its value out is not shown here. A line that cannot be
+laid is named in `uncertified`, and a held input something else reads lays none. Over carried values the
+entries are `machine.carried.possible`, each call run as a finish path's is, with `form` also `values`
+(`when`, `tests`), which `carries_of_carriesOk` settles. A `possible` line outside a `machine` is the
+top-level `possible`, each with its `witness`: the call is listed, and what it answers is not worked out by
+either program, so each one comes out as stated. `rulec test` plays the call.
 
 A machine that carries more than its state is `proofs/RulecCert/Carried.lean` (§15.232). There a
 case is a configuration — the state and the value of each carried thing — and a call that really
@@ -1402,7 +1501,7 @@ makes the next call **from the state the call before it answered**, as the langu
 value — the runner does not read it back out of JSON. There is a sequence for every transition
 a case can make and every two that can follow one another, each the shortest from the initial
 state that ends with them and each passing the `held` inputs the same value on every call, and
-one for each `scenario`; `why` says which. The expected file
+one for each `scenario`, one for each `possible` claim that takes a call, with the claim as its `why`; `why` says which. The expected file
 starts with `{"initial":…,"final":[…]}`, what the runner has to print for the first line, and
 then has one fixtures record per call, the carried input filled in, so a runner that hands the
 state over wrongly shows up as a record whose `in` differs.

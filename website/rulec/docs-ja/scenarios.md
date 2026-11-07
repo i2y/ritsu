@@ -463,6 +463,8 @@ examples
 | 東京都 | 1999g | 800円   |
 ```
 
+起きるはずのことも同じように、`possible` の行で書きます（`machine` の中なら `possible delivered`、一度の呼び出しなら `possible event = cancel, refund = 500JPY`）。起こす呼び出しが無ければ `check` が E146 で止まり、あれば `check --show-possible` が呼び出しの並びを見せます。そのあと `rulec strength rules/<名前>.rule` で、主張もシナリオも例も気づかない変更を、それを見せる呼び出しつきで一覧します。どれが大事かは人が決め、エージェントは大事なものに主張か例を足します（[主張が決めていないこと](checks.md#主張が決めていないこと)）。
+
 ### 3-4. 人が読む資料と公開の資料を出す
 
 担当: rulec（rulec doc）。読むのは規則を確かめる人とお客

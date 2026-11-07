@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E144, W105, W110, W111, W114-W134, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E146, W105, W110, W111, W114-W135, W901) has to be fixed; when a change to such a rule has to be shown to a person before it ships; or when the claims of a rule (`never`, `once`, `possible`) have to be shown to decide its table.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -201,6 +201,19 @@ rounding or unit in it is decided. A date, a percentage and a unit from the cell
 read back out of it; a word that cannot be a name, or that a target language cannot take, is named
 for now (`c2`, `v1`, `Zone(zone)`), the word kept in its note. It saves the typing, not the reading.
 
+Two habits pay for themselves once the claims are written:
+
+- **Write down what is to happen.** `never`, `once` and `always` say what must not happen, so a
+  table that does nothing passes them all. Add `possible` lines: `possible delivered` and
+  `possible cancelled after paid` in a `machine`, `possible event = cancel, refund = 500JPY` for
+  one call. `check` stops with E146 when no call makes one happen, and `check --show-possible`
+  prints the shortest calls when one does; W127 and W135 mean "not settled", not "holds".
+- **Then run `rulec strength <file>`.** It lists the changes to the table that no claim,
+  scenario or example notices, each with a call that shows it. Add a claim or a scenario for the
+  ones that matter. For one you cannot defend or reject from the file, ask a person (§6), since
+  a row nothing pins down may be wrong. A long list is not a fault of the rule: it shows how far
+  what is written decides the table.
+
 One habit pays for itself at the first revision:
 
 - **Write down where each table came from.** A comment at the end of the `table` line names the
@@ -350,13 +363,12 @@ Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a Po
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 
-### For one occasion each: CI, `rulec verify`, `rulec diff`, `rulec doc`
+### For one occasion each: CI, `rulec verify`, `rulec diff`, `rulec strength`, `rulec doc`
 
-Four more steps are for one occasion each: the gate in CI, a legacy implementation to compare
-with (`rulec verify`), two versions of a rule (`rulec diff`), and the pages for people and for
-customers (`rulec doc`). They are in [more-of-the-loop.md](more-of-the-loop.md); read it when one
-of them is the task.
-
+Five more steps are for one occasion each: the gate in CI, a legacy implementation to compare
+with (`rulec verify`), two versions of a rule (`rulec diff`), how far the claims decide the table
+(`rulec strength`), and the pages for people and for customers (`rulec doc`). They are in
+[more-of-the-loop.md](more-of-the-loop.md); read it when one of them is the task.
 ---
 
 ## 2. Language
@@ -447,6 +459,8 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 | E104 on output `fee`, notes saying the spread is 9 yen | "Which way should the fee be rounded? Rounding up or down changes it by up to 9 yen. Do the terms say?" |
 | E105 between rows 3 and 7 with different outputs | "Is this input 1,200 yen or 800 yen? It meets the conditions of both." |
 | W114 | "Can an order that meets both of these conditions at once exist?" |
+| E146 on `possible delivered`, notes saying a case reaches received / cancelled | "Is an order supposed to reach delivered? The table lets every event cancel it." |
+| a change `rulec strength` shows nothing notices, `refund 0JPY -> amount_paid` with its call | "A cancellation at `received` with 1JPY paid refunds 0JPY today. Is that the rule, or should it be paid back?" |
 | E126, `witness.trace` = cancel → pay → ship | "What happens to an order when a payment notice arrives after the cancellation? As the table stands it goes back to paid and on to shipped." |
 | A rounding you assumed | "This rounding has no basis in the terms. I have assumed rounding down for now. Is there a source?" |
 

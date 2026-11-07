@@ -444,6 +444,25 @@ EXAMPLES = [
         ],
     ),
     (
+        "注文の起きること.rule",
+        "守りの主張に、起きるはずのことを足す（possible）",
+        "前の例と同じ注文の流れに、起きるはずのことを書き足したものです。`never` と `once` は悪いことが起きないと言うだけなので、全部の出来事が注文を取り消す表でも通ります。`possible` の行は、その反対側を書きます。",
+        [
+            "**`possible 配達済` は、起きる呼び出しの並びが見つかったときだけ通ります。** 入金、出荷、配達の三回です。`rulec check --show-possible` がその並びを、使った表の行つきで見せます。出来事を全部取消にした表（`なんでも取り消す注文.rule`）に同じ行を足すと、E146 で止まります。",
+            "**`possible 取消 after 入金済, 出荷済` は、状態ごとに一つの主張です。** どちらの状態からでも取り消せることを、別々に確かめます。",
+            "**`possible 返金額 >0円 after 出荷済` は、出力のセルについての行です。** 出荷のあとの取消で、返金が本当に出る並びを見せます。",
+            "**`machine` の外では、一度の呼び出しで同時に成り立つ条件を書きます。** `possible 出来事 = 取消依頼, 返金額 = 500円` は、入金済の注文への取消依頼が見つかります。",
+        ],
+        "Saying what is to happen, beside what must not (possible)",
+        "The order of the previous example with what has to happen written in. `never` and `once` only say that bad things do not happen, so a table in which every event cancels the order passes them. A `possible` line writes the other side.",
+        [
+            "**`possible delivered` passes only when a sequence of calls that makes it happen is found.** Pay, ship, deliver. `rulec check --show-possible` prints the calls, with the table row each one used. Add the same line to the table in which every event cancels (`order_cancels_everything.rule`) and `check` stops with E146.",
+            "**`possible cancelled after paid, shipped` is one claim for each state.** That the order can be cancelled from either is checked separately.",
+            "**`possible refund >0JPY after shipped` is a line about an output's cell.** It shows the calls in which a cancellation after shipment really pays something back.",
+            "**Outside a `machine`, a line is the conditions that hold together in one call.** `possible event = cancel, refund = 500JPY` is found at an order that has been paid and is cancelled.",
+        ],
+    ),
+    (
         "会員段階の送料.rule",
         "会員の段階で送料が変わる",
         "会員の段階（一般 < シルバー < ゴールド < プラチナ）に順があり、表のセルは段階と比べます。キャンペーンは、その注文に限って会員をキャンペーンの段階まで引き上げます。",

@@ -148,6 +148,9 @@ rulec が出しうるコードの全部について、いつ出るかと、ど�
 | [W133](#w133) | warning | 行が、定義からは起こらない組み合わせでしか当たりません |
 | [W134](#w134) | warning | `never` の行が何も外しません |
 | [E141](#e141) | error | `never` の行の書き方が違います |
+| [E145](#e145) | error | `possible` の行の書き方が違います |
+| [E146](#e146) | error | `possible` に書いたことが、どの呼び出しでも起きません |
+| [W135](#w135) | warning | `possible` の行を決めきれませんでした |
 | [E142](#e142) | error | `never` に書いた組み合わせが、定義から起こります |
 | [E143](#e143) | error | `never` の行を定義から確かめられません |
 | [E144](#e144) | error | `fed by` を読めないか、書けない場所にあります |
@@ -211,7 +214,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never`）。表の行なら `|` で始めてください。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible`）。表の行なら `|` で始めてください。
 
 **最小の再現**:
 
@@ -229,7 +232,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never` のどれかに直してください。業務の語を書けるのは、名前とセルの中だけです。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements / never / possible` のどれかに直してください。業務の語を書けるのは、名前とセルの中だけです。
 
 **最小の再現**:
 
@@ -4852,9 +4855,9 @@ machine k(k) over m
 
 `warning` — **ステートマシンの主張を決めきれませんでした**
 
-**いつ出るか。** 主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。数を持ち越す機械（`carry` の二行目から）では、ほかに三つあります。数の値を一つずつ調べると予算を超えるので区間にまとめて調べ、区間の上で破れる並びを、本当に起きる呼び出しでは作り直せなかったとき。区間にまとめたので、どの状態からも終わりに着けるかを確かめていないとき。持ち越す数の次の値が区画の中でほかの入力とともに動き、あいだの値を一つずつは試していないとき。決めきれなかったことを、成り立つとは言いません。
+**いつ出るか。** 主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。数を持ち越す機械（`carry` の二行目から）では、ほかに三つあります。数の値を一つずつ調べると予算を超えるので区間にまとめて調べ、区間の上で破れる並びを、本当に起きる呼び出しでは作り直せなかったとき。区間にまとめたので、どの状態からも終わりに着けるかを確かめていないとき。持ち越す数の次の値が区画の中でほかの入力とともに動き、あいだの値を一つずつは試していないとき。決めきれなかったことを、成り立つとは言いません。`possible` の行（E146）では、本当の呼び出しの並びが見つからず、無いとも言い切れないときで、見つかった並びが途中で `held` の値を変えないと通れないときや、区間の上でしか作れないときも含みます。rulec は、決めきれなかった `possible` を成り立つとは言いません。
 
-**直し方。** その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。区間にまとめたためなら、`--budget` を上げるか持ち越す数の範囲を狭めると、値を一つずつ調べて決めます。
+**直し方。** その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。区間にまとめたためなら、`--budget` を上げるか持ち越す数の範囲を狭めると、値を一つずつ調べて決めます。 On a `possible` line (E146) it is a sequence of real calls not found and none shown not to be there, including one found that needs a `held` value to change partway or that is made only over intervals. rulec does not say an unsettled `possible` holds.
 
 **最小の再現**:
 
@@ -4886,7 +4889,7 @@ machine k(k) over m
   initial p
 ```
 
-関係するコード: [W114](#w114), [E128](#e128)
+関係するコード: [W114](#w114), [E128](#e128), [E146](#e146)
 
 ## W128
 
@@ -5950,6 +5953,116 @@ policy unique
 ```
 
 関係するコード: [E142](#e142), [E143](#e143), [E018](#e018)
+
+## E145
+
+`error` — **`possible` の行の書き方が違います**
+
+**いつ出るか。** `machine` の中の `possible` の行に、状態でない語、知らない名前、型に合わないセルがあるとき。状態の一覧とセルを一行に混ぜたとき。`after` と `when` を一行に書いたとき。出力のセルに `when` を、持ち越す値のセルに `after` を書いたとき。名前が出力でもあり持ち越す入力でもあって、どちらの話か読めないとき。`machine` の外では、入力でも出力でも集計でもない名前、同じ名前の条件が二つ、要素のフィールド、型に合わないセルがあるとき。
+
+**直し方。** `machine` の中は `possible <状態>, … [after <状態>, …]`、`possible <出力> <セル> [after <状態>, …]`、`possible <持ち越す入力> <セル> [and …] [when <状態>, …]` の三つの形です。`machine` の外は `never` の行と同じ書き方で、`possible 名前 = 値, 名前 > 値` と書きます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum 状態(state) = 受付(received) | 発送済(shipped) | 配達済(delivered)
+enum 操作(step) = 発送(ship) | 配達(deliver)
+
+inputs
+  状態(state_now) : 状態
+  操作(step_now)  : 操作
+
+outputs
+  次(next_state) : 状態
+
+table 進み方(moves)
+policy first
+| 状態   | 操作 | -> 次  |
+| 受付   | 発送 | 発送済 |
+| 発送済 | 配達 | 配達済 |
+| -      | -    | 状態   |
+
+machine 注文(order) over 進み方
+  carry    状態 -> 次
+  initial  受付
+  final    配達済
+  possible 届いた
+```
+
+関係するコード: [E146](#e146), [W135](#w135), [W127](#w127), [E141](#e141)
+
+## E146
+
+`error` — **`possible` に書いたことが、どの呼び出しでも起きません**
+
+**いつ出るか。** `possible` の行が言うことを、案件が着ける範囲を全部調べても見つけられなかったとき（未決着の区画が無く、持ち越す値を区間で歩いたときは区間の上でも無いとき）。何もしない表は `never` と `once` と `always` を全部守るので、この行が、表が仕事をしていることを確かめます。`machine` の外では、入力の区画を全部調べても、一度の呼び出しでその条件が同時に成り立たないとき。呼び出しは `constraint`、`never` の行、入力の範囲が受け入れるものだけを数えます。悪い例の並びはないので、本文は代わりに、見えているもの（その状態のあとに着ける状態、呼び出しが答えた値）を言います。
+
+**直し方。** 行き先や答えを決める表の行を直してください。起きなくてよいことなら、`possible` の行を消してください。成り立つ行の並びは `rulec check --show-possible` で見られます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum 状態(state) = 受付(received) | 発送済(shipped) | 配達済(delivered) | 取消(cancelled)
+enum 操作(step) = 発送(ship) | 配達(deliver) | 取り消し(cancel)
+
+inputs
+  状態(state_now) : 状態
+  操作(step_now)  : 操作
+
+outputs
+  次(next_state) : 状態
+
+table 進み方(moves)
+policy first
+| 状態 | 操作     | -> 次 |
+| 受付 | 取り消し | 取消  |
+| -    | -        | 状態  |
+
+machine 注文(order) over 進み方
+  carry    状態 -> 次
+  initial  受付
+  final    配達済, 取消
+  never    発送済 after 取消
+  possible 配達済
+```
+
+関係するコード: [E145](#e145), [E126](#e126), [W125](#w125), [W127](#w127), [W135](#w135)
+
+## W135
+
+`warning` — **`possible` の行を決めきれませんでした**
+
+**いつ出るか。** `machine` の外の `possible` の行で、条件に合う呼び出しが見つからず、合わないとも言い切れないとき。答えが入力から計算で出て、区画の中で値が動くときや、入力の区画が予算を超えるとき、`fold` を読むときに起きます。`machine` の中の行は W127 で言います。rulec は、決めきれなかったことを成り立つとは言いません。
+
+**直し方。** `--budget` を上げるか、その呼び出しを `examples` に書いて確かめてください。計算で出る値なら、表の答えで分かる条件（`approved = true` など）に書き直すと決まることがあります。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  数量(qty)   : number  range >=1 <=1000000
+  単価(price) : number  range >=1 <=1000000
+
+define 合計の元(raw_total) : number = 数量 * 単価
+
+outputs
+  合計(total) : number  round down(1)
+
+table 合計を出す(totals)
+policy first
+| -> 合計  |
+| 合計の元 |
+
+possible 合計 = 80779853376
+```
+
+関係するコード: [E145](#e145), [E146](#e146), [W127](#w127)
 
 ## E142
 

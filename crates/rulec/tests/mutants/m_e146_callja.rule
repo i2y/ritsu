@@ -1,4 +1,4 @@
-rule 修理の見積り(repair_quote) v1
+rule 修理の見積り(repair_quote_ja) v1
 description "修理店の見積り。表から出なければならない答え（承認される仕事、承認される上位の仕事、大きな普通の仕事）も書く。どれにも `false` を答える表でも `never` の行は守れる。"
 
 enum 区分(member_tier) = 普通(basic) | 上位(gold)

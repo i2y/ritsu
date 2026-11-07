@@ -1,4 +1,4 @@
-rule なんでも取り消す注文(order_cancels_everything) v1
+rule なんでも取り消す注文(order_cancels_everything_ja) v1
 description "注文の起きることと同じ注文で、役に立たない表を持つもの。どの出来事でも取消になる。`never` と `once` の行は気にしないので `check` はエラーを出さず、ほかの状態に着かないと警告が言うだけ。`possible 配達済` を足すと E146 で止まる。"
 
 enum 状態(order_state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 配達済(delivered) | 取消(cancelled)

@@ -187,6 +187,8 @@ check:
 
 `--target` で、コードが読む言語を一つずつ挙げ（`--target python --target typescript`）、`--extra runner --extra vectors` で、`rulec test` が走らせるランナーとベクタを頼みます。`gen --check` は、同じフラグで書くものと突き合わせます。
 
+`rulec strength` はファイルを一つずつ受け取るので、上の行に足すのでなく、別のジョブにします。`rulec strength rules/parcel.rule --at-most 10` は、表への変更のうち誰も気づかないものが 10 件を超えると 1 で終わります（[主張が決めていないこと](checks.md#主張が決めていないこと)）。件数は今のファイルの値から決め、主張を足すたびに下げます。
+
 走るのは Linux（x86_64 / aarch64）と macOS（x86_64 / arm64）の runner です。リリースがその四つしか無いので、ほかの runner では `no ritsu release is built for …` と言って止まります。
 
 この五つの `run:` がゲートです。過去再生は記録を持つ環境の別ジョブにします。変更が目に見えるのはこちらで、PR に「何件がいくら動くか」のコメントが付きます。わざとそうしている所が四つあります。

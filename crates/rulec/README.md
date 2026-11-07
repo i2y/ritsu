@@ -182,6 +182,82 @@ What is **not** proved matters just as much.
 **What each layer reaches, and where it stops, is laid out in
 [How it is checked](https://i2y.github.io/ritsu/rulec/assurance/).**
 
+## Saying what has to happen, and what the claims leave open
+
+`never`, `once` and `always` say what must not happen, so a table that does nothing passes all
+of them. `tests/corpus/order_cancels_everything.rule` is such a table: every event cancels the
+order, and `rulec check` ends with `ok` and only warnings that the other states are not reached.
+A `possible` line says what **is to happen**, in a `machine` (`possible delivered`,
+`possible cancelled after paid, shipped`, `possible refund >0JPY after shipped`) or for one call
+(`possible event = cancel, refund = 500JPY`). Adding `possible delivered` to that table is
+`tests/mutants/m_e146.rule`, and the warnings now come with an error:
+
+```console
+$ rulec check tests/mutants/m_e146.rule
+...
+error[E146]: No sequence of calls makes `possible delivered` happen
+  --> tests/mutants/m_e146.rule:30 machine order
+   |
+30 |   possible delivered
+   |   ^^^^^^^^^^^^^^^^^^
+   |
+ From received a case reaches received / cancelled. delivered is not among them.
+ Everywhere a case can get to was looked at. Correct the rows that decide where a case goes and what it answers, or drop the `possible` line if this need not happen.
+...
+```
+
+When the line does hold, `--show-possible` prints the shortest calls that make it happen,
+found by really calling the table (`tests/corpus/order_happens.rule`):
+
+```console
+$ rulec check tests/corpus/order_happens.rule --show-possible
+tests/corpus/order_happens.rule:36 possible delivered
+  Calls (from received):
+    1. at received, event = pay → paid (table step row 1)
+    2. at paid, event = ship → shipped (table step row 4)
+    3. at shipped, event = deliver → delivered (table step row 7)
+```
+
+A line that is not found to happen is not called impossible unless every case was looked at:
+otherwise it is W127 or W135, "could not be decided". The calls go to every language's vectors
+and to the certificate.
+
+Passing `check` also does not mean the claims decide the table. `rulec strength` changes every
+output cell, every row and every boundary between rows, one place at a time, puts each change
+through the same checks, and says who noticed: the claims and checks, only a scenario or an
+example, only a warning, or nothing. It is not a verdict on the rule; it shows how far what is
+written fixes the table. For `tests/corpus/order_lifecycle.rule`:
+
+```console
+$ rulec strength rules/order_lifecycle.rule --other other.rule
+rules/order_lifecycle.rule: 15 of 93 changes to the rule are noticed by nothing.
+  35 noticed by the claims and checks
+  43 noticed only by a scenario or an example
+   0 noticed only by a warning
+  15 noticed by nothing
+   5 change no answer
+
+Noticed by nothing:
+  table step row 2 (state = received, event = cancel): refund 0JPY -> amount_paid
+    Calls (from received):
+      1. at received, event = cancel, amount_paid = 1JPY → next_state = cancelled, refund = 0JPY, accepted = true
+         with this change, refund = 1JPY
+  ...
+
+Another table keeps everything the file says and differs in at least 9 of 30 output cells.
+  Changes that pass only together were not looked for, so this is not said to be the most different one.
+  It is written to `other.rule`: `rulec check other.rule` passes, and `rulec diff rules/order_lifecycle.rule other.rule` shows where the two part.
+```
+
+Each unnoticed change comes with a call that shows it: add a claim or a scenario for the ones
+that matter, and ask a person about the ones that cannot be decided from the file. `--claims-only`
+takes the scenarios and examples out first and asks how far the claims alone decide the table
+(`44 of 93` here, and a table that differs in at least 23 of 30 cells); `--at-most <n>` exits 1
+when more changes than that are noticed by nothing, which makes it a gate in CI; `--format json`
+is in [`docs/formats.md`](docs/formats.md). The count is a measure of one file against its own
+claims, and a rule with large amounts in its cells has many changes the claims never mention, so
+it is not a ranking of rules.
+
 ## Install
 
 One binary, no runtime, handed out as part of [ritsu](https://github.com/i2y/ritsu): a release of
@@ -236,6 +312,8 @@ download and the check ([In CI](#in-ci)).
 ```console
 $ rulec check rules/*.rule                         # --format json, --terse, --diff-base HEAD
 $ rulec fmt --check rules/*.rule                   # the gofmt convention
+$ rulec check rules/parcel.rule --show-possible    # the calls that make each `possible` line happen
+$ rulec strength rules/parcel.rule                 # which changes to the table nothing would notice
 $ rulec gen rules/*.rule --target python           # into generated/; more --target, --extra runner, --check
 $ rulec vectors | coverage | test                  # the test cases, their coverage, the run
 $ rulec run rules/parcel.rule weight=1200 zone=north    # one input, one answer (--input, --trace, --format json)
@@ -294,14 +372,14 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              60 modules, and 12 more under codegen/
-tests/corpus/     153 rules, and the copies of the documents they cite
-tests/mutants/    236 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 106 in Japanese, 95 in English
+src/              62 modules, and 12 more under codegen/
+tests/corpus/     159 rules, and the copies of the documents they cite
+tests/mutants/    242 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 108 in Japanese, 97 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-153 rules — 34 transcribed from a published source, 119 written to reach the rest of the language — are checked, generated and run on every commit, and all 145 diagnostics are implemented.
+159 rules — 40 transcribed from a published source, 119 written to reach the rest of the language — are checked, generated and run on every commit, and all 148 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as
@@ -309,7 +387,7 @@ e-Gov publishes them, the premium tables of Kyokai Kenpo and the Japan Pension S
 income tax and stamp duty rates, the IRS rate tables, three sections of the US Code of Federal
 Regulations as the eCFR publishes them, PayPal's own merchant fees, and the lifecycle of a
 PaymentIntent as Stripe's documentation describes it — or are sketches written to reach the
-corners of the language. 74 of the 87 are 37 pairs, each a rule written with Japanese names and the
+corners of the language. 146 of the 159 are 73 pairs, each a rule written with Japanese names and the
 same rule written with English ones, which a test holds to the same findings, the same answers and
 the same claims. None of it is private data.
 

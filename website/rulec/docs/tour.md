@@ -41,6 +41,7 @@ These are all the words that may start a line.
 | `define` | a boolean, or a computed intermediate |
 | `constraint` | a relation between inputs: which combinations **cannot happen** |
 | `never` | a combination that **cannot happen**, written out: `never has_tool = true, all_parts = true` |
+| `possible` | what **is to happen**: `possible approved = true`, in a `machine` `possible delivered`. rulec shows the shortest calls that make it happen |
 | `fold` | reduces a column of per-element verdicts to one answer |
 | `count` | how many elements of the sequence meet one test |
 | `sum` | the total of one column over the elements of a sequence |

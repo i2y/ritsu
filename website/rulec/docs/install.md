@@ -286,6 +286,11 @@ check:
 typescript`), and `--extra runner --extra vectors` the runners and the vectors `rulec test` puts
 through them; `gen --check` compares what those same flags write.
 
+`rulec strength` takes one file, so it is a job of its own rather than one more line: `rulec
+strength rules/parcel.rule --at-most 10` exits 1 when more than ten changes to the table are
+noticed by nothing ([What the claims leave open](checks.md#what-the-claims-leave-open)). Set the
+number from what the file gives today, and lower it as claims are added.
+
 It runs on the Linux (x86_64, aarch64) and macOS (x86_64, arm64) runners.
 Those are the four releases there are, so any other runner stops with
 `no ritsu release is built for …`.

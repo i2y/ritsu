@@ -1183,10 +1183,10 @@ outputs
 
 table 進み方(moves)
 policy first
-| 状態   | 操作 | -> 次   |
-| 受付   | 発送 | 発送済  |
-| 発送済 | 配達 | 配達済  |
-| -      | -    | 状態    |
+| 状態   | 操作 | -> 次  |
+| 受付   | 発送 | 発送済 |
+| 発送済 | 配達 | 配達済 |
+| -      | -    | 状態   |
 
 machine 注文(order) over 進み方
   carry    状態 -> 次
@@ -1209,8 +1209,8 @@ outputs
 table moves(moves)
 policy first
 | state_now | step_now | -> next_state |
-| received  | ship     | shipped   |
-| shipped   | deliver  | delivered |
+| received  | ship     | shipped       |
+| shipped   | deliver  | delivered     |
 | -         | -        | state_now     |
 
 machine order(order) over moves
@@ -1233,9 +1233,9 @@ outputs
 
 table 進み方(moves)
 policy first
-| 状態 | 操作     | -> 次  |
-| 受付 | 取り消し | 取消   |
-| -    | -        | 状態   |
+| 状態 | 操作     | -> 次 |
+| 受付 | 取り消し | 取消  |
+| -    | -        | 状態  |
 
 machine 注文(order) over 進み方
   carry    状態 -> 次
@@ -1282,8 +1282,8 @@ outputs
 
 table 合計を出す(totals)
 policy first
-| -> 合計   |
-| 合計の元  |
+| -> 合計  |
+| 合計の元 |
 
 possible 合計 = 80779853376
 "##;

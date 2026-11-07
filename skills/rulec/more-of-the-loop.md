@@ -46,6 +46,16 @@ A version is a file, a git tag (`parcel@v3` is `rules/parcel/v3`, else the revis
 PR, `rules/parcel.rule@origin/main`), or a dependency's rule: `@tax/vat.rule` at the lock's version, `@tax@1.0.0/vat.rule` from the
 store. `--format markdown` is what gets posted and `--terse` keeps record values out; [formats.md](formats.md) has both shapes.
 
+## What the claims leave open: `rulec strength`
+
+`rulec check` passing does not mean the file decides the table. `rulec strength <file>` changes every
+output cell, row and boundary one at a time and says who notices: the claims, only a test, only a warning,
+or nothing. Each change nothing notices comes with a call: add a scenario or a claim for the ones that
+matter, and tell a person about the ones you cannot decide, since a row you cannot defend may be wrong.
+`--at-most <n>` makes it a gate. `--claims-only` asks how far the claims alone go, and `--other <path>`
+writes a different table that keeps everything the file says, to compare with `rulec diff`.
+`--format json` is in [formats.md](formats.md#strength).
+
 ## For people: `rulec doc`
 
 `rulec doc <file> --lang ja` renders the page for people: the rule in markdown with the facts the
