@@ -2312,6 +2312,24 @@ geas のターゲットに `contract "<file>"` の行を足した（geas の DES
 
 確かめたこと：`crates/ritsu/tests/check.rs` の `no_claims_…`、`modules_site.rs` の `a_version_is_checked_…`（レジストリから取った版で印が残らないこと、落ちた版の文）、`modules_diff.rs` の `what_a_rule_asks_…`、`impact.rs` の `a_line_on_…`。
 
+### 7.99 起きるはずのことの行と、誰も気づかない変更を出すコマンド（2026-11-07）
+
+rulec の主張には穴が二つあった。`never`・`once`・`always` は悪いことが起きないとしか言わないので、どの出来事でも取消へ進む表でも全部通る。もう一つ、`check` が通っても、主張が表を決めているとは限らない。`possible` の行（rulec の §15.287）と `rulec strength`（rulec の §15.288）を足した（DESIGN 8.9）。
+
+**`possible`。** 三つの形と一番上の階層、E145・E146・W135、`check --show-possible`、JSON の `kind: possible` の行、`doc`、`api`、vectors のトレース、証明書（`tools/recheck.py` と Lean の `Machine.happens_of_reachedOk` など）。何もしない表と、`possible` を足すと止まる対は、コーパスの `order_cancels_everything.rule` と壊す試しの `m_e146.rule`。一番上の階層の行は、再検算では呼び出しを載せるだけで答えを計算せず（stated）、`rulec test` が再生する。
+
+**`rulec strength`。** 三つの変更と四つの分類、`same_answers`、`--format json`（`formats.md`）、`--at-most`、`--other`、`--claims-only`。`std::thread::scope` で並べ、結果は変更の順に戻す。`ritsu rulec` は `days::with` の中で `cli::run` を呼ぶので、`crates/ritsu` は変えていない。
+
+確かめたこと：`crates/rulec/tests/possible.rs`、`tests/strength.rs`、`tests/lean.rs`（`proofs/` の `lake build` のうえで）、新しいコーパス 6 本を含む `threeway`、rulec の全部（1,431 件、SKIP はネットワークと kani の 2 行で、どちらも platforms の段）。Kani は 335 本が 888 秒で全部通る。`rulec strength` をコーパス 159 本に通すと全部 exit 0 で終わる（変更 28,280 件、debug ビルドで 742 秒）。先に作った試作が分類した 226 件は、一件ずつ同じ分類に入った。組んだ `ritsu` で `ritsu rulec strength` と `ritsu rulec check --show-possible` を確かめた。
+
+見つけて直していないもの：
+
+- 掛け算の `=`（`possible total = 80779853376`）は本当に起きても W135 になる。起きないとは言わないので、誤りの向きは安全側である。
+- 一番上の階層で、ほかの行が切った区画のせいで E146 が W135 に下がることがある。これも安全側である。
+- `strength` は `range` の無い出力に負の値を作る（`0JPY -> -1JPY`）。宣言した範囲を外れないので、誰も気づかない変更として出る。
+
+作っていないもの：`ritsu check` と一緒に走らせること（DESIGN 8.9）、dandori と kaname の `possible`、変更の絞り込みとスレッド数のフラグ。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
