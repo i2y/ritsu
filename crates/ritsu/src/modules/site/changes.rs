@@ -92,7 +92,7 @@ fn grouped(i: &diff::Iface) -> Vec<Grouped> {
         // `/python/enums/region/values/eu`: the part after the output, with the outputs it holds for
         let at = c.at.trim_start_matches('/');
         let (head, rest) = match at.split_once('/') {
-            Some(("sources", _)) | None => ("", at),
+            Some(("sources" | "preconditions", _)) | None => ("", at),
             Some(parts) => parts,
         };
         let place = match rest.strip_prefix("output_fields/") {
@@ -141,6 +141,10 @@ fn headline(d: &ModDiff) -> Text {
             }
         }
         [] if d.behavior.is_empty() => tr!("答えを出すファイルは変わっていません。", "No file that gives answers changed."),
+        [] if whole && breaks > 0 => {
+            let w = if breaks == 1 { "change" } else { "changes" };
+            tr!("両方の版が受け取る入力の答えは同じですが、インターフェースの変更 {breaks} 件が使う側を壊しえます。", "The inputs both versions accept get the same answers, but {breaks} {w} to the interface may break a user.")
+        }
         [] if whole => tr!("どの答えも変わりません。", "Every answer stays the same."),
         [] => tr!("違いは見つかりませんでしたが、調べきれなかった入力があります。", "No difference was shown, but some inputs could not be settled."),
         [b] => {
@@ -802,6 +806,20 @@ fn interface_html(d: &ModDiff, lang: Lang) -> String {
         for (tool, f) in &i.breaks {
             o.push_str(&format!("<p>{file} ({tool}): {}</p>\n", esc(&f.text)));
         }
+        for f in &i.fed_by {
+            let code = |x: &str| format!("<code>{}</code>", esc(x));
+            let at = code(&f.at);
+            let line = match (&f.old, &f.new, lang) {
+                (None, Some(n), Lang::Ja) => format!("{file} の {at} の値の出どころが書かれました：{}", code(n)),
+                (None, Some(n), Lang::En) => format!("In {file}, {at} now says where its value comes from: {}", code(n)),
+                (Some(o), None, Lang::Ja) => format!("{file} の {at} の値の出どころの行が消えました（{}）", code(o)),
+                (Some(o), None, Lang::En) => format!("In {file}, {at} no longer says where its value comes from (it said {})", code(o)),
+                (Some(o), Some(n), Lang::Ja) => format!("{file} の {at} の値の出どころが変わりました：{} → {}", code(o), code(n)),
+                (Some(o), Some(n), Lang::En) => format!("In {file}, {at} says its value comes from elsewhere: {} → {}", code(o), code(n)),
+                (None, None, _) => continue,
+            };
+            o.push_str(&format!("<p>{line}</p>\n"));
+        }
         let mut groups = grouped(i);
         groups.sort_by_key(|g| !g.may_break);
         // the outputs are named only where a change holds for some of them
@@ -824,9 +842,15 @@ fn interface_html(d: &ModDiff, lang: Lang) -> String {
                 (None, None) => String::new(),
             };
             let warns = if g.may_break { format!(" <span class=\"small warn\">{}</span>", esc(tr!("（使う側を壊しえます）", "(may break a user)").get(lang))) } else { String::new() };
-            let line = match lang {
-                Lang::Ja => format!("{file} の <code>{code}</code> が{}{values}{warns}", esc(verb.get(lang))),
-                Lang::En => format!("In {file}, <code>{code}</code> {}{values}{warns}", esc(verb.get(lang))),
+            // what a rule asks of its callers says itself: where in the api it stands says nothing
+            let asked = g.place.starts_with("preconditions/").then(|| g.new.as_ref().or(g.old.as_ref()).map(|x| esc(x))).flatten();
+            let line = match (asked, g.how, lang) {
+                (Some(x), How::Added, Lang::Ja) => format!("{file} は、呼び出す側に <code>{x}</code> を求めるようになりました{warns}"),
+                (Some(x), How::Added, Lang::En) => format!("{file} now asks its callers to keep to <code>{x}</code>{warns}"),
+                (Some(x), _, Lang::Ja) => format!("{file} は、呼び出す側に <code>{x}</code> を求めなくなりました{warns}"),
+                (Some(x), _, Lang::En) => format!("{file} no longer asks its callers to keep to <code>{x}</code>{warns}"),
+                (None, _, Lang::Ja) => format!("{file} の <code>{code}</code> が{}{values}{warns}", esc(verb.get(lang))),
+                (None, _, Lang::En) => format!("In {file}, <code>{code}</code> {}{values}{warns}", esc(verb.get(lang))),
             };
             if list.is_empty() {
                 o.push_str(&format!("<p>{line}</p>\n"));
@@ -1010,6 +1034,7 @@ mod tests {
                 change("/go/output_fields/most/range/max", "1", "2"),
                 change("/sql/outputs/most/range/max", "1", "3"),
             ],
+            fed_by: Vec::new(),
             breaks: Vec::new(),
             note: None,
         };

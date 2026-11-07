@@ -464,9 +464,38 @@ pub struct IChange {
 impl IChange {
     /// A candidate for a change that breaks a user: a removal or a change, not of a description
     /// (words for a person, which no caller reads) nor of what a file says of its sources (where its
-    /// numbers came from: no caller reads that, and what the numbers do is the behavior).
+    /// numbers came from: no caller reads that, and what the numbers do is the behavior). What a rule
+    /// asks of its callers goes the other way: a new condition is what can refuse a call that used to
+    /// work, and a condition dropped asks less.
     pub fn may_break(&self) -> bool {
+        if self.at.starts_with("/preconditions/") {
+            return self.how != How::Removed;
+        }
         self.how != How::Added && self.at.rsplit('/').next() != Some("description") && !self.at.starts_with("/sources/") && !self.at.starts_with("/calendar/sources/")
+    }
+}
+
+/// A place of a file whose `fed by` line only one version has, or that names another source in each:
+/// what the file says of where a value comes from, which the code that uses the file does not read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FedBy {
+    /// The place, as a path into the file's api (`inputs/due_on`).
+    pub at: String,
+    pub old: Option<String>,
+    pub new: Option<String>,
+}
+
+impl FedBy {
+    /// In a sentence, each name in `q`.
+    pub(crate) fn line(&self, lang: Lang, q: &str) -> String {
+        let at = format!("{q}{}{q}", self.at);
+        let t = match (&self.old, &self.new) {
+            (None, Some(n)) => tr!("{at} の値の出どころが書かれました: {q}{n}{q}", "{at} now says where its value comes from: {q}{n}{q}"),
+            (Some(o), None) => tr!("{at} の値の出どころの行が消えました（{q}{o}{q}）", "{at} no longer says where its value comes from (it said {q}{o}{q})"),
+            (Some(o), Some(n)) => tr!("{at} の値の出どころが変わりました: {q}{o}{q} → {q}{n}{q}", "{at} says its value comes from elsewhere: {q}{o}{q} → {q}{n}{q}"),
+            (None, None) => tr!("{at}", "{at}"),
+        };
+        t.get(lang).to_string()
     }
 }
 
@@ -486,6 +515,9 @@ pub struct Iface {
     pub breaks: Vec<(&'static str, ritsu_ports::Finding)>,
     /// Why the interface was compared by its digest alone.
     pub note: Option<Text>,
+    /// The `fed by` lines that differ: no change of the interface, and a change of what `ritsu check`
+    /// holds.
+    pub fed_by: Vec<FedBy>,
 }
 
 impl Iface {
@@ -493,7 +525,7 @@ impl Iface {
     /// file did not change, though its bytes did. The text and the Markdown count these in one line;
     /// the JSON lists each.
     pub fn quiet(&self) -> bool {
-        self.how != "digest" && self.changes.is_empty() && self.breaks.is_empty() && self.note.is_none() && self.version.is_none()
+        self.how != "digest" && self.changes.is_empty() && self.fed_by.is_empty() && self.breaks.is_empty() && self.note.is_none() && self.version.is_none()
     }
 
     /// A book's E050 or E051, or an E310: what the data already in a database, or a caller built on
@@ -723,7 +755,7 @@ fn files(o: &FileSide, n: &FileSide, budget: Option<u64>, lang: Lang, joined: &J
 
 /// A `.req` whose requirements could not be read: all that is said is that its bytes changed.
 fn unread_requirements(file: String, note: Text) -> Iface {
-    Iface { file, tool: Some(Tool::Yuen), how: "digest", version: None, changes: Vec::new(), breaks: Vec::new(), note: Some(note) }
+    Iface { file, tool: Some(Tool::Yuen), how: "digest", version: None, changes: Vec::new(), fed_by: Vec::new(), breaks: Vec::new(), note: Some(note) }
 }
 
 /// What one language's diff says of a file over two versions, each side read through its own files.
@@ -797,7 +829,7 @@ impl At {
 /// The interface of a file whose bytes changed (DESIGN 17.9.5).
 fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
     let tool = tool_of(&o.rel).or_else(|| tool_of(&n.rel));
-    let mut out = Iface { file: file.to_string(), tool, how: "digest", version: None, changes: Vec::new(), breaks: Vec::new(), note: None };
+    let mut out = Iface { file: file.to_string(), tool, how: "digest", version: None, changes: Vec::new(), fed_by: Vec::new(), breaks: Vec::new(), note: None };
     let Some(tool) = tool else { return out };
     match tool {
         Tool::Dandori | Tool::Geas | Tool::Proto => match (o.with(|| items_of(tool, &o.root, &o.rel, &o.label, joined)), n.with(|| items_of(tool, &n.root, &n.rel, &n.label, joined))) {
@@ -810,9 +842,12 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
         _ => match (o.with(|| api_of(tool, &o.read, &o.label, joined)), n.with(|| api_of(tool, &n.read, &n.label, joined))) {
             (Ok(a), Ok(b)) => {
                 out.how = "api";
-                let (a, va) = without_heads(tool, cleaned(a));
-                let (b, vb) = without_heads(tool, cleaned(b));
+                let (mut a, va) = without_heads(tool, cleaned(a));
+                let (mut b, vb) = without_heads(tool, cleaned(b));
+                out.fed_by = fed_by_between(take_fed_by(tool, &mut a), take_fed_by(tool, &mut b));
+                let (asked_old, asked_new) = (take_preconditions(tool, &mut a), take_preconditions(tool, &mut b));
                 compare_json("", &a, &b, &mut out.changes);
+                compare_preconditions(&asked_old, &asked_new, &mut out.changes);
                 if let (Some(x), Some(y)) = (va, vb)
                     && x != y
                 {
@@ -1096,6 +1131,108 @@ fn names(a: &[Json]) -> Option<Vec<&str>> {
     (unique.len() == ns.len()).then_some(ns)
 }
 
+/// Takes what an api says of `fed by` lines out of it, each by the place it stands at. A rule lists
+/// them at the top of its api, where nothing else has that name; every other language writes one
+/// beside the field it is on, as a string, where a field of any name holds an object.
+fn take_fed_by(tool: Tool, j: &mut Json) -> BTreeMap<String, String> {
+    fn beside(at: &str, j: &mut Json, out: &mut BTreeMap<String, String>) {
+        match j {
+            Json::Obj(pairs) => {
+                pairs.retain(|(k, v)| match (k.as_str(), &*v) {
+                    ("fed_by", Json::Str(s)) => {
+                        out.insert(at.trim_start_matches('/').to_string(), s.clone());
+                        false
+                    }
+                    _ => true,
+                });
+                for (k, v) in pairs.iter_mut() {
+                    beside(&format!("{at}/{k}"), v, out);
+                }
+            }
+            Json::Arr(xs) => {
+                for (i, x) in xs.iter_mut().enumerate() {
+                    let name = x.get("name").and_then(Json::as_str).map_or_else(|| i.to_string(), str::to_string);
+                    beside(&format!("{at}/{name}"), x, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = BTreeMap::new();
+    if tool != Tool::Rulec {
+        beside("", j, &mut out);
+        return out;
+    }
+    let Json::Obj(pairs) = j else { return out };
+    let Some(i) = pairs.iter().position(|(k, _)| k == "fed_by") else { return out };
+    let (_, listed) = pairs.remove(i);
+    for e in listed.as_arr().unwrap_or_default() {
+        let (Some(name), Some(source)) = (e.get("name").and_then(Json::as_str), e.get("source").and_then(Json::as_str)) else { continue };
+        let at = match e.get("elements").and_then(Json::as_str) {
+            Some(el) => format!("elements/{el}/{name}"),
+            None => format!("inputs/{name}"),
+        };
+        out.insert(at, source.to_string());
+    }
+    out
+}
+
+/// The places where the `fed by` lines of two versions differ.
+fn fed_by_between(old: BTreeMap<String, String>, new: BTreeMap<String, String>) -> Vec<FedBy> {
+    let places: BTreeSet<&String> = old.keys().chain(new.keys()).collect();
+    places
+        .into_iter()
+        .filter(|at| old.get(*at) != new.get(*at))
+        .map(|at| FedBy { at: at.clone(), old: old.get(at).cloned(), new: new.get(at).cloned() })
+        .collect()
+}
+
+/// Takes what a rule asks of its callers out of its api. They are compared as a set ([`compare_preconditions`]):
+/// their order says nothing, and a line added above another is no change of that one.
+fn take_preconditions(tool: Tool, j: &mut Json) -> Vec<Json> {
+    if tool != Tool::Rulec {
+        return Vec::new();
+    }
+    let Json::Obj(pairs) = j else { return Vec::new() };
+    let Some(i) = pairs.iter().position(|(k, _)| k == "preconditions") else { return Vec::new() };
+    let (_, asked) = pairs.remove(i);
+    asked.as_arr().unwrap_or_default().to_vec()
+}
+
+/// What a rule asks of its callers that only one version asks, each in words a person reads.
+fn compare_preconditions(old: &[Json], new: &[Json], out: &mut Vec<IChange>) {
+    for (i, p) in old.iter().enumerate().filter(|(_, p)| !new.contains(p)) {
+        out.push(IChange { at: format!("/preconditions/{i}"), how: How::Removed, old: Some(Json::str(precondition_said(p))), new: None });
+    }
+    for (i, p) in new.iter().enumerate().filter(|(_, p)| !old.contains(p)) {
+        out.push(IChange { at: format!("/preconditions/{i}"), how: How::Added, old: None, new: Some(Json::str(precondition_said(p))) });
+    }
+}
+
+/// One thing a rule asks of its callers, as its file would say it.
+fn precondition_said(p: &Json) -> String {
+    let word = |k: &str| p.get(k).and_then(Json::as_str).unwrap_or_default().to_string();
+    let side = |k: &str| match p.get(k) {
+        Some(Json::Arr(names)) => names.iter().filter_map(Json::as_str).collect::<Vec<_>>().join(" + "),
+        Some(one) => one.as_str().unwrap_or_default().to_string(),
+        None => String::new(),
+    };
+    let max = || p.get("max").map(Json::compact).unwrap_or_default();
+    match p.get("kind").and_then(Json::as_str) {
+        Some("never") => word("said"),
+        Some("constraint") => format!("constraint {} {} {}", side("left"), word("op"), side("right")),
+        Some("sum") => format!("{}: sum of {}.{} <= {}", word("name"), word("over"), word("of"), max()),
+        Some("length") => format!("length of {} <= {}", word("sequence"), max()),
+        Some("days") => {
+            let from = p.get("from");
+            let of = |k: &str| from.and_then(|f| f.get(k)).and_then(Json::as_str).unwrap_or_default().to_string();
+            let n = p.get("days").and_then(Json::as_arr).map_or(0, <[Json]>::len);
+            format!("{} is one of the {n} days of koyomi \"{}\" date {}", word("input"), of("file"), of("date"))
+        }
+        _ => p.compact(),
+    }
+}
+
 /// The changes from `old` to `new` under `at` (DESIGN 17.9.5): objects by their keys, arrays whose
 /// elements each have a string `name` by it, other arrays by position.
 pub fn compare_json(at: &str, old: &Json, new: &Json, out: &mut Vec<IChange>) {
@@ -1335,6 +1472,9 @@ fn around(x: &str, y: &str) -> (String, String) {
 
 /// The old value and the new one of a change, as a line says them.
 fn values_of(c: &IChange) -> Option<String> {
+    if c.at.starts_with("/preconditions/") {
+        return c.new.as_ref().or(c.old.as_ref()).and_then(Json::as_str).map(str::to_string);
+    }
     if c.how != How::Changed {
         return None;
     }
@@ -1569,6 +1709,9 @@ pub(crate) fn sections_text(d: &ModDiff, lang: Lang) -> String {
             }
             for (tool, f) in &i.breaks {
                 o.push_str(&format!("    {}\n", break_line(tool, f, lang, "")));
+            }
+            for f in &i.fed_by {
+                o.push_str(&format!("    {}\n", f.line(lang, "")));
             }
             let g = grouped(&i.changes);
             for l in g.iter().take(SHOWN) {
@@ -1825,6 +1968,9 @@ pub(crate) fn sections_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usi
             if let Some(t) = &i.note {
                 o.push_str(&format!("  - {}\n", t.get(lang)));
             }
+            for f in &i.fed_by {
+                o.push_str(&format!("  - {}\n", ritsu_base::text::capitalize(&f.line(lang, "`"))));
+            }
             let g = grouped(&i.changes);
             if !g.is_empty() {
                 o.push_str(&format!(
@@ -1888,6 +2034,7 @@ pub fn iface_json(i: &Iface, lang: Lang) -> Json {
         ("how", Json::str(i.how)),
         ("version", i.version.as_ref().map_or(Json::Null, |(a, b)| Json::obj([("old", Json::str(a.as_str())), ("new", Json::str(b.as_str()))]))),
         ("changes", Json::arr(changes)),
+        ("fed_by", Json::arr(i.fed_by.iter().map(|f| Json::obj([("at", Json::str(f.at.as_str())), ("old", Json::opt_str(f.old.clone())), ("new", Json::opt_str(f.new.clone()))])))),
         ("breaks", Json::arr(i.breaks.iter().map(|(tool, f)| with_tool(tool, &f.json)))),
         ("note", i.note.as_ref().map_or(Json::Null, |t| Json::str(t.get(lang)))),
     ])

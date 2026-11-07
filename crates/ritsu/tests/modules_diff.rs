@@ -916,6 +916,81 @@ fn two_files() {
     assert!(out.ends_with("\nno difference in behavior or in an interface.\n"), "{out}");
 }
 
+/// Two versions of a rule that differ in what it asks of its callers, or in what it says of where a
+/// value comes from. A new condition may break a user, whatever the table answers, and one dropped
+/// asks less. A `fed by` line is no change of the interface: it is said, and a diff with nothing else
+/// comes to no difference. Lines are compared as lines: one added above another is no change of that
+/// one.
+#[test]
+fn what_a_rule_asks_of_its_callers_and_where_a_value_comes_from() {
+    let d = TempDir::new("modules-diff-asked");
+    let rule = |items_line: &str, asks: &str| {
+        format!(
+            "rule band v1\ndescription \"A band\"\n\nenum band = small | large\n\ninputs\n  items : number  range >=1 <=60{items_line}\n  sent  : number  range >=1 <=60\n\n{asks}outputs\n  band : band\n\ntable band\npolicy unique\n| items | -> band : band |\n| <=20  | small          |\n| >20   | large          |\n"
+        )
+    };
+    let origin = "rule origin v1\ndescription \"A number of items\"\n\ninputs\n  counted : number  range >=1 <=60\n\noutputs\n  items : number  round down(1)\n\ndefine as_counted : number = counted\n\ntable items\npolicy unique\n| counted | -> items    |\n| -       | as_counted |\n";
+    let version = |at: &str, text: String| {
+        let dir = d.path().join(at);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ritsu.mod"), "module example.com/acme/band\nversion 1.0.0\ndescription \"A band\"\n").unwrap();
+        std::fs::write(dir.join("origin.rule"), origin).unwrap();
+        std::fs::write(dir.join("other.rule"), origin.replace("rule origin v1", "rule other v1")).unwrap();
+        std::fs::write(dir.join("band.rule"), text).unwrap();
+        dir
+    };
+    let run = |a: &Path, b: &Path, more: &[&str]| {
+        let mut args = vec!["mod".to_string(), "diff".to_string(), a.display().to_string(), b.display().to_string()];
+        args.extend(more.iter().map(|m| m.to_string()));
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        ritsu_in(d.path(), &d.path().join("store"), &args)
+    };
+    let plain = version("plain", rule("", ""));
+
+    // the source of a value, said and not counted, added, changed and dropped
+    let fed = version("fed", rule("  fed by rulec \"origin.rule\" output items", ""));
+    let (code, out, err) = run(&plain, &fed, &[]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("inputs/items now says where its value comes from: rulec \"origin.rule\" output items\n"), "{out}");
+    assert!(out.ends_with("\nno difference in behavior or in an interface.\n"), "{out}");
+    let (_, out, _) = run(&plain, &fed, &["--format", "json"]);
+    let iface = |out: &str| json(out)["interface"].as_array().unwrap().iter().find(|i| i["file"] == "band.rule").unwrap_or_else(|| panic!("{out}")).clone();
+    let i = iface(&out);
+    assert_eq!(i["changes"], serde_json::json!([]), "{out}");
+    assert_eq!(i["fed_by"], serde_json::json!([{"at": "inputs/items", "old": null, "new": "rulec \"origin.rule\" output items"}]), "{out}");
+    let (code, out, _) = run(&fed, &plain, &[]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("inputs/items no longer says where its value comes from (it said rulec \"origin.rule\" output items)\n"), "{out}");
+    let elsewhere = version("elsewhere", rule("  fed by rulec \"other.rule\" output items", ""));
+    let (code, out, _) = run(&fed, &elsewhere, &[]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("inputs/items says its value comes from elsewhere: rulec \"origin.rule\" output items → rulec \"other.rule\" output items\n"), "{out}");
+    let (_, out, _) = run(&plain, &fed, &["--lang", "ja"]);
+    assert!(out.contains("inputs/items の値の出どころが書かれました: rulec \"origin.rule\" output items\n"), "{out}");
+    let (_, out, _) = run(&plain, &fed, &["--format", "markdown"]);
+    assert!(out.contains("  - `inputs/items` now says where its value comes from: `rulec \"origin.rule\" output items`\n"), "{out}");
+
+    // a condition added may break a user, and the one above it is no change
+    let constraint = version("constraint", rule("", "constraint items <= sent\n\n"));
+    let both = version("both", rule("", "constraint items <= sent\nnever items = 7, sent = 7\n\n"));
+    let (code, out, _) = run(&plain, &constraint, &[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("may break: added: /preconditions/0: constraint items <= sent\n"), "{out}");
+    let (code, out, _) = run(&constraint, &both, &[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("may break: added: /preconditions/1: never items = 7, sent = 7\n"), "{out}");
+    assert!(!out.contains("constraint items"), "the line that stayed is no change:\n{out}");
+    let (_, out, _) = run(&constraint, &both, &["--format", "json"]);
+    let i = iface(&out);
+    assert_eq!(i["changes"], serde_json::json!([{"at": "/preconditions/1", "change": "added", "old": null, "new": "never items = 7, sent = 7", "may_break": true}]), "{out}");
+
+    // a condition dropped asks less
+    let (code, out, _) = run(&both, &constraint, &[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("removed: /preconditions/1: never items = 7, sent = 7\n"), "{out}");
+    assert!(!out.contains("may break: "), "{out}");
+}
+
 /// A version against itself: exit 0, from the store and from the module at hand's own tree. What
 /// stops a diff, exit 2: a module against a file, a directory in no module, a `--budget` that is no
 /// positive integer, and a walk over `--budget` when nothing else differs.
