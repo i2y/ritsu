@@ -286,7 +286,7 @@ Rust の識別子の字（XID_Start、XID_Continue）は、決まり 4 のとお
 
 | 口 | 出す側 | 受け取る側 | 中身 |
 |---|---|---|---|
-| `Rules` | rulec | dandori、yuen、sakai、ritsu-cross、sekisho、kaname | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み。順序のある列挙の入力の範囲は、範囲に入る値の並び）、列挙（値の名前と、生成したコードのメンバーの名前と、`.rule` に書いた別名（公開名）と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`sum`・`length`）、Connect のサービスの形（`enums` のファイルには無い。rulec の DESIGN §15.258。`implements` で契約のサービスを実装する規則では、パス、名前、番号は契約のもの。rulec の DESIGN §15.274）、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」と「入力をこの区間に限ったとき、この出力（列挙か真偽）がとる値と、そこに届く入力」（`outputs_over`。2026-10-06 に sekisho のために足した）と「入力をこの区間に限ったとき、この数の出力のいちばん小さい値と大きい値、行の数、それぞれになる入力」（`output_values_over`。2026-10-30 に ritsu の X4 のために足した）。評価は入力から出力 |
+| `Rules` | rulec | dandori、yuen、sakai、ritsu-cross、sekisho、kaname | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み。順序のある列挙の入力の範囲は、範囲に入る値の並び）、列挙（値の名前と、生成したコードのメンバーの名前と、`.rule` に書いた別名（公開名）と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`never`・`sum`・`length`）、Connect のサービスの形（`enums` のファイルには無い。rulec の DESIGN §15.258。`implements` で契約のサービスを実装する規則では、パス、名前、番号は契約のもの。rulec の DESIGN §15.274）、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」と「入力をこの区間に限ったとき、この出力（列挙か真偽）がとる値と、そこに届く入力」（`outputs_over`。2026-10-06 に sekisho のために足した）と「入力をこの区間に限ったとき、この数の出力のいちばん小さい値と大きい値、行の数、それぞれになる入力」（`output_values_over`。2026-10-30 に ritsu の X4 のために足した）。評価は入力から出力 |
 | `Dates` | koyomi | dandori、rulec、sakai（doc のため。F.2）、ritsu-cross、sekisho、kaname | 関数、引数の型と範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文、`koyomi doc` が描いたもの。問いは「入力の範囲で、関数がとりうる値の集合」と「入力から値までの日数の最小と最大」と「カレンダーのデータの範囲と、休みの日の全部」（`calendar`）。`calendar` と `doc` は 2026-10-06 に sekisho のために足した。評価 |
 | `Books` | chobo | dandori、sakai（doc のため。D.8）、ritsu-cross、sekisho（`GatePorts`）、kaname | 単位（ritsu の単位の型。D.9）、勘定と境界と拒否の理由、振替の種類（引数と単位、キー、仮押さえと有効期限、移動）、仮押さえのステートマシン。問いは「額がこの範囲のとき、どの操作が、どの理由で拒否されうるか」。評価（帳簿の状態を持つ） |
 | `Claims` | geas | yuen、ritsu-cross | 主張の一覧（名前、行、書いたとおりの手順）。map の記録の読み方。差分が主張に何をもたらすか（geas の `affected`。D.7 で足した） |
@@ -301,6 +301,7 @@ Rust の識別子の字（XID_Start、XID_Continue）は、決まり 4 のとお
 | `GatePorts` | （口ではなく、sekisho が読む口のまとまり） | sekisho | `Rules`・`Dates`・`Books`・`Flows`・`Items` の五つの口。`ritsu-project` の `Joined::sekisho` が作る。`ports()` が、`Flows::crossings` に渡す三つの口の組（`Ports`）を返す。2026-10-06 に足した |
 | `Programs` | kaname（`kaname::ports::Engine`） | ritsu-cross | 名前と型が kaname の検査を通るモジュールが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値（kaname の型 `Given`：場所、受ける名前、書いたとおりの式、範囲の解析の範囲、出どころ、並びの要素のフィールドの範囲）、規則の入力どうしの関係、規則がたどる並びに渡すリストの要素の数の上限（`crossings`）。区間で示せない判定があったときだけ、関数のベクタを参照インタプリタで流して見た値（`seen`）。2026-10-18 に足した（kaname の DESIGN 14.2） |
 | `Verdicts` | ritsu-cross（`ritsu_cross::ProgramVerdicts`） | kaname | モジュールの呼び出しの場所ごとの、X2・X3 の (a)・X4・X6 の答え（成り立つ、例、決められない理由）、ritsu のコードと見出し、振替の操作の拒否の理由。モジュールごとに一度だけ判定し、`ritsu check` は同じ答えを kaname の検査と言語をまたぐ検査に渡す。2026-10-18 に足した（kaname の DESIGN 14.5） |
+| `Feeds` | rulec、koyomi、dandori、sekisho、kaname（`Engine`） | ritsu-cross（X17） | ファイルの場所が言う値の出どころ（`feeds`）と、`fed by` が指せる場所が持つもの（`holds`。dandori の入力・出力・レコードのフィールド、kaname のレコードのフィールド、rulec と koyomi の入力、sekisho の属性と `action` の入力）。受け取る側の型と範囲を返す。7.16 |
 
 どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
 
@@ -341,6 +342,10 @@ pub struct PublishedOperation { context: String, operation: Name, open_to_anyone
 pub struct GatePorts { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, flows: Rc<dyn Flows>, items: Rc<dyn Items> }   // sekisho が読む五つの口。ritsu-project の Joined::sekisho が作り、ports() が Flows::crossings に渡す Ports を返す
 pub trait Programs { fn crossings(&self, file: &Path, ports: &Ports) -> Result<ProgramCrossings, Vec<Said>>; fn seen(&self, file: &Path, ports: &Ports, function: &str) -> Vec<Seen>; fn joined(&self) -> bool; }   // kaname が答え、ritsu-cross が受け取る（2026-10-18）
 pub trait Verdicts { fn verdicts(&self, file: &Path) -> Vec<CallVerdict>; }   // ritsu-cross が答え、kaname が受け取る（2026-10-18）
+pub trait Feeds { fn feeds(&self, root: &Path, file: &str, ports: &Ports) -> Result<Vec<Fed>, Vec<Said>>; fn holds(&self, root: &Path, file: &str, thing: &Name, ports: &Ports) -> Result<Option<Carried>, Vec<Said>>; }
+pub struct Fed { line: usize, place: Name, takes: Carried, source: Result<Name, Text>, written: String }   // `fed by` を書いた場所（X17）
+pub enum Carried { Bool, Str, Date { min, max }, Days(DaySet), Enum { name, values: Vec<Spelled> }, Num { written, unit, min, max }, Opt(Box<Carried>), Other(String) }
+pub struct Spelled { written: String, public: String }   // 列挙の値の二つの名前。どちらかが同じなら同じ値（7.16）
 ```
 
 `RuleFacts` は、dandori の `src/rulec.rs` がいま三つの JSON から組み立てている `RuleInfo`（入力と出力の `Column`、列挙、`Machine`、前提、`walks`）を、単位の型（5 章）の付いた形にしたものである。D の段階では、例のすべての規則について、型の付いた呼び出しで得た事実と、いまの JSON から読んだ事実が同じになることを一度確かめてから、JSON の読み手を消す。D の二つ目の部分でそうした。rulec のコーパスの 50 本と dandori の 14 本の規則で、dandori が読む 1,939 の項目を突き合わせ、違った 7 か所は、どれも JSON の側の読み違えだった（規則がたどる並びを入力に数えて文字列と読んだこと 5 本、無いことがある入力を文字列と読んだこと 2 本）。ステートマシンの状態の軸（口では `Option`）は、dandori も `Option` で持ち、None は「表が状態を読まないので、どの状態からも同じ行が当てはまる」と読む（前の dandori は null を最初の軸と読み違えていた）。くわしくは PLAN の D.3。
@@ -421,6 +426,8 @@ ritsu-ports には、秒を最も大きな単位で書く `seconds_text`（`17 d
 - 口 `Programs`（kaname が答える）と `Verdicts`（ritsu-cross が答える）。型は `ritsu-ports` の `programs.rs` に置いた。kaname は ritsu-cross に、ritsu-cross は kaname に依存しない（`cargo xtask deps` が通る）。二つをつなぐのは `ritsu-project` の `Project::check_with` と、入口の `ritsu` の `languages.rs` である。
 - `ritsu_ports::day_of`（`YYYY-MM-DD` から日の番号へ。`day_text` の逆）。
 - `Joined` の索引に、kaname の `Items`（関数、レコードとフィールド、列挙と値）と `References`（`use rule`・`use dates`・`use book`・`use module` の先）を足した。
+
+**2026-11-07 に足したもの**（7.16）。口 `Feeds`。`Reference` に足さず新しい口にしたのは、`References` が行と指す先と参照の仕方を返す口で、読む側（sakai、yuen）が相手の型を知らなくてよいのに対し、X17 は受け取る側の型と範囲を要り、それを答えるのは受け取る側の言語だけだからである。`fed by` は `References` にも `how: "fed by"` で返す（sakai と yuen のため）。出どころの答えは、それぞれの言語の口（`Rules::output_values`・`outputs_over`、`Books`、`Dates`）と、文書の読み手（`ritsu_proto::validate`、`ritsu_base::openapi`、`ritsu_base::document`）で読み、場所が持つものは `Feeds::holds` で読む。
 
 中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。あとから足した sekisho と kaname は、dandori と同じ作り方の宣言の塊の行にした（作る関数は土台の `ritsu_base::definition` に移し、三つの言語が同じ関数を呼ぶ。4.22）。kaname の関数は見出しから本体の最後の行まで、レコードは宣言の塊、フィールドと列挙はその行、列挙の値は名前と別名である（kaname の DESIGN 14.6）。
 
@@ -918,17 +925,17 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu-base` の参照の書き方は、yuen と sakai の DESIGN.md の 2 章で決め、二つのリポジトリの `tests/fixtures/naming.tsv`（36 行の試しの表）で確かめているものを、そのまま処理系全体の決まりにする。決まりは次のとおり。
 
-1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）、sekisho の `principal P [attribute a]` と `resource R [attribute a]`、`enum E [value V]`、`action A [input i]` と `action A [context c]`、kaname の `record R [field f]` と `enum E [value V [field f]]` だけで、ほかのツールの組は一つまで。組が三つになるのは、kaname のフィールドを持つ列挙の値の下のフィールドだけである（`kaname "orders.kn" enum Order value placed field on`。土台の `Tool::grandchildren`。kaname の DESIGN 23.1）。子の種類は、親の種類のすぐあとにしか書けない。sekisho の `attribute` は、二つの親（`principal` と `resource`）のどちらのすぐあとにも書ける（土台の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」になる）。
-2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`sekisho` は同じ日に、sekisho の段階 D で、口 `Items` と一緒に足した。`kaname` は 2026-10-18 に、kaname の段階 C3 で足した。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。
+1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`、jsonschema の `def D [property P]`（6.5）、sekisho の `principal P [attribute a]` と `resource R [attribute a]`、`enum E [value V]`、`action A [input i]` と `action A [context c]`、kaname の `record R [field f]` と `enum E [value V [field f]]` だけで、ほかのツールの組は一つまで。組が三つになるのは、kaname のフィールドを持つ列挙の値の下のフィールドだけである（`kaname "orders.kn" enum Order value placed field on`。土台の `Tool::grandchildren`。kaname の DESIGN 23.1）。子の種類は、親の種類のすぐあとにしか書けない。sekisho の `attribute` は、二つの親（`principal` と `resource`）のどちらのすぐあとにも書ける（土台の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」になる）。
+2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`、`jsonschema`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`sekisho` は同じ日に、sekisho の段階 D で、口 `Items` と一緒に足した。`kaname` は 2026-10-18 に、kaname の段階 C3 で足した。`jsonschema` は 2026-11-07 に、`fed by` と一緒に足した（6.5、7.16）。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。
 3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上で、`.git` か `ritsu.mod` のある、いちばん近いディレクトリ、どちらも無ければ渡したディレクトリ。17.6）からの相対で、ルートの外に出るパスはエラー。モジュールの中では、`@<名前>/` で始まるパスが依存のファイルを指し、モジュールの外へ出るパスはエラーになる（17.6）。
-4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）、sekisho は `principal`（下に `attribute`）・`resource`（下に `attribute`）・`role`・`workflow`・`enum`（下に `value`）・`action`（下に `input`・`context`）・`policy`・`expect`・`separate`、kaname は `function`・`record`（下に `field`）・`enum`（下に `value`、その下に `field`）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
+4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）、sekisho は `principal`（下に `attribute`）・`resource`（下に `attribute`）・`role`・`workflow`・`enum`（下に `value`）・`action`（下に `input`・`context`）・`policy`・`expect`・`separate`、kaname は `function`・`record`（下に `field`）・`enum`（下に `value`、その下に `field`）、jsonschema は `def`（下に `property`）・`pointer`（6.5）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
 5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文書と Cedar の名前は 6.5。文字列の外の全角の空白、`"…"` で書いた種類やツール名、名前の無い種類はエラー。
-6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`、sekisho の `principal`・`resource`・`enum`・`action`、kaname の `record`・`enum`・`value`）は子を全部含む。
+6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`、jsonschema の `def`、sekisho の `principal`・`resource`・`enum`・`action`、kaname の `record`・`enum`・`value`）は子を全部含む。
 7. **JSON の形**：`{"text": …, "tool": …, "path": …, "items": [[種類, 名前], …]}`（キーはこの順）。`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで書いた形。空白を入れない詰めた書き方で、ASCII でない文字はそのまま出す。
 8. **文の中の書き方**：診断などの文に書くファイルの場所（`<パス>:<行>:<列>`、コピーのパス）は、走らせたディレクトリから、渡されたとおりに書く。文の中の参照は、JSON と同じくルートからの相対で書く（読み直すと同じ参照になり、`.req` や `.ctx` にそのまま貼れる）。
 9. **JSON の中のファイルの場所**：診断の `file` なども、参照と同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。取り込んだときは、yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていた。土台で一つにするときにそろえる（4.2）とし、C.8 で sakai をルートからの相対にした。
 
-この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツール名は十四。`ritsu` はツール名にしない（ritsu は言語ではない）。
+この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツール名は十五。`ritsu` はツール名にしない（ritsu は言語ではない）。試しの表 `naming.tsv` は、JSON の行が 58、拒否の行が 34 ある（`crates/ritsu-base/tests/naming.rs`、`crates/sakai/tests/naming.rs`、`crates/yuen/tests/names.rs` の三か所が数を持つ）。
 
 OpenAPI と AsyncAPI の文書の要素は、2026-10-06 からツール名 `openapi`・`asyncapi` で指す（6.5）。sakai は `.ctx` の中で短い書き方（`schema Charge`）も使えるが、api と診断では参照の書き方で書く（sakai の DESIGN 15.10）。
 
@@ -974,7 +981,7 @@ openapi、asyncapi、cedar の要素は、どの言語の `Items` にも入ら�
 
 yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付、geas、dandori）がある（yuen の DESIGN 3.2）。定義の文が出れば、表や日付の関数やタスクの一つ一つが端になる（7.10）。端の中身が変わるので、yuen のテストと例の確かめた記録（`.req` のハッシュ）は D の段階で取り直す。D.7 で取り直し、F.1 の例もこの端で記録を書いた。koyomi の日付の端がその日付の定義の文になったので、カレンダーの一行を書き換えた例（yuen の `civil_code_periods_reread`）は、書き換えた日付へのリンク一本だけが E303 で止まる（ファイル全体を端にしていた A の段階の見込みでは、同じ `.cal` を指す三本が止まるはずだった）。
 
-**参照**（`References`）は、参照のある行、指す先、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use dates … from`（同梱、Lambda、`local`）、`use book … from`、`use proto|openapi|smithy`、`connect`、`implements`、帳簿の操作のタスクの `book`（先は `chobo "<帳簿>" transfer <振替>`）、子の `flow "…"`、rulec の `import proto`、`import jsonschema`、`import enum`、`shape`、`apply`、`source … file`、`range from koyomi`（先は `koyomi "<ファイル>" date <名前>`。E.4 で足した）、`implements`（先は `proto "<ファイル>" service <サービス>`。dandori の `implements` と同じ形。2026-10-30 に足した。rulec の DESIGN §15.274）、koyomi の `use calendar` と `source`、yuen と sakai の参照、sekisho の `use rule|dates|calendar|openapi|proto|asyncapi|book|gate`、`workflow … from`、`guards`（検査が見つけた操作）、手で書いた Cedar のスキーマの `@guards`、kaname の `use rule|dates|book|module` を出す。sakai はこれで、言語の参照を行番号つきで確かめ（7.10）、yuen は `trace` と `affected` でたどる。sakai が境界を越える参照として数えるのは、ほかの成果物そのものかその要素を使う参照で、規則の `import enum` と `range from koyomi`（sakai の DESIGN 20 章）、ワークフローの `use dates`（19 章）、ゲートの `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、Cedar の `@guards`（17 章）、モジュールの `use rule`・`use dates`・`use module`（18 章）もそこに入る。読む成果物の一部として扱うもの（JSON Schema、出典のコピー、祝日の表、Smithy の記述）と、帳簿の `use book` は数えない（sakai の DESIGN 3.3）。ワークフローと規則の `implements` も数えない。どちらも、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスであることを確かめる（sakai の E208。sakai の DESIGN 3.3、26 章）。
+**参照**（`References`）は、参照のある行、指す先、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use dates … from`（同梱、Lambda、`local`）、`use book … from`、`use proto|openapi|smithy`、`connect`、`implements`、帳簿の操作のタスクの `book`（先は `chobo "<帳簿>" transfer <振替>`）、子の `flow "…"`、`import enum`（先は `rulec "<ファイル>" enum <列挙>`）、rulec の `import proto`、`import jsonschema`、`import enum`、`shape`、`apply`、`source … file`、`range from koyomi`（先は `koyomi "<ファイル>" date <名前>`。E.4 で足した）、`implements`（先は `proto "<ファイル>" service <サービス>`。dandori の `implements` と同じ形。2026-10-30 に足した。rulec の DESIGN §15.274）、koyomi の `use calendar` と `source`、yuen と sakai の参照、sekisho の `use rule|dates|calendar|openapi|proto|asyncapi|book|gate`、`workflow … from`、`guards`（検査が見つけた操作）、手で書いた Cedar のスキーマの `@guards`、kaname の `use rule|dates|book|module` を出す。sekisho の `import enum` は、ワークフローと同じ先を出す。rulec・koyomi・dandori・sekisho・kaname の `fed by` は、書いた参照を `how: "fed by"` で出す（7.16）。sakai はこれで、言語の参照を行番号つきで確かめ（7.10）、yuen は `trace` と `affected` でたどる。sakai が境界を越える参照として数えるのは、ほかの成果物そのものかその要素を使う参照で、規則の `import enum` と `range from koyomi`（sakai の DESIGN 20 章）、ワークフローの `use dates`（19 章）、ゲートの `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、Cedar の `@guards`（17 章）、モジュールの `use rule`・`use dates`・`use module`（18 章）、ワークフローとゲートの `import enum`（31 章）、どの言語の `fed by`（32 章）もそこに入る。読む成果物の一部として扱うもの（JSON Schema、出典のコピー、祝日の表、Smithy の記述）と、帳簿の `use book` は数えない（sakai の DESIGN 3.3）。ワークフローと規則の `implements` も数えない。どちらも、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスであることを確かめる（sakai の E208。sakai の DESIGN 3.3、26 章）。
 
 **E.1 で作った形**（PLAN の E.1）。索引は `ritsu-ports` の `Index` である。言語の口（`Items`、`References`）をツール名ごとに持ち、ファイルごとの答えを、ツールとルートとルートからのパスで一度だけ尋ねて覚える（参照のパスはルートからなので、ルートが違えば別の答えになる）。参照を渡せば `find` が引く。答えは四つのどれかで（`Lookup`）、その言語がつながっていない、その言語がファイルに答えない（言うこと `Said` を添える）、ある（ファイルそのものの参照なら、言語がファイルを読めたこと）、無い（同じ親の下の同じ種類のものを添える）である。何が誤りかは言わない。言うのは、参照を書いた言語である（yuen の E202、sakai の E007）。
 
@@ -996,7 +1003,7 @@ yuen を入れていないのは、yuen の `Engine` が、借りた出典の端
 
 yuen と sakai は、参照を自分で言語ごとに引くのをやめ、この索引で引く（7.10）。yuen は `ends.rs`（リンクの端）と `coverage.rs`（範囲が集めるもの）、sakai は `suite.rs`（参照を読む）と `elements.rs`（語の `means` が指す規則の入力、出力、列挙、値）である。どちらも出力は変わらない（PLAN の E.1 の突き合わせ）。
 
-### 6.5 OpenAPI と AsyncAPI の文書の要素、Cedar（2026-10-06）
+### 6.5 OpenAPI と AsyncAPI の文書の要素、Cedar、JSON Schema（2026-10-06、2026-11-07）
 
 OpenAPI と AsyncAPI の文書と、手で書いた Cedar のポリシーとスキーマは、proto と同じく標準の形式で、どの言語のソースでもない。その中の一つのものを指せるように、ツール名を三つ足した。yuen の要件を一つの操作や一つのポリシーに結び付けられ、端もその要素の分だけになるので、同じ文書のほかの要素を直しても、その要件のリンクは止まらない（yuen の DESIGN 3.6）。sakai は、文書の要素を、ファイルと JSON Pointer ではなく参照の書き方で書く（sakai の DESIGN 15.10）。
 
@@ -1005,11 +1012,13 @@ OpenAPI と AsyncAPI の文書と、手で書いた Cedar のポリシーとス�
 | `openapi` | OpenAPI の文書（`.yaml`、`.yml`、`.json`）と、文書が `$ref` で読むその一部 | `schema`（`components/schemas` のキー。下に `property`（定義の `properties` のキー。無ければ `allOf` のスキーマを順に探す）と `value`（`enum` の値。数と真偽は JSON の書き方、`null`））、`operation`（`operationId`。無い操作だけ方法とパスで `"POST /orders/{orderId}/refunds"`）、`pointer`（JSON Pointer） |
 | `asyncapi` | AsyncAPI の文書と、その一部 | `channel`（`channels` のキー。下に `message`（そのチャネルの `messages` のキー））、`message`（`components/messages` のキー）、`operation`（`operations` のキー）、`schema`（openapi と同じ）、`pointer` |
 | `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`（`@id`。無ければ Cedar の CLI と同じく、ファイルの中の順の `policy0`、`policy1`）、`action` と `entity`（宣言した名前。名前空間を付けない） |
+| `jsonschema` | JSON Schema の文書（`.json`、`.yaml`、`.yml`。拡張子で言語を決めない） | `def`（`$defs` と `definitions` のキー。下に `property`）、`pointer`（`/$defs/Order/properties/amount` のような JSON Pointer。下に何も置けない） |
 
 - **`pointer`**：種類の無い場所（レスポンス、引数、サーバー、`$ref` で読まれる文書の一部のファイルの中）を、ファイルの頭からの JSON Pointer で指す。名前は `/` で始まる（`openapi "common/money.yaml" pointer /Money`）。sakai は、`$ref` の行き着く先とサーバーを、これで書く。
 - **`message` は二つの場所にある**：AsyncAPI 3 では、メッセージを `components/messages` に置いて `$ref` で読むことも、チャネルの `messages` に直に書くこともできる。前者は `message M`、後者は `channel C message M` と書く。
 - **一つの書き方**：`operationId` のある操作を方法とパスで書いた参照は、その操作を指さない（名前の書き方を一つにする。5）。Cedar の action と entity も、名前空間を付けた書き方は受け付けない。一つのスキーマのファイルで二つの名前空間が同じ名前を宣言していれば、その名前は一つに決まらず、yuen は E202 を出す。
 - **どこを指すか**：文書の中のどこがどの参照になるかと、その逆、`$ref` のたどり方は、土台の `ritsu_base::document`（4.21）が一つ持つ。yuen と sakai が同じ関数で引くので、同じ要素を同じ参照で書く。Cedar の要素は、いまも yuen だけが引く（`crates/yuen/src/documents.rs`）。sekisho の口（段階 D）は、手で書いた Cedar の action・ポリシー・`@guards` を ritsu-base の読み手で読むが、Cedar の要素の参照（`cedar "…" policy …`）を引くことはしないので、土台には移していない。二つ目の言語が Cedar の要素の参照を引くようになったら移す。
+- **JSON Schema**：`fed by` の出どころと yuen の `satisfied by` で、一つのプロパティを指すために足した（2026-11-07）。十五個目のツール名で、名前の表の末尾にある。読むのは `ritsu_base::document` で、`$ref` の先を読む `Loaded`（`.proto` や OpenAPI と同じ考え。ファイルの上限 `MAX_FILES`）は yuen から移した。
 - **言語の検査は持たない**：`ritsu check` は、`.yaml` や `.cedar` を言語のファイルとして読まない（6.1 の `ORDER` に無い）。誰かが指したときに、指した言語が読む。
 - **sekisho が守る操作**：sekisho は、action が守る操作を、診断の文、`sekisho api`、生成するスキーマの `@guards` で、`openapi "…" operation <operationId>`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、`chobo "…" transfer T operation O` の参照で書く。パスは `.gate` の `use` に書いたパスではなく、ルートからのパスで、ルートは yuen と sakai と同じに決める（sekisho の DESIGN 2.6）。
 
@@ -1053,6 +1062,9 @@ E.4 と E.5 で、言語の境目の検査のコードを載せた（E2xx がエ
 | W205 | koyomi の日付の入力に渡す日を、dandori が知らない（範囲を書いていない入力・フィールド・タスクの結果、動く期間を書いていないワークフローの `now`、`on failure` と `on cancel` の中の `now`、規則の日付の出力から来る。X6） |
 | E206 | 仮押さえを作ってから確定か取消をするまでの長さの下限が、有効期限以上である。帳簿はどの実行でもその呼び出しを `expired` で拒否する（X5）。注に、下限と、それを作る文を書く |
 | W206 | 仮押さえを作ってから確定か取消をするまでの長さが、有効期限の前にも後にもなりうる、または長さの上限が分からない（X5） |
+| E207 | `fed by` の出どころがとりうる値を、受け取る側が受け取らない（X17）。文に値の例と、言えるならそれを出す入力を書く |
+| W207 | `fed by` の出どころがとりうる値を受け取るかを決められない（X17）。理由を書く |
+| E208 | `fed by` の出どころが無い（X17。ファイル、その中の名前、読めない文書） |
 
 2026-10-18 から、E201〜W205 の見出しと文は、ワークフローの呼び出しと kaname のモジュールの呼び出しの両方を言う（kaname の DESIGN 14.4）。見出しを変えたのは、ワークフローの言い方だけだった E202、W202、E203、W203 の四つである（E202 は「規則の日付の入力に渡す日が、入力の範囲を外れます」、E203 は「振替に渡す額が、chobo の受け取らない額になることがあります」）。E204 はタスクが拒否の理由を処理しているかの確かめなので、kaname の関数が組み立てる振替には出ない（理由は、kaname が生成する振替の型に載る）。台帳の E204 の「いつ出るか」もそう言う。E201〜W205 のうち、E204 と W204 のほかの八つの再現は、ワークフローと同じ規則・日付のファイル・帳簿を呼ぶ `.kn` も持ち、`crates/ritsu/tests/codes.rs` が、モジュールの行にもそのコードが出ることを英語と日本語で確かめる。
 
@@ -1100,6 +1112,7 @@ ritsu の台帳に X10（参照の解決）のコードは無い。参照を書�
 | X14 | 秘密の値の行き先 | 契約が秘密と印を付けた値を、フローが、印のコンテキストと関係の無いコンテキストや地図の外へ送らない | dandori の送る値と印（`Flows::sends`）、sakai の地図（`Maps`） | dandori の、プロジェクトの中の成果物を呼ぶタスク | ritsu の E905、W905 | 2026-10-06（16.8） |
 | X15 | 公開する操作の認可 | コンテキストが公開する操作のどれにも、守る action がある（だれでも呼べる操作を除く） | sakai の `Maps::published_operations`、sekisho の `Gates::facts` | sakai の地図の `open host service` | ritsu の E907、W907 | 2026-10-06（sekisho の段階 D。7.14） |
 | X16 | ワークフローの最小権限 | ワークフローが呼ぶ操作を、ゲートがそのワークフローに許し、拒まれうるならタスクがそれを処理し、許されて呼ばない操作が無い | dandori の `Flows::operation_calls`、sekisho の `Gates::facts` と `Gates::allowed` | sekisho の `workflow … from` が書くフロー | ritsu の E908、W908、W909 | 2026-10-06（sekisho の段階 D。7.14） |
+| X17 | 手書きのコードが運ぶ値の出どころ | `fed by` を書いた場所が、出どころがとりうる値を全部受け取る | 受け取る側は `Feeds`、出どころは `Rules::output_values`・`outputs_over`、`Books`、`Dates`、`Feeds::holds`、`ritsu_proto::validate`、`ritsu_base::openapi`、`ritsu_base::document` | rulec・koyomi の入力、rulec の `elements` のフィールド、dandori の入力とレコードのフィールド、sekisho の属性と入力、kaname のレコードのフィールドと引数 | ritsu の E207、W207、E208（形と場所は各言語：rulec E144、koyomi E017、dandori E023、sekisho E009、kaname E009） | 2026-11-07（7.16） |
 
 kaname の呼び出しの判定は、`ritsu-cross` の `src/programs.rs`（`ProgramVerdicts`）が、ワークフローのものと同じ判定の関数（`borders::days_given`・`amounts_given`・`amounts_hull`・`input_range`、`preconditions::decide`）で行う。kaname の範囲の解析は上からの見積もりなので、区間の端をそのまま例にはしない。区間で示せないときは、関数のベクタを流した実行（`Programs::seen`）を尋ね、確かめを破る実行があればそれを例にしてエラーに、無ければ決められないとして警告にする。X2 は、kaname が呼び出しの場所で知っている入力どうしの関係（`running_totals` の途中までの合計と、その `total` と同じリストを同じフィールドで足した `sum` が等しいことなど。kaname の DESIGN 32 章）が前提を言えば、成り立つとする。並びの合計と長さの前提は、kaname が知っているリストの要素の数の上限（`max_len`）で尋ねるので、ワークフローの呼び出しと違って決められることがある。答えは関数のエフェクトにも効き、示せた場所は total を崩さない（kaname の DESIGN 4.3、14.3）。
 
@@ -1111,7 +1124,7 @@ dandori が規則に渡す値、規則から受け取る値、chobo の振替に
 
 ### 7.4 規則の前提を、呼び出しの場所で（X2）
 
-rulec は、形だけでは表せない入力の前提を `api` の `preconditions` に出している（rulec の §15.116）。種類は三つ：入力どうしの関係（`constraint`）、並びの合計の上限（`sum`）、並びの長さの上限（`length`）。いまの dandori は、これを読むだけで確かめない（dandori の DESIGN 7 章）。規則の生成したコードは入口でエラーにするので、前提を破る値は、それを作ったタスクの結果が実行の履歴に残ったあと、規則を呼ぶところで初めて落ちる。
+rulec は、形だけでは表せない入力の前提を `api` の `preconditions` に出している（rulec の §15.116）。種類は四つ：入力どうしの関係（`constraint`）、起こらない組み合わせ（`never`。rulec の §15.282）、並びの合計の上限（`sum`）、並びの長さの上限（`length`）。いまの dandori は、これを読むだけで確かめない（dandori の DESIGN 7 章）。規則の生成したコードは入口でエラーにするので、前提を破る値は、それを作ったタスクの結果が実行の履歴に残ったあと、規則を呼ぶところで初めて落ちる。
 
 ritsu では、呼び出しの場所で次のように確かめる。
 
@@ -1119,7 +1132,7 @@ ritsu では、呼び出しの場所で次のように確かめる。
 2. ritsu-cross は、入力ごとのその範囲と前提を `Rules` に渡して尋ねる。rulec は、範囲のどの組み合わせでも一次の不等式が成り立つかを、もう持っている消去の手続きで決める（`src/fourier.rs`。rulec の §15.139 と §15.141）。
 3. 成り立てば何も出さない。成り立たない値があればエラーで、その値を添える。決められなければ警告（W201）で、`ritsu dandori` が、決められなかった前提を口 `Undecided` で dandori に渡し、dandori の生成したコードが、ワークフローを走らせたときに、値ができたところですぐに確かめる（どのプラットフォームでも。dandori の DESIGN 1.17）。
 
-並びの合計と長さは、dandori がリストの長さの上限を知っているときだけ決められる。いま知っているのは、`for … at most n` で集めたリスト（長さは n まで）と、リストのリテラルである。タスクの結果のリストには長さの範囲が無いので、決められない（警告と、実行時の確かめ）。リストに長さの範囲を書けるようにするかは、E の段階で決めることにしていた。E では書き方を足していない。dandori は並びをたどる規則を呼ばない（E005）ので、並びの合計と長さの前提は、どれも決められない（下の判定の 2）。
+並びの合計と長さは、dandori がリストの長さの上限を知っているときだけ決められる。いま知っているのは、`for … at most n` で集めたリスト（長さは n まで）と、リストのリテラルである。タスクの結果のリストには長さの範囲が無いので、決められない（警告と、実行時の確かめ）。リストに長さの範囲を書けるようにするかは、E の段階で決めることにしていた。E では書き方を足していない。dandori は並びをたどる規則を呼ばない（E005）ので、並びの合計と長さの前提は、どれも決められない（下の判定の 3）。
 
 **E.4 で作った形**（PLAN の E.4。`crates/ritsu-cross/src/preconditions.rs`）。`ritsu check` は、プロジェクトの `.flow` のうち dandori の検査を通るものごとに、口の `Flows::crossings` で規則の呼び出しを受け取り（日付と帳簿を使うフローも読めるよう、規則・日付・帳簿の三つの口で読む。E.4 では規則の口だけの `rule_calls` で、E.5 で替えた）、呼ぶ規則の前提ごとに、次のように決める。前提一つと呼び出し一つの組が、境目一つである（`borders` に数える）。dandori の検査を通らないフローと、rulec の検査を通らない規則は、それぞれの言語が言うので、ここでは飛ばす。
 
@@ -1131,8 +1144,9 @@ ritsu では、呼び出しの場所で次のように確かめる。
    - どちらかの値に範囲が無ければ（範囲の無い出どころがある）、決められない。理由に出どころを書く。
    - 両方に範囲があれば、`Rules::preconditions_hold` に二つの範囲を渡す。rulec は、範囲の箱のいちばん厳しい角（`<` と `<=` なら左の上の端と右の下の端、`>` と `>=` ならその逆）で比べる。角で成り立てば箱のどの組でも成り立つ（左は上の端以下、右は下の端以上だから）。角で破れば、その角が例である。端が開いていれば決められない。
    - 日付どうしの関係（`check_in <= check_out`）は、`.flow` が範囲を書いた日付なら、口が範囲を日の番号で渡すので、数と同じに決める。例は日付で書く（2026-10-31）。
-2. 並びの合計と長さの上限は、決められない（dandori は並びを歩く規則を呼ばず（E005）、並びの長さを知らない）。
-3. 日付の入力の範囲が koyomi の日付の日の集合（`Days`。rulec の `range from koyomi`）のとき（E.5 で決められるようにした。E.4 ではいつも決められないとしていた）、渡す値がどこから来うるか（`CallArg` の `from`）で決める。来うるところがどれも koyomi の日付の日か、`.flow` が範囲を書いた日付（`Origin::Range`。2026-10-31）なら、それぞれの日付について koyomi が数えた日（`Dates::values`）と、それぞれの範囲のどの日もが、規則の集合の日でなければならない。そうでない日があれば、来うるところの順で最初のその日を例にして E201（範囲なら、範囲が入れる日のうち集合に無い最初の日。下の端が開いていれば、集合の最初の日の前の日か、範囲の上の端。`borders::day_not_in`）。何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`、時刻）からも来うるとき、koyomi が数えないとき、値の来るところが無いときは決められない（W201）。規則と同じ日付の日を渡すなら、集合が同じなので、必ず成り立つ（7.5 の (b) の終わりの段落）。E201 の注の二つ目と三つ目は、日の前提では「koyomi は、入力の範囲のすべてで日付の日を数えています」と「koyomi "<ファイル>" date <日付> の日を渡すか、規則の範囲を直してください」にした。
+2. 起こらない組み合わせ `never …`。呼び出しが行の名前のどれかを渡していなければ、決められない。渡していれば、数の範囲を `Rules::preconditions_hold` に渡す。rulec は、行の条件のどれかが渡す範囲の中で成り立たなければ「成り立つ」と言う。どの条件も閉じた範囲の中で成り立つ値を持てば、その値が例で、E201 である。それ以外は決められない。真偽と列挙には範囲が無く、開いた端は値が来ると言わないからである（W201 と、dandori の実行時の確かめ）。Lean の `RitsuCross` は、この判定をモデルにしていない。
+3. 並びの合計と長さの上限は、決められない（dandori は並びを歩く規則を呼ばず（E005）、並びの長さを知らない）。
+4. 日付の入力の範囲が koyomi の日付の日の集合（`Days`。rulec の `range from koyomi`）のとき（E.5 で決められるようにした。E.4 ではいつも決められないとしていた）、渡す値がどこから来うるか（`CallArg` の `from`）で決める。来うるところがどれも koyomi の日付の日か、`.flow` が範囲を書いた日付（`Origin::Range`。2026-10-31）なら、それぞれの日付について koyomi が数えた日（`Dates::values`）と、それぞれの範囲のどの日もが、規則の集合の日でなければならない。そうでない日があれば、来うるところの順で最初のその日を例にして E201（範囲なら、範囲が入れる日のうち集合に無い最初の日。下の端が開いていれば、集合の最初の日の前の日か、範囲の上の端。`borders::day_not_in`）。何日かを言わないところ（範囲を書いていない入力やタスクの結果、`now`、時刻）からも来うるとき、koyomi が数えないとき、値の来るところが無いときは決められない（W201）。規則と同じ日付の日を渡すなら、集合が同じなので、必ず成り立つ（7.5 の (b) の終わりの段落）。E201 の注の二つ目と三つ目は、日の前提では「koyomi は、入力の範囲のすべてで日付の日を数えています」と「koyomi "<ファイル>" date <日付> の日を渡すか、規則の範囲を直してください」にした。
 
 例は、dandori の範囲が値ごとに独立に取れるとしたときの角である。dandori の E014（「範囲を外れることがある」）と同じ読み方で、二つの値が同じ出どころから来て連動している場合（同じ値そのものは上の 1 で扱う）には、実際には起きない角を例にすることがある。決められないときの警告（W201）は、`ritsu dandori gen` が書くワークフローのコードが、走らせたときに、値ができたところですぐに前提を確かめることを言う（下の「E.5 で作った形」）。
 
@@ -1410,6 +1424,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
    | `secret_destination` | X14 | 送る呼び出し | 送り先のファイル | E905／W905 |
    | `operation_guard` | X15 | コンテキストの `open host service` の行 | 守るゲートの `guards` の行。だれでも呼べる操作（`security: []`）はその文書、守るものが無ければ `null` | E907／W907 |
    | `workflow_permission` | X16 | 操作の呼び出し | 守るゲートの `guards` の行 | E908／W909 |
+   | `fed_by` | X17 | `fed by` を書いた行 | 出どころのファイル（行は `null`） | E207／W207（無ければ E208） |
 
    決まり：名前は変えない。使い回さない。確かめを足すときは、新しい名前を表の後ろに足す（並べる順は表の順なので、前からの記録の並びは変わらない）。確かめをやめても、名前は表に残し、使い回さない。名前は英語の snake_case で、`--lang` で変わらない。kaname の呼び出しの記録の名前は、口の `Crossing` から決める（`Precondition` は `precondition`、`RuleDay` は `rule_date_input`、`Amount` は `transfer_amount`、`Refusals` は `transfer_refusals`、`DateDay` は `koyomi_date_input`）。kaname の `check --format json` の `places` と `kaname api` の `checks` も、同じ語で確かめを書く（`Crossing::check`。前は 7.2 の番号を書いていた。kaname の DESIGN 35 章）。
 
@@ -1419,12 +1434,18 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 
 6. **確かめごとのキー。** 記録の型（`ritsu_cross::Border`）は、`code` のあとに書くキーと値の並び（`detail`）を持つ。確かめごとのキーは、六つのキーと同じ名前を使わず、一度出した名前は変えない。
 
-   日付の境目の記録（`koyomi_date_input`、`rule_date_input`、規則の `range from koyomi` の日の前提の `precondition`）は、`code` のあとに、次の五つをこの順で書く（2026-10-31。dandori の DESIGN 20 章）。ほかの記録には、まだ確かめごとのキーは無い。
+   日付の境目の記録（`koyomi_date_input`、`rule_date_input`、規則の `range from koyomi` の日の前提の `precondition`）は、`code` のあとに、次の五つをこの順で書く（2026-10-31。dandori の DESIGN 20 章）。
    - `given`：フローが書く値（`due.day`、`now`）。
    - `takes`：相手が受け取る日。`from` と `to`（開いた端は `null`）。`range from koyomi` の日の前提では、日の数 `count` も。
    - `from`：値が来うるところの並び。種類 `kind` ごとに、`day`（koyomi の日付。`file`・`date`、koyomi が数えた日 `days` の `from`・`to`・`count`、数えないときは `days` が `null` で理由 `why`）、`range`（日付の範囲。`.flow` の書き方の `range` と `days`）、`moment`（時刻の範囲。`range` と、カレンダーのオフセットで読んだ `days`。規則に渡すときは `null`）、`now`（期間の `period` と `days`。期間の無い `now` はどちらも `null`）、`unknown`（何日かを言わないところ。`place`）、`output`（規則の出力。`rule` と `output`）。
    - `example`：成り立たないときの例。日 `day` と、それが来る `from` の位置（0 から）`from`。ほかは `null`。
    - `why`：決められない理由（`--lang` の言語の文）。ほかは `null`。
+
+   `fed_by` の記録は、`code` のあとに `source`（ルートからの参照。書けないときは `null`）、`takes`（受け取る側）、`gives`（出どころの答え）、`example`（`{value, at}`）、`why` を持つ。`about` は `input food`、`elements units field veterancy`、`record Balance field left`、`resource Order attribute amount`、`action a input b`、`function total parameter order` の形である。ほかの記録には、まだ確かめごとのキーは無い。
+
+   ```json
+   {"check": "fed_by", "about": "input v", "at": {"tool": "rulec", "file": "taker.rule", "line": 4}, "to": {"tool": "rulec", "file": "feeder.rule", "line": null}, "result": "failed", "code": "E207", "source": "rulec \"feeder.rule\" output y", "takes": "number >=0 <=9", "gives": "number >=1 <=20", "example": {"value": "20", "at": "x = 2"}, "why": null}
+   ```
 
 **捨てたもの**：
 
@@ -1449,6 +1470,121 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 **見つけて直していないもの**：
 
 - 規則の `check`（8.3）は `null` で、rulec が規則について言うことは JSON に無い（rulec の DESIGN §15.276）。
+
+### 7.16 手書きのコードが運ぶ値の出どころ（X17。2026-11-07）
+
+**きっかけ**：四つのプロジェクトで独立に確かめたとき、言語のあいだの穴の中心は、手書きのコードが世界から世界へ運ぶ値だった。ワークフローの入力だけ契約より縮める、募兵の規則の練度を 3 にする、受け取る規則の範囲を縮める、表の行を超過分を返す計算に変える、JSON Schema の名前と型と範囲を変える、のどれでも `ritsu check` は黙った。帳簿の上限なしは壊さなくても穴で、帳簿は 10,000,001 を受け付け、フローが `Dandori.BadResponse` で終わる。規則の `from`（E121、E122）はこの一部を言うが、生成コードが読む経路を決める形で、規則の入力にしか書けず、相手は契約だけである。
+
+**決定**：受け取る側の行の最後に `fed by <参照>` を書く。参照は 6.2 の書き方そのもので、行の最後まで読み、パスは書いたファイルのディレクトリから。自分の出力を指すときも同じ書き方で、短い書き方を作らない。一つの場所に一つ。
+
+1. **書ける場所。** rulec の `inputs` と `elements` のフィールド（パスだけの `from` のうしろに書ける。`from` は生成コードが読む場所で、`fed by` はそのオブジェクトを埋めるコードが取ってくる場所。生成コードが並びから求める `from count` などと `random` は E144）。dandori の `inputs` と `record` のフィールド。sekisho の `principal`・`resource` の属性と `action` の `input`（`context` は E009）。koyomi の `inputs`。kaname の `record` のフィールドと関数の引数。`machine` が持ち越す入力、出力など、ほかの行は診断で止める。
+2. **出どころになるもの。** 値を持つものは、rulec の `output`、chobo の `account`、koyomi の `date`、proto の `message … field`、openapi の `schema … property` と `pointer`、dandori の `output` と `record … field`、kaname の `record … field`、jsonschema の `def`、`def … property`、`pointer`。操作がその場に書いたリクエストの本文やパラメータにはスキーマの名前が無いので、`pointer` で指す（レスポンスのスキーマに同じ名前のフィールドがあっても別物で、範囲も別である）。先に値を受け取った場所も出どころになる：rulec・koyomi・dandori の `input`、sekisho の `principal … attribute`、`resource … attribute`、`action … input`。コードが値を手で確かめてからゲートとワークフローに渡すとき、契約に上限が無くても、後の場所が先の場所を指せる。場所から来るのは、その行に書いた範囲である（言語に計算を尋ねない）。二つの場所が互いを指すと、同じ値を受け取るという意味になり、どちらを動かしても片方が止まる。kaname の引数は、参照の書き方に種類が無いので指せない。値の無いものを指すのは書いた言語の診断で止める（`ritsu_base::fed::shapes`）。
+3. **読み方は土台で一つ。** `ritsu_base::fed::cut` が字句に分ける前に行から切り取り、`ritsu_base::naming` が読む。`fed` と `by` は二語が揃って初めて形になるので、名前を奪わない。ページの文も `ritsu_base::fed::page_note` で一つ。
+4. **単独の検査は形と名前だけを言う。** `range from koyomi` と同じ理由で、相手のファイルは相手の言語が読むものであり、単独で動く言語は相手を持たない（P3、P4）。値を比べるのは `ritsu check` だけである。
+5. **答えは三つ（P5）。** 成り立つ。成り立たない例がある（E207。値の例と、言えるならそれを出す入力）。決められない（W207。理由つき）。比べるもの：数は単位と刻みを揃えて範囲の包含（単位が違えば成り立たない）。列挙は値の包含で、ファイルに書いた名前か公開名のどちらかが同じなら同じ値である（`ritsu_ports::Spelled`。同じ一覧を、ワークフローは日本語の名前で、ゲートは英語の別名を持って書くことがある。綴りを読み替えるのはコードの役目で、検査が言うのはどの値にも行き先があることまで）。日付は日。真偽と文字列は型だけ。型が違えば成り立たない。受け取る側が書いていない端は比べない。列挙から文字列へは成り立つ。契約の小数は率なら W207（範囲を比べない）、ほかは型違い。`required` に無いプロパティと `null` を通すものは、受け取る側が `T?` でなければ E207。`pointer` がプロパティに着くときも、それを持つオブジェクトの `required` を読む。
+6. **出どころが端を言わないとき。** 契約（proto、OpenAPI、JSON Schema）の上限なし、下限なしは E122 に揃える（受け取る側の外の値を例に E207）。帳簿の上限なしは帳簿が受け付ける値の話なので E207（chobo の上限の 2⁶³ − 1 まで）。規則の出力で端が分からない、rulec が数えた端が外れるのにどのベクタもそこへ届かないのは W207。場所の行に範囲が無いのも W207。出どころのファイルをその言語が通さないのも W207（誤りはその言語が言う）。文書や `.proto` が読めない、ファイルや名前が無いのは E208。
+7. **自分を指すのは止めない。** 次の季節へ持ち越す値は普通の形である（`progress` が同じ規則の `next_progress` を指す）。
+8. **記録。** `Borders` の新しい語 `fed_by`（後ろに足す）。`ritsu check --format json`、`ritsu mod report`、境目の記録に出る。
+9. **sakai。** `References` が `how: "fed by"` で返すものを `Kind::FedBy` として数える。手書きのコードが運ぶ値にも、関係が要る。
+10. **嘘を隠さない。** `fed by` は手書きのコードが本当にそれを運ぶかを確かめない。`doc` のページに「出どころ: `…`（値の範囲は `ritsu check` が確かめます。値を運ぶ手書きのコードは確かめません）」と出し、README と reference にも書く。
+11. **生成コードと版を変えない。** 全部の出力先で、ある・なしで生成物が同じ。`meaning` のハッシュ、各言語の `source_sha256`、`RuleFacts.sha256`、`Item.text`（yuen の版）はこの形を除いたものから取る（`ritsu_base::fed::hash`）。意味を変えない形で版が動けば、変わっていないものに人の確認を求めることになる。rulec の証明書の `source_sha256`、寄与の `sha256`、`rests_on` はファイルのバイト列のままで、この形を書けば動く。`tools/recheck.py` と Lean がファイルを読み直して比べる数で、除いたものに揃えると、それらがこの形の読み方を持つことになる。
+
+**捨てたもの**：(1) `from` を広げる：生成コードの経路で、書くだけで生成物が動く。(2) 関係を一つのファイルにまとめる：受け取る値の隣に書けば、その行を読む人に見え、`doc` にも出せる。(3) `Reference` に型を足す：型と範囲を要るのは X17 だけである。(4) 短い書き方：参照の書き方を一つに保つ。(5) asyncapi を出どころにする：メッセージの値は proto や OpenAPI と同じ読み方で足せるが、受け取る側の用途がまだ無い。指せば `ritsu_base::fed::shapes` で止まる。(6) 出どころの範囲で kaname の範囲の解析を狭める：確かめていないコードの話を証明の土台にしない。(7) 契約の上限なしを W207 にする：E122 と食い違い、値を通す契約を決められないと言うことになる。この形で止まる行は、契約に上限を書くか、先に受け取った場所を指す。
+
+**変わること**：五つの言語の入力の行に形が一つ増える。`Check::FedBy`（`Check::ALL` は 11）。ツール名が十五、`naming.tsv` が 58 と 34。E207、W207、E208、rulec の E144、koyomi の E017、dandori の E023、sekisho と kaname の E009 の場合。`ritsu_base::document::Loaded` と `ritsu_proto::validate` の整数と文字列の読み方を、yuen と rulec から移した（読み方は変えない）。
+
+**確かめたこと**：`crates/ritsu/tests/fed_by.rs`（37 件）、`tests/projects/fed_by`（OpenAPI → フロー → 帳簿 → 規則 → 規則のプロジェクトに、JSON Schema のゲート・日付・モジュール）。六つの壊し方（成り立つ→壊す→E207）、三つの答え、単位、列挙（二つの名前）、日付、上限なしの帳簿、端の分からない規則の出力、値の無いもの、ファイルが無い、自分の出力、循環、`elements` のフィールドとパスのうしろ、寄与のファイル、先に受け取った場所（言語ごと、互いに指す場合、無いもの、通らないゲート）、その場に書いた本文（`pointer`、`required`）。生成物が同じこと（全部の出力先で 225 ファイル）。`meaning` と yuen の版。sakai の境界。依存の `@` と `ritsu mod report`。実物では、作例のストラテジーゲームで `veterancy` が成り立ち、`food` と `progress` が W207 になる。mod の `silo` を入れると `food` が E207 になり、61 になる入力の例を出す（`buildings = [1 elements], development = 1, realm_policy = no_policy, season = spring, terrain = plains`）。
+
+**残したこと**：行の条件で規則の出力の範囲を狭める解析（`food` と `next_progress` の W207 はここから来る）。契約の日付の `formatMinimum`。JSON Schema の持ち主。Lean の RitsuCross のモデルに X17 は無い（X2 などの判定と違い、包含の比べだけで、証明の話が無い）。
+
+### 7.17 世界のあいだの関係をどこに書くか（2026-11-07）
+
+**問い**：rulec や chobo などで表現されたものを、それぞれ一つの閉じた世界とし、世界のあいだをつなぐ。そのために、関係だけを書く別の言語（案の名は conifold、拡張子 `.link`）を作るのか。それとも、関係をそれぞれの世界の言語に書けるようにするのか。
+
+**測り方**：四つのプロジェクト（返金、営業、通販、作例のストラテジーゲーム）で測った。
+
+1. 別々の担当（上位のモデル）が、試作の文法で `.link` を書いた。
+2. `.link` を見ていない担当（一つ下のモデル）が、ファイルをまたぐ壊し方 70 件と、壊さない変更 20 件を書いた。
+3. 同じ壊し方を一件ずつ当てて、`ritsu check` と `.link` が言うことを比べた。`ritsu check` が黙るものが 29 件あった。
+4. 言語の側に形を足し、壊し方を見ていない担当（一つ下のモデル）が手順のページ（`skills/ritsu/between.md`）だけを読んで、同じプロジェクトに関係を書き込み、同じ壊し方を当て直した。
+
+4 は二回行った。一回目のあと、結果を見て三つ足した。先に値を受け取った場所と `pointer` を出どころにすること、列挙を二つの名前で比べること、手順のページに、片方の数でもう片方を確かめる形（`expect`、`examples`）と、手書きのコードを試験で確かめる形を書くこと。
+
+**結果**：
+
+| | 返金 | 営業 | 通販 | ゲーム | 計 |
+|---|---|---|---|---|---|
+| またぐ壊し方 | 18 | 16 | 19 | 17 | 70 |
+| `ritsu check` が黙る | 13 | 3 | 5 | 8 | 29 |
+| `.link` が止めた | 3 | 1 | 2 | 4 | 10 |
+| 言語の側の一回目が止めた | 0 | 0 | 0 | 2 | 2 |
+| 言語の側の二回目が `ritsu check` で止めた | 3 | 1 | 0 | 2 | 6 |
+| 言語の側の二回目が書いた試験で止めた | 2 | 0 | 2 | 0 | 4 |
+| どちらでも止まらない | 8 | 1 | 3 | 4 | 16 |
+| 壊さない変更への指摘：`.link` | 0/5 | 2/5 | 1/5 | 0/5 | 3/20 |
+| 壊さない変更への指摘：言語の側の二回目 | 0/5 | 0/5 | 0/5 | 0/5 | 0/20 |
+
+書いた量は、`.link` が 150 行。言語の側の二回目が `fed by` 19 行、`import enum` 4 行、`expect` 4 つ、試験 3 本（Go 326 行、Python 83 行）。
+
+- **言語の側の一回目は、見込みより少なかった。** 形を足せば 7 件は止まると見ていたが、担当が書いたのは `fed by` と `import enum` だけで、止まったのは 2 件だった。その場に書いたリクエストの本文を指せないので応答の別のスキーマを指して成り立たないと報告し、片方の数でもう片方を確かめる形がページに無いので、関係を見つけても「置き場が無い」に回していた。
+- **二回目は `.link` に並んだ。** 止めたのは合わせて 10 件で、`.link` と同じ数である。7 件は同じで（R02、R09、R18、S03、S16、K06、K17）、`.link` だけが A08、K01、K09 を、言語の側だけが R03、R07、A03 を止めた。
+- **壊さない変更への指摘は、`.link` が 3/20、言語の側が二回とも 0/20。** `.link` の 3 件は、列挙の型名を変えただけで行が宙に浮いたもの（A24）、前から落ちていた行の文面が変わったもの（S21）、本物の指摘かもしれないもの（A25）である。
+
+**`.link` が見つけた 10 件は何だったか。** 実際に出した行から数えると：
+
+| `.link` の形 | 件 | 言語の側の置き場 |
+|---|---|---|
+| 値の流れ（`flows`）、同じ一覧（`same`） | R09、R18、K06、K17 | `fed by` |
+| 手書きのコードを全部の値で走らせる（`agree`） | S03、S16 | `sakai vectors` と、プロジェクトの言語の試験 |
+| 手書きのコードの定数の流れ | K01、K09 | `rulec api` の範囲を読むプロジェクトの言語の試験。ファイルへのリンク（yuen の E303）は読み直しを促すだけで、何が悪いかは言わない |
+| 全部の値についての主張（`claim every`） | R02、A08 | R02 はゲートの `expect allow`。A08 は日付の `examples` |
+
+十件すべてに言語の側の置き場があり、担当が書かなかった A08、K01、K09 も、今の形で止まることを手で確かめた。オントロジーの機能（階層と推論）は、どの担当の `.link` も使わなかった。`.link` の形は安定せず、プロジェクトごとに足す形が要った（営業 5、通販 4、ゲーム 9）。
+
+**世界の側に足したもの**：
+
+- **尋ねる口。** 関係を見つける側が、ソースを読まずに世界へ尋ねられるようにした。`rulec run`、`dandori api`、`sakai vectors`。どれも新しい意味を足さない。`run` は `vectors` の期待値を作るのと同じ参照インタプリタを、生成したコードの入口と同じ入口（`door::read`）を通して呼び、`api` は検査を通ったプログラムから作り、`vectors` は規則の答えを規則の口（`Rules::eval`）に尋ねる。つなぐ側は問いを渡して答えを受け取るだけで、言語の意味を書き直さない。chobo の勘定の範囲と行を `api` に足す案は、使う場所が無いので取り下げた。
+- **`import enum`。** `.gate` と `.flow` は、規則と同じ `import enum <列挙> from "<ファイル>" [-> <名前>]` で、`enums` ファイルの列挙を丸ごと読む。読むのは口（`Rules::facts`）だけで、読んだ列挙はその場で書いた `enum` と同じに動く。ワークフローとゲートが同じ状態を別々に持って食い違う穴を、列挙を一か所に置くことでなくす。間違いは各言語の診断（sekisho は E201、E101、E006、E007、E209、dandori は E005、E002、E006、E018）で止め、`References` が `rulec "<ファイル>" enum <列挙>` として返すので、sakai は境目の決まりに当て、yuen は影響をたどる（sekisho DESIGN 25 章、dandori DESIGN 1.21、sakai DESIGN 29 章）。
+- **`fed by`。** 7.16。
+- **通販の例の穴。** 成果物のあいだにだけある穴で、どの言語の検査にも sakai の検査にも見えなかった。梱包の 2 日より短い 30 分の仮押さえが売り越しを許し、押さえを確定する口が契約になく、契約が注文の行を運ばず、帳簿の `key_conflict` に契約の値がなく、梱包の途中の不足を受注が聞けず、金額と数量に範囲がなく、読み替えの層が地図にない値を黙って `skip` にしていた。押さえは 14 日（梱包の待ち 2 日と、受注から出荷日までの最長 7 日より長い）、確定は梱包のあとで知らせる前、押さえたあとの失敗では全行を戻す（`crates/sakai/DESIGN.md` 30 章）。
+- **二つの不具合。** `import proto` と `import jsonschema` の `->` が規則の列挙を指していなくても通っていた（E012 にした）。`ritsu gen` が規則の `range from koyomi` を読めず、そうした規則のあるプロジェクトで止まっていた。
+- **手順のページ。** `skills/ritsu/between.md`。尋ねる、書かれていない関係を探す（生成コードのまわりの手書きのコード、二度書かれた語、文）、言語の側に置く、それぞれの行が約束しないことを言う、一度壊す、三つのリストで報告する。
+
+**今の判断**：いま `.link` は作らない。関係はそれぞれの世界の言語に書く。世界のあいだの言語の案（conifold）は、下の条件が出るまで置いておく。
+
+1. 言語の側の形で、`.link` と同じ数を止め、`.link` が止めなかったものも止めた（R03、R07、A03）。別の言語でないと書けないものは、測った範囲に無かった。
+2. 関係が受け取る値の隣にあると、その行を読む人に見え、`doc` にも出せる。その言語の検査が、その行で止まる。別のファイルの関係は、消えても世界の側からは見えない。
+3. 言語を増やすと、形を決め続ける仕事が増える。`.link` は四つのプロジェクトのそれぞれで形を足した。言語の側で足した形は `fed by` と `import enum` の二つで、四つのプロジェクトで同じ形が使えた。
+
+**この測り方の限界**：
+
+- 書き手のモデルが違う。`.link` の書き手は上位のモデル、言語の側の書き手は一つ下のモデルで、節約も指示した。言語の側に不利な条件である。
+- 一方で、形とページは、70 件と `.link` の見逃しを見てから作った。書き込む担当は壊し方を見ていないが、設計は目隠しになっていない。言語の側に有利な条件で、別のプロジェクトでは同じ数にならないかもしれない。
+- 試験で止まった 4 件（R03、R09、S03、S16）は、誰かがその試験を走らせて初めて止まる。`ritsu check` には入らない。Go の試験は手書きのコードを文字列として読むので、書き方が変わると読めなくなる。
+- 別のファイルには、世界のファイルを変えないという利点が実際にある。営業の担当は A08 の関係（有効期限の 30 日）を見つけていたが、`examples` を足すとそのファイルへの人の確認（yuen の E303）がまた増えるので足さなかった。`.link` は確認に触らない。ページには、E303 を理由に行を省かないことを足した（測り直していない）。
+- `expect` と `examples` は相手の数を写す。相手が動いても言わない。一覧の `import enum` に当たるものが、数には無い。
+
+**判断が変わる条件**：次のどれかが見えたら、`.link` か、それに近いものを作り直す。
+
+- 同じ数を二つの言語に写した `expect` や `examples` が、実際のプロジェクトで古くなって事故になる（先に試すのは、数を一か所に置いて読む形）。
+- 世界のファイルに手を入れられないプロジェクトが出る（他の人の持ち物の規則、確認の記録が重いプロジェクト）。
+- 別のプロジェクトで同じ測り方をして、言語の側の形が `.link` より明らかに少なくしか止めない。
+
+**捨てたもの**：
+
+1. 今 `.link` を作る。上の理由。
+2. オントロジーの言語を土台にする。階層も推論も、測った範囲で一度も使われなかった。
+3. kaname を世界のあいだの主張の置き場にする。kaname に全部の入力についての主張と `use gate` を足す案で、R02 と A08 のために考えたが、どちらも今ある形で止まった。
+
+**残したこと**：
+
+- どちらでも止まらない 16 件のうち 11 件は手書きのコードである（R08、R11、R12、R14、R19、S13、S14、S15、K02、K12、K14）。一番大きい残りである。
+- 残りの 5 件は、書いていない関係（R01、R06、R17）、単位（A15）、規則の中の文字列（K05）。
+- 書き手が足りないと言った口：規則のグループをスキーマから読む、`rulec vectors` がどの行にも無い列挙の値と断る入力を出す、`where` の文字列を列挙と突き合わせる、範囲の定数を生成コードに出す、koyomi の `from`、kaname の `shape`、proto の一覧のコマンド、sakai の用語の `means` から帳簿を指す、yuen の決まっていない状態。
+- `fed by` が一行に一つなので、kaname の引数を一行に並べた関数では行を割る。すると関数の版が動き、yuen の E303 が出る（営業で 2 件）。
+- 壊さなくても成り立たない関係が見つかった：返金の `返金の按分.kn:12`（帳簿の勘定は 0 になる。Go の手書きのコードが外している）、`返金の按分.kn:10`（契約の `line` に範囲が無い）、営業の `required` に無いプロパティ（`Order.financeApproved`、`PriceList.audience`、`PriceList.channel`、`RefrigerationUnit.lastInspectedOn`、`Quote.issuedOn`）、ゲームの `battle.rule:8`（`strength` は 0 になる）。範囲は持ち主が決めるので、どれも変えていない。帳簿の勘定に上限が無いこと（返金）と注文の金額に範囲が無いこと（通販）も同じように見つかったが、これは測った写しのあとで直した。
+
+**確かめたこと**：数は、壊し方を一件ずつ新しい写しに当てる判定のスクリプトの出力から数えた。担当の書き方で壊し方の元の文が無くなった 3 件（A07、A24、K17）は、同じ変更を手で当てた。
 
 ## 8. 一つの CLI
 

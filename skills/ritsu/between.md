@@ -65,7 +65,9 @@ the sentence to be false, and whether anything would say so.
 ## 3. Put each where a language can hold it
 
 Most relations have a place in a language already. Writing it there is worth more than recording it
-somewhere else, because that language then stops at the line that breaks it.
+somewhere else, because that language then stops at the line that breaks it. Go down your list, not
+down this table: each relation gets a line, a test, or an entry in the report's left-open list, and
+left open is for what has no place after you have tried.
 
 | What you found | Where it goes | What stops it |
 |---|---|---|
@@ -74,6 +76,8 @@ somewhere else, because that language then stops at the line that breaks it.
 | A rule's input read from a contract's field | `from` on the input | rulec E121, E122 |
 | A value hand-written code carries between two languages | `fed by <where it comes from>` at the end of the line that takes it | ritsu E207, W207, E208 |
 | What a language says about its own answers: a date's number of days, a rule's result at a given input | koyomi `claims` and `examples`; a rule's `constraint`, `never`, `examples` | the language's own check |
+| A limit on one side that has to let through what the other side decides, with no value carried on a line: a gate's limit and a rule's threshold, a date's days and what a table or a sentence expects of them | the side with the limit, at the other side's number: `expect allow` or `expect deny` in a gate, `examples` in a dates file or a rule | sekisho E304, the language's own check |
+| A constant, a map or a table in hand-written code, next to what a language takes or answers | a test in the project's language that reads `<language> api` or `vectors` and compares, over all the values | your test |
 | A combination of inputs that cannot happen | `never` in the rule | rulec E142 when the definitions give it, and the generated code at its door |
 | How a layer between contexts reads an enum | the map's `enum <upstream> -> <downstream>` lines, and a test of the layer's code that reads `sakai vectors` | sakai E401 for the map, your test for the code |
 | A hold a flow has to post or void in time | call the book with `use book` from the flow | ritsu E206, W206 |
@@ -102,15 +106,45 @@ elements units from battle.units
 ```
 
 A source can be a rule's `output`, a book's `account`, a `date`, a `.proto`'s `message … field`, an
-OpenAPI `schema … property`, a JSON Schema's `def` or `pointer`, a workflow's `output` or
-`record … field`, and a `record … field` of kaname. `ritsu check` asks the source what it can come to
-and holds that to what the line takes. Here a book with no upper limit gives a record a value the
-record refuses:
+OpenAPI `schema … property` or `pointer`, a JSON Schema's `def` or `pointer`, a workflow's `output` or
+`record … field`, a `record … field` of kaname, and a place that took the value first: an `input` of a
+rule, a dates file or a workflow, an `attribute` of a gate or an `input` of its action. A body or a
+parameter an operation writes in place has no schema's name, so its `pointer` names it; a response's
+schema with the same field name is another thing, with its own limits. `ritsu check`
+asks the source what it can come to and holds that to what the line takes. Here a book with no upper
+limit gives a record a value the record refuses:
 
 ```text
 error[ritsu E207]: refund.flow:9:1: `record Balance field left` takes money[USDc] >=0 <=10000000, and its source chobo "refunds.book" account remaining can be 10000001
      9 |   left : money[USDc]  range >=0USDc <=10000000USDc  fed by chobo "refunds.book" account remaining
   = The book takes it: an end with no `at least` or `at most` goes as far as chobo's limit (2⁶³ − 1).
+```
+
+Two places often hold one value with nothing between them to compare: a contract that lists no bound,
+code that checks the bound by hand, then a gate and a workflow that each write it. The second names the
+first, and if neither comes after the other, each names the other, which says they take the same
+values. Two enums can name each other the same way when one list is written twice, in different
+spellings for the wire: a value counts as the same if the two share a name, as a file writes it or as
+its public name. Reach for this before you report a list or a bound as having nowhere to go.
+
+When no value goes between the two sides, say what one side needs of the other in the language that
+decides. A routing rule sends a clerk up to 10,000 yen, and the gate's limit was lowered to 5,000
+yen. Each file passes alone. An `expect allow` at the rule's number stops the gate, with the amounts
+it refuses:
+
+```gate
+expect allow clerks_approve_what_the_routing_rule_sends_them
+  description "The routing rule sends a clerk up to 10,000 yen, and a clerk has to be able to approve it"
+  principal in clerk
+  action approve
+  when resource.amount <= 10000JPY and resource.state is waiting
+```
+
+```text
+error[sekisho E304]: refunds.gate:28:1: The expectation `clerks_approve_what_the_routing_rule_sends_them` does not hold: 1 of the 2 combinations it picks is denied
+    28 | expect allow clerks_approve_what_the_routing_rule_sends_them
+  = For example: User holding clerk, Request (amount: 5,001JPY to 10,000JPY, state: waiting); denied: no permit applies.
+  = Fix the policies, or the expectation if it says more than is meant.
 ```
 
 Read the language's skill before you write a form you have not used ([which skill](SKILL.md#5-which-skill-to-read)).
@@ -126,10 +160,14 @@ Say what you have held and do not claim more:
 - **`import enum`** makes two files use one list of names. It does not make the names mean the same.
 - **`sakai vectors`** gives the values. Nothing is held until a test of yours calls the layer with them.
 - **`claims` and `examples`** hold for what they say. An example holds for its input.
+- **An `expect` or an example at the other side's number** holds that number as you wrote it. If the
+  other side moves, nothing says so. Say which number you copied, and list the other side as left open.
+- **A test of yours** holds when someone runs it. Give the command in the report.
 - **A `reviewed` record** says a person read both ends once. E302 and E303 say an end has changed and
   someone must read it again. They do not say what is wrong, and they fire on any change. The record
   is the person's to write: do not run `ritsu yuen review` on your own judgment (the skill of yuen says
-  why).
+  why). A line you add to a file a link points at makes E303 say so. That is what it is for: list it for
+  the person to read, and do not leave a line out because of it.
 
 ## 5. Break each one once
 
