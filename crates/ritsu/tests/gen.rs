@@ -106,6 +106,28 @@ fn sha256(bytes: &[u8]) -> String {
 
 // ── the type checkers ────────────────────────────────────────────────────────────────────────────
 
+/// A rule's `range from koyomi` needs koyomi's port to be read at all. `ritsu rulec` gives it; `ritsu gen`
+/// gives it too, named one file at a time and over a whole project, and the rule holds its input to the
+/// days koyomi gives, as `ritsu rulec gen` makes it.
+#[test]
+fn a_rules_range_from_koyomi_generates() {
+    let t = TempDir::new("gen-days");
+    let project = t.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    for file in ["settlement.rule", "payment_terms.cal"] {
+        std::fs::copy(here().join("../rulec/tests/days").join(file), project.join(file)).unwrap();
+    }
+    let out = t.path().join("named");
+    let (code, _, err) = ritsu_in(&project, &["gen", "settlement.rule", "payment_terms.cal", "--root", ".", "--target", "python", "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "ritsu gen of two named files:\n{err}");
+    let made = read(&out.join("python/generated/rules/settlement.py"));
+    assert!(made.contains("pay_day takes only the days koyomi \"payment_terms.cal\" date payment comes to (12 days)"), "{made}");
+    let out = t.path().join("whole");
+    let (code, _, err) = ritsu_in(&project, &["gen", "--root", ".", "--target", "python", "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "ritsu gen of the project:\n{err}");
+    assert_eq!(read(&out.join("python/generated/rules/settlement.py")), made);
+}
+
 /// The packages of the English project, with the books on PostgreSQL, on TigerBeetle and on the MySQL
 /// family, and the TypeScript and the Python of the Japanese one, pass `tsc --strict`, `mypy --strict`
 /// and `go vet`.

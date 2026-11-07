@@ -1520,7 +1520,8 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
     let json = asks_json(args);
     let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, instead: None, silent: false };
-    let code = generate(args, &table, cmd, lang, json, &mut answer);
+    // A rule's `range from koyomi` is read through koyomi's port here too, as in `ritsu rulec` (DESIGN 7.5).
+    let code = rulec::days::with(Some(ritsu_project::Joined::dates()), || generate(args, &table, cmd, lang, json, &mut answer));
     if json && !answer.silent {
         println!("{}", answer.json(code).pretty());
     }
