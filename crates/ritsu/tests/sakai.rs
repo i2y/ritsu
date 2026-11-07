@@ -68,7 +68,7 @@ fn ritsu_sakai_catches_what_crosses_through_another_language() {
     edit("contexts/配送.ctx", "partnership with 受注\n", "downstream 受注 supplier\n");
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", "通販.ctx"]);
     assert_eq!(code, 1, "{out}{err}");
-    assert!(out.starts_with("error[E209]: ordering/受注.flow:65:1: The workflow ordering/受注.flow of 受注 runs 配送's workflow delivery/配送の手配.flow as its child\n"), "{out}");
+    assert!(out.starts_with("error[E209]: ordering/受注.flow:73:1: The workflow ordering/受注.flow of 受注 runs 配送's workflow delivery/配送の手配.flow as its child\n"), "{out}");
     edit("proto/shop/ordering/v1/order.proto", "  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n");
     let (code, out, _) = ritsu_in(t.path(), &["sakai", "check", "通販.ctx", "--lang", "ja"]);
     assert_eq!(code, 1);
@@ -117,7 +117,7 @@ fn ritsu_sakai_catches_what_crosses_through_another_language_in_english() {
     edit("contexts/delivery.ctx", "partnership with Ordering\n", "downstream Ordering supplier\n");
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", "shop.ctx"]);
     assert_eq!(code, 1, "{out}{err}");
-    assert!(out.starts_with("error[E209]: ordering/fulfillment.flow:65:1: The workflow ordering/fulfillment.flow of Ordering runs Delivery's workflow delivery/arrange_delivery.flow as its child\n"), "{out}");
+    assert!(out.starts_with("error[E209]: ordering/fulfillment.flow:73:1: The workflow ordering/fulfillment.flow of Ordering runs Delivery's workflow delivery/arrange_delivery.flow as its child\n"), "{out}");
     edit("proto/shop/ordering/v1/order.proto", "  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n");
     let (code, out, _) = ritsu_in(t.path(), &["sakai", "check", "shop.ctx", "--lang", "ja"]);
     assert_eq!(code, 1);
