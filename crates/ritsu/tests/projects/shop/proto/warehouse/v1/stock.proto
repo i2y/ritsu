@@ -2,10 +2,13 @@ syntax = "proto3";
 
 package warehouse.v1;
 
-// Inventory's published language: reserving and releasing stock for each line of an order, and how packing is going.
+import "buf/validate/validate.proto";
+
+// Inventory's published language: reserving, releasing and posting stock for each line of an order, and how packing is going.
 service StockService {
   rpc Reserve(ReserveRequest) returns (ReserveResponse);
   rpc Release(ReleaseRequest) returns (ReleaseResponse);
+  rpc Post(PostRequest) returns (PostResponse);
 }
 
 service PackingService {
@@ -14,13 +17,16 @@ service PackingService {
 
 message ReserveRequest {
   string sku = 1;
-  int32 quantity = 2;
+  int32 quantity = 2 [(buf.validate.field).int32 = {gte: 0, lte: 1000000}];
+  // the line of the order the stock is held for: the key of the hold, and the id the answer gives back
+  string line_id = 3;
 }
 
 enum Stock {
   STOCK_UNSPECIFIED = 0;
   STOCK_SECURED = 1;
   STOCK_SHORT = 2;
+  STOCK_CONFLICT = 3;
 }
 
 message ReserveResponse {
@@ -34,6 +40,13 @@ message ReleaseRequest {
 }
 
 message ReleaseResponse {}
+
+// The hold of a line posted when the order ships; a hold that expires first goes back to the shelf.
+message PostRequest {
+  string id = 1;
+}
+
+message PostResponse {}
 
 enum PackingStatus {
   PACKING_STATUS_UNSPECIFIED = 0;

@@ -2,7 +2,7 @@
 
 A small online shop that takes orders, holds stock, delivers and bills
 
-Written from `shop.ctx`. `sakai check` says: 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5).
+Written from `shop.ctx`. `sakai check` says: 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6).
 
 ```mermaid
 flowchart LR
@@ -61,8 +61,8 @@ Takes orders, holds stock for them, hands them to delivery, and sees them throug
 
 ### Relationships
 
-- Upstream [Inventory](#inventory-inventory): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:47` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:53` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`
-- Partnership with [Delivery](#delivery-delivery). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:59` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- Upstream [Inventory](#inventory-inventory): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
+- Partnership with [Delivery](#delivery-delivery). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - Downstream [Billing](#billing-billing): open host service, published language `shop.ordering.v1` → anticorruption layer. References that cross: `billing/rules/billing_need.rule:4` (import proto) → `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus`
 
 ## Inventory (inventory)
@@ -78,12 +78,12 @@ Keeps the counts on the warehouse shelves, holds stock for each line of an order
 | Tool | File | What it holds |
 |---|---|---|
 | `chobo` | `inventory/inventory.book` | accounts `stock`, `suppliers`, `customers`; transfers `receive`, `reserve`, `take_back` |
-| `proto` | `proto/warehouse/v1/stock.proto` | messages `ReserveRequest`, `ReserveResponse`, `ReleaseRequest`, `ReleaseResponse`, `GetPackingRequest`, `GetPackingResponse`; enums `Stock`, `PackingStatus`; services `StockService`, `PackingService` |
+| `proto` | `proto/warehouse/v1/stock.proto` | messages `ReserveRequest`, `ReserveResponse`, `ReleaseRequest`, `ReleaseResponse`, `PostRequest`, `PostResponse`, `GetPackingRequest`, `GetPackingResponse`; enums `Stock`, `PackingStatus`; services `StockService`, `PackingService` |
 | `file` | 15 files (code) |  |
 
 ### Published language
 
-- `warehouse.v1`: written in `proto/warehouse/v1/stock.proto`; open host service `StockService` (`Reserve`, `Release`); open host service `PackingService` (`GetPacking`); generated code in `py/warehouse/v1`, `ts/warehouse/v1`, `java/src/main/java/warehouse/v1`, `go/warehouse/v1`
+- `warehouse.v1`: written in `proto/warehouse/v1/stock.proto`; open host service `StockService` (`Reserve`, `Release`, `Post`); open host service `PackingService` (`GetPacking`); generated code in `py/warehouse/v1`, `ts/warehouse/v1`, `java/src/main/java/warehouse/v1`, `go/warehouse/v1`
 
 ### Glossary
 
@@ -95,7 +95,7 @@ Keeps the counts on the warehouse shelves, holds stock for each line of an order
 
 ### Relationships
 
-- Downstream [Ordering](#ordering-ordering): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:47` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:53` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`
+- Downstream [Ordering](#ordering-ordering): open host service, published language `warehouse.v1` → conformist. References that cross: `proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
 - Downstream [Delivery](#delivery-delivery): open host service, published language `warehouse.v1` → anticorruption layer
 
 ## Delivery (delivery)
@@ -130,7 +130,7 @@ Decides the day to ship, chooses how to carry, and arranges delivery of the parc
 
 ### Relationships
 
-- Partnership with [Ordering](#ordering-ordering). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:59` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- Partnership with [Ordering](#ordering-ordering). References that cross: `ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - Upstream [Inventory](#inventory-inventory): open host service, published language `warehouse.v1` → anticorruption layer
 - Shared kernel with [Billing](#billing-billing): `koyomi "calendars/tokyo_business_days.cal"`, `dir "py/calendars"`, `dir "ts/calendars"`, `dir "java/src/main/java/calendars"`, `dir "go/calendars"`. References that cross: `delivery/ship_date.cal:3` (use calendar) → `koyomi "calendars/tokyo_business_days.cal"`
 - Downstream [Billing](#billing-billing): supplier, open host service, published language `shop.delivery.v1` → customer. References that cross: `billing/rules/shipment_fee.rule:7` (shape) → `proto "proto/shop/delivery/v1/shipment.proto" message CreateShipmentRequest`

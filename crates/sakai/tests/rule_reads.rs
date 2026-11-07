@@ -171,8 +171,8 @@ fn a_rule_reads_across_a_boundary_from_the_shared_kernel_only() {
         let (codes, en, _, o) = said(&x, &t);
         assert!(codes.is_empty(), "{}: {en}", x.dir);
         let summary = o.summary.clone().expect("a summary");
-        assert_eq!(summary.en, "5 contexts, 7 relationships; 81 artifacts, each in one context; 11 crossings checked (proto 1, rulec 4, koyomi 1, dandori 5)");
-        assert_eq!(summary.ja, "コンテキスト 5、関係 7。成果物 81 件は、どれも一つのコンテキストに属する。境界を越える参照 11 件を確かめた（proto 1、rulec 4、koyomi 1、dandori 5）");
+        assert_eq!(summary.en, "5 contexts, 7 relationships; 81 artifacts, each in one context; 12 crossings checked (proto 1, rulec 4, koyomi 1, dandori 6)");
+        assert_eq!(summary.ja, "コンテキスト 5、関係 7。成果物 81 件は、どれも一つのコンテキストに属する。境界を越える参照 12 件を確かめた（proto 1、rulec 4、koyomi 1、dandori 6）");
         let api = sakai::api::api(o.checked.as_ref().unwrap());
         let from_rule: Vec<&serde_json::Value> = api["crossings"].as_array().unwrap().iter().filter(|c| c["from"]["path"] == rule).collect();
         let got: Vec<(String, String, String, String)> = from_rule
@@ -200,7 +200,7 @@ fn a_rule_that_reads_its_own_contexts_files_crosses_nothing() {
         let t = laid_out(&x, &[x.methods, x.reminder], &[]);
         let (codes, en, _, o) = said(&x, &t);
         assert!(codes.is_empty(), "{}: {en}", x.dir);
-        assert_eq!(o.summary.unwrap().en, "5 contexts, 7 relationships; 81 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)");
+        assert_eq!(o.summary.unwrap().en, "5 contexts, 7 relationships; 81 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)");
     }
 }
 

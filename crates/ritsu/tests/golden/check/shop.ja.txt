@@ -12,9 +12,9 @@ tests/projects/shop/inventory/inventory.book: ok
   reserve.void  拒否されうる理由: already_posted、expired、no_such_hold
   take_back.do  拒否されうる理由: key_conflict
   キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
-  キー: reserve は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+  キー: reserve は、line ごとに一度だけ動きます。キーが同じで sku、qty のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
   キー: take_back は、return_id と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
 tests/projects/shop/delivery/arrange_delivery.flow: 検査を通りました
 tests/projects/shop/ordering/fulfillment.flow: 検査を通りました
-tests/projects/shop/shop.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
+tests/projects/shop/shop.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）
 ritsu check: ファイル 21 個（rulec 4、koyomi 3、chobo 1、proto 5、dandori 2、sakai 6）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所

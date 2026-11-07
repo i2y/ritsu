@@ -19,7 +19,7 @@ service FulfillmentService {
 
   // 注文の明細を引き当て、配送を手配し、梱包が済んだらお客さまに知らせる。
   rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
-    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ"]};
+    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"]};
   }
 
   // 梱包の担当者が、`梱包を待つ` のコールバックに応答する。
@@ -46,6 +46,8 @@ message FulfillmentOrder {
 message Line {
   string sku = 1;
   int32 quantity = 2 [json_name = "数"];
+  // 明細の ID。在庫はこの ID で押さえる
+  string id = 3;
 }
 
 message Gift {

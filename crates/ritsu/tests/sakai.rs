@@ -30,16 +30,16 @@ fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
 fn ritsu_sakai_checks_the_example_with_every_language() {
     let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop.ja/通販.ctx"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(out, "examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    assert_eq!(out, "examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)\n");
     let (code, out, _) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop.ja/通販.ctx", "--lang", "ja"]);
     assert_eq!(code, 0);
-    assert!(out.ends_with("境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）\n"), "{out}");
+    assert!(out.ends_with("境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）\n"), "{out}");
     // the api names how each crossing refers, in the words of the file's language
     let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "api", "examples/shop.ja/通販.ctx", "--root", "examples/shop.ja"]);
     assert_eq!(code, 0, "{err}");
     let api: serde_json::Value = serde_json::from_str(&out).unwrap();
     let via: Vec<&str> = api["crossings"].as_array().unwrap().iter().map(|c| c["via"].as_str().unwrap()).collect();
-    assert_eq!(via, ["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "flow"]);
+    assert_eq!(via, ["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "connect", "flow"]);
     // the settings the example keeps are what the map writes, read with every language joined
     for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
         let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "gen", "examples/shop.ja/通販.ctx", "--target", t, "--check", "--lang", "ja"]);
@@ -68,7 +68,7 @@ fn ritsu_sakai_catches_what_crosses_through_another_language() {
     edit("contexts/配送.ctx", "partnership with 受注\n", "downstream 受注 supplier\n");
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", "通販.ctx"]);
     assert_eq!(code, 1, "{out}{err}");
-    assert!(out.starts_with("error[E209]: ordering/受注.flow:59:1: The workflow ordering/受注.flow of 受注 runs 配送's workflow delivery/配送の手配.flow as its child\n"), "{out}");
+    assert!(out.starts_with("error[E209]: ordering/受注.flow:65:1: The workflow ordering/受注.flow of 受注 runs 配送's workflow delivery/配送の手配.flow as its child\n"), "{out}");
     edit("proto/shop/ordering/v1/order.proto", "  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n");
     let (code, out, _) = ritsu_in(t.path(), &["sakai", "check", "通販.ctx", "--lang", "ja"]);
     assert_eq!(code, 1);
@@ -82,17 +82,17 @@ fn ritsu_sakai_catches_what_crosses_through_another_language() {
 fn ritsu_sakai_checks_the_english_example_with_every_language() {
     let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop/shop.ctx"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(out, "examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    assert_eq!(out, "examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)\n");
     let (code, out, _) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop/shop.ctx", "--lang", "ja"]);
     assert_eq!(code, 0);
-    assert!(out.ends_with("境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）\n"), "{out}");
+    assert!(out.ends_with("境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）\n"), "{out}");
     let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "api", "examples/shop/shop.ctx", "--root", "examples/shop"]);
     assert_eq!(code, 0, "{err}");
     let api: serde_json::Value = serde_json::from_str(&out).unwrap();
     let mut via: Vec<&str> = api["crossings"].as_array().unwrap().iter().map(|c| c["via"].as_str().unwrap()).collect();
     // the Japanese example's order, which differs by its two rules' names only
     via.sort();
-    let mut want = vec!["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "flow"];
+    let mut want = vec!["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "connect", "flow"];
     want.sort();
     assert_eq!(via, want);
     for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
@@ -117,7 +117,7 @@ fn ritsu_sakai_catches_what_crosses_through_another_language_in_english() {
     edit("contexts/delivery.ctx", "partnership with Ordering\n", "downstream Ordering supplier\n");
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", "shop.ctx"]);
     assert_eq!(code, 1, "{out}{err}");
-    assert!(out.starts_with("error[E209]: ordering/fulfillment.flow:59:1: The workflow ordering/fulfillment.flow of Ordering runs Delivery's workflow delivery/arrange_delivery.flow as its child\n"), "{out}");
+    assert!(out.starts_with("error[E209]: ordering/fulfillment.flow:65:1: The workflow ordering/fulfillment.flow of Ordering runs Delivery's workflow delivery/arrange_delivery.flow as its child\n"), "{out}");
     edit("proto/shop/ordering/v1/order.proto", "  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n");
     let (code, out, _) = ritsu_in(t.path(), &["sakai", "check", "shop.ctx", "--lang", "ja"]);
     assert_eq!(code, 1);
@@ -323,9 +323,9 @@ fn read_alike(shop: &Shop, delivery: (&Readers, &RuleReads), ordering: (&Readers
     // in the shared kernel: five more crossings, a workflow's, a gate's, a module's and the rule's two
     let t = lay(&[delivery], true);
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", shop.map]);
-    assert_eq!((code, out.as_str()), (0, format!("{}: ok — 5 contexts, 7 relationships; 84 artifacts, each in one context; 14 crossings checked (proto 1, rulec 4, koyomi 1, dandori 6, sekisho 1, kaname 1)\n", shop.map).as_str()), "{err}");
+    assert_eq!((code, out.as_str()), (0, format!("{}: ok — 5 contexts, 7 relationships; 84 artifacts, each in one context; 15 crossings checked (proto 1, rulec 4, koyomi 1, dandori 7, sekisho 1, kaname 1)\n", shop.map).as_str()), "{err}");
     let (_, out, _) = ritsu_in(t.path(), &["sakai", "check", shop.map, "--lang", "ja"]);
-    assert!(out.ends_with("境界を越える参照 14 件を確かめた（proto 1、rulec 4、koyomi 1、dandori 6、sekisho 1、kaname 1）\n"), "{out}");
+    assert!(out.ends_with("境界を越える参照 15 件を確かめた（proto 1、rulec 4、koyomi 1、dandori 7、sekisho 1、kaname 1）\n"), "{out}");
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "api", shop.map, "--root", "."]);
     assert_eq!(code, 0, "{err}");
     let api: serde_json::Value = serde_json::from_str(&out).unwrap();

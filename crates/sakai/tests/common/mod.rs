@@ -295,3 +295,17 @@ pub fn mutant_command(name: &str) -> Option<Vec<String>> {
     let s = std::fs::read_to_string(Path::new("tests/mutants").join(name).join("command")).ok()?;
     Some(s.split_whitespace().map(String::from).collect())
 }
+
+/// The part of Protovalidate the two protos use (`gte` and `lte` of an `int32` and an `int64`), with a `buf.yaml`
+/// that leaves it out of the lint, so that `buf lint` needs no network.
+pub fn write_validate_stand_in(dir: &TempDir) {
+    dir.write(
+        "buf/validate/validate.proto",
+        "syntax = \"proto3\";\npackage buf.validate;\nimport \"google/protobuf/descriptor.proto\";\n\
+         message Int32Rules { optional int32 gte = 4; optional int32 lte = 3; }\n\
+         message Int64Rules { optional int64 gte = 4; optional int64 lte = 3; }\n\
+         message FieldRules { oneof type { Int32Rules int32 = 3; Int64Rules int64 = 4; } }\n\
+         extend google.protobuf.FieldOptions { optional FieldRules field = 1159; }\n",
+    );
+    dir.write("buf.yaml", "version: v2\nlint:\n  ignore:\n    - buf\n");
+}

@@ -14,7 +14,7 @@ use std::time::Duration;
 fn the_example_passes_check() {
     let (code, out, err) = common::joined(&["check", "examples/shop.ja/通販.ctx"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(out, "examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    assert_eq!(out, "examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)\n");
     // What crosses: ordering's code takes inventory's types, as a conformist may; billing's rules
     // take ordering's order status in its layer and delivery's shipment as delivery's customer;
     // delivery's dates read billing's calendar from their shared kernel; ordering's workflow calls
@@ -36,6 +36,7 @@ fn the_example_passes_check() {
         ("ordering/受注.flow", "use proto", "proto \"proto/warehouse/v1/stock.proto\"", "受注", "在庫"),
         ("ordering/受注.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve", "受注", "在庫"),
         ("ordering/受注.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Release", "受注", "在庫"),
+        ("ordering/受注.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Post", "受注", "在庫"),
         ("ordering/受注.flow", "flow", "dandori \"delivery/配送の手配.flow\"", "受注", "配送"),
     ]
     .iter()
@@ -43,7 +44,7 @@ fn the_example_passes_check() {
     .collect();
     assert_eq!(crossings, want);
     assert_eq!(c.crossings[0].allowed, Some(sakai::refs::Allowed::Upstream(0)));
-    assert_eq!(c.crossings[8].allowed, Some(sakai::refs::Allowed::Partnership));
+    assert_eq!(c.crossings[9].allowed, Some(sakai::refs::Allowed::Partnership));
 }
 
 /// The binary of sakai's own crate holds no other language (ritsu's DESIGN 2.3): on the example it
@@ -113,12 +114,14 @@ fn buf_lints_the_protos_written_for_the_example() {
         common::skip("buf is not there (SAKAI_BUF or the PATH)");
         return;
     };
-    // The other two import files buf would fetch from the BSR (buf/validate) or read from
-    // dandori (options.proto); these two stand alone.
+    // The other two import files buf would read from dandori (options.proto); these two stand alone but for
+    // the import of Protovalidate, which buf would fetch from the BSR: a stand-in of the part they use is
+    // written beside them, and buf is told not to lint it.
     let dir = common::TempDir::new("buf-lint");
     for f in ["shop/ordering/v1/order.proto", "warehouse/v1/stock.proto"] {
         dir.write(f, &std::fs::read_to_string(Path::new(common::EXAMPLE).join("proto").join(f)).unwrap());
     }
+    common::write_validate_stand_in(&dir);
     let r = common::run(Command::new(&buf).arg("lint").current_dir(dir.path()).env("BUF_CACHE_DIR", dir.path().join(".cache")), Duration::from_secs(120));
     assert!(r.ok, "{}{}", r.stdout, r.stderr);
 }
@@ -191,7 +194,7 @@ fn a_change_to_the_example_is_caught() {
 fn the_example_passes_check_in_english() {
     let (code, out, err) = common::joined(&["check", "examples/shop/shop.ctx"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(out, "examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    assert_eq!(out, "examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)\n");
     // The crossings are the Japanese example's, in the order of their files' names.
     let ex = std::fs::canonicalize(common::EXAMPLE_EN).unwrap();
     let out = sakai::check::check_map_with(&ex, "shop.ctx", &common::suite()).unwrap();
@@ -210,6 +213,7 @@ fn the_example_passes_check_in_english() {
         ("ordering/fulfillment.flow", "use proto", "proto \"proto/warehouse/v1/stock.proto\"", "Ordering", "Inventory"),
         ("ordering/fulfillment.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve", "Ordering", "Inventory"),
         ("ordering/fulfillment.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Release", "Ordering", "Inventory"),
+        ("ordering/fulfillment.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Post", "Ordering", "Inventory"),
         ("ordering/fulfillment.flow", "flow", "dandori \"delivery/arrange_delivery.flow\"", "Ordering", "Delivery"),
     ]
     .iter()
@@ -217,7 +221,7 @@ fn the_example_passes_check_in_english() {
     .collect();
     assert_eq!(crossings, want);
     assert_eq!(c.crossings[0].allowed, Some(sakai::refs::Allowed::Upstream(0)));
-    assert_eq!(c.crossings[8].allowed, Some(sakai::refs::Allowed::Partnership));
+    assert_eq!(c.crossings[9].allowed, Some(sakai::refs::Allowed::Partnership));
     // The two examples say the same, but for the names: every crossing is of the same kind, from
     // a context to a context, in the same relationship.
     let ja = std::fs::canonicalize(common::EXAMPLE).unwrap();
@@ -293,6 +297,7 @@ fn buf_lints_the_protos_written_for_the_example_in_english() {
     for f in ["shop/ordering/v1/order.proto", "warehouse/v1/stock.proto"] {
         dir.write(f, &std::fs::read_to_string(Path::new(common::EXAMPLE_EN).join("proto").join(f)).unwrap());
     }
+    common::write_validate_stand_in(&dir);
     let r = common::run(Command::new(&buf).arg("lint").current_dir(dir.path()).env("BUF_CACHE_DIR", dir.path().join(".cache")), Duration::from_secs(120));
     assert!(r.ok, "{}{}", r.stdout, r.stderr);
 }
@@ -381,11 +386,53 @@ fn the_two_maps_say_the_same_but_for_the_names() {
         v.sort();
         v
     };
-    assert_eq!(crossings(en).len(), 9);
+    assert_eq!(crossings(en).len(), 10);
     assert_eq!(crossings(en), crossings(ja));
     for lang in [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja] {
         let (a, b) = (sakai::cml::render(en, "shop.ctx", lang), sakai::cml::render(ja, "通販.ctx", lang));
         assert_ne!(a, b, "the comments and strings differ");
         assert_eq!(bare(&a), bare(&b), "the CML of the two maps, without comments and strings ({lang:?})");
     }
+}
+
+// ── What the holds of the book promise: they outlast the waits, the order posts them, a failure gives them back ──
+
+/// The book, the flow and the contract of an example: a hold lasts longer than the waits it sits
+/// through (the packing crew's two days, and the days from an order to its shipping day, seven at
+/// most: `delivery/ship_date.cal`), the contract has the call that posts a hold, and the flow posts
+/// the lines it held once the packing is done and gives them back in every way it fails after the
+/// holds (a `fail` after the first, which gives them back itself, has a `release` just above it).
+fn holds_are_kept(example: &str, book: &str, flow: &str, release: &str, post: &str, wait: &str, told: &str, fails_after_holds: usize) {
+    let book_text = std::fs::read_to_string(Path::new(example).join(book)).unwrap();
+    let days: u32 = book_text.lines().find_map(|l| l.trim().strip_prefix("pending expires after ")).and_then(|r| r.strip_suffix(" days")).and_then(|d| d.parse().ok()).unwrap_or_else(|| panic!("{book} holds for a number of days:\n{book_text}"));
+    assert!(days > 7, "a hold of {days} days does not outlast the seven days to a shipping day");
+    let flow_text = std::fs::read_to_string(Path::new(example).join(flow)).unwrap();
+    let lines: Vec<&str> = flow_text.lines().collect();
+    let waits = lines.iter().position(|l| l.trim_start().starts_with(&format!("task {wait}"))).unwrap_or_else(|| panic!("no task {wait}"));
+    let timeout = lines[waits..].iter().take_while(|l| !l.is_empty()).find_map(|l| l.trim().strip_prefix("timeout ")).expect("the wait has a timeout");
+    assert_eq!(timeout, "2 days");
+    // the posting comes after the wait, before the notice
+    let body = lines.iter().position(|l| *l == "flow").unwrap();
+    let at = |what: &str| body + lines[body..].iter().position(|l| l.contains(what)).unwrap_or_else(|| panic!("no {what} in the flow"));
+    let posted = at(post);
+    assert!(at(&format!("{wait}(")) < posted, "the packing is waited for before the posting");
+    assert!(posted < at(told), "the posting comes before the customer is told");
+    // every `fail` after the holds has the release above it (the shortage's own is the first)
+    let fails: Vec<usize> = (body..lines.len()).filter(|i| lines[*i].trim_start().starts_with("fail ")).collect();
+    assert_eq!(fails.len(), fails_after_holds, "the failures of the flow: {fails:?}");
+    for i in fails {
+        assert!(lines[i.saturating_sub(5)..i].iter().any(|l| l.contains(release)), "{flow}:{} fails without giving back what was held", i + 1);
+    }
+    let proto = std::fs::read_to_string(Path::new(example).join("proto/warehouse/v1/stock.proto")).unwrap();
+    assert!(proto.contains("rpc Post(PostRequest) returns (PostResponse);"));
+}
+
+#[test]
+fn the_holds_of_the_book_outlast_the_waits_and_every_failure_gives_them_back() {
+    holds_are_kept("examples/shop.ja", "inventory/在庫の引当.book", "ordering/受注.flow", "引当を戻す", "引当を確定する(", "梱包を待つ", "出しました", 5);
+}
+
+#[test]
+fn the_holds_of_the_book_outlast_the_waits_and_every_failure_gives_them_back_in_english() {
+    holds_are_kept("examples/shop", "inventory/inventory.book", "ordering/fulfillment.flow", "release_stock", "post_stock(", "wait_for_packing", "went out by", 5);
 }

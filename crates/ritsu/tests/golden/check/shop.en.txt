@@ -12,9 +12,9 @@ tests/projects/shop/inventory/inventory.book: ok
   reserve.void  may be refused: already_posted, expired, no_such_hold
   take_back.do  may be refused: key_conflict
   key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
-  key: reserve once per order, sku; a second call that differs only in qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: reserve once per line; a second call that differs only in sku or qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
   key: take_back once per return_id, sku; a second call that differs only in qty is refused with key_conflict
 tests/projects/shop/delivery/arrange_delivery.flow: ok
 tests/projects/shop/ordering/fulfillment.flow: ok
-tests/projects/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+tests/projects/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)
 ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): all pass; borders between the languages: 0 checked, 0 undecided

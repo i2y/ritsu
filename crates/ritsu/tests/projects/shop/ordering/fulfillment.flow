@@ -1,7 +1,7 @@
 # Copied from dandori's examples/fulfillment/temporal/fulfillment.flow. The rule is called by Connect, the paths of the
-# protos and of the child .flow are those of this example's layout, and the names of the inventory's values are those of stock.proto
+# protos and of the child .flow are those of this example's layout, the names of the inventory's values are those of stock.proto, each line has an id its stock is held under, a failure after the hold gives it back, and the packing is posted when it is done
 workflow fulfillment v1 implements shop.FulfillmentService
-description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
+description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, post what was reserved, and then tell the customer. The lines are reserved side by side, and when one is short, or anything fails after the stock was reserved, what was reserved is released. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
 
 use rule urgency from "../delivery/rules/urgency.rule"
   connect "https://rules.example.com"
@@ -10,8 +10,9 @@ use proto warehouse from "../proto/warehouse/v1/stock.proto"
   url "https://warehouse.example.com"
 
 record Line
+  id       : string
   sku      : string
-  quantity : int
+  quantity : int  range >=0 <=1000000
 
 record Gift
   recipient : string
@@ -42,8 +43,9 @@ outputs
   reservations    : list[warehouse.ReserveResponse]
   tracking_number : string
 
-# The warehouse answers every reservation: STOCK_SECURED with its id, or STOCK_SHORT when the stock is short.
-task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
+# The warehouse answers every reservation: STOCK_SECURED with its id, STOCK_SHORT when the stock is short, or
+# STOCK_CONFLICT when the line was reserved before with other stock. Posting makes a reservation final.
+task reserve_stock(line_id: string, sku: string, quantity: int  range >=0 <=1000000) -> warehouse.ReserveResponse
   connect warehouse "StockService/Reserve"
   errors busy = resource_exhausted
   key
@@ -51,6 +53,10 @@ task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
 
 task release_stock(id: string)
   connect warehouse "StockService/Release"
+  idempotent
+
+task post_stock(id: string)
+  connect warehouse "StockService/Post"
   idempotent
 
 # The delivery team's workflow arranges the delivery, on the workers of its own task queue. It is
@@ -63,6 +69,7 @@ task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: str
 # and answers the callback when the boxes are packed.
 task wait_for_packing(order_id: string, reservations: list[warehouse.ReserveResponse]) -> Packing
   callback
+  errors short
   timeout 2 days
 
 # The shop's own notice service.
@@ -75,12 +82,12 @@ task audit(order_id: string, extra: json)
 flow
   let decision = urgency(member: order.member, amount: order.amount)
   let results = for line in order.lines at most 50 in parallel, 10 at a time
-    let r = reserve_stock(sku: line.sku, quantity: line.quantity)
+    let r = reserve_stock(line_id: line.id, sku: line.sku, quantity: line.quantity)
     yield r
   let any_short = false
   for one in results at most 50
     match one.stock
-      STOCK_SHORT => let any_short = true
+      STOCK_SHORT, STOCK_CONFLICT => let any_short = true
       STOCK_SECURED => pass
   match any_short
     true =>
@@ -101,10 +108,35 @@ flow
   let delivery = arrange_delivery(order_id: order.id, carrier: decision.carrier, recipient: recipient, extra: order.extra)
     on NoVan =>
       let delivery = arrange_delivery(order_id: order.id, carrier: standard, recipient: recipient, extra: order.extra)
-        on failure => fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
-    on failure => fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
+        on failure =>
+          for taken in results at most 50 in parallel
+            match taken.id
+              some id => release_stock(id: id)
+              none => pass
+          fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
+    on failure =>
+      for taken in results at most 50 in parallel
+        match taken.id
+          some id => release_stock(id: id)
+          none => pass
+      fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
   let packed = wait_for_packing(order_id: order.id, reservations: results)
-    on timeout => fail PackingLate "No word of the packing in two days"
+    on timeout =>
+      for taken in results at most 50 in parallel
+        match taken.id
+          some id => release_stock(id: id)
+          none => pass
+      fail PackingLate "No word of the packing in two days"
+    on short =>
+      for taken in results at most 50 in parallel
+        match taken.id
+          some id => release_stock(id: id)
+          none => pass
+      fail PackingShort "The warehouse found an item missing while packing order {order.id}. It goes back to ordering"
+  for held in results at most 50 in parallel
+    match held.id
+      some id => post_stock(id: id)
+      none => pass
   notify(order_id: order.id, text: "Order {order.id} went out by {decision.carrier} ({packed.boxes} boxes, tracking number {delivery.tracking_number})")
     on no_recipient => pass
   succeed reservations = results, tracking_number = delivery.tracking_number

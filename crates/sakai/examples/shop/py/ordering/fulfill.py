@@ -4,7 +4,7 @@ from warehouse.v1 import stock_pb2
 
 
 def short(answers: list[stock_pb2.ReserveResponse]) -> bool:
-    return any(a.stock == stock_pb2.STOCK_SHORT for a in answers)
+    return any(a.stock in (stock_pb2.STOCK_SHORT, stock_pb2.STOCK_CONFLICT) for a in answers)
 
 
 def received(id: str, amount_jpy: int) -> order_pb2.Order:

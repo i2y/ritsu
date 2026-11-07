@@ -5,8 +5,9 @@ package warehousev1
 type Stock int32
 
 const (
-	Stock_STOCK_SECURED Stock = 1
-	Stock_STOCK_SHORT   Stock = 2
+	Stock_STOCK_SECURED  Stock = 1
+	Stock_STOCK_SHORT    Stock = 2
+	Stock_STOCK_CONFLICT Stock = 3
 )
 
 type PackingStatus int32

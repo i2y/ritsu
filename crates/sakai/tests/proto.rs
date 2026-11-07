@@ -228,6 +228,10 @@ fn sakai_reads_what_buf_reads_in_english() {
         common::skip("buf is not installed (SAKAI_BUF or the PATH); the reader of .proto files is not compared with it");
         return;
     };
+    // buf would fetch Protovalidate from the BSR: a stand-in of the part the protos use is beside a copy of them
+    let copy = common::TempDir::new("buf-reads-en");
+    common::copy_dir(Path::new("examples/shop/proto"), copy.path());
+    common::write_validate_stand_in(&copy);
     let cases = [
         ("examples/shop/proto", "shop/ordering/v1/order.proto"),
         ("examples/shop/proto", "warehouse/v1/stock.proto"),
@@ -236,7 +240,7 @@ fn sakai_reads_what_buf_reads_in_english() {
     for (root, file) in cases {
         let root = Path::new(root);
         let ours = sakai_reads(root, file);
-        let theirs = buf_reads(&buf, root, file);
+        let theirs = buf_reads(&buf, copy.path(), file);
         assert_eq!(ours, theirs, "{file}");
         println!("compared {file} with buf: {} facts", ours.len());
     }

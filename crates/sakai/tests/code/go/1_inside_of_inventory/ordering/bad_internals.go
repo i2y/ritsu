@@ -4,5 +4,6 @@ package ordering
 import "example.com/shop/inventory/ledger"
 
 func Take(order, sku string) bool {
-	return ledger.Hold(order, sku, 1)
+	result, _ := ledger.Hold(order, sku, 1)
+	return result == "done"
 }

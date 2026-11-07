@@ -9,7 +9,7 @@ import warehouse.v1.Stock;
 
 public final class Fulfill {
   public boolean shortOf(List<ReserveResponse> answers) {
-    return answers.stream().anyMatch(a -> a.stock() == Stock.STOCK_SHORT);
+    return answers.stream().anyMatch(a -> a.stock() == Stock.STOCK_SHORT || a.stock() == Stock.STOCK_CONFLICT);
   }
 
   public Order received(String id, long amountJpy) {

@@ -34,10 +34,10 @@ shared kernel with 請求
 
 ```console
 $ sakai check examples/shop.ja/通販.ctx --lang ja
-examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
+examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）
 ```
 
-境界を越える参照の 9 件は、成果物そのものが書いているものです。`.proto` の import、規則の `import proto` と `shape`、カレンダーの `use calendar`、ワークフローの `use rule`・`use proto`・`connect`・子のフローがそれにあたります。
+境界を越える参照の 10 件は、成果物そのものが書いているものです。`.proto` の import、規則の `import proto` と `shape`、カレンダーの `use calendar`、ワークフローの `use rule`・`use proto`・`connect`・子のフローがそれにあたります。
 sakai はこれを、それぞれの言語が自分のファイルを読んだ結果として、ritsu を通して同じプロセスの中で受け取ります。
 
 ## 検査が言うこと
@@ -48,7 +48,7 @@ sakai はこれを、それぞれの言語が自分のファイルを読んだ�
 ```text
 エラー[E401]: contexts/配送.ctx:33:3: 「配送」の腐敗防止層の対応に、「在庫」の列挙 warehouse.v1.PackingStatus の値 PACKING_STATUS_DAMAGED がありません
     33 |   enum PackingStatus -> 出荷の可否
-  = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:43 の値です。
+  = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:56 の値です。
   = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: PACKING_STATUS_DAMAGED -> refuse "…"
 ```

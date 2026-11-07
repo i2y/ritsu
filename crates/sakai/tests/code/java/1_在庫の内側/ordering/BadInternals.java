@@ -3,6 +3,7 @@ package ordering;
 
 public final class BadInternals {
   public boolean take(String order, String sku) {
-    return inventory.Ledger.hold(order, sku, 1);
+    var held = inventory.Ledger.hold(order, sku, 1);
+    return held != null;
   }
 }

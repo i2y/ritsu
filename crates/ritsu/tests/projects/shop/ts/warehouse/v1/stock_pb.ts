@@ -4,6 +4,7 @@ export enum Stock {
   UNSPECIFIED = 0,
   SECURED = 1,
   SHORT = 2,
+  CONFLICT = 3,
 }
 
 export enum PackingStatus {

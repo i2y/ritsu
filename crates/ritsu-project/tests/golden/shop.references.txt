@@ -7,9 +7,10 @@ ordering/受注.flow:3 implements -> proto "proto/shop/ordering/v1/fulfillment.p
 ordering/受注.flow:6 use rule … connect -> rulec "delivery/rules/出荷の急ぎ.rule" (in the project): the file, read
 ordering/受注.flow:8 use proto -> proto "proto/shop/ordering/v1/fulfillment.proto" (in the project): the .proto holds it
 ordering/受注.flow:9 use proto -> proto "proto/warehouse/v1/stock.proto" (in the project): the .proto holds it
-ordering/受注.flow:47 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Reserve (in the project): the .proto holds it
-ordering/受注.flow:53 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Release (in the project): the .proto holds it
-ordering/受注.flow:59 flow -> dandori "delivery/配送の手配.flow" (in the project): the file, read
+ordering/受注.flow:49 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Reserve (in the project): the .proto holds it
+ordering/受注.flow:55 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Release (in the project): the .proto holds it
+ordering/受注.flow:59 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Post (in the project): the .proto holds it
+ordering/受注.flow:65 flow -> dandori "delivery/配送の手配.flow" (in the project): the file, read
 contexts/レビュー.ctx:6 owns -> file "py/reviews" (outside it): a file
 contexts/レビュー.ctx:6 owns -> file "ts/reviews" (outside it): a file
 contexts/レビュー.ctx:6 owns -> file "java/src/main/java/reviews" (outside it): a file

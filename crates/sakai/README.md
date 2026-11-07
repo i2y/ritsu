@@ -31,10 +31,10 @@ shared kernel with Billing
 
 ```console
 $ sakai check examples/shop/shop.ctx
-examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)
 ```
 
-The nine crossings are what the artifacts themselves say: a `.proto` importing another, a rule's `import proto` and `shape`, a calendar's `use calendar`, a workflow's `use rule`, `use proto`, `connect` and child flow.
+The ten crossings are what the artifacts themselves say: a `.proto` importing another, a rule's `import proto` and `shape`, a calendar's `use calendar`, a workflow's `use rule`, `use proto`, `connect` and child flow.
 sakai reads them through ritsu's ports, in the same process, from each language's own reading of its files.
 
 ## What the checker says
@@ -45,7 +45,7 @@ Delivery's anticorruption layer has no line for it, and the check stops until so
 ```text
 error[E401]: contexts/delivery.ctx:33:3: The anticorruption layer of Delivery maps no value for PACKING_STATUS_DAMAGED of Inventory's enum warehouse.v1.PackingStatus
     33 |   enum PackingStatus -> shipping_decision
-  = PACKING_STATUS_DAMAGED is the value at proto/warehouse/v1/stock.proto:43.
+  = PACKING_STATUS_DAMAGED is the value at proto/warehouse/v1/stock.proto:56.
   = Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes.
   = The line, fixed: PACKING_STATUS_DAMAGED -> refuse "…"
 ```

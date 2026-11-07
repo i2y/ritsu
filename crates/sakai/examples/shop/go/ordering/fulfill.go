@@ -8,7 +8,7 @@ import (
 
 func Short(answers []*warehousev1.ReserveResponse) bool {
 	for _, a := range answers {
-		if a.Stock == warehousev1.Stock_STOCK_SHORT {
+		if a.Stock == warehousev1.Stock_STOCK_SHORT || a.Stock == warehousev1.Stock_STOCK_CONFLICT {
 			return true
 		}
 	}

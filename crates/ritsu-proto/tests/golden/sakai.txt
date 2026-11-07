@@ -2397,71 +2397,80 @@ message FulfillmentOrder 36
 message Line 47
   field sku 1 None Scalar("string") json=None oneof=None line=48
   field quantity 2 None Scalar("int32") json=None oneof=None line=49
-message Gift 52
-  field recipient 1 None Scalar("string") json=None oneof=None line=53
-  field message 2 Optional Scalar("string") json=None oneof=None line=54
-message FulfillResponse 57
-  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=58
-  field tracking_number 2 None Scalar("string") json=Some("tracking_number") oneof=None line=59
-message AnswerPackingRequest 62
-  field boxes 1 None Scalar("int32") json=None oneof=None line=63
-message AnswerPackingResponse 66
+  field id 3 None Scalar("string") json=None oneof=None line=51
+message Gift 54
+  field recipient 1 None Scalar("string") json=None oneof=None line=55
+  field message 2 Optional Scalar("string") json=None oneof=None line=56
+message FulfillResponse 59
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=60
+  field tracking_number 2 None Scalar("string") json=Some("tracking_number") oneof=None line=61
+message AnswerPackingRequest 64
+  field boxes 1 None Scalar("int32") json=None oneof=None line=65
+message AnswerPackingResponse 68
 service FulfillmentService 18
   option (dandori.v1.workflow) = {name: "fulfillment", version: 1}
   method Fulfill FulfillRequest FulfillResponse false false 22
-    option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate"]}
+    option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate", "PackingShort"]}
   method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 27
     option (dandori.v1.answer) = {task: "wait_for_packing"}
 == examples/shop/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
-message Order 18
-  field id 1 None Scalar("string") json=None oneof=None line=19
-  field status 2 None Named("OrderStatus") json=None oneof=None line=20
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
-message GetOrderRequest 24
-  field id 1 None Scalar("string") json=None oneof=None line=25
-message GetOrderResponse 28
-  field order 1 None Named("Order") json=None oneof=None line=29
-enum OrderStatus 10
-  value ORDER_STATUS_UNSPECIFIED 0 11
-  value ORDER_STATUS_RECEIVED 1 12
-  value ORDER_STATUS_PAID 2 13
-  value ORDER_STATUS_SHIPPED 3 14
-  value ORDER_STATUS_CANCELLED 4 15
-service OrderService 6
-  method GetOrder GetOrderRequest GetOrderResponse false false 7
+import buf/validate/validate.proto 5:1 public=false weak=false
+message Order 20
+  field id 1 None Scalar("string") json=None oneof=None line=21
+  field status 2 None Named("OrderStatus") json=None oneof=None line=22
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=23
+message GetOrderRequest 26
+  field id 1 None Scalar("string") json=None oneof=None line=27
+message GetOrderResponse 30
+  field order 1 None Named("Order") json=None oneof=None line=31
+enum OrderStatus 12
+  value ORDER_STATUS_UNSPECIFIED 0 13
+  value ORDER_STATUS_RECEIVED 1 14
+  value ORDER_STATUS_PAID 2 15
+  value ORDER_STATUS_SHIPPED 3 16
+  value ORDER_STATUS_CANCELLED 4 17
+service OrderService 8
+  method GetOrder GetOrderRequest GetOrderResponse false false 9
 == examples/shop/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
-message ReserveRequest 15
-  field sku 1 None Scalar("string") json=None oneof=None line=16
-  field quantity 2 None Scalar("int32") json=None oneof=None line=17
-message ReserveResponse 26
-  field sku 1 None Scalar("string") json=None oneof=None line=27
-  field stock 2 None Named("Stock") json=None oneof=None line=28
-  field id 3 Optional Scalar("string") json=None oneof=None line=29
-message ReleaseRequest 32
-  field id 1 None Scalar("string") json=None oneof=None line=33
-message ReleaseResponse 36
-message GetPackingRequest 45
-  field order_id 1 None Scalar("string") json=None oneof=None line=46
-message GetPackingResponse 49
-  field status 1 None Named("PackingStatus") json=None oneof=None line=50
-enum Stock 20
-  value STOCK_UNSPECIFIED 0 21
-  value STOCK_SECURED 1 22
-  value STOCK_SHORT 2 23
-enum PackingStatus 38
-  value PACKING_STATUS_UNSPECIFIED 0 39
-  value PACKING_STATUS_WAITING 1 40
-  value PACKING_STATUS_PACKED 2 41
-  value PACKING_STATUS_SHORT 3 42
-service StockService 6
-  method Reserve ReserveRequest ReserveResponse false false 7
-  method Release ReleaseRequest ReleaseResponse false false 8
-service PackingService 11
-  method GetPacking GetPackingRequest GetPackingResponse false false 12
+import buf/validate/validate.proto 5:1 public=false weak=false
+message ReserveRequest 18
+  field sku 1 None Scalar("string") json=None oneof=None line=19
+  field quantity 2 None Scalar("int32") json=None oneof=None line=20
+  field line_id 3 None Scalar("string") json=None oneof=None line=22
+message ReserveResponse 32
+  field sku 1 None Scalar("string") json=None oneof=None line=33
+  field stock 2 None Named("Stock") json=None oneof=None line=34
+  field id 3 Optional Scalar("string") json=None oneof=None line=35
+message ReleaseRequest 38
+  field id 1 None Scalar("string") json=None oneof=None line=39
+message ReleaseResponse 42
+message PostRequest 45
+  field id 1 None Scalar("string") json=None oneof=None line=46
+message PostResponse 49
+message GetPackingRequest 58
+  field order_id 1 None Scalar("string") json=None oneof=None line=59
+message GetPackingResponse 62
+  field status 1 None Named("PackingStatus") json=None oneof=None line=63
+enum Stock 25
+  value STOCK_UNSPECIFIED 0 26
+  value STOCK_SECURED 1 27
+  value STOCK_SHORT 2 28
+  value STOCK_CONFLICT 3 29
+enum PackingStatus 51
+  value PACKING_STATUS_UNSPECIFIED 0 52
+  value PACKING_STATUS_WAITING 1 53
+  value PACKING_STATUS_PACKED 2 54
+  value PACKING_STATUS_SHORT 3 55
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+  method Post PostRequest PostResponse false false 11
+service PackingService 14
+  method GetPacking GetPackingRequest GetPackingResponse false false 15
 == examples/shop.ja/proto/dandori/v1/options.proto
 syntax proto3
 package dandori.v1
@@ -2521,71 +2530,80 @@ message FulfillmentOrder 35
 message Line 46
   field sku 1 None Scalar("string") json=None oneof=None line=47
   field quantity 2 None Scalar("int32") json=Some("数") oneof=None line=48
-message Gift 51
-  field recipient 1 None Scalar("string") json=Some("宛名") oneof=None line=52
-  field message 2 Optional Scalar("string") json=Some("メッセージ") oneof=None line=53
-message FulfillResponse 56
-  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=Some("引当") oneof=None line=57
-  field tracking_number 2 None Scalar("string") json=Some("追跡番号") oneof=None line=58
-message AnswerPackingRequest 61
-  field boxes 1 None Scalar("int32") json=Some("箱の数") oneof=None line=62
-message AnswerPackingResponse 65
+  field id 3 None Scalar("string") json=None oneof=None line=50
+message Gift 53
+  field recipient 1 None Scalar("string") json=Some("宛名") oneof=None line=54
+  field message 2 Optional Scalar("string") json=Some("メッセージ") oneof=None line=55
+message FulfillResponse 58
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=Some("引当") oneof=None line=59
+  field tracking_number 2 None Scalar("string") json=Some("追跡番号") oneof=None line=60
+message AnswerPackingRequest 63
+  field boxes 1 None Scalar("int32") json=Some("箱の数") oneof=None line=64
+message AnswerPackingResponse 67
 service FulfillmentService 17
   option (dandori.v1.workflow) = {name: "引当と発送", version: 1}
   method Fulfill FulfillRequest FulfillResponse false false 21
-    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ"]}
+    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ", "梱包の欠品"]}
   method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 26
     option (dandori.v1.answer) = {task: "梱包を待つ"}
 == examples/shop.ja/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
-message Order 18
-  field id 1 None Scalar("string") json=None oneof=None line=19
-  field status 2 None Named("OrderStatus") json=None oneof=None line=20
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
-message GetOrderRequest 24
-  field id 1 None Scalar("string") json=None oneof=None line=25
-message GetOrderResponse 28
-  field order 1 None Named("Order") json=None oneof=None line=29
-enum OrderStatus 10
-  value ORDER_STATUS_UNSPECIFIED 0 11
-  value ORDER_STATUS_RECEIVED 1 12
-  value ORDER_STATUS_PAID 2 13
-  value ORDER_STATUS_SHIPPED 3 14
-  value ORDER_STATUS_CANCELLED 4 15
-service OrderService 6
-  method GetOrder GetOrderRequest GetOrderResponse false false 7
+import buf/validate/validate.proto 5:1 public=false weak=false
+message Order 20
+  field id 1 None Scalar("string") json=None oneof=None line=21
+  field status 2 None Named("OrderStatus") json=None oneof=None line=22
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=23
+message GetOrderRequest 26
+  field id 1 None Scalar("string") json=None oneof=None line=27
+message GetOrderResponse 30
+  field order 1 None Named("Order") json=None oneof=None line=31
+enum OrderStatus 12
+  value ORDER_STATUS_UNSPECIFIED 0 13
+  value ORDER_STATUS_RECEIVED 1 14
+  value ORDER_STATUS_PAID 2 15
+  value ORDER_STATUS_SHIPPED 3 16
+  value ORDER_STATUS_CANCELLED 4 17
+service OrderService 8
+  method GetOrder GetOrderRequest GetOrderResponse false false 9
 == examples/shop.ja/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
-message ReserveRequest 15
-  field sku 1 None Scalar("string") json=None oneof=None line=16
-  field quantity 2 None Scalar("int32") json=None oneof=None line=17
-message ReserveResponse 26
-  field sku 1 None Scalar("string") json=None oneof=None line=27
-  field stock 2 None Named("Stock") json=None oneof=None line=28
-  field id 3 Optional Scalar("string") json=None oneof=None line=29
-message ReleaseRequest 32
-  field id 1 None Scalar("string") json=None oneof=None line=33
-message ReleaseResponse 36
-message GetPackingRequest 45
-  field order_id 1 None Scalar("string") json=None oneof=None line=46
-message GetPackingResponse 49
-  field status 1 None Named("PackingStatus") json=None oneof=None line=50
-enum Stock 20
-  value STOCK_UNSPECIFIED 0 21
-  value STOCK_SECURED 1 22
-  value STOCK_SHORT 2 23
-enum PackingStatus 38
-  value PACKING_STATUS_UNSPECIFIED 0 39
-  value PACKING_STATUS_WAITING 1 40
-  value PACKING_STATUS_PACKED 2 41
-  value PACKING_STATUS_SHORT 3 42
-service StockService 6
-  method Reserve ReserveRequest ReserveResponse false false 7
-  method Release ReleaseRequest ReleaseResponse false false 8
-service PackingService 11
-  method GetPacking GetPackingRequest GetPackingResponse false false 12
+import buf/validate/validate.proto 5:1 public=false weak=false
+message ReserveRequest 18
+  field sku 1 None Scalar("string") json=None oneof=None line=19
+  field quantity 2 None Scalar("int32") json=None oneof=None line=20
+  field line_id 3 None Scalar("string") json=None oneof=None line=22
+message ReserveResponse 32
+  field sku 1 None Scalar("string") json=None oneof=None line=33
+  field stock 2 None Named("Stock") json=None oneof=None line=34
+  field id 3 Optional Scalar("string") json=None oneof=None line=35
+message ReleaseRequest 38
+  field id 1 None Scalar("string") json=None oneof=None line=39
+message ReleaseResponse 42
+message PostRequest 45
+  field id 1 None Scalar("string") json=None oneof=None line=46
+message PostResponse 49
+message GetPackingRequest 58
+  field order_id 1 None Scalar("string") json=None oneof=None line=59
+message GetPackingResponse 62
+  field status 1 None Named("PackingStatus") json=None oneof=None line=63
+enum Stock 25
+  value STOCK_UNSPECIFIED 0 26
+  value STOCK_SECURED 1 27
+  value STOCK_SHORT 2 28
+  value STOCK_CONFLICT 3 29
+enum PackingStatus 51
+  value PACKING_STATUS_UNSPECIFIED 0 52
+  value PACKING_STATUS_WAITING 1 53
+  value PACKING_STATUS_PACKED 2 54
+  value PACKING_STATUS_SHORT 3 55
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+  method Post PostRequest PostResponse false false 11
+service PackingService 14
+  method GetPacking GetPackingRequest GetPackingResponse false false 15
 == tests/contract/proto/shop/pricing/v1/pricing.proto
 syntax proto3
 package shop.pricing.v1
@@ -3042,43 +3060,45 @@ service PackingService 13
 == tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
-message Order 19
-  field id 1 None Scalar("string") json=None oneof=None line=20
-  field status 2 None Named("OrderStatus") json=None oneof=None line=21
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
-message GetOrderRequest 25
-  field id 1 None Scalar("string") json=None oneof=None line=26
-message GetOrderResponse 29
-  field order 1 None Named("Order") json=None oneof=None line=30
-enum OrderStatus 10
-  value ORDER_STATUS_UNSPECIFIED 0 11
-  value ORDER_STATUS_RECEIVED 1 12
-  value ORDER_STATUS_PAID 2 13
-  value ORDER_STATUS_SHIPPED 3 14
-  value ORDER_STATUS_CANCELLED 4 15
-  value ORDER_STATUS_RETURNED 5 16
-service OrderService 6
-  method GetOrder GetOrderRequest GetOrderResponse false false 7
+import buf/validate/validate.proto 5:1 public=false weak=false
+message Order 21
+  field id 1 None Scalar("string") json=None oneof=None line=22
+  field status 2 None Named("OrderStatus") json=None oneof=None line=23
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=24
+message GetOrderRequest 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message GetOrderResponse 31
+  field order 1 None Named("Order") json=None oneof=None line=32
+enum OrderStatus 12
+  value ORDER_STATUS_UNSPECIFIED 0 13
+  value ORDER_STATUS_RECEIVED 1 14
+  value ORDER_STATUS_PAID 2 15
+  value ORDER_STATUS_SHIPPED 3 16
+  value ORDER_STATUS_CANCELLED 4 17
+  value ORDER_STATUS_RETURNED 5 18
+service OrderService 8
+  method GetOrder GetOrderRequest GetOrderResponse false false 9
 == tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
-message Order 19
-  field id 1 None Scalar("string") json=None oneof=None line=20
-  field status 2 None Named("OrderStatus") json=None oneof=None line=21
-  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
-message GetOrderRequest 25
-  field id 1 None Scalar("string") json=None oneof=None line=26
-message GetOrderResponse 29
-  field order 1 None Named("Order") json=None oneof=None line=30
-enum OrderStatus 10
-  value ORDER_STATUS_UNSPECIFIED 0 11
-  value ORDER_STATUS_RECEIVED 1 12
-  value ORDER_STATUS_PAID 2 13
-  value ORDER_STATUS_SHIPPED 3 14
-  value ORDER_STATUS_CANCELLED 4 15
-  value ORDER_STATUS_RETURNED 5 16
-service OrderService 6
-  method GetOrder GetOrderRequest GetOrderResponse false false 7
+import buf/validate/validate.proto 5:1 public=false weak=false
+message Order 21
+  field id 1 None Scalar("string") json=None oneof=None line=22
+  field status 2 None Named("OrderStatus") json=None oneof=None line=23
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=24
+message GetOrderRequest 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message GetOrderResponse 31
+  field order 1 None Named("Order") json=None oneof=None line=32
+enum OrderStatus 12
+  value ORDER_STATUS_UNSPECIFIED 0 13
+  value ORDER_STATUS_RECEIVED 1 14
+  value ORDER_STATUS_PAID 2 15
+  value ORDER_STATUS_SHIPPED 3 16
+  value ORDER_STATUS_CANCELLED 4 17
+  value ORDER_STATUS_RETURNED 5 18
+service OrderService 8
+  method GetOrder GetOrderRequest GetOrderResponse false false 9
 == tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto
 error 11:1 `;` is expected where `}` is | `;` が要るところに `}` があります
 == tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto
@@ -3308,67 +3328,81 @@ service OrderService 6
 == tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
-message ReserveRequest 15
-  field sku 1 None Scalar("string") json=None oneof=None line=16
-  field quantity 2 None Scalar("int32") json=None oneof=None line=17
-message ReserveResponse 26
-  field sku 1 None Scalar("string") json=None oneof=None line=27
-  field stock 2 None Named("Stock") json=None oneof=None line=28
-  field id 3 Optional Scalar("string") json=None oneof=None line=29
-message ReleaseRequest 32
-  field id 1 None Scalar("string") json=None oneof=None line=33
-message ReleaseResponse 36
-message GetPackingRequest 46
-  field order_id 1 None Scalar("string") json=None oneof=None line=47
-message GetPackingResponse 50
-  field status 1 None Named("PackingStatus") json=None oneof=None line=51
-enum Stock 20
-  value STOCK_UNSPECIFIED 0 21
-  value STOCK_SECURED 1 22
-  value STOCK_SHORT 2 23
-enum PackingStatus 38
-  value PACKING_STATUS_UNSPECIFIED 0 39
-  value PACKING_STATUS_WAITING 1 40
-  value PACKING_STATUS_PACKED 2 41
-  value PACKING_STATUS_SHORT 3 42
-  value PACKING_STATUS_DAMAGED 4 43
-service StockService 6
-  method Reserve ReserveRequest ReserveResponse false false 7
-  method Release ReleaseRequest ReleaseResponse false false 8
-service PackingService 11
-  method GetPacking GetPackingRequest GetPackingResponse false false 12
+import buf/validate/validate.proto 5:1 public=false weak=false
+message ReserveRequest 18
+  field sku 1 None Scalar("string") json=None oneof=None line=19
+  field quantity 2 None Scalar("int32") json=None oneof=None line=20
+  field line_id 3 None Scalar("string") json=None oneof=None line=22
+message ReserveResponse 32
+  field sku 1 None Scalar("string") json=None oneof=None line=33
+  field stock 2 None Named("Stock") json=None oneof=None line=34
+  field id 3 Optional Scalar("string") json=None oneof=None line=35
+message ReleaseRequest 38
+  field id 1 None Scalar("string") json=None oneof=None line=39
+message ReleaseResponse 42
+message PostRequest 45
+  field id 1 None Scalar("string") json=None oneof=None line=46
+message PostResponse 49
+message GetPackingRequest 59
+  field order_id 1 None Scalar("string") json=None oneof=None line=60
+message GetPackingResponse 63
+  field status 1 None Named("PackingStatus") json=None oneof=None line=64
+enum Stock 25
+  value STOCK_UNSPECIFIED 0 26
+  value STOCK_SECURED 1 27
+  value STOCK_SHORT 2 28
+  value STOCK_CONFLICT 3 29
+enum PackingStatus 51
+  value PACKING_STATUS_UNSPECIFIED 0 52
+  value PACKING_STATUS_WAITING 1 53
+  value PACKING_STATUS_PACKED 2 54
+  value PACKING_STATUS_SHORT 3 55
+  value PACKING_STATUS_DAMAGED 4 56
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+  method Post PostRequest PostResponse false false 11
+service PackingService 14
+  method GetPacking GetPackingRequest GetPackingResponse false false 15
 == tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
-message ReserveRequest 15
-  field sku 1 None Scalar("string") json=None oneof=None line=16
-  field quantity 2 None Scalar("int32") json=None oneof=None line=17
-message ReserveResponse 26
-  field sku 1 None Scalar("string") json=None oneof=None line=27
-  field stock 2 None Named("Stock") json=None oneof=None line=28
-  field id 3 Optional Scalar("string") json=None oneof=None line=29
-message ReleaseRequest 32
-  field id 1 None Scalar("string") json=None oneof=None line=33
-message ReleaseResponse 36
-message GetPackingRequest 46
-  field order_id 1 None Scalar("string") json=None oneof=None line=47
-message GetPackingResponse 50
-  field status 1 None Named("PackingStatus") json=None oneof=None line=51
-enum Stock 20
-  value STOCK_UNSPECIFIED 0 21
-  value STOCK_SECURED 1 22
-  value STOCK_SHORT 2 23
-enum PackingStatus 38
-  value PACKING_STATUS_UNSPECIFIED 0 39
-  value PACKING_STATUS_WAITING 1 40
-  value PACKING_STATUS_PACKED 2 41
-  value PACKING_STATUS_SHORT 3 42
-  value PACKING_STATUS_DAMAGED 4 43
-service StockService 6
-  method Reserve ReserveRequest ReserveResponse false false 7
-  method Release ReleaseRequest ReleaseResponse false false 8
-service PackingService 11
-  method GetPacking GetPackingRequest GetPackingResponse false false 12
+import buf/validate/validate.proto 5:1 public=false weak=false
+message ReserveRequest 18
+  field sku 1 None Scalar("string") json=None oneof=None line=19
+  field quantity 2 None Scalar("int32") json=None oneof=None line=20
+  field line_id 3 None Scalar("string") json=None oneof=None line=22
+message ReserveResponse 32
+  field sku 1 None Scalar("string") json=None oneof=None line=33
+  field stock 2 None Named("Stock") json=None oneof=None line=34
+  field id 3 Optional Scalar("string") json=None oneof=None line=35
+message ReleaseRequest 38
+  field id 1 None Scalar("string") json=None oneof=None line=39
+message ReleaseResponse 42
+message PostRequest 45
+  field id 1 None Scalar("string") json=None oneof=None line=46
+message PostResponse 49
+message GetPackingRequest 59
+  field order_id 1 None Scalar("string") json=None oneof=None line=60
+message GetPackingResponse 63
+  field status 1 None Named("PackingStatus") json=None oneof=None line=64
+enum Stock 25
+  value STOCK_UNSPECIFIED 0 26
+  value STOCK_SECURED 1 27
+  value STOCK_SHORT 2 28
+  value STOCK_CONFLICT 3 29
+enum PackingStatus 51
+  value PACKING_STATUS_UNSPECIFIED 0 52
+  value PACKING_STATUS_WAITING 1 53
+  value PACKING_STATUS_PACKED 2 54
+  value PACKING_STATUS_SHORT 3 55
+  value PACKING_STATUS_DAMAGED 4 56
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+  method Post PostRequest PostResponse false false 11
+service PackingService 14
+  method GetPacking GetPackingRequest GetPackingResponse false false 15
 == tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
@@ -3448,6 +3482,7 @@ examples/shop.ja/proto/warehouse/v1/stock.proto sees
   GetPackingResponse.status: warehouse.v1.PackingStatus (examples/shop.ja/proto/warehouse/v1/stock.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
+  StockService.Post: warehouse.v1.PostRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.PostResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
 examples/shop/proto/dandori/v1/options.proto sees 
   Status.cases: known google.protobuf.Value
@@ -3473,6 +3508,7 @@ examples/shop/proto/warehouse/v1/stock.proto sees
   GetPackingResponse.status: warehouse.v1.PackingStatus (examples/shop/proto/warehouse/v1/stock.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (examples/shop/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/shop/proto/warehouse/v1/stock.proto)
+  StockService.Post: warehouse.v1.PostRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.PostResponse (examples/shop/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/shop/proto/warehouse/v1/stock.proto)
 tests/contract/proto/shop/pricing/v1/pricing.proto sees 
   ShippingResponse.trace: shop.pricing.v1.Fired (tests/contract/proto/shop/pricing/v1/pricing.proto)
@@ -3643,12 +3679,14 @@ tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.pr
   GetPackingResponse.status: warehouse.v1.PackingStatus (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
+  StockService.Post: warehouse.v1.PostRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.PostResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
 tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto, enum)
   GetPackingResponse.status: warehouse.v1.PackingStatus (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto)
+  StockService.Post: warehouse.v1.PostRequest (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto) -> warehouse.v1.PostResponse (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto)
 tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto sees 
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto, enum)

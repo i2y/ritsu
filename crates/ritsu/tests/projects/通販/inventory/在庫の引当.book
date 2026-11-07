@@ -1,7 +1,8 @@
-# コピー元: chobo の examples/inventory/inventory.ja.book（変えていない）
-# 注文のために在庫を押さえる。30 分のうちに出荷するか、キャンセルする
+# コピー元: chobo の examples/inventory/inventory.ja.book。押さえるのは注文と SKU ではなく注文の明細ごとで、押さえは 14 日続ける。
+# 梱包の担当者が答えるまでの 2 日にも、受注から出荷日までの 7 日（delivery/出荷日.cal）にも足りる長さ
+# 注文の明細のために在庫を押さえる。14 日のうちに出荷するか、キャンセルする
 book 在庫の引当 v1
-description "SKU ごとの在庫。入荷で増え、注文のために 30 分押さえ、出荷で確定し、キャンセルで取り消す。返品は棚に戻す"
+description "SKU ごとの在庫。入荷で増え、注文の明細ごとに 14 日押さえ、出荷で確定し、キャンセルで取り消す。返品は棚に戻す"
 
 unit 個
 
@@ -15,10 +16,10 @@ transfer 入荷(納品書: string, sku: string, 数: 個)
   key 納品書, sku
   move 数 from 仕入先 to 在庫(sku)
 
-transfer 引当(注文: string, sku: string, 数: 個)
+transfer 引当(明細: string, sku: string, 数: 個)
   description "出荷で確定し、キャンセルで取り消す"
-  key 注文, sku
-  pending expires after 30 minutes
+  key 明細
+  pending expires after 14 days
   move 数 from 在庫(sku) to 客
 
 transfer 返品(返品番号: string, sku: string, 数: 個)

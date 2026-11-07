@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package shop.ordering.v1;
 
+import "buf/validate/validate.proto";
+
 // Ordering's published language: the status of an order, and the service that looks an order up.
 service OrderService {
   rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
@@ -19,7 +21,7 @@ enum OrderStatus {
 message Order {
   string id = 1;
   OrderStatus status = 2;
-  int64 amount_jpy = 3;
+  int64 amount_jpy = 3 [(buf.validate.field).int64 = {gte: 0, lte: 1000000}];
 }
 
 message GetOrderRequest {

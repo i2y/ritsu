@@ -2,4 +2,4 @@
 // The import linters look at the boundaries between packages, not at what is in them.
 package warehouse.v1;
 
-public enum Stock { STOCK_UNSPECIFIED, STOCK_SECURED, STOCK_SHORT }
+public enum Stock { STOCK_UNSPECIFIED, STOCK_SECURED, STOCK_SHORT, STOCK_CONFLICT }

@@ -143,7 +143,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-1",
+                      "line": "line-1",
                       "sku": "sku-2",
                       "qty": 1
                     },
@@ -175,7 +175,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 1
                     },
@@ -185,7 +185,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -203,7 +203,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-1",
+                      "line": "line-1",
                       "sku": "sku-2",
                       "qty": 1
                     },
@@ -214,7 +214,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-1",
+                      "line": "line-1",
                       "sku": "sku-2",
                       "qty": 1
                     },
@@ -226,10 +226,46 @@
             ],
             "key": {
               "params": [
-                "order",
-                "sku"
+                "line"
               ],
               "examples": [
+                {
+                  "about": "key_conflict",
+                  "param": "sku",
+                  "operations": [
+                    {
+                      "op": "do",
+                      "kind": "receive",
+                      "args": {
+                        "delivery": "delivery-1",
+                        "sku": "sku-2",
+                        "qty": 1
+                      },
+                      "result": "done"
+                    },
+                    {
+                      "op": "hold",
+                      "kind": "reserve",
+                      "args": {
+                        "line": "line-3",
+                        "sku": "sku-2",
+                        "qty": 1
+                      },
+                      "result": "done"
+                    },
+                    {
+                      "op": "hold",
+                      "kind": "reserve",
+                      "args": {
+                        "line": "line-3",
+                        "sku": "sku-4",
+                        "qty": 1
+                      },
+                      "result": "refused",
+                      "reason": "key_conflict"
+                    }
+                  ]
+                },
                 {
                   "about": "key_conflict",
                   "param": "qty",
@@ -248,7 +284,7 @@
                       "op": "hold",
                       "kind": "reserve",
                       "args": {
-                        "order": "order-3",
+                        "line": "line-3",
                         "sku": "sku-2",
                         "qty": 1
                       },
@@ -258,7 +294,7 @@
                       "op": "hold",
                       "kind": "reserve",
                       "args": {
-                        "order": "order-3",
+                        "line": "line-3",
                         "sku": "sku-2",
                         "qty": 2
                       },
@@ -284,7 +320,7 @@
                       "op": "hold",
                       "kind": "reserve",
                       "args": {
-                        "order": "order-3",
+                        "line": "line-3",
                         "sku": "sku-2",
                         "qty": 2
                       },
@@ -292,13 +328,13 @@
                     },
                     {
                       "op": "pass",
-                      "duration": "30 minutes"
+                      "duration": "14 days"
                     },
                     {
                       "op": "hold",
                       "kind": "reserve",
                       "args": {
-                        "order": "order-3",
+                        "line": "line-3",
                         "sku": "sku-2",
                         "qty": 2
                       },
@@ -332,7 +368,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -342,8 +378,7 @@
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "done"
                   },
@@ -351,8 +386,7 @@
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "amounts": {
                       "qty": 1
@@ -381,7 +415,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -391,8 +425,7 @@
                     "op": "void",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "done"
                   },
@@ -400,8 +433,7 @@
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "refused",
                     "reason": "already_voided"
@@ -427,7 +459,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -435,14 +467,13 @@
                   },
                   {
                     "op": "pass",
-                    "duration": "30 minutes"
+                    "duration": "14 days"
                   },
                   {
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "refused",
                     "reason": "expired"
@@ -468,7 +499,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -478,8 +509,7 @@
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "amounts": {
                       "qty": 3
@@ -498,8 +528,7 @@
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-1",
-                      "sku": "sku-2"
+                      "line": "line-1"
                     },
                     "result": "refused",
                     "reason": "no_such_hold"
@@ -531,7 +560,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -541,8 +570,7 @@
                     "op": "post",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "done"
                   },
@@ -550,8 +578,7 @@
                     "op": "void",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "refused",
                     "reason": "already_posted"
@@ -577,7 +604,7 @@
                     "op": "hold",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
+                      "line": "line-3",
                       "sku": "sku-2",
                       "qty": 2
                     },
@@ -585,14 +612,13 @@
                   },
                   {
                     "op": "pass",
-                    "duration": "30 minutes"
+                    "duration": "14 days"
                   },
                   {
                     "op": "void",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-3",
-                      "sku": "sku-2"
+                      "line": "line-3"
                     },
                     "result": "refused",
                     "reason": "expired"
@@ -608,8 +634,7 @@
                     "op": "void",
                     "kind": "reserve",
                     "args": {
-                      "order": "order-1",
-                      "sku": "sku-2"
+                      "line": "line-1"
                     },
                     "result": "refused",
                     "reason": "no_such_hold"
@@ -768,7 +793,7 @@
       "ok": true,
       "check": {
         "ok": true,
-        "summary": "5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)"
+        "summary": "5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)"
       }
     }
   ],

@@ -2726,31 +2726,37 @@ message shop.ordering.v1.Gift
 message shop.ordering.v1.Line
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingResponse
   field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.PostRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.PostResponse
 message warehouse.v1.ReleaseRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReleaseResponse
 message warehouse.v1.ReserveRequest
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
-  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":1000000}}
+  field line_id json=lineId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReserveResponse
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
   field id json=id ty=Scalar("string") repeated=false presence=true rules=null
 enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
-enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONFLICT
 service shop.ordering.v1.FulfillmentService imports_options=true
   option dandori.v1.workflow = {"name":"fulfillment","version":1}
   method Fulfill in=shop.ordering.v1.FulfillRequest out=shop.ordering.v1.FulfillResponse streams=false
-    option dandori.v1.start = {"fails":["OutOfStock","DeliveryFailed","PackingLate"]}
+    option dandori.v1.start = {"fails":["OutOfStock","DeliveryFailed","PackingLate","PackingShort"]}
   method AnswerPacking in=shop.ordering.v1.AnswerPackingRequest out=shop.ordering.v1.AnswerPackingResponse streams=false
     option dandori.v1.answer = {"task":"wait_for_packing"}
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+  method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
@@ -2763,7 +2769,7 @@ message shop.ordering.v1.GetOrderResponse
 message shop.ordering.v1.Order
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
-  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
@@ -2774,21 +2780,26 @@ message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingResponse
   field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.PostRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.PostResponse
 message warehouse.v1.ReleaseRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReleaseResponse
 message warehouse.v1.ReserveRequest
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
-  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":1000000}}
+  field line_id json=lineId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReserveResponse
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
   field id json=id ty=Scalar("string") repeated=false presence=true rules=null
 enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
-enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONFLICT
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+  method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
@@ -2865,31 +2876,37 @@ message shop.ordering.v1.Gift
 message shop.ordering.v1.Line
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field quantity json=数 ty=Scalar("int32") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingResponse
   field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.PostRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.PostResponse
 message warehouse.v1.ReleaseRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReleaseResponse
 message warehouse.v1.ReserveRequest
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
-  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":1000000}}
+  field line_id json=lineId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReserveResponse
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
   field id json=id ty=Scalar("string") repeated=false presence=true rules=null
 enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
-enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONFLICT
 service shop.ordering.v1.FulfillmentService imports_options=true
   option dandori.v1.workflow = {"name":"引当と発送","version":1}
   method Fulfill in=shop.ordering.v1.FulfillRequest out=shop.ordering.v1.FulfillResponse streams=false
-    option dandori.v1.start = {"fails":["在庫不足","配送の手配の失敗","梱包の遅れ"]}
+    option dandori.v1.start = {"fails":["在庫不足","配送の手配の失敗","梱包の遅れ","梱包の欠品"]}
   method AnswerPacking in=shop.ordering.v1.AnswerPackingRequest out=shop.ordering.v1.AnswerPackingResponse streams=false
     option dandori.v1.answer = {"task":"梱包を待つ"}
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+  method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
@@ -2902,7 +2919,7 @@ message shop.ordering.v1.GetOrderResponse
 message shop.ordering.v1.Order
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
-  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
@@ -2913,21 +2930,26 @@ message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingResponse
   field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.PostRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.PostResponse
 message warehouse.v1.ReleaseRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReleaseResponse
 message warehouse.v1.ReserveRequest
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
-  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":1000000}}
+  field line_id json=lineId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReserveResponse
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
   field id json=id ty=Scalar("string") repeated=false presence=true rules=null
 enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
-enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONFLICT
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+  method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
@@ -3483,7 +3505,7 @@ message shop.ordering.v1.GetOrderResponse
 message shop.ordering.v1.Order
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
-  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
@@ -3497,7 +3519,7 @@ message shop.ordering.v1.GetOrderResponse
 message shop.ordering.v1.Order
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
-  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
 enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
@@ -3700,21 +3722,26 @@ message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingResponse
   field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.PostRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.PostResponse
 message warehouse.v1.ReleaseRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReleaseResponse
 message warehouse.v1.ReserveRequest
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
-  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":1000000}}
+  field line_id json=lineId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReserveResponse
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
   field id json=id ty=Scalar("string") repeated=false presence=true rules=null
 enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT PACKING_STATUS_DAMAGED
-enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONFLICT
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+  method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
@@ -3724,21 +3751,26 @@ message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.GetPackingResponse
   field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.PostRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.PostResponse
 message warehouse.v1.ReleaseRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReleaseResponse
 message warehouse.v1.ReserveRequest
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
-  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules={"int32":{"gte":0,"lte":1000000}}
+  field line_id json=lineId ty=Scalar("string") repeated=false presence=false rules=null
 message warehouse.v1.ReserveResponse
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
   field id json=id ty=Scalar("string") repeated=false presence=true rules=null
 enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT PACKING_STATUS_DAMAGED
-enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT STOCK_CONFLICT
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+  method Post in=warehouse.v1.PostRequest out=warehouse.v1.PostResponse streams=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread

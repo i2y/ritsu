@@ -8,9 +8,13 @@ import (
 	deliveryv1 "example.com/shop/shop/delivery/v1"
 )
 
-func Due(orderStatus int32, shipment *deliveryv1.CreateShipmentRequest, day string) (string, bool) {
-	if aclordering.HandlingOf(orderStatus) != aclordering.Bill || shipment.Parcels < 1 {
-		return "", false
+func Due(orderStatus int32, shipment *deliveryv1.CreateShipmentRequest, day string) (string, bool, error) {
+	handling, err := aclordering.HandlingOf(orderStatus)
+	if err != nil {
+		return "", false, err
 	}
-	return calendars.NextBusinessDay(day), true
+	if handling != aclordering.Bill || shipment.Parcels < 1 {
+		return "", false, nil
+	}
+	return calendars.NextBusinessDay(day), true, nil
 }

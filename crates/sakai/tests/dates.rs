@@ -146,8 +146,8 @@ fn a_workflow_reads_a_dates_file_across_a_boundary_from_the_shared_kernel_only()
         let (codes, en, _, o) = said(&x, &t);
         assert!(codes.is_empty(), "{}: {en}", x.dir);
         let summary = o.summary.clone().expect("a summary");
-        assert_eq!(summary.en, "5 contexts, 7 relationships; 80 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)");
-        assert_eq!(summary.ja, "コンテキスト 5、関係 7。成果物 80 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）");
+        assert_eq!(summary.en, "5 contexts, 7 relationships; 80 artifacts, each in one context; 11 crossings checked (proto 1, rulec 2, koyomi 1, dandori 7)");
+        assert_eq!(summary.ja, "コンテキスト 5、関係 7。成果物 80 件は、どれも一つのコンテキストに属する。境界を越える参照 11 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 7）");
         let api = sakai::api::api(o.checked.as_ref().unwrap());
         let crossing = api["crossings"].as_array().unwrap().iter().find(|c| c["from"]["path"] == flow).expect("the workflow's crossing");
         assert_eq!(crossing["to"]["text"], format!("koyomi \"{terms}\""));
@@ -167,7 +167,7 @@ fn a_workflow_that_reads_its_own_contexts_dates_file_crosses_nothing() {
         let t = laid_out(&x, &[x.remind], &[]);
         let (codes, en, _, o) = said(&x, &t);
         assert!(codes.is_empty(), "{}: {en}", x.dir);
-        assert_eq!(o.summary.unwrap().en, "5 contexts, 7 relationships; 80 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)");
+        assert_eq!(o.summary.unwrap().en, "5 contexts, 7 relationships; 80 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)");
     }
 }
 

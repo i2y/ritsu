@@ -21,7 +21,7 @@ inventory/在庫の引当.book: ok
   引当.void  may be refused: already_posted, expired, no_such_hold
   返品.do    may be refused: key_conflict
   key: 入荷 once per 納品書, sku; a second call that differs only in 数 is refused with key_conflict
-  key: 引当 once per 注文, sku; a second call that differs only in 数 is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: 引当 once per 明細; a second call that differs only in sku or 数 is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
   key: 返品 once per 返品番号, sku; a second call that differs only in 数 is refused with key_conflict
 delivery/配送の手配.flow: ok
 ordering/受注.flow: ok

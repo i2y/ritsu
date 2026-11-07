@@ -412,7 +412,7 @@ fn go_arch_lint_leaves_out_what_the_map_excepts() {
     common::copy_dir(Path::new(common::EXAMPLE_EN), dir.path());
     let map = dir.path().join("shop.ctx");
     std::fs::write(&map, std::fs::read_to_string(&map).unwrap().replacen("covers \".\"\n", "covers \".\"\nexcept \"go/legacy\"\n", 1)).unwrap();
-    dir.write("go/legacy/old.go", "// Old code the map leaves out: it reaches into Inventory's ledger.\npackage legacy\n\nimport \"example.com/shop/inventory/ledger\"\n\nvar Held = ledger.Hold(\"order\", \"sku\", 1)\n");
+    dir.write("go/legacy/old.go", "// Old code the map leaves out: it reaches into Inventory's ledger.\npackage legacy\n\nimport \"example.com/shop/inventory/ledger\"\n\nvar Held, _ = ledger.Hold(\"order\", \"sku\", 1)\n");
     let b = build::run_with(dir.path(), "shop.ctx", Target::GoArchLint, &common::suite(), None, false, Lang::En).unwrap();
     let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
     assert!(!b.outcome.has_errors() && b.done.is_some(), "{text}");

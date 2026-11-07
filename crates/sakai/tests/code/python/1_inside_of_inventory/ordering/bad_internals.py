@@ -3,4 +3,4 @@ from inventory import ledger
 
 
 def take(order: str, sku: str) -> bool:
-    return ledger.hold(order, sku, 1)
+    return ledger.hold(order, sku, 1)[0] == "done"

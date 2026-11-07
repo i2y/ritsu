@@ -2,6 +2,7 @@
 # The import linters look at the boundaries between modules, not at what is in them.
 STOCK_SECURED = 1
 STOCK_SHORT = 2
+STOCK_CONFLICT = 3
 PACKING_STATUS_WAITING = 1
 PACKING_STATUS_PACKED = 2
 PACKING_STATUS_SHORT = 3

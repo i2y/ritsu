@@ -2,7 +2,7 @@
 
 A small online shop that takes orders, holds stock, delivers and bills
 
-`shop.ctx` から書いた。`sakai check` の結果：コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）。
+`shop.ctx` から書いた。`sakai check` の結果：コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）。
 
 ```mermaid
 flowchart LR
@@ -61,8 +61,8 @@ Takes orders, holds stock for them, hands them to delivery, and sees them throug
 
 ### 関係
 
-- 上流 [Inventory](#inventoryinventory)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:47` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:53` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`
-- [Delivery](#deliverydelivery) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:59` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- 上流 [Inventory](#inventoryinventory)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
+- [Delivery](#deliverydelivery) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - 下流 [Billing](#billingbilling)：公開ホストサービス・公表された言語 `shop.ordering.v1` → 腐敗防止層。越える参照：`billing/rules/billing_need.rule:4` (import proto) → `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus`
 
 ## Inventory（inventory）
@@ -78,12 +78,12 @@ Keeps the counts on the warehouse shelves, holds stock for each line of an order
 | ツール | ファイル | 持っているもの |
 |---|---|---|
 | `chobo` | `inventory/inventory.book` | 勘定 `stock`、`suppliers`、`customers`／振替 `receive`、`reserve`、`take_back` |
-| `proto` | `proto/warehouse/v1/stock.proto` | メッセージ `ReserveRequest`、`ReserveResponse`、`ReleaseRequest`、`ReleaseResponse`、`GetPackingRequest`、`GetPackingResponse`／列挙 `Stock`、`PackingStatus`／サービス `StockService`、`PackingService` |
+| `proto` | `proto/warehouse/v1/stock.proto` | メッセージ `ReserveRequest`、`ReserveResponse`、`ReleaseRequest`、`ReleaseResponse`、`PostRequest`、`PostResponse`、`GetPackingRequest`、`GetPackingResponse`／列挙 `Stock`、`PackingStatus`／サービス `StockService`、`PackingService` |
 | `file` | 15 個のファイル（コード） |  |
 
 ### 公表された言語
 
-- `warehouse.v1`：書いたもの `proto/warehouse/v1/stock.proto`。公開ホストサービス `StockService`（`Reserve`、`Release`）。公開ホストサービス `PackingService`（`GetPacking`）。生成したコード `py/warehouse/v1`、`ts/warehouse/v1`、`java/src/main/java/warehouse/v1`、`go/warehouse/v1`
+- `warehouse.v1`：書いたもの `proto/warehouse/v1/stock.proto`。公開ホストサービス `StockService`（`Reserve`、`Release`、`Post`）。公開ホストサービス `PackingService`（`GetPacking`）。生成したコード `py/warehouse/v1`、`ts/warehouse/v1`、`java/src/main/java/warehouse/v1`、`go/warehouse/v1`
 
 ### 用語集
 
@@ -95,7 +95,7 @@ Keeps the counts on the warehouse shelves, holds stock for each line of an order
 
 ### 関係
 
-- 下流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:47` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:53` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`
+- 下流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `warehouse.v1` → 順応者。越える参照：`proto/shop/ordering/v1/fulfillment.proto:16` (proto import) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:9` (use proto) → `proto "proto/warehouse/v1/stock.proto"`; `ordering/fulfillment.flow:49` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Reserve`; `ordering/fulfillment.flow:55` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Release`; `ordering/fulfillment.flow:59` (connect) → `proto "proto/warehouse/v1/stock.proto" service StockService method Post`
 - 下流 [Delivery](#deliverydelivery)：公開ホストサービス・公表された言語 `warehouse.v1` → 腐敗防止層
 
 ## Delivery（delivery）
@@ -130,7 +130,7 @@ Decides the day to ship, chooses how to carry, and arranges delivery of the parc
 
 ### 関係
 
-- [Ordering](#orderingordering) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:59` (flow) → `dandori "delivery/arrange_delivery.flow"`
+- [Ordering](#orderingordering) とパートナーシップ。越える参照：`ordering/fulfillment.flow:6` (use rule … connect) → `rulec "delivery/rules/urgency.rule"`; `ordering/fulfillment.flow:65` (flow) → `dandori "delivery/arrange_delivery.flow"`
 - 上流 [Inventory](#inventoryinventory)：公開ホストサービス・公表された言語 `warehouse.v1` → 腐敗防止層
 - [Billing](#billingbilling) と共有カーネル：`koyomi "calendars/tokyo_business_days.cal"`、`dir "py/calendars"`、`dir "ts/calendars"`、`dir "java/src/main/java/calendars"`、`dir "go/calendars"`。越える参照：`delivery/ship_date.cal:3` (use calendar) → `koyomi "calendars/tokyo_business_days.cal"`
 - 下流 [Billing](#billingbilling)：供給者・公開ホストサービス・公表された言語 `shop.delivery.v1` → 顧客。越える参照：`billing/rules/shipment_fee.rule:7` (shape) → `proto "proto/shop/delivery/v1/shipment.proto" message CreateShipmentRequest`

@@ -713,14 +713,14 @@ tests/maps/基本/基本.ctx: ok — コンテキスト 3、関係 3。成果物
 
 ```
 $ ritsu sakai check examples/shop/shop.ctx
-examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)
 $ ritsu sakai check examples/shop/shop.ctx --lang ja
-examples/shop/shop.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
+examples/shop/shop.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）
 $ ritsu sakai check examples/shop.ja/通販.ctx
-examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)
 ```
 
-境界を越える参照の 9 件は、proto の import が一つ（Ordering の `fulfillment.proto` から Inventory の `stock.proto` へ）、rulec が二つ（Billing の `billing_need.rule` の `import proto` が Ordering の `OrderStatus` へ、`shipment_fee.rule` の `shape` が Delivery の `CreateShipmentRequest` へ）、koyomi が一つ（Delivery の `ship_date.cal` が、Billing と Delivery の共有カーネルの `tokyo_business_days.cal` を `use calendar` で読む）、dandori が五つ（Ordering の `fulfillment.flow` が、Delivery の規則 `urgency` を `use rule … connect` で、Inventory の `stock.proto` を `use proto` で読み、その `StockService` の `Reserve` と `Release` を `connect` で呼び、Delivery の `arrange_delivery.flow` を子として走らせる）である。日本語の名前で書いた例では、同じ九つが、受注の `受注.flow`、請求の `請求の要否.rule` と `出荷の送料.rule`、配送の `出荷日.cal`、`配送の手配.flow` などの上にある。括弧の中は、参照のもとの言語ごとの数で、proto、rulec、koyomi、dandori、rust（Rust のクレートのマニフェスト。7.7）の順に並べ、一つも無い言語は書かない。
+境界を越える参照の 10 件は、proto の import が一つ（Ordering の `fulfillment.proto` から Inventory の `stock.proto` へ）、rulec が二つ（Billing の `billing_need.rule` の `import proto` が Ordering の `OrderStatus` へ、`shipment_fee.rule` の `shape` が Delivery の `CreateShipmentRequest` へ）、koyomi が一つ（Delivery の `ship_date.cal` が、Billing と Delivery の共有カーネルの `tokyo_business_days.cal` を `use calendar` で読む）、dandori が六つ（Ordering の `fulfillment.flow` が、Delivery の規則 `urgency` を `use rule … connect` で、Inventory の `stock.proto` を `use proto` で読み、その `StockService` の `Reserve`・`Release`・`Post` を `connect` で呼び、Delivery の `arrange_delivery.flow` を子として走らせる）である。日本語の名前で書いた例では、同じ 10 件が、受注の `受注.flow`、請求の `請求の要否.rule` と `出荷の送料.rule`、配送の `出荷日.cal`、`配送の手配.flow` などの上にある。括弧の中は、参照のもとの言語ごとの数で、proto、rulec、koyomi、dandori、rust（Rust のクレートのマニフェスト。7.7）の順に並べ、一つも無い言語は書かない。
 
 ### 3.2 属し方
 
@@ -1076,7 +1076,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 ```
 エラー[E401]: contexts/配送.ctx:33:3: 「配送」の腐敗防止層の対応に、「在庫」の列挙 warehouse.v1.PackingStatus の値 PACKING_STATUS_DAMAGED がありません
     33 |   enum PackingStatus -> 出荷の可否
-  = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:43 の値です。
+  = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:56 の値です。
   = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: PACKING_STATUS_DAMAGED -> refuse "…"
   関わるもの:
@@ -1138,26 +1138,26 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
       配送  rulec "delivery/rules/出荷の急ぎ.rule"  「配送」の内側のもの
 ```
 
-例で、在庫が `StockService` を公開ホストサービスから外したとき（受注のワークフローは、それを `connect` で呼ぶ）。二つ出るうちの一つめ：
+例で、在庫が `StockService` を公開ホストサービスから外したとき（受注のワークフローは、それを `connect` で呼ぶ）。三つ出るうちの一つめ：
 
 ```
-エラー[E207]: ordering/受注.flow:47:1: 「受注」の ordering/受注.flow が、「在庫」の公開ホストサービスでない StockService を呼んでいます
-    47 |   connect warehouse "StockService/Reserve"
+エラー[E207]: ordering/受注.flow:49:1: 「受注」の ordering/受注.flow が、「在庫」の公開ホストサービスでない StockService を呼んでいます
+    49 |   connect warehouse "StockService/Reserve"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
   = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
-      受注  ordering/受注.flow:47                                                       connect StockService/Reserve
+      受注  ordering/受注.flow:49                                                       connect StockService/Reserve
       在庫  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  公表された言語 warehouse.v1 のもの
 ```
 
 例で、受注と配送のパートナーシップを、受注が配送の顧客になる関係に替えたとき（受注のワークフローは、配送のワークフローを子として走らせる。4.7）：
 
 ```
-エラー[E209]: ordering/受注.flow:59:1: 「受注」の ordering/受注.flow が、「配送」のワークフロー delivery/配送の手配.flow を子として走らせています
-    59 |   flow "../delivery/配送の手配.flow"
+エラー[E209]: ordering/受注.flow:65:1: 「受注」の ordering/受注.flow が、「配送」のワークフロー delivery/配送の手配.flow を子として走らせています
+    65 |   flow "../delivery/配送の手配.flow"
   = 境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「配送」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「配送」が公表したサービスを `connect` で呼んでください。
   関わるもの:
-      受注  ordering/受注.flow:59               flow "../delivery/配送の手配.flow"
+      受注  ordering/受注.flow:65               flow "../delivery/配送の手配.flow"
       配送  dandori "delivery/配送の手配.flow"  「配送」の内側のもの
 ```
 
@@ -1613,7 +1613,7 @@ HTML の枠は ritsu-base の `docpage`（頭、配色の変数、明るい配�
 
 ## 11. 例
 
-**決定**：一式の例をコピーして、五つのコンテキストからなる小さな通販を作る。同じ例を二つ置く。英語の名前で書いた `examples/shop/`（地図は `shop.ctx`）を先に、日本語の名前で書いた `examples/shop.ja/`（地図は `通販.ctx`）を並べる。二つは、コンテキスト、語、規則、カレンダー、フロー、帳簿、コードの識別子の名前が違うだけで、成果物の中身と関係は同じである。どちらも同じ数の境界を越える参照（9 件）を出し、同じ診断が出る（`tests/examples.rs` が両方を確かめる）。日本語の例の名前は、英語の例の名前の順に次の表の括弧に書く。
+**決定**：一式の例をコピーして、五つのコンテキストからなる小さな通販を作る。同じ例を二つ置く。英語の名前で書いた `examples/shop/`（地図は `shop.ctx`）を先に、日本語の名前で書いた `examples/shop.ja/`（地図は `通販.ctx`）を並べる。二つは、コンテキスト、語、規則、カレンダー、フロー、帳簿、コードの識別子の名前が違うだけで、成果物の中身と関係は同じである。どちらも同じ数の境界を越える参照（10 件）を出し、同じ診断が出る（`tests/examples.rs` が両方を確かめる）。日本語の例の名前は、英語の例の名前の順に次の表の括弧に書く。
 
 | コンテキスト | 成果物（コピー元） |
 |---|---|
@@ -1671,7 +1671,7 @@ C の段階で、この例を作った（日本語の名前の `通販.ctx` と�
 
 四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。英語の例には `--lang en`、日本語の例には `--lang ja`）も置く。CI で `sakai gen --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
 
-ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む。境界を越える参照は 9 件で（3.1）、どれも関係が許す。英語の例では、境界を越える参照を、参照元のファイルの名前の順に並べるので、規則の二つ（`billing_need.rule` と `shipment_fee.rule`）の順が、日本語の例（`出荷の送料.rule` と `請求の要否.rule`）と逆になる。言語ごとの数と、関係と、診断は同じである。
+ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む。境界を越える参照は 10 件で（3.1）、どれも関係が許す。英語の例では、境界を越える参照を、参照元のファイルの名前の順に並べるので、規則の二つ（`billing_need.rule` と `shipment_fee.rule`）の順が、日本語の例（`出荷の送料.rule` と `請求の要否.rule`）と逆になる。言語ごとの数と、関係と、診断は同じである。
 
 OpenAPI と AsyncAPI の文書でやりとりするサービスの例は、別に `examples/webshop`（英語の名前）と `examples/webshop.ja`（日本語の名前）に置いた（15.9）。
 
@@ -1736,7 +1736,7 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 例、テストの材料、golden、文書の例は、英語を先にする。日本語のものは消さず、中身も変えず、日本語の版として残して、英語の版を足した。名前の付け方は、次の一つの決まりにそろえた。
 
-- **例**（`examples/`）：英語の名前の版が `examples/shop/`、日本語の名前の版が `examples/shop.ja/` である。もとの `通販` は、`git mv` で名前だけを替えた（中身は、`billing/支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、一字も変えていない）。英語の版は、dandori、koyomi、chobo、rulec の英語の例をコピーして、コンテキスト、語、フロー、規則、カレンダー、帳簿、コードの識別子の名前を英語にしたもの（92 ファイル。祝日の表はコピーしたまま）で、日本語の版と同じ数の境界を越える参照（9 件）と、同じ診断を出す（`tests/examples.rs`）。コンテキストの別名は日本語の版と同じなので、設定の中のグループの名前（`sakai-ordering` など）も同じになり、設定の説明の文だけが英語になる。
+- **例**（`examples/`）：英語の名前の版が `examples/shop/`、日本語の名前の版が `examples/shop.ja/` である。もとの `通販` は、`git mv` で名前だけを替えた（中身は、`billing/支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、一字も変えていない）。英語の版は、dandori、koyomi、chobo、rulec の英語の例をコピーして、コンテキスト、語、フロー、規則、カレンダー、帳簿、コードの識別子の名前を英語にしたもの（92 ファイル。祝日の表はコピーしたまま）で、日本語の版と同じ数の境界を越える参照（10 件）と、同じ診断を出す（`tests/examples.rs`）。コンテキストの別名は日本語の版と同じなので、設定の中のグループの名前（`sakai-ordering` など）も同じになり、設定の説明の文だけが英語になる。
 - **テストの地図**（`tests/maps/`）：日本語の名前の `基本`、`入れ子`、`パターン` はそのまま残し、英語の名前の `basic`、`nested`、`patterns`（コンテキストのファイル 13 本、proto、コード）を足した。診断の同じコードを出す。
 - **変異**（`tests/mutants/`）：日本語の名前の 64 本はそのまま残し、同じコードを出す英語の名前のものを 64 本足した。名前は診断のコードで始め（`E001_閉じていない文字列` と `E001_unclosed_string`）、`base` は英語の地図か英語の例を指す。日本語の変異の `base` のうち、例を指す 11 本は、`examples/通販` と書いたまま残した（日本語の名前のものの中身は変えない）。テストの道具（`tests/common/mod.rs` の `base_dir`）が、それを `examples/shop.ja` と読み替える。一つのコードに、英語の名前の変異が日本語の名前のものと同じ数かそれ以上あることは、`tests/codes.rs` の `every_japanese_mutant_has_an_english_one` が確かめる。もとから英語の名前だった 4 本（Rust の地図のもの）は、そのままである。
 - **import の検査のコード**（`tests/code/`）：日本語の名前のディレクトリ（`1_在庫の内側` など）はそのまま残し、同じ import を英語の名前のディレクトリ（`1_inside_of_inventory` など、入れ子の地図のものは `nested/`）に足した。`tests/imports.rs` は、英語の例と英語の入れ子の地図でも、四つのツールを走らせる。
@@ -2804,3 +2804,58 @@ error[E208]: delivery/rules/delivery_fee.rule:3:1: The rule delivery/rules/deliv
 ### 29.6 見つけて直していないもの
 
 - 通販の例の `status.py` は、地図に無い `ORDER_STATUS_UNSPECIFIED`（0）を `skip` と答える。`unmapped` なので試験の外に出しているが、地図が何も言わない値をコードが `skip` にしていることは、試験では見えない。
+
+## 30. 通販の例の穴を塞ぐ：押さえた在庫が、売り越しにならないように（2026-11-07）
+
+### 30.1 きっかけ
+
+世界のあいだの関係を一つずつ書き出して確かめたところ、通販の例には、`ritsu check` にも `sakai check` にも見えない穴があった。どの成果物も、自分の検査は通る。穴は、成果物のあいだにある。いちばん重いのは売り越しである。梱包に 2 日かかる最後の 1 個を、30 分で切れる仮押さえで押さえていたので、梱包のあいだに押さえが切れて棚に戻り、別の注文がそれを押さえられた。
+
+```
+  2  reserve.hold(order: o1, sku: A, qty: 1)   done
+  3  pass 2 days                               reserve(o1, A) expired
+  4  reserve.post(order: o1, sku: A)           refused: expired
+  5  reserve.hold(order: o2, sku: A, qty: 1)   done
+```
+
+帳簿が仮押さえを持ち、契約はその前に立つサービスを公表し、フローはそのサービスを呼ぶ。この三つは同じコンテキスト（在庫）と、その上流の下流（受注）にまたがるので、境界を越える参照に数えられず、どの検査も三つを一度に見ない。同じ見方で、次の穴も見つかった。
+
+- 帳簿の `post` を呼ぶ口が契約になく、押さえたものは確定されないまま期限で棚に戻る。
+- 帳簿の `reserve` は注文を求めるが、契約は SKU と数しか運ばない。用語 `reservation` は「注文の一行」で、キー `order, sku` は同じ SKU の二行を一回しか押さえない。
+- 帳簿が返す `key_conflict` に、契約の `Stock` の値がない。手書きのコードは、棚に在庫があっても `STOCK_SHORT` と答える。
+- 地図は梱包の途中の不足を「受注に戻す」と言うが、受注のワークフローに聞く口がない。
+- `order.proto` の `amount_jpy` と `stock.proto` の `quantity` に範囲がない。
+- 読み替えの層のコードが、地図にない値（0、上流が足した値）を黙って `skip` と答える。規則は E032 で止まるのに、コードは黙って請求しない。
+
+### 30.2 決定
+
+1. **押さえは 14 日。** 梱包の担当者が答えるまでの 2 日にも、受注から出荷日までの最長 7 日（`delivery/ship_date.cal` の 719 日を `koyomi vectors` で数えた）にも足りる長さにした。chobo の例（仮押さえの説明）は直さない。
+2. **確定の口。** `StockService` に `Post(PostRequest) returns (PostResponse)`（`PostRequest { string id = 1; }`）を足し、フローに `post_stock(id)`（`connect warehouse "StockService/Post"`、`idempotent`）を足した。全部の言語のサービスのコードに `post` を足した。
+3. **いつ確定し、いつ戻すか。** 梱包が済み、お客さまに知らせる前に、押さえた全部の行を確定する。押さえたあとの失敗（`OutOfStock`、`DeliveryFailed`、`PackingLate`、新しい `PackingShort`）では、押さえた全部を戻す。`on failure` は処理されなかったタスクのエラーのあとにしか走らず、`fail` のあとには走らないので、`for` を `fail` ごとに書いた。
+4. **契約が行を運ぶ。** 帳簿を `transfer reserve(line, sku, qty)`、`key line` にした。`ReserveRequest` に `line_id = 3`、フローの `record Line` に `id`、`fulfillment.proto` の `Line` に `id = 3` を足し、サービスの予約 ID は `line_id` にした。帳簿のキーが行だけなので、確定と取消も行だけで引ける（`Post` の `id` で足りる）。
+5. **`key_conflict` の行き先。** `Stock` に `STOCK_CONFLICT = 3` を足し、サービスのコードは `key_conflict` をそれで答え、`done_before` は成功の答えにした。フローは `STOCK_CONFLICT` を `STOCK_SHORT` と同じく、押さえられなかったものとして扱う。
+6. **梱包の途中の不足。** `wait_for_packing` に `errors short` を足し、`on short` で `fail PackingShort` にして、`fulfillment.proto` の `fails` に足した。コールバックの応答でエラーを送るには、dandori の `options.proto` が定めるとおり、`{"error": "short"}` を `ok` の代わりに送るので、`AnswerPackingRequest` は変えない。
+7. **範囲。** `order.proto` の `amount_jpy`（0〜1,000,000）と `stock.proto` の `quantity`（0〜1,000,000）に Protovalidate の範囲を書いた。dandori の E016 が、タスクの引数とレコードにも同じ範囲を求める。
+8. **読み替えの既定。** 層のコードは、地図にない値は例外にする（Python、TypeScript、Go、Java）。配送の層は、地図が拒否する `SHORT` と、地図にない値を読み分ける。`check_layers.py` は、`unmapped` の行と、各層が知っている最後の値の次の番号で、コードが例外を出すことを確かめる。
+
+### 30.3 捨てたもの
+
+- 押さえを 7 日ちょうどにすること。7 日は、受注から出荷日までの最長で、梱包の待ちの 2 日を足すと超える。
+- `AnswerPackingRequest` に不足を言うフィールドを足すこと。応答がエラーで送れるので、足すと値の二通りの言い方ができる。
+- フローの `on failure` で押さえたぶんを戻すこと。`on failure` は処理されなかったタスクのエラーのあとにしか走らず、`fail` のあとには走らないので、失敗の多くに効かない。
+- 帳簿のキーを `line, sku` のままにすること。確定と取消に SKU を要り、`Post` の `id` から SKU を引けなくなる。
+
+### 30.4 変わること
+
+通販の例が、英日の二つとも変わる：帳簿、`stock.proto`、`order.proto`、`fulfillment.proto`、フロー、四つの言語のコード、`check_layers.py`、README。境界を越える参照が 9 件から 10 件になる（`Post` の `connect` 一つ）。`ritsu` のテストのプロジェクト（`tests/projects/shop` と `通販`）は例のコピーなので、同じに揃えた。`tests/mutants` の三つの重ね書き（E105 の `order.proto`、E202 の同梱のフロー、E401 の `stock.proto`）は、壊す所だけが例と違うように作り直した。
+
+### 30.5 確かめたこと
+
+英日どちらの例も `ritsu check` が通り（21 ファイル）、`sakai check` が「10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)」と言い、`check_layers.py` は「11 held, 0 failed, 0 left out」と言う。値 0 を `skip` と答える前の層で同じ検査を走らせると落ちる（`tests/vectors.rs` の誤りを入れた二つ）。売り越しの再現は、新しい帳簿で `post` が `done` になり、別の注文は在庫切れで断られる。`chobo run` で、一つの注文の二行が別々に押さえられ、同じ行を別の数で押さえると `key_conflict`、同じ中身なら `done_before` になる。フローの五つの終わり方（成功、`OutOfStock`、`PackingShort`、`PackingLate`、`DeliveryFailed`）を `ritsu run` で流し、成功では `post_stock` が行ごとに呼ばれ、ほかの四つでは `release_stock` が押さえた行ごとに呼ばれる。`tests/examples.rs` に、押さえが 7 日より長いこと、確定が梱包のあとでお知らせの前にあること、`fail` ごとに戻す呼び出しが直前にあることを確かめる試験を足した。buf の lint は、Protovalidate の代わりの `.proto` を横に置いて、ネットワークなしで通す。
+
+### 30.6 残したこと
+
+- 失敗した実行のあとの注文の状態と請求：どの世界も言っていない。`billing_need.rule` は `paid` を請求し、`fulfillment.flow` は注文の状態を書かない。在庫切れが `CANCELLED` になるのか、`paid` のまま残るのかは、作者の決めることである。
+- 出荷日と梱包待ちの比較：関係があると書いた成果物がないので、穴と言えない。
+- `payment_terms.cal` と `ship_date.cal` を読むコードやフローがない：`next_business_day` を呼ぶ手書きのコードが代わりにある。
+- 確定（`post_stock`）や知らせる（`notify`）が処理されないエラーで失敗したときは、押さえたぶんを戻さない。確定が途中まで通った後で戻すのが正しいかが決まらない。

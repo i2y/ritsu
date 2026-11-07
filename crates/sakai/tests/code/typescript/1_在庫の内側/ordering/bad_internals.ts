@@ -2,5 +2,5 @@
 import { hold } from "../inventory/ledger.ts";
 
 export function take(order: string, sku: string): boolean {
-  return hold(order, sku, 1);
+  return hold(order, sku, 1).result !== "refused";
 }

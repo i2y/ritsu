@@ -12,9 +12,9 @@ tests/projects/通販/inventory/在庫の引当.book: ok
   引当.void  may be refused: already_posted, expired, no_such_hold
   返品.do    may be refused: key_conflict
   key: 入荷 once per 納品書, sku; a second call that differs only in 数 is refused with key_conflict
-  key: 引当 once per 注文, sku; a second call that differs only in 数 is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: 引当 once per 明細; a second call that differs only in sku or 数 is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
   key: 返品 once per 返品番号, sku; a second call that differs only in 数 is refused with key_conflict
 tests/projects/通販/delivery/配送の手配.flow: ok
 tests/projects/通販/ordering/受注.flow: ok
-tests/projects/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+tests/projects/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)
 ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): all pass; borders between the languages: 0 checked, 0 undecided

@@ -127,21 +127,34 @@ fn the_python_layers_of_the_shop_hold_to_the_vectors() {
     let ran = held(&py, Path::new("examples/shop"), &shop_vectors());
     assert!(ran.ok, "{}", ran.both());
     println!("compared: {}", ran.stdout.trim());
-    assert!(ran.stdout.contains("7 held, 0 failed"), "{}", ran.stdout);
+    assert!(ran.stdout.contains("11 held, 0 failed, 0 left out"), "{}", ran.stdout);
 }
 
-/// Three mistakes, each in a copy: a value swapped in the code of a layer, the numbers of two values
-/// swapped in the `.proto` (the stand-in the code is given by is the old one), and a value swapped in
-/// the map (the code is the old one). Each one makes the check fail, and says which value.
+/// Four mistakes, each in a copy: a value swapped in the code of a layer, a layer that answers `skip` to
+/// a value the map says nothing of (instead of raising), the numbers of two values swapped in the `.proto`
+/// (the stand-in the code is given by is the old one), and a value swapped in the map (the code is the old
+/// one). Each one makes the check fail, and says which value.
 #[test]
 fn a_changed_layer_a_changed_proto_and_a_changed_map_each_fail() {
     let Some(py) = python() else { return };
-    let edits: [(&str, &str, &str, &str); 3] = [
+    let edits: [(&str, &str, &str, &str); 5] = [
         (
             "py/billing/acl/ordering/status.py",
             "(order_pb2.ORDER_STATUS_PAID, order_pb2.ORDER_STATUS_SHIPPED)",
             "(order_pb2.ORDER_STATUS_PAID,)",
             "ORDER_STATUS_SHIPPED",
+        ),
+        (
+            "py/billing/acl/ordering/status.py",
+            "    raise ValueError(f\"order status {status} is not one the rule reads\")",
+            "    return SKIP",
+            "ORDER_STATUS_UNSPECIFIED",
+        ),
+        (
+            "py/delivery/acl/inventory/packing.py",
+            "    raise ValueError(f\"packing status {status} is not one the map names\")",
+            "    return False",
+            "PACKING_STATUS_UNSPECIFIED",
         ),
         ("proto/warehouse/v1/stock.proto", "PACKING_STATUS_WAITING = 1;\n  PACKING_STATUS_PACKED = 2;", "PACKING_STATUS_WAITING = 2;\n  PACKING_STATUS_PACKED = 1;", "PACKING_STATUS_PACKED"),
         ("contexts/delivery.ctx", "PACKING_STATUS_PACKED  -> ship", "PACKING_STATUS_PACKED  -> wait", "PACKING_STATUS_PACKED"),

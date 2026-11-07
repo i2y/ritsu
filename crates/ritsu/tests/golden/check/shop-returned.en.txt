@@ -21,7 +21,7 @@ inventory/inventory.book: ok
   reserve.void  may be refused: already_posted, expired, no_such_hold
   take_back.do  may be refused: key_conflict
   key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
-  key: reserve once per order, sku; a second call that differs only in qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: reserve once per line; a second call that differs only in sku or qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
   key: take_back once per return_id, sku; a second call that differs only in qty is refused with key_conflict
 delivery/arrange_delivery.flow: ok
 ordering/fulfillment.flow: ok

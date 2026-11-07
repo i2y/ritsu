@@ -12,9 +12,9 @@ tests/projects/通販/inventory/在庫の引当.book: ok
   引当.void  拒否されうる理由: already_posted、expired、no_such_hold
   返品.do    拒否されうる理由: key_conflict
   キー: 入荷 は、納品書 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。
-  キー: 引当 は、注文 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+  キー: 引当 は、明細 ごとに一度だけ動きます。キーが同じで sku、数 のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
   キー: 返品 は、返品番号 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。
 tests/projects/通販/delivery/配送の手配.flow: 検査を通りました
 tests/projects/通販/ordering/受注.flow: 検査を通りました
-tests/projects/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
+tests/projects/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 10 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6）
 ritsu check: ファイル 21 個（rulec 4、koyomi 3、chobo 1、proto 5、dandori 2、sakai 6）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
