@@ -597,6 +597,46 @@ fn 入力を共有する導出の規則でも_外について言い切れる() {
     assert_eq!(code, 1, "差があるので exit は 1");
 }
 
+/// A product on one value is a matter of its divisors (§15.291). The new version pays a bonus of 5
+/// rather than 1 where `qty × price` is exactly 80,779,853,376, which is 123,456 × 654,321 and which
+/// no move of one input along a line lands on: that cell came back unrealized, and the one change
+/// there is was not reported. The two cells beside it, with one input at 1,000,000, hold no input at
+/// all, since 1,000,000 does not divide the value, and they withheld the claim about the rest.
+#[test]
+fn a_product_on_one_value_is_built_from_its_divisors_and_its_empty_neighbours_are_left_out() {
+    let rule = |version: &str, bonus: &str| {
+        format!(
+            "rule t(t) {version}
+
+inputs
+  qty(qty)     : number  range >=1 <=1000000
+  price(price) : number  range >=1 <=1000000
+
+define raw_total(raw_total) : number = qty * price
+
+outputs
+  bonus(bonus) : number  round down(1)
+
+table bonuses(bonuses)
+policy first
+| raw_total   | -> bonus |
+| 80779853376 | {bonus}  |
+| -           | 0        |
+"
+        )
+    };
+    let tmp = TempDir::new("vdiff-product");
+    let (old, new) = (tmp.path().join("old.rule"), tmp.path().join("new.rule"));
+    std::fs::write(&old, rule("v1", "1")).unwrap();
+    std::fs::write(&new, rule("v2", "5")).unwrap();
+    let (code, out) = rulec(&["diff", &old.to_string_lossy(), &new.to_string_lossy(), "--format", "json"]);
+    let j = json(&out);
+    assert_eq!(int(&j, "differing"), 1, "{out}");
+    assert_eq!(int(&j, "unrealized"), 0, "{out}");
+    assert!(is_true(&j, "total"), "{out}");
+    assert_eq!(code, 1, "{out}");
+}
+
 /// A range put on an input of an ordered enum is a change of what the version takes, as a
 /// number's range is (§15.251). The corpus's campaign stops at gold; a version of it whose
 /// campaign takes every tier was said to take every input the other does, with "every input gets

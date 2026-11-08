@@ -1349,7 +1349,7 @@ inputs
   数量(qty)   : number  range >=1 <=1000000
   単価(price) : number  range >=1 <=1000000
 
-define 合計の元(raw_total) : number = 数量 * 単価
+define 合計の元(raw_total) : number = 数量 * (単価 + 50)
 
 outputs
   合計(total) : number  round down(1)
@@ -1367,7 +1367,7 @@ inputs
   qty(qty)     : number  range >=1 <=1000000
   price(price) : number  range >=1 <=1000000
 
-define raw_total(raw_total) : number = qty * price
+define raw_total(raw_total) : number = qty * (price + 50)
 
 outputs
   total(total) : number  round down(1)

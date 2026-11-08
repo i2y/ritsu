@@ -915,6 +915,15 @@ fn realize(
     // Two derives can also read the same input (`最低差` and `支払差` both read `現在残額`),
     // so settling one can unsettle another: the whole pass repeats until they hold at once.
     let input_names: BTreeSet<String> = axes.iter().filter(|a| a.kind == Kind::Input).map(|a| a.col.clone()).collect();
+    // The caller's promises kept, and every scalar derive on its coordinate at the same time, not
+    // one after another.
+    let all_hold = |m: &HashMap<String, Val>| -> bool {
+        constraints_hold(f, c, m)
+            && scalars.iter().all(|(name, expr)| match ax_of.get(name.as_str()) {
+                Some(&ai) => crate::eval::Env::new(c, chained(m, scalars, c)).expr(expr).is_some_and(|v| holds(&axes[ai], cell[ai], &v)),
+                None => true,
+            })
+    };
     let climbed: Option<HashMap<String, Val>> = 'climb: {
     for _pass in 0..4 {
         let mut moved = false;
@@ -1013,21 +1022,7 @@ fn realize(
             break;
         }
     }
-    let mut settled = constraints_hold(f, c, &base);
-    // Every scalar derive has to hold at the same time, not one after another.
-    if settled {
-        for (name, expr) in scalars {
-            let Some(&ai) = ax_of.get(name.as_str()) else { continue };
-            match crate::eval::Env::new(c, chained(&base, scalars, c)).expr(expr) {
-                Some(v) if holds(&axes[ai], cell[ai], &v) => {}
-                _ => {
-                    settled = false;
-                    break;
-                }
-            }
-        }
-    }
-    if settled { Some(base) } else { None }
+    if all_hold(&base) { Some(base) } else { None }
     };
     // The walk moves one input at a time towards the middle of each target, which cannot
     // reach a point that only the **intersection** of two targets holds — `残高A > 1000円`
@@ -1036,7 +1031,20 @@ fn realize(
     // coordinates exactly as the walk's own answer is, so nothing is trusted here on the
     // strength of the arithmetic: a point that does not verify is a cell not realized, as
     // before.
-    let base = match climbed.or_else(|| solved_point(axes, cell, f, c, scalars, &input_names)) {
+    //
+    // A column that multiplies inputs and sits on a point is reached by no line at all, and the
+    // elimination, which reads lines only, hands back a point that misses it: its divisors are
+    // where the inputs go (§15.291). A seeded run asks for another point of the cell, which a
+    // divisor is not.
+    let solved = || solved_point(axes, cell, f, c, scalars, &input_names).filter(|b| all_hold(b));
+    let factor = || match seed {
+        None => match factored(axes, cell, f, c, scalars) {
+            Factored::Point(p) => Some(p),
+            _ => None,
+        },
+        Some(_) => None,
+    };
+    let base = match climbed.or_else(solved).or_else(factor) {
         Some(b) => b,
         None => {
             if seed.is_none() && !cone.is_empty() {
@@ -2053,6 +2061,10 @@ pub(crate) fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), bud
     let cone = cone_of(&axes, o.0, o.1, &scalars);
     let mut memo: HashMap<Vec<usize>, Solved> = HashMap::new();
     let mut shape_memo: HashMap<Vec<usize>, bool> = HashMap::new();
+    // What whole numbers rule out, each version over its own derives (§15.291).
+    let scalars_n = scalar_derives(n.0, &n.0.inputs.iter().map(|i| i.name.text.clone()).collect());
+    let cone_n = cone_of(&axes, n.0, n.1, &scalars_n);
+    let mut factor_memo: [HashMap<Vec<usize>, bool>; 2] = [HashMap::new(), HashMap::new()];
 
     let n_cells = total as usize;
     let mut strides = vec![1usize; axes.len()];
@@ -2140,9 +2152,17 @@ pub(crate) fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), bud
             // away from "elsewhere the two answer alike".
             // Proved empty: the cell is not a case anybody can send, so it is passed over
             // exactly as one the shape ruled out is — counted nowhere and claimed nothing
-            // about.
-            let empty = |v: (&RuleFile, &Checked)| linearly_empty(&axes, &cell, v) || never_empties(&axes, &cell, v.0, v.1);
-            if !(empty(o) && empty(n)) {
+            // about. A product on a point is asked of whole numbers as well (§15.291), each
+            // version with its own derives.
+            let mut empty = |side: usize| -> bool {
+                let (v, sc, cn) = if side == 0 { (o, &scalars, &cone) } else { (n, &scalars_n, &cone_n) };
+                if linearly_empty(&axes, &cell, v) || never_empties(&axes, &cell, v.0, v.1) {
+                    return true;
+                }
+                let k: Vec<usize> = cn.iter().map(|&i| cell[i]).collect();
+                *factor_memo[side].entry(k).or_insert_with(|| matches!(factored(&axes, &cell, v.0, v.1, sc), Factored::Empty))
+            };
+            if !(empty(0) && empty(1)) {
                 out.unrealized += 1;
                 considered[at] = true;
                 unbuilt.push(at);
@@ -3060,6 +3080,324 @@ fn solved_point(
     (!out.is_empty() && constraints_hold(f, c, &out)).then_some(out)
 }
 
+// ---------------------------------------------------------------------------------------
+// A product on a point: whole numbers settle it (§15.291)
+// ---------------------------------------------------------------------------------------
+
+/// The most trial divisions one point is given, and the most ways of writing it as a product
+/// that are looked at. Past either, the cell stays where the walk left it.
+const DIVISIONS: u64 = 2_000_000;
+const PRODUCTS: usize = 100_000;
+
+/// What whole numbers say about a cell whose computed column multiplies inputs and sits on a
+/// point there.
+enum Factored {
+    /// Inputs of the cell whose product lands on the point, every computed column held to its
+    /// coordinate and every `constraint` kept.
+    Point(HashMap<String, Val>),
+    /// No input of the cell lands on the point: every way of writing it as a product of values on
+    /// the inputs' grids was looked at, and none is inside their coordinates.
+    Empty,
+    /// Not settled either way.
+    Open,
+}
+
+/// A computed column that only multiplies, `k × x × y × … + b`, where `k` and `b` are plain
+/// numbers and every factor is an input of the walk: the inputs with how many times each is
+/// multiplied in, `k` and `b`. `None` for any other expression.
+fn product_of(e: &Expr, c: &Checked, is_input: &dyn Fn(&str) -> bool) -> Option<(BTreeMap<String, u32>, Rat, Rat)> {
+    // A number read as the evaluator reads it, in its own unit.
+    fn constant(e: &Expr, c: &Checked) -> Option<Rat> {
+        match e {
+            Expr::Lit(Lit::Num(_), _) => match crate::eval::Env::new(c, HashMap::new()).expr(e) {
+                Some(Val::Num(r)) => Some(r),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+    fn mono(e: &Expr, c: &Checked, is_input: &dyn Fn(&str) -> bool) -> Option<(BTreeMap<String, u32>, Rat)> {
+        if let Some(k) = constant(e, c) {
+            return Some((BTreeMap::new(), k));
+        }
+        match e {
+            Expr::Name(n, _) if is_input(n) => Some((BTreeMap::from([(n.clone(), 1)]), Rat::int(1))),
+            Expr::Bin(l, BinOp::Mul, r, _) => {
+                let (mut a, ka) = mono(l, c, is_input)?;
+                let (b, kb) = mono(r, c, is_input)?;
+                for (n, x) in b {
+                    *a.entry(n).or_insert(0) += x;
+                }
+                Some((a, ka.checked_mul(kb)?))
+            }
+            // The typing takes nothing but a positive constant for a divisor.
+            Expr::Bin(l, BinOp::Div, r, _) => {
+                let d = constant(r, c)?;
+                let (a, k) = mono(l, c, is_input)?;
+                Some((a, k.checked_div(d)?))
+            }
+            _ => None,
+        }
+    }
+    let (m, k, b) = match e {
+        Expr::Bin(l, op @ (BinOp::Add | BinOp::Sub), r, _) => {
+            let sign = Rat::int(if *op == BinOp::Sub { -1 } else { 1 });
+            if let Some(b) = constant(r, c) {
+                let (m, k) = mono(l, c, is_input)?;
+                (m, k, b.checked_mul(sign)?)
+            } else {
+                let b = constant(l, c)?;
+                let (m, k) = mono(r, c, is_input)?;
+                (m, k.checked_mul(sign)?, b)
+            }
+        }
+        _ => {
+            let (m, k) = mono(e, c, is_input)?;
+            (m, k, Rat::zero())
+        }
+    };
+    (!m.is_empty() && k.cmp_to(Rat::zero()) != Ordering::Equal).then_some((m, k, b))
+}
+
+/// One factor of a product: its input's axis, how many times it is multiplied in, and the whole
+/// numbers of grid steps its coordinate allows (an end it runs on from is `None`).
+struct Factor {
+    ai: usize,
+    exp: u32,
+    lo: Option<i128>,
+    hi: Option<i128>,
+}
+
+impl Factor {
+    fn takes(&self, a: i128) -> bool {
+        self.lo.is_none_or(|l| a >= l) && self.hi.is_none_or(|h| a <= h)
+    }
+}
+
+/// Every positive divisor of `n`, smallest first; `None` when that is more trial divisions than
+/// one point is given.
+fn divisors(n: u128) -> Option<Vec<u128>> {
+    let n = u64::try_from(n).ok()?;
+    let mut r = (n as f64).sqrt() as u64;
+    while r.checked_mul(r).is_none_or(|x| x > n) {
+        r -= 1;
+    }
+    while (r + 1).checked_mul(r + 1).is_some_and(|x| x <= n) {
+        r += 1;
+    }
+    if r > DIVISIONS {
+        return None;
+    }
+    let (mut small, mut large) = (Vec::new(), Vec::new());
+    for d in 1..=r {
+        if n % d == 0 {
+            small.push(u128::from(d));
+            if d != n / d {
+                large.push(u128::from(n / d));
+            }
+        }
+    }
+    small.extend(large.into_iter().rev());
+    Some(small)
+}
+
+/// The whole numbers whose `exp`-th power is `n`.
+fn roots(n: i128, exp: u32) -> Vec<i128> {
+    if exp == 1 {
+        return vec![n];
+    }
+    if n < 0 && exp % 2 == 0 {
+        return Vec::new();
+    }
+    let m = n.unsigned_abs();
+    let guess = (m as f64).powf(1.0 / f64::from(exp)).round() as u128;
+    let Some(a) = (guess.saturating_sub(2)..=guess + 2).find(|x| x.checked_pow(exp) == Some(m)) else { return Vec::new() };
+    let Ok(a) = i128::try_from(a) else { return Vec::new() };
+    match (n < 0, exp % 2 == 0) {
+        (true, _) => vec![-a],
+        (false, true) => vec![a, -a],
+        (false, false) => vec![a],
+    }
+}
+
+/// Walks the ways of writing `n` (not nought) as the product of the factors from `j` on, each a
+/// whole number inside its ends raised to its power. `found` is asked about each, and stops the
+/// walk by answering true; `fits` records that some way was inside every end. `Some(true)` when
+/// `found` stopped it, `Some(false)` when the walk got to the end, `None` when it ran past
+/// [`PRODUCTS`] first.
+#[allow(clippy::too_many_arguments)]
+fn walk_products(
+    n: i128,
+    fs: &[Factor],
+    j: usize,
+    ds: &[u128],
+    at: &mut Vec<i128>,
+    tried: &mut usize,
+    fits: &mut bool,
+    found: &mut dyn FnMut(&[i128]) -> bool,
+) -> Option<bool> {
+    if j + 1 == fs.len() {
+        for a in roots(n, fs[j].exp) {
+            if !fs[j].takes(a) {
+                continue;
+            }
+            *fits = true;
+            *tried += 1;
+            at.push(a);
+            let stop = found(at);
+            at.pop();
+            if stop {
+                return Some(true);
+            }
+            if *tried > PRODUCTS {
+                return None;
+            }
+        }
+        return Some(false);
+    }
+    let m = n.unsigned_abs();
+    for &d in ds {
+        let Some(p) = d.checked_pow(fs[j].exp) else { break };
+        if p > m {
+            break;
+        }
+        if m % p != 0 {
+            continue;
+        }
+        let (Ok(d), Ok(p)) = (i128::try_from(d), i128::try_from(p)) else { break };
+        for a in [d, -d] {
+            if !fs[j].takes(a) {
+                continue;
+            }
+            let ap = if a < 0 && fs[j].exp % 2 == 1 { -p } else { p };
+            at.push(a);
+            let r = walk_products(n / ap, fs, j + 1, ds, at, tried, fits, found);
+            at.pop();
+            match r {
+                Some(false) => {}
+                other => return other,
+            }
+            *tried += 1;
+            if *tried > PRODUCTS {
+                return None;
+            }
+        }
+    }
+    Some(false)
+}
+
+/// What whole numbers say about the cell (§15.291). A computed column that multiplies inputs is
+/// one value of each of them on a point, and the inputs sit on grids: `qty × price` on
+/// 80,779,853,376 is 123,456 × 654,321 and a handful of others, and a point no divisor reaches is
+/// a cell nobody can send. Neither the walk, which moves one input along a line, nor the
+/// elimination, which only reads lines, reaches either answer.
+///
+/// `Point` is held to the cell like every other point; `Empty` only comes out of a search that
+/// went to the end.
+fn factored(axes: &[Axis], cell: &[usize], f: &RuleFile, c: &Checked, scalars: &[(String, Expr)]) -> Factored {
+    let ax_of: HashMap<&str, usize> = axes.iter().enumerate().map(|(i, a)| (a.col.as_str(), i)).collect();
+    let is_input = |n: &str| {
+        ax_of.get(n).is_some_and(|&i| axes[i].kind == Kind::Input && !axes[i].date && matches!(axes[i].ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number))
+    };
+    let base: HashMap<String, Val> = axes
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.kind == Kind::Input)
+        .filter_map(|(i, a)| coord_val(a, cell[i]).map(|v| (a.col.clone(), v)))
+        .collect();
+    let keeps = |m: &HashMap<String, Val>| -> bool {
+        if !constraints_hold(f, c, m) {
+            return false;
+        }
+        let env = chained(m, scalars, c);
+        axes.iter().enumerate().all(|(i, a)| match a.kind {
+            Kind::Input => m.get(&a.col).is_some_and(|v| holds(a, cell[i], v)),
+            _ if scalars.iter().any(|(n, _)| *n == a.col) => env.get(&a.col).is_some_and(|v| holds(a, cell[i], v)),
+            _ => true,
+        })
+    };
+    for (name, expr) in scalars {
+        let Some(&ai) = ax_of.get(name.as_str()) else { continue };
+        let Some(Coord::Point(v)) = axes[ai].coords.get(cell[ai]) else { continue };
+        let Some((powers, k, b)) = product_of(expr, c, &is_input) else { continue };
+        // v = k × Π (aᵢ × stepᵢ)^eᵢ + b, so Π aᵢ^eᵢ = (v − b) ÷ (k × Π stepᵢ^eᵢ), each aᵢ whole.
+        let mut scale = Some(k);
+        let mut fs: Vec<Factor> = Vec::new();
+        for (col, &exp) in &powers {
+            let fi = ax_of[col.as_str()];
+            let ax = &axes[fi];
+            let steps = |x: Rat| x.checked_div(ax.step);
+            // The ends in whole steps, from the coordinate itself: strictly inside an open one.
+            let (lo, hi) = match &ax.coords[cell[fi]] {
+                Coord::Point(p) => match steps(*p) {
+                    Some(s) if s.is_int() => (Some(s.num), Some(s.num)),
+                    _ => (None, None),
+                },
+                Coord::Open(l, h) => (
+                    l.and_then(steps).map(|s| s.num.div_euclid(s.den) + 1),
+                    h.and_then(steps).map(|s| -(-s.num).div_euclid(s.den) - 1),
+                ),
+                _ => (None, None),
+            };
+            if matches!(&ax.coords[cell[fi]], Coord::Point(_)) && lo.is_none() {
+                scale = None;
+                break;
+            }
+            for _ in 0..exp {
+                scale = scale.and_then(|s| s.checked_mul(ax.step));
+            }
+            fs.push(Factor { ai: fi, exp, lo, hi });
+        }
+        let Some(n) = scale.and_then(|s| v.checked_sub(b)?.checked_div(s)) else { continue };
+        if !n.is_int() {
+            return Factored::Empty;
+        }
+        let point = |vals: &[i128]| -> HashMap<String, Val> {
+            let mut m = base.clone();
+            for (fc, &a) in fs.iter().zip(vals) {
+                m.insert(axes[fc.ai].col.clone(), val_of(&axes[fc.ai], Rat::int(a).mul(axes[fc.ai].step)));
+            }
+            m
+        };
+        if n.num == 0 {
+            // Nought is a product exactly when one factor is nought.
+            let Some(z) = fs.iter().position(|fc| fc.takes(0)) else { return Factored::Empty };
+            let mut vals: Vec<i128> = fs.iter().map(|fc| fc.lo.or(fc.hi).unwrap_or(0)).collect();
+            vals[z] = 0;
+            let m = point(&vals);
+            if keeps(&m) {
+                return Factored::Point(m);
+            }
+            continue;
+        }
+        // One factor is a root, and needs no divisors.
+        let ds = if fs.len() > 1 {
+            match divisors(n.num.unsigned_abs()) {
+                Some(ds) => ds,
+                None => continue,
+            }
+        } else {
+            Vec::new()
+        };
+        let (mut hit, mut fits, mut tried) = (None, false, 0usize);
+        let walked = walk_products(n.num, &fs, 0, &ds, &mut Vec::new(), &mut tried, &mut fits, &mut |vals: &[i128]| {
+            let m = point(vals);
+            let ok = keeps(&m);
+            if ok {
+                hit = Some(m);
+            }
+            ok
+        });
+        if let Some(m) = hit {
+            return Factored::Point(m);
+        }
+        if walked == Some(false) && !fits {
+            return Factored::Empty;
+        }
+    }
+    Factored::Open
+}
+
 /// Whether no input of this version reaches the cell, as far as linear arithmetic can tell
 /// (§15.129).
 ///
@@ -3284,6 +3622,7 @@ pub(crate) struct Walker<'a> {
     cone: Vec<usize>,
     memo: HashMap<Vec<usize>, Solved>,
     shape_memo: HashMap<Vec<usize>, bool>,
+    factor_memo: HashMap<Vec<usize>, bool>,
 }
 
 impl<'a> Walker<'a> {
@@ -3326,6 +3665,7 @@ impl<'a> Walker<'a> {
             cone,
             memo: HashMap::new(),
             shape_memo: HashMap::new(),
+            factor_memo: HashMap::new(),
         })
     }
 
@@ -3344,15 +3684,26 @@ impl<'a> Walker<'a> {
             Some(v) => *v,
             None => {
                 let v = feasible_shape(&self.axes, cell, self.f, self.c, &self.scalars);
-                self.shape_memo.insert(k, v);
+                self.shape_memo.insert(k.clone(), v);
                 v
             }
         };
-        if !shaped || linearly_empty(&self.axes, cell, (self.f, self.c)) || never_empties(&self.axes, cell, self.f, self.c) {
+        if !shaped || linearly_empty(&self.axes, cell, (self.f, self.c)) || never_empties(&self.axes, cell, self.f, self.c) || self.factored_empty(cell, k) {
             Settled::Empty
         } else {
             Settled::Unknown
         }
+    }
+
+    /// Whether whole numbers rule the cell out (§15.291), once for each combination of the
+    /// coordinates the question reads.
+    fn factored_empty(&mut self, cell: &[usize], key: Vec<usize>) -> bool {
+        if let Some(v) = self.factor_memo.get(&key) {
+            return *v;
+        }
+        let v = matches!(factored(&self.axes, cell, self.f, self.c, &self.scalars), Factored::Empty);
+        self.factor_memo.insert(key, v);
+        v
     }
 
     /// Other inputs of the same cell, each held to the cell's coordinates again, with what

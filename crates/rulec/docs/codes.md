@@ -6051,7 +6051,7 @@ inputs
   qty(qty)     : number  range >=1 <=1000000
   price(price) : number  range >=1 <=1000000
 
-define raw_total(raw_total) : number = qty * price
+define raw_total(raw_total) : number = qty * (price + 50)
 
 outputs
   total(total) : number  round down(1)

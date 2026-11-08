@@ -424,17 +424,16 @@ fn 機械のある規則でも一番上の階層は一度の呼び出し() {
     assert_eq!(codes(&src), ["E146"]);
 }
 
-/// A number the rule computes from two inputs, on a value only some calls have: the cells do not settle
-/// it, and it is not said to hold.
-#[test]
-fn w135_決めきれないことを成り立つと言わない() {
-    let src = "rule t(t) v1
+/// A rule whose `total` is `raw_total`, worked out from two inputs as `expr`, with these lines.
+fn computed(expr: &str, lines: &str) -> String {
+    format!(
+        "rule t(t) v1
 
 inputs
   qty(qty)     : number  range >=1 <=1000000
   price(price) : number  range >=1 <=1000000
 
-define raw_total(raw_total) : number = qty * price
+define raw_total(raw_total) : number = {expr}
 
 outputs
   total(total) : number  round down(1)
@@ -444,14 +443,59 @@ policy first
 | -> total  |
 | raw_total |
 
-possible total = 7919
-possible total > 1000000000
-possible total = 5000000000000
-";
-    let got = codes(src);
-    assert!(got.iter().all(|c| c == "W135"), "{got:?}");
-    let said = titled(src, "W135");
-    assert!(said.iter().any(|t| t.contains("total = 5000000000000")), "{said:?}");
+{lines}"
+    )
+}
+
+/// A number the rule computes from two inputs, on a value only some calls have: neither a line nor
+/// the divisors settle it, and it is not said to hold. Beside it, a value past what the inputs reach
+/// is still said not to happen.
+#[test]
+fn w135_決めきれないことを成り立つと言わない() {
+    let src = computed("qty * (price + 50)", "possible total = 80779853376\npossible total = 5000000000000\n");
+    assert_eq!(said(&src), ["E146", "W135"]);
+    let open = titled(&src, "W135");
+    assert!(open.iter().any(|t| t.contains("total = 80779853376")), "{open:?}");
+}
+
+/// A product on one value is a matter of its divisors (§15.291). 80,779,853,376 is 123,456 × 654,321,
+/// which no move of one input along a line lands on; 1,000,003 is a prime past both ranges, which no
+/// line rules out; 1,000,001 is 101 × 9,901, inside both.
+#[test]
+fn 積の値は約数で決まる() {
+    let src = computed("qty * price", "possible total = 80779853376\n");
+    assert_eq!(said(&src), Vec::<String>::new());
+    let (_t, d) = scratch("product");
+    let f = write(&d, "p.rule", &src);
+    let claims = json_claims(&f);
+    let inputs = claims[0].get("witness").and_then(|w| w.get("inputs")).unwrap();
+    let of = |k: &str| inputs.get(k).and_then(|x| x.as_int()).unwrap_or_else(|| panic!("{k}: {inputs:?}"));
+    assert_eq!(of("qty") * of("price"), 80779853376);
+    assert_eq!(said(&computed("qty * price", "possible total = 1000003\n")), ["E146"]);
+    assert_eq!(said(&computed("qty * price", "possible total = 1000001\n")), Vec::<String>::new());
+    // A factor and an addend that are plain numbers: 3 × 1,000,003 + 1 is the prime again, and
+    // 3,000,005 is no whole product at all.
+    assert_eq!(said(&computed("qty * price * 3 + 1", "possible total = 242339560129\n")), Vec::<String>::new());
+    assert_eq!(said(&computed("qty * price * 3 + 1", "possible total = 3000010\n")), ["E146"]);
+    assert_eq!(said(&computed("qty * price * 3 + 1", "possible total = 3000005\n")), ["E146"]);
+    // An input multiplied in twice: 999,999 squared, and one past it.
+    assert_eq!(said(&computed("qty * qty", "possible total = 999998000001\n")), Vec::<String>::new());
+    assert_eq!(said(&computed("qty * qty", "possible total = 999998000002\n")), ["E146"]);
+}
+
+/// A cell no input was built for leaves a line open only where its answer could meet the line
+/// (§15.291). `possible total > 1000000000` cuts `raw_total` at 1,000,000,000, which `qty × qty + qty`
+/// never lands on and the walk builds nothing for. `total` there is 1,000,000,000 whatever the call,
+/// so the cell says nothing about `total = 0` or `total = 1`, which no call reaches.
+#[test]
+fn 答えが届かない区画は行を決めきれなくしない() {
+    let src = computed("qty * qty + qty", "possible total = 1\npossible total > 1000000000\n");
+    assert_eq!(said(&src), ["E146"]);
+    // Where the answer could meet the line, the cell still leaves it open.
+    let src = computed("qty * qty + qty", "possible total = 1000000000\n");
+    assert_eq!(said(&src), ["W135"]);
+    // A value past both ranges' product, beside a line whose cut leaves cells of its own.
+    assert_eq!(said(&computed("qty * price", "possible total = 999999999989\npossible total > 1000000000\n")), ["E146"]);
 }
 
 // ------------------------------------------------------------------------------------------------

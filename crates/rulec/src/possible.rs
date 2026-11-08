@@ -15,7 +15,8 @@ use crate::eval::Val;
 use crate::machine::{Edge, NODES_PER_CELL};
 use crate::num::Rat;
 use crate::types::{Checked, Ty};
-use crate::vdiff::{Settled, Walker};
+use crate::vdiff::{Axis, Coord, Settled, Walker};
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// How one claim came out.
@@ -128,6 +129,145 @@ struct Seen {
     answers: BTreeMap<String, BTreeSet<String>>,
 }
 
+/// What a name can be over a cell, read off the coordinates with no call to run: one value, or
+/// every value between two ends on its grid (an end it runs on from is `None`).
+enum Reach {
+    Is(Val),
+    Between(Option<Rat>, Option<Rat>),
+}
+
+/// Whether a row can fire anywhere in the cell. A coordinate rules a row out only where one value
+/// of it answers for all: a point, a word or a truth value, or an interval tested by a comparison,
+/// which the axes are cut at. A string class is a prefix, and one string does not stand for it.
+fn may_fire(c: &Checked, axes: &[Axis], cell: &[usize], t: &Table, r: &Row) -> bool {
+    t.inputs.iter().enumerate().all(|(ci, (col, _))| {
+        let Some(test) = r.cells.get(ci) else { return true };
+        let Some(ai) = axes.iter().position(|a| a.col == *col) else { return true };
+        let ax = &axes[ai];
+        let decides = match &ax.coords[cell[ai]] {
+            Coord::Point(_) => true,
+            Coord::Word(_) => *ax.ty.present() != Ty::Str,
+            Coord::Open(..) => matches!(test, Cell::Cmp(_) | Cell::Lit(_) | Cell::DontCare),
+            Coord::OtherStr => false,
+        };
+        !decides || crate::vdiff::coord_val(ax, cell[ai]).is_none_or(|v| crate::eval::cell_matches(c, test, &v, &ax.ty))
+    })
+}
+
+/// Every value `name` can take over the cell: off its coordinate when it has an axis, otherwise off
+/// each row that can fire there, followed through the tables in between. `false` when that cannot
+/// be read without a call: a name an expression works out and no axis follows, a string class, a
+/// date between two ends.
+fn reaches(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], name: &str, depth: usize, out: &mut Vec<Reach>) -> bool {
+    if depth > 16 {
+        return false;
+    }
+    if let Some(ai) = axes.iter().position(|a| a.col == name) {
+        let ax = &axes[ai];
+        return match &ax.coords[cell[ai]] {
+            Coord::Word(_) if *ax.ty.present() == Ty::Str => false,
+            Coord::Point(_) | Coord::Word(_) => match crate::vdiff::coord_val(ax, cell[ai]) {
+                Some(v) => {
+                    out.push(Reach::Is(v));
+                    true
+                }
+                None => false,
+            },
+            co @ Coord::Open(..) if !ax.date => {
+                let (lo, hi) = crate::vdiff::ival(co, ax.step);
+                out.push(Reach::Between(lo, hi));
+                true
+            }
+            _ => false,
+        };
+    }
+    // The first output of a `result` line is its expression.
+    if let (Some(r), Some(first)) = (&f.result, f.outputs.first()) {
+        if first.name.text == name {
+            return match &r.expr {
+                Expr::Name(m, _) => reaches(f, c, axes, cell, m, depth + 1, out),
+                _ => false,
+            };
+        }
+    }
+    let computed = f.items.iter().any(|it| match it {
+        Item::Derived(d) => d.name.text == name,
+        Item::Define(d) => d.name.text == name,
+        _ => false,
+    });
+    if computed || f.inputs.iter().any(|i| i.name.text == name) {
+        return false;
+    }
+    let Some(set) = c.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == name)) else { return false };
+    let Some(oi) = set.table.outputs.iter().position(|o| o.name.text == name) else { return false };
+    let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+    let word = |w: &Lit, out: &mut Vec<Reach>| crate::eval::lit_to_val(w, &ty).map(|v| out.push(Reach::Is(v))).is_some();
+    for r in set.table.rows.iter().filter(|r| may_fire(c, axes, cell, &set.table, r)) {
+        let read = match r.outs.get(oi) {
+            Some(OutCell::Lit(l)) => word(l, out),
+            Some(OutCell::Nothing) => {
+                out.push(Reach::Is(Val::Enum(crate::kw::NONE.into())));
+                true
+            }
+            // A name the rule knows is read; any other word is the value it spells (§3.2).
+            Some(OutCell::Name(m)) if c.ty_of(m).is_some() => reaches(f, c, axes, cell, m, depth + 1, out),
+            Some(OutCell::Name(m)) => word(&Lit::Word(m.clone()), out),
+            None => false,
+        };
+        if !read {
+            return false;
+        }
+    }
+    true
+}
+
+/// What the output's own rounding makes of a value that reaches it, as the evaluator applies it
+/// last (§7.2).
+fn rounded(f: &RuleFile, c: &Checked, output: &str, x: Rat) -> Rat {
+    use crate::num::RoundTo;
+    let Some(rd) = f.outputs.iter().find(|o| o.name.text == output).and_then(|o| o.rounding.as_ref()) else { return x };
+    let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
+    match (crate::types::lit_value_in_pub(&rd.grid, &ty), crate::num::RoundMode::parse(&rd.mode)) {
+        (Some(g), Some(m)) => x.round_to(m, g),
+        _ => x,
+    }
+}
+
+/// Whether no call of the cell has `output` meet the test, read off the rows that can fire there
+/// (§15.291). A cell no input was built for, and that was not shown empty either, leaves a line
+/// open only when its answer could meet the line there.
+fn output_outside(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], output: &str, tested: &Cell) -> bool {
+    let Some(ty) = c.ty_of(output) else { return false };
+    let mut reach = Vec::new();
+    if !reaches(f, c, axes, cell, output, 0, &mut reach) {
+        return false;
+    }
+    let bounds = crate::machine::cell_bounds(tested, &ty);
+    let written = match tested {
+        Cell::Cmp(ops) => ops.len(),
+        Cell::Lit(_) => 1,
+        Cell::Set(ls) | Cell::Not(ls) => ls.len(),
+        _ => usize::MAX,
+    };
+    reach.iter().all(|r| match r {
+        Reach::Is(Val::Num(x)) => !crate::eval::cell_matches(c, tested, &Val::Num(rounded(f, c, output, *x)), &ty),
+        Reach::Is(v) => !crate::eval::cell_matches(c, tested, v, &ty),
+        // The answers between two ends are the rounding of each value, and rounding keeps their
+        // order. With no boundary of the test among them, the test answers alike for all.
+        Reach::Between(lo, hi) => {
+            if bounds.len() != written {
+                return false;
+            }
+            let (lo, hi) = (lo.map(|x| rounded(f, c, output, x)), hi.map(|x| rounded(f, c, output, x)));
+            let among = |b: &Rat| lo.is_none_or(|l| b.cmp_to(l) != Ordering::Less) && hi.is_none_or(|h| b.cmp_to(h) != Ordering::Greater);
+            match lo.or(hi) {
+                Some(at) if !bounds.iter().any(among) => !crate::eval::cell_matches(c, tested, &Val::Num(at), &ty),
+                _ => false,
+            }
+        }
+    })
+}
+
 /// The lines outside a `machine` (§15.287): a walk over the rule's own cells, each settled by an input
 /// the door takes. `Err` is why the walk could not be made: the rule folds a sequence, or its cells
 /// are past the budget.
@@ -167,11 +307,11 @@ fn walk_lines(f: &RuleFile, c: &Checked, budget: usize) -> Result<Vec<Seen>, Str
             match &settled {
                 Settled::Empty => {}
                 Settled::Unknown => {
-                    // A coordinate wholly outside a condition says the cell is not this line's.
-                    let out = n.conds.iter().any(|k| {
-                        axes.iter().position(|a| a.col == k.name.text).is_some_and(|ai| {
-                            crate::vdiff::coord_val(&axes[ai], cell[ai]).is_some_and(|v| !crate::eval::cell_matches(c, &k.cell, &v, &axes[ai].ty))
-                        })
+                    // A coordinate wholly outside a condition says the cell is not this line's, and
+                    // so does an output no row that can fire here brings inside it (§15.291).
+                    let out = n.conds.iter().any(|k| match axes.iter().position(|a| a.col == k.name.text) {
+                        Some(ai) => crate::vdiff::coord_val(&axes[ai], cell[ai]).is_some_and(|v| !crate::eval::cell_matches(c, &k.cell, &v, &axes[ai].ty)),
+                        None => is_output(&k.name.text) && output_outside(f, c, &axes, &cell, &k.name.text, &k.cell),
                     });
                     seen[li].open |= !out;
                 }
