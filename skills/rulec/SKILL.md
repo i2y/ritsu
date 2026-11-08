@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E146, W105, W110, W111, W114-W135, W901) has to be fixed; when a change to such a rule has to be shown to a person before it ships; or when the claims of a rule (`never`, `once`, `possible`) have to be shown to decide its table.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E148, W105, W110, W111, W114-W135, W901) has to be fixed; when a change to such a rule has to be shown to a person before it ships; or when the claims of a rule (`never`, `once`, `possible`) have to be shown to decide its table.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -121,6 +121,12 @@ A few shapes are worth knowing before the first draft:
   that cannot go negative, and `max`/`min` with the largest or the smallest. An average divides
   inside a rounding: `half_up(total / max(n, 1), 1JPY)`. Folds and these mix freely, over any
   number of sequences; one item reading the elements of two sequences is E031.
+- **A field no two elements share.** `building : building  unique` at the end of a field of
+  `elements`: the door refuses a sequence with two elements of one value of it, in every
+  language. On an enum or a truth value it also caps a `sum` over the sequence at what each value
+  adds once, and `rulec check` holds that to the `sum`'s range, with the rows contributions add
+  (E147). Write it where the caller really sends each value once — the buildings of a province, the
+  members of a team — not to make E147 go away.
 - **Handing one amount out over several lines.** `allocate(<amount>, <running total>,
   <whole>)` is `<amount> × <running total> ÷ <whole>` rounded down. Write one line's share
   as the share up to it minus the share up to the line before: the parts then add up to the
@@ -281,6 +287,11 @@ meet while transcribing:
 - **E028 / E029 / E030 a count that cannot be counted** — the shape is `count <name> over
   <sequence> where <column> = <value>`; the column has to be one an element has, with values that
   are a closed set; and the range is required. E030's message says why it is two things at once.
+- **E147 a sum past its range with each `unique` value once** — the note lists what the element
+  of each value adds at most, largest first, and names the row a contribution added. Widen the
+  `sum`'s range and decide the answer for such a total, lower the rows, or cap the sequence with a
+  `count`: which one is a business decision. **E148** is `unique` on an input, on a field that may
+  be absent, or beside `random`.
 - **W111 unused declaration** — see §3.
 
 ### `examples`

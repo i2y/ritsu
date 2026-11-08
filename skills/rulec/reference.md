@@ -1743,6 +1743,37 @@ sequence and the fields of its elements among them — and every language has to
 that reason, with the sentence the reference evaluator says
 ([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204).
 
+### `unique` — a field no two elements share
+
+A field of `elements` may end with `unique`: no two elements of the sequence have the same value
+of it.
+
+```rule
+elements buildings
+  building : building  unique
+```
+
+The door refuses a sequence with two (`buildings has two elements with the same building`) before
+it adds up the `sum`s over it: the reference evaluator (`rulec run`) once it has read every element
+of the sequence and held each to its type and range, the generated code at the second of the two,
+right after holding that element to its type and range. An input refused for that alone gets that
+sentence in every language, and `vectors/<alias>.refused.jsonl` holds one such input for each
+`unique` field, so `rulec test` holds every language to it. Values are compared as values: `1` and
+`1.0` are the same number, and two dates are the same when they are the same day. A field of any
+type may be `unique`; on one of an enum or a truth value, each value then stands once at most, and
+that caps what a `sum` over the sequence can come to (§6.3, E147). SQL and NumPy do not walk a
+sequence and are unchanged.
+
+Only a field of `elements` that is always there can be `unique` (E148): not an input, which holds
+one value a call and has nothing to be compared with; not a field that may be absent (`T?`), since
+whether two elements without a value are the same is not settled; and not a `random` one, whose
+draws are each their own. An example whose sequence has two elements alike is E019. `rulec api`
+writes `"unique":true` on the field and a precondition of kind `unique` beside the others
+([formats.md](formats.md)), the page says it of the field, and the meaning and the signature a
+contribution pins both read it, since it changes what the door takes (§6.7). The mark is the
+rule's own: it is not read from a contract a sequence is taken from, and the `.proto` a rule
+generates does not carry it.
+
 ## 6.3 count, sum, max and min
 
 `fold` ends a walk with one answer. `count` and `sum` end it with **a number**, `max` and `min`
@@ -1809,6 +1840,42 @@ running total move one way only: the walk refuses the moment it passes the decla
 so one test at the end is a test everywhere, and the accumulator never leaves `maximum plus
 one element` — which is what keeps E108's int64 claim true of a sequence whose length nothing
 caps. To take a difference, sum two non-negative columns and subtract.
+
+**What a sum can reach, with a `unique` field.** Where a field of an enum or a truth value is
+`unique` (§6.2), the sequence holds each of its values once at most, and a `sum` over it comes to at
+most what the element of each value adds at most, added up over the values. `rulec check` works
+that out, and where it passes the top of the `sum`'s range, says E147: a sequence with no two
+elements alike, which a caller may well send, would be refused at the door.
+
+```rule
+enum building = temple | library | market  open
+
+elements buildings
+  building : building  unique
+
+table learning_of open
+policy unique
+| building             | -> learning_add : number |
+| temple               | 1                        |
+| library              | 2                        |
+| not: temple, library | 0                        |
+
+sum building_learning over buildings of learning_add  range >=0 <=40
+```
+
+The buildings add 3 at most, inside the 40. A contribution that adds `academy` to the enum and a
+clause that gives it 40 takes that to 43 (`academy 40, library 2, temple 1`), and the check of the
+rule with that contribution stops with E147 on the `sum` line, naming the row the contribution
+added; one that gives it 10 takes it to 13 and passes. The rule is checked alone and with its
+contributions (§6.7). The most for a value is read off the rows of every table that gives the
+summed column, the rows a contribution adds and the rows `overrides` replaces among them: only the
+rows that take the value where the table has a column of the field, every row where it has none,
+each row at the top of what its cell can come to. A column no table gives (a field of the element,
+a `define`, an open value) counts at the top of its range. A `count` that caps the sequence (above)
+leaves the largest that many, and with two `unique` fields the smaller total is the one that holds.
+A `unique` field of a number, an amount, a string or a date caps nothing here, and neither does a
+`count` alone: a `sum` a long enough sequence can take past its range is refused at the door, as it
+always was, and the check says nothing of it.
 
 ### max and min
 
@@ -3232,9 +3299,10 @@ output or a state may be called it.
 | machine body | `carry` `initial` `final` `after` `once` (and `never`, `over` and `held`, above; `always` and `when`, which a `clause` has too) |
 <!-- /RESERVED -->
 
-`step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`
-`area` `volume` `duration` `temperature` `sound` `rate` `number` `bool` `date` `string`), the
-money attributes (`incl_tax` `excl_tax`), `std`, `enums` (the heading of a file of enums, read
+`step` (inside `rate[step 1%]`), `unique` (after `policy`, and at the end of a field of
+`elements`, §6.2), `first`, the type words (`money` `mass` `length` `area` `volume` `duration`
+`temperature` `sound` `rate` `number` `bool` `date` `string`), the money attributes (`incl_tax`
+`excl_tax`), `std`, `enums` (the heading of a file of enums, read
 on its first line only) and `open` (the mark after an enum's last value, §3) are part of the
 vocabulary but are told apart by position, so they are not reserved as names. A value may be
 called `open` too: the mark is only the word that follows the last value, and `open` starts a line

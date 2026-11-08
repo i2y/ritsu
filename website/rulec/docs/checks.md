@@ -332,7 +332,13 @@ terms come to together; the Lean one proves it. A value a
 contribution adds to an enum is asked for a row by every table that reads the enum (E101), and one
 that a table that is not open would decide in silence, by its `-` row or a comparing cell, is
 **E033**. The rule is checked alone and merged: its claims of chances hold whatever is added, and
-a contribution that moves a claimed chance is E133, naming the contribution's rows.
+a contribution that moves a claimed chance is E133, naming the contribution's rows. A `sum` over a
+sequence has its range checked at the door, so rows a contribution adds can let the total pass the
+top without the check saying anything. Where a field of the elements is of an enum or a truth value
+and marked `unique` (no two elements share its value), the check adds up the most the element of
+each value can add, the contributed rows among them; a total past the top is **E147**, naming the
+values largest first along with the rows contributions added. `unique` written where it cannot
+stand is **E148**.
 
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
@@ -368,7 +374,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 242 deliberately broken
+   and that implementation has not been proved correct. The evidence is 246 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
