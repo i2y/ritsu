@@ -2346,6 +2346,20 @@ rulec の主張には穴が二つあった。`never`・`once`・`always` は悪�
 
 確かめたこと：`crates/geas/tests/keep.rs`（五つの呼び出し、uuid の ID で二回の実行と `-j1`・`-j4` が同じバイト、snap のあとのドリフト、小さい数、読めないときの失敗、`within`、`keep env` の値がどこにも出ないこと、値のエスケープ、Location の絶対 URL、契約、W016、W901）、`tests/spec.rs`（書けないものを英日と `--json` で）、`tests/explain.rs`（E017、E038、W016 の再現）、`tests/browser.rs` と `tests/gui.rs`（画面）、`tests/readme.rs`（`examples/tickets`）、`src/model.rs` のユニットテスト（古い `display()` のバイト）。
 
+### 7.101 rulec の `unique` と、`sum` が届く上限の検査（2026-11-08）
+
+寄与（ゲームの mod）が開いた表に行を足し、`sum` の合計が宣言した範囲を越えうるのに `rulec check` と `ritsu check` が通っていた穴（DESIGN 7.17 の残したこと）を、`rulec check` で止めるようにした（rulec の DESIGN §15.290）。
+
+- **書き方**：`elements` のフィールドの行の後ろの `unique`。同じ値の要素が並びに二つあってはいけない。入口（参照の評価器と、八つの生成器）は、その並びの `sum` の前に受け付けない。参照の評価器は並びを全部読んでから比べ、生成コードは二つ目の要素の型と範囲を確かめたすぐ後に比べるので、理由が一つの入力ではどれも同じ文になる。文は「{seq} の要素に {field} が同じものが二つあります」。`rulec vectors` が受け付けない入力を足し、`rulec test` が全部の言語を同じ文に縛る。SQL と NumPy は変わらない。
+- **E147**：列挙か真偽の `unique` のフィールドがある並びの `sum` について、値ごとの最大（寄与が足した行も入れる）を足し、範囲の上端を越えれば止める。`count` の上限があれば、大きい順にその数まで。規則だけでも、寄与と合わせても調べる。`count` の上限だけでは出さない。
+- **E148**：`unique` を入力、値の無いことがあるフィールド、`random` に書いたとき。
+- **口**：`rulec api` のフィールドの `"unique":true` と、前提の `unique`。ritsu-ports の `Precondition::Unique` を、dandori、sekisho、ritsu-cross、kaname、ritsu の modules diff が `Length` と同じに受ける（ritsu の E201・W201 の説明と、DESIGN 7.4 の前提の種類にも足した。Lean の `RitsuCross` のモデルにも、合計と長さと同じく決めない前提として足した。`x2_undecided_on_lists`）。`ritsu mod diff` は、言語ごとの部分の `"unique":true` を比べず、前提の差だけで言う（DESIGN 17.9.6。キーとして比べると、消したときに壊しうる差になる）。signature と meaning が `unique` を読むので、`unique` を書いた規則に足す寄与は固定を付け直す。rulec の診断のコードは 150 種類になった。
+- **ついでに直したこと**：要素に日付のフィールドがあり、入力と出力に日付の無い規則で、記録の関数が使う `_civil` が生成されず、どの言語の runner も止まっていた。
+
+kunitori は直していない。新しい語は、次のリリースまで公開のバイナリが読めない。kunitori のコピーで確かめた結果は DESIGN 7.17 と rulec の DESIGN §15.290 に書いた（`unique` を書いて lighthouse の固定を付け直すと全部通り、学問 40 と食料 37 を足す mod は E147 が二つ、学問 37 と 10 を足す mod は通ってコンピュータどうしの 6 局も止まらない）。
+
+確かめたこと：`crates/rulec/tests/unique.rs`（学問 40 の寄与で E147、学問 10 の寄与と規則だけで通る、英日。`count` の上限で大きい順に絞る。数と文字列の `unique` は入口だけ。E148 の三つ。入口と `rulec vectors` と E019。`fmt`・`api`・`doc`・meaning・signature。11 通りの実行が、二つの規則で同じ文で受け付けない）、`tests/contrib.rs`（寄与と合わせた規則と、手で書いた規則が、全部のベクタで同じ答え）、`tests/codes.rs`、`tests/m0.rs`、`tests/golden.rs`、`tests/golden_en.rs`、`tests/api.rs`、`tests/ports.rs`。rulec の全部（tools の段で 1,442 件。文書の数の直し漏れで落ちた 5 件は、直してその四つのファイルを回し直した。SKIP はネットワークと kani の 2 行で、どちらも platforms の段）、ritsu-ports、sekisho、ritsu-cross、kaname、dandori（examples を含む。examples は二回とも別の 2 件が待ち時間やワーカーの応答の確かめで落ち、その 2 件だけを回し直すと通った）の全部と、ritsu の `tests/modules_diff.rs`・`codes.rs`・`cross.rs`、ritsu-model の `cross` と `kaname` も通る。0.46.0 のバイナリとの突き合わせで、コーパスの 159 本と、並びを歩く規則のうち生成できる 49 本の生成物が、12 の言語と全部の extra で一字も変わらない。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
