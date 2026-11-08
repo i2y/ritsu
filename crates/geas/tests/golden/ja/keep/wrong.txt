@@ -2,15 +2,14 @@ not ok 1 - a line break cannot go in a header（エラー）
     エラー[E038]: k/wrong.geas:15:3: `lines` の値はヘッダー `x-lines` で送れません。改行か制御文字が入っています
         15 |   when api.get("/a", header "x-lines": "see {lines}")
       ここまでの実行:
-          13  when api.post("/plain", body: "one
-    two")  →  200, body "one\ntwo"
+          13  when api.post("/plain", body: "one\ntwo")  →  200, body "one\ntwo"
           14  keep body as lines  →  "one\ntwo"
           15  when api.get("/a", header "x-lines": "see {lines}")
 not ok 2 - a control character cannot go in a header（エラー）
     エラー[E038]: k/wrong.geas:22:3: `tabbed` の値はヘッダー `x-tabbed` で送れません。改行か制御文字が入っています
         22 |   when api.get("/a", header "x-tabbed": "{tabbed}")
       ここまでの実行:
-          20  when api.post("/plain", body: "one	two")  →  200, body "one\ttwo"
+          20  when api.post("/plain", body: "one\ttwo")  →  200, body "one\ttwo"
           21  keep body as tabbed  →  "one\ttwo"
           22  when api.get("/a", header "x-tabbed": "{tabbed}")
 not ok 3 - another host cannot be called（エラー）

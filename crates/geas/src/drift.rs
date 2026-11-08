@@ -642,7 +642,8 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
                 ));
                 continue;
             };
-            if b.call != o.call {
+            // a baseline snapped before the call's strings were escaped holds it unescaped (DESIGN §22.1)
+            if b.call != o.call && o.unescaped.as_deref() != Some(b.call.as_str()) {
                 r.notes.push(tr!(
                     "{} は呼び出しそのものが変わりました（{} → {}）。比べるには `geas snap` をやり直してください",
                     "{}: the call itself changed ({} → {}); re-snap to compare",

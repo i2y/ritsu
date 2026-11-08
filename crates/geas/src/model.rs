@@ -229,20 +229,20 @@ impl Place {
 }
 
 impl Call {
-    /// The call as the spec writes it after the target: `get("/total")`.
+    /// The call as the spec writes it after the target: `get("/total")`, `post("/events", body:
+    /// "{\"id\":1}")`. Its strings are escaped as the spec writes them (`\"`, `\\`, `\n`, `\t`; any
+    /// other control character as JSON writes it), so the text reads back as the call (DESIGN §22.1).
     pub fn display(&self) -> String {
         use crate::json::quote;
         match self {
             Call::Run(args) => {
-                let a: Vec<String> = args.iter().map(|s| format!("\"{}\"", s)).collect();
+                let a: Vec<String> = args.iter().map(|s| quote(s)).collect();
                 format!("run({})", a.join(", "))
             }
-            // a baseline compares this text with what it keeps, so a call without headers stays
-            // what it has always been: its path and its body as written, not escaped
             Call::Http { method, path, body, headers } => {
-                let mut s = format!("{}(\"{}\"", method.word(), path);
+                let mut s = format!("{}({}", method.word(), quote(path));
                 if let Some(b) = body {
-                    s.push_str(&format!(", body: \"{}\"", b));
+                    s.push_str(&format!(", body: {}", quote(b)));
                 }
                 for (name, value) in headers {
                     s.push_str(&format!(", header {}: {}", quote(name), quote(value)));
@@ -262,6 +262,33 @@ impl Call {
             Call::Press(k) => format!("press({})", quote(k)),
             Call::Advance(ms) => format!("advance({ms})"),
         }
+    }
+
+    /// The text a baseline snapped before the call's strings were escaped holds for it: the
+    /// arguments of `run`, and the path and the body of a call to a service, as they are, without
+    /// escapes. Drift takes a baseline that holds it as one of the same call (DESIGN §22.1). `None`
+    /// where that is the text of [`Call::display`].
+    pub fn unescaped(&self) -> Option<String> {
+        use crate::json::quote;
+        let text = match self {
+            Call::Run(args) => {
+                let a: Vec<String> = args.iter().map(|s| format!("\"{s}\"")).collect();
+                format!("run({})", a.join(", "))
+            }
+            Call::Http { method, path, body, headers } => {
+                let mut s = format!("{}(\"{path}\"", method.word());
+                if let Some(b) = body {
+                    s.push_str(&format!(", body: \"{b}\""));
+                }
+                for (name, value) in headers {
+                    s.push_str(&format!(", header {}: {}", quote(name), quote(value)));
+                }
+                s.push(')');
+                s
+            }
+            _ => return None,
+        };
+        (text != self.display()).then_some(text)
     }
 
     /// The word the call is written with: `run`, `click`.
@@ -750,15 +777,37 @@ mod tests {
         Call::Http { method, path: path.into(), body: body.map(str::to_string), headers: headers.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() }
     }
 
-    /// A baseline compares this text with what it keeps: a call without headers is the bytes it has
-    /// always been, its path and its body not escaped, so an old baseline still reads.
+    /// The text of a call is the spec's: its strings escaped as the spec writes them, so a JSON body
+    /// reads `body: "{\"a\":1}"` and the lexer reads the strings back.
     #[test]
-    fn a_call_is_written_as_it_always_was() {
+    fn a_call_is_written_as_the_spec_writes_it() {
         assert_eq!(http(Method::Get, "/x", None, &[]).display(), r#"get("/x")"#);
         assert_eq!(http(Method::Post, "/x", None, &[]).display(), r#"post("/x")"#);
         assert_eq!(http(Method::Post, "/x", Some("b"), &[]).display(), r#"post("/x", body: "b")"#);
-        assert_eq!(http(Method::Post, "/x\"y", Some("{\"a\":\"b\"}"), &[]).display(), "post(\"/x\"y\", body: \"{\"a\":\"b\"}\")");
-        assert_eq!(http(Method::Post, "/x", Some("a\nb"), &[]).display(), "post(\"/x\", body: \"a\nb\")");
+        assert_eq!(http(Method::Post, "/x\"y", Some("{\"a\":\"b\"}"), &[]).display(), r#"post("/x\"y", body: "{\"a\":\"b\"}")"#);
+        assert_eq!(http(Method::Post, "/x", Some("a\nb\\c\td"), &[]).display(), r#"post("/x", body: "a\nb\\c\td")"#);
+        let run = Call::Run(vec!["sh".into(), "-c".into(), "echo \"hi\"".into()]);
+        assert_eq!(run.display(), r#"run("sh", "-c", "echo \"hi\"")"#);
+        for (call, strings) in [
+            (http(Method::Post, "/x\"y", Some("{\"a\":\"b\\n\"}\n\t"), &[("h", "say \"c\"")]), vec!["/x\"y", "{\"a\":\"b\\n\"}\n\t", "h", "say \"c\""]),
+            (run, vec!["sh", "-c", "echo \"hi\""]),
+        ] {
+            let toks = crate::lex::lex(&call.display()).unwrap();
+            let read: Vec<&str> = toks.iter().filter(|t| t.kind == crate::lex::Kind::Str).map(|t| t.text.as_str()).collect();
+            assert_eq!(read, strings, "{}", call.display());
+            assert!(toks.iter().all(|t| t.odd.is_none()), "{}", call.display());
+        }
+    }
+
+    /// A baseline snapped before the escapes holds the call as geas wrote it then: the arguments of
+    /// `run`, the path and the body as they are. Where nothing needs an escape, that is the text itself.
+    #[test]
+    fn the_text_a_baseline_held_before_the_escapes() {
+        assert_eq!(http(Method::Post, "/x", Some("b"), &[("a", "b")]).unescaped(), None);
+        assert_eq!(http(Method::Post, "/x\"y", Some("{\"a\":\"b\"}"), &[]).unescaped().as_deref(), Some("post(\"/x\"y\", body: \"{\"a\":\"b\"}\")"));
+        assert_eq!(http(Method::Post, "/x", Some("a\nb"), &[("a", "say \"c\"")]).unescaped().as_deref(), Some("post(\"/x\", body: \"a\nb\", header \"a\": \"say \\\"c\\\"\")"));
+        assert_eq!(Call::Run(vec!["echo \"hi\"".into()]).unescaped().as_deref(), Some("run(\"echo \"hi\"\")"));
+        assert_eq!(Call::Click { name: "a\"b".into(), nth: None }.unescaped(), None);
     }
 
     #[test]

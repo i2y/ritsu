@@ -37,6 +37,24 @@ out, and §16 says what was measured. v1 is now what §6–§14 describe.
 claims of the same names (`geas scenarios`), and the claims drafted for
 the scenarios no claim answers.
 
+2026-10-28: §18 is added: `within`, a `when` that calls again, within a
+time, until an answer holds its checks, for a service that answers before
+its work is done.
+
+2026-10-31: §19 is added: the object of a spec that `ritsu check --format
+json` hands on, the same `geas check --json` prints.
+
+2026-11-07: §20, §21 and §22 are added: `contract`, which holds every call
+to a `serve` target to its OpenAPI document (§20); writing claims from a
+project's specs, a page of the skill rather than a command (§21); and
+`put`, `patch`, `delete`, headers and `keep`, which goes on from what a
+service answers (§22).
+
+2026-11-08: §23 is added: `in any order`, a block whose calls run in every
+order, each on a service started afresh. The same day, a call's text in a
+report, the journal and the baseline escapes its strings as the spec
+writes them (§22.1).
+
 ## 0. Thesis
 
 Agent-written code has a verification gap: specs (Spec Kit, Kiro) drive
@@ -2308,11 +2326,14 @@ claim "a ticket can be read back, changed and taken away" {
 
 ### 22.1 The calls
 
-The model has one `Call::Http { method, path, body, headers }`. `display()` writes `get("/x")` and
-`post("/x", body: "b")` as it always did, byte for byte, because a baseline's `call` is compared with
-it and a baseline written before must still read. Headers come after, as `, header "a": "b"`, in the
-order path, body, headers as written. A `get` takes no body (E002). All five wait (§18.1) and are held
-to a contract (§20).
+The model has one `Call::Http { method, path, body, headers }`. `display()` writes a call as the spec
+does, `get("/x")`, `post("/x", body: "{\"a\":1}")`, with the headers after, as `, header "a": "b"`, in
+the order path, body, headers as written. Every string is escaped as the spec writes it, so the text a
+report, the journal, `--json` and the baseline hold reads back as the call. Until 2026-11-08 the path,
+the body and the arguments of `run` went in as they are, and a JSON body read `body: "{"a":1}"`, which
+no spec can write. A baseline's `call` is compared with this text, and one snapped before then holds the
+old text: drift takes that as the same call (`Call::unescaped`), so the change asks for no new snap. A
+`get` takes no body (E002). All five wait (§18.1) and are held to a contract (§20).
 
 ### 22.2 Headers
 
@@ -2353,7 +2374,7 @@ not ok 1 - a ticket can be read back, changed and taken away
         19 |   keep body json ".id" as id
       the run that gets there:
           16  keep env "TICKETS_TOKEN" as token  →  {token}
-          17  when api.post("/tickets", body: "{"title":"the printer"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+          17  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
 ```
 
 The environment is another matter: no answer of the service is wrong when a variable is not set, nor can
@@ -2637,9 +2658,9 @@ claim "the subscription ends where the latest event says, in any order" {
       examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
           21 |   then body json ".status" is "canceled"
         the run that gets there:
-            13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-            17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
-            15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+            13  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+            17  when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")  →  200, body "{\"applied\": true}"
+            15  when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")  →  200, body "{\"applied\": true}"
             20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
   ```
 

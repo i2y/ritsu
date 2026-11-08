@@ -1,6 +1,7 @@
 //! `geas snap` and `geas drift` on the greeter: quiet on unchanged code, the
 //! refactor's unclaimed changes, a claimed change, a claim that cannot run during
-//! drift, and no baseline.
+//! drift, and no baseline; and on the webhooks, a baseline snapped before the strings
+//! of a call were escaped.
 
 mod common;
 use common::*;
@@ -141,4 +142,33 @@ fn drift_without_a_baseline_stops_before_running() {
         golden(&format!("{lang}/drift/no-baseline.txt"), &err);
     }
     assert!(!s.exists("examples/greeter/.geas"), "drift ran something without a baseline");
+}
+
+/// A baseline snapped before geas escaped the strings of a call holds each call as geas wrote it then,
+/// `post("/events", body: "{"id":"ev_1",…}")`. Drift takes that as the same call and compares the
+/// answers; a call that is not the same is still told (DESIGN §22.1).
+#[test]
+fn a_baseline_snapped_before_the_escapes_still_compares() {
+    if !python3("examples/webhooks") {
+        return;
+    }
+    let s = Scratch::new("drift-unescaped");
+    copy_example("webhooks", &s);
+    let spec = "examples/webhooks/webhooks.geas";
+    let base = "examples/webhooks/.geas/webhooks.baseline.jsonl";
+    let (out, err, code) = run(s.path(), &["snap", spec], &[]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    let snapped = s.read(base);
+    // the call as the spec writes it, in a JSON string: `body: "{\"id\":…`
+    assert!(snapped.contains(r#"body: \"{\\\"id\\\":\\\"ev_1\\\""#), "{snapped}");
+    let before = snapped.replace(r#"\\\""#, r#"\""#);
+    assert!(before.contains(r#"body: \"{\"id\":\"ev_1\""#), "{before}");
+    s.write(base, &before);
+    let (out, err, code) = run(s.path(), &["drift", spec], &[]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    assert_eq!(out, "drift: 84 interactions compared · 0 drifted · 0 unclaimed change(s) · 0 claimed\n");
+    s.write(base, &before.replacen(r#"\"seq\":3"#, r#"\"seq\":4"#, 1));
+    let (out, _, code) = run(s.path(), &["drift", spec], &[]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("the call itself changed"), "{out}");
 }

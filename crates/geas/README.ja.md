@@ -436,7 +436,7 @@ not ok 1 - チケットは読み返せて、変えられて、消せる
         18 |   keep body json ".id" as id
       ここまでの実行:
           15  keep env "TICKETS_TOKEN" as token  →  {token}
-          16  when api.post("/tickets", body: "{"title":"プリンター"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+          16  when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
 …
 ```
 
@@ -487,9 +487,9 @@ not ok 1 - 購読は、どの順で届いても一番新しいイベントの状
     examples/webhooks/webhooks.ja.geas:21: body json ".status" is "canceled" のはずが、実際は "active"
         21 |   then body json ".status" is "canceled"
       ここまでの実行:
-          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
-          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          13  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")  →  200, body "{\"applied\": true}"
           20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
 …
 ```
@@ -617,7 +617,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 
 このページとスキルに載せた出力は、そのテストが golden のファイルとして残したものを、そのまま貼っています。`tests/docs.rs` が、ページとそれを突き合わせます。ここに載せた主張のファイルは geas が読めること、出力は geas が実際に出したものであること、名前を挙げたコマンド、オプション、コード、リンクはどれも実在することを確かめています。
 
-macOS（Apple シリコン）で、ツールを全部そろえて `cargo test` を一度走らせたときは、テスト 337 件（単体テスト 150 件、バイナリを走らせるテスト 187 件）が 114 秒で通り、飛ばしたテストはありませんでした。リリースビルドのバイナリは 3.1 MB です。
+macOS（Apple シリコン）で、ツールを全部そろえて `cargo test` を一度走らせたときは、テスト 339 件（単体テスト 151 件、バイナリを走らせるテスト 188 件）が 96 秒で通り、飛ばしたテストはありませんでした。リリースビルドのバイナリは 3.2 MB です。
 
 ツールが無いテスト（python3、node、go、llvm-tools の入った rustc、Chrome、git、`GEAS_PIXIE_GREETER` で指定するビルド済みの pixie の greeter）は、`SKIP:` の行を出して通ります。走らなかったものは次で分かります。
 

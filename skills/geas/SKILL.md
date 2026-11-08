@@ -264,9 +264,9 @@ not ok 1 - the subscription ends where the latest event says, in any order
     examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
         21 |   then body json ".status" is "canceled"
       the run that gets there:
-          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
-          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          13  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")  →  200, body "{\"applied\": true}"
           20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
 ```
 

@@ -10,9 +10,9 @@ not ok 1 - 購読は、どの順で届いても一番新しいイベントの状
     examples/webhooks/webhooks.ja.geas:21: body json ".status" is "canceled" のはずが、実際は "active"
         21 |   then body json ".status" is "canceled"
       ここまでの実行:
-          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
-          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          13  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")  →  200, body "{\"applied\": true}"
           20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
 not ok 2 - 二度届いたイベントは何も変えない
     examples/webhooks/webhooks.ja.geas:27: in any order — 12 通りの順のうち 9 通りで成り立ちません。下はその最初の順（2 番目）で、ほかは 4〜6、8〜12 番目の順です
@@ -22,10 +22,10 @@ not ok 2 - 二度届いたイベントは何も変えない
     examples/webhooks/webhooks.ja.geas:35: body json ".seq" is 3 のはずが、実際は 2
         35 |   and  body json ".seq" is 3
       ここまでの実行:
-          28  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-          29  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-          31  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
-          30  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          28  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+          29  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+          31  when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")  →  200, body "{\"applied\": true}"
+          30  when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")  →  200, body "{\"applied\": true}"
           33  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
 主張 2 件 · 成り立った 0 件 · 成り立たなかった 2 件 · ジャーナル: examples/webhooks/.geas/webhooks.ja.journal.jsonl
 $ echo $?

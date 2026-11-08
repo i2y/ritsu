@@ -1,4 +1,4 @@
-{"claim":"stdout and stderr","event":"when","line":7,"target":"echo","call":"run(\"first\n\", \"second\", \"0\")","obs":{"stdout":"{out}\n","stderr":"{err}\n","exit":0}}
+{"claim":"stdout and stderr","event":"when","line":7,"target":"echo","call":"run(\"first\\n\", \"second\", \"0\")","obs":{"stdout":"{out}\n","stderr":"{err}\n","exit":0}}
 {"claim":"stdout and stderr","event":"check","line":8,"check":"keep stdout","expected":"as out","actual":"{out}","ok":true}
 {"claim":"stdout and stderr","event":"check","line":9,"check":"keep stderr","expected":"as err","actual":"{err}","ok":true}
 {"claim":"stdout and stderr","event":"check","line":10,"check":"stdout contains","expected":"\"first\"","actual":"\"{out}\"","ok":true}

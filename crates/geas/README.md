@@ -533,7 +533,7 @@ not ok 1 - a ticket can be read back, changed and taken away
         19 |   keep body json ".id" as id
       the run that gets there:
           16  keep env "TICKETS_TOKEN" as token  →  {token}
-          17  when api.post("/tickets", body: "{"title":"the printer"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+          17  when api.post("/tickets", body: "{\"title\":\"the printer\"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
 …
 ```
 
@@ -601,9 +601,9 @@ not ok 1 - the subscription ends where the latest event says, in any order
     examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
         21 |   then body json ".status" is "canceled"
       the run that gets there:
-          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
-          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
-          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          13  when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")  →  200, body "{\"applied\": true}"
           20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
 …
 ```
@@ -768,8 +768,8 @@ those tests keep, this page's stories as whole transcripts, and `tests/docs.rs` 
 them: every claims file here parses, every output is what geas printed, and every command, option,
 code and link exists.
 
-On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 337 tests (150
-unit tests and 187 that run the binary) in 114 seconds, none skipped; the release binary is 3.1 MB.
+On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 339 tests (151
+unit tests and 188 that run the binary) in 96 seconds, none skipped; the release binary is 3.2 MB.
 A test whose tool is missing (python3, node, go, rustc with the llvm-tools component, Chrome, git,
 or a built pixie greeter named by `GEAS_PIXIE_GREETER`) prints `SKIP:` and passes, and this lists
 what was not run:

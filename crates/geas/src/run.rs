@@ -72,6 +72,9 @@ pub struct ObsRec {
     pub target: String,
     /// The call as written after the target: `get("/total")`.
     pub call: String,
+    /// The call as a baseline snapped before its strings were escaped holds it, where that differs
+    /// (`Call::unescaped`, DESIGN §22.1).
+    pub unescaped: Option<String>,
     pub obs: Obs,
     /// How the `when` waited, when it has `within`.
     pub waited: Option<Waited>,
@@ -490,6 +493,7 @@ fn run_once(spec: &Spec, claim: &Claim, order: Option<(usize, &[usize])>, claim_
                             line: pos.line,
                             target: target.clone(),
                             call: call.display(),
+                            unescaped: call.unescaped(),
                             obs: o.clone(),
                             waited,
                             held: held.clone(),

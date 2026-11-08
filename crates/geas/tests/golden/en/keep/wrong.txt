@@ -2,15 +2,14 @@ not ok 1 - a line break cannot go in a header (error)
     error[E038]: k/wrong.geas:15:3: the value of `lines` cannot go in the header `x-lines`: it has a line break or a control character
         15 |   when api.get("/a", header "x-lines": "see {lines}")
       the run that gets there:
-          13  when api.post("/plain", body: "one
-    two")  →  200, body "one\ntwo"
+          13  when api.post("/plain", body: "one\ntwo")  →  200, body "one\ntwo"
           14  keep body as lines  →  "one\ntwo"
           15  when api.get("/a", header "x-lines": "see {lines}")
 not ok 2 - a control character cannot go in a header (error)
     error[E038]: k/wrong.geas:22:3: the value of `tabbed` cannot go in the header `x-tabbed`: it has a line break or a control character
         22 |   when api.get("/a", header "x-tabbed": "{tabbed}")
       the run that gets there:
-          20  when api.post("/plain", body: "one	two")  →  200, body "one\ttwo"
+          20  when api.post("/plain", body: "one\ttwo")  →  200, body "one\ttwo"
           21  keep body as tabbed  →  "one\ttwo"
           22  when api.get("/a", header "x-tabbed": "{tabbed}")
 not ok 3 - another host cannot be called (error)

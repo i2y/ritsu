@@ -16,7 +16,7 @@ not ok 1 - チケットは読み返せて、変えられて、消せる
         18 |   keep body json ".id" as id
       ここまでの実行:
           15  keep env "TICKETS_TOKEN" as token  →  {token}
-          16  when api.post("/tickets", body: "{"title":"プリンター"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+          16  when api.post("/tickets", body: "{\"title\":\"プリンター\"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
 not ok 2 - 新しいチケットのアドレスをたどれる
     examples/tickets/tickets.ja.geas:35: contract POST /tickets のはずが、実際は $: 必須の id がありません
         35 |   when api.post("/tickets", body: "{\"title\":\"ドア\"}", header "authorization": "Bearer {token}")
@@ -24,7 +24,7 @@ not ok 2 - 新しいチケットのアドレスをたどれる
         37 |   keep body json ".id" as id
       ここまでの実行:
           34  keep env "TICKETS_TOKEN" as token  →  {token}
-          35  when api.post("/tickets", body: "{"title":"ドア"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
+          35  when api.post("/tickets", body: "{\"title\":\"ドア\"}", header "authorization": "Bearer {token}")  →  201, body "{\"ticketId\": \"<uuid>\", \"state\": \"open\", \"title\":…
           36  keep header "location" as at  →  "/tickets/<uuid>"
 ok 3 - トークンのない呼び出しは 401 になる
 主張 3 件 · 成り立った 1 件 · 成り立たなかった 2 件 · ジャーナル: examples/tickets/.geas/tickets.ja.journal.jsonl
