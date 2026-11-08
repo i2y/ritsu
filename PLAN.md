@@ -2356,7 +2356,7 @@ rulec の主張には穴が二つあった。`never`・`once`・`always` は悪�
 - **口**：`rulec api` のフィールドの `"unique":true` と、前提の `unique`。ritsu-ports の `Precondition::Unique` を、dandori、sekisho、ritsu-cross、kaname、ritsu の modules diff が `Length` と同じに受ける（ritsu の E201・W201 の説明と、DESIGN 7.4 の前提の種類にも足した。Lean の `RitsuCross` のモデルにも、合計と長さと同じく決めない前提として足した。`x2_undecided_on_lists`）。`ritsu mod diff` は、言語ごとの部分の `"unique":true` を比べず、前提の差だけで言う（DESIGN 17.9.6。キーとして比べると、消したときに壊しうる差になる）。signature と meaning が `unique` を読むので、`unique` を書いた規則に足す寄与は固定を付け直す。rulec の診断のコードは 150 種類になった。
 - **ついでに直したこと**：要素に日付のフィールドがあり、入力と出力に日付の無い規則で、記録の関数が使う `_civil` が生成されず、どの言語の runner も止まっていた。
 
-kunitori は直していない。新しい語は、次のリリースまで公開のバイナリが読めない。kunitori のコピーで確かめた結果は DESIGN 7.17 と rulec の DESIGN §15.290 に書いた（`unique` を書いて lighthouse の固定を付け直すと全部通り、学問 40 と食料 37 を足す mod は E147 が二つ、学問 37 と 10 を足す mod は通ってコンピュータどうしの 6 局も止まらない）。
+作例のゲームは直していない。新しい語は、次のリリースまで公開のバイナリが読めない。ゲームのコピーで確かめた結果は DESIGN 7.17 と rulec の DESIGN §15.290 に書いた（`unique` を書いて lighthouse の固定を付け直すと全部通り、学問 40 と食料 37 を足す mod は E147 が二つ、学問 37 と 10 を足す mod は通ってコンピュータどうしの 6 局も止まらない）。
 
 確かめたこと：`crates/rulec/tests/unique.rs`（学問 40 の寄与で E147、学問 10 の寄与と規則だけで通る、英日。`count` の上限で大きい順に絞る。数と文字列の `unique` は入口だけ。E148 の三つ。入口と `rulec vectors` と E019。`fmt`・`api`・`doc`・meaning・signature。11 通りの実行が、二つの規則で同じ文で受け付けない）、`tests/contrib.rs`（寄与と合わせた規則と、手で書いた規則が、全部のベクタで同じ答え）、`tests/codes.rs`、`tests/m0.rs`、`tests/golden.rs`、`tests/golden_en.rs`、`tests/api.rs`、`tests/ports.rs`。rulec の全部（tools の段で 1,442 件。文書の数の直し漏れで落ちた 5 件は、直してその四つのファイルを回し直した。SKIP はネットワークと kani の 2 行で、どちらも platforms の段）、ritsu-ports、sekisho、ritsu-cross、kaname、dandori（examples を含む。examples は二回とも別の 2 件が待ち時間やワーカーの応答の確かめで落ち、その 2 件だけを回し直すと通った）の全部と、ritsu の `tests/modules_diff.rs`・`codes.rs`・`cross.rs`、ritsu-model の `cross` と `kaname` も通る。0.46.0 のバイナリとの突き合わせで、コーパスの 159 本と、並びを歩く規則のうち生成できる 49 本の生成物が、12 の言語と全部の extra で一字も変わらない。
 
@@ -2422,14 +2422,14 @@ kunitori は直していない。新しい語は、次のリリースまで公�
 
 ### 7.106 Python の入口が `unique` の値を持つ入れ物を、列挙と真偽では `list` にする（2026-11-08）
 
-Python の生成コードは、`unique` のフィールドの見た値を、どの型でも `set` に持っていた（7.101）。kunitori のアプリを組む処理系は Python をあらかじめネイティブのコードにコンパイルし、`set` の順序はコンパイルした実行で再現できないとして断り、関数の中の `dict` もまだ受け付けない。kunitori の二つの規則の `building` に `unique` を書いて 0.47.0 で生成すると、アプリが組めなかった。
+Python の生成コードは、`unique` のフィールドの見た値を、どの型でも `set` に持っていた（7.101）。作例のゲームのアプリを組む処理系は Python をあらかじめネイティブのコードにコンパイルし、`set` の順序はコンパイルした実行で再現できないとして断り、関数の中の `dict` もまだ受け付けない。ゲームの二つの規則の `building` に `unique` を書いて 0.47.0 で生成すると、アプリが組めなかった。
 
 - **直したこと**：列挙と真偽のフィールドは `list` に持つ（`building_seen: list[Building] = []` と `append`）。値の数より多くの要素を読む前に同じ値の二つ目が来て入口が止まるので、比べる数は値の数を越えない。数・文字列・日付・量は `set` のままにした（`list` では長い並びで要素の数の二乗だけ比べる）。ほかの言語は変えていない（rulec の DESIGN §15.290 の 6）。
 - **変わるもの**：列挙か真偽に `unique` を書いた規則の、Python の生成コードだけ。入口が受け付けるものと文は変わらない。
 
-確かめたこと：rulec の `unique` の試験 8 件。足した `the_python_door_keeps_an_enum_or_a_truth_value_in_a_list` は入れ物を、`every_language_refuses_two_elements_with_the_same_value` は 11 通りの言語が二つの規則とも同じ文で断ることを確かめる。rulec の単体の試験 77 件。kunitori を生成し直すと、差は `province_income.py` と `province_upkeep.py` の三行ずつで、アプリを組む処理系の検査は二つの版とも通った。
+確かめたこと：rulec の `unique` の試験 8 件。足した `the_python_door_keeps_an_enum_or_a_truth_value_in_a_list` は入れ物を、`every_language_refuses_two_elements_with_the_same_value` は 11 通りの言語が二つの規則とも同じ文で断ることを確かめる。rulec の単体の試験 77 件。ゲームを生成し直すと、差は `province_income.py` と `province_upkeep.py` の三行ずつで、アプリを組む処理系の検査は二つの版とも通った。
 
-残したこと：kunitori に `unique` を書くのは、この直しの入った版が出てから。
+残したこと：ゲームに `unique` を書くのは、この直しの入った版が出てから。
 
 ### 7.107 `possible` の、掛け算で出る値と、ほかの行の区切りが残す区画（2026-11-08）
 

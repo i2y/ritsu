@@ -6598,7 +6598,7 @@ machine order over step
 
 ### 15.290 並びの要素どうしで同じ値をとらないフィールド `unique` と、`sum` が届く上限（2026-11-08）
 
-**きっかけ**：寄与（ゲームの mod）が開いた表に行を足し、要素ごとの値を `sum` した合計が宣言した範囲を越えうるとき、`rulec check` は何も言わなかった。kunitori の `province_income.rule` は、州に建つ建物の並びを `elements buildings` で受け、`sum building_learning over buildings of learning_add  range >=0 <=40` で学問を足す。`learning_of` は開いた表で、mod は `clause … -> learning_add` で行を足す。学問 40 の建物を足す mod は `ritsu check` を通るが、寺（1）と書庫（2）と並ぶと合計が 43 になり、生成コードが入口で `building_learning is out of range` と受け付けず、コンピュータどうしの 6 局がすべて止まった。行を一つずつ範囲と比べる検査では、一つで越えるものしか言えない。並びの件数に上限が無ければ合計にも上限が無く、範囲は入口でしか効かない。
+**きっかけ**：寄与（ゲームの mod）が開いた表に行を足し、要素ごとの値を `sum` した合計が宣言した範囲を越えうるとき、`rulec check` は何も言わなかった。作例のストラテジーゲームの `province_income.rule` は、州に建つ建物の並びを `elements buildings` で受け、`sum building_learning over buildings of learning_add  range >=0 <=40` で学問を足す。`learning_of` は開いた表で、mod は `clause … -> learning_add` で行を足す。学問 40 の建物を足す mod は `ritsu check` を通るが、寺（1）と書庫（2）と並ぶと合計が 43 になり、生成コードが入口で `building_learning is out of range` と受け付けず、コンピュータどうしの 6 局がすべて止まった。行を一つずつ範囲と比べる検査では、一つで越えるものしか言えない。並びの件数に上限が無ければ合計にも上限が無く、範囲は入口でしか効かない。
 
 **決めたこと**：
 
@@ -6611,7 +6611,7 @@ machine order over step
    - 規則だけの検査でも、寄与と合わせた検査でも同じことをする（§15.231）。型の誤りか E148 のある規則では、E147 を調べない。
 4. **ほかの口**。`rulec api` はフィールドに `"unique":true` を載せ、前提に `{"kind":"unique","sequence":…,"field":…}` を足した。ritsu-ports の `Precondition::Unique { sequence, field }` を受ける側（dandori の prechecks、sekisho の borders、ritsu-cross の preconditions と programs、kaname の ranges、ritsu の modules diff）は `Length` と同じに扱い、呼ぶ側が示せなければ示せないと言う。`ritsu mod diff` は、言語ごとの部分の `"unique":true` を比べず、前提の差だけで言う（足せば壊しうる差、外せば求めるものが減るだけ。ritsu の DESIGN 17.9.6）。`rulec doc` はフィールドの注に「同じ値の要素は二つありません（`unique`）」と書く。`meaning` は字句から作るので `unique` を読み、寄与が固定する signature は、読む名前の宣言の行に ` unique` を足した。入口が受け付けるものが変わるからである。`rulec schema` の `$comment` は、形で言えない前提として「並びの要素どうしで同じ値をとらないフィールド」を挙げる。`examples` の並びに同じ値の要素があれば E019 にした。`rulec fmt` は表の中しか直さないので、`unique` はそのまま残る。
 5. **入口の順**。参照の評価器は、その並びの要素を全部読んでから同じ値を探す。生成コードは歩きの最初の輪の中で、要素の型と範囲を確かめたすぐ後に、それまでの要素と比べる。受け付けない理由が一つだけの入力では、どちらも同じ文になる。ベクタの受け付けない入力は、どれも理由を一つだけ持つ。
-6. **Python の入口が、見た値を持つ入れ物**。列挙と真偽のフィールドは `list` に、ほかの型は `set` に持つ。列挙と真偽では、値の数より多くの要素を読む前に必ず同じ値の二つ目が来て入口が止まるので、`list` の `in` が比べる数は値の数を越えない。Python をあらかじめネイティブのコードにコンパイルする処理系には、`set` の順序はコンパイルした実行で再現できないとして断り、関数の中の `dict` もまだ受け付けず、`list` なら受け付けるものがある。kunitori のアプリはそうした処理系で組むので、どれも `set` に持つ生成コードでは組めなかった。数・文字列・日付・量は値の数に限りが無く、`list` では長い並びで要素の数の二乗だけ比べることになるので、`set` のままにした。ほかの言語の入れ物は変えていない。
+6. **Python の入口が、見た値を持つ入れ物**。列挙と真偽のフィールドは `list` に、ほかの型は `set` に持つ。列挙と真偽では、値の数より多くの要素を読む前に必ず同じ値の二つ目が来て入口が止まるので、`list` の `in` が比べる数は値の数を越えない。Python をあらかじめネイティブのコードにコンパイルする処理系には、`set` の順序はコンパイルした実行で再現できないとして断り、関数の中の `dict` もまだ受け付けず、`list` なら受け付けるものがある。作例のゲームのアプリはそうした処理系で組むので、どれも `set` に持つ生成コードでは組めなかった。数・文字列・日付・量は値の数に限りが無く、`list` では長い並びで要素の数の二乗だけ比べることになるので、`set` のままにした。ほかの言語の入れ物は変えていない。
 
 **測った**：
 
@@ -6631,9 +6631,9 @@ machine order over step
   ```
 
 - `rulec test` で、学問 10 の寄与と合わせた規則と、列挙・数・文字列・日付・真偽・金額の六つのフィールドを `unique` にした規則を、Python、TypeScript、JavaScript、Rust、Rust の WASI、Ruby、PHP、Go、Swift、Java、Wasm の 11 通りが、参照の評価器と同じ文で受け付けなかった。
-- Python の入れ物（上の 6）：六つのフィールドの規則で、列挙と真偽は `list`、数・文字列・日付・金額は `set` に持つことを `tests/unique.rs` が確かめる。kunitori のアプリを組む処理系の検査は、どれも `set` に持つ生成コードを `building_seen = _set()` の行で断り、関数の中の `dict` に書き換えても断った。直したあと kunitori の二つの版を生成し直すと、どちらも断られなかった。生成コードの差は `province_income.py` と `province_upkeep.py` の三行ずつ（`_set = set` が消え、`building_seen: list[Building] = []` と `append` になる）だけだった。
+- Python の入れ物（上の 6）：六つのフィールドの規則で、列挙と真偽は `list`、数・文字列・日付・金額は `set` に持つことを `tests/unique.rs` が確かめる。ゲームのアプリを組む処理系の検査は、どれも `set` に持つ生成コードを `building_seen = _set()` の行で断り、関数の中の `dict` に書き換えても断った。直したあとゲームの二つの版を生成し直すと、どちらも断られなかった。生成コードの差は `province_income.py` と `province_upkeep.py` の三行ずつ（`_set = set` が消え、`building_seen: list[Building] = []` と `append` になる）だけだった。
 - 変える前と後の突き合わせ：0.46.0 のバイナリとこのビルドで、コーパスの 159 本と、`tests/` の下で並びを歩く 106 本を、12 の言語と全部の extra に生成した。コーパスの 159 本は全部、並びを歩く 106 本のうち生成できる 49 本も、一字も同じだった。残りの 57 本は、どちらのバイナリでも検査で止まる。
-- kunitori のコピー（国盗り 3f04753）。`province_income.rule` と `province_upkeep.rule` の `building` に `unique` を書くと、lighthouse の寄与二つが E040 で止まる（`` `reads field building : building range ` is now `reads field building : building range  unique` ``）。`rulec source pin` で付け直すと、`ritsu check` は 21 ファイルとも通る（警告 1 つ。0.46.0 のバイナリで元のまま検査したときと同じ）。`sum` の範囲の上端を 0 にして届く最大を出させると、金 5、食料 4、率 10%、学問 3、威信 1、維持費 9 で、手で数えた値と同じだった。そのうえで建物の mod を一つ足し、`ritsu check` と、通ればコンピュータどうしの 6 局を回した（生成したコードには、同じ値の要素を受け付けない確かめが入っている）。
+- ゲームのコピー。`province_income.rule` と `province_upkeep.rule` の `building` に `unique` を書くと、lighthouse の寄与二つが E040 で止まる（`` `reads field building : building range ` is now `reads field building : building range  unique` ``）。`rulec source pin` で付け直すと、`ritsu check` は 21 ファイルとも通る（警告 1 つ。0.46.0 のバイナリで元のまま検査したときと同じ）。`sum` の範囲の上端を 0 にして届く最大を出させると、金 5、食料 4、率 10%、学問 3、威信 1、維持費 9 で、手で数えた値と同じだった。そのうえで建物の mod を一つ足し、`ritsu check` と、通ればコンピュータどうしの 6 局を回した（生成したコードには、同じ値の要素を受け付けない確かめが入っている）。
 
   | mod | 足す学問、食料 | `ritsu check` | 6 局 |
   |---|---|---|---|
@@ -6643,7 +6643,7 @@ machine order over step
   | 学問 10 | 10、0 | 通る | 止まらない（domination 3、time 3） |
   | `silo` | 0、36（`flat_food` に 20） | E131 だけ | 回さない |
 
-  0.46.0 のバイナリでは、元のままの kunitori に `over` を足しても `ritsu check` は通り、6 局とも止まる（最初は seed 1 の 16 ターン目、`RuleInputError: building_learning is out of range: 41`）。ゲームは建っている建物を同じ州にもう一つ建てさせないので（`build_allowed.rule` の `already_built`）、同じ値の要素で止まる局は無かった。
+  0.46.0 のバイナリでは、元のままのゲームに `over` を足しても `ritsu check` は通り、6 局とも止まる（最初は seed 1 の 16 ターン目、`RuleInputError: building_learning is out of range: 41`）。ゲームは建っている建物を同じ州にもう一つ建てさせないので（`build_allowed.rule` の `already_built`）、同じ値の要素で止まる局は無かった。
 
   ```
   error[rulec E147]: With each `building` once, `building_learning` can reach 43, past the 40 its range takes
@@ -6670,7 +6670,7 @@ machine order over step
 
 - 上書きされる行も最大に入れる。基の行が 50 で、寄与が `overrides` で 10 に下げても 50 で数えるので、E147 が言いすぎることがある。
 - 表が出さない列は、値ごとに絞らずに列の範囲の上端で数える。
-- 表がほかの列（kunitori の `food_of` の地形など）でも分けるとき、ほかの列は見ずに最大を取る。一回の呼び出しで同時に立たない行どうしでも、大きいほうで数える。
+- 表がほかの列（ゲームの `food_of` の地形など）でも分けるとき、ほかの列は見ずに最大を取る。一回の呼び出しで同時に立たない行どうしでも、大きいほうで数える。
 - `unique` を書いていない並び、数や文字列の `unique` しかない並び、`count` の上限しかない並びの `sum` は、今も入口が実行時に受け付けないだけである。
 - 受け付けない理由を二つ以上持つ入力では、参照の評価器と生成コードで、先に出る文が違うことがある（上の 5）。
 

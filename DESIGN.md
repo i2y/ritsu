@@ -1590,7 +1590,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 | ゲームの mod の `academy`：学問の和が範囲を越えて止まる（6 局中 5 局） | 本体の `tech.learning` を 840 まで広げる。全部の国の最大で、止まらなくなる |
 | 返金の帳簿の勘定に上限が無い、通販の注文の金額に範囲が無い | 測った写しのあとで直した |
 
-`academy` を `silo` と同じに狭めなかったのは、学問の入力が `sum` だからである。`sum` の範囲を寄与の行と比べる検査は、建物の並びのフィールドに `unique` を書いたときだけ働く（rulec §15.290 の E147）。kunitori はまだ `unique` を書いていないので、範囲を狭めても `ritsu check` は通ったまま、ゲームが実行時に止まる。
+`academy` を `silo` と同じに狭めなかったのは、学問の入力が `sum` だからである。`sum` の範囲を寄与の行と比べる検査は、建物の並びのフィールドに `unique` を書いたときだけ働く（rulec §15.290 の E147）。ゲームはまだ `unique` を書いていないので、範囲を狭めても `ritsu check` は通ったまま、ゲームが実行時に止まる。
 
 **残したこと**：
 
@@ -1599,7 +1599,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 - 書き手が足りないと言った口：規則のグループをスキーマから読む、`rulec vectors` がどの行にも無い列挙の値と断る入力を出す、`where` の文字列を列挙と突き合わせる、範囲の定数を生成コードに出す、koyomi の `from`、kaname の `shape`、proto の一覧のコマンド、sakai の用語の `means` から帳簿を指す、yuen の決まっていない状態。
 - `fed by` が一行に一つなので、kaname の引数を一行に並べた関数では行を割る。すると関数の版が動き、yuen の E303 が出る（営業で 2 件）。
 - 営業の `required` に無い残りのプロパティ（`PriceList.audience`、`PriceList.channel`、`RefrigerationUnit.lastInspectedOn`、`Quote.issuedOn`）は、決めていない。
-- `sum` の範囲と mod の行を比べる検査は、並びのフィールドに列挙か真偽の `unique` を書いたときだけ働く（rulec §15.290 の E147）。kunitori はまだ書いていないので（新しい語は、次のリリースまで公開のバイナリが読めない）、学問を足しすぎる mod は今も `ritsu check` を通り、ゲームは 6 局中 6 局で止まる（`building_learning is out of range: 41`）。kunitori のコピーで `province_income.rule` と `province_upkeep.rule` の `building` に `unique` を書き、lighthouse の寄与二つの固定を付け直すと、`ritsu check` は今と同じに通る。そのうえで、学問 40 と食料 37 を足す mod（`over`）は E147 が二つ（学問 43、食料 41）で止まり、学問 37 を足す mod（`academy`）は通って、6 局とも止まらない。`unique` の無い並びと、`count` の上限しか無い並びの `sum` は、今も入口が実行時に受け付けないだけである。
+- `sum` の範囲と mod の行を比べる検査は、並びのフィールドに列挙か真偽の `unique` を書いたときだけ働く（rulec §15.290 の E147）。ゲームはまだ書いていないので（新しい語は、次のリリースまで公開のバイナリが読めない）、学問を足しすぎる mod は今も `ritsu check` を通り、ゲームは 6 局中 6 局で止まる（`building_learning is out of range: 41`）。ゲームのコピーで `province_income.rule` と `province_upkeep.rule` の `building` に `unique` を書き、lighthouse の寄与二つの固定を付け直すと、`ritsu check` は今と同じに通る。そのうえで、学問 40 と食料 37 を足す mod（`over`）は E147 が二つ（学問 43、食料 41）で止まり、学問 37 を足す mod（`academy`）は通って、6 局とも止まらない。`unique` の無い並びと、`count` の上限しか無い並びの `sum` は、今も入口が実行時に受け付けないだけである。
 
 **確かめたこと**：数は、壊し方を一件ずつ新しい写しに当てる判定のスクリプトの出力から数えた。担当の書き方で壊し方の元の文が無くなった 3 件（A07、A24、K17）は、同じ変更を手で当てた。
 
