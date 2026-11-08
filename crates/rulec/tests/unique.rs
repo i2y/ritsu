@@ -30,6 +30,21 @@ fn has_all(out: &str, said: &[&str]) {
     }
 }
 
+/// A rule with `unique` on a field of each kind: an enum, a number, a string, a date, a truth value
+/// and an amount.
+const EACH_KIND: &str = "rule each_kind(each_kind) v1\n\n\
+     enum building(building) = temple(temple) | library(library) | market(market)\n\n\
+     elements lots(lots)\n\
+     \x20 building(building) : building  unique\n\
+     \x20 lot(lot)           : number  range >=1 <=99  unique\n\
+     \x20 tag(tag)           : string  unique\n\
+     \x20 opened(opened)     : date  range >=2026-01-01 <=2026-12-31  unique\n\
+     \x20 coastal(coastal)   : bool  unique\n\
+     \x20 price(price)       : money[JPY]  range >=0JPY <=1000JPY  unique\n\n\
+     outputs\n  total(total) : money[JPY]  round down(1JPY)\n\n\
+     sum price_total(price_total) over lots of price  range >=0JPY <=3000JPY\n\n\
+     define total : money[JPY] = price_total\n";
+
 /// The story the check is for: a mod adds a building to an open enum and its row to an open table.
 /// The rule alone passes; with the academy that adds forty, a temple and a library beside it take the
 /// buildings to 43, past the 40 the `sum` takes, and the check stops it, naming the row the
@@ -300,6 +315,32 @@ fn fmt_api_doc_and_the_pins_read_the_mark() {
     assert!(out.contains("error[E040]"), "{out}");
 }
 
+/// The Python door keeps the values it has seen of an enum or a truth value in a list, and those of
+/// another type in a set (§15.290): the walk stops at the first value seen twice, so the list never
+/// holds more than the values of the type, and a Python that compiles the module ahead of time takes
+/// a list where it refuses a set; a long sequence of numbers or strings is not walked once for each
+/// element.
+#[test]
+fn the_python_door_keeps_an_enum_or_a_truth_value_in_a_list() {
+    let t = TempDir::new("unique-python");
+    std::fs::write(t.path().join("each_kind.rule"), EACH_KIND).unwrap();
+    let out = t.path().join("out");
+    let (c, said, e) = run_in(t.path(), "en", &["gen", "each_kind.rule", "--out", &out.to_string_lossy(), "--target", "python"]);
+    assert_eq!(c, 0, "{said}{e}");
+    let py = std::fs::read_to_string(out.join("python").join("each_kind.py")).unwrap();
+    for line in [
+        "    building_seen: list[Building] = []\n",
+        "    coastal_seen: list[bool] = []\n",
+        "    lot_seen = _set()\n",
+        "    tag_seen = _set()\n",
+        "    opened_seen = _set()\n",
+        "    price_seen = _set()\n",
+    ] {
+        assert!(py.contains(line), "missing `{}`:\n{py}", line.trim());
+    }
+    assert!(py.contains("building_seen.append(") && py.contains("coastal_seen.append(") && py.contains("lot_seen.add("), "{py}");
+}
+
 /// Every language the door is generated for refuses two elements with the same value of a `unique`
 /// field, with the sentence the reference evaluator says, held by `rulec test`: the province with the
 /// academy that adds ten, and a rule with `unique` on a field of each kind — an enum, a number, a
@@ -311,22 +352,7 @@ fn every_language_refuses_two_elements_with_the_same_value() {
         return;
     }
     let t = TempDir::new("unique-langs");
-    std::fs::write(
-        t.path().join("each_kind.rule"),
-        "rule each_kind(each_kind) v1\n\n\
-         enum building(building) = temple(temple) | library(library) | market(market)\n\n\
-         elements lots(lots)\n\
-         \x20 building(building) : building  unique\n\
-         \x20 lot(lot)           : number  range >=1 <=99  unique\n\
-         \x20 tag(tag)           : string  unique\n\
-         \x20 opened(opened)     : date  range >=2026-01-01 <=2026-12-31  unique\n\
-         \x20 coastal(coastal)   : bool  unique\n\
-         \x20 price(price)       : money[JPY]  range >=0JPY <=1000JPY  unique\n\n\
-         outputs\n  total(total) : money[JPY]  round down(1JPY)\n\n\
-         sum price_total(price_total) over lots of price  range >=0JPY <=3000JPY\n\n\
-         define total : money[JPY] = price_total\n",
-    )
-    .unwrap();
+    std::fs::write(t.path().join("each_kind.rule"), EACH_KIND).unwrap();
     let d = fixtures();
     let targets = [
         "--target", "python", "--target", "typescript", "--target", "javascript", "--target", "rust", "--target", "ruby", "--target", "php", "--target", "go",

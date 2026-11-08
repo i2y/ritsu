@@ -2914,18 +2914,28 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The fields marked `unique` (§15.290), in Python: a set for each before the first walk over
-    /// the sequence, and in the walk, after the guards of one element, the refusal of a value an
-    /// element before it had. Returns the lines before the loop and the lines inside it.
+    /// The fields marked `unique` (§15.290), in Python: the values seen so far, kept from before
+    /// the first walk over the sequence, and in the walk, after the guards of one element, the
+    /// refusal of a value an element before it had. An enum or a truth value is kept in a list:
+    /// the walk stops at the first value seen twice, so the list never holds more than the values
+    /// of the type, and a list is what a Python that compiles the module ahead of time takes where
+    /// it refuses a set, whose order a compiled run would not reproduce. Another type is kept in a
+    /// set, so that a long sequence is not walked once for each element. Returns the lines before
+    /// the loop and the lines inside it.
     fn py_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
         let seq = &self.f.elements[s].name.text;
         let (mut init, mut step) = (String::new(), String::new());
         for fd in self.unique_fields(s, sums) {
             let seen = self.temp(&format!("{}_seen", self.ident(&fd.name.text)));
             let v = local(&fd.name.text);
-            init.push_str(&format!("    {seen} = _set()\n"));
+            let ty = self.ty_of(&fd.name.text);
+            let (start, keep) = match ty {
+                Ty::Enum(_) | Ty::Bool => (format!("{seen}: list[{}] = []", self.py_ty(&ty)), format!("{seen}.append({v})")),
+                _ => (format!("{seen} = _set()"), format!("{seen}.add({v})")),
+            };
+            init.push_str(&format!("    {start}\n"));
             step.push_str(&format!(
-                "    if {v} in {seen}:\n        raise RuleInputError(\"{}\", _repr({v}))\n    {seen}.add({v})\n",
+                "    if {v} in {seen}:\n        raise RuleInputError(\"{}\", _repr({v}))\n    {keep}\n",
                 crate::door::duplicate(seq, &fd.name.text)
             ));
         }
