@@ -1052,7 +1052,7 @@ not shown:
 
 ```json
 {
-  "kaname": "0.46.0",
+  "kaname": "0.47.0",
   "file": "late_payment.kn",
   "ok": true,
   "summary": "1 function, total",
