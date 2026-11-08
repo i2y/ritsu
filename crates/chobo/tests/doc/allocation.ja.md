@@ -59,7 +59,7 @@ flowchart LR
 |---|---|---|
 | `sale.do` | `insufficient_sales` | 2 つ目の移動で `shop_sales(shop)` が 0 を下回る |
 | `sale.do` | `key_conflict` | `order` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `sale.do` | `already_refused` | `order` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `sale.do` | `already_refused` | `order` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -80,7 +80,7 @@ flowchart LR
 
 ```text
  1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  insufficient_sales で拒否される（2 つ目の移動が shop_sales(shop-2) から 2 を取ろうとしたときの残高は、確定 1、出ていく仮押さえ 0）
- 2  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  already_refused で拒否される
+ 2  sale.do(order: order-1, shop: shop-2, price: 3, fee: 2)  already_refused で拒否される
 ```
 
 </details>
@@ -99,7 +99,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 |---|---|---|
 | `usd_payout.do` | `insufficient_sales` | 1 つ目の移動で `shop_sales(shop)` が 0 を下回る |
 | `usd_payout.do` | `key_conflict` | `payout_id` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `usd_payout.do` | `already_refused` | `payout_id` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `usd_payout.do` | `already_refused` | `payout_id` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -121,7 +121,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 ```text
  1  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  insufficient_sales で拒否される（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  already_refused で拒否される
+ 2  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 3, usd_amount: 0.02)  already_refused で拒否される
 ```
 
 </details>
@@ -138,7 +138,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 |---|---|---|
 | `usd_transfer.do` | `insufficient_usd` | 1 つ目の移動で `usd_account(shop)` が 0.00 を下回る |
 | `usd_transfer.do` | `key_conflict` | `transfer_id` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `usd_transfer.do` | `already_refused` | `transfer_id` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `usd_transfer.do` | `already_refused` | `transfer_id` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -161,7 +161,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 ```text
  1  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  insufficient_usd で拒否される（1 つ目の移動が usd_account(shop-2) から 0.01 を取ろうとしたときの残高は、確定 0.00、出ていく仮押さえ 0.00）
- 2  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  already_refused で拒否される
+ 2  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.02)  already_refused で拒否される
 ```
 
 </details>
@@ -220,9 +220,9 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) |
 |---|---|---|---|---|---|---|
 | 1 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | insufficient_sales で拒否される | 0 | 0 | 0 | 0 |
-| 2 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | already_refused で拒否される | 0 | 0 | 0 | 0 |
+| 2 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | insufficient_sales で拒否される | 0 | 0 | 0 | 0 |
 | 3 | sale.do(order: order-3, shop: shop-2, price: 105, fee: 3) | 通る | -105 | 3 | 100 | 2 |
-| 4 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | already_refused で拒否される | -105 | 3 | 100 | 2 |
+| 4 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | insufficient_sales で拒否される | -105 | 3 | 100 | 2 |
 
 </details>
 
@@ -251,9 +251,9 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | insufficient_sales で拒否される | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 |
-| 2 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | already_refused で拒否される | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 |
+| 2 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | insufficient_sales で拒否される | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-3, shop: shop-2, price: 104, fee: 3) | 通る | -104 | 3 | 100 | 1 | 0 | 0.00 | 0.00 |
-| 4 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | already_refused で拒否される | -104 | 3 | 100 | 1 | 0 | 0.00 | 0.00 |
+| 4 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | insufficient_sales で拒否される | -104 | 3 | 100 | 1 | 0 | 0.00 | 0.00 |
 
 </details>
 
@@ -284,10 +284,10 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) | overseas_bank | remittance_fee |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | insufficient_usd で拒否される | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
-| 2 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | already_refused で拒否される | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
+| 2 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | insufficient_usd で拒否される | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-3, shop: shop-2, price: 105, fee: 3) | 通る | -105 | 3 | 100 | 2 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
 | 4 | usd_payout.do(payout_id: payout_id-4, shop: shop-2, jpy_amount: 2, usd_amount: 0.01) | 通る | -105 | 3 | 100 | 0 | 2 | -0.01 | 0.01 | 0.00 | 0.00 |
-| 5 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | already_refused で拒否される | -105 | 3 | 100 | 0 | 2 | -0.01 | 0.01 | 0.00 | 0.00 |
+| 5 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | insufficient_usd で拒否される | -105 | 3 | 100 | 0 | 2 | -0.01 | 0.01 | 0.00 | 0.00 |
 
 </details>
 

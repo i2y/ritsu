@@ -504,7 +504,7 @@
           "op": "do",
           "kind": "sale",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_sales"
         },
         {
           "op": "do",
@@ -515,7 +515,7 @@
           "op": "do",
           "kind": "sale",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_sales"
         }
       ],
       "accounts": [
@@ -839,7 +839,7 @@
           "op": "do",
           "kind": "usd_payout",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_sales"
         },
         {
           "op": "do",
@@ -850,7 +850,7 @@
           "op": "do",
           "kind": "usd_payout",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_sales"
         }
       ],
       "accounts": [
@@ -1258,7 +1258,7 @@
           "op": "do",
           "kind": "usd_transfer",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_usd"
         },
         {
           "op": "do",
@@ -1274,7 +1274,7 @@
           "op": "do",
           "kind": "usd_transfer",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_usd"
         }
       ],
       "accounts": [

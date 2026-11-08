@@ -64,7 +64,7 @@ stateDiagram-v2
 |---|---|---|
 | `earn.hold` | `points_cap` | `points(member)` would go above 1000000 |
 | `earn.hold` | `key_conflict` | a call with the same `purchase` and other arguments came before |
-| `earn.hold` | `already_refused` | a call with the same `purchase` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `earn.hold` | `already_refused` | a call with the same `purchase` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `earn.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `earn.post` | `already_voided` | the hold is voided already |
 | `earn.post` | `over_hold` | more than the hold holds |
@@ -95,7 +95,7 @@ stateDiagram-v2
  1  earn.hold(purchase: purchase-1, member: member-2, pts: 1000000)  done
  2  earn.post(purchase: purchase-1)                                  done
  3  earn.hold(purchase: purchase-3, member: member-2, pts: 1)        refused: points_cap (move 1 puts 1 into points(member-2): posted 1000000, held in 0)
- 4  earn.hold(purchase: purchase-3, member: member-2, pts: 1)        refused: already_refused
+ 4  earn.hold(purchase: purchase-3, member: member-2, pts: 2)        refused: already_refused
 ```
 
 #### earn.post: key_conflict
@@ -179,7 +179,7 @@ stateDiagram-v2
 |---|---|---|
 | `spend.hold` | `not_enough_points` | `points(member)` would go below 0 |
 | `spend.hold` | `key_conflict` | a call with the same `checkout` and other arguments came before |
-| `spend.hold` | `already_refused` | a call with the same `checkout` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `spend.hold` | `already_refused` | a call with the same `checkout` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `spend.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `spend.post` | `already_voided` | the hold is voided already |
 | `spend.post` | `expired` | the hold has expired |
@@ -210,7 +210,7 @@ stateDiagram-v2
 
 ```text
  1  spend.hold(checkout: checkout-1, member: member-2, pts: 1)  refused: not_enough_points (move 1 takes 1 from points(member-2): posted 0, held out 0)
- 2  spend.hold(checkout: checkout-1, member: member-2, pts: 1)  refused: already_refused
+ 2  spend.hold(checkout: checkout-1, member: member-2, pts: 2)  refused: already_refused
 ```
 
 #### spend.post: key_conflict
@@ -298,7 +298,7 @@ what the member did not use in the period
 |---|---|---|
 | `lapse.do` | `not_enough_points` | `points(member)` would go below 0 |
 | `lapse.do` | `key_conflict` | a call with the same `member` and `period` and other arguments came before |
-| `lapse.do` | `already_refused` | a call with the same `member` and `period` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `lapse.do` | `already_refused` | a call with the same `member` and `period` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -321,7 +321,7 @@ what the member did not use in the period
 
 ```text
  1  lapse.do(member: member-1, period: period-2, pts: 1)  refused: not_enough_points (move 1 takes 1 from points(member-1): posted 0, held out 0)
- 2  lapse.do(member: member-1, period: period-2, pts: 1)  refused: already_refused
+ 2  lapse.do(member: member-1, period: period-2, pts: 2)  refused: already_refused
 ```
 
 </details>
@@ -445,7 +445,7 @@ what the member did not use in the period
 | 1 | earn.hold(purchase: purchase-1, member: member-2, pts: 1000000) | done | 0 (held in 1000000) | 0 (held out 1000000) |
 | 2 | earn.post(purchase: purchase-1) | done | 1000000 | -1000000 |
 | 3 | earn.hold(purchase: purchase-3, member: member-2, pts: 1) | refused: points_cap | 1000000 | -1000000 |
-| 4 | earn.hold(purchase: purchase-3, member: member-2, pts: 1) | refused: already_refused | 1000000 | -1000000 |
+| 4 | earn.hold(purchase: purchase-3, member: member-2, pts: 1) | refused: points_cap | 1000000 | -1000000 |
 
 </details>
 
@@ -476,10 +476,10 @@ what the member did not use in the period
 | # | Operation | Result | points(member-2) | issued | redeemed |
 |---|---|---|---|---|---|
 | 1 | spend.hold(checkout: checkout-1, member: member-2, pts: 1) | refused: not_enough_points | 0 | 0 | 0 |
-| 2 | spend.hold(checkout: checkout-1, member: member-2, pts: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | spend.hold(checkout: checkout-1, member: member-2, pts: 1) | refused: not_enough_points | 0 | 0 | 0 |
 | 3 | earn.hold(purchase: purchase-3, member: member-2, pts: 1) | done | 0 (held in 1) | 0 (held out 1) | 0 |
 | 4 | earn.post(purchase: purchase-3) | done | 1 | -1 | 0 |
-| 5 | spend.hold(checkout: checkout-1, member: member-2, pts: 1) | refused: already_refused | 1 | -1 | 0 |
+| 5 | spend.hold(checkout: checkout-1, member: member-2, pts: 1) | refused: not_enough_points | 1 | -1 | 0 |
 
 </details>
 
@@ -510,10 +510,10 @@ what the member did not use in the period
 | # | Operation | Result | points(member-1) | issued | lapsed |
 |---|---|---|---|---|---|
 | 1 | lapse.do(member: member-1, period: period-2, pts: 1) | refused: not_enough_points | 0 | 0 | 0 |
-| 2 | lapse.do(member: member-1, period: period-2, pts: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | lapse.do(member: member-1, period: period-2, pts: 1) | refused: not_enough_points | 0 | 0 | 0 |
 | 3 | earn.hold(purchase: purchase-3, member: member-1, pts: 1) | done | 0 (held in 1) | 0 (held out 1) | 0 |
 | 4 | earn.post(purchase: purchase-3) | done | 1 | -1 | 0 |
-| 5 | lapse.do(member: member-1, period: period-2, pts: 1) | refused: already_refused | 1 | -1 | 0 |
+| 5 | lapse.do(member: member-1, period: period-2, pts: 1) | refused: not_enough_points | 1 | -1 | 0 |
 
 </details>
 

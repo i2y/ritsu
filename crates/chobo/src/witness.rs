@@ -611,14 +611,29 @@ pub fn key_conflict_on(book: &Book, k: usize, param: usize) -> Option<Builder<'_
     }
 }
 
-/// A call a bound refuses, and the same call again.
+/// A call a bound refuses, and the same key again with another value of a parameter that is not
+/// in the key (the amounts first, then the strings). The same call again is given the reason the
+/// first was refused with, so only another call with the key meets `already_refused`, and a kind
+/// whose key takes every parameter never does.
 pub fn already_refused(book: &Book, k: usize) -> Option<Builder<'_>> {
     let t = &book.transfers[k];
+    let outside = |amount: bool| (0..t.params.len()).filter(move |i| !t.key.contains(i) && matches!(t.params[*i].ty, Ty::Amount(_)) == amount);
+    let params: Vec<usize> = outside(true).chain(outside(false)).collect();
+    if params.is_empty() {
+        return None;
+    }
     for i in 0..t.moves.len() {
         for upper in [false, true] {
-            if let Some(mut b) = bound_refusal(book, k, i, upper) {
-                let Some(Step::Call(c)) = b.steps.last().cloned() else { continue };
-                if matches!(b.call(&c), Some(Outcome::Refused(r)) if r.reason == "already_refused") {
+            let Some(b) = bound_refusal(book, k, i, upper) else { continue };
+            let Some(Step::Call(c)) = b.steps.last().cloned() else { continue };
+            for &p in &params {
+                let mut b = b.clone();
+                let mut again = c.clone();
+                again.args[p] = Some(match t.params[p].ty {
+                    Ty::Str => Val::Str(b.fresh(&t.params[p].name)),
+                    Ty::Amount(_) => Val::Amt(b.fresh_amount()),
+                });
+                if matches!(b.call(&again), Some(Outcome::Refused(r)) if r.reason == "already_refused") {
                     return Some(b);
                 }
             }

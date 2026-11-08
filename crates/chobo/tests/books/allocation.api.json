@@ -279,7 +279,7 @@
                   "args": {
                     "order": "order-1",
                     "shop": "shop-2",
-                    "price": 1,
+                    "price": 3,
                     "fee": 2
                   },
                   "result": "refused",
@@ -540,7 +540,7 @@
                   "args": {
                     "payout_id": "payout_id-1",
                     "shop": "shop-2",
-                    "jpy_amount": 1,
+                    "jpy_amount": 3,
                     "usd_amount": 2
                   },
                   "result": "refused",
@@ -836,7 +836,7 @@
                   "args": {
                     "transfer_id": "transfer_id-1",
                     "shop": "shop-2",
-                    "amount": 1
+                    "amount": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

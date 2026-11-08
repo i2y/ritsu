@@ -60,7 +60,7 @@ flowchart LR
 |---|---|---|
 | `ship.do` | `below_safety_stock` | `shelf(sku)` が 3 を下回る |
 | `ship.do` | `key_conflict` | `order` と `sku` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `ship.do` | `already_refused` | `order` と `sku` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `ship.do` | `already_refused` | `order` と `sku` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -82,7 +82,7 @@ flowchart LR
 
 ```text
  1  ship.do(order: order-1, sku: sku-2, qty: 1)  below_safety_stock で拒否される（1 つ目の移動が shelf(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  ship.do(order: order-1, sku: sku-2, qty: 1)  already_refused で拒否される
+ 2  ship.do(order: order-1, sku: sku-2, qty: 2)  already_refused で拒否される
 ```
 
 </details>
@@ -161,9 +161,9 @@ flowchart LR
 | # | 操作 | 結果 | shelf(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | ship.do(order: order-1, sku: sku-2, qty: 1) | below_safety_stock で拒否される | 0 | 0 | 0 |
-| 2 | ship.do(order: order-1, sku: sku-2, qty: 1) | already_refused で拒否される | 0 | 0 | 0 |
+| 2 | ship.do(order: order-1, sku: sku-2, qty: 1) | below_safety_stock で拒否される | 0 | 0 | 0 |
 | 3 | replenish.do(slip: slip-3, sku: sku-2, qty: 4) | 通る | 4 | -4 | 0 |
-| 4 | ship.do(order: order-1, sku: sku-2, qty: 1) | already_refused で拒否される | 4 | -4 | 0 |
+| 4 | ship.do(order: order-1, sku: sku-2, qty: 1) | below_safety_stock で拒否される | 4 | -4 | 0 |
 
 </details>
 

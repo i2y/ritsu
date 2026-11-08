@@ -215,13 +215,14 @@ fn keys(book: &Book, k: usize, out: &mut Titled) {
         push(out, &b, tr!("キー: {tn}.{op} を {pn} だけ変えてもう一度呼ぶ", "key: {tn}.{op} again with another {pn}"));
     }
     // refused by a bound, then the same call again, then once more after the account has
-    // enough: the key stays spent
+    // enough: the key stays spent, and the same call is given the same reason each time
     'found: for (i, m) in t.moves.iter().enumerate() {
         for upper in [false, true] {
             let Some(mut b) = witness::bound_refusal(book, k, i, upper) else { continue };
             let Some(Step::Call(c)) = b.steps.last().cloned() else { continue };
             let reason = b.last().and_then(|o| o.reason()).unwrap_or_default().to_string();
-            if !matches!(b.call(&c), Some(Outcome::Refused(r)) if r.reason == "already_refused") {
+            let again = |o: Option<Outcome>| matches!(o, Some(Outcome::Refused(r)) if r.reason == reason);
+            if !again(b.call(&c)) {
                 continue;
             }
             if !upper {
@@ -232,7 +233,7 @@ fn keys(book: &Book, k: usize, out: &mut Titled) {
                 if !b.put(&x, need, 0) {
                     continue;
                 }
-                if !matches!(b.call(&c), Some(Outcome::Refused(r)) if r.reason == "already_refused") {
+                if !again(b.call(&c)) {
                     continue;
                 }
                 let xr = book.ref_text(t, &m.from);

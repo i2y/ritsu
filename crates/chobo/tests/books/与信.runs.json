@@ -582,7 +582,7 @@
           "op": "hold",
           "kind": "後払い",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "与信枠超え"
         },
         {
           "op": "do",
@@ -593,7 +593,7 @@
           "op": "hold",
           "kind": "後払い",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "与信枠超え"
         }
       ],
       "accounts": [
@@ -794,7 +794,7 @@
           "op": "do",
           "kind": "返済",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "前払い超過"
         }
       ],
       "accounts": [

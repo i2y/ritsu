@@ -332,9 +332,15 @@ class Runtime {
         // the key was used: by this call made before, or by another
         const [[used]] = await x.run([fill(this.book.sql.readCall, vals)]);
         await x.quit();
-        const [result, , was, definition] = used as [string, string | null, string, string];
-        if (result === "refused") return refused("already_refused");
-        return was === content && definition === t.definition ? { result: "done_before" } : refused("key_conflict");
+        const [result, reason, was, definition] = used as [string, string | null, string, string];
+        const same = was === content && definition === t.definition;
+        if (result === "refused") {
+          // refused by a bound before: the same call again is given the reason the row keeps, when
+          // it is one of this kind's; another call with the key, or a row without one, already_refused
+          const check = same ? t.sql.checks.find((c) => c.reason === reason) : undefined;
+          return refused(check !== undefined ? check.reason : "already_refused");
+        }
+        return same ? { result: "done_before" } : refused("key_conflict");
       }
       if (t.sql.lock !== null) {
         let lockRows = rows[1];

@@ -291,7 +291,7 @@
                   "args": {
                     "注文": "注文-1",
                     "sku": "sku-2",
-                    "数": 1
+                    "数": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

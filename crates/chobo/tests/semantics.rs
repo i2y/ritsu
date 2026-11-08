@@ -168,6 +168,8 @@ fn the_same_key_with_the_same_content_does_nothing_and_with_other_content_is_ref
     assert_eq!(bal(&v, "在庫", &["x"]), (3, 0, 0));
 }
 
+/// A key a bound refused stays spent: the same call again is refused with the same reason (also
+/// once there is enough), another call with the key with already_refused.
 #[test]
 fn a_key_a_bound_refused_stays_spent() {
     let v = run(json!([
@@ -178,7 +180,8 @@ fn a_key_a_bound_refused_stays_spent() {
         op("hold", "引当", json!({"注文": "o1", "sku": "x", "数": 2})),
         op("hold", "引当", json!({"注文": "o2", "sku": "x", "数": 1})),
     ]));
-    assert_eq!(answers(&v), ["refused:在庫切れ", "refused:already_refused", "done", "refused:already_refused", "refused:already_refused", "done"]);
+    assert_eq!(answers(&v), ["refused:在庫切れ", "refused:在庫切れ", "done", "refused:在庫切れ", "refused:already_refused", "done"]);
+    assert_eq!(bal(&v, "在庫", &["x"]), (5, 1, 0));
 }
 
 #[test]

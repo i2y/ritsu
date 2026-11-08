@@ -542,16 +542,14 @@ func (r *tbRuntime) read(kind, op string, chain []planned, results []tb.CreateTr
 			}
 			return refused("key_conflict"), nil
 		case tb.TransferIDAlreadyFailed:
+			// a transfer a bound refused when this key was used before: the same reason again
+			// (TigerBeetle keeps the ID, not what the chain was called with)
+			if bound := r.checked(t, chain[i]); bound != nil {
+				return refused(bound.reason), nil
+			}
 			return refused("already_refused"), nil
 		case tb.TransferExceedsCredits:
-			m := t.moves[chain[i].move]
-			var bound *boundDef
-			if chain[i].role == "room_in" {
-				bound = r.book.accounts[m.to.kind].upper
-			} else {
-				bound = r.book.accounts[m.from.kind].lower
-			}
-			if bound != nil {
+			if bound := r.checked(t, chain[i]); bound != nil {
 				return refused(bound.reason), nil
 			}
 		case tb.TransferAccountsMustBeDifferent:
@@ -572,6 +570,26 @@ func (r *tbRuntime) read(kind, op string, chain []planned, results []tb.CreateTr
 		return Result{}, fmt.Errorf("chobo: TigerBeetle answered %s for transfer %d (%s) of %s.%s", res.Status, i, chain[i].role, kind, op)
 	}
 	return Result{Outcome: "done"}, nil
+}
+
+// checked is the bound a transfer of a chain checks, or nil: a move out of an account with a
+// flag, the probe of a lower bound above 0 and the transfer out of the floor account check the
+// lower bound of the account the move takes from; the transfer out of the room account checks the
+// upper bound of the account the move puts into.
+func (r *tbRuntime) checked(t transferDef, p planned) *boundDef {
+	m := t.moves[p.move]
+	from := r.book.accounts[m.from.kind]
+	switch p.role {
+	case "main":
+		if from.flagged {
+			return from.lower
+		}
+	case "probe", "floor_out":
+		return from.lower
+	case "room_in":
+		return r.book.accounts[m.to.kind].upper
+	}
+	return nil
 }
 
 type heldTransfer struct {

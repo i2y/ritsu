@@ -582,7 +582,7 @@
           "op": "hold",
           "kind": "pay_later",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "over_the_credit_line"
         },
         {
           "op": "do",
@@ -593,7 +593,7 @@
           "op": "hold",
           "kind": "pay_later",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "over_the_credit_line"
         }
       ],
       "accounts": [
@@ -794,7 +794,7 @@
           "op": "do",
           "kind": "repayment",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "over_prepayment"
         }
       ],
       "accounts": [

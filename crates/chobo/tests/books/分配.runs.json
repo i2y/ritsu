@@ -504,7 +504,7 @@
           "op": "do",
           "kind": "売上",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "売上不足"
         },
         {
           "op": "do",
@@ -515,7 +515,7 @@
           "op": "do",
           "kind": "売上",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "売上不足"
         }
       ],
       "accounts": [
@@ -839,7 +839,7 @@
           "op": "do",
           "kind": "ドル払い",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "売上不足"
         },
         {
           "op": "do",
@@ -850,7 +850,7 @@
           "op": "do",
           "kind": "ドル払い",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "売上不足"
         }
       ],
       "accounts": [
@@ -1258,7 +1258,7 @@
           "op": "do",
           "kind": "ドル送金",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "ドル残高不足"
         },
         {
           "op": "do",
@@ -1274,7 +1274,7 @@
           "op": "do",
           "kind": "ドル送金",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "ドル残高不足"
         }
       ],
       "accounts": [

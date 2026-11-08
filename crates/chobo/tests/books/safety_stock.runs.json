@@ -533,7 +533,7 @@
           "op": "do",
           "kind": "ship",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "below_safety_stock"
         },
         {
           "op": "do",
@@ -544,7 +544,7 @@
           "op": "do",
           "kind": "ship",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "below_safety_stock"
         }
       ],
       "accounts": [

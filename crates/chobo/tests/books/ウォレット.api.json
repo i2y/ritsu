@@ -189,7 +189,7 @@
                   "args": {
                     "入金番号": "入金番号-3",
                     "会員": "会員-2",
-                    "額": 1
+                    "額": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -391,7 +391,7 @@
                   "args": {
                     "注文": "注文-1",
                     "会員": "会員-2",
-                    "額": 1
+                    "額": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -868,7 +868,7 @@
                   "args": {
                     "払戻番号": "払戻番号-1",
                     "会員": "会員-2",
-                    "額": 1
+                    "額": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

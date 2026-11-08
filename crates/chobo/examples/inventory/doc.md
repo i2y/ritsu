@@ -87,7 +87,7 @@ stateDiagram-v2
 |---|---|---|
 | `reserve.hold` | `out_of_stock` | `stock(sku)` would go below 0 |
 | `reserve.hold` | `key_conflict` | a call with the same `order` and `sku` and other arguments came before |
-| `reserve.hold` | `already_refused` | a call with the same `order` and `sku` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `reserve.hold` | `already_refused` | a call with the same `order` and `sku` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `reserve.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `reserve.post` | `already_voided` | the hold is voided already |
 | `reserve.post` | `expired` | the hold has expired |
@@ -117,7 +117,7 @@ stateDiagram-v2
 
 ```text
  1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  refused: out_of_stock (move 1 takes 1 from stock(sku-2): posted 0, held out 0)
- 2  reserve.hold(order: order-1, sku: sku-2, qty: 1)  refused: already_refused
+ 2  reserve.hold(order: order-1, sku: sku-2, qty: 2)  refused: already_refused
 ```
 
 #### reserve.post: key_conflict
@@ -284,9 +284,9 @@ what a customer sent back, on the shelves again
 | # | Operation | Result | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | refused: out_of_stock | 0 | 0 | 0 |
-| 2 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | refused: out_of_stock | 0 | 0 | 0 |
 | 3 | receive.do(delivery: delivery-3, sku: sku-2, qty: 1) | done | 1 | -1 | 0 |
-| 4 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | refused: already_refused | 1 | -1 | 0 |
+| 4 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | refused: out_of_stock | 1 | -1 | 0 |
 
 </details>
 

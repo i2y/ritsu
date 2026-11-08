@@ -63,7 +63,7 @@ stateDiagram-v2
 |---|---|---|
 | `pay_later.hold` | `over_the_credit_line` | `credit(member)` would go below -50000 |
 | `pay_later.hold` | `key_conflict` | a call with the same `order` and other arguments came before |
-| `pay_later.hold` | `already_refused` | a call with the same `order` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `pay_later.hold` | `already_refused` | a call with the same `order` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `pay_later.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `pay_later.post` | `already_voided` | the hold is voided already |
 | `pay_later.post` | `expired` | the hold has expired |
@@ -92,7 +92,7 @@ stateDiagram-v2
 
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  refused: over_the_credit_line (move 1 takes 50001 from credit(member-2): posted 0, held out 0)
- 2  pay_later.hold(order: order-1, member: member-2, amount: 50001)  refused: already_refused
+ 2  pay_later.hold(order: order-1, member: member-2, amount: 1)      refused: already_refused
 ```
 
 #### pay_later.post: key_conflict
@@ -166,7 +166,7 @@ stateDiagram-v2
 |---|---|---|
 | `repayment.do` | `over_prepayment` | `credit(member)` would go above 10000 |
 | `repayment.do` | `key_conflict` | a call with the same `repayment_id` and other arguments came before |
-| `repayment.do` | `already_refused` | a call with the same `repayment_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `repayment.do` | `already_refused` | a call with the same `repayment_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -189,7 +189,7 @@ stateDiagram-v2
 ```text
  1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  done
  2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      refused: over_prepayment (move 1 puts 1 into credit(member-2): posted 10000, held in 0)
- 3  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      refused: already_refused
+ 3  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 2)      refused: already_refused
 ```
 
 </details>
@@ -275,9 +275,9 @@ stateDiagram-v2
 | # | Operation | Result | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
 | 1 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | refused: over_the_credit_line | 0 | 0 | 0 |
-| 2 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | refused: already_refused | 0 | 0 | 0 |
+| 2 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | refused: over_the_credit_line | 0 | 0 | 0 |
 | 3 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | done | 1 | 0 | -1 |
-| 4 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | refused: already_refused | 1 | 0 | -1 |
+| 4 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | refused: over_the_credit_line | 1 | 0 | -1 |
 
 </details>
 
@@ -305,7 +305,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000) | done | 10000 | -10000 |
 | 2 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | refused: over_prepayment | 10000 | -10000 |
-| 3 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | refused: already_refused | 10000 | -10000 |
+| 3 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | refused: over_prepayment | 10000 | -10000 |
 
 </details>
 

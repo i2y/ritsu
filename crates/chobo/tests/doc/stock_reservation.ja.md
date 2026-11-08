@@ -87,7 +87,7 @@ stateDiagram-v2
 |---|---|---|
 | `reserve.hold` | `out_of_stock` | `stock(sku)` が 0 を下回る |
 | `reserve.hold` | `key_conflict` | `order` と `sku` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `reserve.hold` | `already_refused` | `order` と `sku` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `reserve.hold` | `already_refused` | `order` と `sku` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 | `reserve.post` | `key_conflict` | 仮押さえは、違う額で確定済み |
 | `reserve.post` | `already_voided` | 仮押さえはもう取り消されている |
 | `reserve.post` | `expired` | 仮押さえの期限が切れている |
@@ -117,7 +117,7 @@ stateDiagram-v2
 
 ```text
  1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  out_of_stock で拒否される（1 つ目の移動が stock(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  reserve.hold(order: order-1, sku: sku-2, qty: 1)  already_refused で拒否される
+ 2  reserve.hold(order: order-1, sku: sku-2, qty: 2)  already_refused で拒否される
 ```
 
 #### reserve.post: key_conflict
@@ -282,9 +282,9 @@ stateDiagram-v2
 | # | 操作 | 結果 | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | out_of_stock で拒否される | 0 | 0 | 0 |
-| 2 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | already_refused で拒否される | 0 | 0 | 0 |
+| 2 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | out_of_stock で拒否される | 0 | 0 | 0 |
 | 3 | receive.do(delivery: delivery-3, sku: sku-2, qty: 1) | 通る | 1 | -1 | 0 |
-| 4 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | already_refused で拒否される | 1 | -1 | 0 |
+| 4 | reserve.hold(order: order-1, sku: sku-2, qty: 1) | out_of_stock で拒否される | 1 | -1 | 0 |
 
 </details>
 

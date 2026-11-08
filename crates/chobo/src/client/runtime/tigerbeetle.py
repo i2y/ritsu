@@ -264,13 +264,12 @@ class _TigerBeetle:
                 # the first transfer there already: the same call, made before; a later one: a chain of another shape
                 return Result("done_before") if i == 0 else _refused("key_conflict")
             if s == _S.ID_ALREADY_FAILED:
-                return _refused("already_refused")
+                # a transfer a bound refused when this key was used before: the same reason again
+                # (TigerBeetle keeps the ID, not what the chain was called with)
+                bound = self._checked(t, chain[i])
+                return _refused(bound["reason"] if bound is not None else "already_refused")
             if s == _S.EXCEEDS_CREDITS:
-                m = t["moves"][chain[i][2]]
-                if chain[i][1] == "room_in":
-                    bound = self._book["accounts"][m["to"]["kind"]]["upper"]
-                else:
-                    bound = self._book["accounts"][m["from"]["kind"]]["lower"]
+                bound = self._checked(t, chain[i])
                 if bound is not None:
                     return _refused(bound["reason"])
             elif s == _S.ACCOUNTS_MUST_BE_DIFFERENT:
@@ -287,6 +286,21 @@ class _TigerBeetle:
                 return _refused("key_conflict")
             raise RuntimeError(f"chobo: TigerBeetle answered {s.name.lower()} for transfer {i} ({chain[i][1]}) of {kind}.{op}")
         return Result("done")
+
+    def _checked(self, t: Any, p: Any) -> Any:
+        """The bound a transfer of a chain checks, or None: a move out of an account with a flag, the
+        probe of a lower bound above 0 and the transfer out of the floor account check the lower bound
+        of the account the move takes from; the transfer out of the room account checks the upper
+        bound of the account the move puts into."""
+        m = t["moves"][p[2]]
+        source = self._book["accounts"][m["from"]["kind"]]
+        if p[1] == "main":
+            return source["lower"] if source["flagged"] else None
+        if p[1] in ("probe", "floor_out"):
+            return source["lower"]
+        if p[1] == "room_in":
+            return self._book["accounts"][m["to"]["kind"]]["upper"]
+        return None
 
     def _held(self, kind: str, key: Sequence[str]) -> list[Any]:
         """The transfers of the chain that held for `key`: their roles, moves and IDs."""

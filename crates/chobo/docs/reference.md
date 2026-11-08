@@ -182,9 +182,10 @@ at that point (W103), and in a hold, what one move holds coming in cannot be tak
 - The contents compared are every argument for `do` and `hold`, the amount of each move for
   `post` (all of it counts as the amount held), and nothing for `void`.
 - The same key with the same contents answers `done_before`; with other contents, `key_conflict`.
-- A key a bound refused stays refused: the next call with it answers `already_refused`, whatever
-  it carries, even once the balance is enough. To try again, use another key (with the attempt in
-  it).
+- A key a bound refused stays refused, even once the balance is enough. The same call again is
+  refused with the reason the bound gave, so a retry whose answer was lost hears what the first call
+  was told; a call with other contents answers `already_refused`. To try again, use another key
+  (with the attempt in it).
 - A key refused for another reason (`same_account`, `no_such_hold`, the state of a hold) is not
   spent.
 - A hold's key cannot be used again after the hold has ended: holding again with it answers
@@ -211,9 +212,9 @@ machine, in the shape dandori reads a rulec rule's in, for a workflow's checker 
 
 | Reason | When | Does it spend the key |
 |---|---|---|
-| a bound's own (`out_of_stock`) | a move would break the bound | yes: `already_refused` from then on |
+| a bound's own (`out_of_stock`) | a move would break the bound, or the same call comes again after it did | yes: the same call gets it again, any other `already_refused` |
 | `key_conflict` | the same key with other contents | no: the call before stands |
-| `already_refused` | a key a bound refused, again | — |
+| `already_refused` | a key a bound refused, with other contents | — |
 | `same_account` | a move whose two accounts are the same (the same arguments) | no |
 | `no_such_hold` | a post or a void of a hold that is not there | no |
 | `already_posted` | a void of a posted hold | no |

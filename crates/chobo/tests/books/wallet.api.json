@@ -189,7 +189,7 @@
                   "args": {
                     "deposit_id": "deposit_id-3",
                     "member": "member-2",
-                    "amount": 1
+                    "amount": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -391,7 +391,7 @@
                   "args": {
                     "order": "order-1",
                     "member": "member-2",
-                    "amount": 1
+                    "amount": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -868,7 +868,7 @@
                   "args": {
                     "refund_id": "refund_id-1",
                     "member": "member-2",
-                    "amount": 1
+                    "amount": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

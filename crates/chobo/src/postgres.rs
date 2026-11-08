@@ -344,11 +344,34 @@ fn move_or_hold(book: &Book, t: &TransferKind, op: Op) -> String {
     let kind = lit(&t.name);
     let opl = lit(opn);
     let defl = lit(&def);
+    // a key a bound refused: the same call again is given the reason the row keeps, when it is one
+    // of the reasons this kind's bounds give (a row from before the reason was kept has none, and a
+    // reason renamed since is not in the definition's hash); any other call with the key, and
+    // such a row, already_refused
+    let mut reasons: Vec<String> = Vec::new();
+    for m in &t.moves {
+        for b in [&book.accounts[m.from.kind].lower, &book.accounts[m.to.kind].upper].into_iter().flatten() {
+            let r = lit(&b.refusal);
+            if !reasons.contains(&r) {
+                reasons.push(r);
+            }
+        }
+    }
+    let again = if reasons.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "      -- refused by a bound before: the same call again is given the same reason\n      \
+             if v_used.content = v_content and v_used.definition = {defl} and v_used.reason in ({}) then\n        \
+             return ('refused', v_used.reason)::{s}.result;\n      end if;\n",
+            reasons.join(", ")
+        )
+    };
     o.push_str(&format!(
         "\n  -- (1) the key. A second call with it waits here for the first to commit, then answers from\n  -- what the first did\n  \
          insert into {s}.keys (tenant, kind, op, key, content, definition, result, at)\n  values ({tenant}, {kind}, {opl}, v_key, v_content, {defl}, 'done', v_now)\n  on conflict do nothing;\n  \
          if not found then\n    select * into v_used from {s}.keys k\n     where k.tenant = {tenant} and k.kind = {kind} and k.op = {opl} and k.key = v_key;\n    \
-         if v_used.result = 'refused' then\n      {}\n    elsif v_used.content = v_content and v_used.definition = {defl} then\n      {}\n    else\n      {}\n    end if;\n  end if;\n",
+         if v_used.result = 'refused' then\n{again}      {}\n    elsif v_used.content = v_content and v_used.definition = {defl} then\n      {}\n    else\n      {}\n    end if;\n  end if;\n",
         result_sql(&s, "refused", Some("already_refused")),
         result_sql(&s, "done_before", None),
         result_sql(&s, "refused", Some("key_conflict")),

@@ -64,7 +64,7 @@ flowchart LR
 | 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `sale.do` | `sales_short` | 1 つ目の移動で `shop_sales(shop)` が 0 を下回る |
-| `sale.do` | `already_refused` | `order` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `sale.do` | `already_refused` | `order` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -78,7 +78,7 @@ flowchart LR
 
 ```text
  1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で拒否される（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  already_refused で拒否される
+ 2  sale.do(order: order-1, shop: shop-2, price: 2, fee: 1)  already_refused で拒否される
 ```
 
 </details>
@@ -95,7 +95,7 @@ flowchart LR
 |---|---|---|
 | `move_over.do` | `over_limit` | 1 つ目の移動で `slots(day)` が 100 を超える |
 | `move_over.do` | `key_conflict` | `slip` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `move_over.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `move_over.do` | `already_refused` | `slip` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -116,7 +116,7 @@ flowchart LR
 
 ```text
  1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で拒否される（1 つ目の移動が slots(day-2) へ 101 を入れようとしたときの残高は、確定 0、入ってくる仮押さえ 0）
- 2  move_over.do(slip: slip-1, day: day-2, amount: 101)  already_refused で拒否される
+ 2  move_over.do(slip: slip-1, day: day-2, amount: 1)    already_refused で拒否される
 ```
 
 </details>
@@ -148,7 +148,7 @@ flowchart LR
 | # | 操作 | 結果 | slots(day-2) | slot_source |
 |---|---|---|---|---|
 | 1 | move_over.do(slip: slip-1, day: day-2, amount: 101) | over_limit で拒否される | 0 | 0 |
-| 2 | move_over.do(slip: slip-1, day: day-2, amount: 101) | already_refused で拒否される | 0 | 0 |
+| 2 | move_over.do(slip: slip-1, day: day-2, amount: 101) | over_limit で拒否される | 0 | 0 |
 
 </details>
 

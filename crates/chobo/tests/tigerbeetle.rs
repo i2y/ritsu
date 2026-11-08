@@ -1,7 +1,10 @@
 //! What only TigerBeetle has (PLAN C7, DESIGN 6): a book whose bounds changed under accounts
 //! already opened is an error, not a quiet difference; a post of a hold TigerBeetle does not
 //! have is answered no_such_hold without sending it, so that the hold can still be made and
-//! posted with the same key; and an operation too big for one request stops the build (E060).
+//! posted with the same key; a key a bound refused is refused with the bound's reason when it is
+//! called again, with the same arguments or with another amount (TigerBeetle keeps the ID of the
+//! transfer it refused, not what it was called with); and an operation too big for one request
+//! stops the build (E060).
 //!
 //! Each is tried in the four languages. One replica serves the whole test; it is stopped, and its
 //! data file removed, when the test ends, failing too.
@@ -103,6 +106,35 @@ fn post_before_hold(tb: &TigerBeetle, lang: &str, work: &Path, built: Built) {
     eprintln!("no_such_hold: {lang}: the post is not sent, and the same post goes through once the hold is made");
 }
 
+/// What each step of a runner's scenario answered: `done`, `refused 在庫切れ`.
+fn answers_of(result: &Value) -> Vec<String> {
+    result["steps"].as_array().unwrap().iter().map(|s| format!("{}{}", s["result"].as_str().unwrap(), s["reason"].as_str().map(|r| format!(" {r}")).unwrap_or_default())).collect()
+}
+
+/// 引当.hold refused for want of stock, then the same hold again, the same key with another amount,
+/// and the same hold once the stock is there. TigerBeetle keeps the ID of the transfer the bound
+/// refused, not what the chain was called with, so the client answers 在庫切れ each time; the
+/// reference interpreter answers already_refused to the call with another amount (DESIGN 4.2).
+/// The keys and the SKU are the scenario's own, apart from `post_before_hold`'s in the same tenant.
+fn refused_again(tb: &TigerBeetle, lang: &str, work: &Path, built: Built) {
+    let c = case_of(
+        &root().join("tests/books/在庫.book"),
+        json!([{"name": "refused, then again", "steps": [
+            {"op": "hold", "kind": "引当", "args": {"注文": "注文-31", "sku": "sku-32", "数": 2}},
+            {"op": "hold", "kind": "引当", "args": {"注文": "注文-31", "sku": "sku-32", "数": 2}},
+            {"op": "hold", "kind": "引当", "args": {"注文": "注文-31", "sku": "sku-32", "数": 1}},
+            {"op": "do", "kind": "入荷", "args": {"納品書": "納品書-33", "sku": "sku-32", "数": 5}},
+            {"op": "hold", "kind": "引当", "args": {"注文": "注文-31", "sku": "sku-32", "数": 2}}
+        ]}]),
+    );
+    assert_eq!(answers_of(&c.reference[0]), ["refused 在庫切れ", "refused 在庫切れ", "refused already_refused", "done", "refused 在庫切れ"]);
+    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, built) else { return };
+    let got = &out["books"][0]["scenarios"][0];
+    assert!(got["error"].is_null(), "{lang}: {}", got["error"]);
+    assert_eq!(answers_of(&got["result"]), ["refused 在庫切れ", "refused 在庫切れ", "refused 在庫切れ", "done", "refused 在庫切れ"], "{lang}");
+    eprintln!("refused again: {lang}: the same hold, and the key with another amount, get 在庫切れ again");
+}
+
 /// 与信 opened with an upper bound of 10000, then called with a book that says 20000: the room
 /// account's opening is there with another amount, and the client stops with an error.
 fn bounds_changed(tb: &TigerBeetle, lang: &str, work: &Path, v1: &Case, v2: &Case, built: (Built, Built)) {
@@ -165,6 +197,7 @@ fn what_only_tigerbeetle_has() {
         let w = work.path().join(lang);
         std::fs::create_dir_all(w.join("v2")).unwrap();
         post_before_hold(&tb, lang, &w, built.0);
+        refused_again(&tb, lang, &w, built.0);
         bounds_changed(&tb, lang, &w, &v1, &v2, built);
     }
 }
@@ -204,6 +237,26 @@ fn post_before_hold_in_english(tb: &TigerBeetle, lang: &str, work: &Path, built:
     assert!(requests.len() == 1 && requests[0].get("lookup_transfers").is_some(), "{lang}: the post of a hold that is not there sent {requests:?}");
     assert!(agrees(&c.reference[0], &got["result"]), "{lang}");
     eprintln!("no_such_hold (English book): {lang}: the post is not sent, and the same post goes through once the hold is made");
+}
+
+/// reserve.hold refused for want of stock, then again (`refused_again`'s twin).
+fn refused_again_in_english(tb: &TigerBeetle, lang: &str, work: &Path, built: Built) {
+    let c = case_of(
+        &root().join("tests/books/stock_reservation.book"),
+        json!([{"name": "refused, then again", "steps": [
+            {"op": "hold", "kind": "reserve", "args": {"order": "order-31", "sku": "sku-32", "qty": 2}},
+            {"op": "hold", "kind": "reserve", "args": {"order": "order-31", "sku": "sku-32", "qty": 2}},
+            {"op": "hold", "kind": "reserve", "args": {"order": "order-31", "sku": "sku-32", "qty": 1}},
+            {"op": "do", "kind": "receive", "args": {"delivery": "delivery-33", "sku": "sku-32", "qty": 5}},
+            {"op": "hold", "kind": "reserve", "args": {"order": "order-31", "sku": "sku-32", "qty": 2}}
+        ]}]),
+    );
+    assert_eq!(answers_of(&c.reference[0]), ["refused out_of_stock", "refused out_of_stock", "refused already_refused", "done", "refused out_of_stock"]);
+    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, built) else { return };
+    let got = &out["books"][0]["scenarios"][0];
+    assert!(got["error"].is_null(), "{lang}: {}", got["error"]);
+    assert_eq!(answers_of(&got["result"]), ["refused out_of_stock", "refused out_of_stock", "refused out_of_stock", "done", "refused out_of_stock"], "{lang}");
+    eprintln!("refused again (English book): {lang}: the same hold, and the key with another amount, get out_of_stock again");
 }
 
 /// The twin of `what_only_tigerbeetle_has`, on the English books: credit opened with an upper
@@ -249,6 +302,7 @@ fn what_only_tigerbeetle_has_in_english() {
         let w = work.path().join(lang);
         std::fs::create_dir_all(w.join("v2")).unwrap();
         post_before_hold_in_english(&tb, lang, &w, built.0);
+        refused_again_in_english(&tb, lang, &w, built.0);
         bounds_changed(&tb, lang, &w, &v1, &v2, built);
     }
 }

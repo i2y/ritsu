@@ -86,7 +86,7 @@ stateDiagram-v2
 |---|---|---|
 | `refund.hold` | `refund_exceeds_sale` | `refundable(order)` would go below 0.00 |
 | `refund.hold` | `key_conflict` | a call with the same `request` and other arguments came before |
-| `refund.hold` | `already_refused` | a call with the same `request` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `refund.hold` | `already_refused` | a call with the same `request` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `refund.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `refund.post` | `already_voided` | the hold is voided already |
 | `refund.post` | `expired` | the hold has expired |
@@ -116,7 +116,7 @@ stateDiagram-v2
 
 ```text
  1  refund.hold(request: request-1, order: order-2, amount: 0.01)  refused: refund_exceeds_sale (move 1 takes 0.01 from refundable(order-2): posted 0.00, held out 0.00)
- 2  refund.hold(request: request-1, order: order-2, amount: 0.01)  refused: already_refused
+ 2  refund.hold(request: request-1, order: order-2, amount: 0.02)  refused: already_refused
 ```
 
 #### refund.post: key_conflict
@@ -260,9 +260,9 @@ stateDiagram-v2
 | # | Operation | Result | refundable(order-2) | sales | refunded |
 |---|---|---|---|---|---|
 | 1 | refund.hold(request: request-1, order: order-2, amount: 0.01) | refused: refund_exceeds_sale | 0.00 | 0.00 | 0.00 |
-| 2 | refund.hold(request: request-1, order: order-2, amount: 0.01) | refused: already_refused | 0.00 | 0.00 | 0.00 |
+| 2 | refund.hold(request: request-1, order: order-2, amount: 0.01) | refused: refund_exceeds_sale | 0.00 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-2, amount: 0.01) | done | 0.01 | -0.01 | 0.00 |
-| 4 | refund.hold(request: request-1, order: order-2, amount: 0.01) | refused: already_refused | 0.01 | -0.01 | 0.00 |
+| 4 | refund.hold(request: request-1, order: order-2, amount: 0.01) | refused: refund_exceeds_sale | 0.01 | -0.01 | 0.00 |
 
 </details>
 

@@ -171,7 +171,7 @@
                   "args": {
                     "注文": "注文-1",
                     "会員": "会員-2",
-                    "額": 50001
+                    "額": 1
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -644,7 +644,7 @@
                   "args": {
                     "返済番号": "返済番号-3",
                     "会員": "会員-2",
-                    "額": 1
+                    "額": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

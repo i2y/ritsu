@@ -216,8 +216,8 @@ pub fn reason_meaning(book: &Book, t: &TransferKind, op: Op, r: &crate::check::R
         ("key_conflict", Op::Post) => tr!("仮押さえは、違う額で確定済み", "the hold was posted before, for other amounts"),
         ("key_conflict", _) => tr!("{key} が同じで、ほかの引数が違う呼び出しが、前に済んでいる", "a call with the same {key} and other arguments came before"),
         ("already_refused", _) => tr!(
-            "{key} が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない",
-            "a call with the same {key} was refused by a bound before; a key a bound refused stays refused, even once there is enough"
+            "{key} が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される）",
+            "a call with the same {key} and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason)"
         ),
         ("same_account", _) => tr!("移動の元と先が同じ勘定になる", "a move would go from an account to itself"),
         ("no_such_hold", _) => tr!("その {key} の仮押さえが無い", "there is no hold with that {key}"),

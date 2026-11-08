@@ -107,8 +107,9 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
 …
 ```
 
-TigerBeetle answers otherwise than the reference interpreter in two cases the tests do not reach: a
-retry with other amounts of a key a bound refused, and a balance past what 64 bits hold.
+TigerBeetle answers otherwise than the reference interpreter in two cases: a key a bound refused,
+called again with other amounts, is given the bound's reason where the reference interpreter
+answers `already_refused`; and a balance past what 64 bits hold, which the tests do not reach.
 [Targets](targets.md#tigerbeetle) says what each does.
 
 ## MySQL, TiDB and Vitess
@@ -158,7 +159,8 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
 
 - **The key first.** A `do` or a `hold` puts its own row in first. A key used before stops the call
   there, with a duplicate key, and the row of the earlier call says whether it answers
-  `done_before`, `key_conflict` or `already_refused`.
+  `done_before`, `key_conflict`, the reason a bound refused the same call with, or
+  `already_refused`.
 - **One locking read.** Then the rows of the accounts with bounds are locked in the order of their
   IDs and read once, and the read itself says which move would break a bound first (the `case`).
   Nothing else is read before the write. An account without bounds, such as `refunded` here, is

@@ -1,7 +1,9 @@
 //! What only PostgreSQL has (PLAN C6, DESIGN 6): two calls that touch the same two accounts in
 //! the opposite order never deadlock, a client under REPEATABLE READ tries a serialization
 //! failure again and ends where READ COMMITTED would, a write that does not go through the
-//! functions is stopped by the checks, a row made under other bounds is an error, expire()
+//! functions is stopped by the checks, a row made under other bounds is an error, a key a bound
+//! refused answers the same call with the reason its row keeps and any other call, or a row without
+//! a reason, with already_refused, expire()
 //! gives back what is past its expiry, chobo_id makes the IDs of PLAN 0.3, and a name too long
 //! for PostgreSQL stops the build (E061).
 //!
@@ -115,6 +117,25 @@ fn other_bounds(pg: &Postgres) {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success() && err.contains("CB001"), "{err}");
     eprintln!("bounds: a row made under other bounds stops the call with CB001");
+}
+
+/// 引当.hold refused for want of stock, then the same key again: the same call is refused with the
+/// reason the key's row keeps, also once the stock is there; a call with another amount with
+/// already_refused; and a row without a reason (one written before the reason was kept) with
+/// already_refused. Nothing moves.
+fn refused_again(pg: &Postgres) {
+    let t = "'again'";
+    let hold = |n: i64| pg.exec(&format!("select result, reason from \"在庫\".\"引当_hold\"({t}, 'o-1', 'A', {n})")).trim().to_string();
+    assert_eq!(hold(2), "refused|在庫切れ");
+    assert_eq!(hold(2), "refused|在庫切れ");
+    assert_eq!(hold(1), "refused|already_refused");
+    pg.exec(&format!("select * from \"在庫\".\"入荷_do\"({t}, 'n-1', 'A', 5)"));
+    assert_eq!(hold(2), "refused|在庫切れ");
+    pg.exec(&format!("update \"在庫\".keys set reason = null where tenant = {t} and kind = '引当'"));
+    assert_eq!(hold(2), "refused|already_refused");
+    let stock = pg.exec(&format!("select posted, held_out from \"在庫\".\"balance_在庫\"({t}, 'A')"));
+    assert_eq!(stock.trim(), "5|0");
+    eprintln!("refused again: the same call gets the reason the key keeps, another call and a row without one already_refused");
 }
 
 /// expire() gives back what the holds past their expiry hold, says how many it ended, and the
@@ -498,6 +519,7 @@ fn what_only_postgres_has() {
     no_deadlock(&pg);
     checks_stop_writes(&pg);
     other_bounds(&pg);
+    refused_again(&pg);
     expire(&pg);
     repeatable_read(&pg, work.path());
 }
@@ -570,6 +592,22 @@ fn other_bounds_in_english(pg: &Postgres) {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success() && err.contains("CB001"), "{err}");
     eprintln!("bounds: a row made under other bounds stops the call with CB001");
+}
+
+/// reserve.hold refused for want of stock, then the same key again (`refused_again`'s twin).
+fn refused_again_in_english(pg: &Postgres) {
+    let t = "'again'";
+    let hold = |n: i64| pg.exec(&format!("select result, reason from \"stock_reservation\".\"reserve_hold\"({t}, 'o-1', 'A', {n})")).trim().to_string();
+    assert_eq!(hold(2), "refused|out_of_stock");
+    assert_eq!(hold(2), "refused|out_of_stock");
+    assert_eq!(hold(1), "refused|already_refused");
+    pg.exec(&format!("select * from \"stock_reservation\".\"receive_do\"({t}, 'n-1', 'A', 5)"));
+    assert_eq!(hold(2), "refused|out_of_stock");
+    pg.exec(&format!("update \"stock_reservation\".keys set reason = null where tenant = {t} and kind = 'reserve'"));
+    assert_eq!(hold(2), "refused|already_refused");
+    let stock = pg.exec(&format!("select posted, held_out from \"stock_reservation\".\"balance_stock\"({t}, 'A')"));
+    assert_eq!(stock.trim(), "5|0");
+    eprintln!("refused again: the same call gets the reason the key keeps, another call and a row without one already_refused");
 }
 
 /// expire() gives back what the holds past their expiry hold, says how many it ended, and the
@@ -844,6 +882,7 @@ fn what_only_postgres_has_in_english() {
     no_deadlock_in_english(&pg);
     checks_stop_writes_in_english(&pg);
     other_bounds_in_english(&pg);
+    refused_again_in_english(&pg);
     expire_in_english(&pg);
     repeatable_read_in_english(&pg, work.path());
 }

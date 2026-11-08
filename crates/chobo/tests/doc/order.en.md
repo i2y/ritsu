@@ -64,7 +64,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 | Operation | May be refused with | When |
 |---|---|---|
 | `sale.do` | `sales_short` | move 1 would take `shop_sales(shop)` below 0 |
-| `sale.do` | `already_refused` | a call with the same `order` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `sale.do` | `already_refused` | a call with the same `order` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -78,7 +78,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  refused: sales_short (move 1 takes 1 from shop_sales(shop-2): posted 0, held out 0)
- 2  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  refused: already_refused
+ 2  sale.do(order: order-1, shop: shop-2, price: 2, fee: 1)  refused: already_refused
 ```
 
 </details>
@@ -95,7 +95,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `move_over.do` | `over_limit` | move 1 would take `slots(day)` above 100 |
 | `move_over.do` | `key_conflict` | a call with the same `slip` and other arguments came before |
-| `move_over.do` | `already_refused` | a call with the same `slip` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `move_over.do` | `already_refused` | a call with the same `slip` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -116,7 +116,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  move_over.do(slip: slip-1, day: day-2, amount: 101)  refused: over_limit (move 1 puts 101 into slots(day-2): posted 0, held in 0)
- 2  move_over.do(slip: slip-1, day: day-2, amount: 101)  refused: already_refused
+ 2  move_over.do(slip: slip-1, day: day-2, amount: 1)    refused: already_refused
 ```
 
 </details>
@@ -148,7 +148,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 | # | Operation | Result | slots(day-2) | slot_source |
 |---|---|---|---|---|
 | 1 | move_over.do(slip: slip-1, day: day-2, amount: 101) | refused: over_limit | 0 | 0 |
-| 2 | move_over.do(slip: slip-1, day: day-2, amount: 101) | refused: already_refused | 0 | 0 |
+| 2 | move_over.do(slip: slip-1, day: day-2, amount: 101) | refused: over_limit | 0 | 0 |
 
 </details>
 

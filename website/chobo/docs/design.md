@@ -66,7 +66,8 @@ for.
   counts it. A hold that went through is never refused for a bound when it is posted.
 - **A refusal is an answer, not a failure.** There is no stock: that is the business answering, and
   the clients return it as a result. A key a bound refused stays refused, as TigerBeetle forbids an
-  ID it refused, so that a retry always gets the same answer.
+  ID it refused, and the same call again gets the same reason, so that a retry whose answer was
+  lost gets the answer the first call got.
 - **chobo calls no other language.** A workflow reads the book through ritsu's port of books, and
   another tool through `chobo api`; chobo knows neither.
 - **A client for each database, in each language.** The clients of every database have the same

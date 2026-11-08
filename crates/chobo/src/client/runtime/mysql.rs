@@ -902,9 +902,14 @@ impl<D: Database> Runtime<D> {
                 let Some(u) = used.first().and_then(|r| r.first()) else {
                     return Err(Error::Answer(format!("chobo: the key of {}.{} is used, and its call is not there", t.name, op.name())));
                 };
+                let same = col(u, 2) == was && col(u, 3) == t.definition;
                 return Ok(if col(u, 0) == "refused" {
-                    Outcome::Refused(Reason::AlreadyRefused)
-                } else if col(u, 2) == was && col(u, 3) == t.definition {
+                    // refused by a bound before: the same call again is given the reason the row
+                    // keeps, when it is one of this kind's; another call with the key, or a row
+                    // without one, already_refused
+                    let kept = t.sql.checks.iter().find(|(_, r, _)| same && has(u, 1) && r.as_str() == col(u, 1));
+                    Outcome::Refused(kept.map(|(_, r, _)| *r).unwrap_or(Reason::AlreadyRefused))
+                } else if same {
                     Outcome::DoneBefore
                 } else {
                     Outcome::Refused(Reason::KeyConflict)

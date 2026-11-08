@@ -291,7 +291,7 @@
                   "args": {
                     "order": "order-1",
                     "sku": "sku-2",
-                    "qty": 1
+                    "qty": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

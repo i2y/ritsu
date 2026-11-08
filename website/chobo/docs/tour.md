@@ -183,6 +183,7 @@ examples/marketplace/marketplace.book: ok
 
 A payout that never expires is never refused with `expired`, and a sale, which only puts in, is
 never refused by a bound: each reason is listed because the checker found operations that get
-there. `already_refused` is the answer to a key a bound refused, called again: the key stays
-spent, so a retry answers the same, and trying again takes a new key. [What it checks](checks.md)
+there. A key a bound refused stays spent: the same call again is refused with the same reason, so
+a retry whose answer was lost hears what the first call was told, and a call with other arguments
+gets `already_refused`. Trying again takes a new key. [What it checks](checks.md)
 goes on from here, and [Run scenarios](scenarios.md) runs the book.

@@ -216,7 +216,7 @@
                     "args": {
                       "明細": "明細-1",
                       "sku": "sku-2",
-                      "数": 1
+                      "数": 2
                     },
                     "result": "refused",
                     "reason": "already_refused"

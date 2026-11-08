@@ -569,7 +569,7 @@
           "op": "hold",
           "kind": "reserve",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "out_of_stock"
         },
         {
           "op": "do",
@@ -580,7 +580,7 @@
           "op": "hold",
           "kind": "reserve",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "out_of_stock"
         }
       ],
       "accounts": [

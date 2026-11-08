@@ -285,11 +285,14 @@ class Runtime {
         case CreateTransferStatus.exists:
           // the first transfer there already: the same call, made before; a later one: a chain of another shape
           return i === 0 ? { result: "done_before" } : refused("key_conflict");
-        case CreateTransferStatus.id_already_failed:
-          return refused("already_refused");
+        case CreateTransferStatus.id_already_failed: {
+          // a transfer a bound refused when this key was used before: the same reason again
+          // (TigerBeetle keeps the ID, not what the chain was called with)
+          const bound = this.checked(t, chain[i]);
+          return refused(bound !== null ? bound.reason : "already_refused");
+        }
         case CreateTransferStatus.exceeds_credits: {
-          const m = t.moves[chain[i].move];
-          const bound = chain[i].role === "room_in" ? this.book.accounts[m.to.kind].upper : this.book.accounts[m.from.kind].lower;
+          const bound = this.checked(t, chain[i]);
           if (bound !== null) return refused(bound.reason);
           break;
         }
@@ -309,6 +312,28 @@ class Runtime {
       throw new Error(`chobo: TigerBeetle answered ${name} for transfer ${i} (${chain[i].role}) of ${kind}.${op}`);
     }
     return { result: "done" };
+  }
+
+  /**
+   * The bound a transfer of a chain checks, or null: a move out of an account with a flag, the
+   * probe of a lower bound above 0 and the transfer out of the floor account check the lower bound
+   * of the account the move takes from; the transfer out of the room account checks the upper
+   * bound of the account the move puts into.
+   */
+  private checked(t: TransferDef, p: Planned): BoundDef | null {
+    const m = t.moves[p.move];
+    const from = this.book.accounts[m.from.kind];
+    switch (p.role) {
+      case "main":
+        return from.flagged ? from.lower : null;
+      case "probe":
+      case "floor_out":
+        return from.lower;
+      case "room_in":
+        return this.book.accounts[m.to.kind].upper;
+      default:
+        return null;
+    }
   }
 
   /** The transfers of the chain that held for `key`: their roles, moves and IDs. */

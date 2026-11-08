@@ -82,6 +82,7 @@ const THEOREMS: &[&str] = &[
     "ChoboModel.refused_keeps_balances",
     "ChoboModel.doneBefore_keeps_state",
     "ChoboModel.again_doneBefore",
+    "ChoboModel.again_refused",
     "KoyomiModel.monotone_of_adjacentOk",
     "KoyomiModel.monotone_on_range",
     "KoyomiModel.seek_following",

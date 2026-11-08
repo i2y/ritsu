@@ -606,11 +606,14 @@ pub fn one(book: &Book, tenant: &str, state: &State, c: &Call) -> Value {
                     tails.push(r);
                 }
             }
+            // a key used before is answered from its row, whatever the answer is: done_before,
+            // key_conflict, already_refused, or the reason a bound refused the same call with
+            let used = state.keys.contains_key(&(c.kind, c.op, c.key(t)));
             let mut s2 = state.clone();
             let tail = match s2.apply(book, c).unwrap_or(Outcome::Done) {
+                _ if used => dup,
                 Outcome::Done => done,
                 Outcome::DoneBefore => dup,
-                Outcome::Refused(r) if r.reason == "key_conflict" || r.reason == "already_refused" => dup,
                 Outcome::Refused(r) => refused(&r.reason),
             };
             let statements = [head.clone(), tail].concat();

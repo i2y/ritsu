@@ -436,6 +436,22 @@ struct Planned {
     move_no: usize,
 }
 
+/// The reason of the bound a transfer of a chain checks, if it checks one: a move out of an
+/// account with a flag, the probe of a lower bound above 0 and the transfer out of the floor
+/// account check the lower bound of the account the move takes from; the transfer out of the room
+/// account checks the upper bound of the account the move puts into.
+fn checked(t: &TransferDef, p: &Planned) -> Option<Reason> {
+    let m = &t.moves[p.move_no];
+    let from = &ACCOUNTS[m.from.kind];
+    let bound = match p.role {
+        Role::Main if from.flagged => &from.lower,
+        Role::Probe | Role::FloorOut => &from.lower,
+        Role::RoomIn => &ACCOUNTS[m.to.kind].upper,
+        _ => return None,
+    };
+    bound.as_ref().map(|b| b.reason)
+}
+
 /// Every transfer of the chain but the last is linked to the next.
 fn link(chain: &mut [Planned]) {
     let n = chain.len();
@@ -650,12 +666,12 @@ impl<C: TigerBeetleClient> Runtime<C> {
                 // chain of another shape
                 S::Exists if i == 0 => return Ok(Outcome::DoneBefore),
                 S::Exists => return refused(Reason::KeyConflict),
-                S::IdAlreadyFailed => return refused(Reason::AlreadyRefused),
+                // a transfer a bound refused when this key was used before: the same reason again
+                // (TigerBeetle keeps the ID, not what the chain was called with)
+                S::IdAlreadyFailed => return refused(checked(t, p).unwrap_or(Reason::AlreadyRefused)),
                 S::ExceedsCredits => {
-                    let m = &t.moves[p.move_no];
-                    let bound = if p.role == Role::RoomIn { &ACCOUNTS[m.to.kind].upper } else { &ACCOUNTS[m.from.kind].lower };
-                    if let Some(b) = bound {
-                        return refused(b.reason);
+                    if let Some(reason) = checked(t, p) {
+                        return refused(reason);
                     }
                 }
                 S::AccountsMustBeDifferent => return refused(Reason::SameAccount),

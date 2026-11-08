@@ -106,12 +106,13 @@ pub struct Hold {
     pub posted: Option<Vec<i128>>,
 }
 
-/// What a key was used for: a call that went through, with what it was called with, or a
-/// call a bound refused (DESIGN 2.3).
+/// What a key was used for (DESIGN 2.3): a call that went through, with what it was called
+/// with, or a call a bound refused, with the reason it was given and what it was called with. The
+/// same call again answers what the first did: `done_before`, or the same reason.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KeyRec {
     Done(String),
-    Refused,
+    Refused { reason: String, content: String },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -321,7 +322,11 @@ impl State {
         let slot = (c.kind, c.op, key.clone());
         let content = crate::ids::content_json(book, c, None);
         match self.keys.get(&slot) {
-            Some(KeyRec::Refused) => return Ok(Outcome::refused("already_refused")),
+            // a key a bound refused stays spent: the same call again is given the same reason
+            // (without where: no database answers that), another call with the key already_refused
+            Some(KeyRec::Refused { reason, content: before }) => {
+                return Ok(Outcome::refused(if *before == content { reason.as_str() } else { "already_refused" }));
+            }
             Some(KeyRec::Done(before)) => {
                 return Ok(if *before == content { Outcome::DoneBefore } else { Outcome::refused("key_conflict") });
             }
@@ -337,7 +342,7 @@ impl State {
             let fb = scratch[&m.from];
             if let Some(l) = &book.accounts[m.from.kind].lower {
                 if fb.posted - fb.held_out - m.amount < l.value {
-                    self.keys.insert(slot, KeyRec::Refused);
+                    self.keys.insert(slot, KeyRec::Refused { reason: l.refusal.clone(), content });
                     let at = At { move_index: i, account: m.from.clone(), upper: false, amount: m.amount, bal: fb };
                     return Ok(Outcome::Refused(Refusal { reason: l.refusal.clone(), at: Some(at) }));
                 }
@@ -345,7 +350,7 @@ impl State {
             let tb = scratch[&m.to];
             if let Some(u) = &book.accounts[m.to.kind].upper {
                 if tb.posted + tb.held_in + m.amount > u.value {
-                    self.keys.insert(slot, KeyRec::Refused);
+                    self.keys.insert(slot, KeyRec::Refused { reason: u.refusal.clone(), content });
                     let at = At { move_index: i, account: m.to.clone(), upper: true, amount: m.amount, bal: tb };
                     return Ok(Outcome::Refused(Refusal { reason: u.refusal.clone(), at: Some(at) }));
                 }

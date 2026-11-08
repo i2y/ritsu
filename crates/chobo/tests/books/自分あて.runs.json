@@ -1010,7 +1010,7 @@
           "op": "do",
           "kind": "移し替え",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫不足"
         },
         {
           "op": "do",
@@ -1021,7 +1021,7 @@
           "op": "do",
           "kind": "移し替え",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫不足"
         }
       ],
       "accounts": [
@@ -1290,7 +1290,7 @@
           "op": "do",
           "kind": "本店へ",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫不足"
         },
         {
           "op": "do",
@@ -1301,7 +1301,7 @@
           "op": "do",
           "kind": "本店へ",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫不足"
         }
       ],
       "accounts": [
@@ -1564,7 +1564,7 @@
           "op": "do",
           "kind": "出庫",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫不足"
         },
         {
           "op": "do",
@@ -1575,7 +1575,7 @@
           "op": "do",
           "kind": "出庫",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫不足"
         }
       ],
       "accounts": [

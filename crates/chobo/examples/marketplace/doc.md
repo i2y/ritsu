@@ -73,7 +73,7 @@ gives back the fee and the shop's part, both or neither
 |---|---|---|
 | `refund.do` | `insufficient_balance` | move 2 would take `shop_balance(shop)` below 0.00 |
 | `refund.do` | `key_conflict` | a call with the same `refund_id` and other arguments came before |
-| `refund.do` | `already_refused` | a call with the same `refund_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `refund.do` | `already_refused` | a call with the same `refund_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -95,7 +95,7 @@ gives back the fee and the shop's part, both or neither
 
 ```text
  1  refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  refused: insufficient_balance (move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00)
- 2  refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  refused: already_refused
+ 2  refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.03, fee: 0.02)  refused: already_refused
 ```
 
 </details>
@@ -132,7 +132,7 @@ stateDiagram-v2
 |---|---|---|
 | `payout.hold` | `insufficient_balance` | `shop_balance(shop)` would go below 0.00 |
 | `payout.hold` | `key_conflict` | a call with the same `payout_id` and other arguments came before |
-| `payout.hold` | `already_refused` | a call with the same `payout_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `payout.hold` | `already_refused` | a call with the same `payout_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `payout.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `payout.post` | `already_voided` | the hold is voided already |
 | `payout.post` | `over_hold` | more than the hold holds |
@@ -160,7 +160,7 @@ stateDiagram-v2
 
 ```text
  1  payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)  refused: insufficient_balance (move 1 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00)
- 2  payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)  refused: already_refused
+ 2  payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.02)  refused: already_refused
 ```
 
 #### payout.post: key_conflict
@@ -313,9 +313,9 @@ stateDiagram-v2
 | # | Operation | Result | shop_balance(shop-2) | buyers | fees |
 |---|---|---|---|---|---|
 | 1 | refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02) | refused: insufficient_balance | 0.00 | 0.00 | 0.00 |
-| 2 | refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02) | refused: already_refused | 0.00 | 0.00 | 0.00 |
+| 2 | refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02) | refused: insufficient_balance | 0.00 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-3, shop: shop-2, to_shop: 0.01, fee: 0.03) | done | 0.01 | -0.04 | 0.03 |
-| 4 | refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02) | refused: already_refused | 0.01 | -0.04 | 0.03 |
+| 4 | refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02) | refused: insufficient_balance | 0.01 | -0.04 | 0.03 |
 
 </details>
 
@@ -344,9 +344,9 @@ stateDiagram-v2
 | # | Operation | Result | shop_balance(shop-2) | buyers | fees | bank |
 |---|---|---|---|---|---|---|
 | 1 | payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01) | refused: insufficient_balance | 0.00 | 0.00 | 0.00 | 0.00 |
-| 2 | payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01) | refused: already_refused | 0.00 | 0.00 | 0.00 | 0.00 |
+| 2 | payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01) | refused: insufficient_balance | 0.00 | 0.00 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-3, shop: shop-2, to_shop: 0.01, fee: 0.02) | done | 0.01 | -0.03 | 0.02 | 0.00 |
-| 4 | payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01) | refused: already_refused | 0.01 | -0.03 | 0.02 | 0.00 |
+| 4 | payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01) | refused: insufficient_balance | 0.01 | -0.03 | 0.02 | 0.00 |
 
 </details>
 

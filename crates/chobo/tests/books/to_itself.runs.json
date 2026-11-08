@@ -1010,7 +1010,7 @@
           "op": "do",
           "kind": "move_stock",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_stock"
         },
         {
           "op": "do",
@@ -1021,7 +1021,7 @@
           "op": "do",
           "kind": "move_stock",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_stock"
         }
       ],
       "accounts": [
@@ -1290,7 +1290,7 @@
           "op": "do",
           "kind": "to_main",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_stock"
         },
         {
           "op": "do",
@@ -1301,7 +1301,7 @@
           "op": "do",
           "kind": "to_main",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_stock"
         }
       ],
       "accounts": [
@@ -1564,7 +1564,7 @@
           "op": "do",
           "kind": "stock_out",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_stock"
         },
         {
           "op": "do",
@@ -1575,7 +1575,7 @@
           "op": "do",
           "kind": "stock_out",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_stock"
         }
       ],
       "accounts": [

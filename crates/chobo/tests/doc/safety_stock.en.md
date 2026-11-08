@@ -60,7 +60,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `ship.do` | `below_safety_stock` | `shelf(sku)` would go below 3 |
 | `ship.do` | `key_conflict` | a call with the same `order` and `sku` and other arguments came before |
-| `ship.do` | `already_refused` | a call with the same `order` and `sku` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `ship.do` | `already_refused` | a call with the same `order` and `sku` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -82,7 +82,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  ship.do(order: order-1, sku: sku-2, qty: 1)  refused: below_safety_stock (move 1 takes 1 from shelf(sku-2): posted 0, held out 0)
- 2  ship.do(order: order-1, sku: sku-2, qty: 1)  refused: already_refused
+ 2  ship.do(order: order-1, sku: sku-2, qty: 2)  refused: already_refused
 ```
 
 </details>
@@ -161,9 +161,9 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 | # | Operation | Result | shelf(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | ship.do(order: order-1, sku: sku-2, qty: 1) | refused: below_safety_stock | 0 | 0 | 0 |
-| 2 | ship.do(order: order-1, sku: sku-2, qty: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | ship.do(order: order-1, sku: sku-2, qty: 1) | refused: below_safety_stock | 0 | 0 | 0 |
 | 3 | replenish.do(slip: slip-3, sku: sku-2, qty: 4) | done | 4 | -4 | 0 |
-| 4 | ship.do(order: order-1, sku: sku-2, qty: 1) | refused: already_refused | 4 | -4 | 0 |
+| 4 | ship.do(order: order-1, sku: sku-2, qty: 1) | refused: below_safety_stock | 4 | -4 | 0 |
 
 </details>
 

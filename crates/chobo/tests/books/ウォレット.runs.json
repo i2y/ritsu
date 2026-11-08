@@ -740,7 +740,7 @@
           "op": "do",
           "kind": "入金",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "上限超え"
         }
       ],
       "accounts": [
@@ -996,7 +996,7 @@
           "op": "hold",
           "kind": "支払",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "残高不足"
         },
         {
           "op": "do",
@@ -1007,7 +1007,7 @@
           "op": "hold",
           "kind": "支払",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "残高不足"
         }
       ],
       "accounts": [
@@ -1240,7 +1240,7 @@
           "op": "do",
           "kind": "払い戻し",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "残高不足"
         },
         {
           "op": "do",
@@ -1251,7 +1251,7 @@
           "op": "do",
           "kind": "払い戻し",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "残高不足"
         }
       ],
       "accounts": [

@@ -343,10 +343,15 @@ class _MySql:
                 # the key was used: by this call made before, or by another
                 used = x.run([_fill(self._book["sql"]["readCall"], vals)])[0][0]
                 x.quit()
-                result, _, was, definition = used
+                result, reason, was, definition = used
+                same = was == content and definition == t["definition"]
                 if result == "refused":
-                    return _refused("already_refused")
-                return Result("done_before") if was == content and definition == t["definition"] else _refused("key_conflict")
+                    # refused by a bound before: the same call again is given the reason the row keeps,
+                    # when it is one of this kind's; another call with the key, or a row without one,
+                    # already_refused
+                    kept = [c["reason"] for c in sql["checks"] if same and c["reason"] == reason]
+                    return _refused(kept[0] if kept else "already_refused")
+                return Result("done_before") if same else _refused("key_conflict")
             if sql["lock"] is not None:
                 lock_rows = rows[1]
                 if len(lock_rows) != locked:

@@ -387,7 +387,7 @@
                     "from_place": "from_place-2",
                     "to_place": "to_place-3",
                     "sku": "sku-4",
-                    "qty": 1
+                    "qty": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -741,7 +741,7 @@
                     "slip": "slip-1",
                     "from_place": "from_place-2",
                     "sku": "sku-3",
-                    "qty": 1
+                    "qty": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -1039,7 +1039,7 @@
                     "slip": "slip-1",
                     "place": "place-2",
                     "sku": "sku-3",
-                    "qty": 1
+                    "qty": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

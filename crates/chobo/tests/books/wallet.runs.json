@@ -740,7 +740,7 @@
           "op": "do",
           "kind": "deposit",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "over_the_limit"
         }
       ],
       "accounts": [
@@ -996,7 +996,7 @@
           "op": "hold",
           "kind": "payment",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_balance"
         },
         {
           "op": "do",
@@ -1007,7 +1007,7 @@
           "op": "hold",
           "kind": "payment",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_balance"
         }
       ],
       "accounts": [
@@ -1240,7 +1240,7 @@
           "op": "do",
           "kind": "refund",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_balance"
         },
         {
           "op": "do",
@@ -1251,7 +1251,7 @@
           "op": "do",
           "kind": "refund",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "insufficient_balance"
         }
       ],
       "accounts": [

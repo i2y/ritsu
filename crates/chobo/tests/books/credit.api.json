@@ -171,7 +171,7 @@
                   "args": {
                     "order": "order-1",
                     "member": "member-2",
-                    "amount": 50001
+                    "amount": 1
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -644,7 +644,7 @@
                   "args": {
                     "repayment_id": "repayment_id-3",
                     "member": "member-2",
-                    "amount": 1
+                    "amount": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

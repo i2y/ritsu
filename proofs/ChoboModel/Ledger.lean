@@ -141,10 +141,11 @@ structure Hold where
   deriving DecidableEq, Repr
 
 /-- What a key was used for (DESIGN 2.3): a call that went through, with the arguments a second
-    call under the key is compared with, or a call a bound refused. -/
+    call under the key is compared with, or a call a bound refused, with the reason it was given
+    and the arguments it was called with. -/
 inductive KeyRec where
   | done (content : List (Option Val))
-  | refused
+  | refused (reason : String) (content : List (Option Val))
   deriving DecidableEq, Repr
 
 /-- A hold is known by its transfer kind and the values of its key. -/
@@ -300,11 +301,11 @@ def State.moveOrHold (s : State) (b : Book) (t : TransferKind) (c : Call) :
   if moves.any (fun m => decide (m.src = m.dst)) then .ok (.refused "same_account", s) else
   let slot : KeySlot := (c.kind, c.op, c.key t)
   match find? s.keys slot with
-  | some .refused => .ok (.refused "already_refused", s)
+  | some (.refused reason before) => .ok (.refused (if before = c.args then reason else "already_refused"), s)
   | some (.done before) => .ok (if before = c.args then .doneBefore else .refused "key_conflict", s)
   | none =>
     match runMoves b (c.op == .hold) s moves [] with
-    | .refusedAt r => .ok (.refused r, { s with keys := (slot, .refused) :: s.keys })
+    | .refusedAt r => .ok (.refused r, { s with keys := (slot, .refused r c.args) :: s.keys })
     | .moved scratch =>
       if moves.all (fun m => inRange (scratchBal scratch s m.src) && inRange (scratchBal scratch s m.dst)) then
         let s1 : State := { s with accounts := scratch ++ s.accounts }

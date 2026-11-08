@@ -40,7 +40,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `deposit.do` | `over_the_limit` | `wallet(member)` would go above 100000 |
 | `deposit.do` | `key_conflict` | a call with the same `deposit_id` and other arguments came before |
-| `deposit.do` | `already_refused` | a call with the same `deposit_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `deposit.do` | `already_refused` | a call with the same `deposit_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -63,7 +63,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 ```text
  1  deposit.do(deposit_id: deposit_id-1, member: member-2, amount: 100000)  done
  2  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       refused: over_the_limit (move 1 puts 1 into wallet(member-2): posted 100000, held in 0)
- 3  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       refused: already_refused
+ 3  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 2)       refused: already_refused
 ```
 
 </details>
@@ -100,7 +100,7 @@ stateDiagram-v2
 |---|---|---|
 | `payment.hold` | `insufficient_balance` | `wallet(member)` would go below 0 |
 | `payment.hold` | `key_conflict` | a call with the same `order` and other arguments came before |
-| `payment.hold` | `already_refused` | a call with the same `order` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `payment.hold` | `already_refused` | a call with the same `order` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `payment.post` | `key_conflict` | the hold was posted before, for other amounts |
 | `payment.post` | `already_voided` | the hold is voided already |
 | `payment.post` | `over_hold` | more than the hold holds |
@@ -128,7 +128,7 @@ stateDiagram-v2
 
 ```text
  1  payment.hold(order: order-1, member: member-2, amount: 1)  refused: insufficient_balance (move 1 takes 1 from wallet(member-2): posted 0, held out 0)
- 2  payment.hold(order: order-1, member: member-2, amount: 1)  refused: already_refused
+ 2  payment.hold(order: order-1, member: member-2, amount: 2)  refused: already_refused
 ```
 
 #### payment.post: key_conflict
@@ -190,7 +190,7 @@ stateDiagram-v2
 |---|---|---|
 | `refund.do` | `insufficient_balance` | `wallet(member)` would go below 0 |
 | `refund.do` | `key_conflict` | a call with the same `refund_id` and other arguments came before |
-| `refund.do` | `already_refused` | a call with the same `refund_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `refund.do` | `already_refused` | a call with the same `refund_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -212,7 +212,7 @@ stateDiagram-v2
 
 ```text
  1  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  refused: insufficient_balance (move 1 takes 1 from wallet(member-2): posted 0, held out 0)
- 2  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  refused: already_refused
+ 2  refund.do(refund_id: refund_id-1, member: member-2, amount: 2)  refused: already_refused
 ```
 
 </details>
@@ -326,7 +326,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | 1 | deposit.do(deposit_id: deposit_id-1, member: member-2, amount: 100000) | done | 100000 | -100000 |
 | 2 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | refused: over_the_limit | 100000 | -100000 |
-| 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | refused: already_refused | 100000 | -100000 |
+| 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | refused: over_the_limit | 100000 | -100000 |
 
 </details>
 
@@ -355,9 +355,9 @@ stateDiagram-v2
 | # | Operation | Result | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|
 | 1 | payment.hold(order: order-1, member: member-2, amount: 1) | refused: insufficient_balance | 0 | 0 | 0 |
-| 2 | payment.hold(order: order-1, member: member-2, amount: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | payment.hold(order: order-1, member: member-2, amount: 1) | refused: insufficient_balance | 0 | 0 | 0 |
 | 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | done | 1 | -1 | 0 |
-| 4 | payment.hold(order: order-1, member: member-2, amount: 1) | refused: already_refused | 1 | -1 | 0 |
+| 4 | payment.hold(order: order-1, member: member-2, amount: 1) | refused: insufficient_balance | 1 | -1 | 0 |
 
 </details>
 
@@ -386,9 +386,9 @@ stateDiagram-v2
 | # | Operation | Result | wallet(member-2) | bank |
 |---|---|---|---|---|
 | 1 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | refused: insufficient_balance | 0 | 0 |
-| 2 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | refused: already_refused | 0 | 0 |
+| 2 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | refused: insufficient_balance | 0 | 0 |
 | 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | done | 1 | -1 |
-| 4 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | refused: already_refused | 1 | -1 |
+| 4 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | refused: insufficient_balance | 1 | -1 |
 
 </details>
 

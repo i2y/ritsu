@@ -40,7 +40,7 @@ flowchart LR
 |---|---|---|
 | `deposit.do` | `over_the_limit` | `wallet(member)` が 100000 を超える |
 | `deposit.do` | `key_conflict` | `deposit_id` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `deposit.do` | `already_refused` | `deposit_id` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `deposit.do` | `already_refused` | `deposit_id` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -63,7 +63,7 @@ flowchart LR
 ```text
  1  deposit.do(deposit_id: deposit_id-1, member: member-2, amount: 100000)  通る
  2  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       over_the_limit で拒否される（1 つ目の移動が wallet(member-2) へ 1 を入れようとしたときの残高は、確定 100000、入ってくる仮押さえ 0）
- 3  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       already_refused で拒否される
+ 3  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 2)       already_refused で拒否される
 ```
 
 </details>
@@ -100,7 +100,7 @@ stateDiagram-v2
 |---|---|---|
 | `payment.hold` | `insufficient_balance` | `wallet(member)` が 0 を下回る |
 | `payment.hold` | `key_conflict` | `order` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `payment.hold` | `already_refused` | `order` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `payment.hold` | `already_refused` | `order` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 | `payment.post` | `key_conflict` | 仮押さえは、違う額で確定済み |
 | `payment.post` | `already_voided` | 仮押さえはもう取り消されている |
 | `payment.post` | `over_hold` | 押さえた額より多く確定しようとした |
@@ -128,7 +128,7 @@ stateDiagram-v2
 
 ```text
  1  payment.hold(order: order-1, member: member-2, amount: 1)  insufficient_balance で拒否される（1 つ目の移動が wallet(member-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  payment.hold(order: order-1, member: member-2, amount: 1)  already_refused で拒否される
+ 2  payment.hold(order: order-1, member: member-2, amount: 2)  already_refused で拒否される
 ```
 
 #### payment.post: key_conflict
@@ -190,7 +190,7 @@ stateDiagram-v2
 |---|---|---|
 | `refund.do` | `insufficient_balance` | `wallet(member)` が 0 を下回る |
 | `refund.do` | `key_conflict` | `refund_id` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `refund.do` | `already_refused` | `refund_id` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
+| `refund.do` | `already_refused` | `refund_id` が同じでほかの引数が違う呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない（同じ引数で呼び直すと、前と同じ理由で拒否される） |
 
 <details><summary>拒否される例</summary>
 
@@ -212,7 +212,7 @@ stateDiagram-v2
 
 ```text
  1  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  insufficient_balance で拒否される（1 つ目の移動が wallet(member-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  already_refused で拒否される
+ 2  refund.do(refund_id: refund_id-1, member: member-2, amount: 2)  already_refused で拒否される
 ```
 
 </details>
@@ -326,7 +326,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | 1 | deposit.do(deposit_id: deposit_id-1, member: member-2, amount: 100000) | 通る | 100000 | -100000 |
 | 2 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | over_the_limit で拒否される | 100000 | -100000 |
-| 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | already_refused で拒否される | 100000 | -100000 |
+| 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | over_the_limit で拒否される | 100000 | -100000 |
 
 </details>
 
@@ -355,9 +355,9 @@ stateDiagram-v2
 | # | 操作 | 結果 | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|
 | 1 | payment.hold(order: order-1, member: member-2, amount: 1) | insufficient_balance で拒否される | 0 | 0 | 0 |
-| 2 | payment.hold(order: order-1, member: member-2, amount: 1) | already_refused で拒否される | 0 | 0 | 0 |
+| 2 | payment.hold(order: order-1, member: member-2, amount: 1) | insufficient_balance で拒否される | 0 | 0 | 0 |
 | 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | 通る | 1 | -1 | 0 |
-| 4 | payment.hold(order: order-1, member: member-2, amount: 1) | already_refused で拒否される | 1 | -1 | 0 |
+| 4 | payment.hold(order: order-1, member: member-2, amount: 1) | insufficient_balance で拒否される | 1 | -1 | 0 |
 
 </details>
 
@@ -386,9 +386,9 @@ stateDiagram-v2
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
 | 1 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | insufficient_balance で拒否される | 0 | 0 |
-| 2 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | already_refused で拒否される | 0 | 0 |
+| 2 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | insufficient_balance で拒否される | 0 | 0 |
 | 3 | deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1) | 通る | 1 | -1 |
-| 4 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | already_refused で拒否される | 1 | -1 |
+| 4 | refund.do(refund_id: refund_id-1, member: member-2, amount: 1) | insufficient_balance で拒否される | 1 | -1 |
 
 </details>
 

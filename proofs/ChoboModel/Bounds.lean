@@ -614,4 +614,50 @@ theorem again_doneBefore {bk : Book} {s s1 : State} {c : Call}
       · rw [hop] at h ⊢; exact moveOrHold_again h
     · cases h
 
+theorem moveOrHold_again_refused {bk : Book} {s s1 : State} {t : TransferKind} {c : Call} {r : String}
+    (h : s.moveOrHold bk t c = .ok (.refused r, s1)) : s1.moveOrHold bk t c = .ok (.refused r, s1) := by
+  have h0 := h
+  unfold State.moveOrHold at h
+  simp only at h
+  split at h
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨_, rfl⟩ := h
+    exact h0
+  · next hsame =>
+    split at h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨_, rfl⟩ := h
+      exact h0
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨_, rfl⟩ := h
+      exact h0
+    · split at h
+      · simp only [Except.ok.injEq, Prod.mk.injEq, Outcome.refused.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        unfold State.moveOrHold
+        simp only
+        rw [if_neg hsame]
+        simp [find?_cons]
+      · split at h
+        · simp at h
+        · cases h
+
+/-- **The same `do` or `hold` a second time after a refusal is refused with the same reason**,
+    and changes nothing: what a retry of a refused call comes to when its answer was lost. A key a
+    bound refused keeps the reason; every other refusal leaves the state as it was. -/
+theorem again_refused {bk : Book} {s s1 : State} {c : Call} {r : String}
+    (hop : c.op = .«do» ∨ c.op = .hold) (h : s.apply bk c = .ok (.refused r, s1)) :
+    s1.apply bk c = .ok (.refused r, s1) := by
+  unfold State.apply at h ⊢
+  split at h
+  · cases h
+  · next t ht =>
+    split at h
+    · next hf =>
+      rw [if_pos hf]
+      rcases hop with hop | hop
+      · rw [hop] at h ⊢; exact moveOrHold_again_refused h
+      · rw [hop] at h ⊢; exact moveOrHold_again_refused h
+    · cases h
+
 end ChoboModel

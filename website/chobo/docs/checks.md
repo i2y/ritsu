@@ -26,7 +26,9 @@ examples/points/points.book: ok
 The reasons that can be there come from the book: the lower bound of an account a move takes from,
 and the upper bound of one it puts into; `key_conflict`, when two calls with the same key can differ
 in an amount or in another parameter left out of the key; `already_refused`, when a bound can refuse
-a call, which spends its key; `same_account`, when a move goes between two accounts of one kind; and
+a call, which spends its key, and a second call with that key can differ from the first (the same
+call again is refused with the reason the first was); `same_account`, when a move goes between two
+accounts of one kind; and
 the states of a hold. Each is listed only when the checker finds operations that get there, and
 runs them. A
 purchase's points never expire, so `earn` is never refused with `expired`; earning only puts in, so

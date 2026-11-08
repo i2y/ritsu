@@ -708,10 +708,20 @@ func (r *myRuntime) move(ctx context.Context, kind, op string, v []any) (Result,
 				return fmt.Errorf("chobo: the key of %s.%s is used, and its call is not there", kind, op)
 			}
 			u := used[0][0]
+			same := u[2].String == was && u[3].String == t.definition
 			switch {
 			case u[0].String == "refused":
+				// refused by a bound before: the same call again is given the reason the row keeps,
+				// when it is one of this kind's; another call with the key, or a row without one,
+				// already_refused
 				res = refused("already_refused")
-			case u[2].String == was && u[3].String == t.definition:
+				for _, c := range t.sql.checks {
+					if same && u[1].Valid && c.reason == u[1].String {
+						res = refused(c.reason)
+						break
+					}
+				}
+			case same:
 				res = Result{Outcome: "done_before"}
 			default:
 				res = refused("key_conflict")

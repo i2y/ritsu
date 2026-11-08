@@ -569,7 +569,7 @@
           "op": "hold",
           "kind": "引当",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫切れ"
         },
         {
           "op": "do",
@@ -580,7 +580,7 @@
           "op": "hold",
           "kind": "引当",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "在庫切れ"
         }
       ],
       "accounts": [

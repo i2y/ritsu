@@ -387,7 +387,7 @@
                     "元": "元-2",
                     "先": "先-3",
                     "sku": "sku-4",
-                    "数": 1
+                    "数": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -741,7 +741,7 @@
                     "伝票": "伝票-1",
                     "元": "元-2",
                     "sku": "sku-3",
-                    "数": 1
+                    "数": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"
@@ -1039,7 +1039,7 @@
                     "伝票": "伝票-1",
                     "場所": "場所-2",
                     "sku": "sku-3",
-                    "数": 1
+                    "数": 2
                   },
                   "result": "refused",
                   "reason": "already_refused"

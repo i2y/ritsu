@@ -62,7 +62,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `move_stock.do` | `insufficient_stock` | `warehouse(from_place, sku)` would go below 0 |
 | `move_stock.do` | `key_conflict` | a call with the same `slip` and other arguments came before |
-| `move_stock.do` | `already_refused` | a call with the same `slip` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `move_stock.do` | `already_refused` | a call with the same `slip` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `move_stock.do` | `same_account` | a move would go from an account to itself |
 
 <details><summary>How each refusal comes about</summary>
@@ -85,7 +85,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  refused: insufficient_stock (move 1 takes 1 from warehouse(from_place-2, sku-4): posted 0, held out 0)
- 2  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  refused: already_refused
+ 2  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 2)  refused: already_refused
 ```
 
 #### move_stock.do: same_account
@@ -106,7 +106,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `to_main.do` | `insufficient_stock` | `warehouse(from_place, sku)` would go below 0 |
 | `to_main.do` | `key_conflict` | a call with the same `slip` and other arguments came before |
-| `to_main.do` | `already_refused` | a call with the same `slip` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `to_main.do` | `already_refused` | a call with the same `slip` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 | `to_main.do` | `same_account` | a move would go from an account to itself |
 
 <details><summary>How each refusal comes about</summary>
@@ -129,7 +129,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  refused: insufficient_stock (move 1 takes 1 from warehouse(from_place-2, sku-3): posted 0, held out 0)
- 2  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  refused: already_refused
+ 2  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 2)  refused: already_refused
 ```
 
 #### to_main.do: same_account
@@ -150,7 +150,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `stock_out.do` | `insufficient_stock` | `warehouse(place, sku)` would go below 0 |
 | `stock_out.do` | `key_conflict` | a call with the same `slip` and other arguments came before |
-| `stock_out.do` | `already_refused` | a call with the same `slip` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `stock_out.do` | `already_refused` | a call with the same `slip` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -172,7 +172,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  refused: insufficient_stock (move 1 takes 1 from warehouse(place-2, sku-3): posted 0, held out 0)
- 2  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  refused: already_refused
+ 2  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 2)  refused: already_refused
 ```
 
 </details>
@@ -305,9 +305,9 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 | # | Operation | Result | warehouse(from_place-2, sku-4) | warehouse(to_place-3, sku-4) | suppliers |
 |---|---|---|---|---|---|
 | 1 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | refused: insufficient_stock | 0 | 0 | 0 |
-| 2 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | refused: insufficient_stock | 0 | 0 | 0 |
 | 3 | stock_in.do(slip: slip-5, place: from_place-2, sku: sku-4, qty: 1) | done | 1 | 0 | -1 |
-| 4 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | refused: already_refused | 1 | 0 | -1 |
+| 4 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | refused: insufficient_stock | 1 | 0 | -1 |
 
 </details>
 
@@ -336,9 +336,9 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 | # | Operation | Result | warehouse(from_place-2, sku-3) | warehouse(main, sku-3) | suppliers |
 |---|---|---|---|---|---|
 | 1 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | refused: insufficient_stock | 0 | 0 | 0 |
-| 2 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | refused: insufficient_stock | 0 | 0 | 0 |
 | 3 | stock_in.do(slip: slip-4, place: from_place-2, sku: sku-3, qty: 1) | done | 1 | 0 | -1 |
-| 4 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | refused: already_refused | 1 | 0 | -1 |
+| 4 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | refused: insufficient_stock | 1 | 0 | -1 |
 
 </details>
 
@@ -367,9 +367,9 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 | # | Operation | Result | warehouse(place-2, sku-3) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | refused: insufficient_stock | 0 | 0 | 0 |
-| 2 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | refused: already_refused | 0 | 0 | 0 |
+| 2 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | refused: insufficient_stock | 0 | 0 | 0 |
 | 3 | stock_in.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1) | done | 1 | -1 | 0 |
-| 4 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | refused: already_refused | 1 | -1 | 0 |
+| 4 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | refused: insufficient_stock | 1 | -1 | 0 |
 
 </details>
 

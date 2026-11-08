@@ -151,16 +151,20 @@ chain of linked transfers in one request, which TigerBeetle applies whole or not
   `--development`, which is what chobo is tested on, and 8189 on one started without it. `gen`
   stops at 253 (E060), so that a book it writes also runs on the replica it can be tried on. Past it, split the transfer into kinds with fewer moves.
 
-Two answers differ from the reference interpreter, and the tests do not reach either:
+Two answers differ from the reference interpreter:
 
-- When a key a bound refused comes again **with other amounts**, the reference interpreter
-  answers `already_refused`. TigerBeetle forbids only the ID of the transfer it refused, so a
-  transfer before it in the new chain can be refused first, by its own bound, and the client
-  answers that bound's reason. Nothing moves either way; only the name of the reason differs. A
-  retry with the same arguments answers `already_refused` on both.
+- A key a bound refused, called again. The reference interpreter, PostgreSQL and the MySQL family
+  keep the reason with the key: the same call is refused with it again, and a call **with other
+  contents** with `already_refused`. TigerBeetle keeps only the ID of the transfer it refused, not
+  what the chain carried, so it answers `id_already_failed` whatever the call carries, and the
+  client gives the reason of the bound that transfer checks, for other amounts too. TigerBeetle
+  also checks the transfers before it in the chain again: if the balances have changed since, one
+  of them can be refused first, with its own bound's reason. Nothing moves either way; only the
+  name of the reason differs. The tests call a key refused for want of stock again with another
+  amount, in every language; a change of the balances in between they do not reach.
 - TigerBeetle keeps balances of 128 bits, so an operation that takes a balance past what 64 bits
   hold goes through, and reading the balance with `balance` then fails; the reference
-  interpreter and PostgreSQL fail the operation itself.
+  interpreter and PostgreSQL fail the operation itself. The tests do not reach it.
 
 ## MySQL, TiDB and Vitess
 
@@ -210,7 +214,8 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
 
 - **One write.** A call is one transaction. A `do` or a `hold` first inserts its own row into
   `refunds_calls`: a key used before stops it there, with a duplicate key (1062), and the client
-  reads the earlier call to answer `done_before`, `key_conflict` or `already_refused`. Then it
+  reads the earlier call to answer `done_before`, `key_conflict`, the reason a bound refused the
+  same call with, or `already_refused`. Then it
   locks the rows of the accounts with bounds, in the order of their IDs, and the read itself says,
   for each row, the first move that would take it past a bound (the `case`, 0 for none); the
   earliest of them is the move refused. The update after it works the new balances out itself. A

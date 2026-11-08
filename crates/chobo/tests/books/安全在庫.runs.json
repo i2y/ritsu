@@ -533,7 +533,7 @@
           "op": "do",
           "kind": "出荷",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "安全在庫割れ"
         },
         {
           "op": "do",
@@ -544,7 +544,7 @@
           "op": "do",
           "kind": "出荷",
           "result": "refused",
-          "reason": "already_refused"
+          "reason": "安全在庫割れ"
         }
       ],
       "accounts": [

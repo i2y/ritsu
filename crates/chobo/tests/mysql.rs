@@ -6,12 +6,13 @@
 //! something each get done or refused, a call runs in the caller's transaction and goes with it,
 //! a call is a transaction of its own on a connection that is in none, in each of the three
 //! languages, a call's statements go in one request with `batch`, a key and a tenant are their
-//! bytes, the statements read the same under any `sql_mode`, and a name MySQL cannot hold stops
-//! the build (E062).
+//! bytes, the statements read the same under any `sql_mode`, a key a bound refused is refused with
+//! the reason its row keeps when the same call comes again and with already_refused when other
+//! contents come or the row keeps no reason, and a name MySQL cannot hold stops the build (E062).
 //!
-//! The steps run the TypeScript client, through mysql2, and the step of whose transaction a call is
-//! the Python and the Go clients too; the three clients run every scenario on both servers in
-//! tests/backends.rs.
+//! The steps run the TypeScript client, through mysql2; the step of whose transaction a call is,
+//! and that of a refused key called again, the Python, Go and Rust clients too. The four clients
+//! run every scenario on MySQL, TiDB and Vitess in tests/backends.rs.
 
 mod common;
 use chobo::target::Target;
@@ -725,6 +726,210 @@ console.log(JSON.stringify({{ rs, posted: String(s.posted) }}));"
     eprintln!("sql_mode on {}: under {under}, quotes and backslashes in keys go through", my.label);
 }
 
+/// The table of the calls of a book of tests/books, as SQL.
+fn calls_of(book: &str) -> String {
+    let c = case(&root().join(format!("tests/books/{book}.book")));
+    chobo::mysql::table(&c.book, "calls")
+}
+
+/// A key a bound refused, called again (DESIGN 4.5, 20): the same call is refused with the reason
+/// the row keeps, also once there is enough; a call with other contents, and the same call once the
+/// row keeps no reason, with already_refused. Nothing moves. The TypeScript client, with the book
+/// of `names` (the book, receive and its delivery, the quantity, reserve and its order, the account
+/// of the stock, and the reason its bound gives); with `every`, which goes with stock_reservation,
+/// the Python, Go and Rust clients too.
+fn refused_again(my: &MySql, place: &Place, work: &Path, names: [&str; 8], every: bool) {
+    let [book, receive, delivery, qty, reserve, order, stock, reason] = names;
+    let r = format!("refused {reason}");
+    let want = json!({"out": [r, r, "refused already_refused", "done", r, "refused already_refused"], "posted": 5, "held": 0});
+    let v = ts(
+        my,
+        place,
+        &[book],
+        &format!(
+            "const b = {book}(pool, {{ tenant: \"again-ts\" }});
+const out: string[] = [];
+const step = async (f: () => Promise<any>) => {{ const r = await f(); out.push(r.reason ? `${{r.result}} ${{r.reason}}` : r.result); }};
+const hold = (n: bigint) => b.{reserve}.hold({{ {order}: \"a-1\", sku: \"A\", {qty}: n }} as any);
+await step(() => hold(1n));
+await step(() => hold(1n));
+await step(() => hold(2n));
+await step(() => b.{receive}.do({{ {delivery}: \"a-d\", sku: \"A\", {qty}: 5n }} as any));
+await step(() => hold(1n));
+await pool.query(\"update {calls} set `reason` = null where `tenant` = {t} and `result` = 'refused'\");
+await step(() => hold(1n));
+const s = await b.balance.{stock}({{ sku: \"A\" }} as any);
+console.log(JSON.stringify({{ out, posted: Number(s.posted), held: Number(s.held_out) }}));",
+            calls = calls_of(book),
+            t = tenant_of(book, "again-ts")
+        ),
+        false,
+    );
+    assert_eq!(v, want, "{} TypeScript", my.label);
+    eprintln!("a refused key called again on {}, TypeScript: the same call {r}, other contents and a row without its reason already_refused", my.label);
+    if !every {
+        return;
+    }
+
+    match python_mysql() {
+        Ok(python) => {
+            let v = py(
+                my,
+                place,
+                &python,
+                &["stock_reservation"],
+                &"b = stock_reservation(connect(autocommit=True), tenant=\"again-py\")
+out = []
+
+
+def step(r):
+    out.append(f\"{r.result} {r.reason}\" if r.reason else r.result)
+
+
+def hold(n):
+    return b.reserve.hold(order=\"a-1\", sku=\"A\", qty=n)
+
+
+step(hold(1))
+step(hold(1))
+step(hold(2))
+step(b.receive.do(delivery=\"a-d\", sku=\"A\", qty=5))
+step(hold(1))
+connect(autocommit=True).cursor().execute(\"update @CALLS@ set `reason` = null where `tenant` = @TENANT@ and `result` = 'refused'\")
+step(hold(1))
+s = b.balance.stock(sku=\"A\")
+print(json.dumps({\"out\": out, \"posted\": s.posted, \"held\": s.held_out}))"
+                    .replace("@CALLS@", &calls_of("stock_reservation"))
+                    .replace("@TENANT@", &tenant_of("stock_reservation", "again-py")),
+            );
+            assert_eq!(v, want, "{} Python", my.label);
+            eprintln!("a refused key called again on {}, Python: the same call {r}, other contents and a row without its reason already_refused", my.label);
+        }
+        Err(why) => skip(&format!("{why}; a refused key called again is not tried with the Python client on {}", my.label)),
+    }
+
+    match go() {
+        Ok(()) => {
+            let v = go_main(
+                my,
+                place,
+                work,
+                "stock_reservation",
+                &"\tb := book.MySQL(db, \"again-go\", false)
+\tvar got []string
+\tstep := func(r book.Result, err error) {
+\t\tmust(err)
+\t\tif r.Reason != \"\" {
+\t\t\tgot = append(got, r.Outcome+\" \"+r.Reason)
+\t\t} else {
+\t\t\tgot = append(got, r.Outcome)
+\t\t}
+\t}
+\thold := func(n int64) (book.Result, error) {
+\t\treturn b.Reserve.Hold(ctx, book.ReserveArgs{Order: \"a-1\", Sku: \"A\", Qty: n})
+\t}
+\tstep(hold(1))
+\tstep(hold(1))
+\tstep(hold(2))
+\tstep(b.Receive.Do(ctx, book.ReceiveArgs{Delivery: \"a-d\", Sku: \"A\", Qty: 5}))
+\tstep(hold(1))
+\t_, err = db.ExecContext(ctx, \"update @CALLS@ set `reason` = null where `tenant` = @TENANT@ and `result` = 'refused'\")
+\tmust(err)
+\tstep(hold(1))
+\ts, err := b.Balance.Stock(ctx, book.StockAccount{Sku: \"A\"})
+\tmust(err)
+\tout[\"out\"] = got
+\tout[\"posted\"] = s.Posted
+\tout[\"held\"] = s.HeldOut"
+                    .replace("@CALLS@", &calls_of("stock_reservation"))
+                    .replace("@TENANT@", &tenant_of("stock_reservation", "again-go")),
+            );
+            assert_eq!(v, want, "{} Go", my.label);
+            eprintln!("a refused key called again on {}, Go: the same call {r}, other contents and a row without its reason already_refused", my.label);
+        }
+        Err(why) => skip(&format!("{why}; a refused key called again is not tried with the Go client on {}", my.label)),
+    }
+
+    if need(Need::Rustc) {
+        match rust() {
+            Ok(()) => {
+                let bin = again_rust(work, &place.db, &my.host, my.port, &my.user);
+                let out = Command::new(&bin).output().unwrap();
+                assert!(out.status.success(), "the Rust of a refused key called again on {}:\n{}{}", my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                let v: Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&out.stdout)));
+                assert_eq!(v, want, "{} Rust", my.label);
+                eprintln!("a refused key called again on {}, Rust: the same call {r}, other contents and a row without its reason already_refused", my.label);
+            }
+            Err(why) => skip(&format!("{why}; a refused key called again is not tried with the Rust client on {}", my.label)),
+        }
+    }
+}
+
+/// Build the Rust of a refused key called again, on `db` of the server at `host:port`, with
+/// stock_reservation: the answers of the calls of `refused_again` and the balance of the stock at
+/// the end. The binary prints one JSON object.
+fn again_rust(work: &Path, db: &str, host: &str, port: u16, user: &str) -> PathBuf {
+    let c = case(&root().join("tests/books/stock_reservation.book"));
+    let module = chobo::target::build(&c.copy, &c.stem, Target::MySqlRust, &c.origin).unwrap_or_else(|d| panic!("{}", d[0].message.en)).remove(0).1;
+    let calls = calls_of("stock_reservation");
+    let tenant = tenant_of("stock_reservation", "again-rust");
+    let main = format!(
+        r#"#![deny(warnings)]
+
+#[allow(dead_code)]
+mod harness;
+
+#[path = "books/book.rs"]
+mod book;
+
+fn shown(r: book::Outcome) -> String {{
+    match r.reason() {{
+        Some(why) => format!("{{}} {{}}", r.result(), why.as_str()),
+        None => r.result().to_string(),
+    }}
+}}
+
+fn main() {{
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    rt.block_on(async {{
+        let options = sqlx::mysql::MySqlConnectOptions::new().host({host:?}).port({port}).username({user:?}).database({db:?}).pipes_as_concat(false);
+        let pool = sqlx::mysql::MySqlPoolOptions::new().max_connections(4).connect_with(options).await.unwrap();
+        let b = book::mysql(pool.clone(), "again-rust", false);
+        let hold = |qty: i64| book::ReserveArgs {{ order: "a-1", sku: "A", qty }};
+        let mut out = Vec::new();
+        out.push(shown(b.reserve().hold(hold(1)).await.unwrap()));
+        out.push(shown(b.reserve().hold(hold(1)).await.unwrap()));
+        out.push(shown(b.reserve().hold(hold(2)).await.unwrap()));
+        out.push(shown(b.receive().r#do(book::ReceiveArgs {{ delivery: "a-d", sku: "A", qty: 5 }}).await.unwrap()));
+        out.push(shown(b.reserve().hold(hold(1)).await.unwrap()));
+        sqlx::raw_sql(sqlx::AssertSqlSafe("update {calls} set `reason` = null where `tenant` = {tenant} and `result` = 'refused'")).execute(&pool).await.unwrap();
+        out.push(shown(b.reserve().hold(hold(1)).await.unwrap()));
+        let s = b.balance().stock(book::StockAccount {{ sku: "A" }}).await.unwrap();
+        println!("{{}}", serde_json::json!({{"out": out, "posted": s.posted, "held": s.held_out}}));
+        pool.close().await;
+    }});
+}}
+"#
+    );
+    build_rust_with(work, "again", &[("book".to_string(), module)], &main).unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// The Rust of a refused key called again builds, held to no warning, when there is no server of
+/// the MySQL family to run it on.
+#[test]
+fn the_rust_of_a_refused_key_called_again_builds() {
+    if !need(Need::Rustc) {
+        return;
+    }
+    if let Err(why) = rust() {
+        skip(&format!("{why}; the Rust of a refused key called again is not built"));
+        return;
+    }
+    let work = TempDir::new("again-rust");
+    let bin = again_rust(work.path(), "chobo", "127.0.0.1", 3306, "root");
+    assert!(bin.is_file());
+}
+
 #[test]
 fn what_only_the_mysql_family_has() {
     let all = servers("what only the MySQL family has");
@@ -753,6 +958,7 @@ fn what_only_the_mysql_family_has() {
         batch(my, &place, ["stock_reservation", "receive", "delivery", "qty", "reserve", "order"]);
         keys_are_bytes(my, &place, ["stock_reservation", "receive", "delivery", "qty"]);
         sql_mode(my, &place, ["stock_reservation", "receive", "delivery", "qty"]);
+        refused_again(my, &place, work.path(), ["stock_reservation", "receive", "delivery", "qty", "reserve", "order", "stock", "out_of_stock"], true);
     }
 }
 
@@ -776,6 +982,7 @@ fn what_only_the_mysql_family_has_in_japanese() {
         checks_stop_writes(my, &place, ["在庫", "入荷", "納品書", "在庫", "数"], ["ウォレット", "入金", "入金番号", "ウォレット", "額", "会員"]);
         other_bounds(my, &place, ["在庫", "入荷", "納品書", "在庫", "数", "引当", "注文"]);
         expire(my, &place, ["在庫", "入荷", "納品書", "数", "引当", "注文", "在庫", "客", "在庫"]);
+        refused_again(my, &place, work.path(), ["在庫", "入荷", "納品書", "数", "引当", "注文", "在庫", "在庫切れ"], false);
     }
 }
 

@@ -59,7 +59,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 |---|---|---|
 | `sale.do` | `insufficient_sales` | move 2 would take `shop_sales(shop)` below 0 |
 | `sale.do` | `key_conflict` | a call with the same `order` and other arguments came before |
-| `sale.do` | `already_refused` | a call with the same `order` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `sale.do` | `already_refused` | a call with the same `order` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -80,7 +80,7 @@ A box is an account, and an arrow a move of a transfer. A rounded box is an acco
 
 ```text
  1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  refused: insufficient_sales (move 2 takes 2 from shop_sales(shop-2): posted 1, held out 0)
- 2  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  refused: already_refused
+ 2  sale.do(order: order-1, shop: shop-2, price: 3, fee: 2)  refused: already_refused
 ```
 
 </details>
@@ -99,7 +99,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 |---|---|---|
 | `usd_payout.do` | `insufficient_sales` | move 1 would take `shop_sales(shop)` below 0 |
 | `usd_payout.do` | `key_conflict` | a call with the same `payout_id` and other arguments came before |
-| `usd_payout.do` | `already_refused` | a call with the same `payout_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `usd_payout.do` | `already_refused` | a call with the same `payout_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -121,7 +121,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 ```text
  1  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  refused: insufficient_sales (move 1 takes 1 from shop_sales(shop-2): posted 0, held out 0)
- 2  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  refused: already_refused
+ 2  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 3, usd_amount: 0.02)  refused: already_refused
 ```
 
 </details>
@@ -138,7 +138,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 |---|---|---|
 | `usd_transfer.do` | `insufficient_usd` | move 1 would take `usd_account(shop)` below 0.00 |
 | `usd_transfer.do` | `key_conflict` | a call with the same `transfer_id` and other arguments came before |
-| `usd_transfer.do` | `already_refused` | a call with the same `transfer_id` was refused by a bound before; a key a bound refused stays refused, even once there is enough |
+| `usd_transfer.do` | `already_refused` | a call with the same `transfer_id` and other arguments was refused by a bound before; a key a bound refused stays refused, even once there is enough (the same call again is refused with the same reason) |
 
 <details><summary>How each refusal comes about</summary>
 
@@ -161,7 +161,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 ```text
  1  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  refused: insufficient_usd (move 1 takes 0.01 from usd_account(shop-2): posted 0.00, held out 0.00)
- 2  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  refused: already_refused
+ 2  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.02)  refused: already_refused
 ```
 
 </details>
@@ -220,9 +220,9 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 | # | Operation | Result | buyers | fee_income | shipping | shop_sales(shop-2) |
 |---|---|---|---|---|---|---|
 | 1 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | refused: insufficient_sales | 0 | 0 | 0 | 0 |
-| 2 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | refused: already_refused | 0 | 0 | 0 | 0 |
+| 2 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | refused: insufficient_sales | 0 | 0 | 0 | 0 |
 | 3 | sale.do(order: order-3, shop: shop-2, price: 105, fee: 3) | done | -105 | 3 | 100 | 2 |
-| 4 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | refused: already_refused | -105 | 3 | 100 | 2 |
+| 4 | sale.do(order: order-1, shop: shop-2, price: 1, fee: 2) | refused: insufficient_sales | -105 | 3 | 100 | 2 |
 
 </details>
 
@@ -251,9 +251,9 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 | # | Operation | Result | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | refused: insufficient_sales | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 |
-| 2 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | refused: already_refused | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 |
+| 2 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | refused: insufficient_sales | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-3, shop: shop-2, price: 104, fee: 3) | done | -104 | 3 | 100 | 1 | 0 | 0.00 | 0.00 |
-| 4 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | refused: already_refused | -104 | 3 | 100 | 1 | 0 | 0.00 | 0.00 |
+| 4 | usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02) | refused: insufficient_sales | -104 | 3 | 100 | 1 | 0 | 0.00 | 0.00 |
 
 </details>
 
@@ -284,10 +284,10 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 | # | Operation | Result | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) | overseas_bank | remittance_fee |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | refused: insufficient_usd | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
-| 2 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | refused: already_refused | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
+| 2 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | refused: insufficient_usd | 0 | 0 | 0 | 0 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
 | 3 | sale.do(order: order-3, shop: shop-2, price: 105, fee: 3) | done | -105 | 3 | 100 | 2 | 0 | 0.00 | 0.00 | 0.00 | 0.00 |
 | 4 | usd_payout.do(payout_id: payout_id-4, shop: shop-2, jpy_amount: 2, usd_amount: 0.01) | done | -105 | 3 | 100 | 0 | 2 | -0.01 | 0.01 | 0.00 | 0.00 |
-| 5 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | refused: already_refused | -105 | 3 | 100 | 0 | 2 | -0.01 | 0.01 | 0.00 | 0.00 |
+| 5 | usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01) | refused: insufficient_usd | -105 | 3 | 100 | 0 | 2 | -0.01 | 0.01 | 0.00 | 0.00 |
 
 </details>
 
