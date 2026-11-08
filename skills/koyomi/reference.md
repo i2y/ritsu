@@ -222,7 +222,8 @@ v2's `law_data` returns for the element), with the revision e-Gov served in `rev
 citation, `@<source> <article>[, <article>…]`, goes at the end of a `date` line, an operation, an
 `at` line, a claim, or a calendar's `closed` and `open` lines, before the comment. Articles,
 paragraphs and items of the main provisions can be cited (`第143条`, `第143条第2項`,
-`第143条第2項第1号`, `第20条の2`, in kanji numerals too); supplementary provisions and appended
+`第143条第2項第1号`, `第20条の2`, and branch numbers on an article or an item as deep as the law has
+them, `第41条の16の2`, `第2条第1項第12号の2`; in kanji numerals too); supplementary provisions and appended
 tables cannot yet. Every article cited is pinned under its source (E111), and a pin nothing cites
 is W102.
 

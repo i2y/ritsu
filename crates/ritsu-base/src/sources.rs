@@ -94,17 +94,13 @@ pub fn law_number(s: &str) -> Option<u32> {
 }
 
 /// `第20条の2第3項第4号` as the tail of an element path: `-Article_20_2-Paragraph_3-Item_4`.
+/// An article's branch numbers go as deep as the law's (`第41条の16の2` → `-Article_41_16_2`), and
+/// an item has them too (`第12号の2` → `-Item_12_2`), as e-Gov numbers the elements.
 fn article_suffix(s: &str) -> Option<String> {
     let rest = s.strip_prefix('第')?;
     let (art, rest) = rest.split_once('条')?;
     let mut elm = format!("-Article_{}", law_number(art)?);
-    let mut rest = rest;
-    // `第20条の2`: a sub-numbered article.
-    if let Some(r) = rest.strip_prefix('の') {
-        let end = r.find('第').unwrap_or(r.len());
-        elm.push_str(&format!("_{}", law_number(&r[..end])?));
-        rest = &r[end..];
-    }
+    let mut rest = branches(rest, &mut elm)?;
     if let Some(r) = rest.strip_prefix('第') {
         let (para, r) = r.split_once('項')?;
         elm.push_str(&format!("-Paragraph_{}", law_number(para)?));
@@ -112,13 +108,24 @@ fn article_suffix(s: &str) -> Option<String> {
         if let Some(r) = rest.strip_prefix('第') {
             let (item, r) = r.split_once('号')?;
             elm.push_str(&format!("-Item_{}", law_number(item)?));
-            rest = r;
+            rest = branches(r, &mut elm)?;
         }
     }
     if !rest.is_empty() {
         return None;
     }
     Some(elm)
+}
+
+/// The branch numbers after an article's or an item's own number (`の16の2`), each added to the
+/// path (`_16_2`): what follows them, or `None` when one of them is not a number.
+fn branches<'a>(mut rest: &'a str, elm: &mut String) -> Option<&'a str> {
+    while let Some(r) = rest.strip_prefix('の') {
+        let end = r.find(['第', 'の']).unwrap_or(r.len());
+        elm.push_str(&format!("_{}", law_number(&r[..end])?));
+        rest = &r[end..];
+    }
+    Some(rest)
 }
 
 /// A fragment of a law, as a citation names it and as the database addresses it.

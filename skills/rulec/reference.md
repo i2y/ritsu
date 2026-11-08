@@ -641,7 +641,8 @@ that row came from, so the rest goes unasked while the amounts are still checked
 
 `@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
 the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
-`第20条第2項`, `第20条第2項第3号`, `別表第一`, and the supplementary provisions as `附則第3条` (the law's
+`第20条第2項`, `第20条第2項第3号`, branch numbers on an article or an item as deep as the law has them
+(`第41条の16の2`, `第2条第1項第12号の2`), `別表第一`, and the supplementary provisions as `附則第3条` (the law's
 own) or `附則（令和七年三月三一日法律第一三号）第3条` (an amending law's, its number spelled as the law's
 heading spells it); several are separated by `,`. A `file` is cited
 whole, `@japanpost`, or by one of its tables, `@japanpost table1`; a law cited with no article is E037, and so

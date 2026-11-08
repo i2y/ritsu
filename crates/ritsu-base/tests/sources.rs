@@ -29,6 +29,18 @@ fn articles_are_named_as_the_law_names_them() {
     assert_eq!(elm("別表第一").as_deref(), Some("AppdxTable[1]"));
     assert_eq!(elm("別表第十二").as_deref(), Some("AppdxTable[12]"));
     assert_eq!(elm("第3条ただし書"), None);
+    // Branch numbers as deep as the law's, on an article and on an item, as e-Gov numbers the
+    // elements (`<Article Num="41_16_2">` is 第四十一条の十六の二, `<Item Num="12_2">` is 十二の二).
+    assert_eq!(elm("第41条の16の2").as_deref(), Some("MainProvision-Article_41_16_2"));
+    assert_eq!(elm("第四十一条の十六の二第一項").as_deref(), Some("MainProvision-Article_41_16_2-Paragraph_1"));
+    assert_eq!(elm("第2条第1項第12号の2").as_deref(), Some("MainProvision-Article_2-Paragraph_1-Item_12_2"));
+    assert_eq!(elm("第2条の3第1項第12号の6の7").as_deref(), Some("MainProvision-Article_2_3-Paragraph_1-Item_12_6_7"));
+    assert_eq!(elm("附則第3条の2の2").as_deref(), Some("SupplProvision-Article_3_2_2"));
+    assert_eq!(elm("第41条の"), None);
+    assert_eq!(elm("第41条の16の"), None);
+    assert_eq!(elm("第41条のの2"), None);
+    assert_eq!(elm("第2条第1項第12号の"), None);
+    assert_eq!(elm("第2条第1項の2"), None);
     // koyomi's, which cites the main provisions only.
     let main = |s: &str| sources::fragment(LawDb::Egov, s).filter(|f| f.is_main_provision()).map(|f| f.elm);
     assert_eq!(main("第143条").as_deref(), Some("MainProvision-Article_143"));
@@ -48,6 +60,7 @@ fn articles_are_named_as_the_law_names_them() {
     assert_eq!(file("附則").as_deref(), Some("SupplProvision.xml"));
     assert_eq!(file("附則（令和七年三月三一日法律第一三号）第3条").as_deref(), Some("SupplProvision_令和七年三月三一日法律第一三号-Article_3.xml"));
     assert_eq!(file("140条"), None);
+    assert_eq!(file("第41条の16の2").as_deref(), Some("MainProvision-Article_41_16_2.xml"));
     assert_eq!(sources::fragment_file(LawDb::Ecfr, "§1910.157").as_deref(), Some("1910.157.xml"));
     assert_eq!(sources::fragment_file(LawDb::Ecfr, "1910.157").as_deref(), Some("1910.157.xml"));
     assert_eq!(sources::fragment_file(LawDb::Ecfr, "1910"), None);
