@@ -612,7 +612,7 @@ SHA-256（FIPS 180-4）を一つにし、`hex` と、先頭 16 桁の `short` �
 
 rulec、koyomi、yuen の三つは、法令のコピーを同じ場所と同じ名前で持つ（`sources/law/<法令の ID>@<時点>/<要素>.xml`。yuen の `src/copies.rs` の頭に、そうそろえたと書いてある）。そこで、次を一つにする。
 
-- 引用の書き方から要素の名前を作る（e-Gov の `第143条第2項` → `MainProvision-Article_143-Paragraph_2`、`別表第一` → `AppdxTable_1`、附則。eCFR の節）。
+- 引用の書き方から要素の名前を作る（e-Gov の `第143条第2項` → `MainProvision-Article_143-Paragraph_2`、`別表第一` → `AppdxTable_1`、附則。条と号の枝番は法令にあるだけ読む（`第41条の16の2` → `MainProvision-Article_41_16_2`、`第2条第1項第12号の2` → `…-Item_12_2`）。eCFR の節）。
 - コピーの場所、コピーの本文（タグを落とした文、項ごとの行）、固定（先頭 16 桁）、`.rule`・`.cal`・`.req` の固定の行の書き換え。
 - 通信：`curl` を子プロセスで呼び、三度まで試す（二度めの前に 2 秒、三度めの前に 4 秒）。e-Gov の法令 API v2（`law_data` と `law_revisions`）、eCFR（全文と版の一覧）、GitHub の raw のファイル（rulec）、e-Gov の応答の base64。
 
