@@ -2445,7 +2445,7 @@ CI を初めて回したときに落ちた四つは、どれも GitHub の環境
 Lean の層は、根の `proofs/` の一つの Lake のパッケージ（`ritsu_proofs`。Lean v4.34.0、mathlib なし、依存なし）で、ライブラリは六つ、プログラムは二つである（73 のファイル、38,358 行。まっさらから `lake build` で 31 秒。2026-10-19）。
 
 - `RulecCert`（12,758 行）：rulec の証明書が通らなければならない検査を関数として書き、検査が通れば主張（完全性、重なり、当てはまらない行、単位、int64）が成り立つことを証明している。ステートマシン（`Machine.lean`）と、状態のほかに持ち越す値（`Carried.lean`。値を区間にまとめて調べたときの模倣の定理 `Model.simulates` と、閉じた場所の集まりが案件の着ける組を全部含む `Sys.reaches_mem`、値を一つずつ調べたときに本当に起きる呼び出しの並びで終われることを言う `Model.reachable_finishes`）、行のセルが狭める範囲と列挙の入力の軸（`Cells.lean` の `cut_of_box`・`written_mem_hull`・`enumAxis_coords`）、最大と最小の集計と fold の答えの範囲（`Values.lean` の `extreme_mem_stated`・`foldAnswer_mem_stated`）、どの丸めでも同じ値になる評価（`evalExact_sound`）、前提のつながり（`Prereq.lean` の `no_cycle`・`reached_holds`・`never_held`・`order_along`）、確率の主張（`Chances.lean` の `Claim.holds`・`RunClaim.holds`・`WeightedClaim.holds`。区画ごとに数えたもの、一つずつ走らせたもの、重みで選ぶもの）、数の軸の敷き詰め（`Axes.lean` の `axisTilesB_cover`・`axisTilesB_unique`）、開いた値の範囲（`Values.lean` の `openValue_mem_stated`）、按分の値の順（`Values.lean` の `sharesInOrder_le`。rulec の §15.268）、出力の範囲（`Outputs.lean` の `rounded_mem_stated`・`output_mem_stated`・`written_output_mem_stated`。証明書が出力ごとに言う範囲が、出力を決めるものを丸めの刻みへ外向きに広げたものを含めば、どの向きの丸めでも答えはその範囲に入る。刻みを言わない範囲は通さない。rulec の §15.269）、一次の不等式を打ち消す乗数（`Linear.lean`）、契約と入口（`Contract.lean`）、koyomi の日の集合（`Sieve.lean` の `days`）も含む。プログラム `rulec-recheck`（`RulecMain.lean`）は、証明書を読んで、その関数そのものを走らせる。F の段階で `crates/rulec/proofs/` から移した。
-- `ChoboModel`（1,318 行）、`KoyomiModel`（830 行）、`DandoriCore`（2,755 行）：chobo・koyomi・dandori の意味の中心部分のモデルと、その性質の証明（11.2）。
+- `ChoboModel`（1,365 行）、`KoyomiModel`（830 行）、`DandoriCore`（2,755 行）：chobo・koyomi・dandori の意味の中心部分のモデルと、その性質の証明（11.2）。
 - `RitsuCross`（2,260 行）：言語をまたぐ検査の判定のモデルと、それぞれの答えが言っていることの証明（11.2 の 3）。kaname のモジュールが規則を呼ぶところでの X2 の判定（`Program.lean`）と、その証明（`ProgramSound.lean`）も含む。
 - `KanameCore`（24,769 行）：kaname の評価と範囲の解析のモデルと、範囲の解析が健全であること、total と推論した関数が失敗しないことの証明（11.2 の 5）。
 - プログラム `ritsu-model`（`Main.lean`）は、`ChoboModel`・`KoyomiModel`・`DandoriCore`・`RitsuCross`・`KanameCore` の関数を走らせる（11.3）。
@@ -2461,6 +2461,7 @@ AWS の Cedar と同じ形にした。意味の中心部分を Lean でモデル
    - `within_stays`：だから、境界の内にある勘定は、何を呼んでも内にとどまる。
    - `refused_keeps_balances`・`doneBefore_keeps_state`：拒否された呼び出しは残高も仮押さえも変えない（全部か無し）。前に済んでいる呼び出しは何も変えない。
    - `again_doneBefore`：通った `do` と `hold` をもう一度呼ぶと `done_before` になり、何も変えない（リトライが二重に動かないこと）。
+   - `again_refused`：拒否された `do` と `hold` をもう一度呼ぶと、同じ理由で拒否され、何も変えない（答えが失われたあとのリトライが、最初と同じ答えを受け取ること）。境界で拒否されたキーは理由と中身を覚え、ほかの拒否は状態を変えない。
    どれも、仮押さえの額が 0 以上であること（`State.Good`。`fits` が通すもので、どの呼び出しも保つ）だけを前提にする。
 2. **koyomi の日付の計算**（`KoyomiModel`）：通算日（Hinnant の手順を Rust と同じ 0 へ切り捨てる割り算で）、月の足し算と無い日の三つの扱い、締め、月初と月末、カレンダーの決まり（休みの曜日、表の休日、毎年の休み、特定の日、例外の営業日、データの範囲）、四つの慣行、営業日の数え方、`if closed`、`at` の時刻。定理は次のとおり。
    - `monotone_of_adjacentOk`・`monotone_on_range`：`is monotonic` の検査（範囲のどの日も翌日と比べる）が通れば、範囲のどの二日についても、遅い日の値は早い日の値より前にならない。
@@ -3052,7 +3053,7 @@ task score(text: string secret) -> Score
 
 | プラットフォーム | 残るもの | 鍵を持つ人だけが読めるようにする手段 |
 |---|---|---|
-| Temporal | ワークフローの入力と結果、アクティビティ（タスク、規則、日付、帳簿）の入力と結果、子ワークフロー、Update の値。失敗の文とスタックトレースは、既定ではペイロードの外に平文で残る | ペイロードのコーデックで暗号化し、失敗のコンバーターの `encodeCommonAttributes` で失敗の文もそれに通す |
+| Temporal | ワークフローの入力と結果、アクティビティ（タスク、規則、日付、帳簿）の入力と結果、子ワークフロー、Update の値と結果（受け取った値の SHA-256）。失敗の文とスタックトレースは、既定ではペイロードの外に平文で残る。Update の ID もペイロードの外に平文で残る。生成したクライアントの `answer` と `sendOnce` は、それをコールバックの ID か、イベントの名前と呼び手の `id` の SHA-256 から作り、値は入れない（dandori の DESIGN 25 章）。推測できる `id` は ID から分かるので、`id` に秘密にしたい値を入れない | ペイロードのコーデックで暗号化し、失敗のコンバーターの `encodeCommonAttributes` で失敗の文もそれに通す。Update の ID は暗号化されない |
 | Step Functions | 実行の入力と出力、各ステートの入力と出力 | ステートマシンにカスタマー管理の KMS キーを設定する（実行の履歴を暗号化し、`GetExecutionHistory` と `DescribeExecution` には `kms:Decrypt` が要る） |
 | Lambda durable functions | ステップの結果（実行の履歴として読める） | durable の実行のデータを、カスタマー管理の KMS キーで暗号化する（2026-07-22 の告知から。関数の `DurableConfig.KMSKeyArn`） |
 | Argo Workflows | テンプレートの入力と出力のパラメーター（Workflow のオブジェクトの中。UI と `argo get` で読める） | 無い（Argo の文書は、秘密を Kubernetes の Secret から環境変数かボリュームで渡すよう勧める） |

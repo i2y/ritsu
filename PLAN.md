@@ -2376,6 +2376,37 @@ kunitori は直していない。新しい語は、次のリリースまで公�
 
 確かめたこと：`crates/geas/tests/orders.rs`（正しいハンドラで 6 通り・12 通り・2 通りが成り立つこと、決まった並び、順ごとのサーバー、二回の実行と `-j1`・`-j4` で同じバイトのジャーナルとベースライン、snap のあとのドリフト、届いたまま書くハンドラで 6 通りのうち 4 通り・12 通りのうち 9 通り・2 通りのうち 1 通りが成り立たず、最初の順が決まった並びの最初であること、報告の英日と `--json` の golden、エラーで止まること、E018 のどれも何も起動しないこと、`map` が順の和になること、フェイクのドライバー・Chrome・pixie の greeter が順ごとに新しく立つこと）、`tests/spec.rs`（E018 の 8 つと、あとの順だけの E012 を英日と `--json` で）、`tests/explain.rs`（E018 の再現）、`tests/readme.rs`（`examples/webhooks`）、`tests/docs.rs`、`tests/skill.rs`、`src/model.rs`・`src/parse.rs`・`src/report.rs`・`src/drift.rs` のユニットテスト。geas の全部（337 件、SKIP なし、114 秒）と、`ritsu` の `playground`・`skill`・`codes`・`readme`・`website`（Zensical と Pygments のある環境で 29 件）、`ritsu-cross` の全部。
 
+### 7.103 dandori の応答とイベントの送り直しを、同じ Update にする（2026-11-08）
+
+返金の見本で見つかった。承認の API が承認の知らせを生成された `Send` で送り、届いたのに返事が失われると、送り直しは別の Update になってワークフローに二度目として拒否され、API は 409 を返して承認者を記録しないまま、ワークフローは承認として進んだ。生成した `Send` と `AnswerCallback` が Update の ID を付けず、SDK が呼ぶたびに新しい ID を作るためである（dandori の DESIGN 25 章）。
+
+- **応答**：`answer`（Go は `AnswerCallback`）の Update の ID を、`dandori.answer:` とコールバックの ID の SHA-256 の先頭 32 字にした。同じコールバックへの応答は一つの Update になり、二度目からはサーバーが最初の結果を返す。
+- **イベント**：`sendOnce`（Python は `send_once`、Go は `SendOnce`）を足した。ID は `dandori.event:` と、イベントの名前と呼び手の `id` を改行でつないだものの SHA-256 の先頭 32 字。ループで同じイベントを待つなら、待つ回ごとに `id` を変える。`Send` は変えず、コメントで `SendOnce` を指す。
+- **値を比べる**：ワークフローの Update は、受け取った値の正準の JSON の SHA-256 の先頭 32 字を結果（`{"value_sha256": …}`）に入れて返し、クライアントは自分の値のものと比べる。違えば `SentWithAnotherValueError`（Go はエラーの型、TypeScript と Python は例外のクラス）。結果に SHA-256 の無い実行（前のコード）は比べない。数はどれも最も近い double に読んで JavaScript が書くとおりに書き、対にならないサロゲートは U+FFFD に替える（Go の JSON が読むときと同じ）ので、三つの言語でそろう。TypeScript のワークフローには `node:crypto` が無いので、SHA-256 は `runtime.ts` に書いた。
+- **捨てた形**：値を ID に入れる形（初めに作った。暗号化した履歴でも ID は平文なので、とりうる値の少ない応答が ID から分かる）と、値を入れず比べもしない形（違う応答を送っても成功と読む）。
+- **閉じた実行**：開発用サーバー（Server 1.32.0）で、終わった実行（完了、失敗、キャンセル、強制終了）への同じ ID の送り直しは最初の結果を返し、知らない ID は `workflow execution already completed` になると確かめ、生成するコメントと DESIGN に書いた。Continue-As-New のあとの実行は前の実行の ID を知らない。validator が拒否した ID は残らない。
+- **暗号化**：Update の ID は暗号化されないので、`id` に秘密にしたい値（決定や人の名前）を入れないと、生成するコメントとサイトに書いた。値の SHA-256 は結果に入り、コーデックで暗号化される。暗号化の試験のフロー（`tests/encrypted/pay.flow`）にコールバックを足して確かめた。
+- **再生**：記録した 45 の履歴（うち 7 つに、結果の無い `dandori.answer` の Update がある）を、結果を返す新しいコードで再生できた。
+- **名前**：`SendOnce` と `SentWithAnotherValueError` を生成するコードの名前に足した（ぶつかれば `Send` と同じく W105・E051）。
+
+確かめたこと：dandori の `tests/examples.rs` を platforms の段で、記録した履歴の再生、三つの言語の参照との突き合わせ（応答ごとに同じ応答の送り直しが成功し、違う応答が `SentWithAnotherValueError` になり、一度だけ待つイベントの `sendOnce` も同じ）、別の言語のアクティビティ、子のワークフロー（`temporal_runs_a_flow_as_its_child`）、コールバックの上限（`callback_limits_hold_on_temporal`）、Worker Deployment Versioning の試験（終わった実行への送り直しが三つの言語とも、同じ応答は `taken`、違う応答は `SentWithAnotherValueError`、最初の実行の応答は `workflow execution already completed`）、暗号化した履歴（三つの言語とも、送り直しが成功し、違う応答が `SentWithAnotherValueError` になり、履歴には Update が一つだけ残って、その ID はコールバックの ID の SHA-256、結果はコーデックが書いた形で `value_sha256` が平文で出ない）、`an_update_id_is_made_alike_by_the_reference_typescript_python_and_go`（72 件の ID と SHA-256 が三つの言語でそろい、ID はすべて、SHA-256 は小数の無い 46 件が参照とも同じ。対にならないサロゲートを含む値と `id` もそろう）、`generated_typescript_type_checks`（182）、`generated_go_vets`（78）。ほかに `tests/spellings.rs`（18）、`tests/secrets.rs`、`tests/docs.rs`、`tests/skill.rs`、ritsu-emit の `copies`、ritsu-proto の `readers`、ritsu の `tests/skill.rs`。SKIP の行は 0。
+
+残したこと：ループの中で前の待ちの `id` を使い回したときの答えは、走らせて確かめていない（参照の実行は一番外のループの回ごとに新しい実行になる）。新しいクライアントと古いワーカーの組では、結果に SHA-256 が無いので、違う値が比べられずに成功になる。同じ double に丸められる数と、U+FFFD に替えると同じになる文字列は、同じ値として比べる。サービスを実装するフローのイベントのメソッドは `Send` のまま。Step Functions と durable functions の応答は変えず、二度送ったときの答えも確かめていない。
+
+### 7.104 chobo の、境界で拒否されたキーの呼び直しに同じ理由を返す（2026-11-08）
+
+返金の見本で見つかった。返金の仮押さえが残りの不足で拒否され、その答えが失われると、アクティビティのリトライは同じキーで `already_refused` を受け取った。ワークフローが宣言した理由は境界の理由だけなので、リトライが尽きて、申請は拒否でなく失敗で終わった（chobo の DESIGN 20 章）。
+
+- **同じ中身**：境界で拒否されたキーを、同じ中身・同じ定義のハッシュで呼び直すと、最初と同じ理由の `refused` を返す。参照インタプリタは理由と中身を覚え、PostgreSQL の `keys` と MySQL の系統の `calls` は行の理由を返す。行の理由がその振替の種類の境界の理由に無ければ（理由の名前だけを変えた版）`already_refused`。TigerBeetle のクライアントは `id_already_failed` を、その振替が確かめる境界の理由に読み替える（`exceeds_credits` と同じ求め方）。
+- **違う中身、理由の無い行**：今までどおり `already_refused`。TigerBeetle は中身を比べられないので、違う中身にも境界の理由を返す（chobo の DESIGN 4.2、4.4）。二度目の拒否には `at` を添えない。
+- **検査と例**：`already_refused` の例は、キーに入らない引数を変えた呼び直しで作る。doc の文は、同じ引数の呼び直しが同じ理由になることを言う。生成するシナリオは、すぐの呼び直しと、足りるようになってからの呼び直しに、最初の理由を待つ。
+- **Lean**：`ChoboModel` も理由と中身を覚え、`again_refused`（拒否された `do` と `hold` をもう一度呼ぶと同じ理由で拒否され、何も変えない）を足した（根の DESIGN 11.2）。
+- dandori の `lower.rs` は変えない（`already_refused` は違う中身の呼び直しで返りうる）。
+
+確かめたこと：chobo の試験 127 件を tools の段で回した（全シナリオの MySQL の Go の組み合わせを除いて通った）。MySQL の系統は `tools/mysql/fetch.sh` の MySQL 8.4.11 で回し、SKIP は TiDB と Vitess の 6 行（どちらも CI の platforms の段が回す）。参照インタプリタ、PostgreSQL（英日の帳簿で、同じ呼び出し、違う額、足りるようになったあと、理由を空にした行）、TigerBeetle（四つの言語のクライアントで、同じ額と違う額）、MySQL の系統（`tests/mysql.rs` の `refused_again`。英語の帳簿で四つの言語、日本語の帳簿で TypeScript）。全シナリオの突き合わせは、PostgreSQL と TigerBeetle の全部の組み合わせと、MySQL の TypeScript・Python・Rust。`ritsu-model` の chobo と proofs、ritsu の check・cross・kaname・run と gen の `the_checkout_records_the_sale`、ritsu-testkit の MySQL、ritsu-cross の programs、dandori の `books_run_on_postgres_tigerbeetle_and_mysql`（四つの Transport と三つのデータベースで、170 の操作が参照と同じ答え）。golden は 92 を作り直した（リトライの答え、`already_refused` の例の額、doc の文と表）。
+
+残したこと：TigerBeetle の二つの違い（違う中身に境界の理由、あいだに残高が変わるとチェーンの前の振替の理由）。キーに入らない引数の無い振替の種類では、`chobo check` が `already_refused` を挙げない（いまの帳簿には無い）。手元の macOS では、全シナリオの MySQL の Go の組み合わせが、最初の呼び出しの接続の切れで比べきれない（chobo の DESIGN 20.7）。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
