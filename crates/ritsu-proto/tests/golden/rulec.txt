@@ -675,6 +675,16 @@ message Sent
   note string
 message Ack
 message StatusRequest
+== ../dandori/tests/spellings/protos/client_send_once.proto
+package Some("client_send_once.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
 == ../dandori/tests/spellings/protos/client_send_starts.proto
 package Some("client_send_starts.v1") imports ["dandori/v1/options.proto"]
 message Order
@@ -755,6 +765,16 @@ message Ack
 message StatusRequest
 == ../dandori/tests/spellings/protos/クライアントのRunStatusで始める.proto
 package Some("client_run_status_starts.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/protos/クライアントのSendOnce.proto
+package Some("client_send_once.ja.v1") imports ["dandori/v1/options.proto"]
 message Order
   id string
 message Reply
@@ -951,6 +971,16 @@ message Sent
   note string
 message Ack
 message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/client_send_once.proto
+package Some("client_send_once.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
 == ../dandori/tests/spellings/renamed/protos/client_send_starts.proto
 package Some("client_send_starts.v1") imports ["dandori/v1/options.proto"]
 message Order
@@ -993,6 +1023,16 @@ message Ack
 message StatusRequest
 == ../dandori/tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto
 package Some("client_run_status_starts.ja.v1") imports ["dandori/v1/options.proto"]
+message Order
+  id string
+message Reply
+  id string
+message Sent
+  note string
+message Ack
+message StatusRequest
+== ../dandori/tests/spellings/renamed/protos/クライアントのSendOnce.proto
+package Some("client_send_once.ja.v1") imports ["dandori/v1/options.proto"]
 message Order
   id string
 message Reply

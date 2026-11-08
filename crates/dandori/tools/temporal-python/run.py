@@ -9,6 +9,7 @@
 #   .venv/bin/python run.py <generated package> <runs.json> <results.json> [<histories dir>]
 #   .venv/bin/python run.py --replay <generated package> <histories dir> <results.json>
 #   .venv/bin/python run.py --serve <generated package> <runs.json> <steps.json> <server address>
+#   .venv/bin/python run.py --update-ids <generated package> <cases.json> <results.json>
 #
 # With DANDORI_ACTIVITIES_BY set to a command (a JSON list), the workers here run only the
 # workflows, and the activities are the other language's: the command, with <steps.json> and
@@ -23,6 +24,13 @@
 # Continue-As-New, <workflow id>.<n>.json (the second is 2). With --replay, it only replays the
 # histories of a directory (written by this runner, or by the TypeScript one) with the code, and
 # writes for each file the error, or None.
+#
+# With --update-ids, it starts no server: for each case, the generated client (`answer` for a case
+# with a "callback", `send_once` for one with an "event") sends to a client that writes the update's
+# id down and hands back an outcome whose SHA-256 of the value is none, so that the client raises
+# SentWithAnotherValueError with the SHA-256 of its own value. It writes { "id": the update's id,
+# "sha256": that SHA-256 }, or { "thrown": the error }; the cases are those of
+# ../temporal/run.mjs --update-ids.
 #
 # runs.json: { "workflow": type, "own": [ { "name", "method", "callback" } ], "rules": [activity],
 #              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
@@ -47,17 +55,18 @@
 # keeps the activity busy until the server times it out. A call during which the scenario
 # cancels the workflow asks the server to cancel it, and keeps the activity busy until the server
 # tells it that it is cancelled; a callback's answer that is a cancellation is the request to
-# cancel. An event (a task that says `event`) is sent with the generated client's `send` once the
-# query dandori.status says the workflow waits for it; an event the scenario times out is not sent,
-# and is written down when the next call comes, or when the run is over. While the workflow waits
-# for one event, another it has must be refused.
+# cancel. An event (a task that says `event`) is sent with the generated client's `send` or
+# `send_once` once the query dandori.status says the workflow waits for it; an event the scenario
+# times out is not sent, and is written down when the next call comes, or when the run is over.
+# While the workflow waits for one event, another it has must be refused. An event the workflow
+# waits for once goes by `send_once` and goes again with the same id (see send_events).
 #
 # The server keeps real time, so the copy of the generated code that runs here waits far less:
 # every duration of the workflow's timers (dd.seconds) is at most 10 ms, and an activity or a
 # child workflow gets 5 seconds before it times out (2 were too few when the whole test suite
 # kept the machine busy), but for one that hands on a callback's id: the scenarios never time it
-# out, and its stand-in answers the callback and sees a second answer refused before it returns,
-# which takes a few workflow tasks. An event is waited for 5 seconds at most, long enough for the
+# out, and its stand-in answers the callback, sends the same answer again (taken: it is the same
+# update) and sees another answer told apart (SentWithAnotherValueError) before it returns, which takes a few workflow tasks. An event is waited for 5 seconds at most, long enough for the
 # runner to see the wait and send it. The rounds of `for … in parallel` run one at
 # a time here, so that the calls come in the order the reference interpreter makes them. A loop at
 # the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
@@ -257,7 +266,17 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
         value, the error, or instead a request to cancel the workflow. Before, every other event
         must be refused, since the workflow does not wait for it. The query may tell of a wait that
         is just over, or of a run that is closing to go on in a new one (Continue-As-New): an event
-        that the workflow refuses so, or that finds the run closed, is sent again when it waits."""
+        that the workflow refuses so, or that finds the run closed, is sent again when it waits.
+
+        An event the workflow waits for once goes by send_once, with the step's number as its id,
+        and goes again as a caller sends it when the reply to the first was lost: with the same id
+        and value it is the update the workflow took, and the server hands back its outcome, which
+        has the SHA-256 of the value the workflow took; with the same id and another value it is
+        that update too, which the client tells apart (SentWithAnotherValueError). An event it waits
+        for again (a loop) goes by send at its first wait and by send_once, with each wait's own id,
+        at the later ones: not sent again, since a run that goes on in a new one between the two
+        does not know the id, and the new run would take the event as a new one when it waits for
+        it."""
         assert env is not None
 
         async def waits_for(name: str) -> bool:
@@ -266,17 +285,45 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             except Exception:  # noqa: BLE001 - the workflow has not answered a query yet
                 return False
 
-        async def taken(name: str, a: dict[str, Any]) -> bool:
-            """Whether the workflow took the event: not when it refused it, nor when the run it reached closed as it came."""
+        async def sent(name: str, a: dict[str, Any], key: str | None = None) -> str:
+            """How the workflow met the event, sent by send, or by send_once with the key: "taken";
+            "refused", when it refused it, or the run it reached closed as it came; or "another",
+            when the key went with another value before (SentWithAnotherValueError)."""
             try:
-                await client.send(env.client, run["id"], name, a)
-                return True
+                if key is None:
+                    await client.send(env.client, run["id"], name, a)
+                else:
+                    await client.send_once(env.client, run["id"], name, key, a)
+                return "taken"
+            except client.SentWithAnotherValueError:
+                return "another"
             except (WorkflowUpdateFailedError, WorkflowUpdateRPCTimeoutOrCancelledError):
-                return False
+                return "refused"
             except RPCError as e:
                 if e.status == RPCStatusCode.NOT_FOUND:
-                    return False
+                    return "refused"
                 raise
+
+        async def run_id() -> str | None:
+            return (await env.client.get_workflow_handle(run["id"]).describe()).run_id
+
+        async def sent_again(name: str, key: str, a: dict[str, Any], first: str | None) -> None:
+            """The event the workflow took once, sent again with its key: `first` is the run it went to,
+            as far as the runner knows. A run that went on in a new one in between does not know the
+            id, and the new one does not wait for the event: it refuses it."""
+            same = await sent(name, a, key)
+            if same == "another":
+                raise RuntimeError(f"the client told the event {name}, sent again with the id and the value it was taken by, apart")
+            what = "the value"
+            if same == "taken":
+                other = await sent(name, another(a), key)
+                if other == "taken":
+                    raise RuntimeError(f"the client took the event {name}, sent with the id it was taken by and another value, as taken")
+                if other == "another":
+                    return
+                what = "another value"
+            if await run_id() == first:
+                raise RuntimeError(f"the workflow refused the event {name} sent again with the id it took it by and {what}")
 
         while not run["done"]:
             name = run["events"].get(str(run["next"]))
@@ -290,12 +337,23 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                     continue
                 a = {"ok": ans["ok"]} if "ok" in ans else {"error": "Dandori.Test.Failure" if ans["error"] == "failure" else ans["error"], "message": "scripted"}
                 for other in (e for e in client.EVENTS if e != name):
-                    if await taken(other, a):
+                    if await sent(other, a) == "taken":
                         raise RuntimeError(f"the workflow took the event {other} while it waited for {name}")
-                if not await taken(name, a):
+                step = run["next"] - 1
+                before = any(int(k) < step and e == name for k, e in run["events"].items())
+                again = any(int(k) > step and e == name for k, e in run["events"].items())
+                key = str(step) if before or not again else None
+                first = None if before or again else await run_id()
+                got = await sent(name, a, key)
+                if got == "another":
+                    raise RuntimeError(f"the client told the event {name}, sent with the id {key} of this wait, apart")
+                if got == "refused":
                     # not taken: the workflow still waits for it, and nothing else has come
                     run["next"] -= 1
                     run["steps"].pop()
+                    continue
+                if key is not None and not before and not again:
+                    await sent_again(name, key, a, first)
                 continue
             await asyncio.sleep(0.02)
 
@@ -365,14 +423,27 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             return await late()
         raise scripted(ans["error"])
 
+    def another(a: dict[str, Any]) -> dict[str, Any]:
+        """An answer other than `a`: an error, or the same error with another message."""
+        return {"error": a.get("error", "Dandori.Test.Failure"), "message": "another"}
+
     async def must_refuse(callback_id: str, a: dict[str, Any], why: str) -> None:
-        """A second answer to a callback, and an answer to one the workflow never waits for, must be refused."""
+        """An answer to a callback the workflow never waits for must be refused."""
         assert env is not None
         try:
             await client.answer(env.client, callback_id, a)
         except WorkflowUpdateFailedError:
             return
         raise RuntimeError(f"the workflow took {why}")
+
+    async def must_tell_apart(callback_id: str, a: dict[str, Any]) -> None:
+        """Another answer to a callback the workflow took an answer of: the update it took, which the client tells apart from it."""
+        assert env is not None
+        try:
+            await client.answer(env.client, callback_id, a)
+        except client.SentWithAnotherValueError:
+            return
+        raise RuntimeError(f"the client took another answer to the callback {callback_id}, which the workflow took an answer of, as taken")
 
     async def answer_later(callback_id: str, ans: dict[str, Any]) -> None:
         """Answer a callback with the generated client's update, before the task that hands the
@@ -393,7 +464,11 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
         else:
             a = {"error": "Dandori.Test.Failure" if ans["error"] == "failure" else ans["error"], "message": "scripted"}
         await client.answer(env.client, callback_id, a)
-        await must_refuse(callback_id, a, "a second answer to a callback")
+        # the same answer again, as a caller sends it when the reply to the first was lost: the
+        # update the workflow took, whose outcome the server hands back, with the SHA-256 of the
+        # answer it took; another answer is that update too, which the client tells apart
+        await client.answer(env.client, callback_id, a)
+        await must_tell_apart(callback_id, another(a))
         if not refusals_checked:
             refusals_checked = True
             workflow_id = json.loads(callback_id)[0]
@@ -618,7 +693,49 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
     return results
 
 
+def update_ids(package_dir: str, cases_file: str, out_file: str) -> None:
+    """--update-ids (see the top)."""
+    sys.path.insert(0, os.path.dirname(os.path.normpath(package_dir)))
+    client = importlib.import_module(f"{os.path.basename(os.path.normpath(package_dir))}.client")
+    with open(cases_file, encoding="utf-8") as f:
+        cases = json.load(f)
+    sent: list[str | None] = []
+
+    class Handle:
+        async def execute_update(self, name: str, arg: Any, id: str | None = None) -> Any:
+            # an outcome whose SHA-256 of the value is none, so that the client names its own
+            sent.append(id)
+            return {"value_sha256": "-"}
+
+    class StandIn:
+        def get_workflow_handle(self, workflow_id: str) -> Handle:
+            return Handle()
+
+    async def each() -> list[Any]:
+        results: list[Any] = []
+        for c in cases:
+            sent.clear()
+            try:
+                if "callback" in c:
+                    await client.answer(StandIn(), c["callback"], c["answer"])
+                else:
+                    await client.send_once(StandIn(), c["workflow"], c["event"], c["id"], c["answer"])
+                results.append({"thrown": "the client took the outcome as the one of its value"})
+            except client.SentWithAnotherValueError as e:
+                results.append({"id": e.update_id, "sha256": e.sent} if sent == [e.update_id] else {"thrown": f"{len(sent)} update(s) sent"})
+            except Exception as e:  # noqa: BLE001 - the error is the result
+                results.append({"thrown": str(e)})
+        return results
+
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(asyncio.run(each()), f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
 def main() -> None:
+    if sys.argv[1] == "--update-ids":
+        update_ids(*sys.argv[2:5])
+        return
     replaying = sys.argv[1] == "--replay"
     serve_at: tuple[str, str] | None = None
     if replaying:

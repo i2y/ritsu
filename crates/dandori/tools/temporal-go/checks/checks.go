@@ -1,8 +1,10 @@
 // The checks of the Go that dandori writes beside the runs of the scenarios: what its default
 // Transport sends (--wire, the Go twin of ../wire/check.py), how it runs an agent (--agents, the
 // twin of ../agents/check.py), how it reads a rule's answer from the rule's Connect service
-// (--connect-read, the twin of ../connect/read.py) and Jev's (--jev, the twin of ../jev/check.py).
-// Each takes the same cases as its twins and writes its results in the same shape.
+// (--connect-read, the twin of ../connect/read.py) and Jev's (--jev, the twin of ../jev/check.py),
+// and the ids of the updates its client sends (--update-ids, the twin of ../temporal/run.mjs
+// --update-ids and ../temporal-python/run.py --update-ids). Each takes the same cases as its twins
+// and writes its results in the same shape.
 package checks
 
 import (
@@ -27,6 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"go.temporal.io/sdk/client"
 
 	"temporalgo/harness"
 )
@@ -558,6 +561,84 @@ func ReadRule(read func(wire, body any) (any, error), casesFile, outFile string)
 		results = append(results, v)
 	}
 	return writeJSON(outFile, results)
+}
+
+// UpdateIDs sends each case with the package's client (AnswerCallback for a case with a "callback",
+// SendOnce for one with an "event") to a client that writes the update's id down and hands back an
+// outcome whose SHA-256 of the value is none, so that the client fails with its
+// SentWithAnotherValueError, which has the SHA-256 of its own value. It writes { "id": the update's
+// id, "sha256": that SHA-256 }, or { "thrown": the error }.
+func UpdateIDs(f harness.Flow, casesFile, outFile string) error {
+	var raw any
+	if err := readJSON(casesFile, &raw); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	results := []any{}
+	for _, x := range raw.([]any) {
+		c := x.(map[string]any)
+		ans := c["answer"].(map[string]any)
+		a := harness.CallbackAnswer{OK: ans["ok"]}
+		if e, ok := ans["error"].(string); ok {
+			m, _ := ans["message"].(string)
+			a = harness.CallbackAnswer{Error: e, Message: m}
+		}
+		ids := &idClient{}
+		var err error
+		if cb, ok := c["callback"].(string); ok {
+			err = f.Answer(ctx, ids, cb, a)
+		} else {
+			err = f.SendOnce(ctx, ids, text(c["workflow"]), text(c["event"]), text(c["id"]), a)
+		}
+		if id, sent, ok := sentWithAnother(err); ok && len(ids.ids) == 1 && ids.ids[0] == id {
+			results = append(results, map[string]any{"id": id, "sha256": sent})
+		} else {
+			results = append(results, map[string]any{"thrown": fmt.Sprint(err)})
+		}
+	}
+	return writeJSON(outFile, results)
+}
+
+// sentWithAnother reads the update's id and the SHA-256 of the value the client made from err, when
+// it is the package's SentWithAnotherValueError (a type of the package, so read by its name).
+func sentWithAnother(err error) (id, sent string, ok bool) {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		v := reflect.Indirect(reflect.ValueOf(e))
+		if v.Kind() == reflect.Struct && v.Type().Name() == "SentWithAnotherValueError" {
+			return v.FieldByName("UpdateID").String(), v.FieldByName("Sent").String(), true
+		}
+	}
+	return "", "", false
+}
+
+// idClient is a client that writes down the id of each update it is asked for, and sends nothing.
+type idClient struct {
+	client.Client
+	ids []string
+}
+
+func (c *idClient) UpdateWorkflow(ctx context.Context, o client.UpdateWorkflowOptions) (client.WorkflowUpdateHandle, error) {
+	c.ids = append(c.ids, o.UpdateID)
+	return idHandle{o.UpdateID}, nil
+}
+
+// idHandle is the handle of an update idClient wrote down: its outcome has a SHA-256 of the value
+// that is none.
+type idHandle struct{ id string }
+
+func (h idHandle) WorkflowID() string { return "" }
+
+func (h idHandle) RunID() string { return "" }
+
+func (h idHandle) UpdateID() string { return h.id }
+
+func (h idHandle) Get(ctx context.Context, valuePtr any) error {
+	return json.Unmarshal([]byte(`{"value_sha256":"-"}`), valuePtr)
+}
+
+func text(v any) string {
+	s, _ := v.(string)
+	return s
 }
 
 // Jev sends every case's request for real — to TypeSafe's API, OpenAI's Decisions API, or a server

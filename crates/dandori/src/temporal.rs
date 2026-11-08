@@ -534,6 +534,7 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str(&format!("// Starting {} v{}, answering its callbacks, and asking where it is.\n\n", m.name, m.version));
     c.push_str("import { type Client, type WorkflowHandle } from \"@temporalio/client\";\n");
     c.push_str("import { WorkflowIdReusePolicy } from \"@temporalio/common\";\n");
+    c.push_str("import { sha256Hex as ddSha256Hex, valueSha256 as ddValueSha256 } from \"./runtime\";\n");
     c.push_str("import type * as T from \"./types\";\n\n");
     c.push_str(&format!("/** The workflow's type. The `.flow`'s version is in it, so that a new version is a new workflow. */\nexport const WORKFLOW_TYPE = {};\n\n", q(&ty)));
     c.push_str(&format!("/** The task queue of the workflow and its activities (the tasks that say `queue` go to theirs). */\nexport const TASK_QUEUE = {};\n\n", q(&ty)));
@@ -542,19 +543,69 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("export async function start(client: Client, id: string, input: T.WorkflowInput, options: StartOptions = {}): Promise<WorkflowHandle> {\n");
     c.push_str("  return client.workflow.start(WORKFLOW_TYPE, {\n    args: [input],\n    taskQueue: TASK_QUEUE,\n    workflowId: id,\n    workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,\n    ...(options.searchAttributes ? { memo: { \"dandori.cases\": true } } : {}),\n  });\n}\n\n");
     c.push_str("/** A callback's answer: its value, or the error it names. */\nexport type CallbackAnswer = { ok: unknown } | { error: string; message?: string };\n\n");
-    c.push_str("/**\n * Answer a callback, by the id its task handed on. The workflow says whether it took the answer:\n * it refuses one for a callback it does not wait for, and a second one (WorkflowUpdateFailedError).\n */\n");
-    c.push_str("export async function answer(client: Client, callbackId: string, a: CallbackAnswer): Promise<void> {\n  const [workflowId] = JSON.parse(callbackId) as [string, string];\n  await client.workflow.getHandle(workflowId).executeUpdate(\"dandori.answer\", { args: [{ callback_id: callbackId, ...a }] });\n}\n\n");
+    c.push_str(r#"/**
+ * Answer a callback, by the id its task handed on. The workflow says whether it took the answer:
+ * it refuses one for a callback it does not wait for, or that has its answer already
+ * (WorkflowUpdateFailedError). The update's id is made from the callback's id alone, so the
+ * answers to a callback are one update: the same answer sent again (when the reply to the first
+ * was lost on the way) gets the outcome of the first from the server, after the run has ended
+ * too, and another answer fails with SentWithAnotherValueError, as the outcome has the SHA-256 of
+ * the answer the workflow took. A run that went on in a new one (Continue-As-New) hands no update
+ * ids on: an answer it took, sent again after that, is refused, and once the workflow has ended
+ * fails with WorkflowNotFoundError ("workflow execution already completed"); `status` tells where
+ * the workflow is.
+ */
+export async function answer(client: Client, callbackId: string, a: CallbackAnswer): Promise<void> {
+  const [workflowId] = JSON.parse(callbackId) as [string, string];
+  const updateId = ddUpdateId("dandori.answer", callbackId);
+  const took = await client.workflow.getHandle(workflowId).executeUpdate("dandori.answer", { args: [{ callback_id: callbackId, ...a }], updateId });
+  ddSameValue(updateId, a, took);
+}
+
+"#);
     let events: Vec<String> = m.tasks.iter().filter(|t| t.event).map(|t| q(&t.name)).collect();
     if !events.is_empty() {
         c.push_str(&format!("/** The events the workflow waits for (the tasks that say `event`), by name. */\nexport const EVENTS = [{}] as const;\nexport type EventName = (typeof EVENTS)[number];\n\n", events.join(", ")));
-        c.push_str("/**\n * Send an event to the workflow, by its id and the event's name: its value, or the error it\n * names. The workflow refuses an event it does not wait for now, and a second one\n * (WorkflowUpdateFailedError): send it again when the workflow waits for it (status: `events`).\n */\n");
-        c.push_str("export async function send(client: Client, workflowId: string, event: EventName, a: CallbackAnswer): Promise<void> {\n  await client.workflow.getHandle(workflowId).executeUpdate(\"dandori.event\", { args: [{ event, ...a }] });\n}\n\n");
+        c.push_str(r#"/**
+ * Send an event to the workflow, by its id and the event's name: its value, or the error it
+ * names. The workflow refuses an event it does not wait for now, and a second one
+ * (WorkflowUpdateFailedError): send it again when the workflow waits for it (status: `events`).
+ * Each call is an update of its own; to send again an event whose reply may have been lost, use
+ * `sendOnce`.
+ */
+export async function send(client: Client, workflowId: string, event: EventName, a: CallbackAnswer): Promise<void> {
+  await client.workflow.getHandle(workflowId).executeUpdate("dandori.event", { args: [{ event, ...a }] });
+}
+
+/**
+ * Send an event to the workflow as `send` does, with an `id` you give the send. The update's id is
+ * made from the event's name and the id alone, so the sends with them are one update: the same
+ * value sent again (when the reply to the first send was lost on the way) gets the outcome of the
+ * first from the server, after the run has ended too, and another value fails with
+ * SentWithAnotherValueError, as the outcome has the SHA-256 of the value the workflow took, even
+ * when the workflow waits for the event again. So a workflow that waits for the event more than
+ * once (in a loop) needs an id for each wait. A run that went on in a new one (Continue-As-New)
+ * hands no update ids on: a send again that reaches the new run is a new update there, which it
+ * takes when it waits for the event, and once the workflow has ended fails with
+ * WorkflowNotFoundError ("workflow execution already completed"); `status` tells where the
+ * workflow is. Even when the history is encrypted, the update's id stays in it as it is, and its
+ * hash gives away an id that can be guessed: keep out of the id what must stay secret, such as a
+ * decision or a person's name.
+ */
+export async function sendOnce(client: Client, workflowId: string, event: EventName, id: string, a: CallbackAnswer): Promise<void> {
+  const updateId = ddUpdateId("dandori.event", event, id);
+  const took = await client.workflow.getHandle(workflowId).executeUpdate("dandori.event", { args: [{ event, ...a }], updateId });
+  ddSameValue(updateId, a, took);
+}
+
+"#);
     }
     c.push_str("/** Where the workflow is: the line of the call or the wait it is at, each case's state (null before it starts), and the events it waits for now. */\nexport interface Status {\n  at: number | null;\n  cases: Record<string, string | null>;\n  events: string[];\n}\n\n");
     c.push_str("export async function status(client: Client, id: string): Promise<Status> {\n  return client.workflow.getHandle(id).query<Status>(\"dandori.status\");\n}\n\n");
     c.push_str("/**\n * The histories of the runs of this workflow that `query` finds, by default the ones going on:\n * replay them with new code (worker.ts: replay) before it takes them over.\n */\n");
     c.push_str("export async function* histories(client: Client, query = `WorkflowType = '${WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'`): AsyncIterable<{ workflowId: string; history: Awaited<ReturnType<WorkflowHandle[\"fetchHistory\"]>> }> {\n");
     c.push_str("  for await (const w of client.workflow.list({ query })) {\n    yield { workflowId: w.workflowId, history: await client.workflow.getHandle(w.workflowId, w.runId).fetchHistory() };\n  }\n}\n");
+    c.push_str(UPDATE_ID_TS);
     if let Some(s) = &m.service {
         c.push_str(&service_client_ts(m, s).0);
     }
@@ -563,6 +614,50 @@ fn client_file(m: &Model, header: &str) -> String {
     }
     c
 }
+
+/// The id of the update that answers a callback or sends an event, made from the callback's id, or
+/// from the event's name and the id the caller gives, and not from what it sends; and the check of
+/// the SHA-256 of the value that the update's outcome has (DESIGN 25), as client.go and client.py
+/// make and check them.
+const UPDATE_ID_TS: &str = r#"
+/**
+ * The id of an update that answers a callback or sends an event: `kind`, a colon, and the first 32
+ * hex digits of the SHA-256 of the parts, with a newline between each two. client.go and client.py
+ * make the same id of the same.
+ */
+function ddUpdateId(kind: string, ...parts: string[]): string {
+  return `${kind}:${ddSha256Hex(parts.join("\n")).slice(0, 32)}`;
+}
+
+/**
+ * The update's id went with another value before, which the workflow took: the server handed back
+ * the outcome of that update, whose SHA-256 of the value (`taken`) is not that of this one (`sent`).
+ */
+export class SentWithAnotherValueError extends globalThis.Error {
+  readonly updateId: string;
+  readonly sent: string;
+  readonly taken: string;
+  constructor(updateId: string, sent: string, taken: string) {
+    super(`the update ${updateId} was sent before with another value, which the workflow took`);
+    this.name = "SentWithAnotherValueError";
+    this.updateId = updateId;
+    this.sent = sent;
+    this.taken = taken;
+  }
+}
+
+/**
+ * Throw SentWithAnotherValueError unless the workflow took `a` by the update: its outcome has the
+ * SHA-256 of the value it took (runtime.ts: valueSha256), which must be that of `a`. An outcome
+ * without one is of a run on code from before it, and is taken as it is.
+ */
+function ddSameValue(updateId: string, a: CallbackAnswer, took: unknown): void {
+  const taken = (took as { value_sha256?: unknown } | null | undefined)?.value_sha256;
+  if (typeof taken !== "string") return;
+  const sent = ddValueSha256(a);
+  if (sent !== taken) throw new SentWithAnotherValueError(updateId, sent, taken);
+}
+"#;
 
 /// failure.ts, for a workflow whose history is encrypted (`history encrypted`, DESIGN 1.18): the
 /// failure converter that puts the message and the stack trace of a failure into its encoded
@@ -617,13 +712,13 @@ pub const ENCRYPTED_CLIENT: &[&str] = &["Connection", "ClientOptions", "PayloadC
 
 /// What client.ts declares and imports, and the global types it reads, which an alias of a message
 /// of the name would hide: a message's type cannot be one of them (W105).
-pub const CLIENT_NAMES: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy", "AsyncIterable", "Awaited", "Omit", "Promise", "ReturnType"];
+pub const CLIENT_NAMES: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy", "AsyncIterable", "Awaited", "Omit", "Promise", "ReturnType", "ddSha256Hex", "ddValueSha256", "ddUpdateId", "ddSameValue", "SentWithAnotherValueError"];
 
 /// client.ts, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
 /// client's own `start`, `send`, `answer` or `status`. And the names it could not write.
 fn service_client_ts(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
-    const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
+    const FUNCTIONS: &[&str] = &["start", "answer", "send", "sendOnce", "status", "histories"];
     let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
     let own: Vec<(String, With)> = CLIENT_NAMES.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
     let mut names = ClientNames::new(own, FUNCTIONS);
@@ -2288,9 +2383,10 @@ export const callbackSignal = defineSignal<[CallbackAnswer]>("dandori.callback")
 /**
  * The update that brings a callback's answer, and tells the one who answers whether the workflow
  * took it: it refuses an answer for a callback the workflow does not wait for (an id it never
- * handed on, or one it gave up on), and a second answer.
+ * handed on, or one it gave up on), and a second answer. Its result has the SHA-256 of the answer
+ * it took (valueSha256), which client.ts's `answer` compares with its own.
  */
-export const answerUpdate = defineUpdate<void, [CallbackAnswer]>("dandori.answer");
+export const answerUpdate = defineUpdate<Took, [CallbackAnswer]>("dandori.answer");
 
 const answers = new Map<string, CallbackAnswer>();
 /** The callbacks whose ids the workflow has handed on, and that it still waits for. */
@@ -2303,8 +2399,10 @@ export function listen(): void {
   });
   setHandler(
     answerUpdate,
-    (a: CallbackAnswer) => {
+    (a: CallbackAnswer): Took => {
+      const took = { value_sha256: valueSha256(a) };
       answers.set(a.callback_id, a);
+      return took;
     },
     {
       validator: (a: CallbackAnswer) => {
@@ -2344,9 +2442,11 @@ export interface EventAnswer {
 /**
  * The update that brings an event, sent to the workflow by its id and the event's name (a task
  * that says `event`; client.ts: send). The workflow refuses an event it does not wait for now,
- * and a second one: the one who sends it learns so, and can send it again when it waits.
+ * and a second one: the one who sends it learns so, and can send it again when it waits. Its
+ * result has the SHA-256 of the value it took (valueSha256), which client.ts's `sendOnce` compares
+ * with its own.
  */
-export const eventUpdate = defineUpdate<void, [EventAnswer]>("dandori.event");
+export const eventUpdate = defineUpdate<Took, [EventAnswer]>("dandori.event");
 
 const events = new Map<string, EventAnswer>();
 /** The events the workflow waits for now. */
@@ -2356,8 +2456,10 @@ const awaited = new Set<string>();
 export function listenForEvents(): void {
   setHandler(
     eventUpdate,
-    (a: EventAnswer) => {
+    (a: EventAnswer): Took => {
+      const took = { value_sha256: valueSha256(a) };
       events.set(a.event, a);
+      return took;
     },
     {
       validator: (a: EventAnswer) => {
@@ -2499,6 +2601,111 @@ export function fail(error: string, cause: string | null): ApplicationFailure {
 /** A task's error that nothing handled ends the workflow with the error's kind. */
 export function asFailure(e: unknown): unknown {
   return e instanceof TaskError ? fail(e.kind, e.message) : e;
+}
+
+/** What the updates dandori.answer and dandori.event hand back: the SHA-256 of the value the workflow took. */
+export interface Took {
+  value_sha256: string;
+}
+
+/**
+ * The first 32 hex digits of the SHA-256 of a callback's answer or an event's value, as the
+ * workflow reads it, in canonical JSON: { "ok": value }, or { "error": name, "message": text }
+ * ("" when it has none). The updates dandori.answer and dandori.event hand it back, and client.ts
+ * compares it with its own. Canonical JSON has each object's keys in the order of their code
+ * points, no spaces, a string's text as it is but for `"`, `\` and the control characters, each
+ * lone surrogate as U+FFFD (as Go's JSON reads one), and a number as JavaScript writes it. The
+ * runtimes of Python and Go make the same of the same.
+ */
+export function valueSha256(a: { ok?: unknown; error?: unknown; message?: unknown }): string {
+  const read = typeof a.error === "string" ? { error: a.error, message: typeof a.message === "string" ? a.message : "" } : { ok: a.ok ?? null };
+  return sha256Hex(canonicalJson(JSON.parse(JSON.stringify(read)))).slice(0, 32);
+}
+
+function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`;
+  if (v !== null && typeof v === "object") {
+    // keys that are one once their lone surrogates are U+FFFD are one key, with the later value
+    const o = new Map<string, unknown>();
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) o.set(wellFormed(k), x);
+    return `{${[...o.keys()].sort(byCodePoint).map((k) => `${JSON.stringify(k)}:${canonicalJson(o.get(k))}`).join(",")}}`;
+  }
+  return JSON.stringify(typeof v === "string" ? wellFormed(v) : v);
+}
+
+/** `s` with each lone surrogate as U+FFFD, as Go's JSON reads one. */
+function wellFormed(s: string): string {
+  if (!/[\ud800-\udfff]/.test(s)) return s;
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      out += s.slice(i, i + 2);
+      i++;
+    } else {
+      out += c >= 0xd800 && c <= 0xdfff ? "\ufffd" : s[i];
+    }
+  }
+  return out;
+}
+
+function byCodePoint(x: string, y: string): number {
+  const [p, q] = [[...x], [...y]];
+  for (let i = 0; i < p.length && i < q.length; i++) {
+    if (p[i] !== q[i]) return p[i].codePointAt(0)! - q[i].codePointAt(0)!;
+  }
+  return p.length - q.length;
+}
+
+/** The SHA-256 of `text` as UTF-8, in hex, a lone surrogate as U+FFFD (the workflow's sandbox has no node:crypto). */
+export function sha256Hex(text: string): string {
+  const bytes: number[] = [];
+  for (const s of text) {
+    let c = s.codePointAt(0)!;
+    if (c >= 0xd800 && c <= 0xdfff) c = 0xfffd;
+    if (c < 0x80) bytes.push(c);
+    else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    else if (c < 0x10000) bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    else bytes.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+  }
+  const bits = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  const high = Math.floor(bits / 0x100000000);
+  bytes.push(high >>> 24, (high >>> 16) & 0xff, (high >>> 8) & 0xff, high & 0xff, bits >>> 24, (bits >>> 16) & 0xff, (bits >>> 8) & 0xff, bits & 0xff);
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  const rotr = (x: number, n: number): number => (x >>> n) | (x << (32 - n));
+  const w = new Array<number>(64).fill(0);
+  for (let i = 0; i < bytes.length; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = (bytes[i + 4 * t] << 24) | (bytes[i + 4 * t + 1] << 16) | (bytes[i + 4 * t + 2] << 8) | bytes[i + 4 * t + 3];
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let t = 0; t < 64; t++) {
+      const t1 = (hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + k[t] + w[t]) | 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      hh = g;
+      g = f;
+      f = e;
+      e = (d + t1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (t1 + t2) | 0;
+    }
+    const v = [a, b, c, d, e, f, g, hh];
+    for (let j = 0; j < 8; j++) h[j] = (h[j] + v[j]) | 0;
+  }
+  return h.map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
 }
 "#;
 

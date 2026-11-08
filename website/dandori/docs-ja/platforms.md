@@ -28,13 +28,28 @@ $ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|tempo
 `client.ts` には次の関数があります。
 
 - `start`：実行を始めます。冪等キーをワークフロー ID から作るので、一度使った ID は使い回しません。
-- `answer`：コールバックへの応答を Update で送ります。待っていないコールバックへの応答や二度目の応答は、ワークフローが拒否します。
+- `answer`：コールバックへの応答を Update で送ります。待っていないコールバックへの応答は、ワークフローが拒否します。
 - `status`：クエリ `dandori.status` を読みます。ワークフローが待っている行、案件ごとの状態、待っているイベントが分かります。
-- `send`：イベントを送ります。
+- `send`：イベントを送ります。呼ぶたびに別の Update になります。
+- `sendOnce`：イベントを、呼び手が決めた `id` を付けて送ります（`sendOnce(client, workflowId, event, id, a)`）。
 
 `{ searchAttributes: true }` を付けて始めると、ワークフローは案件の状態が変わるたびに Search Attribute の `DandoriCases`（`"pi=requires_capture"` など）を書き換えます。これで、案件の状態から実行を検索できます。
 
 サービスを実装するワークフローの `client.ts` には、サービスのメソッドごとの関数（`fulfill`、`answerPacking`）と、`.proto` のメッセージの名前を付けた型（`FulfillRequest`）も入ります。詳しくは[サービスを実装する](services.md)を見てください。
+
+### 送り直し
+
+応答やイベントの返事が途中で失われると、呼び手にはワークフローが受け取ったかどうかが分からず、送り直すことになります。`answer` は Update の ID をコールバックの ID だけから作るので、同じコールバックへの応答はどれも同じ Update になり、サーバーは最初の結果を返します。実行が終わったあとでも同じです。ワークフローが応答を受け取るのは一度だけです。
+
+結果には、ワークフローが受け取った応答の SHA-256 が入っていて、クライアントは自分の応答の SHA-256 と比べます。同じ応答の送り直しは成功し、違う応答は `SentWithAnotherValueError`（TypeScript と Python は例外、Go はエラーの値）になります。呼び手は、自分の応答が取られなかったことをこれで知ります。
+
+イベントの送り直しには `sendOnce` を使います。Update の ID をイベントの名前と `id` から作るので、同じ `id` の送り直しは同じ Update になり、値は応答と同じように比べます。ループで同じイベントを何度も待つワークフローには、待つ回ごとに違う `id` を渡してください。同じ実行の中で前の待ちの `id` を使うと、サーバーは前の待ちの結果を返し、送ったものは次の待ちに届きません（値が違えば `SentWithAnotherValueError` になります）。
+
+Continue-As-New で続けた実行は、前の実行の Update の ID を知りません。新しい実行に届いた送り直しは新しい Update になります。応答なら新しい実行が拒否し、イベントなら、新しい実行がそのイベントを待っていれば受け取ります。ワークフローが終わっていれば、知らない ID にはサーバーが `workflow execution already completed` を返します。そのときは `status` で実行の状態を確かめてください。ID と SHA-256 の作り方は TypeScript、Python、Go で同じです。
+
+`history encrypted` で履歴を暗号化していても、Update の ID は暗号化されずに履歴に残ります。ID は `id` のハッシュなので、推測できる `id` は ID から分かります。決定や人の名前など、秘密にしたい値を `id` に入れないでください。値の SHA-256 は結果に入るので、コーデックで暗号化されます。
+
+dandori の版を上げて生成し直したときは、ワーカーを先に入れ替え、クライアントはそのあとにしてください。前の版の dandori で生成したワークフローは結果に SHA-256 を入れないので、新しいクライアントは比べられず、同じコールバックへの違う応答（同じ `id` のイベントの違う値）も成功になります。呼び手は、自分の応答が取られなかったことを知りません。Worker Deployment Versioning で古いビルドに留めた実行は、終わるまでこのままです。古いクライアントは、新しいワーカーとも前と同じに動きます。
 
 ### 長い実行
 
@@ -46,7 +61,7 @@ $ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|tempo
 
 ## Temporal（Python）
 
-`--target temporal-python` は、同じものを Temporal の Python SDK 向けに、ワークフローの名前を付けたパッケージとして書き出します。中身は `workflow.py`（ワークフローと、ワーカーに渡す `workflows`）、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`（rulec の Python を包んだもの）、`runtime.py`、`worker.py`（`make_worker`）、`client.py`（`start`、`answer`、`status`。サービスを実装するワークフローなら、メソッドごとの関数も入り、名前はスネークケースの `answer_packing` のようになります）です。ワークフローの型、アクティビティ、コールバックの Update とシグナル、クエリ、ID の名前を TypeScript 版とそろえてあるので、ワークフローとアクティビティを別々の言語のワーカーで動かせます。
+`--target temporal-python` は、同じものを Temporal の Python SDK 向けに、ワークフローの名前を付けたパッケージとして書き出します。中身は `workflow.py`（ワークフローと、ワーカーに渡す `workflows`）、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`（rulec の Python を包んだもの）、`runtime.py`、`worker.py`（`make_worker`）、`client.py`（`start`、`answer`、`send`、`send_once`、`status`。サービスを実装するワークフローなら、メソッドごとの関数も入り、名前はスネークケースの `answer_packing` のようになります）です。ワークフローの型、アクティビティ、コールバックの Update とシグナル、クエリ、ID の名前を TypeScript 版とそろえてあるので、ワークフローとアクティビティを別々の言語のワーカーで動かせます。
 
 ## Temporal（Go）
 
@@ -59,7 +74,7 @@ $ dandori gen <file.flow> --target asl|temporal-typescript|temporal-python|tempo
 - `rules.go`：rulec の Go を包んで、規則をアクティビティにしたもの
 - `runtime.go`、`values.go`
 - `worker.go`：`NewWorker(client, own, transport, deployment)` と `Replay`
-- `client.go`：`Start`、`AnswerCallback`、`Send`、`RunStatus`、`Histories`。サービスを実装するワークフローなら、メソッドごとの関数（`Fulfill`、`AnswerPacking`）も入ります
+- `client.go`：`Start`、`AnswerCallback`、`Send`、`SendOnce`、`RunStatus`、`Histories`。サービスを実装するワークフローなら、メソッドごとの関数（`Fulfill`、`AnswerPacking`）も入ります
 
 ワークフローの型やアクティビティなど、外から見える名前は TypeScript 版とそろえてあります。
 

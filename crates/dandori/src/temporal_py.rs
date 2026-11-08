@@ -233,11 +233,12 @@ fn client_file(m: &Model, header: &str) -> String {
     let ty = crate::temporal::workflow_type(m);
     let mut c = header.to_string();
     c.push_str(&format!("# Starting {} v{}, answering its callbacks, and asking where it is.\n\n", m.name, m.version));
-    c.push_str("from __future__ import annotations\n\nimport json\nfrom typing import Any, AsyncIterator\n\n");
+    c.push_str("from __future__ import annotations\n\nimport hashlib\nimport json\nfrom typing import Any, AsyncIterator\n\n");
     c.push_str("from temporalio.client import Client, WorkflowHandle, WorkflowHistory\nfrom temporalio.common import WorkflowIDReusePolicy\n\n");
     if m.service.is_some() {
-        c.push_str("from . import types as T\n\n");
+        c.push_str("from . import types as T\n");
     }
+    c.push_str("from .runtime import value_sha256 as _value_sha256\n\n");
     c.push_str(&format!("# The workflow's type. The `.flow`'s version is in it, so that a new version is a new workflow.\nWORKFLOW_TYPE = {}\n\n", q(&ty)));
     c.push_str(&format!("# The task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nTASK_QUEUE = {}\n\n", q(&ty)));
     c.push('\n');
@@ -245,16 +246,53 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("    \"\"\"Start the workflow as `id`. The idempotency keys of its calls are made from the id, so an id is\n    used once: a second start with it is refused, even after the first run has ended. With\n    `search_attributes`, the workflow keeps the search attribute DandoriCases (a keyword list) up to\n    date with the cases' states, as \"<case>=<state>\"; register it on the namespace first.\"\"\"\n");
     c.push_str("    extra: dict[str, Any] = {}\n    if search_attributes:\n        extra[\"memo\"] = {\"dandori.cases\": True}\n");
     c.push_str("    return await client.start_workflow(WORKFLOW_TYPE, input, id=id, task_queue=TASK_QUEUE, id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE, **extra)\n\n\n");
-    c.push_str("async def answer(client: Client, callback_id: str, a: dict[str, Any]) -> None:\n");
-    c.push_str("    \"\"\"Answer a callback, by the id its task handed on, with {\"ok\": value} or {\"error\": name, \"message\": text}.\n    The workflow says whether it took the answer: it refuses one for a callback it does not wait\n    for, and a second one (WorkflowUpdateFailedError).\"\"\"\n");
-    c.push_str("    workflow_id = json.loads(callback_id)[0]\n    await client.get_workflow_handle(workflow_id).execute_update(\"dandori.answer\", {\"callback_id\": callback_id, **a})\n\n\n");
+    c.push_str(r#"async def answer(client: Client, callback_id: str, a: dict[str, Any]) -> None:
+    """Answer a callback, by the id its task handed on, with {"ok": value} or {"error": name, "message": text}.
+    The workflow says whether it took the answer: it refuses one for a callback it does not wait
+    for, or that has its answer already (WorkflowUpdateFailedError). The update's id is made from
+    the callback's id alone, so the answers to a callback are one update: the same answer sent
+    again (when the reply to the first was lost on the way) gets the outcome of the first from the
+    server, after the run has ended too, and another answer raises SentWithAnotherValueError, as the
+    outcome has the SHA-256 of the answer the workflow took. A run that went on in a new one
+    (Continue-As-New) hands no update ids on: an answer it took, sent again after that, is refused,
+    and once the workflow has ended fails with RPCError NOT_FOUND ("workflow execution already
+    completed"); `status` tells where the workflow is."""
+    workflow_id = json.loads(callback_id)[0]
+    update_id = _update_id("dandori.answer", callback_id)
+    took = await client.get_workflow_handle(workflow_id).execute_update("dandori.answer", {"callback_id": callback_id, **a}, id=update_id)
+    _same_value(update_id, a, took)
+
+
+"#);
     let events: Vec<String> = m.tasks.iter().filter(|t| t.event).map(|t| q(&t.name)).collect();
     if !events.is_empty() {
         c.push_str(&format!("# The events the workflow waits for (the tasks that say `event`), by name.\nEVENTS = ({}{})\n\n\n", events.join(", "), if events.len() == 1 { "," } else { "" }));
         c.push_str("async def send(client: Client, workflow_id: str, event: str, a: dict[str, Any]) -> None:\n");
-        c.push_str("    \"\"\"Send an event to the workflow, by its id and the event's name, with {\"ok\": value} or {\"error\": name,\n    \"message\": text}. The workflow refuses an event it does not wait for now, and a second one\n    (WorkflowUpdateFailedError): send it again when the workflow waits for it (status: \"events\").\"\"\"\n");
+        c.push_str("    \"\"\"Send an event to the workflow, by its id and the event's name, with {\"ok\": value} or {\"error\": name,\n    \"message\": text}. The workflow refuses an event it does not wait for now, and a second one\n    (WorkflowUpdateFailedError): send it again when the workflow waits for it (status: \"events\").\n    Each call is an update of its own; to send again an event whose reply may have been lost, use\n    `send_once`.\"\"\"\n");
         c.push_str("    if event not in EVENTS:\n        raise ValueError(f\"the workflow has no event {event}\")\n");
         c.push_str("    await client.get_workflow_handle(workflow_id).execute_update(\"dandori.event\", {\"event\": event, **a})\n\n\n");
+        c.push_str(r#"async def send_once(client: Client, workflow_id: str, event: str, id: str, a: dict[str, Any]) -> None:
+    """Send an event to the workflow as `send` does, with an `id` you give the send. The update's id
+    is made from the event's name and the id alone, so the sends with them are one update: the same
+    value sent again (when the reply to the first send was lost on the way) gets the outcome of the
+    first from the server, after the run has ended too, and another value raises
+    SentWithAnotherValueError, as the outcome has the SHA-256 of the value the workflow took, even
+    when the workflow waits for the event again. So a workflow that waits for the event more than
+    once (in a loop) needs an id for each wait. A run that went on in a new one (Continue-As-New)
+    hands no update ids on: a send again that reaches the new run is a new update there, which it
+    takes when it waits for the event, and once the workflow has ended fails with RPCError NOT_FOUND
+    ("workflow execution already completed"); `status` tells where the workflow is. Even when the
+    history is encrypted, the update's id stays in it as it is, and its hash gives away an id that
+    can be guessed: keep out of the id what must stay secret, such as a decision or a person's
+    name."""
+    if event not in EVENTS:
+        raise ValueError(f"the workflow has no event {event}")
+    update_id = _update_id("dandori.event", event, id)
+    took = await client.get_workflow_handle(workflow_id).execute_update("dandori.event", {"event": event, **a}, id=update_id)
+    _same_value(update_id, a, took)
+
+
+"#);
     }
     c.push_str("async def status(client: Client, id: str) -> dict[str, Any]:\n");
     c.push_str("    \"\"\"Where the workflow is: {\"at\": the line of the call or the wait it is at, \"cases\": each case's state\n    (None before it starts), \"events\": the events it waits for now}.\"\"\"\n");
@@ -263,6 +301,7 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("    \"\"\"The histories of the runs of this workflow that `query` finds, by default the ones going on:\n    replay them with new code (worker.py: replay) before it takes them over.\"\"\"\n");
     c.push_str("    async for w in client.list_workflows(query or f\"WorkflowType = '{WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'\"):\n");
     c.push_str("        yield await client.get_workflow_handle(w.id, run_id=w.run_id).fetch_history()\n");
+    c.push_str(UPDATE_ID_PY);
     if let Some(s) = &m.service {
         c.push_str(&service_client_py(m, s).0);
     }
@@ -272,13 +311,52 @@ fn client_file(m: &Model, header: &str) -> String {
     c
 }
 
+/// The id of the update that answers a callback or sends an event, made from the callback's id, or
+/// from the event's name and the id the caller gives, and not from what it sends; and the check of
+/// the SHA-256 of the value that the update's outcome has (DESIGN 25), as client.go and client.ts
+/// make and check them.
+const UPDATE_ID_PY: &str = r#"
+
+
+class SentWithAnotherValueError(Exception):
+    """The update's id went with another value before, which the workflow took: the server handed
+    back the outcome of that update, whose SHA-256 of the value (`taken`) is not that of this one
+    (`sent`)."""
+
+    def __init__(self, update_id: str, sent: str, taken: str) -> None:
+        super().__init__(f"the update {update_id} was sent before with another value, which the workflow took")
+        self.update_id = update_id
+        self.sent = sent
+        self.taken = taken
+
+
+def _update_id(kind: str, *parts: str) -> str:
+    """The id of an update that answers a callback or sends an event: `kind`, a colon, and the first
+    32 hex digits of the SHA-256 of the parts, with a newline between each two, in UTF-8 with each
+    lone surrogate as U+FFFD. client.go and client.ts make the same id of the same."""
+    text = "".join("\ufffd" if "\ud800" <= c <= "\udfff" else c for c in "\n".join(parts))
+    return kind + ":" + hashlib.sha256(text.encode()).hexdigest()[:32]
+
+
+def _same_value(update_id: str, a: dict[str, Any], took: Any) -> None:
+    """Raise SentWithAnotherValueError unless the workflow took `a` by the update: its outcome has the
+    SHA-256 of the value it took (runtime.py: value_sha256), which must be that of `a`. An outcome
+    without one is of a run on code from before it, and is taken as it is."""
+    taken = took.get("value_sha256") if isinstance(took, dict) else None
+    if not isinstance(taken, str):
+        return
+    sent = _value_sha256(a)
+    if sent != taken:
+        raise SentWithAnotherValueError(update_id, sent, taken)
+"#;
+
 /// client.py, for a workflow whose history is encrypted: every function, and the worker, takes a
 /// client whose payloads go through the codec, which only `connect` makes, so that a client without
 /// the codec is a type error to mypy (DESIGN 1.18). The failure converter puts the messages and the
 /// stack traces of failures where the codec encrypts them.
 fn encrypted_client_py(c: String) -> String {
     let c = c
-        .replace("from __future__ import annotations\n\nimport json\nfrom typing import Any, AsyncIterator\n\n", "from __future__ import annotations\n\nimport dataclasses\nimport json\nfrom typing import Any, AsyncIterator, NewType\n\nimport temporalio.converter\n")
+        .replace("from __future__ import annotations\n\nimport hashlib\nimport json\nfrom typing import Any, AsyncIterator\n\n", "from __future__ import annotations\n\nimport dataclasses\nimport hashlib\nimport json\nfrom typing import Any, AsyncIterator, NewType\n\nimport temporalio.converter\n")
         .replace("from temporalio.common import WorkflowIDReusePolicy\n", "from temporalio.common import WorkflowIDReusePolicy\nfrom temporalio.converter import DataConverter, DefaultFailureConverterWithEncodedAttributes, PayloadCodec\n")
         .replace("(client: Client,", "(client: EncryptedClient,");
     let at = c.find("\n\nasync def start(").map(|i| i + 2).unwrap_or(c.len());
@@ -338,8 +416,8 @@ pub const ENCRYPTED_CLIENT: &[&str] = &["dataclasses", "NewType", "temporalio", 
 /// `answer` or `status`. The names are those of client.ts, in Python's way. And the names it could
 /// not write.
 fn service_client_py(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
-    const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
-    const OTHERS: &[&str] = &["WORKFLOW_TYPE", "TASK_QUEUE", "EVENTS", "SERVICE", "json", "Any", "AsyncIterator", "Client", "WorkflowHandle", "WorkflowHistory", "WorkflowIDReusePolicy", "T", "annotations"];
+    const FUNCTIONS: &[&str] = &["start", "answer", "send", "send_once", "status", "histories"];
+    const OTHERS: &[&str] = &["WORKFLOW_TYPE", "TASK_QUEUE", "EVENTS", "SERVICE", "json", "hashlib", "Any", "AsyncIterator", "Client", "WorkflowHandle", "WorkflowHistory", "WorkflowIDReusePolicy", "SentWithAnotherValueError", "T", "annotations"];
     let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
     let own: Vec<(String, With)> = OTHERS.iter().chain(encrypted).map(|x| (x.to_string(), With::Own)).collect();
     let mut names = ClientNames::new(own, FUNCTIONS);
@@ -1673,6 +1751,7 @@ const RUNTIME: &str = r#"# What the generated workflow code shares. It runs insi
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import itertools
 import json
 from datetime import datetime, timedelta
@@ -1680,6 +1759,7 @@ from typing import Any, Awaitable, Callable, Sequence
 
 from temporalio import workflow
 from temporalio.common import SearchAttributeKey
+from temporalio.converter import AdvancedJSONEncoder
 from temporalio.exceptions import ActivityError, ApplicationError, ChildWorkflowError, is_cancelled_exception
 from temporalio.exceptions import TimeoutError as TemporalTimeout
 
@@ -1902,6 +1982,66 @@ def shown(cases: dict[str, str | None]) -> None:
     if workflow.memo_value("dandori.cases", default=False) is not True:
         return
     workflow.upsert_search_attributes([CASES.value_set([f"{name}={state}" for name, state in cases.items() if state is not None])])
+
+
+def value_sha256(a: dict[str, Any]) -> str:
+    """The first 32 hex digits of the SHA-256 of a callback's answer or an event's value, as the
+    workflow reads it, in canonical JSON: {"ok": value}, or {"error": name, "message": text} ("" when
+    it has none). The updates dandori.answer and dandori.event hand it back, and client.py compares it
+    with its own. Canonical JSON has each object's keys in the order of their code points, no spaces,
+    a string's text as it is but for the quotation mark, the backslash and the control characters,
+    each lone surrogate as U+FFFD (as Go's JSON reads one), and a number as JavaScript writes the
+    double nearest to it (null past the doubles). The runtimes of TypeScript and Go make the same of
+    the same."""
+    message = a.get("message")
+    read = {"error": a["error"], "message": message if isinstance(message, str) else ""} if isinstance(a.get("error"), str) else {"ok": a.get("ok")}
+
+    def number(x: float) -> str:
+        # the shortest digits that read back as x, where JavaScript puts the point
+        if x != x or x in (float("inf"), float("-inf")):
+            return "null"
+        if x == 0:
+            return "0"
+        mantissa, _, exponent = str(abs(x)).partition("e")
+        whole, _, fraction = mantissa.partition(".")
+        digits = (whole + fraction).lstrip("0")
+        n = len(whole) + int(exponent or 0) - (len(whole + fraction) - len(digits))
+        digits = digits.rstrip("0")
+        k = len(digits)
+        if k <= n <= 21:
+            text = digits + "0" * (n - k)
+        elif 0 < n <= 21:
+            text = digits[:n] + "." + digits[n:]
+        elif -6 < n <= 0:
+            text = "0." + "0" * -n + digits
+        else:
+            text = digits[0] + ("." + digits[1:] if k > 1 else "") + ("e+" if n > 0 else "e-") + str(abs(n - 1))
+        return ("-" if x < 0 else "") + text
+
+    def well_formed(s: str) -> str:
+        # each lone surrogate as U+FFFD, as Go's JSON reads one (json.loads joins the halves of a pair)
+        return "".join("\ufffd" if "\ud800" <= c <= "\udfff" else c for c in s)
+
+    def string(s: str) -> str:
+        return json.dumps(well_formed(s), ensure_ascii=False)
+
+    def canonical(v: Any) -> str:
+        if isinstance(v, dict):
+            # keys that are one once their lone surrogates are U+FFFD are one key, with the later value
+            o = {well_formed(k): x for k, x in v.items()}
+            return "{" + ",".join(string(k) + ":" + canonical(o[k]) for k in sorted(o)) + "}"
+        if isinstance(v, list):
+            return "[" + ",".join(canonical(x) for x in v) + "]"
+        if isinstance(v, str):
+            return string(v)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            try:
+                return number(float(v))
+            except Exception:  # an integer past the doubles, as JavaScript writes Infinity
+                return "null"
+        return json.dumps(v)
+
+    return hashlib.sha256(canonical(json.loads(json.dumps(read, cls=AdvancedJSONEncoder))).encode()).hexdigest()[:32]
 "#;
 
 /// The retriers of a call, as the list `dd.attempt` takes: the ASL's, by the `.flow`'s kinds.
@@ -2090,12 +2230,12 @@ impl<'a> Gen<'a> {
         self.out.push('\n');
         self.out.push_str("    @workflow.query(name=\"dandori.status\")\n    def dd_status(self) -> dict[str, Any]:\n        \"\"\"Where the workflow is: the line of the call or the wait it is at, each case's state (None before it starts), and the events it waits for now.\"\"\"\n        return {\"at\": self.dd_at, \"cases\": self.dd_cases(), \"events\": sorted(self.dd_awaited)}\n\n");
         if events {
-            self.out.push_str("    @workflow.update(name=\"dandori.event\")\n    def dd_event(self, a: dict[str, Any]) -> None:\n        \"\"\"An event, sent to the workflow by its id and the event's name: {\"event\", \"ok\"} or {\"event\", \"error\", \"message\"}.\"\"\"\n        self.dd_events[a[\"event\"]] = a\n\n");
+            self.out.push_str("    @workflow.update(name=\"dandori.event\")\n    def dd_event(self, a: dict[str, Any]) -> dict[str, str]:\n        \"\"\"An event, sent to the workflow by its id and the event's name: {\"event\", \"ok\"} or {\"event\", \"error\", \"message\"}. The result has the SHA-256 of the value it took, which client.py's send_once compares with its own.\"\"\"\n        took = {\"value_sha256\": dd.value_sha256(a)}\n        self.dd_events[a[\"event\"]] = a\n        return took\n\n");
             self.out.push_str("    @dd_event.validator\n    def dd_check_event(self, a: dict[str, Any]) -> None:\n        \"\"\"Refuse an event the workflow does not wait for now, and a second one.\"\"\"\n        if a.get(\"event\") not in self.dd_awaited:\n            raise ValueError(f\"the workflow does not wait for the event {a.get('event')} now\")\n        if a[\"event\"] in self.dd_events:\n            raise ValueError(f\"the event {a['event']} has come already\")\n\n");
         }
         if callbacks {
             self.out.push_str("    @workflow.signal(name=\"dandori.callback\")\n    def dd_callback(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback: {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\"\"\"\n        if a.get(\"callback_id\") in self.dd_waiting:\n            self.dd_answers[a[\"callback_id\"]] = a\n\n");
-            self.out.push_str("    @workflow.update(name=\"dandori.answer\")\n    def dd_answer(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback, which the one who answers learns the workflow took.\"\"\"\n        self.dd_answers[a[\"callback_id\"]] = a\n\n");
+            self.out.push_str("    @workflow.update(name=\"dandori.answer\")\n    def dd_answer(self, a: dict[str, Any]) -> dict[str, str]:\n        \"\"\"The answer of a callback, which the one who answers learns the workflow took: the result has the SHA-256 of the answer, which client.py's answer compares with its own.\"\"\"\n        took = {\"value_sha256\": dd.value_sha256(a)}\n        self.dd_answers[a[\"callback_id\"]] = a\n        return took\n\n");
             self.out.push_str("    @dd_answer.validator\n    def dd_check_answer(self, a: dict[str, Any]) -> None:\n        \"\"\"Refuse an answer for a callback the workflow does not wait for, and a second answer.\"\"\"\n        if a.get(\"callback_id\") not in self.dd_waiting:\n            raise ValueError(f\"no callback waits for an answer with the id {a.get('callback_id')}\")\n        if a[\"callback_id\"] in self.dd_answers:\n            raise ValueError(f\"the callback {a['callback_id']} has its answer already\")\n\n");
         }
         if self.resumes() {

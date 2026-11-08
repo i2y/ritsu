@@ -1210,7 +1210,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 
 ### 4.2 Temporal
 
-- `types.ts`（型と検査）、`activities.ts`（タスクの型、dandori が書くタスク、利用者が書く `OwnTasks`、それらを合わせる `makeActivities(own, transport)`）、`io.ts`（`Transport`）、`rules.ts`（規則を包むアクティビティ）、`runtime.ts`（共通の部品）、`workflow.ts`、`worker.ts`（ワーカー）、`client.ts`（始め方、コールバックへの応答の仕方、状態の聞き方）を出す。
+- `types.ts`（型と検査）、`activities.ts`（タスクの型、dandori が書くタスク、利用者が書く `OwnTasks`、それらを合わせる `makeActivities(own, transport)`）、`io.ts`（`Transport`）、`rules.ts`（規則を包むアクティビティ）、`runtime.ts`（共通の部品）、`workflow.ts`、`worker.ts`（ワーカー）、`client.ts`（始め方、コールバックへの応答の仕方、イベントの送り方、状態の聞き方）を出す。
 - **ワークフローの型にバージョンを入れる。** 型は `<名前>_v<版>`（`hotel_stay_v1`）で、ワーカーのタスクキューも同じ名前にする。`.flow` のバージョンを上げると別のワークフローになり、古いバージョンの実行は、古いコードのワーカーが持つ古いキューで最後まで走る。同じバージョンのまま dandori を上げてコードが変わったときのために、`worker.ts` は Worker Deployment Versioning にも乗れる。`deployment` を渡すと、ワーカーはそのデプロイの一つのバージョンになり、ビルド ID は dandori が書いたコードのハッシュ（`BUILD_ID`）になる。ワークフローは始まったバージョンに留まる（PINNED）ので、書き直されたコードが古い実行を再生することはない。Worker Deployment Versioning を使わずに同じバージョンのコードを差し替えるなら、`client.ts` の `histories`（いま走っている実行の履歴）を `worker.ts` の `replay` にかけ、新しいコードが古い実行を再生できるかを先に確かめる。
 - **`client.ts` の `start` は、ワークフロー ID を二度使わせない**（`REJECT_DUPLICATE`）。冪等キーはワークフロー ID から作るので、ID を使い回すと、新しい実行の呼び出しが前の実行の呼び出しと同じキーを持ち、外部のサービスに同じリクエストとして扱われる。前の実行が失敗していても同じである。
 - **ワークフローがいまどこにいるかを、クエリ `dandori.status` で返す。** 返すのは、いま待っている呼び出しか待ちの行（`at`）と、案件ごとの状態（`cases`、始まっていなければ null）と、いま待っているイベント（`events`）。`start` に `searchAttributes: true` を渡すと、案件の状態を search attribute `DandoriCases`（キーワードのリスト、`"pi=requires_capture"` の形）にも出し、案件が動くたびに書き直す。これで「確定待ちの与信を持つ予約」を Temporal の一覧から探せる。`DandoriCases` は名前空間に前もって登録しておく必要がある（登録していない search attribute を書くと、ワークフロータスクが失敗し続けて止まる）ので、既定では書かない。オンにしたかどうかは memo（`dandori.cases`）で伝える（始めるときに空のリストを渡すと、属性が無いのと区別できない）。クエリには、実行の始めから答える。入力の確かめで失敗した実行にも、案件をすべて null として答える（TypeScript では、ワークフローの関数の最初で、案件をすべて null とするクエリを登録し、入力を確かめたあとで読み方を替える）。
@@ -1221,7 +1221,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **`timeout` を書かないタスクには、プラットフォームが許す以上のタイムアウトを付けない。** Step Functions の Task に `TimeoutSeconds` を書かないのと同じにする。Temporal のアクティビティはタイムアウトを持たなければならないので、`http` と `agent` には HTTP Task と同じ 60 秒、`lambda` には Lambda が関数を動かせる 900 秒、ほかのタスクには一年を付ける。代わりに、ワークフローのワーカーが持つタスク（`queue` の無いもの）は、動いているあいだ 10 秒ごとにハートビートを送り、Temporal は 30 秒来なければそのアクティビティをタイムアウト（`timeout`）にする。ワーカーが落ちても 30 秒で分かり、`retry` があればリトライできる。`queue` のタスクは別のワーカーが持ち、ハートビートを送るとは限らないので、`timeout` が無ければ 60 秒にする。コールバックの ID を渡すアクティビティは、`timeout`（答えの待ちの長さ）にかかわらず 60 秒で、ほかの出力先の渡す部分と同じ上限である（`check.rs` の `CALLBACK_HAND_ON_SECONDS`。17 章）。
 - **規則と日付のアクティビティは 10 秒で、タイムアウトもリトライする。** 規則は純関数で、すぐに終わる。タイムアウトは、動かしていたワーカーが落ちたことを意味するので、失敗と同じくリトライする。10 秒の上限とリトライの並びは、どのプラットフォームでも同じである（16 章）。上限は `startToCloseTimeout` で、ワーカーが受け取ってから数え、タスクキューで待つ時間は入らない。
 - **`timeout until` の待ちは、ワークフローのタイマーにする。** `event` と `callback` の待ちを始めるときに、ワークフローの時計（`now` と同じ読み方。再生でも同じ値）から期限までの秒数を出し（切り上げ、1 秒より短くしない。`runtime` の `secondsUntil`、Python の `seconds_until`、Go の `ddSecondsUntil`）、待ちのタイムアウトにする。コールバックでは、ID を渡すアクティビティが返ってから数え始める（16 章）。
-- **`callback` は Update で応答を受け取る。** 送る側のアクティビティに `callback_id`（ワークフロー ID と呼び出しの場所を JSON にしたもの）を渡し、ワークフローはその ID の応答が来るのを `condition` で待つ。結果は Update `dandori.answer` で受ける（`client.ts` の `answer`）。Update は、応答を受け取ったかどうかを、応答した側に返す。ワークフローが待っていない ID（渡していない ID や、タイムアウトで待つのをやめた ID）への応答と、二度目の応答は、validator が拒否する。シグナル `dandori.callback` でも受け取るが、待っていない ID への応答は捨てる。`timeout` を過ぎれば `timeout` になる。
+- **`callback` は Update で応答を受け取る。** 送る側のアクティビティに `callback_id`（ワークフロー ID と呼び出しの場所を JSON にしたもの）を渡し、ワークフローはその ID の応答が来るのを `condition` で待つ。結果は Update `dandori.answer` で受ける（`client.ts` の `answer`）。Update は、応答を受け取ったかどうかを、応答した側に返す。ワークフローが待っていない ID（渡していない ID や、タイムアウトで待つのをやめた ID）への応答と、二度目の応答は、validator が拒否する。Update の ID はコールバックの ID だけから作るので、返事を失った呼び手が送り直すと同じ Update になり、サーバーが最初の結果を返す。結果には、ワークフローが受け取った値の SHA-256 が入り、クライアントは送った値のものと比べて、違えば `SentWithAnotherValueError` にする（25 章）。シグナル `dandori.callback` でも受け取るが、待っていない ID への応答は捨てる。`timeout` を過ぎれば `timeout` になる。
 - `for … in parallel` は、`dd.rounds` が `k` 個ずつイテレーションを走らせる。ワークフローのコードは決定的に動くので、Promise で並べても再生で食い違わない。イテレーションの変数はイテレーションの関数の中で宣言する。
 - `on failure` は、処理されなかったタスクのエラー（`TaskError`）のときだけ走り、`fail` や結果の検査の失敗では走らない。Step Functions で Fail の状態に Catch が効かないのと同じにした。
 - **`on cancel` は、キャンセルの届かない範囲で走らせる**（2.6）。TypeScript では、流れと `on failure` を `try` で包み、`isCancellation` で届いたキャンセルを見分けて、`CancellationScope.nonCancellable` の中で `on cancel` を走らせ、同じキャンセルを投げ直す。投げ直すと、ワークフローは Canceled で終わる。Python では `except BaseException` で受け、`temporalio.exceptions.is_cancelled_exception` で見分け、`on cancel` をそのまま走らせて `raise` する（Python の SDK はキャンセルを一度しか届けないので、受け取ったあとのアクティビティは止められない）。`dd.attempt` はキャンセルをタスクのエラーに直さずにそのまま通し、`dd.rounds` はキャンセルで止まったイテレーションがあれば、ほかのイテレーションの失敗よりそれを先に投げる。
@@ -1229,7 +1229,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
   - サーバーの勧めは、dev server（Server 1.32.0）では、履歴が 4,096 件を超えたところで来た（4,020 件の時点ではまだで、4,123 件で来た）。10,000 件は、名前空間の設定で勧めが遅いか、来ないときの歯止めである。
   - 続きの実行は、Worker Deployment Versioning でも、始まったバージョンに留まる（サーバーの既定）。渡す値の形（何番目のループか、どの変数か）はビルドごとのものなので、`initialVersioningBehavior` を `AUTO_UPGRADE` にして新しいバージョンに移すことはしない。memo（`dandori.cases`）と search attribute は、サーバーが続きの実行に引き継ぐ。
   - 並列のイテレーションのループと、ループの中のループでは続けない。並列のイテレーションを途中で切ると、走っているイテレーションを新しい実行に渡せないからである。それらの大きさは E040 で見る。
-- **`event` のタスクは、Update `dandori.event` を待つ。** アクティビティは呼ばない。`dd.awaitEvent` が、待っているイベントの名前を覚えたうえで、その名前の値が来るのを `condition` で待ち（タイムアウトはコールバックと同じ）、待ち終わったら名前を消す。Update の validator は、待っていない名前と、もう来た名前を拒否する。値は `{ event, ok }` か `{ event, error, message }` で、エラーの名前は宣言したエラーとして読む（コールバックと同じ）。`client.ts` は、イベントの名前の一覧（`EVENTS`）と、それを送る `send` を持つ。一番外のループのイテレーションで待つイベントは、新しい実行で続けた先でも同じ名前で待つので、送る側はワークフロー ID だけを知っていればよい。
+- **`event` のタスクは、Update `dandori.event` を待つ。** アクティビティは呼ばない。`dd.awaitEvent` が、待っているイベントの名前を覚えたうえで、その名前の値が来るのを `condition` で待ち（タイムアウトはコールバックと同じ）、待ち終わったら名前を消す。Update の validator は、待っていない名前と、もう来た名前を拒否する。値は `{ event, ok }` か `{ event, error, message }` で、エラーの名前は宣言したエラーとして読む（コールバックと同じ）。`client.ts` は、イベントの名前の一覧（`EVENTS`）と、それを送る `send` と `sendOnce` を持つ。`send` は呼ぶたびに別の Update で、`sendOnce` は呼び手が渡す `id` とイベントの名前から Update の ID を作るので、同じ `id` の送り直しが同じ Update になり、値が違えばクライアントが `SentWithAnotherValueError` にする（25 章）。一番外のループのイテレーションで待つイベントは、新しい実行で続けた先でも同じ名前で待つので、送る側はワークフロー ID だけを知っていればよい。
 - **エージェントは一つのアクティビティにする。** Temporal には OpenAI の Agents SDK との公式の統合があり、モデルやツールの呼び出しをそれぞれアクティビティにして、エージェントの実行そのものを durable にできる。何往復もしてツールを呼ぶエージェントのための形である。dandori のエージェントはツールを持たずに一往復で応答するので、タスクの `timeout` と `retry` がそのまま効く一つのアクティビティにした。
 - 規則は普通のアクティビティとして呼ぶ。rulec の TypeScript を import し、`parse<列挙>` と `BigInt` で直して呼ぶ。規則は純関数なので、決定性のためだけならワークフローのコードで直接呼べるが、そうしない。理由は三つ。
   - 判定の入力と結果が、実行履歴に残る（ActivityTaskScheduled と ActivityTaskCompleted）。どの入力でどう判定したかを後から読め、rulec の `replay` と `diff` に渡す記録にもなる。
@@ -1249,7 +1249,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **`history encrypted`**（1.18）のフローでは、`worker.ts` の `WorkerConfig.codec`（ペイロードのコーデック）を要るフィールドにし、ワーカーの `dataConverter` にそれと `failure.ts` の失敗のコンバーター（`encodeCommonAttributes`）を入れる。`client.ts` の関数は、`encryptedClient(connection, codec)` だけが返す `EncryptedClient` を受け取る。`replay` もコーデックを受け取る。Python では `client.py` の `connect(target, codec)` が返す `EncryptedClient`（`NewType`）を、関数と `make_worker` が受け取り、データコンバーターは `DefaultFailureConverterWithEncodedAttributes` を使う。Go では `client.go` の `Dial(options, codec)` だけが `EncryptedClient` を返し、関数と `NewWorker` が受け取る。宣言の無いフローの生成物は変わらない。
 - **規則の前提の確かめ**（1.17）は、ワークフローのコードの `if (!(asked! <= paid)) throw dd.fail("Dandori.BrokenPrecondition", …)`（日は `[…].includes(day!)`）。アクティビティもタイマーも使わないので、履歴は増えない。
 
-**Python SDK 向け**（`--target temporal-python`）も出す。ワークフローの名前のパッケージに、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`、`runtime.py`、`workflow.py`（ワークフローのクラスと、ワーカーに渡す `workflows`）を置く。`worker.py`（`worker_options` と `make_worker`）と `client.py`（`start`・`answer`・`status`）も同じ形で出す。意味は TypeScript 版と同じで、線に乗る名前もそろえた。ワークフローの型、アクティビティの名前、コールバックの Update とシグナル、クエリ、search attribute、子ワークフローとコールバックの ID が同じなので、TypeScript のワーカーが持つアクティビティを Python のワークフローから呼べ、その逆もできる（5 章で、全部のシナリオを両方向に走らせて確かめている）。書き方が違うのは次のところ。
+**Python SDK 向け**（`--target temporal-python`）も出す。ワークフローの名前のパッケージに、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`、`runtime.py`、`workflow.py`（ワークフローのクラスと、ワーカーに渡す `workflows`）を置く。`worker.py`（`worker_options` と `make_worker`）と `client.py`（`start`・`answer`・`send`・`send_once`・`status`）も同じ形で出す。意味は TypeScript 版と同じで、線に乗る名前もそろえた。ワークフローの型、アクティビティの名前、コールバックの Update とシグナル、クエリ、search attribute、子ワークフローとコールバックの ID が同じなので、TypeScript のワーカーが持つアクティビティを Python のワークフローから呼べ、その逆もできる（5 章で、全部のシナリオを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
 - Python にはラベルを付けた `break` が無い。`on` のある呼び出しは `try` にし、`except` でタスクのエラーを処理して、合う `on` が無ければ投げ直す。結果の検査は `else` に置く。ループの `break` は Python の `break` のまま使える。コードの中のループは `.flow` のループだけだからである。
 - 並列のイテレーションは、イテレーションごとの `async def` を `asyncio.gather` で `k` 個ずつ走らせる。Temporal の Python SDK はワークフローの中の asyncio を決定的に動かす。
@@ -1262,7 +1262,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - 日付は `rules.py` が `.koyomi.python.<別名>` から読み、`{"day": …, "at": …}` を返す。帳簿の操作は `io.py` の `book`（帳簿の値は `transport(books=…)`。chobo の Python のクライアントは同期なので `asyncio.to_thread` で呼ぶ）。`now` は `workflow.now()` で、`now` を読む呼び出しは、その前で一度読んで変数に入れる（試しのたびに走る `lambda` と `async def dd_call_<場所>` の外で）。
 - 規則の前提の確かめ（1.17）は、`if not (…): raise dd.fail("Dandori.BrokenPrecondition", …)`（日は `in` と日のタプル）。ワークフローが動く期間の確かめ（20 章）は、走り始めの外が `raise dd.fail("Dandori.OutOfPeriod", …)`、`now` を読む文の前の外が `raise dd.TaskError("Dandori.OutOfPeriod", …)`。
 
-**Go SDK 向け**（`--target temporal-go`）も出す（2026-10-02）。ワークフローの名前の Go のパッケージ一つに、`doc.go`（パッケージの説明と、前提にするモジュールのバージョン）、`types.go`、`values.go`（JSON の値を読み書きする部品）、`activities.go`（`OwnTasks` と `Activities(own, transport)`）、`io.go`（と、フローが使うときだけ `io_aws.go`・`io_openai.go`・`io_claude.go`）、`rules.go`、`runtime.go`、`workflow.go`（`Workflow`）、`client.go`（`Start`・`AnswerCallback`・`Send`・`RunStatus`・`Histories`）、`worker.go`（`NewWorker`・`Replay`）を置く。線に乗る名前は TypeScript 版と同じなので、ワークフローとアクティビティを TypeScript や Python のワーカーと分け合える（5 章で、Go と TypeScript の組み合わせを両方向に走らせて確かめている）。書き方が違うのは次のところ。
+**Go SDK 向け**（`--target temporal-go`）も出す（2026-10-02）。ワークフローの名前の Go のパッケージ一つに、`doc.go`（パッケージの説明と、前提にするモジュールのバージョン）、`types.go`、`values.go`（JSON の値を読み書きする部品）、`activities.go`（`OwnTasks` と `Activities(own, transport)`）、`io.go`（と、フローが使うときだけ `io_aws.go`・`io_openai.go`・`io_claude.go`）、`rules.go`、`runtime.go`、`workflow.go`（`Workflow`）、`client.go`（`Start`・`AnswerCallback`・`Send`・`SendOnce`・`RunStatus`・`Histories`）、`worker.go`（`NewWorker`・`Replay`）を置く。線に乗る名前は TypeScript 版と同じなので、ワークフローとアクティビティを TypeScript や Python のワーカーと分け合える（5 章で、Go と TypeScript の組み合わせを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
 - **値は JSON のまま運ぶ。** ワークフローの変数、タスクの引数と結果は、JSON の値（`map[string]any`、`[]any`、`float64`、`string`、`bool`、`nil`）のまま持ち、構造体には読まない。Python 版と同じ形である。構造体に読むと、無いフィールドと null の区別が消え、構造体が知らないフィールドが落ち、型に合わない結果は読む段階でエラーになる。シナリオは型に合わない結果（`{}` や `[]`）も返し、ワークフローがそれを `Dandori.BadResponse` で拒否すること、無いフィールドを無いまま次の呼び出しに渡すことを、参照インタプリタと比べる。型を確かめる関数（`Is<型>`）は JSON の値に対して書く。`types.go` には、レコードごとの構造体（JSON の名前をタグに持つ）と列挙ごとの文字列の型も書き、利用者は自分のタスクの中で `Decode` で読める。自分で書くタスク（`OwnTasks` のメソッド）は、引数を `map[string]any` で受け取り、SDK が JSON に書ける値を何でも返せる。
 - **パッケージの名前は ASCII にする。** Go の import パスには ASCII しか使えない（golang.org/x/mod の `CheckImportPath`）ので、`宿泊` というディレクトリは import できない。ワークフローの名前が ASCII の識別子ならそれを、そうでなければ `.flow` のファイル名（`hotel.ja.flow` なら `hotel_ja`）を、それも使えなければ `workflow` を名前にする。Go の識別子は日本語を受け付けるので、変数の名前は日本語のまま書く。外から見える名前（型、構造体のフィールド、`OwnTasks` のメソッド）は先頭が大文字でなければならないので、日本語の名前には前に `X` を付ける（`X承認を求める`）。
@@ -2831,7 +2831,7 @@ rulec、koyomi、chobo、sekisho は、書いた名前が生成先で一つの�
    | `_` で始まる名前 | 型とタスク | TypeScript と Python の出力先 |
    | 型とメソッドが Python の予約語、生成するコードが読む組み込み、自分の名前 | `class`、`str`、`workflow` | temporal-python、pydantic-graph |
    | 型が Python の派生の名前 | `Color` の隣の `Color_values`、`is_Room` | temporal-python、pydantic-graph |
-   | サービスのメソッドが、違うことをするクライアントの関数 | イベントのメソッドや始めのメソッドの `Send`、状態のメソッドの `Histories` | temporal-typescript、temporal-python、temporal-go |
+   | サービスのメソッドが、違うことをするクライアントの関数 | イベントのメソッドや始めのメソッドの `Send` と `SendOnce`、状態のメソッドの `Histories` | temporal-typescript、temporal-python、temporal-go |
    | サービスのメソッドが一つの言語の関数 | `Answer`（TypeScript と Python）、`AnswerCallback`（Go） | その言語の出力先 |
    | Go の関数になるメソッドと同じ名前の型 | `record Status` と `rpc Status` | temporal-go |
    | サービスのメッセージがクライアントの型 | `Order` | 同じ三つ |
@@ -2973,3 +2973,116 @@ ritsu check: 2 files (chobo 1, dandori 1): 1 fail (1 error); borders between the
 ### 24.6 残したこと
 
 `tests/mutants` は dandori に無い（壊す試しは `tests/fixtures` と `crates/ritsu/tests/fed_by.rs`）。タスクの結果の範囲に `fed by` は書けない：タスクの結果はすでに呼び先の宣言から来る。
+
+## 25. 応答とイベントの送り直しを、同じ Update にする（2026-11-08）
+
+### 25.1 きっかけ
+
+承認の API が、承認の知らせを生成された `Send` でワークフローに送り、成功したら承認者を記録するとする。知らせがワークフローに届いたのに返事が呼び手に届かない（呼び手が待ちきれずに切る、タイムアウトになる）と、送り直しは別の Update になり、ワークフローは二度目のイベントとして拒否する。API は 409 を返して承認者を記録しないのに、ワークフローは承認されたものとして先へ進む。呼び手には、届いたのか届かなかったのかを見分ける手段が無かった。生成した `Send` も `AnswerCallback` も Update の ID を付けておらず、Temporal の SDK は呼ぶたびに新しい ID を作る（Go SDK v1.49.0 で確かめた）。コールバックへの応答（`AnswerCallback`・`answer`）も同じだった。
+
+### 25.2 決定
+
+1. **応答の Update の ID を、コールバックの ID だけから決める。** ID は `dandori.answer:` のあとに、コールバックの ID の SHA-256 の 16 進の先頭 32 字を付けたもの。同じコールバックへの応答は、値が違っても一つの Update になり、二度目からはサーバーが最初の結果を返す。
+2. **イベントには、呼び手が `id` を渡す `SendOnce`（TypeScript は `sendOnce`、Python は `send_once`）を足す。** 引数は `Send` の値の前に `id` を足したもの（Go は `SendOnce(ctx, c, workflowID, event, id string, a CallbackAnswer) error`、TypeScript と Python も同じ並び）。ID は `dandori.event:` のあとに、イベントの名前と `id` を改行でつないだものの SHA-256 の先頭 32 字を付けたもの。イベントの名前に改行は入らないので、違う組が同じ文字列になることは無い。
+3. **ワークフローの Update は、受け取った値の SHA-256 を結果に入れて返す。** 結果は `{"value_sha256": "<16 進の先頭 32 字>"}`。今までの Update は結果を返さなかった（TypeScript は `void`、Python は `None`、Go は `error` だけ）ので、壊す形は無い。結果はほかの値と同じくペイロードなので、`history encrypted` のフロー（1.18）ではコーデックで暗号化される（25.5 で確かめた）。
+4. **クライアントは、結果の SHA-256 を自分の値の SHA-256 と比べる。** 同じなら成功とする（今回受け取られたか、最初の結果が返ってきたか）。違えば `SentWithAnotherValueError` にする。名前は三つの言語で同じで、Go はエラーの型（`*SentWithAnotherValueError`、フィールドは `UpdateID`・`Sent`・`Taken`）、TypeScript と Python は例外のクラス（`updateId`／`update_id`・`sent`・`taken`）。メッセージは `the update <ID> was sent before with another value, which the workflow took`。結果に SHA-256 が無いとき（この変更より前に生成したワーカーで動いている実行。25.6）は、比べずに成功とする。比べる場所をワークフローの validator にする形は取れない。同じ ID の送り直しにはサーバーが最初の結果を返し、ワークフローまで届かないからである。
+5. **`Send` は変えない。** 呼ぶたびに別の Update のままにし、送り直しには `SendOnce` を使うよう、コメントに一文を足した。
+6. **値は、ワークフローが読む形にそろえてから JSON にする。** エラーの名前が文字列なら `{"error": 名前, "message": 文}`（文が文字列でなければ `""`）、ほかは `{"ok": 値}`（値が無ければ `null`）。メッセージの無いエラーと空のメッセージのエラーは、ワークフローが同じに読むので同じ SHA-256 になる。クライアントは値をまず SDK が送るのと同じ JSON にし（Go は `encoding/json`、TypeScript は `JSON.stringify`、Python は temporalio の `AdvancedJSONEncoder`）、それを読み戻してから正準の形に書く。ワークフローは、届いた値を同じ関数に通す。
+7. **正準の JSON の決まり。** オブジェクトのキーはコードポイントの順に並べる（TypeScript の `sort` は UTF-16 の順なので、比べる関数を渡す）。空白は入れない。文字列は `"`、`\`、制御文字（`\b`・`\f`・`\n`・`\r`・`\t`、ほかは小文字の `\u00xx`）だけをエスケープし、ほかの字は UTF-8 のまま書く。HTML の字も U+2028 と U+2029 もエスケープしない。対にならないサロゲートは U+FFFD に替え、替えて同じになったキーは一つにして後の値を取る。Go の JSON は読むときにそう替えるので、TypeScript と Python も替えないと、その呼び手が Go のワーカーに送った値の SHA-256 がそろわない。数は、どれも最も近い double に読んでから JavaScript が書くとおりに書く（Go の `encoding/json` が float64 を書く形と同じで、Python は `str` の桁から組み立てる）。`-0` は `0`、double の範囲を越える数は `null` になる。TypeScript のワークフローは JSON の数を double で読むので、ほかの言語の呼び手と同じ SHA-256 にするには、どの言語もそう読むしかない。
+8. **作り方を三つの言語でそろえる。** TypeScript の呼び手が Go のワーカーに送っても、ID も SHA-256 も同じになる。TypeScript のワークフローのサンドボックスには `node:crypto` が無いので、SHA-256 は `runtime.ts` に TypeScript で書き、`client.ts` もそれを使う。ID の材料の文字列も、TypeScript と Python は対にならないサロゲートを U+FFFD に替えてから UTF-8 にする（Go の UTF-8 の文字列はサロゲートを持たない）。
+
+閉じた実行への送り直しを、Temporal CLI 1.9.1（Server 1.32.0）の開発用サーバーで、Go SDK v1.49.0 から確かめた。三つの言語の試験（25.5）も同じ結果だった。
+
+- Update が完了したあと、実行が終わってから（完了、失敗、キャンセル、強制終了のどれでも）同じ ID で送り直すと、サーバーは最初の Update の結果を返す。値が違えば、クライアントが `SentWithAnotherValueError` にする。
+- 終わった実行に知らない ID で送ると、`workflow execution already completed` が返る（Go は `*serviceerror.NotFound`、TypeScript は `WorkflowNotFoundError`、Python は状態が `NOT_FOUND` の `RPCError`）。
+- Continue-As-New で続けた実行は、前の実行の Update の ID を知らない。ワークフロー ID で送り直すと新しい実行に届き、そこでは新しい Update になる。コールバックの ID はループの回数を含むので、新しい実行は待っていないコールバックとして拒否し、ワークフローが終わっていれば `workflow execution already completed` になる。イベントは、新しい実行が同じイベントを待っていれば受け取られる。前の実行の run ID を付けて送れば、最初の結果が返る。
+- validator が拒否した Update はサーバーに残らない。同じ ID を、ワークフローが受け取れるようになってから送れば受け取られる。
+- 一つの実行の中では、同じ ID の送り直しにサーバーが最初の結果を返す。だから、ループで同じイベントを何度も待つワークフローに前の待ちの `id` で送ると、送ったものは次の待ちに届かない。値が同じなら呼び手には成功に見え、違えば `SentWithAnotherValueError` になる。待つ回ごとに違う `id` を渡すよう、生成するコメントとサイトに書いた。
+
+生成するコメントには、この事実を書き、エラーが返ったら呼び手は実行の状態（Go は `RunStatus`、TypeScript と Python は `status`）を見るよう書いた。
+
+`history encrypted` のフローでも、Update の ID は暗号化されずに履歴に残る。イベントの ID は名前と呼び手の `id` のハッシュなので、推測できる `id` は、候補のハッシュと比べれば分かる。`id` に秘密にしたい値（決定や人の名前など）を入れないよう、生成するコメントとサイトに書いた。値の SHA-256 は結果に入るので、コーデックで暗号化される。
+
+### 25.3 捨てたもの
+
+- **値を ID に入れる形（初めに作った形）。** ID を、コールバックの ID（イベントは名前と `id`）と値の正準の JSON の SHA-256 から作っていた。違う値は別の Update になり、ワークフローが二度目として拒否する。だが ID は暗号化されないので、`history encrypted` のフローでも、とりうる値の少ない応答（承認者の名前、はい・いいえ）は、候補のハッシュと比べれば ID から分かった。終わった実行に違う値を送ると `workflow execution already completed` になり、呼び手には、自分の値が取られなかったのか実行が終わっただけなのかが分からなかった。
+- **値を入れず、比べもしない形。** 違う応答を送っても最初の結果が返り、呼び手は自分の応答が取られなかったことを知らないまま成功と読む。
+- **`Send` に自動で ID を付けること。** 同じイベントを二度送るつもりの呼び手（ループの回ごとに同じ知らせを送る）が、黙って一度にまとめられる。引数を変えれば、今の呼び手のコードが変わる。
+- **ワークフローの側で、受け取った `id` を覚えて重なりを拒否すること。** 新しい実行に渡す状態が増える。Update の重なりは、サーバーがすでに ID で見分けている。
+- **ID を呼び手が自由に渡せるようにするだけにすること。** 呼び手ごとに作り方を考えることになり、言語をまたぐとそろわない。
+
+### 25.4 変わること
+
+- 三つの言語のクライアントで、`answer`（Go は `AnswerCallback`）が Update の ID を付けて結果の SHA-256 を比べ、`sendOnce`（Python は `send_once`、Go は `SendOnce`）と `SentWithAnotherValueError` が増える。内部の関数は、TypeScript が `client.ts` の `ddUpdateId`・`ddSameValue` と `runtime.ts` の `valueSha256`・`sha256Hex`、Python が `client.py` の `_update_id`・`_same_value` と `runtime.py` の `value_sha256`、Go が `client.go` の `ddUpdateID`・`ddSameValue`・`ddTook`・`ddValueHash`・`ddCanonical`（`runtime.go` の Update のハンドラーが `ddTook` を呼ぶ）。`client.ts` は `runtime.ts` を、`client.py` は `runtime.py` を読むようになった。Go の `client.go` は `crypto/sha256`・`encoding/hex`・`sort`・`strings` を、Python の `runtime.py` は `hashlib` と temporalio の `AdvancedJSONEncoder` を読む。
+- ワークフローの Update `dandori.answer` と `dandori.event` が `{"value_sha256": …}` を返す（TypeScript の型は `Took`）。ワークフローの状態と、履歴に残るコマンドは変わらない。
+- 記録した 45 の履歴は、新しいコードで再生できる（25.5）。そのうち 7 つ（TypeScript 3、Python 3、Go 1）に、結果の無い（`binary/null` の）`dandori.answer` の Update がある。イベントの Update を含む記録は無い。
+- 生成物のバイトが変わるので、Worker Deployment Versioning のビルド ID（書いたコードのハッシュ）も、どのフローでも変わる。
+- `SendOnce`・`sendOnce`・`send_once` と `SentWithAnotherValueError` を、生成するコードが持つ名前に足した。サービスのメソッドやメッセージの名前とぶつかったときの扱いは、`Send` と同じ（W105・E051、22 章）。TypeScript の例外は `globalThis.Error` を継ぐ。`Error` という名前のメッセージの型が `client.ts` にあっても、組み込みの `Error` を指すためである。
+- サイトの Temporal のページ（英日）と、スキルの `platforms.md`。
+
+### 25.5 確かめたこと
+
+Temporal の試験は、各 SDK の試験の道具が立てる開発用サーバーで回した（`cargo xtask test --level platforms -p dandori -- --exact <名前>`）。どれも SKIP の行は 0 だった。PostgreSQL は使っていない。
+
+- **記録した履歴の再生**（`temporal_replays_the_recorded_histories`）。記録した 45 の履歴を、結果を返す今のハンドラーで再生した。結果の無い `dandori.answer` の Update を含む 7 つも、非決定性のエラーなしに再生できた。
+
+  ```text
+  replayed 45 kept history(ies) with the code dandori writes now
+  ```
+
+- **参照との突き合わせ**（`temporal_runs_as_the_reference_says`、`temporal_python_runs_as_the_reference_says`、`temporal_go_runs_as_the_reference_says`）。走らせる道具（`tools/temporal/run.mjs`、`tools/temporal-python/run.py`、`tools/temporal-go/harness/run.go`）は、コールバックに応答するたびに同じ応答をもう一度送り、成功しなければ止まる。ワークフローは二度目の応答を拒否するので、成功したことは、サーバーが同じ Update として最初の結果を返したことを示す。続けて同じコールバックに違う応答を送り、`SentWithAnotherValueError` にならなければ止まる。一度だけ待つイベントは、通し番号を `id` にした `sendOnce` で送り、同じ `id` と値の送り直しが成功し、同じ `id` で違う値が `SentWithAnotherValueError` になることを確かめる（あいだで実行が Continue-As-New で続いたときは、新しい実行が拒否することを確かめる）。何度も待つイベントは、初めの待ちを `send` で、二度目からを待つ回ごとの `id` の `sendOnce` で送る。三つの言語とも、呼び出しと答えは参照どおりだった。
+- **別の言語のアクティビティ**（`temporal_activities_run_in_the_other_language`）。ワークフローとアクティビティを別の言語で動かす（TypeScript と Python を両方向、Go と TypeScript を両方向）。コールバックに応答するのはアクティビティの側の道具（`--serve`）なので、応答の SHA-256 を、ワークフローの言語と違う言語のクライアントが比べる。四つの組とも、50 のフローで呼び出しと答えが参照どおりだった。
+- **終わった実行への送り直し**（`temporal_worker_versioning_keeps_a_run_on_its_build`）。2 回目のラウンドを Continue-As-New の新しい実行で始めるワークフローが終わったあと、最後の実行が受け取った応答、そのコールバックへの違う応答、最初の実行が受け取った応答を送り直す。試験は、一つ目が `taken`、二つ目が `was sent before with another value` を、三つ目が `workflow execution already completed` を含むことを確かめる。出力はこうだった。
+
+  ```text
+  TypeScript: sent again after the end: the last answer: "taken"; another answer: "SentWithAnotherValueError: the update dandori.answer:2595770cff44f7dd5bb3f2b5bf2a15fd was sent before with another value, which the workflow took"; the first run's answer: "WorkflowNotFoundError: workflow execution already completed"
+  Python: sent again after the end: the last answer: "taken"; another answer: "SentWithAnotherValueError: the update dandori.answer:2595770cff44f7dd5bb3f2b5bf2a15fd was sent before with another value, which the workflow took"; the first run's answer: "RPCError NOT_FOUND: workflow execution already completed"
+  Go: sent again after the end: the last answer: "taken"; another answer: "*approvals.SentWithAnotherValueError: the update dandori.answer:2595770cff44f7dd5bb3f2b5bf2a15fd was sent before with another value, which the workflow took"; the first run's answer: "*serviceerror.NotFound: workflow execution already completed"
+  ```
+
+- **ID と SHA-256 が三つの言語でそろうこと**（`an_update_id_is_made_alike_by_the_reference_typescript_python_and_go`）。`tests/flows/events.flow` から生成した三つのクライアントの `answer` と `sendOnce` を、ID を書き留め、SHA-256 の無い結果を返すクライアントで呼ぶ（`run.mjs` と `run.py` の `--update-ids`、Go は checks の `--update-ids`）。クライアントは `SentWithAnotherValueError` に自分の値の SHA-256 を入れるので、それを書き出す。応答は、エスケープする字としない字（`"`・`\`・制御文字、`/`・DEL・HTML の字・U+2028・U+2029・絵文字）、対にならないサロゲート（文字列の終わりと始め、逆の順に並んだ組の半分ずつ、替えるとコードポイントの順が変わるキー）、コードポイントの順と UTF-16 の順が違うキー、2⁵³−1 までの整数、真偽、null、入れ子、メッセージのある・空の・無いエラー、小数と指数のある数（`5e-324`、`1.7976931348623157e308`、`-0`、`1e21` など）、2⁵³ を越える整数。ほかに、同じ応答を別のコールバックへ、同じ値を別のイベントへ、別の `id` と、対にならないサロゲートを含む `id` で送る組。サロゲートは、試験が書く `cases.json` に `\ud800` のようなエスケープで入る。Go のツールはそれを読んだ時点で U+FFFD にしているので、ほかの二つの言語が同じに替えなければそろわない。72 件の ID はどれも Rust で書いた参照（サロゲートを U+FFFD として作る）と同じで、ID はコールバック（イベントは名前と `id`）ごとに一つ、値によらない。小数の無い 46 件の SHA-256 は参照とも比べ、数の 26 件は三つの言語のあいだで比べる（`12345678901234567890` は `{"ok":12345678901234567000}` の SHA-256 になる）。メッセージの無いエラーと空のメッセージのエラー、`-0` と `0` のほかは、どの二つの値も SHA-256 が違う。
+
+  ```text
+  72 update id(s) and SHA-256s of the answers of callbacks and of events sent once were made alike by TypeScript, Python, Go; the ids of all and the SHA-256s of 46 as the reference makes them. "dandori.answer:eeab8367391fb6f2db3711a965faf15f" answers "[\"承認と配達-1\",\"2/0/1\"]", and "296fa78a1f9121e3304013cc1fc4fc8d" is the SHA-256 of {"ok":"承認"}
+  ```
+
+- **TypeScript の SHA-256**。`runtime.ts` の `sha256Hex` を、`node:crypto` と 313 の文字列で比べた（空、55・56・63・64・65 字、多バイトの字、絵文字、対にならないサロゲート、10 万字、乱数で作った 300 個）。どれも同じだった。
+- **閉じた実行の事実（25.2）**は、Go SDK v1.49.0 から Temporal CLI 1.9.1（Server 1.32.0）の開発用サーバーに送る使い捨てのプログラムでも確かめた。一つの値を Update で受け取り、二つ目を validator で拒否するワークフローに、ID `A` で送ってから実行を終わらせる。完了、失敗、キャンセル、強制終了のどれでも、`A` の送り直しは `ok: "took a"`（最初の実行の結果）、新しい ID は `*serviceerror.NotFound: workflow execution already completed` だった。Continue-As-New のあとは、`A` の送り直しを新しい実行が新しい Update として受け取り（`ok: "took a"`、新しい実行の run ID）、最初の実行の run ID を付けると最初の結果が返った。validator が拒否した ID は、ワークフローが受け取れるようになってから同じ ID で送ると `ok: "took r"` になった。
+- **暗号化した履歴**（`temporal_keeps_an_encrypted_history_with_the_codec`）。`tests/encrypted/pay.flow` に、承認を待つコールバックのタスク `approve` を足した。三つの言語の道具（`tools/temporal/codec.mjs`、`tools/temporal-python/codec.py`、試験の中の Go のプログラム）は、すべてのペイロードを base64 にして自前のエンコーディングの名前を付けるコーデックで、生成したワーカーとクライアントを動かす。`approve` に渡されたコールバックに、タスクが返る前に応答し、同じ応答をもう一度、続けて違う応答を送る。実行が終わったら、コーデックの無いクライアントで履歴を読む。試験は、三つの言語とも、二つの実行（支払うものと、銀行が拒否するもの）の結果が次と同じことを確かめる（支払う実行のもの。拒否する実行は `end`・`failure_message`・`failure_encoded` だけが違う）。
+
+  ```json
+  {
+    "end": { "succeed": { "receipt": "receipt for acct-paid", "approved_by": "approver of paid" } },
+    "input_encoding": "binary/dandori-test-base64",
+    "number_in_the_clear": false,
+    "failure_message": null,
+    "failure_encoded": false,
+    "answers": { "first": "taken", "again": "taken", "another": "SentWithAnotherValueError" },
+    "update_ids": ["dandori.answer:<the SHA-256 of the callback's id>"],
+    "update_result_encoding": "binary/dandori-test-base64",
+    "update_result_in_the_clear": false,
+    "update_result_decodes_to_value_sha256": true
+  }
+  ```
+
+  同じ応答の送り直しは成功した（クライアントがコーデックで結果を読み、SHA-256 を比べた）。違う応答は `SentWithAnotherValueError` になった。履歴に残る Update は一つだけで（送り直しは新しい Update を作らない）、その ID（`dandori.answer:` とコールバックの ID の SHA-256 の先頭 32 字）は平文で残る。結果のペイロードはコーデックのエンコーディングで書かれていて `value_sha256` の字が出ず、コーデックで読むと 32 字の SHA-256 を持つ。
+
+  ```text
+  ran tests/encrypted/pay.flow with a codec in TypeScript, Python, Go
+  ```
+
+- **子のワークフローとコールバックの上限**（`temporal_runs_a_flow_as_its_child`、`callback_limits_hold_on_temporal`）。Update が結果を返すようになったコードでも通った。
+- **型の検査**：`generated_typescript_type_checks`（182 のビルドを `tsc --strict`）、`generated_go_vets`（78 のフローを `go vet` と `gofmt`）、`tests/spellings.rs` の `tsc`・`mypy --strict`・`go vet`。
+- **名前**：`tests/spellings.rs`（18 件。Python の組み込みの表と TypeScript の型の表に合うよう、`ord` と `OverflowError` を使わず、`Error` は `globalThis.Error` で読む）、ritsu-emit の `copies` の golden（`GO_EXPORTED` が 43 になった）、ritsu-proto の `readers`。
+- **文書**：`tests/docs.rs`、`tests/skill.rs`。
+
+### 25.6 残したこと
+
+- **Continue-As-New は Update の ID を新しい実行に渡さない。** 前の実行が受け取った応答やイベントを送り直すと、新しい実行では新しい Update になる。コールバックは ID がループの回数を含むので拒否される（ワークフローが終わっていれば `workflow execution already completed`）が、イベントは、新しい実行が同じイベントを待っていれば二度目として受け取られる。エラーが返ったら、呼び手は `RunStatus`（`status`）で実行の状態を見る。
+- **ループの中で、前の待ちの `id` を使い回したときの答えは、走らせて確かめていない。** 参照との突き合わせでは、一番外のループの回ごとに Continue-As-New で新しい実行になるので、一つの実行の中で同じイベントを二度待つことが無い。25.2 の答えは、一つの実行の中の送り直しに最初の結果が返るという、確かめた事実からのものである。
+- **新しいクライアントと古いワーカーの組では、同じコールバックへの違う答えが、比べられずに成功になる。** この変更より前に生成したワーカー（ワークフロー）の Update は、結果に SHA-256 を返さない。クライアントは比べようがないので、違う答え（同じ `id` のイベントの違う値）も成功とし、呼び手は自分の答えが取られなかったことを知らない。Worker Deployment Versioning で実行を古いビルドに留めていれば、その実行が終わるまでこの組が残る。古いクライアントと新しいワーカーの組は、前と同じに動く（古いクライアントは Update の ID を付けず、結果も読まない。生成されたコードを読んで確かめた）。
+- **同じ double に丸められる二つの数は、同じ値として比べる。** 2⁵³ を越える整数（`12345678901234567890` と `12345678901234567891` など）は、どの言語でも同じ SHA-256 になる。TypeScript のワークフローには、そもそも同じ値として届く。
+- **対にならないサロゲートは U+FFFD として比べる。** `"\udc00"` と `"\ufffd"` のように、替えると同じになる二つの値は SHA-256 が同じで、違う値の送り直しが成功に見える。TypeScript と Python のワークフローには違う値として届き、Go のワークフローにはどちらも U+FFFD として届く。
+- **サービスを実装するフロー（1.14）のクライアントの、イベントのメソッドは `Send` のまま。** 送り直しを同じ Update にしたければ、`SendOnce` を呼ぶ。
+- **Step Functions と Lambda durable functions は変えていない。** Step Functions は task token で、durable はコールバックの ID で応答を受け取る。同じ応答を二度送ったときに何が返るかは、走らせて確かめていない（LocalStack でも、durable の手元の試しの道具でも、試験は二度目を送らない）。AWS の API の説明は、`SendTaskSuccess` が、閉じたタスクの token に `TaskTimedOut` を返すと書く。
+- **終わった実行の Update の結果を返せる期間。** 名前空間が履歴を消したあとの送り直しに何が返るかは、確かめていない。

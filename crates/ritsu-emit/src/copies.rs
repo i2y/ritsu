@@ -268,10 +268,11 @@ pub mod dandori {
         "WorkflowType", "TaskQueue", "Events", "Workflow", "RegisterWorkflow", "OwnTasks",
         "OwnTasksBy", "Activities", "RegisterActivities", "BuildID", "WorkerOptions", "NewWorker",
         "RunHistory", "ReplayFailure", "Replay", "Start", "CallbackAnswer", "AnswerCallback", "Send",
-        "Where", "RunStatus", "Histories", "CallOutcome", "HTTPRequest", "HTTPResponse", "AgentCall",
-        "Transport", "TransportOptions", "NewTransport", "DefaultTransport", "AgentHTTPError",
-        "AgentStopped", "JevURL", "DecisionsURL", "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput",
-        "IsWorkflowInput", "Decode", "TIMESTAMP", "Service",
+        "SendOnce", "SentWithAnotherValueError", "Where", "RunStatus", "Histories", "CallOutcome",
+        "HTTPRequest", "HTTPResponse", "AgentCall", "Transport", "TransportOptions", "NewTransport",
+        "DefaultTransport", "AgentHTTPError", "AgentStopped", "JevURL", "DecisionsURL",
+        "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput", "IsWorkflowInput", "Decode", "TIMESTAMP",
+        "Service",
     ];
 
     /// `TS_GLOBALS`: the names a type's name cannot be in `types.ts` (W105): the global types it

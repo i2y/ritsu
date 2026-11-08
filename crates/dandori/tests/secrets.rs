@@ -135,7 +135,7 @@ const codec: PayloadCodec = {
 
 export async function main(): Promise<void> {
   const client = encryptedClient(await Connection.connect({}), codec);
-  await makeWorker({ pay: async () => "receipt" }, { codec });
+  await makeWorker({ approve: async () => {}, pay: async () => "receipt" }, { codec });
   await start(client, "pay-1", { account: { id: "acct-1", number: "4111" } });
 }
 "#;
@@ -146,7 +146,7 @@ import { makeWorker } from "./worker";
 
 export async function main(): Promise<void> {
   const client = new Client({ connection: await Connection.connect({}) });
-  await makeWorker({ pay: async () => "receipt" }, {});
+  await makeWorker({ approve: async () => {}, pay: async () => "receipt" }, {});
   await start(client, "pay-1", { account: { id: "acct-1", number: "4111" } });
 }
 "#;
@@ -169,6 +169,9 @@ class Identity(PayloadCodec):
 
 
 class Own:
+    async def approve(self, args: dict[str, Any]) -> None:
+        return None
+
     async def pay(self, args: dict[str, Any]) -> str:
         return "receipt"
 
@@ -188,6 +191,9 @@ from pay.worker import make_worker
 
 
 class Own:
+    async def approve(self, args: dict[str, Any]) -> None:
+        return None
+
     async def pay(self, args: dict[str, Any]) -> str:
         return "receipt"
 
@@ -216,6 +222,8 @@ func (identity) Decode(ps []*commonpb.Payload) ([]*commonpb.Payload, error) { re
 
 type own struct{}
 
+func (own) Approve(ctx context.Context, args map[string]any) (any, error) { return nil, nil }
+
 func (own) Pay(ctx context.Context, args map[string]any) (any, error) { return "receipt", nil }
 
 func main() {
@@ -241,6 +249,8 @@ import (
 )
 
 type own struct{}
+
+func (own) Approve(ctx context.Context, args map[string]any) (any, error) { return nil, nil }
 
 func (own) Pay(ctx context.Context, args map[string]any) (any, error) { return "receipt", nil }
 
@@ -359,8 +369,8 @@ fn the_code_of_an_encrypted_history_takes_the_codec() {
                 assert!(out.status.success(), "mypy --strict refuses the Python that gives the codec:\n{text}");
             } else {
                 assert!(!out.status.success(), "mypy --strict passes the Python that gives no codec");
-                assert!(text.contains("uses.py:16:") && text.contains("\"EncryptedClient\""), "mypy does not say the worker needs the client with the codec:\n{text}");
-                assert!(text.contains("uses.py:17:") && text.contains("\"EncryptedClient\""), "mypy does not say start needs the client with the codec:\n{text}");
+                assert!(text.contains("uses.py:19:") && text.contains("\"EncryptedClient\""), "mypy does not say the worker needs the client with the codec:\n{text}");
+                assert!(text.contains("uses.py:20:") && text.contains("\"EncryptedClient\""), "mypy does not say start needs the client with the codec:\n{text}");
             }
         }
         eprintln!("mypy --strict: the Python takes the codec");
@@ -374,7 +384,7 @@ fn the_code_of_an_encrypted_history_takes_the_codec() {
         assert!(out.status.success(), "go vet refuses the Go that gives the codec:\n{}", said(&out));
         let fmt = Command::new("gofmt").arg("-l").arg("flows").current_dir(&dir).output().unwrap();
         assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write the Go of an encrypted history otherwise:\n{}", said(&fmt));
-        for (program, line, what) in [("bad-worker", "main.go:20:", "the worker"), ("bad-client", "main.go:16:", "Start")] {
+        for (program, line, what) in [("bad-worker", "main.go:22:", "the worker"), ("bad-client", "main.go:16:", "Start")] {
             let out = go_in(&dir).args(["vet", &format!("./cmd/{program}")]).output().unwrap();
             let text = said(&out);
             assert!(!out.status.success(), "go vet passes {program}, which gives {what} no codec");
@@ -580,11 +590,21 @@ fn the_names_an_encrypted_history_adds_are_the_ones_the_lists_hold() {
 
 /// What every SDK's run of tests/encrypted/pay.flow comes to: the run that pays and the one the bank
 /// refuses end as the reference says, the input in the history is the codec's, the account's number
-/// is nowhere in the history in the clear, and the failure's message is encoded with the rest.
+/// is nowhere in the history in the clear, and the failure's message is encoded with the rest. The
+/// approval is taken, taken again when it is sent again, and told apart when another answer goes to
+/// the same callback; the history keeps one update for it, whose id, in the clear, is made of the
+/// callback's id alone, and whose outcome, the SHA-256 of the answer the workflow took, the codec wrote.
 fn encrypted_runs() -> Value {
-    json!({
+    let approved = json!({
+        "answers": { "first": "taken", "again": "taken", "another": "SentWithAnotherValueError" },
+        "update_ids": ["dandori.answer:<the SHA-256 of the callback's id>"],
+        "update_result_encoding": "binary/dandori-test-base64",
+        "update_result_in_the_clear": false,
+        "update_result_decodes_to_value_sha256": true
+    });
+    let mut runs = json!({
         "paid": {
-            "end": { "succeed": { "receipt": "receipt for acct-paid" } },
+            "end": { "succeed": { "receipt": "receipt for acct-paid", "approved_by": "approver of paid" } },
             "input_encoding": "binary/dandori-test-base64",
             "number_in_the_clear": false,
             "failure_message": null,
@@ -597,7 +617,13 @@ fn encrypted_runs() -> Value {
             "failure_message": "Encoded failure",
             "failure_encoded": true
         }
-    })
+    });
+    for run in ["paid", "refused"] {
+        for (k, v) in approved.as_object().unwrap() {
+            runs[run][k] = v.clone();
+        }
+    }
+    runs
 }
 
 /// The Go program that runs tests/encrypted/pay.flow as tools/temporal/codec.mjs does.
@@ -605,12 +631,16 @@ const GO_RUN: &str = r#"package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
+	"sync"
 
 	commonpb "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -650,14 +680,75 @@ func (b64) Decode(ps []*commonpb.Payload) ([]*commonpb.Payload, error) {
 	return out, nil
 }
 
-type own struct{}
+// own runs the user's tasks. It answers the approval before the task returns, and then twice more,
+// as a caller sends it when the reply was lost: the same answer, and another.
+type own struct {
+	c        pay.EncryptedClient
+	mu       sync.Mutex
+	answered map[string]map[string]any
+}
 
-func (own) Pay(ctx context.Context, args map[string]any) (any, error) {
+// outcome says how the workflow met an answer: taken, or the error the client gave.
+func (o *own) outcome(ctx context.Context, callbackID string, a pay.CallbackAnswer) string {
+	err := pay.AnswerCallback(ctx, o.c, callbackID, a)
+	if err == nil {
+		return "taken"
+	}
+	var another *pay.SentWithAnotherValueError
+	if errors.As(err, &another) {
+		return "SentWithAnotherValueError"
+	}
+	return fmt.Sprintf("%T: %v", err, err)
+}
+
+func (o *own) Approve(ctx context.Context, args map[string]any) (any, error) {
+	callbackID, _ := args["callback_id"].(string)
+	var id []any
+	if err := json.Unmarshal([]byte(callbackID), &id); err != nil || len(id) != 2 {
+		return nil, fmt.Errorf("%q is not the id of a callback", callbackID)
+	}
+	workflowID, _ := id[0].(string)
+	a := pay.CallbackAnswer{OK: "approver of " + workflowID}
+	first := o.outcome(ctx, callbackID, a)
+	again := o.outcome(ctx, callbackID, a)
+	another := o.outcome(ctx, callbackID, pay.CallbackAnswer{OK: "someone else"})
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.answered[workflowID] = map[string]any{"callback_id": callbackID, "answers": map[string]string{"first": first, "again": again, "another": another}}
+	return nil, nil
+}
+
+func (o *own) Pay(ctx context.Context, args map[string]any) (any, error) {
 	account, _ := args["account"].(map[string]any)
 	if n, _ := account["number"].(string); strings.HasPrefix(n, "5500") {
 		return nil, temporal.NewNonRetryableApplicationError("the account is closed", "refused", nil)
 	}
 	return fmt.Sprintf("receipt for %v", account["id"]), nil
+}
+
+// named is an update's id as the history keeps it, its hex digits named when they are the SHA-256
+// of the callback's id.
+func named(updateID, callbackID string) string {
+	sum := sha256.Sum256([]byte(callbackID))
+	if updateID == "dandori.answer:"+hex.EncodeToString(sum[:])[:32] {
+		return "dandori.answer:<the SHA-256 of the callback's id>"
+	}
+	return updateID
+}
+
+// holdsValueSha256 says whether the payload, read with the codec, is an outcome that holds the
+// SHA-256 of a value.
+func holdsValueSha256(p *commonpb.Payload) bool {
+	ps, err := b64{}.Decode([]*commonpb.Payload{p})
+	if err != nil {
+		return false
+	}
+	var took map[string]any
+	if err := json.Unmarshal(ps[0].Data, &took); err != nil {
+		return false
+	}
+	s, _ := took["value_sha256"].(string)
+	return regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(s)
 }
 
 func run() (map[string]any, error) {
@@ -676,7 +767,8 @@ func run() (map[string]any, error) {
 		return nil, err
 	}
 	defer plain.Close()
-	w := pay.NewWorker(c, own{}, nil, "")
+	o := &own{c: c, answered: map[string]map[string]any{}}
+	w := pay.NewWorker(c, o, nil, "")
 	if err := w.Start(); err != nil {
 		return nil, err
 	}
@@ -705,6 +797,8 @@ func run() (map[string]any, error) {
 		var inputEncoding string
 		var failureMessage any
 		failureEncoded := false
+		var updateIDs []string
+		var took *commonpb.Payload
 		for events.HasNext() {
 			ev, err := events.Next()
 			if err != nil {
@@ -719,10 +813,31 @@ func run() (map[string]any, error) {
 				failureMessage = a.Failure.Message
 				failureEncoded = a.Failure.EncodedAttributes != nil
 			}
+			if a := ev.GetWorkflowExecutionUpdateAcceptedEventAttributes(); a != nil {
+				updateIDs = append(updateIDs, a.GetAcceptedRequest().GetMeta().GetUpdateId())
+			}
+			if a := ev.GetWorkflowExecutionUpdateCompletedEventAttributes(); a != nil && took == nil {
+				if ps := a.GetOutcome().GetSuccess().GetPayloads(); len(ps) > 0 {
+					took = ps[0]
+				}
+			}
 		}
 		// protojson writes bytes as base64: the number would show as the base64 of itself
 		clear := strings.Contains(kept.String(), number) || strings.Contains(kept.String(), base64.StdEncoding.EncodeToString([]byte(number)))
-		results[id] = map[string]any{"end": end, "input_encoding": inputEncoding, "number_in_the_clear": clear, "failure_message": failureMessage, "failure_encoded": failureEncoded}
+		o.mu.Lock()
+		approved := o.answered[id]
+		o.mu.Unlock()
+		callbackID, _ := approved["callback_id"].(string)
+		for i, u := range updateIDs {
+			updateIDs[i] = named(u, callbackID)
+		}
+		result := map[string]any{"end": end, "input_encoding": inputEncoding, "number_in_the_clear": clear, "failure_message": failureMessage, "failure_encoded": failureEncoded, "answers": approved["answers"], "update_ids": updateIDs, "update_result_encoding": nil, "update_result_in_the_clear": nil, "update_result_decodes_to_value_sha256": nil}
+		if took != nil {
+			result["update_result_encoding"] = string(took.Metadata["encoding"])
+			result["update_result_in_the_clear"] = strings.Contains(string(took.Data), "value_sha256")
+			result["update_result_decodes_to_value_sha256"] = holdsValueSha256(took)
+		}
+		results[id] = result
 	}
 	return results, nil
 }
@@ -745,7 +860,10 @@ func main() {
 /// worker and the client dandori writes in TypeScript, Python and Go, with a codec that writes every
 /// payload as base64 under an encoding of its own: the runs end as they should, and the history the
 /// server keeps, read without the codec, holds the input as the codec wrote it, nothing of the
-/// account's number in the clear, and the failure's message encoded too.
+/// account's number in the clear, and the failure's message encoded too. The approval the flow waits
+/// for is answered, sent again (taken) and sent with another answer (SentWithAnotherValueError), and
+/// the history keeps one update for it, whose id is the SHA-256 of the callback's id and whose
+/// outcome, the SHA-256 of the answer the workflow took, is as the codec wrote it.
 #[test]
 fn temporal_keeps_an_encrypted_history_with_the_codec() {
     if !need(Need::Temporal) {

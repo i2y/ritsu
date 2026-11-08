@@ -63,6 +63,7 @@ type Flow struct {
 	Start     func(ctx context.Context, c client.Client, id string, input any, searchAttributes bool) (client.WorkflowRun, error)
 	Answer    func(ctx context.Context, c client.Client, callbackID string, a CallbackAnswer) error
 	Send      func(ctx context.Context, c client.Client, workflowID, event string, a CallbackAnswer) error
+	SendOnce  func(ctx context.Context, c client.Client, workflowID, event, id string, a CallbackAnswer) error
 	Status    func(ctx context.Context, c client.Client, id string) (Where, error)
 	Histories func(ctx context.Context, c client.Client, query string) ([]History, error)
 

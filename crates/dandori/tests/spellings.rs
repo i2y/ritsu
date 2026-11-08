@@ -60,6 +60,7 @@ const FORMS: &[Form] = &[
     Form { en: "python_is", ja: "Pythonのis", targets: PY_GO, broken: &["temporal-python", "temporal-go"] },
     Form { en: "client_send", ja: "クライアントのsend", targets: CLIENTS, broken: &[] },
     Form { en: "client_send_starts", ja: "クライアントのsendで始める", targets: CLIENTS, broken: &[] },
+    Form { en: "client_send_once", ja: "クライアントのSendOnce", targets: CLIENTS, broken: &[] },
     Form { en: "client_histories_status", ja: "クライアントのhistoriesで状態", targets: CLIENTS, broken: &[] },
     Form { en: "client_message", ja: "クライアントのメッセージ", targets: CLIENT_TS_PY, broken: &[] },
     Form { en: "client_two_types", ja: "クライアントの二つの型", targets: CLIENTS, broken: &[] },
@@ -222,7 +223,7 @@ fn a_message_two_methods_share_is_one_type() {
         let (code, o, e) = run(&["check", &flow]);
         assert!(code == 0 && !format!("{o}{e}").contains("warning["), "{flow}: {o}{e}");
         let out = scratch.path().join(stem);
-        for (target, file, head, times) in [("temporal-typescript", "client.ts", "export type Sent = ", 1), ("temporal-python", "client.py", "\nSent = ", 1), ("temporal-go", "client.go", "type Sent", 0)] {
+        for (target, file, head, times) in [("temporal-typescript", "client.ts", "export type Sent = ", 1), ("temporal-python", "client.py", "\nSent = ", 1), ("temporal-go", "client.go", "type Sent ", 0)] {
             let (code, _, e) = run(&["gen", &flow, "--target", target, "--out", out.to_str().unwrap()]);
             assert_eq!(code, 0, "{flow} --target {target}: {e}");
             let dir = std::fs::read_dir(out.join(target)).unwrap().flatten().next().unwrap().path();

@@ -9,6 +9,7 @@
 //   node tools/temporal/run.mjs <generated dir> <runs.json> <results.json> [<histories dir>]
 //   node tools/temporal/run.mjs --replay <generated dir> <histories dir> <results.json>
 //   node tools/temporal/run.mjs --serve <generated dir> <runs.json> <steps.json> <server address>
+//   node tools/temporal/run.mjs --update-ids <generated dir> <cases.json> <results.json>
 //
 // With DANDORI_ACTIVITIES_BY set to a command (a JSON list), the workers here run only the
 // workflows, and the activities are the other language's: the command, with <steps.json> and
@@ -23,6 +24,14 @@
 // Continue-As-New, <workflow id>.<n>.json (the second is 2). With --replay, it only replays the
 // histories of a directory (written by this runner, or by the Python one) with the code, and
 // writes for each file the error, or null.
+//
+// With --update-ids, it starts no server: for each case, the generated client (`answer` for a case
+// with a "callback", `sendOnce` for one with an "event") sends to a client that writes the update's
+// id down and hands back an outcome whose SHA-256 of the value is none, so that the client throws
+// SentWithAnotherValueError with the SHA-256 of its own value. It writes { "id": the update's id,
+// "sha256": that SHA-256 }, or { "thrown": the error } (cases.json: [ { "callback": id, "answer": a }
+// | { "workflow": id, "event": name, "id": id, "answer": a } ]). The Python runner and the Go one
+// write the same of the same cases.
 //
 // runs.json: { "workflow": name, "own": [ { "method", "callback" } ], "rules": [activity],
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
@@ -48,18 +57,20 @@
 // scenario cancels the workflow asks the server to cancel it, and keeps the activity busy until
 // the server tells it that it is cancelled; a callback's answer that is a cancellation is the
 // request to cancel. An event (a task that says `event`) is sent with the generated client's
-// `send` once the query dandori.status says the workflow waits for it; an event the scenario
-// times out is not sent, and is written down when the next call comes, or when the run is over.
-// While the workflow waits for one event, another it has must be refused.
+// `send` or `sendOnce` once the query dandori.status says the workflow waits for it; an event the
+// scenario times out is not sent, and is written down when the next call comes, or when the run is
+// over. While the workflow waits for one event, another it has must be refused. An event the
+// workflow waits for once goes by `sendOnce` and goes again with the same id (see sendEvents).
 //
 // The server keeps real time, so the copy of the generated code that runs here waits far less:
 // every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
 // workflow gets 20 seconds before it times out (2 and then 5 were too few when the whole test suite kept the
 // machine busy, see TIMEOUT), but for one that hands on a callback's id: the scenarios never time it out, and
-// its stand-in answers the callback and sees a second answer refused before it returns, which
-// takes a few workflow tasks. An event is waited for 5 seconds at most, long enough for the
-// runner to see the wait and send it. The rounds of `for … in parallel` run one at a
-// time here, so that the calls come in the order the reference interpreter makes them. A loop at
+// its stand-in answers the callback, sends the same answer again (taken: it is the same update) and
+// sees another answer told apart (SentWithAnotherValueError) before it returns, which takes a few workflow tasks. An event is
+// waited for 5 seconds at most, long enough for the runner to see the wait and send it. The rounds
+// of `for … in parallel` run one at a time here, so that the calls come in the order the reference
+// interpreter makes them. A loop at
 // the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 // run, since the history counts as long from one event on here (dd.CONTINUE_AT).
 //
@@ -88,7 +99,8 @@ Runtime.install({ logger: new DefaultLogger("WARN", (entry) => process.stderr.wr
 const here = path.dirname(fileURLToPath(import.meta.url));
 const replaying = process.argv[2] === "--replay";
 const serving = process.argv[2] === "--serve";
-const [dir, runsFile, outFile, historiesDir] = replaying ? [process.argv[3], null, process.argv[5], process.argv[4]] : serving ? process.argv.slice(3) : process.argv.slice(2);
+const idsOnly = process.argv[2] === "--update-ids";
+const [dir, runsFile, outFile, historiesDir] = replaying ? [process.argv[3], null, process.argv[5], process.argv[4]] : serving || idsOnly ? process.argv.slice(3) : process.argv.slice(2);
 const spec = replaying ? JSON.parse(fs.readFileSync(path.join(historiesDir, "spec.json"), "utf8")) : JSON.parse(fs.readFileSync(runsFile, "utf8"));
 /** The other language's runner, serving the activities: the command, when the workers here run only the workflows. */
 const activitiesBy = serving ? null : JSON.parse(process.env.DANDORI_ACTIVITIES_BY ?? "null");
@@ -184,6 +196,27 @@ function ddTestNow(start: boolean): string {
 }
 fs.symlinkSync(path.join(here, "node_modules"), path.join(work, "node_modules"));
 
+if (idsOnly) {
+  // the cases are the spec here (see the top)
+  const { answer, sendOnce, SentWithAnotherValueError } = await import(path.join(work, "client.ts"));
+  const results = [];
+  for (const c of spec) {
+    let id = null;
+    // an outcome whose SHA-256 of the value is none, so that the client names its own
+    const client = { workflow: { getHandle: () => ({ executeUpdate: async (_name, options) => ((id = options.updateId), { value_sha256: "-" }) }) } };
+    try {
+      if ("callback" in c) await answer(client, c.callback, c.answer);
+      else await sendOnce(client, c.workflow, c.event, c.id, c.answer);
+      results.push({ thrown: "the client took the outcome as the one of its value" });
+    } catch (e) {
+      results.push(e instanceof SentWithAnotherValueError && e.updateId === id ? { id, sha256: e.sent } : { thrown: e.message });
+    }
+  }
+  fs.writeFileSync(outFile, JSON.stringify(results, null, 2) + "\n");
+  fs.rmSync(work, { recursive: true, force: true });
+  process.exit(0);
+}
+
 // the child workflows: stand-ins that ask an activity for the scenario's answer
 let children = `export * from "./workflow.ts";\nimport { proxyActivities, ApplicationFailure, ActivityFailure } from "@temporalio/workflow";\n`;
 children += `const { dd_test_child } = proxyActivities({ startToCloseTimeout: "60 seconds", retry: { maximumAttempts: 1 } });\n`;
@@ -228,7 +261,7 @@ if (replaying) {
 
 const { makeActivities } = await import(path.join(work, "activities.ts"));
 const { workerOptions } = await import(path.join(work, "worker.ts"));
-const { start, answer, status, send, EVENTS, histories: listed, TASK_QUEUE, WORKFLOW_TYPE } = await import(path.join(work, "client.ts"));
+const { start, answer, status, send, sendOnce, SentWithAnotherValueError, EVENTS, histories: listed, TASK_QUEUE, WORKFLOW_TYPE } = await import(path.join(work, "client.ts"));
 const CASES = defineSearchAttributeKey("DandoriCases", SearchAttributeType.KEYWORD_LIST);
 
 /** Each run by its workflow's id: the answers it gets, the next one, and the calls it made. */
@@ -261,6 +294,15 @@ function settleEvents(run) {
  * refused, since the workflow does not wait for it. The query may tell of a wait that is just
  * over, or of a run that is closing to go on in a new one (Continue-As-New): an event that the
  * workflow refuses so, or that finds the run closed, is sent again when it waits.
+ *
+ * An event the workflow waits for once goes by sendOnce, with the step's number as its id, and
+ * goes again as a caller sends it when the reply to the first was lost: with the same id and
+ * value it is the update the workflow took, and the server hands back its outcome, which has the
+ * SHA-256 of the value the workflow took; with the same id and another value it is that update
+ * too, which the client tells apart (SentWithAnotherValueError). An event it waits for again (a
+ * loop) goes by send at its first wait and by sendOnce, with each wait's own id, at the later
+ * ones: not sent again, since a run that goes on in a new one between the two does not know the
+ * id, and the new run would take the event as a new one when it waits for it.
  */
 async function sendEvents(run) {
   const waitsFor = async (name) => {
@@ -270,15 +312,39 @@ async function sendEvents(run) {
       return false; // the workflow has not answered a query yet
     }
   };
-  /** Whether the workflow took the event: not when it refused it, nor when the run it reached closed as it came. */
-  const taken = async (name, a) => {
+  /**
+   * How the workflow met the event, sent by send, or by sendOnce with the id: "taken"; "refused",
+   * when it refused it, or the run it reached closed as it came; or "another", when the id went
+   * with another value before (SentWithAnotherValueError).
+   */
+  const sent = async (name, a, id) => {
     try {
-      await send(env.client, run.id, name, a);
-      return true;
+      if (id === undefined) await send(env.client, run.id, name, a);
+      else await sendOnce(env.client, run.id, name, id, a);
+      return "taken";
     } catch (e) {
-      if (e instanceof WorkflowUpdateFailedError || e instanceof WorkflowNotFoundError) return false;
+      if (e instanceof SentWithAnotherValueError) return "another";
+      if (e instanceof WorkflowUpdateFailedError || e instanceof WorkflowNotFoundError) return "refused";
       throw e;
     }
+  };
+  const runId = async () => (await env.client.workflow.getHandle(run.id).describe()).runId;
+  /**
+   * The event the workflow took once, sent again with its id: `first` is the run it went to, as far
+   * as the runner knows. A run that went on in a new one in between does not know the id, and the
+   * new one does not wait for the event: it refuses it.
+   */
+  const sentAgain = async (name, id, a, first) => {
+    const same = await sent(name, a, id);
+    if (same === "another") throw new Error(`the client told the event ${name}, sent again with the id and the value it was taken by, apart`);
+    let what = "the value";
+    if (same === "taken") {
+      const other = await sent(name, another(a), id);
+      if (other === "taken") throw new Error(`the client took the event ${name}, sent with the id it was taken by and another value, as taken`);
+      if (other === "another") return;
+      what = "another value";
+    }
+    if ((await runId()) === first) throw new Error(`the workflow refused the event ${name} sent again with the id it took it by and ${what}`);
   };
   while (!run.done) {
     const name = run.events?.[run.next];
@@ -293,13 +359,23 @@ async function sendEvents(run) {
       }
       const a = "ok" in ans ? { ok: ans.ok } : { error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
       for (const other of EVENTS.filter((e) => e !== name)) {
-        if (await taken(other, a)) throw new Error(`the workflow took the event ${other} while it waited for ${name}`);
+        if ((await sent(other, a)) === "taken") throw new Error(`the workflow took the event ${other} while it waited for ${name}`);
       }
-      if (!(await taken(name, a))) {
+      const step = run.next - 1;
+      const waits = Object.entries(run.events).filter(([, e]) => e === name).map(([k]) => Number(k));
+      const before = waits.some((k) => k < step);
+      const again = waits.some((k) => k > step);
+      const id = before || !again ? String(step) : undefined;
+      const first = before || again ? undefined : await runId();
+      const got = await sent(name, a, id);
+      if (got === "another") throw new Error(`the client told the event ${name}, sent with the id ${id} of this wait, apart`);
+      if (got === "refused") {
         // not taken: the workflow still waits for it, and nothing else has come
         run.next--;
         run.steps.pop();
+        continue;
       }
+      if (first !== undefined) await sentAgain(name, id, a, first);
       continue;
     }
     await new Promise((ok) => setTimeout(ok, 20));
@@ -397,7 +473,11 @@ async function answerLater(callbackId, ans) {
   }
   const a = "ok" in ans ? { ok: ans.ok } : { error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
   await answer(env.client, callbackId, a);
-  await mustRefuse(callbackId, a, "a second answer to a callback");
+  // the same answer again, as a caller sends it when the reply to the first was lost: the update
+  // the workflow took, whose outcome the server hands back, with the SHA-256 of the answer it took;
+  // another answer is that update too, which the client tells apart
+  await answer(env.client, callbackId, a);
+  await mustTellApart(callbackId, another(a));
   if (!refusalsChecked) {
     refusalsChecked = true;
     const [workflowId] = JSON.parse(callbackId);
@@ -405,8 +485,13 @@ async function answerLater(callbackId, ans) {
   }
 }
 
-// a second answer to a callback, and an answer to one the workflow never waits for, must be refused
+// an answer to a callback the workflow never waits for must be refused
 let refusalsChecked = false;
+
+/** An answer other than `a`: an error, or the same error with another message. */
+function another(a) {
+  return { error: "error" in a ? a.error : "Dandori.Test.Failure", message: "another" };
+}
 
 async function mustRefuse(callbackId, a, why) {
   try {
@@ -416,6 +501,17 @@ async function mustRefuse(callbackId, a, why) {
     throw e;
   }
   throw new Error(`the workflow took ${why}`);
+}
+
+/** Another answer to a callback the workflow took an answer of: the update it took, which the client tells apart from it. */
+async function mustTellApart(callbackId, a) {
+  try {
+    await answer(env.client, callbackId, a);
+  } catch (e) {
+    if (e instanceof SentWithAnotherValueError) return;
+    throw e;
+  }
+  throw new Error(`the client took another answer to the callback ${callbackId}, which the workflow took an answer of, as taken`);
 }
 
 // the stand-in transport writes every call down with the answer it takes; a call it times out gets none

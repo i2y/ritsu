@@ -572,6 +572,9 @@ func {{.Alias}}Flow() harness.Flow {
 		Send: func(ctx context.Context, c client.Client, workflowID, event string, a harness.CallbackAnswer) error {
 			return {{.Alias}}.Send(ctx, c, workflowID, event, {{.Alias}}.CallbackAnswer(a))
 		},
+		SendOnce: func(ctx context.Context, c client.Client, workflowID, event, id string, a harness.CallbackAnswer) error {
+			return {{.Alias}}.SendOnce(ctx, c, workflowID, event, id, {{.Alias}}.CallbackAnswer(a))
+		},
 		Status: func(ctx context.Context, c client.Client, id string) (harness.Where, error) {
 			w, err := {{.Alias}}.RunStatus(ctx, c, id)
 			return harness.Where(w), err

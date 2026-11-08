@@ -5,11 +5,16 @@
 // must run on B's. The workflow is tests/versions/approvals.flow: each round waits for an
 // approval (a callback) and then notifies, with a text that differs between A's code and B's.
 // Its second round starts in a new run, since the copies here count every history as long.
+// Once the run on A has ended, its answers go again, as a caller sends one when the reply to the
+// first was lost: the last answer (the server hands back the outcome of the update the last run
+// took), another answer to that callback, and the answer its first run took before it went on in
+// a new one.
 //
 //   node tools/temporal/versions.mjs <generated dir A> <generated dir B> <results.json>
 //
 // results.json: { "buildIds": [A's, B's], "notified": { "<run>": [the texts it notified] },
-//                 "runs": { "<run>": how many runs it took } }
+//                 "runs": { "<run>": how many runs it took },
+//                 "resent": { "same" | "another" | "earlier": "taken", or the error } }
 
 import fs from "node:fs";
 import path from "node:path";
@@ -137,6 +142,19 @@ try {
       await b.client.answer(env.client, callbacks.get("run-b")[1], { ok: { 承認者: "b" } });
       await Promise.all([first.result(), second.result()]);
       out.runs = { "run-a": await runsOf("run-a", first.firstExecutionRunId), "run-b": await runsOf("run-b", second.firstExecutionRunId) };
+      // the answers of the run on A, which has ended, sent again: what the server answers is the result
+      const resend = async (callbackId, answer) => {
+        try {
+          await a.client.answer(env.client, callbackId, answer);
+          return "taken";
+        } catch (e) {
+          return `${e.constructor.name}: ${e.message}`;
+        }
+      };
+      out.resent = {};
+      out.resent.same = await resend(callbacks.get("run-a")[1], { ok: { 承認者: "a" } });
+      out.resent.another = await resend(callbacks.get("run-a")[1], { ok: { 承認者: "x" } });
+      out.resent.earlier = await resend(callbacks.get("run-a")[0], { ok: { 承認者: "a" } });
     });
   });
   out.notified = Object.fromEntries(notified);

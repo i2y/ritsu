@@ -807,7 +807,8 @@ func (r *ddRun) report(read func() map[string]any) {
 // listenForAnswers takes the answers of callbacks as they come: by the update dandori.answer, which
 // tells the one who answers whether the workflow took it (it refuses an answer for a callback it
 // does not wait for, an id it never handed on or one it gave up on, and a second answer), and by
-// the signal dandori.callback, whose answers for callbacks it does not wait for it drops.
+// the signal dandori.callback, whose answers for callbacks it does not wait for it drops. The update
+// hands back the SHA-256 of the answer it took (ddTook), which AnswerCallback compares with its own.
 func (r *ddRun) listenForAnswers(ctx workflow.Context) {
 	signals := workflow.GetSignalChannel(ctx, "dandori.callback")
 	workflow.Go(ctx, func(ctx workflow.Context) {
@@ -821,10 +822,14 @@ func (r *ddRun) listenForAnswers(ctx workflow.Context) {
 			}
 		}
 	})
-	_ = workflow.SetUpdateHandlerWithOptions(ctx, "dandori.answer", func(ctx workflow.Context, a map[string]any) error {
+	_ = workflow.SetUpdateHandlerWithOptions(ctx, "dandori.answer", func(ctx workflow.Context, a map[string]any) (map[string]any, error) {
+		took, err := ddTook(a)
+		if err != nil {
+			return nil, err
+		}
 		id, _ := a["callback_id"].(string)
 		r.answers[id] = a
-		return nil
+		return took, nil
 	}, workflow.UpdateHandlerOptions{Validator: func(ctx workflow.Context, a map[string]any) error {
 		id, _ := a["callback_id"].(string)
 		if !r.waiting[id] {
@@ -871,12 +876,17 @@ func ddCame(a map[string]any) (any, error) {
 
 // listenForEvents takes the events the workflow waits for as they come, by the update
 // dandori.event (client.go: Send). It refuses an event it does not wait for now, and a second one:
-// the one who sends it learns so, and can send it again when it waits.
+// the one who sends it learns so, and can send it again when it waits. It hands back the SHA-256 of
+// the value it took (ddTook), which SendOnce compares with its own.
 func (r *ddRun) listenForEvents(ctx workflow.Context) {
-	_ = workflow.SetUpdateHandlerWithOptions(ctx, "dandori.event", func(ctx workflow.Context, a map[string]any) error {
+	_ = workflow.SetUpdateHandlerWithOptions(ctx, "dandori.event", func(ctx workflow.Context, a map[string]any) (map[string]any, error) {
+		took, err := ddTook(a)
+		if err != nil {
+			return nil, err
+		}
 		name, _ := a["event"].(string)
 		r.events[name] = a
-		return nil
+		return took, nil
 	}, workflow.UpdateHandlerOptions{Validator: func(ctx workflow.Context, a map[string]any) error {
 		name, _ := a["event"].(string)
 		if !r.awaited[name] {
@@ -2847,7 +2857,7 @@ fn plain_client_file(m: &Model, pkg: &str, header: &str) -> String {
     let ty = crate::temporal::workflow_type(m);
     let mut c = header.to_string();
     c.push_str(&format!("// Starting {} v{}, answering its callbacks, sending it events, and asking where it is.\n\npackage {pkg}\n\n", m.name, m.version));
-    c.push_str("import (\n\t\"context\"\n\t\"encoding/json\"\n\t\"fmt\"\n\n\tenumspb \"go.temporal.io/api/enums/v1\"\n\thistorypb \"go.temporal.io/api/history/v1\"\n\t\"go.temporal.io/api/workflowservice/v1\"\n\t\"go.temporal.io/sdk/client\"\n)\n\n");
+    c.push_str("import (\n\t\"context\"\n\t\"crypto/sha256\"\n\t\"encoding/hex\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"sort\"\n\t\"strings\"\n\n\tenumspb \"go.temporal.io/api/enums/v1\"\n\thistorypb \"go.temporal.io/api/history/v1\"\n\t\"go.temporal.io/api/workflowservice/v1\"\n\t\"go.temporal.io/sdk/client\"\n)\n\n");
     c.push_str(&format!("// WorkflowType is the workflow's type. The .flow's version is in it, so that a new version is a new workflow.\nconst WorkflowType = {}\n\n", q(&ty)));
     c.push_str("// TaskQueue is the task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nconst TaskQueue = WorkflowType\n\n");
     let events: Vec<String> = m.tasks.iter().filter(|t| t.event).map(|t| q(&t.name)).collect();
@@ -2856,24 +2866,252 @@ fn plain_client_file(m: &Model, pkg: &str, header: &str) -> String {
     c.push_str("func Start(ctx context.Context, c client.Client, id string, input any, searchAttributes bool) (client.WorkflowRun, error) {\n\to := client.StartWorkflowOptions{ID: id, TaskQueue: TaskQueue, WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE, WorkflowExecutionErrorWhenAlreadyStarted: true}\n\tif searchAttributes {\n\t\to.Memo = map[string]any{\"dandori.cases\": true}\n\t}\n\treturn c.ExecuteWorkflow(ctx, o, WorkflowType, input)\n}\n\n");
     c.push_str("// CallbackAnswer is a callback's answer, or an event's value: OK, or the error Error names, with Message.\ntype CallbackAnswer struct {\n\tOK      any\n\tError   string\n\tMessage string\n}\n\n");
     c.push_str("func (a CallbackAnswer) fields() map[string]any {\n\tif a.Error != \"\" {\n\t\treturn map[string]any{\"error\": a.Error, \"message\": a.Message}\n\t}\n\treturn map[string]any{\"ok\": a.OK}\n}\n\n");
-    c.push_str("// AnswerCallback answers a callback, by the id its task handed on. The workflow says whether it took the\n// answer: it refuses one for a callback it does not wait for, and a second one.\nfunc AnswerCallback(ctx context.Context, c client.Client, callbackID string, a CallbackAnswer) error {\n\tvar id []any\n\tif err := json.Unmarshal([]byte(callbackID), &id); err != nil || len(id) != 2 {\n\t\treturn fmt.Errorf(\"%q is not the id of a callback\", callbackID)\n\t}\n\tworkflowID, _ := id[0].(string)\n\targs := a.fields()\n\targs[\"callback_id\"] = callbackID\n\th, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: \"dandori.answer\", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn h.Get(ctx, nil)\n}\n\n");
-    c.push_str("// Send sends the workflow an event, by its id and the event's name. The workflow refuses an event\n// it does not wait for now, and a second one: send it again when it waits for it (RunStatus: Events).\nfunc Send(ctx context.Context, c client.Client, workflowID, event string, a CallbackAnswer) error {\n\tif !ddHas(Events, event) {\n\t\treturn fmt.Errorf(\"the workflow has no event %s\", event)\n\t}\n\targs := a.fields()\n\targs[\"event\"] = event\n\th, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: \"dandori.event\", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn h.Get(ctx, nil)\n}\n\n");
+    c.push_str(r#"// AnswerCallback answers a callback, by the id its task handed on. The workflow says whether it took the
+// answer: it refuses one for a callback it does not wait for, or that has its answer already. The
+// update's id is made from the callback's id alone, so the answers to a callback are one update: the
+// same answer sent again (when the reply to the first was lost on the way) gets the outcome of the
+// first from the server, after the run has ended too, and another answer fails with a
+// SentWithAnotherValueError, as the outcome has the SHA-256 of the answer the workflow took. A run
+// that went on in a new one (Continue-As-New) hands no update ids on: an answer it took, sent again
+// after that, is refused, and once the workflow has ended fails with *serviceerror.NotFound
+// ("workflow execution already completed"); RunStatus tells where the workflow is.
+func AnswerCallback(ctx context.Context, c client.Client, callbackID string, a CallbackAnswer) error {
+	var id []any
+	if err := json.Unmarshal([]byte(callbackID), &id); err != nil || len(id) != 2 {
+		return fmt.Errorf("%q is not the id of a callback", callbackID)
+	}
+	workflowID, _ := id[0].(string)
+	args := a.fields()
+	args["callback_id"] = callbackID
+	h, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{UpdateID: ddUpdateID("dandori.answer", callbackID), WorkflowID: workflowID, UpdateName: "dandori.answer", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})
+	if err != nil {
+		return err
+	}
+	return ddSameValue(ctx, h, args)
+}
+
+"#);
+    c.push_str(r#"// Send sends the workflow an event, by its id and the event's name. The workflow refuses an event
+// it does not wait for now, and a second one: send it again when it waits for it (RunStatus: Events).
+// Each call is an update of its own; to send again an event whose reply may have been lost, use
+// SendOnce.
+func Send(ctx context.Context, c client.Client, workflowID, event string, a CallbackAnswer) error {
+	if !ddHas(Events, event) {
+		return fmt.Errorf("the workflow has no event %s", event)
+	}
+	args := a.fields()
+	args["event"] = event
+	h, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{WorkflowID: workflowID, UpdateName: "dandori.event", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})
+	if err != nil {
+		return err
+	}
+	return h.Get(ctx, nil)
+}
+
+"#);
+    c.push_str(r#"// SendOnce sends the workflow an event as Send does, with an id you give the send. The update's id is
+// made from the event's name and the id alone, so the sends with them are one update: the same value
+// sent again (when the reply to the first send was lost on the way) gets the outcome of the first from
+// the server, after the run has ended too, and another value fails with a SentWithAnotherValueError,
+// as the outcome has the SHA-256 of the value the workflow took, even when the workflow waits for the
+// event again. So a workflow that waits for the event more than once (in a loop) needs an id for each
+// wait. A run that went on in a new one (Continue-As-New) hands no update ids on: a send again that
+// reaches the new run is a new update there, which it takes when it waits for the event, and once the
+// workflow has ended fails with *serviceerror.NotFound ("workflow execution already completed");
+// RunStatus tells where the workflow is. Even when the history is encrypted, the update's id stays in
+// it as it is, and its hash gives away an id that can be guessed: keep out of the id what must stay
+// secret, such as a decision or a person's name.
+func SendOnce(ctx context.Context, c client.Client, workflowID, event, id string, a CallbackAnswer) error {
+	if !ddHas(Events, event) {
+		return fmt.Errorf("the workflow has no event %s", event)
+	}
+	args := a.fields()
+	args["event"] = event
+	h, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{UpdateID: ddUpdateID("dandori.event", event, id), WorkflowID: workflowID, UpdateName: "dandori.event", Args: []any{args}, WaitForStage: client.WorkflowUpdateStageCompleted})
+	if err != nil {
+		return err
+	}
+	return ddSameValue(ctx, h, args)
+}
+
+"#);
     c.push_str("// Where is where a run is: the line of the call or the wait it is at, each case's state (nil before\n// it starts), and the events it waits for now.\ntype Where struct {\n\tAt     *int           `json:\"at\"`\n\tCases  map[string]any `json:\"cases\"`\n\tEvents []string       `json:\"events\"`\n}\n\n");
     c.push_str("// RunStatus is where the run id is (the query dandori.status).\nfunc RunStatus(ctx context.Context, c client.Client, id string) (Where, error) {\n\tvar w Where\n\tv, err := c.QueryWorkflow(ctx, id, \"\", \"dandori.status\")\n\tif err != nil {\n\t\treturn w, err\n\t}\n\treturn w, v.Get(&w)\n}\n\n");
     c.push_str("// RunHistory is the history of a run.\ntype RunHistory struct {\n\tWorkflowID string\n\tHistory    *historypb.History\n}\n\n");
     c.push_str("// Histories are the histories of the runs of this workflow that query finds, by default (\"\") the\n// ones going on: replay them with new code (worker.go: Replay) before it takes them over.\nfunc Histories(ctx context.Context, c client.Client, query string) ([]RunHistory, error) {\n\tif query == \"\" {\n\t\tquery = fmt.Sprintf(\"WorkflowType = '%s' AND ExecutionStatus = 'Running'\", WorkflowType)\n\t}\n\tvar out []RunHistory\n\tvar token []byte\n\tfor {\n\t\tlisted, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query, NextPageToken: token})\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, e := range listed.Executions {\n\t\t\th := &historypb.History{}\n\t\t\tevents := c.GetWorkflowHistory(ctx, e.Execution.WorkflowId, e.Execution.RunId, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)\n\t\t\tfor events.HasNext() {\n\t\t\t\tev, err := events.Next()\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn nil, err\n\t\t\t\t}\n\t\t\t\th.Events = append(h.Events, ev)\n\t\t\t}\n\t\t\tout = append(out, RunHistory{WorkflowID: e.Execution.WorkflowId, History: h})\n\t\t}\n\t\ttoken = listed.NextPageToken\n\t\tif len(token) == 0 {\n\t\t\treturn out, nil\n\t\t}\n\t}\n}\n");
+    c.push_str(UPDATE_ID_GO);
     if let Some(s) = &m.service {
         c.push_str(&service_client_go(m, s).0);
     }
     c
 }
 
+/// The id of the update that answers a callback or sends an event, made from the callback's id, or
+/// from the event's name and the id the caller gives, and not from what it sends; and the SHA-256 of
+/// the value, which the workflow's update hands back (ddTook) and the client compares with its own
+/// (DESIGN 25), as client.ts and client.py make and compare them.
+const UPDATE_ID_GO: &str = r#"
+// ddUpdateID is the id of an update that answers a callback or sends an event: kind, a colon, and
+// the first 32 hex digits of the SHA-256 of the parts, with a newline between each two. client.ts and
+// client.py make the same id of the same.
+func ddUpdateID(kind string, parts ...string) string {
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return kind + ":" + hex.EncodeToString(sum[:])[:32]
+}
+
+// SentWithAnotherValueError says that the update's id went with another value before, which the
+// workflow took: the server handed back the outcome of that update, whose SHA-256 of the value
+// (Taken) is not that of this one (Sent).
+type SentWithAnotherValueError struct {
+	UpdateID string
+	Sent     string
+	Taken    string
+}
+
+func (e *SentWithAnotherValueError) Error() string {
+	return fmt.Sprintf("the update %s was sent before with another value, which the workflow took", e.UpdateID)
+}
+
+// ddSameValue reads the outcome of the update h, which sent the answer or the value in sent: it has
+// the SHA-256 of the value the workflow took (ddTook), which must be that of sent, or the error is a
+// SentWithAnotherValueError. An outcome without one is of a run on code from before it, and is taken
+// as it is.
+func ddSameValue(ctx context.Context, h client.WorkflowUpdateHandle, sent map[string]any) error {
+	var took map[string]any
+	if err := h.Get(ctx, &took); err != nil {
+		return err
+	}
+	taken, ok := took["value_sha256"].(string)
+	if !ok {
+		return nil
+	}
+	hash, err := ddValueHash(sent)
+	if err != nil {
+		return err
+	}
+	if hash != taken {
+		return &SentWithAnotherValueError{UpdateID: h.UpdateID(), Sent: hash, Taken: taken}
+	}
+	return nil
+}
+
+// ddTook is what the updates dandori.answer and dandori.event hand back: the SHA-256 of the answer
+// or the value in a, as the workflow reads it (ddValueHash), which AnswerCallback and SendOnce
+// compare with their own.
+func ddTook(a map[string]any) (map[string]any, error) {
+	hash, err := ddValueHash(a)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"value_sha256": hash}, nil
+}
+
+// ddValueHash is the first 32 hex digits of the SHA-256 of a callback's answer or an event's value in
+// a, as the workflow reads it, in canonical JSON: {"ok": value}, or {"error": name, "message": text}
+// ("" when it has none). client.ts and client.py, and the runtimes of their workflows, make the same
+// of the same.
+func ddValueHash(a map[string]any) (string, error) {
+	read := map[string]any{"ok": a["ok"]}
+	if e, ok := a["error"].(string); ok {
+		m, _ := a["message"].(string)
+		read = map[string]any{"error": e, "message": m}
+	}
+	text, err := json.Marshal(read)
+	if err != nil {
+		return "", err
+	}
+	d := json.NewDecoder(strings.NewReader(string(text)))
+	d.UseNumber()
+	var v any
+	if err := d.Decode(&v); err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	ddCanonical(&b, v)
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])[:32], nil
+}
+
+// ddCanonical writes v, a value of JSON, as canonical JSON: each object's keys in order, no spaces,
+// a string's text as it is but for `"`, `\` and the control characters, and a number as JavaScript
+// writes the double nearest to it.
+func ddCanonical(b *strings.Builder, v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		b.WriteString("{")
+		for i, k := range keys {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			ddCanonical(b, k)
+			b.WriteString(":")
+			ddCanonical(b, x[k])
+		}
+		b.WriteString("}")
+	case []any:
+		b.WriteString("[")
+		for i, y := range x {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			ddCanonical(b, y)
+		}
+		b.WriteString("]")
+	case string:
+		b.WriteString(`"`)
+		for _, r := range x {
+			switch {
+			case r == '"' || r == '\\':
+				b.WriteByte('\\')
+				b.WriteRune(r)
+			case r == '\b':
+				b.WriteString(`\b`)
+			case r == '\f':
+				b.WriteString(`\f`)
+			case r == '\n':
+				b.WriteString(`\n`)
+			case r == '\r':
+				b.WriteString(`\r`)
+			case r == '\t':
+				b.WriteString(`\t`)
+			case r < 0x20:
+				fmt.Fprintf(b, `\u%04x`, r)
+			default:
+				b.WriteRune(r)
+			}
+		}
+		b.WriteString(`"`)
+	case json.Number:
+		// JavaScript reads a number as the double nearest to it, and Go writes a float64 as JavaScript
+		// writes a number; one past the doubles goes as JavaScript writes Infinity, as null
+		f, _ := x.Float64()
+		s := "null"
+		if text, err := json.Marshal(f); err == nil {
+			s = string(text)
+		}
+		if s == "-0" {
+			s = "0"
+		}
+		b.WriteString(s)
+	case bool:
+		fmt.Fprint(b, x)
+	default:
+		b.WriteString("null")
+	}
+}
+"#;
+
 /// client.go, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
 /// client's own Start, Send, AnswerCallback or RunStatus. The names are those of client.ts, as Go exports them.
 /// And the names it could not write.
 fn service_client_go(m: &Model, s: &ServiceUse) -> (String, Vec<(String, Name, With)>) {
-    const FUNCTIONS: &[&str] = &["Start", "AnswerCallback", "Send", "RunStatus", "Histories"];
+    const FUNCTIONS: &[&str] = &["Start", "AnswerCallback", "Send", "SendOnce", "RunStatus", "Histories"];
     let mut c = String::new();
     c.push_str(&format!("\n// Service is the service the workflow implements, which `{}` describes. Its methods are the functions below.\nconst Service = {}\n", s.file, q(&s.name)));
     let mut own: Vec<(String, With)> = own_names(m).into_iter().map(|x| (x, With::Own)).collect();
@@ -3103,7 +3341,7 @@ fn doc_file(m: &Model, nd: &Needs, pkg: &str, header: &str, called: &BTreeSet<us
         ritsu_emit::header::one_line(&m.source_file),
         if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }
     )));
-    d.push_str("//\n// Workflow is the workflow (workflow.go), and NewWorker its worker, with the tasks you write\n// (OwnTasks); Start, AnswerCallback, Send and RunStatus are its client (client.go).\n//\n");
+    d.push_str("//\n// Workflow is the workflow (workflow.go), and NewWorker its worker, with the tasks you write\n// (OwnTasks); Start, AnswerCallback, Send, SendOnce and RunStatus are its client (client.go).\n//\n");
     d.push_str(&format!("// It is written against {}; add them to your module with go get.\n", modules.join(", ")));
     if !called.is_empty() {
         d.push_str("// The rules it calls are rulec's Go: see rules.go.\n");

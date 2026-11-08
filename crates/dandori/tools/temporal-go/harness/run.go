@@ -50,10 +50,11 @@ package harness
 // activity busy until the server times it out. A call during which the scenario cancels the
 // workflow asks the server to cancel it, and keeps the activity busy until the server tells it that
 // it is cancelled; a callback's answer that is a cancellation is the request to cancel. An event
-// (a task that says `event`) is sent with the generated client's Send once the query
+// (a task that says `event`) is sent with the generated client's Send or SendOnce once the query
 // dandori.status says the workflow waits for it; an event the scenario times out is not sent, and
 // is written down when the next call comes, or when the run is over. While the workflow waits for
-// one event, another it has must be refused.
+// one event, another it has must be refused. An event the workflow waits for once goes by SendOnce
+// and goes again with the same id (see sendEvents).
 //
 // The server keeps real time, so the copy of the generated code that runs here waits far less (the
 // build patches it as run.py patches its copy): every duration of the workflow's timers (ddSeconds)
@@ -384,8 +385,16 @@ func refused(err error) bool {
 	return errors.As(err, &app)
 }
 
-// mustRefuse sends an answer that the workflow must refuse: a second answer to a callback, and an
-// answer to one the workflow never waits for.
+// another is an answer other than a: an error, or the same error with another message.
+func another(a CallbackAnswer) CallbackAnswer {
+	if a.Error == "" {
+		return CallbackAnswer{Error: errorName("failure"), Message: "another"}
+	}
+	return CallbackAnswer{Error: a.Error, Message: "another"}
+}
+
+// mustRefuse sends an answer that the workflow must refuse: an answer to a callback it never waits
+// for.
 func (r *runner) mustRefuse(ctx context.Context, callbackID string, a CallbackAnswer, why string) error {
 	err := r.flow.Answer(ctx, r.client, callbackID, a)
 	if err == nil {
@@ -395,6 +404,30 @@ func (r *runner) mustRefuse(ctx context.Context, callbackID string, a CallbackAn
 		return nil
 	}
 	return err
+}
+
+// mustTellApart sends another answer to a callback the workflow took an answer of: the update it
+// took, which the client tells apart from it (its SentWithAnotherValueError).
+func (r *runner) mustTellApart(ctx context.Context, callbackID string, a CallbackAnswer) error {
+	err := r.flow.Answer(ctx, r.client, callbackID, a)
+	if err == nil {
+		return fmt.Errorf("the client took another answer to the callback %s, which the workflow took an answer of, as taken", callbackID)
+	}
+	if sentWithAnother(err) {
+		return nil
+	}
+	return err
+}
+
+// sentWithAnother says whether err is the generated client's SentWithAnotherValueError, a type of
+// the generated package: the update's id went with another value before, which the workflow took.
+func sentWithAnother(err error) bool {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if strings.HasSuffix(fmt.Sprintf("%T", e), ".SentWithAnotherValueError") {
+			return true
+		}
+	}
+	return false
 }
 
 // answerLater answers a callback with the generated client's Answer (the update dandori.answer),
@@ -419,7 +452,13 @@ func (r *runner) answerLater(ctx context.Context, callbackID string, ans map[str
 	if err := r.flow.Answer(ctx, r.client, callbackID, a); err != nil {
 		return fmt.Errorf("answering the callback %s: %w", callbackID, err)
 	}
-	if err := r.mustRefuse(ctx, callbackID, a, "a second answer to a callback"); err != nil {
+	// the same answer again, as a caller sends it when the reply to the first was lost: the update
+	// the workflow took, whose outcome the server hands back, with the SHA-256 of the answer it
+	// took; another answer is that update too, which the client tells apart
+	if err := r.flow.Answer(ctx, r.client, callbackID, a); err != nil {
+		return fmt.Errorf("answering the callback %s again with the same answer: %w", callbackID, err)
+	}
+	if err := r.mustTellApart(ctx, callbackID, another(a)); err != nil {
 		return err
 	}
 	r.mu.Lock()
@@ -622,6 +661,15 @@ func serve(flow Flow, sp spec, s Settings, stepsFile, address string) error {
 // be refused, since the workflow does not wait for it. The query may tell of a wait that is just
 // over, or of a run that is closing to go on in a new one (Continue-As-New): an event that the
 // workflow refuses so, or that finds the run closed, is sent again when it waits.
+//
+// An event the workflow waits for once goes by SendOnce, with the step's number as its id, and
+// goes again as a caller sends it when the reply to the first was lost: with the same id and value
+// it is the update the workflow took, and the server hands back its outcome, which has the SHA-256
+// of the value the workflow took; with the same id and another value it is that update too, which
+// the client tells apart (SentWithAnotherValueError). An event it waits for again (a loop) goes by
+// Send at its first wait and by SendOnce, with each wait's own id, at the later ones: not sent
+// again, since a run that goes on in a new one between the two does not know the id, and the new
+// run would take the event as a new one when it waits for it.
 func (r *runner) sendEvents(ctx context.Context, run *runState) error {
 	waitsFor := func(name string) bool {
 		where, err := r.flow.Status(ctx, r.client, run.id)
@@ -630,19 +678,69 @@ func (r *runner) sendEvents(ctx context.Context, run *runState) error {
 		}
 		return slices.Contains(where.Events, name)
 	}
-	// taken says whether the workflow took the event: not when it refused it, nor when the run it
-	// reached closed as it came
-	taken := func(name string, a CallbackAnswer) (bool, error) {
-		err := r.flow.Send(ctx, r.client, run.id, name, a)
+	// sent says how the workflow met the event, sent by Send, or by SendOnce with the id when there
+	// is one: "taken"; "refused", when it refused it, or the run it reached closed as it came; or
+	// "another", when the id went with another value before (SentWithAnotherValueError)
+	sent := func(name string, a CallbackAnswer, id string) (string, error) {
+		var err error
+		if id == "" {
+			err = r.flow.Send(ctx, r.client, run.id, name, a)
+		} else {
+			err = r.flow.SendOnce(ctx, r.client, run.id, name, id, a)
+		}
 		if err == nil {
-			return true, nil
+			return "taken", nil
+		}
+		if sentWithAnother(err) {
+			return "another", nil
 		}
 		var timedOut *client.WorkflowUpdateServiceTimeoutOrCanceledError
 		var notFound *serviceerror.NotFound
 		if refused(err) || errors.As(err, &timedOut) || errors.As(err, &notFound) {
-			return false, nil
+			return "refused", nil
 		}
-		return false, fmt.Errorf("sending the event %s to %s: %w", name, run.id, err)
+		return "", fmt.Errorf("sending the event %s to %s: %w", name, run.id, err)
+	}
+	runID := func() (string, error) {
+		d, err := r.client.DescribeWorkflowExecution(ctx, run.id, "")
+		if err != nil {
+			return "", err
+		}
+		return d.WorkflowExecutionInfo.Execution.RunId, nil
+	}
+	// sentAgain sends again, with its id, the event the workflow took once: first is the run it went
+	// to, as far as the runner knows. A run that went on in a new one in between does not know the
+	// id, and the new one does not wait for the event: it refuses it.
+	sentAgain := func(name, id string, a CallbackAnswer, first string) error {
+		same, err := sent(name, a, id)
+		if err != nil {
+			return err
+		}
+		if same == "another" {
+			return fmt.Errorf("the client told the event %s, sent again with the id and the value it was taken by, apart", name)
+		}
+		what := "the value"
+		if same == "taken" {
+			other, err := sent(name, another(a), id)
+			if err != nil {
+				return err
+			}
+			if other == "taken" {
+				return fmt.Errorf("the client took the event %s, sent with the id it was taken by and another value, as taken", name)
+			}
+			if other == "another" {
+				return nil
+			}
+			what = "another value"
+		}
+		now, err := runID()
+		if err != nil {
+			return err
+		}
+		if now == first {
+			return fmt.Errorf("the workflow refused the event %s sent again with the id it took it by and %s", name, what)
+		}
+		return nil
 	}
 	for {
 		r.mu.Lock()
@@ -673,24 +771,54 @@ func (r *runner) sendEvents(ctx context.Context, run *runState) error {
 				if other == name {
 					continue
 				}
-				took, err := taken(other, a)
+				got, err := sent(other, a, "")
 				if err != nil {
 					return err
 				}
-				if took {
+				if got == "taken" {
 					return fmt.Errorf("the workflow took the event %s while it waited for %s", other, name)
 				}
 			}
-			took, err := taken(name, a)
+			r.mu.Lock()
+			step := run.next - 1
+			before, again := false, false
+			for k, e := range run.events {
+				if n, err := strconv.Atoi(k); err == nil && e == name {
+					before = before || n < step
+					again = again || n > step
+				}
+			}
+			r.mu.Unlock()
+			id, first := "", ""
+			if before || !again {
+				id = strconv.Itoa(step)
+			}
+			if !before && !again {
+				f, err := runID()
+				if err != nil {
+					return err
+				}
+				first = f
+			}
+			got, err := sent(name, a, id)
 			if err != nil {
 				return err
 			}
-			if !took {
+			if got == "another" {
+				return fmt.Errorf("the client told the event %s, sent with the id %s of this wait, apart", name, id)
+			}
+			if got == "refused" {
 				// not taken: the workflow still waits for it, and nothing else has come
 				r.mu.Lock()
 				run.next--
 				run.steps = run.steps[:len(run.steps)-1]
 				r.mu.Unlock()
+				continue
+			}
+			if first != "" {
+				if err := sentAgain(name, id, a, first); err != nil {
+					return err
+				}
 			}
 			continue
 		}

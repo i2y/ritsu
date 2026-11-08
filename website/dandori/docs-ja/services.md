@@ -94,7 +94,7 @@ use proto shop from "../specs/fulfillment.proto"
 
 - `SERVICE`（Go では `Service`）：サービスの完全な名前
 - メッセージごとの型。名前は `.proto` のメッセージの名前で、`FulfillRequest` はワークフローの入力、`FulfillResponse` は出力、イベントとコールバックのリクエストはそのタスクの結果の型です。
-- メソッドごとの関数。名前はメソッドの名前から作り（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）、中で `start`・`send`・`answer`・`status` を呼びます。クライアントにもともとある関数と同じになるメソッド（`Start` なら `start`）には、関数を足しません。
+- メソッドごとの関数。名前はメソッドの名前から作り（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）、中で `start`・`send`・`answer`・`status` を呼びます。クライアントにもともとある関数と同じになるメソッド（`Start` なら `start`）には、関数を足しません。イベントのメソッドは `send` で送るので、呼ぶたびに別の Update になります。送り直しを同じ Update にするなら、`id` を付けて `sendOnce` を呼んでください（[送り直し](platforms.md#送り直し)）。
 
 ## ほかのプラットフォームでは
 

@@ -1,0 +1,22 @@
+workflow client_send_once v1 implements svc.Svc
+description "A method named as the function of the client that sends an event once, the same again too."
+
+use proto svc from "protos/client_send_once.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task wait() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = wait()
+    on timeout => fail Late "no word"
+  succeed id = "{id} {s.note}"

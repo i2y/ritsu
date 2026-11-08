@@ -1,6 +1,6 @@
 workflow pay v1
   history encrypted
-description "A payout whose history is encrypted: tests/secrets.rs runs it on Temporal with a codec, and reads the history the server keeps"
+description "A payout whose history is encrypted, approved by a callback first: tests/secrets.rs runs it on Temporal with a codec, answers the callback again as a caller that lost the reply would, and reads the history the server keeps"
 
 record Account
   id     : string
@@ -10,12 +10,19 @@ inputs
   account : Account
 
 outputs
-  receipt : string
+  receipt     : string
+  approved_by : string
+
+# Someone approves the payout, and answers by the id of the callback the task hands on.
+task approve(account: Account) -> string
+  callback
+  timeout 1 hour
 
 task pay(account: Account) -> string
   errors refused
 
 flow
+  let approver = approve(account: account)
   let receipt = pay(account: account)
     on refused => fail Refused "the bank refused to pay {account.number}"
-  succeed receipt = receipt
+  succeed receipt = receipt, approved_by = approver

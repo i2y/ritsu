@@ -1,0 +1,22 @@
+workflow クライアントのSendOnce v1 implements svc.Svc
+description "イベントを送り直しても一度だけ届けるクライアントの関数と同じメソッドです。"
+
+use proto svc from "protos/クライアントのSendOnce.proto"
+
+record Sent
+  note : string
+
+inputs
+  id : string
+
+outputs
+  id : string
+
+task 待つ() -> Sent
+  event
+  timeout 1 day
+
+flow
+  let s = 待つ()
+    on timeout => fail Late "知らせがありません"
+  succeed id = "{id} {s.note}"

@@ -1477,7 +1477,12 @@ fn neutral(text: &str) -> String {
 /// deployment. A run that starts on A and waits for its approval while B becomes the current
 /// version ends on A's code, and so does its second round, which starts in a new run
 /// (Continue-As-New); a run that starts after runs on B's. The build id is a hash of the code:
-/// the same for the same code, and another for B. In TypeScript, in Python and in Go.
+/// the same for the same code, and another for B. Once the run on A has ended, the answers it took
+/// go again, as a caller sends one when the reply to the first was lost: the last is taken (the
+/// server hands back the outcome of the update the last run took), another answer to that callback
+/// is that update too, which the client tells apart from the answer it took (the outcome has the
+/// SHA-256 of that answer), and the answer the first run took is refused, as it reaches the last run
+/// (Continue-As-New hands no update id on to the new run). In TypeScript, in Python and in Go.
 #[test]
 fn temporal_worker_versioning_keeps_a_run_on_its_build() {
     if !need(Need::Temporal) {
@@ -1539,7 +1544,14 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         if lang == "Go" {
             assert_eq!(got["buildIds"], json!([built[0].1, built[1].1]), "Go: the runner's builds have other build ids than dandori wrote: {}", got["buildIds"]);
         }
+        let resent = &got["resent"];
+        assert_eq!(resent["same"], json!("taken"), "{lang}: the last answer of a run that has ended, sent again, was not taken: {resent}");
+        let another = resent["another"].as_str().unwrap_or_default();
+        assert!(another.contains("was sent before with another value"), "{lang}: another answer to the last callback of a run that has ended was not told apart from the answer it took: {resent}");
+        let earlier = resent["earlier"].as_str().unwrap_or_default();
+        assert!(earlier.contains("workflow execution already completed"), "{lang}: the answer the first run took, sent after the run ended, was not refused as an answer to an ended run: {resent}");
         eprintln!("{lang}: a run pinned to build {} ended on it, in the run it went on in too, after {} became the current version", built[0].1, built[1].1);
+        eprintln!("{lang}: sent again after the end: the last answer: {}; another answer: {}; the first run's answer: {}", resent["same"], resent["another"], resent["earlier"]);
     }
 }
 
@@ -3143,6 +3155,210 @@ fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_go_and_jsonat
     let readers = if in_go.is_some() { 4 } else { 3 };
     assert!(wrong.is_empty(), "{} of {} reading(s) differ:\n{}", wrong.len(), cases.len() * readers, wrong.iter().take(12).cloned().collect::<Vec<_>>().join("\n"));
     eprintln!("{} answer(s) of {} rule(s) were read alike by the reference, TypeScript, Python{} and JSONata", cases.len(), rules.len(), if in_go.is_some() { ", Go" } else { "" });
+}
+
+/// The id of the update that answers a callback or sends an event once, and the SHA-256 of the
+/// value it sends, are the same in the clients dandori writes for TypeScript, Python and Go (DESIGN
+/// 25). The id is `dandori.answer:` and the first 32 hex digits of the SHA-256 of the callback's id,
+/// or `dandori.event:` and those of the event's name, a newline and its id; the value's are those of
+/// the answer as the workflow reads it, in canonical JSON, which the workflow's update hands back and
+/// the client compares with its own. The runners' `--update-ids` hand each client a client that
+/// writes the id down and hands back an outcome whose SHA-256 is none, so that the client names its
+/// own as it fails. The answers have strings with every kind of escape, lone surrogates (which go
+/// as U+FFFD, as Go's JSON reads them: in a string, in a key, and in an event's id), keys whose
+/// order by code point is not their order in UTF-16, integers, booleans, null, nesting, an error
+/// with and without its message (the workflow reads them alike), numbers with a fraction or an
+/// exponent, and an integer past 2^53. The reference here makes the same ids of all, and the same
+/// SHA-256 of every value but the numbers, which go as JavaScript writes the double nearest to them
+/// and are compared between the languages (the integer past 2^53 with the SHA-256 of its double as
+/// JavaScript writes it).
+#[test]
+fn an_update_id_is_made_alike_by_the_reference_typescript_python_and_go() {
+    need_node!();
+    let python = temporal_python();
+    if !temporal_available() || python.is_none() {
+        skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing; the ids of the updates are not made");
+        return;
+    }
+    let f = "tests/flows/events.flow";
+    let (_, checked) = check_file(&root().join(f)).unwrap();
+    let m = checked.model.expect("the flow passes check");
+    let dir = scratch("update-ids");
+    let mut packages = Vec::new();
+    for lang in [Sdk::Ts, Sdk::Py] {
+        let d = dir.join(lang.short());
+        for (n, t) in lang.build(&m).unwrap() {
+            let p = d.join(n);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, t).unwrap();
+        }
+        packages.push(d.join(lang.package(&m)));
+    }
+
+    let mut exact = vec![
+        json!({ "ok": null }),
+        json!({ "ok": true }),
+        json!({ "ok": false }),
+        json!({ "ok": 0 }),
+        json!({ "ok": -3 }),
+        json!({ "ok": 9007199254740991i64 }),
+        json!({ "ok": "" }),
+        json!({ "ok": "承認" }),
+        json!({ "ok": "\"\\/\u{8}\u{c}\n\r\t\u{0}\u{1}\u{1f}\u{7f}<>&'\u{2028}\u{2029}é😀" }),
+        json!({ "ok": { "承認者": "a", "b": [1, "2", null, true, { "z": 0, "a": [] }], "A": {}, "": "" } }),
+        json!({ "ok": { "\u{ff61}": 1, "😀": 2, "z": 3, "Z": 4, "é": 5, "a\u{0}": 6, "a": 7 } }),
+        json!({ "ok": [] }),
+        json!({ "ok": [[[]], {}] }),
+        json!({ "error": "却下", "message": "scripted" }),
+        json!({ "error": "却下", "message": "" }),
+        json!({ "error": "却下" }),
+        json!({ "error": "Dandori.Test.Failure", "message": "\n" }),
+    ];
+    // a lone surrogate, which a Rust string cannot hold: each of these characters stands for the
+    // escape beside it, which cases.json has in its place and the reference reads as U+FFFD
+    const LONE: [(char, &str); 5] = [('\u{10fff0}', "\\ud800"), ('\u{10fff1}', "\\udc00"), ('\u{10fff2}', "\\udfff"), ('\u{10fff3}', "\\ude00"), ('\u{10fff4}', "\\ud83d")];
+    /// `text` with each character of LONE as U+FFFD
+    fn lone(text: &str) -> String {
+        text.chars().map(|c| if LONE.iter().any(|(l, _)| *l == c) { '\u{fffd}' } else { c }).collect()
+    }
+    /// `v` with each character of LONE as U+FFFD, in its strings and in its keys
+    fn fffd(v: &Value) -> Value {
+        match v {
+            Value::String(s) => Value::String(lone(s)),
+            Value::Array(a) => Value::Array(a.iter().map(fffd).collect()),
+            Value::Object(o) => Value::Object(o.iter().map(|(k, x)| (lone(k), fffd(x))).collect()),
+            other => other.clone(),
+        }
+    }
+    // lone surrogates: at the end, at the start, the halves of a pair the wrong way round, and in a
+    // key whose order by code point is another once it is U+FFFD
+    exact.push(json!({ "ok": format!("a{}", LONE[0].0) }));
+    exact.push(json!({ "ok": format!("{}b", LONE[1].0) }));
+    exact.push(json!({ "ok": format!("{}{}", LONE[3].0, LONE[4].0) }));
+    exact.push(json!({ "ok": Value::Object([(format!("k{}", LONE[2].0), json!(1)), ("k\u{e000}".to_string(), json!(2))].into_iter().collect()) }));
+    let numbers = vec![
+        json!({ "ok": 1.5 }),
+        json!({ "ok": 0.1 }),
+        json!({ "ok": -2.5e-3 }),
+        json!({ "ok": 123.0 }),
+        json!({ "ok": -0.0 }),
+        json!({ "ok": 1e20 }),
+        json!({ "ok": 1e21 }),
+        json!({ "ok": 1e-6 }),
+        json!({ "ok": 1.5e-7 }),
+        json!({ "ok": 5e-324 }),
+        json!({ "ok": 1.7976931348623157e308 }),
+        json!({ "ok": { "x": [0.30000000000000004, 2.5, 1e100] } }),
+        json!({ "ok": 12345678901234567890u64 }),
+    ];
+    let callback = json!(["承認と配達-1", "2/0/1"]).to_string();
+    let answer = |a: &Value| json!({ "callback": callback, "answer": a });
+    let event = |a: &Value| json!({ "workflow": "承認と配達-1", "event": "承認の知らせ", "id": "0", "answer": a });
+    let mut cases: Vec<Value> = exact.iter().flat_map(|a| [answer(a), event(a)]).collect();
+    // the same answer to another callback, and the same value of another event or with another id
+    cases.push(json!({ "callback": json!(["承認と配達-2", "2/1/1"]).to_string(), "answer": exact[7] }));
+    cases.push(json!({ "workflow": "承認と配達-1", "event": "配達の知らせ", "id": "0", "answer": exact[7] }));
+    cases.push(json!({ "workflow": "承認と配達-1", "event": "承認の知らせ", "id": "承認-1", "answer": exact[7] }));
+    // and a lone surrogate in an event's id
+    cases.push(json!({ "workflow": "承認と配達-1", "event": "承認の知らせ", "id": format!("承認-{}", LONE[0].0), "answer": exact[7] }));
+    let compared = cases.len();
+    cases.extend(numbers.iter().flat_map(|a| [answer(a), event(a)]));
+    let mut text = serde_json::to_string(&cases).unwrap();
+    for (c, escape) in LONE {
+        text = text.replace(c, escape);
+    }
+    std::fs::write(dir.join("cases.json"), text).unwrap();
+
+    /// The answer as the workflow reads it, in canonical JSON: each object's keys in the order of
+    /// their code points, no spaces, a string's text as it is but for `"`, `\` and the control characters.
+    fn canonical(v: &Value) -> String {
+        match v {
+            Value::Object(o) => {
+                let mut keys: Vec<&String> = o.keys().collect();
+                keys.sort();
+                format!("{{{}}}", keys.iter().map(|k| format!("{}:{}", Value::String(k.to_string()), canonical(&o[*k]))).collect::<Vec<_>>().join(","))
+            }
+            Value::Array(a) => format!("[{}]", a.iter().map(canonical).collect::<Vec<_>>().join(",")),
+            Value::Number(n) => {
+                assert!(n.is_i64() || n.is_u64(), "the reference makes no SHA-256 of the number {n}");
+                n.to_string()
+            }
+            other => other.to_string(),
+        }
+    }
+    let sha256 = |text: &str| ritsu_testkit::registry::sha256_hex(text.as_bytes())[..32].to_string();
+    let reference_id = |c: &Value| -> String {
+        let (kind, parts) = match c["callback"].as_str() {
+            Some(cb) => ("dandori.answer", vec![lone(cb)]),
+            None => ("dandori.event", vec![lone(c["event"].as_str().unwrap()), lone(c["id"].as_str().unwrap())]),
+        };
+        format!("{kind}:{}", sha256(&parts.join("\n")))
+    };
+    let reference_sha256 = |c: &Value| -> String {
+        let a = &c["answer"];
+        let read = match a["error"].as_str() {
+            Some(e) => json!({ "error": e, "message": a["message"].as_str().unwrap_or("") }),
+            None => json!({ "ok": a["ok"] }),
+        };
+        sha256(&canonical(&fffd(&read)))
+    };
+
+    let ts = Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--update-ids").arg(&packages[0]).arg(dir.join("cases.json")).arg(dir.join("ts.json")).output().unwrap();
+    assert!(ts.status.success(), "tools/temporal/run.mjs --update-ids failed:\n{}", String::from_utf8_lossy(&ts.stderr));
+    let py = Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--update-ids").arg(&packages[1]).arg(dir.join("cases.json")).arg(dir.join("py.json")).output().unwrap();
+    assert!(py.status.success(), "tools/temporal-python/run.py --update-ids failed:\n{}", String::from_utf8_lossy(&py.stderr));
+    let mut made: Vec<(&str, Vec<Value>)> = Vec::new();
+    for (lang, file) in [("TypeScript", "ts.json"), ("Python", "py.json")] {
+        made.push((lang, serde_json::from_str(&std::fs::read_to_string(dir.join(file)).unwrap()).unwrap()));
+    }
+    if let Some(go) = go_runner() {
+        let out = Command::new(&go.bin).arg("--update-ids").arg(go.key(f)).arg(dir.join("cases.json")).arg(dir.join("go.json")).output().unwrap();
+        assert!(out.status.success(), "the Go runner's --update-ids failed:\n{}", String::from_utf8_lossy(&out.stderr));
+        made.push(("Go", serde_json::from_str(&std::fs::read_to_string(dir.join("go.json")).unwrap()).unwrap()));
+    }
+    let mut wrong = Vec::new();
+    for (i, c) in cases.iter().enumerate() {
+        let id = json!(reference_id(c));
+        let (by, hash) = if i < compared { ("the reference makes", json!(reference_sha256(c))) } else { ("TypeScript makes", made[0].1[i]["sha256"].clone()) };
+        for (lang, results) in &made {
+            let got = results.get(i).cloned().unwrap_or_default();
+            if results.len() != cases.len() || got["id"] != id || got["sha256"] != hash {
+                wrong.push(format!("{c}\n    the reference makes the id {id}; {by} the SHA-256 {hash}\n    {lang} makes {got}"));
+            }
+        }
+        assert!(hash.as_str().is_some_and(|h| h.len() == 32 && h.bytes().all(|b| b.is_ascii_hexdigit())), "not a SHA-256: {hash} of {c}");
+    }
+    assert!(wrong.is_empty(), "{} result(s) differ:\n{}", wrong.len(), wrong.iter().take(12).cloned().collect::<Vec<_>>().join("\n"));
+    let ts = &made[0].1;
+    // the integer past 2^53 goes as JavaScript writes the double nearest to it
+    let big = cases.iter().position(|c| c["answer"] == json!({ "ok": 12345678901234567890u64 })).unwrap();
+    assert_eq!(ts[big]["sha256"], json!(sha256(r#"{"ok":12345678901234567000}"#)), "the integer past 2^53 was not read as the double JavaScript reads it");
+    // the id is made of the callback's id, or of the event's name and its id, whatever the value:
+    // one to the callback, one to the event with the id, one each to the other callback, event and
+    // id, and one to the id with a lone surrogate
+    let ids: std::collections::BTreeSet<String> = ts.iter().map(|r| r["id"].to_string()).collect();
+    assert_eq!(ids.len(), 6, "the ids are not made of the callback's id, or of the event's name and its id, alone: {ids:?}");
+    // a value has one SHA-256 as an answer and as an event, and every value one of its own, but an
+    // error with no message, which the workflow reads as one with an empty message, and -0, which
+    // JSON writes as 0
+    let values: Vec<(&Value, usize)> = exact.iter().enumerate().map(|(k, a)| (a, 2 * k)).chain(numbers.iter().enumerate().map(|(k, a)| (a, compared + 2 * k))).collect();
+    for (a, at) in &values {
+        assert_eq!(ts[*at]["sha256"], ts[at + 1]["sha256"], "the value {a} has another SHA-256 as an event than as an answer");
+    }
+    let hashes: std::collections::BTreeSet<String> = values.iter().map(|(_, at)| ts[*at]["sha256"].to_string()).collect();
+    assert_eq!(hashes.len(), values.len() - 2, "two values that differ have one SHA-256");
+    let (empty, none) = (exact.iter().position(|a| a == &json!({ "error": "却下", "message": "" })).unwrap(), exact.iter().position(|a| a == &json!({ "error": "却下" })).unwrap());
+    assert_eq!(ts[2 * empty]["sha256"], ts[2 * none]["sha256"], "an error with no message has another SHA-256 than one with an empty message");
+    eprintln!(
+        "{} update id(s) and SHA-256s of the answers of callbacks and of events sent once were made alike by {}; the ids of all and the SHA-256s of {} as the reference makes them. {} answers {}, and {} is the SHA-256 of {}",
+        cases.len(),
+        made.iter().map(|(l, _)| *l).collect::<Vec<_>>().join(", "),
+        compared,
+        ts[2 * 7]["id"],
+        cases[2 * 7]["callback"],
+        ts[2 * 7]["sha256"],
+        cases[2 * 7]["answer"]
+    );
 }
 
 /// The Python of tools/pydantic-graph/.venv, where pydantic-graph is.

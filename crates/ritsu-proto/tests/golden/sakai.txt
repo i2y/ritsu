@@ -1132,6 +1132,26 @@ service Svc 7
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/protos/client_send_once.proto
+syntax proto3
+package client_send_once.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "client_send_once", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method SendOnce Sent Ack false false 14
+    option (dandori.v1.event) = {task: "wait"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
 == tests/spellings/protos/client_send_starts.proto
 syntax proto3
 package client_send_starts.v1
@@ -1309,6 +1329,26 @@ service Svc 7
   method RunStatus Order Reply false false 10
     option (dandori.v1.start) = {fails: ["Late"]}
   method Tell Sent Ack false false 14
+    option (dandori.v1.event) = {task: "待つ"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
+== tests/spellings/protos/クライアントのSendOnce.proto
+syntax proto3
+package client_send_once.ja.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "クライアントのSendOnce", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method SendOnce Sent Ack false false 14
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
@@ -1692,6 +1732,26 @@ service Svc 7
     option (dandori.v1.event) = {task: "wait"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
+== tests/spellings/renamed/protos/client_send_once.proto
+syntax proto3
+package client_send_once.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "client_send_once", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method DeliverOnce Sent Ack false false 14
+    option (dandori.v1.event) = {task: "wait"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
 == tests/spellings/renamed/protos/client_send_starts.proto
 syntax proto3
 package client_send_starts.v1
@@ -1789,6 +1849,26 @@ service Svc 7
   method Begin Order Reply false false 10
     option (dandori.v1.start) = {fails: ["Late"]}
   method Tell Sent Ack false false 14
+    option (dandori.v1.event) = {task: "待つ"}
+  method GetStatus StatusRequest dandori.v1.Status false false 18
+    option (dandori.v1.status) = {}
+== tests/spellings/renamed/protos/クライアントのSendOnce.proto
+syntax proto3
+package client_send_once.ja.v1
+import dandori/v1/options.proto 5:1 public=false weak=false
+message Order 23
+  field id 1 None Scalar("string") json=None oneof=None line=24
+message Reply 27
+  field id 1 None Scalar("string") json=None oneof=None line=28
+message Sent 31
+  field note 1 None Scalar("string") json=None oneof=None line=32
+message Ack 35
+message StatusRequest 37
+service Svc 7
+  option (dandori.v1.workflow) = {name: "クライアントのSendOnce", version: 1}
+  method Begin Order Reply false false 10
+    option (dandori.v1.start) = {fails: ["Late"]}
+  method DeliverOnce Sent Ack false false 14
     option (dandori.v1.event) = {task: "待つ"}
   method GetStatus StatusRequest dandori.v1.Status false false 18
     option (dandori.v1.status) = {}
@@ -2171,6 +2251,10 @@ tests/spellings/protos/client_send.proto sees
   Svc.Begin: client_send.v1.Order (tests/spellings/protos/client_send.proto) -> client_send.v1.Reply (tests/spellings/protos/client_send.proto)
   Svc.Send: client_send.v1.Sent (tests/spellings/protos/client_send.proto) -> client_send.v1.Ack (tests/spellings/protos/client_send.proto)
   Svc.GetStatus: client_send.v1.StatusRequest (tests/spellings/protos/client_send.proto) -> known dandori.v1.Status
+tests/spellings/protos/client_send_once.proto sees 
+  Svc.Begin: client_send_once.v1.Order (tests/spellings/protos/client_send_once.proto) -> client_send_once.v1.Reply (tests/spellings/protos/client_send_once.proto)
+  Svc.SendOnce: client_send_once.v1.Sent (tests/spellings/protos/client_send_once.proto) -> client_send_once.v1.Ack (tests/spellings/protos/client_send_once.proto)
+  Svc.GetStatus: client_send_once.v1.StatusRequest (tests/spellings/protos/client_send_once.proto) -> known dandori.v1.Status
 tests/spellings/protos/client_send_starts.proto sees 
   Svc.Send: client_send_starts.v1.Order (tests/spellings/protos/client_send_starts.proto) -> client_send_starts.v1.Reply (tests/spellings/protos/client_send_starts.proto)
   Svc.Tell: client_send_starts.v1.Sent (tests/spellings/protos/client_send_starts.proto) -> client_send_starts.v1.Ack (tests/spellings/protos/client_send_starts.proto)
@@ -2208,6 +2292,10 @@ tests/spellings/protos/クライアントのRunStatusで始める.proto sees
   Svc.RunStatus: client_run_status_starts.ja.v1.Order (tests/spellings/protos/クライアントのRunStatusで始める.proto) -> client_run_status_starts.ja.v1.Reply (tests/spellings/protos/クライアントのRunStatusで始める.proto)
   Svc.Tell: client_run_status_starts.ja.v1.Sent (tests/spellings/protos/クライアントのRunStatusで始める.proto) -> client_run_status_starts.ja.v1.Ack (tests/spellings/protos/クライアントのRunStatusで始める.proto)
   Svc.GetStatus: client_run_status_starts.ja.v1.StatusRequest (tests/spellings/protos/クライアントのRunStatusで始める.proto) -> known dandori.v1.Status
+tests/spellings/protos/クライアントのSendOnce.proto sees 
+  Svc.Begin: client_send_once.ja.v1.Order (tests/spellings/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Reply (tests/spellings/protos/クライアントのSendOnce.proto)
+  Svc.SendOnce: client_send_once.ja.v1.Sent (tests/spellings/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Ack (tests/spellings/protos/クライアントのSendOnce.proto)
+  Svc.GetStatus: client_send_once.ja.v1.StatusRequest (tests/spellings/protos/クライアントのSendOnce.proto) -> known dandori.v1.Status
 tests/spellings/protos/クライアントのStatusと並ぶレコード.proto sees 
   Svc.Begin: client_status_beside.ja.v1.Order (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto) -> client_status_beside.ja.v1.Reply (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto)
   Svc.Tell: client_status_beside.ja.v1.Sent (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto) -> client_status_beside.ja.v1.Ack (tests/spellings/protos/クライアントのStatusと並ぶレコード.proto)
@@ -2285,6 +2373,10 @@ tests/spellings/renamed/protos/client_send.proto sees
   Svc.Begin: client_send.v1.Order (tests/spellings/renamed/protos/client_send.proto) -> client_send.v1.Reply (tests/spellings/renamed/protos/client_send.proto)
   Svc.Deliver: client_send.v1.Sent (tests/spellings/renamed/protos/client_send.proto) -> client_send.v1.Ack (tests/spellings/renamed/protos/client_send.proto)
   Svc.GetStatus: client_send.v1.StatusRequest (tests/spellings/renamed/protos/client_send.proto) -> known dandori.v1.Status
+tests/spellings/renamed/protos/client_send_once.proto sees 
+  Svc.Begin: client_send_once.v1.Order (tests/spellings/renamed/protos/client_send_once.proto) -> client_send_once.v1.Reply (tests/spellings/renamed/protos/client_send_once.proto)
+  Svc.DeliverOnce: client_send_once.v1.Sent (tests/spellings/renamed/protos/client_send_once.proto) -> client_send_once.v1.Ack (tests/spellings/renamed/protos/client_send_once.proto)
+  Svc.GetStatus: client_send_once.v1.StatusRequest (tests/spellings/renamed/protos/client_send_once.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/client_send_starts.proto sees 
   Svc.Begin: client_send_starts.v1.Order (tests/spellings/renamed/protos/client_send_starts.proto) -> client_send_starts.v1.Reply (tests/spellings/renamed/protos/client_send_starts.proto)
   Svc.Tell: client_send_starts.v1.Sent (tests/spellings/renamed/protos/client_send_starts.proto) -> client_send_starts.v1.Ack (tests/spellings/renamed/protos/client_send_starts.proto)
@@ -2305,6 +2397,10 @@ tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto 
   Svc.Begin: client_run_status_starts.ja.v1.Order (tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto) -> client_run_status_starts.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto)
   Svc.Tell: client_run_status_starts.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto) -> client_run_status_starts.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto)
   Svc.GetStatus: client_run_status_starts.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのRunStatusで始める.proto) -> known dandori.v1.Status
+tests/spellings/renamed/protos/クライアントのSendOnce.proto sees 
+  Svc.Begin: client_send_once.ja.v1.Order (tests/spellings/renamed/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのSendOnce.proto)
+  Svc.DeliverOnce: client_send_once.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのSendOnce.proto) -> client_send_once.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのSendOnce.proto)
+  Svc.GetStatus: client_send_once.ja.v1.StatusRequest (tests/spellings/renamed/protos/クライアントのSendOnce.proto) -> known dandori.v1.Status
 tests/spellings/renamed/protos/クライアントのStatusのレコード.proto sees 
   Svc.Begin: client_status_type.ja.v1.Order (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto) -> client_status_type.ja.v1.Reply (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto)
   Svc.Tell: client_status_type.ja.v1.Sent (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto) -> client_status_type.ja.v1.Ack (tests/spellings/renamed/protos/クライアントのStatusのレコード.proto)

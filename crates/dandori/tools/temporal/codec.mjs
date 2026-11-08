@@ -2,14 +2,20 @@
 // Temporal CLI's dev server, through the worker.ts and client.ts dandori generated for it, with a
 // codec that writes every payload as base64 under an encoding of its own. Then it reads the history
 // the server keeps with a client that has no codec, and says what it finds there: the encoding of the
-// workflow's input, whether a value of the input shows in the clear anywhere in the history, and the
-// message of the failure the second run ends with.
+// workflow's input, whether a value of the input shows in the clear anywhere in the history, the
+// message of the failure the second run ends with, and the update that answered the callback: its
+// id, which the history keeps in the clear, and its outcome, the SHA-256 of the answer the workflow
+// took (dandori's DESIGN 25), as the codec wrote it.
 //
 //   node tools/temporal/codec.mjs <generated dir> <results.json>
 //
-// The workflow is tests/encrypted/pay.flow: its one task, `pay`, is the user's, and fails with
-// `refused` for an account whose number starts with 5500. Two runs: one that pays, one that is refused.
+// The workflow is tests/encrypted/pay.flow. Its task `approve` hands on the id of a callback, which
+// this runner answers before the task returns, and then twice more, as a caller sends it when the
+// reply was lost: the same answer, which the workflow took, and another, which the client tells
+// apart (SentWithAnotherValueError). Its task `pay` is the user's, and fails with `refused` for an
+// account whose number starts with 5500. Two runs: one that pays, one that is refused.
 
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,7 +45,9 @@ const codec = {
   async decode(payloads) {
     return payloads.map((p) => {
       if (text(p.metadata?.encoding ?? new Uint8Array()) !== ENCODING) return p;
-      return { metadata: { encoding: p.metadata["dandori-encoding"] }, data: new Uint8Array(Buffer.from(text(p.data), "base64")) };
+      // the worker hands on a payload of no data (the null a task that answers nothing returns) with
+      // an empty array for its data, not bytes
+      return { metadata: { encoding: p.metadata["dandori-encoding"] }, data: new Uint8Array(Buffer.from(Buffer.from(p.data ?? []).toString(), "base64")) };
     });
   },
 };
@@ -67,20 +75,59 @@ const bundlerOptions = {
 };
 
 const { makeWorker } = await import(path.join(work, "worker.ts"));
-const { encryptedClient, start } = await import(path.join(work, "client.ts"));
+const { encryptedClient, start, answer, SentWithAnotherValueError } = await import(path.join(work, "client.ts"));
+
+/** The client with the codec, which the task `approve` answers with. */
+let client;
+/** By the id of each run: the id of its callback, and how the workflow met each answer to it. */
+const answered = {};
+
+/** How the workflow met an answer: "taken", or the error the client gave. */
+async function outcome(callbackId, a) {
+  try {
+    await answer(client, callbackId, a);
+    return "taken";
+  } catch (e) {
+    return e instanceof SentWithAnotherValueError ? "SentWithAnotherValueError" : `${e?.name}: ${e?.message}`;
+  }
+}
 
 const own = {
+  async approve({ callback_id }) {
+    const [workflowId] = JSON.parse(callback_id);
+    const a = { ok: `approver of ${workflowId}` };
+    const first = await outcome(callback_id, a);
+    const again = await outcome(callback_id, a);
+    const another = await outcome(callback_id, { ok: "someone else" });
+    answered[workflowId] = { callbackId: callback_id, answers: { first, again, another } };
+  },
   async pay({ account }) {
     if (account.number.startsWith("5500")) throw ApplicationFailure.create({ type: "refused", message: "the account is closed", nonRetryable: true });
     return `receipt for ${account.id}`;
   },
 };
 
+/** An update's id as the history keeps it, its hex digits named when they are the SHA-256 of the callback's id. */
+function named(updateId, callbackId) {
+  const sha256 = createHash("sha256").update(callbackId ?? "").digest("hex").slice(0, 32);
+  return updateId === `dandori.answer:${sha256}` ? "dandori.answer:<the SHA-256 of the callback's id>" : updateId;
+}
+
+/** Whether the payload, read with the codec, is an outcome that holds the SHA-256 of a value. */
+async function holdsValueSha256(p) {
+  try {
+    const [plain] = await codec.decode([p]);
+    return /^[0-9a-f]{32}$/.test(JSON.parse(text(plain.data))?.value_sha256 ?? "");
+  } catch {
+    return false;
+  }
+}
+
 const env = await TestWorkflowEnvironment.createLocal({ server: { ui: false, log: { format: "pretty", level: "error" } } });
 const results = {};
 try {
   const worker = await makeWorker(own, { codec, connection: env.nativeConnection, bundlerOptions });
-  const client = encryptedClient(env.connection, codec);
+  client = encryptedClient(env.connection, codec);
   const plain = new Client({ connection: env.connection });
   await worker.runUntil(async () => {
     for (const [id, number] of [
@@ -100,12 +147,19 @@ try {
       const started = history.events[0].workflowExecutionStartedEventAttributes;
       const failed = history.events.at(-1).workflowExecutionFailedEventAttributes;
       const kept = JSON.stringify(history, (_, v) => (v instanceof Uint8Array ? text(v) : v));
+      const accepted = history.events.map((e) => e.workflowExecutionUpdateAcceptedEventAttributes).filter(Boolean);
+      const took = history.events.map((e) => e.workflowExecutionUpdateCompletedEventAttributes?.outcome?.success?.payloads?.[0]).find(Boolean);
       results[id] = {
         end,
         input_encoding: text(started.input.payloads[0].metadata.encoding),
         number_in_the_clear: kept.includes(number),
         failure_message: failed?.failure?.message ?? null,
         failure_encoded: Boolean(failed?.failure?.encodedAttributes),
+        answers: answered[id]?.answers ?? null,
+        update_ids: accepted.map((a) => named(a.acceptedRequest?.meta?.updateId ?? "", answered[id]?.callbackId)),
+        update_result_encoding: took ? text(took.metadata.encoding) : null,
+        update_result_in_the_clear: took ? text(took.data).includes("value_sha256") : null,
+        update_result_decodes_to_value_sha256: took ? await holdsValueSha256(took) : null,
       };
     }
   });

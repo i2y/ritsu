@@ -4,13 +4,16 @@ package harness
 // workflow, A and B, whose workers are versions of one deployment through the generated
 // NewWorker. A run that starts on A and waits while B becomes the current version must end on A's
 // code, the rounds it runs in a new run after a Continue-As-New too; a run that starts after must
-// run on B's. The Go twin of ../../temporal-python/versions.py. The build gives both copies the
-// patch "continue": every history is long enough to go on in a new run.
+// run on B's. Once the run on A has ended, its answers go again: the last, another answer to that
+// callback, and the answer its first run took. The Go twin of ../../temporal-python/versions.py.
+// The build gives both copies the patch "continue": every history is long enough to go on in a
+// new run.
 //
 //	<bin> --versions <key A> <key B> <results.json>
 //
 // results.json: { "buildIds": [A's, B's], "notified": { "<run>": [the texts it notified] },
-//                 "runs": { "<run>": how many runs it took } }
+//                 "runs": { "<run>": how many runs it took },
+//                 "resent": { "same" | "another" | "earlier": "taken", or the error } }
 
 import (
 	"context"
@@ -149,8 +152,19 @@ func versions(a, b Flow, outFile string) error {
 	if err != nil {
 		return err
 	}
+	// an answer of the run on A, which has ended, sent again: what the server answers is the result
+	resend := func(callbackID string, ans CallbackAnswer) string {
+		if err := a.Answer(ctx, c, callbackID, ans); err != nil {
+			return fmt.Sprintf("%T: %v", err, err)
+		}
+		return "taken"
+	}
+	resent := map[string]string{}
+	resent["same"] = resend(callback("run-a", 1), CallbackAnswer{OK: map[string]any{"承認者": "a"}})
+	resent["another"] = resend(callback("run-a", 1), CallbackAnswer{OK: map[string]any{"承認者": "x"}})
+	resent["earlier"] = resend(callback("run-a", 0), CallbackAnswer{OK: map[string]any{"承認者": "a"}})
 	mu.Lock()
-	out := map[string]any{"buildIds": []string{a.BuildID, b.BuildID}, "notified": notified, "runs": map[string]int{"run-a": runA, "run-b": runB}}
+	out := map[string]any{"buildIds": []string{a.BuildID, b.BuildID}, "notified": notified, "runs": map[string]int{"run-a": runA, "run-b": runB}, "resent": resent}
 	err = writeJSON(outFile, out, true)
 	mu.Unlock()
 	return err

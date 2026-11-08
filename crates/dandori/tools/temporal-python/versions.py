@@ -2,12 +2,14 @@
 # workflow, A and B, whose workers are versions of one deployment through the generated
 # worker.py. A run that starts on A and waits while B becomes the current version must end on A's
 # code, the rounds it runs in a new run after a Continue-As-New too; a run that starts after must
-# run on B's. The Python twin of ../temporal/versions.mjs.
+# run on B's. Once the run on A has ended, its answers go again: the last, another answer to that
+# callback, and the answer its first run took. The Python twin of ../temporal/versions.mjs.
 #
 #   .venv/bin/python versions.py <generated package A> <generated package B> <results.json>
 #
 # results.json: { "buildIds": [A's, B's], "notified": { "<run>": [the texts it notified] },
-#                 "runs": { "<run>": how many runs it took } }
+#                 "runs": { "<run>": how many runs it took },
+#                 "resent": { "same" | "another" | "earlier": "taken", or the error } }
 
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ from typing import Any, Awaitable, Callable
 from temporalio import activity
 from temporalio.api.workflowservice.v1 import SetWorkerDeploymentCurrentVersionRequest
 from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig, TelemetryFilter
+from temporalio.service import RPCError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
@@ -112,7 +115,23 @@ async def main(packages: list[str], out_file: str) -> None:
                 await client_b.answer(env.client, callbacks["run-b"][1], {"ok": {"承認者": "b"}})
                 await asyncio.gather(first.result(), second.result())
                 runs = {"run-a": await runs_of("run-a", first.first_execution_run_id), "run-b": await runs_of("run-b", second.first_execution_run_id)}
-        out = {"buildIds": [worker_a.BUILD_ID, worker_b.BUILD_ID], "notified": notified, "runs": runs}
+
+                async def resend(callback_id: str, answer: dict[str, Any]) -> str:
+                    """An answer of the run on A, which has ended, sent again: what the server answers is the result."""
+                    try:
+                        await client_a.answer(env.client, callback_id, answer)
+                        return "taken"
+                    except RPCError as e:
+                        return f"RPCError {e.status.name}: {e}"
+                    except Exception as e:  # noqa: BLE001 - the error is the result
+                        return f"{type(e).__name__}: {e}"
+
+                resent = {
+                    "same": await resend(callbacks["run-a"][1], {"ok": {"承認者": "a"}}),
+                    "another": await resend(callbacks["run-a"][1], {"ok": {"承認者": "x"}}),
+                    "earlier": await resend(callbacks["run-a"][0], {"ok": {"承認者": "a"}}),
+                }
+        out = {"buildIds": [worker_a.BUILD_ID, worker_b.BUILD_ID], "notified": notified, "runs": runs, "resent": resent}
     finally:
         await env.shutdown()
     with open(out_file, "w", encoding="utf-8") as f:

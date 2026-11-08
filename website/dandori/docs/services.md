@@ -140,7 +140,9 @@ The methods are what the client already does. The workflow's type is `<name>_v<v
   `FulfillResponse` its output, and the request of an event or a callback is the task's answer;
 - a function for each method, by its name (`fulfill`, `answerPacking`; in Python `answer_packing`; in
   Go `Fulfill`, `AnswerPacking`), which calls `start`, `send`, `answer` or `status`. A method whose
-  function the client has already (`Start` is `start`) adds none.
+  function the client has already (`Start` is `start`) adds none. An event's method sends with
+  `send`, an Update of its own at every call; to make a send again the same Update, call `sendOnce`
+  with an id ([Temporal](platforms.md#temporal-typescript)).
 
 ## On the other platforms
 
