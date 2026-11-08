@@ -239,7 +239,8 @@ same name checks. A claim can wait for an answer that comes later, such as a job
 after it answers, for as long as the claim says. One line on a target holds every answer of a service to
 its OpenAPI document, whatever the claims look at. A claim can call with `put`, `patch` and `delete`, send
 headers, and go on from what a service answers (`keep body json ".id" as id`, then `{id}`), and the records
-stay the same from run to run.
+stay the same from run to run. `in any order { … }` runs a claim's calls in every order, for a handler that
+takes events which can come out of order or twice.
 
 ```geas
 # The human-auditable half. The implementation (calc.py) is agent-written;
