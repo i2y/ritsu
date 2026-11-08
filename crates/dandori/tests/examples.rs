@@ -767,7 +767,13 @@ fn asl_runs_as_the_reference_says() {
 /// images after it ask for an auth token.
 const LOCALSTACK_IMAGE: &str = "localstack/localstack:4.14.0";
 
-fn localstack_ready() -> Result<(), String> {
+/// How much shorter than its limit a try on LocalStack may look. LocalStack starts a try's timer
+/// before it evaluates the Task's arguments and writes TaskScheduled and TaskStarted, and the
+/// history times the try from TaskStarted: on a quiet machine that is a few milliseconds, on a busy
+/// runner of the CI 0.19 s. Half a second, so that a TimeoutSeconds a second off still fails.
+const LOCALSTACK_EARLY: f64 = 0.5;
+
+fn localstack_ready()-> Result<(), String> {
     let out = Command::new("docker").args(["image", "inspect", "--format", "{{.Id}}", LOCALSTACK_IMAGE]).output().map_err(|_| "docker is missing".to_string())?;
     if out.status.success() {
         return Ok(());
@@ -4649,7 +4655,7 @@ fn rule_limits_hold_on_localstack() {
         let late = o.remove("late").and_then(|l| l.as_u64()).unwrap_or(0);
         let took: Vec<f64> = tries.as_array().unwrap().iter().map(|t| t["ended"].as_f64().unwrap() - t["started"].as_f64().unwrap()).collect();
         for t in &took {
-            assert!(*t >= limit - 0.05 && *t < limit + 2.0, "{}: a try on LocalStack timed out {t:.3} s after it started, where the limit is {limit} s", rel(&f));
+            assert!(*t >= limit - LOCALSTACK_EARLY && *t < limit + 2.0, "{}: a try on LocalStack timed out {t:.3} s after it started, where the limit is {limit} s", rel(&f));
         }
         let over = timed(reference, &mut g);
         eprintln!(
@@ -4845,7 +4851,7 @@ fn callback_limits_hold_on_localstack() {
         o.remove("late");
         let took: Vec<f64> = tries.as_array().unwrap().iter().map(|t| t["ended"].as_f64().unwrap() - t["started"].as_f64().unwrap()).collect();
         for t in &took {
-            assert!(*t >= timeout - 0.05 && *t < timeout + 2.0, "{}: a try on LocalStack timed out {t:.3} s after it started, where the task's timeout is {timeout} s", rel(&f));
+            assert!(*t >= timeout - LOCALSTACK_EARLY && *t < timeout + 2.0, "{}: a try on LocalStack timed out {t:.3} s after it started, where the task's timeout is {timeout} s", rel(&f));
         }
         let over = timed(reference, &mut g);
         eprintln!(
