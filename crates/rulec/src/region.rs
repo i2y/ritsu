@@ -4784,24 +4784,26 @@ impl TableRegion {
             }
             Cover::ByUpstream(what, Some(Apart::Spans { input, spans })) => {
                 // A span with no column of its own is the box's own coordinate on the
-                // shared input, and the leaf's own text names which one it is.
-                let pin = |col: &Option<String>, val: &Option<String>| -> Option<(usize, usize)> {
+                // shared input. On an enum the leaf's own text names which one it is; on a
+                // number it is the coordinate whose span it is, which both re-checkers work out
+                // again from the axis (§15.293).
+                let pin = |col: &Option<String>, val: &Option<String>, span: &CertSpan| -> Option<(usize, usize)> {
                     match (col, val) {
                         (Some(c), Some(v)) => idx(c, v),
                         _ => {
                             let ai = self.col_names.iter().position(|n| n == input)?;
-                            let ci = what
-                                .split(", ")
-                                .find_map(|part| part.strip_prefix(&format!("{input} = ")))
-                                .and_then(|v| match &self.axes[ai] {
-                                    Axis::Enum { values } => values.iter().position(|x| x == v),
-                                    _ => None,
-                                })?;
+                            let ci = match &self.axes[ai] {
+                                Axis::Enum { values } => {
+                                    what.split(", ").find_map(|part| part.strip_prefix(&format!("{input} = "))).and_then(|v| values.iter().position(|x| x == v))?
+                                }
+                                Axis::Num { .. } => (0..self.axes[ai].len()).find(|&c| self.coord_closed(ai, c).map(|(a, b)| CertSpan::Num(a, b)).as_ref() == Some(span))?,
+                                _ => return None,
+                            };
                             Some((ai, ci))
                         }
                     }
                 };
-                if let (Some(a), Some(b)) = (pin(&spans[0].0, &spans[0].1), pin(&spans[1].0, &spans[1].1)) {
+                if let (Some(a), Some(b)) = (pin(&spans[0].0, &spans[0].1, &spans[0].2), pin(&spans[1].0, &spans[1].1, &spans[1].2)) {
                     let f = AboveFact::Apart {
                         a,
                         b,

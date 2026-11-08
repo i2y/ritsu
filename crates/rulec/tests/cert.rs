@@ -1112,3 +1112,74 @@ fn a_tampered_line_fails_the_recheck() {
     assert_ne!(f, cert);
     assert_ne!(recheck_rule(&f, rule).0, 0, "a line with no proof passes as shown from definitions");
 }
+
+const PAIR: &str = "rule pair(pair) v1
+
+enum destination(destination) = merge | owner_reads | stop
+
+inputs
+  stale(stale)     : bool
+  errors(errors)   : number  range >=0 <=1000000
+  changes(changes) : number  range >=0 <=1000000
+  dates(dates)     : number  range >=0 <=1000000
+
+outputs
+  route(route)               : destination
+  person_reads(person_reads) : bool
+
+define moved(moved) : number = changes + dates
+
+table routes(routes)
+policy unique
+| stale | errors | moved | -> route : destination |
+| true  | -      | -     | stop                   |
+| false | >=1    | -     | stop                   |
+| false | 0      | >=1   | owner_reads            |
+| false | 0      | 0     | merge                  |
+
+table who_reads(who_reads)
+policy unique
+| moved | route             | -> person_reads : bool |
+| >=1   | owner_reads, stop | true                   |
+| 0     | owner_reads, stop | true                   |
+| 0     | merge             | false                  |
+";
+
+/// The pair rule written where `rulec certificate` can read it.
+fn pair_file(tag: &str) -> String {
+    let p = std::env::temp_dir().join(format!("rulec-pair-{tag}-{}.rule", std::process::id()));
+    std::fs::write(&p, PAIR).unwrap();
+    p.to_string_lossy().into_owned()
+}
+
+/// The fact of `who_reads` that keeps `moved = 1` from `route = merge`, and a narrower one.
+const PAIR_FACT: &str = r#""a":{"axis":0,"coord":0},"b":{"axis":1,"coord":2},"input":"moved","spans":[["0","0"],["1","1"]]"#;
+
+/// A leaf whose box holds a number column at a value the table above never meets with the value it
+/// gives (§15.293): `moved = 1` with `route = merge`, where the routes table sends a change that
+/// moved something away from merge. The fact names the number column's own coordinate, and the
+/// re-check works its span out again from the axis.
+#[test]
+fn 数の列の座標と上の表の値の組も事実になる() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let file = pair_file("cert");
+    let (c, cert) = rulec(&["certificate", &file]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(PAIR_FACT), "証明書の形が変わっています:\n{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "そのままの証明書が通らない:\n{said}");
+    assert!(said.contains("2 impossible for the tables above"), "{said}");
+    let forgeries = [
+        ("事実を消す", cert.replace(PAIR_FACT, "").replace("[,{", "[{")),
+        ("数の座標の範囲を狭く書く", cert.replace(PAIR_FACT, &PAIR_FACT.replace(r#"["1","1"]"#, r#"["2","2"]"#))),
+        ("起こる組を離れていると言う", cert.replace(PAIR_FACT, &PAIR_FACT.replace(r#""coord":2"#, r#""coord":1"#).replace(r#"["1","1"]"#, r#"["0","0"]"#))),
+    ];
+    for (what, forged) in forgeries {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
+}
