@@ -122,6 +122,7 @@ def x2Line (j : Json) : Except String Json := do
     | "relation" => pure (Pre.relation (← readOp (← (← jfield j "op").getStr?)) "left" "right")
     | "sum" => pure Pre.sum
     | "length" => pure Pre.length
+    | "unique" => pure Pre.unique
     | "days" => pure (Pre.days "input" (← ints (← jfield j "days")))
     | _ => throw s!"unknown precondition {kind}"
   let l ← readArg ((jfield j "left").toOption.getD Json.null)

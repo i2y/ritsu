@@ -2003,7 +2003,17 @@ pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
 /// refuses it at the door, and the checker never demanded a row for it. Filtering here is
 /// what keeps the suite and the proof talking about the same set of inputs.
 pub fn allowed(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| constraint_holds(k, &|n| a.get(n))) && f.door_nevers().all(|n| never_clear(n, c, &|m| a.get(m)))
+    f.constraints.iter().all(|k| constraint_holds(k, &|n| a.get(n))) && f.door_nevers().all(|n| never_clear(n, c, &|m| a.get(m))) && distinct(f, a)
+}
+
+/// Whether no sequence has two elements with the same value of a field marked `unique` (§15.290):
+/// the generated code refuses one that does at its door, as it refuses what a `constraint` rules
+/// out.
+pub fn distinct(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
+    f.elements.iter().all(|el| match a.get(&el.name.text) {
+        Some(Val::Seq(xs)) => crate::door::repeated(el, xs).is_none(),
+        _ => true,
+    })
 }
 
 /// Whether these values stay clear of a `never` line (§15.282): not every condition holds, each
@@ -2312,13 +2322,42 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
                 let many = Json::Arr(vec![first.clone(); cap as usize + 1]);
                 push(with(&top, seq, many), tr!("{seq} の要素を、数え上げの上限より一つ多く", "{seq} one element past what a count over it can be"));
             }
+            // The fields marked `unique` (§15.290), and the values each takes in elements built side
+            // by side: the vector's own first, then others its door takes.
+            let uniques: Vec<&crate::ast::VarDecl> = el.fields.iter().filter(|fd| fd.unique.is_some()).collect();
+            let spread_of = |n: usize| -> Option<Vec<Json>> {
+                let mut xs = vec![first.clone(); n];
+                for fd in &uniques {
+                    let ty = c.ty_of(&fd.name.text).unwrap_or(Ty::Unknown);
+                    let vs = spread(c, &fd.name.text, &ty, first.get(&fd.name.text), n)?;
+                    for (x, v) in xs.iter_mut().zip(vs) {
+                        *x = with(x, &fd.name.text, v);
+                    }
+                }
+                Some(xs)
+            };
+            // Two elements with the same value of a `unique` field, one case for each such field:
+            // the two differ in every other `unique` field, so the door has that one to say.
+            if cap.is_none_or(|cap| cap >= 2) {
+                for fd in &uniques {
+                    let Some(mut two) = spread_of(2) else { continue };
+                    let same = two[0].get(&fd.name.text).cloned().unwrap_or(Json::Null);
+                    two[1] = with(&two[1], &fd.name.text, same);
+                    let obj = with(&top, seq, Json::Arr(two));
+                    let said = crate::door::duplicate(seq, &fd.name.text);
+                    if crate::door::refusal(f, c, &obj).is_some_and(|r| r.error == said) {
+                        push(obj, tr!("{seq} の要素を、{} が同じ二つに", "two elements of {seq} with the same {}", fd.name.text));
+                    }
+                }
+            }
             // A sum over a field past the top of its range: as many elements at the field's own
-            // top as it takes, where that is a few dozen.
+            // top as it takes, where that is a few dozen, each with values of its own in the
+            // `unique` fields.
             for d in crate::door::sums(f).into_iter().filter(|d| d.over == *seq) {
                 let (Some(hi), Some((_, Some(fhi)))) = (c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi), c.ranges.get(&d.column.text).copied()) else {
                     continue;
                 };
-                if !el.fields.iter().any(|fd| fd.name.text == d.column.text) || fhi.num <= 0 {
+                if !el.fields.iter().any(|fd| fd.name.text == d.column.text) || fhi.num <= 0 || uniques.iter().any(|fd| fd.name.text == d.column.text) {
                     continue;
                 }
                 let q = hi.div(fhi);
@@ -2326,8 +2365,9 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
                 if n > 50 || cap.is_some_and(|cap| n > cap) {
                     continue;
                 }
-                let top_value = with(&first, &d.column.text, Json::Int(crate::types::wire_int(fhi, c.wire_scale(&d.column.text))));
-                let many = Json::Arr(vec![top_value; n as usize]);
+                let top_wire = Json::Int(crate::types::wire_int(fhi, c.wire_scale(&d.column.text)));
+                let Some(xs) = spread_of(n as usize) else { continue };
+                let many = Json::Arr(xs.into_iter().map(|x| with(&x, &d.column.text, top_wire.clone())).collect());
                 push(with(&top, seq, many), tr!("{} の合計 {} を範囲の上端の先に", "the sum {1} of {0} past the top of its range", seq, d.name.text));
             }
             for fd in &el.fields {
@@ -2350,6 +2390,69 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
         }
     }
     out
+}
+
+/// `n` values of a field its door takes, each other than the rest, the value it has (`at`) first:
+/// what elements side by side take in a field marked `unique` (§15.290). `None` when the field
+/// does not have that many — an enum with fewer values, a truth value past two, a range too
+/// narrow — or is of a type with no next value to take.
+fn spread(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>, n: usize) -> Option<Vec<Json>> {
+    let mut out: Vec<Json> = at.into_iter().cloned().collect();
+    let add = |out: &mut Vec<Json>, v: Json| {
+        if out.len() < n && !out.contains(&v) {
+            out.push(v);
+        }
+    };
+    match ty.present() {
+        Ty::Enum(en) => {
+            let vs = c.enum_ranges.get(name).or_else(|| c.enums.get(en))?;
+            for v in vs {
+                add(&mut out, Json::Str(v.clone()));
+            }
+        }
+        Ty::Bool => {
+            add(&mut out, Json::Bool(false));
+            add(&mut out, Json::Bool(true));
+        }
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
+            let sc = c.wire_scale(name);
+            let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+            let (lo, hi) = (lo.map(|x| crate::types::wire_int(x, sc)), hi.map(|x| crate::types::wire_int(x, sc)));
+            let n0 = at.and_then(|j| j.as_int()).or(lo).unwrap_or(0);
+            let inside = |v: i128| lo.is_none_or(|l| v >= l) && hi.is_none_or(|h| v <= h);
+            for k in 0..(4 * n as i128 + 2) {
+                for v in [n0 + k, n0 - k] {
+                    if inside(v) {
+                        add(&mut out, Json::Int(v));
+                    }
+                }
+            }
+        }
+        Ty::Str => {
+            let s = at.and_then(|j| j.as_str()).unwrap_or("").to_string();
+            for k in 1..=n {
+                add(&mut out, Json::Str(format!("{s}{k}")));
+            }
+        }
+        Ty::Date => {
+            let days: Vec<i64> = match c.day_sets.get(name) {
+                Some(set) => set.days.clone(),
+                None => {
+                    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+                    let d0 = at.and_then(|j| j.as_str()).and_then(crate::door::civil).map(|(y, m, d)| crate::types::date_ord(y, m, d).num as i64)?;
+                    (0..(2 * n as i64 + 2))
+                        .flat_map(|k| [d0 + k, d0 - k])
+                        .filter(|d| lo.is_none_or(|l| *d as i128 * l.den >= l.num) && hi.is_none_or(|h| *d as i128 * h.den <= h.num))
+                        .collect()
+                }
+            };
+            for d in days {
+                add(&mut out, Json::Str(date_text(d as i128)));
+            }
+        }
+        _ => {}
+    }
+    (out.len() == n).then_some(out)
 }
 
 /// The values of another kind, or outside what the input takes, that its door refuses, each

@@ -1,0 +1,25 @@
+rule province_prestige(province_prestige) v1
+description "The prestige a temple adds in winter, with `unique` written on the season, an input, rather than on the building of an element (E148)"
+
+enum season(season) = spring(spring) | summer(summer) | autumn(autumn) | winter(winter)
+enum building(building) = temple(temple) | library(library) | market(market)
+
+inputs
+  season(season) : season  unique
+
+elements buildings(buildings)
+  building(building) : building
+
+outputs
+  prestige(prestige) : number  round down(1)
+
+table prestige_of
+policy unique
+| building        | season                 | -> prestige_add : number |
+| temple          | winter                 | 1                        |
+| temple          | spring, summer, autumn | 0                        |
+| library, market | -                      | 0                        |
+
+sum building_prestige(building_prestige) over buildings of prestige_add  range >=0 <=10
+
+define prestige : number = building_prestige

@@ -1,0 +1,10 @@
+contribution academy(academy) v1
+description "An academy that yields forty learning a season. Beside a temple and a library the buildings add 43, past the 40 the sum takes, and the check stops it (E147)"
+to "../province_learning.rule" signature:19c9f59d718a2f26
+
+extend building with academy
+
+clause academy_learning -> learning_add
+  when building academy
+  then 40
+  overrides learning_of

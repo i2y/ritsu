@@ -530,7 +530,7 @@ order the files were given (§15.242).
 
 **`preconditions` is the half `schema` cannot carry.** A caller that validates its input
 against `rulec schema` has done everything JSON Schema can express and is still not done:
-three things the generated code refuses at the door are not shapes at all. Each entry names
+some of what the generated code refuses at the door is not a shape at all. Each entry names
 one, and a caller reads them by `kind` rather than by prose — the sentence the refusal
 carries moves with `--lang`, these do not.
 
@@ -540,6 +540,7 @@ carries moves with `--lang`, these do not.
 | `never` | `said`, `conds` | a combination a `never` line rules out (§15.282). `said` is the line as written, and each of `conds` has a `name` and its test on the wire: `among` with `yes` (one of these values, or with `yes` false any but them), or `compare`, a list of `{"op":…,"value":…}`. A line of summaries alone is not listed: its values are worked out inside |
 | `sum` | `name`, `over`, `of`, `max` | a sequence whose total over that column passes `max` (§15.100) |
 | `length` | `sequence`, `max` | a sequence with more than `max` elements (§15.58) |
+| `unique` | `sequence`, `field` | a sequence with two elements that have the same value of `field`, compared as values (§15.290). JSON Schema's `uniqueItems` holds whole elements apart, not one field of them |
 
 The list is empty where the rule has none, and never absent: a caller has to be able to tell
 "there are none" from "this tool does not say". Where the caller is a step of a workflow
@@ -741,7 +742,9 @@ after its sequence (`list[LinesElement]`, §15.219):
 ```
 
 Those fields get the same entry guards the inputs get, so their `range` means what a
-parameter's `range` means. SQL has no entry for such a rule — `rulec gen` does not write one
+parameter's `range` means. A field marked `unique` carries `"unique":true`, and the door refuses
+two elements with the same value of it (the precondition of kind `unique` says the same, §15.290);
+a field without the mark has no such key. SQL has no entry for such a rule — `rulec gen` does not write one
 (§15.56). The `sql` entry describes the relation first: the file, the relation the query
 reads (`input`) and its `id` column, the `guard` column that carries the entry guard's
 sentence, the `columns` of that relation as the query declares them, the `outputs`, and under

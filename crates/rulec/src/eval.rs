@@ -703,6 +703,12 @@ fn walk_all(
         if cap.is_some_and(|cap| seqs[k].len() as i128 > cap) {
             return (nothing(), Vec::new(), Vec::new(), HashMap::new());
         }
+        // Two elements with the same value of a `unique` field have none either (§15.290): the
+        // generated code refuses them at its door, and the checks were made over sequences
+        // without them.
+        if crate::door::repeated(el, &seqs[k]).is_some() {
+            return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+        }
     }
 
     // Before every walk.
@@ -1350,6 +1356,25 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                             "例の値を直すか、その組み合わせが本当に起こるなら `never` の行を消してください。",
                             "Correct the example's values, or drop the `never` line if that combination really does happen."
                         )),
+                    );
+                }
+                // Two elements with the same value of a `unique` field (§15.290).
+                for el in &f.elements {
+                    let Some(Val::Seq(xs)) = a.get(&el.name.text) else { continue };
+                    let Some(field) = crate::door::repeated(el, xs) else { continue };
+                    let seq = &el.name.text;
+                    out.push(
+                        Diag::error("E019", tr!("例の並びに、`unique` のフィールドが同じ要素が二つあります", "An example's sequence has two elements with the same `unique` field"))
+                            .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                            .mark(row.span.clone(), tr!("{seq} の要素に {field} が同じものが二つあります", "{seq} has two elements with the same {field}"))
+                            .note(tr!(
+                                "`unique` は、並びの要素どうしでそのフィールドが同じにならないという約束です。同じ要素が二つある並びは、生成コードが入口で受け付けません。例はその並びに答えがあると言っていることになります。",
+                                "`unique` is the promise that no two elements of the sequence have the same value of that field, and the generated code refuses a sequence with two at its door. The example claims an answer for one."
+                            ))
+                            .note(tr!(
+                                "例の並びを直すか、同じ値の要素が本当に来るなら `unique` を外してください。",
+                                "Correct the example's sequence, or take `unique` off if two elements with the same value really come."
+                            )),
                     );
                 }
                 continue;

@@ -258,6 +258,7 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
                         })
                         .collect(),
                 },
+                "unique" => Precondition::Unique { sequence: st(p.get("sequence")), field: st(p.get("field")) },
                 _ => Precondition::Length { sequence: st(p.get("sequence")), max: p.get("max").and_then(|x| x.as_int()).unwrap() },
             })
             .collect();

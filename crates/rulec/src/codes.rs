@@ -1269,6 +1269,80 @@ machine order(order) over moves
   never    shipped after cancelled
   possible delivered
 "##;
+const X_E147: &str = r##"rule t(t) v1
+
+enum 建物(building) = 寺(temple) | 書庫(library) | 学問所(academy)
+
+elements 建物一覧(buildings)
+  種類(kind) : 建物  unique
+
+outputs
+  学問(learning) : number  round down(1)
+
+table 学問の表(learning_of)
+policy unique
+| 種類   | -> 加算(learning_add) : number |
+| 寺     | 1                              |
+| 書庫   | 2                              |
+| 学問所 | 40                             |
+
+sum 建物の学問(building_learning) over 建物一覧 of 加算  range >=0 <=40
+
+define 学問 : number = 1 + 建物の学問
+"##;
+const X_E147_EN: &str = r##"rule t(t) v1
+
+enum building(building) = temple(temple) | library(library) | academy(academy)
+
+elements buildings(buildings)
+  kind(kind) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of(learning_of)
+policy unique
+| kind    | -> learning_add(learning_add) : number |
+| temple  | 1                                      |
+| library | 2                                      |
+| academy | 40                                     |
+
+sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+
+define learning : number = 1 + building_learning
+"##;
+const X_E148: &str = r##"rule t(t) v1
+
+enum 建物(building) = 寺(temple) | 書庫(library)
+
+inputs
+  種類(kind) : 建物  unique
+
+outputs
+  学問(learning) : number  round down(1)
+
+table 学問の表(learning_of)
+policy unique
+| 種類 | -> 学問 |
+| 寺   | 1       |
+| 書庫 | 2       |
+"##;
+const X_E148_EN: &str = r##"rule t(t) v1
+
+enum building(building) = temple(temple) | library(library)
+
+inputs
+  kind(kind) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of(learning_of)
+policy unique
+| kind    | -> learning |
+| temple  | 1           |
+| library | 2           |
+"##;
 const X_W135: &str = r##"rule t(t) v1
 
 inputs
@@ -5454,6 +5528,36 @@ pub fn ledger() -> Vec<Entry> {
             &["E121", "E122"],
         )
         .english(X_E144_EN),
+        err(
+            "E147",
+            tr!("`unique` の値が一つずつでも、`sum` が範囲の上端を越えます", "With each value of a `unique` field once, a `sum` can pass the top of its range"),
+            tr!(
+                "`elements` の列挙か真偽のフィールドが `unique` で、その並びの `sum` が、値ごとに要素が足しうる最大を全部の値について足すと、`sum` の範囲の上端を越えるとき。値ごとの最大は、`sum` が足す列を出す表の行から読みます。寄与が足した行も、`overrides` で上書きされる行も入れます。表に `unique` のフィールドの列があれば、その値を受け付ける行だけを見て、無ければ全部の行を見ます。表が出さない列（要素のフィールド、`define`、開いた値）は、列の範囲の上端です。`count` が並びの件数に上限を付けていれば、大きいほうからその数だけ足します。`unique` のフィールドが二つ以上あれば、いちばん小さい合計で比べます。規則だけでも、寄与と合わせても調べます。要素どうしで値が違う並びでも合計が範囲を出るので、生成コードはそういう並びを入口で受け付けません。",
+                "A field of `elements` of an enum or a truth value is `unique`, and a `sum` over that sequence passes the top of its range when the most the element of each value can add is added up over every value. The most for a value is read off the rows of the tables that give the column the `sum` adds, rows a contribution adds and rows `overrides` replaces among them: where a table has a column of the `unique` field, only the rows that take the value; where it has none, every row. A column no table gives (a field of the element, a `define`, an open value) counts at the top of its range. Where a `count` caps how many elements the sequence has, the largest that many are added. With two `unique` fields or more, the smallest total is the one compared. The rule is checked alone and with its contributions. With no two elements sharing a value the total still leaves the range, so the generated code refuses such a sequence at its door."
+            ),
+            tr!(
+                "`sum` の範囲を広げてその合計のときの答えを決めるか、行が足す値を下げるか、`count` で並びの件数を絞ってください。どれにするかは業務の判断です。寄与が足した行なら、注にその寄与の名前と行の場所が出ます。列挙か真偽で `unique` のフィールドが無い並びは、この検査の外です（入口が実行時に受け付けないだけです）。",
+                "Widen the range of the `sum` and decide the answer for such a total, lower what the rows add, or cap how many elements the sequence has with a `count`. Which is a business decision. Where a contribution added the row, a note names the contribution and where the row is. A sequence with no `unique` field of an enum or a truth value is outside this check (only the door refuses, when the code runs)."
+            ),
+            X_E147,
+            &["E148", "E131", "E122", "E033"],
+        )
+        .english(X_E147_EN),
+        err(
+            "E148",
+            tr!("`unique` は `elements` の、必ずあるフィールドにだけ書けます", "Only a field of `elements` that is always there can be `unique`"),
+            tr!(
+                "`unique` を入力の行、値の無いことがある `elements` のフィールド（`?`）、`random` のフィールドに書いたとき。`unique` は並びの要素どうしでそのフィールドが同じ値にならないという約束なので、比べる相手の無い入力には書けません。値の無い要素どうしを同じとみなすかは決まっておらず、`random` の値は一つずつ独立に引くので、引いた二つが同じにならない保証がありません。",
+                "`unique` stands on an input's line, on a field of `elements` that may be absent (`?`), or on a `random` field. It promises that no two elements of a sequence have the same value of the field, so an input, with nothing to be compared with, cannot take it. Whether two elements without a value count as the same is not settled, and a `random` value is drawn on its own each time, with nothing to keep two draws apart."
+            ),
+            tr!(
+                "`unique` を外すか、`elements` の、必ずあって `random` でないフィールドに書いてください。",
+                "Take `unique` off, or write it on a field of `elements` that is always there and not `random`."
+            ),
+            X_E148,
+            &["E147", "E070"],
+        )
+        .english(X_E148_EN),
     ]
 }
 

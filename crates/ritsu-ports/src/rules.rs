@@ -166,6 +166,8 @@ pub enum Precondition {
     Sum { name: String, over: String, of: String, max: i128 },
     /// How many elements the list may have.
     Length { sequence: String, max: i128 },
+    /// No two elements of the list with the same value of `field` (rulec's §15.290).
+    Unique { sequence: String, field: String },
     /// A date input that takes only the days of a koyomi date (`range from koyomi`, rulec's
     /// §15.174): the file and the date as the rule names them, and the days.
     Days { input: String, file: String, date: String, days: crate::DaySet },

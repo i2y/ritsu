@@ -637,6 +637,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.php_element_guards(s, &local);
+        let (seen, step) = self.php_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.php_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -827,6 +830,25 @@ impl<'a> Gen<'a> {
         fin.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
         fin.push_str(&format!("    {} = {answer};\n", php_var(&self.ident(&out_name))));
         (init, step, fin)
+    }
+
+    /// The fields marked `unique` (§15.290), in PHP: a list of the values met for each before the
+    /// first walk over the sequence, and in the walk, after the guards of one element, the refusal
+    /// of a value an element before it had. `in_array` is strict, so an enum case is itself and a
+    /// number is not a string.
+    fn php_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = php_var(&self.temp(&format!("{}_seen", self.ident(&fd.name.text))));
+            let v = local(&fd.name.text);
+            init.push_str(&format!("    {seen} = [];\n"));
+            step.push_str(&format!(
+                "    if (in_array({v}, {seen}, true)) {{\n        throw new RuleInputError({});\n    }}\n    {seen}[] = {v};\n",
+                php_str(&crate::door::duplicate(seq, &fd.name.text))
+            ));
+        }
+        (init, step)
     }
 
     /// The range guard of one element's fields, inside the walk. The kind of the value is

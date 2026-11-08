@@ -1,0 +1,8 @@
+error[E148]: Only a field of `elements` that is always there can be `unique`
+  --> tests/mutants/m_e148.rule:8
+  |
+8 |   season(season) : season  unique
+  |                            ^^^^^^ season is an input
+  |
+ `unique` promises that no two elements of a sequence have the same value of the field. An input holds one value per call, and has nothing to be compared with.
+ Take `unique` off the line. To say that the elements of a sequence differ in a value, write it on that field of the `elements`.

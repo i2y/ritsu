@@ -294,6 +294,10 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
             "並び `{sequence}` の長さの上限ですが、dandori は並びの長さを知りません",
             "it bounds the length of the list `{sequence}`, and dandori knows no list's length"
         )),
+        Precondition::Unique { sequence, field } => Answer::Undecided(tr!(
+            "並び `{sequence}` の要素どうしで `{field}` が同じにならないという前提ですが、dandori は並びの中身を知りません",
+            "it asks that no two elements of the list `{sequence}` have the same `{field}`, and dandori knows nothing of what a list holds"
+        )),
         Precondition::Days { input, file, date, days } => match arg(input) {
             Some(a) => days_kept(dates, a, days, file, date),
             None => Answer::Undecided(tr!("呼び出しが `{input}` を渡していません", "the call does not give `{input}`")),
@@ -341,6 +345,7 @@ pub(crate) fn said(p: &Precondition) -> String {
         Precondition::SumRelation { left, op, right } => format!("{} {op} {}", left.join(" + "), right.join(" + ")),
         Precondition::Sum { name, max, .. } => format!("{name} <= {max}"),
         Precondition::Length { sequence, max } => format!("len({sequence}) <= {max}"),
+        Precondition::Unique { sequence, field } => format!("{sequence}.{field} unique"),
         Precondition::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
         Precondition::Never { said, .. } => said.clone(),
     }

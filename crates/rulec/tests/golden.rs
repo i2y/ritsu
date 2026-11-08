@@ -195,6 +195,10 @@ golden!(e142_定義から起こる組み合わせ, "E142", "tests/mutants/m_e142
 golden!(e143_計算する列, "E143", "tests/mutants/m_e143ja.rule", "E143");
 golden!(w134_何も外さない行, "W134", "tests/mutants/m_w134ja.rule", "W134");
 golden!(e144_出どころと_from_count, "E144", "tests/mutants/m_e144ja.rule", "E144");
+// §15.290: a `sum` that the values of a `unique` field, each once, take past its range, and
+// `unique` on an input.
+golden!(e147_一つずつでも届く合計, "E147", "tests/mutants/m_e147ja.rule", "E147");
+golden!(e148_入力の_unique, "E148", "tests/mutants/m_e148ja.rule", "E148");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

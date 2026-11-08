@@ -265,6 +265,7 @@ fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Precondition> {
             },
             crate::verify::Pre::Sum { name, over, of, max } => Precondition::Sum { name, over, of, max },
             crate::verify::Pre::Length { sequence, max } => Precondition::Length { sequence, max },
+            crate::verify::Pre::Unique { sequence, field } => Precondition::Unique { sequence, field },
             crate::verify::Pre::Days { input, file, date, days } => Precondition::Days { input, file, date, days: days.into_iter().collect() },
             crate::verify::Pre::Never { said, conds } => Precondition::Never { said, conds },
         })
@@ -820,6 +821,15 @@ impl ritsu_ports::Rules for Engine {
                         None => Answer::Undecided(ritsu_base::tr!(
                             "`{sequence}` の長さの上限です。並びの長さの上限が分からないので、決められません",
                             "it bounds the length of `{sequence}`, and how long the list can be is not known, so it cannot be decided"
+                        )),
+                    },
+                    // A range says nothing of whether two elements share a value: a list of one element
+                    // at most is the only one that cannot have two.
+                    Precondition::Unique { sequence, field } => match max_len {
+                        Some(n) if n <= 1 => Answer::Holds,
+                        _ => Answer::Undecided(ritsu_base::tr!(
+                            "`{sequence}` の要素どうしで `{field}` が同じにならないことは、範囲と長さからは示せません",
+                            "ranges and a length cannot show that no two elements of `{sequence}` have the same `{field}`"
                         )),
                     },
                     Precondition::Days { input, .. } => Answer::Undecided(ritsu_base::tr!(

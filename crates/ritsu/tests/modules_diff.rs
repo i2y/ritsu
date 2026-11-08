@@ -25,6 +25,9 @@
 //!   with no range written on the output's line: the range `api` gives the output changes in every
 //!   language (rulec's DESIGN §15.271), and the behavior says the output changed range. English and
 //!   the twin with Japanese names.
+//! - Two versions of a rule whose field of the elements becomes `unique` (rulec's DESIGN §15.290):
+//!   the precondition it adds may break a user, dropping it asks less, and the mark on the field in
+//!   each language's part of the api is no line of its own.
 //! - The two-file form, with the spellings of DESIGN 17.9.1; a version against itself (exit 0); and
 //!   what stops a diff (exit 2): sides of two kinds; a directory in no module; a `--budget` that is
 //!   no positive integer; and one too small for a walk, when nothing else differs.
@@ -988,6 +991,48 @@ fn what_a_rule_asks_of_its_callers_and_where_a_value_comes_from() {
     let (code, out, _) = run(&both, &constraint, &[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("removed: /preconditions/1: never items = 7, sent = 7\n"), "{out}");
+    assert!(!out.contains("may break: "), "{out}");
+}
+
+/// Two versions of a rule whose field of the elements becomes `unique` (rulec's §15.290): the door
+/// now refuses a list with two elements alike, so the precondition it adds may break a user, said
+/// the way the rule would say it, and dropping it asks less. The mark on the field, in each
+/// language's part of the api, says the same and is no line of its own.
+#[test]
+fn a_field_no_two_elements_share_may_break_a_user() {
+    let d = TempDir::new("modules-diff-unique");
+    let rule = |mark: &str| {
+        format!(
+            "rule learning v1\ndescription \"Learning by the buildings\"\n\nenum building = temple | library\n\nelements buildings\n  building : building{mark}\n\noutputs\n  learning : number  round down(1)\n\ntable learning_of\npolicy unique\n| building | -> learning_add : number |\n| temple   | 1                       |\n| library  | 2                       |\n\nsum building_learning over buildings of learning_add  range >=0 <=40\n\ndefine learning : number = 1 + building_learning\n"
+        )
+    };
+    let version = |at: &str, text: String| {
+        let dir = d.path().join(at);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ritsu.mod"), "module example.com/acme/learning\nversion 1.0.0\ndescription \"Learning\"\n").unwrap();
+        std::fs::write(dir.join("learning.rule"), text).unwrap();
+        dir
+    };
+    let run = |a: &Path, b: &Path, more: &[&str]| {
+        let mut args = vec!["mod".to_string(), "diff".to_string(), a.display().to_string(), b.display().to_string()];
+        args.extend(more.iter().map(|m| m.to_string()));
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        ritsu_in(d.path(), &d.path().join("store"), &args)
+    };
+    let plain = version("plain", rule(""));
+    let marked = version("marked", rule("  unique"));
+    let (code, out, err) = run(&plain, &marked, &[]);
+    assert_eq!((code, err.as_str()), (1, ""), "{out}");
+    assert!(out.contains("may break: added: /preconditions/1: no two elements of buildings with the same building\n"), "{out}");
+    assert!(!out.contains("/unique"), "{out}");
+    let (_, out, _) = run(&plain, &marked, &["--format", "json"]);
+    let i = json(&out)["interface"].as_array().unwrap().iter().find(|i| i["file"] == "learning.rule").unwrap_or_else(|| panic!("{out}")).clone();
+    assert_eq!(i["changes"], serde_json::json!([{"at": "/preconditions/1", "change": "added", "old": null, "new": "no two elements of buildings with the same building", "may_break": true}]), "{out}");
+
+    // dropped, it asks less
+    let (code, out, _) = run(&marked, &plain, &[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("removed: /preconditions/1: no two elements of buildings with the same building\n"), "{out}");
     assert!(!out.contains("may break: "), "{out}");
 }
 

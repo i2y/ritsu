@@ -145,6 +145,7 @@ fn 形だけでは足りない前提が_目録に並び_実際にエラーにな
                     "constraint" => format!("constraint {} {} {}", g("left"), g("op"), g("right")),
                     "sum" => format!("sum {} over {} of {} max {}", g("name"), g("over"), g("of"), n("max")),
                     "length" => format!("length {} max {}", g("sequence"), n("max")),
+                    "unique" => format!("unique {} field {}", g("sequence"), g("field")),
                     other => format!("(kind {other} は目録に無いはず)"),
                 }
             })

@@ -1,0 +1,21 @@
+contribution small_academy(small_academy) v1
+description "An academy that yields ten learning a season. With every other building once, the buildings add 13 at most, inside the 40 the sum takes"
+to "../province_learning.rule" signature:19c9f59d718a2f26
+
+extend building with academy
+
+clause academy_learning -> learning_add
+  when building academy
+  then 10
+  overrides learning_of
+
+sequence every_building
+| building |
+| temple   |
+| library  |
+| market   |
+| academy  |
+
+examples
+| buildings      | -> learning |
+| every_building | 14          |

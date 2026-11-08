@@ -1,0 +1,33 @@
+rule province_learning_listed(province_learning) v1
+description "The same answer written out by hand: the academy a value of the enum, and its row in the table"
+
+enum building(building) = temple(temple) | library(library) | market(market) | academy(academy)
+
+elements buildings(buildings)
+  building(building) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of
+policy unique
+| building                      | -> learning_add : number |
+| temple                        | 1                        |
+| library                       | 2                        |
+| academy                       | 10                       |
+| not: temple, library, academy | 0                        |
+
+sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+
+define learning : number = 1 + building_learning
+
+sequence every_building
+| building |
+| temple   |
+| library  |
+| market   |
+| academy  |
+
+examples
+| buildings      | -> learning |
+| every_building | 14          |

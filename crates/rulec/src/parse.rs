@@ -201,7 +201,7 @@ impl Tail {
     fn takes(self) -> &'static [&'static str] {
         match self {
             Tail::Input => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM],
-            Tail::Field => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY],
+            Tail::Field => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::UNIQUE],
             Tail::Output => &[crate::kw::RANGE, crate::kw::ROUND],
             Tail::Derive | Tail::Walk => &[crate::kw::RANGE],
             Tail::Shape | Tail::From => &[],
@@ -209,20 +209,21 @@ impl Tail {
     }
 
     /// The words another check says the line cannot hold, with a reason of its own: `random` on an
-    /// output or a field of an element, and after a `from` (E070).
+    /// output or a field of an element, and after a `from` (E070); `unique` on an input (E148).
     fn elsewhere(self) -> &'static [&'static str] {
         match self {
             Tail::Field | Tail::Output | Tail::From => &[crate::kw::RANDOM],
+            Tail::Input => &[crate::kw::UNIQUE],
             _ => &[],
         }
     }
 
     /// What E047 says the line holds.
     fn holds(self) -> String {
-        let (r, c, d, o) = (crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND);
+        let (r, c, d, o, u) = (crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND, crate::kw::UNIQUE);
         match self {
             Tail::Input => tr!("入力の行に置けるのは `{r}`、`{c}`、`{d}` だけです。", "An input's line holds `{r}`, `{c}` and `{d}`, and nothing else."),
-            Tail::Field => tr!("要素のフィールドの行に置けるのは `{r}` と `{c}` だけです。", "A field of an element holds `{r}` and `{c}`, and nothing else."),
+            Tail::Field => tr!("要素のフィールドの行に置けるのは `{r}`、`{c}`、`{u}` だけです。", "A field of an element holds `{r}`, `{c}` and `{u}`, and nothing else."),
             Tail::Output => tr!("出力の行に置けるのは `{r}` と `{o}` だけです。", "An output's line holds `{r}` and `{o}`, and nothing else."),
             Tail::Derive => tr!("`derive` の行に置けるのは `{r}` だけです。", "A `derive` line holds `{r}`, and nothing else."),
             Tail::Walk => tr!("`count`、`sum`、`max`、`min` の行に置けるのは `{r}` だけです。", "A `count`, `sum`, `max` or `min` line holds `{r}`, and nothing else."),
@@ -241,6 +242,16 @@ fn tail_random(ts: &[Token], k: usize) -> Option<Span> {
     (k..ts.len()).find_map(|j| {
         let bound = j > 0 && matches!(ts[j - 1].kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt);
         (ts[j].ident() == Some(crate::kw::RANDOM) && !bound && !ts[..j].iter().any(|t| t.is(&Kind::At))).then(|| ts[j].span.clone())
+    })
+}
+
+/// Where the `unique` mark is in a declaration's tail (§15.290), when it is written: the word on its
+/// own, not a bound of a range (`range >=unique` names a value of an ordered enum), and not in a
+/// citation.
+fn tail_unique(ts: &[Token], k: usize) -> Option<Span> {
+    (k..ts.len()).find_map(|j| {
+        let bound = j > 0 && matches!(ts[j - 1].kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt);
+        (ts[j].ident() == Some(crate::kw::UNIQUE) && !bound && !ts[..j].iter().any(|t| t.is(&Kind::At))).then(|| ts[j].span.clone())
     })
 }
 
@@ -1306,9 +1317,10 @@ impl P {
             };
             let (range, contract_only) = self.tail_range(head, k);
             let random = tail_random(head, k).or_else(|| trailing_random(&line[cut..]));
+            let unique = tail_unique(head, k);
             self.tail_junk(head, k, if section == crate::kw::ELEMENTS { Tail::Field } else { Tail::Input });
             let fed = self.fed_by(&name, from.as_ref(), random.is_some());
-            v.push(VarDecl { name, ty, range, contract_only, from, random, fed, span: span_of(&line) });
+            v.push(VarDecl { name, ty, range, contract_only, from, random, unique, fed, span: span_of(&line) });
         }
         v
     }
@@ -1843,7 +1855,7 @@ impl P {
                 return;
             }
             let w = ts[k].ident();
-            if let Some(w) = w.filter(|w| [crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND].contains(w))
+            if let Some(w) = w.filter(|w| [crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND, crate::kw::UNIQUE].contains(w))
                 && !kind.takes().contains(&w)
                 && !kind.elsewhere().contains(&w)
             {
@@ -1870,6 +1882,9 @@ impl P {
                 // The `random` mark (§15.224). An output's line is told it cannot take one where the
                 // outputs are read; here it is one more word of a declaration's tail.
                 Some(crate::kw::RANDOM) => k += 1,
+                // The `unique` mark (§15.290). An input's line is told it cannot take one where the
+                // marks are checked (E148).
+                Some(crate::kw::UNIQUE) => k += 1,
                 // `round up(10円)` is five tokens. A shorter one is E104's business, not
                 // this check's, so the word alone is stepped over.
                 Some(crate::kw::ROUND) => {

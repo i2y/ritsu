@@ -174,7 +174,10 @@ fn declaration(t: &RuleFile, n: &str) -> Option<String> {
             return Some(format!("elements {n}"));
         }
         if let Some(fd) = el.fields.iter().find(|x| x.name.text == n) {
-            return Some(format!("field {n} : {} range {}", type_text(&fd.ty), fd.range.as_ref().map(range_text).unwrap_or_default()));
+            // `unique` moves the door and the cap on a sum over the sequence (§15.290), as the range
+            // does; a field without it reads as it always did.
+            let unique = if fd.unique.is_some() { format!(" {}", crate::kw::UNIQUE) } else { String::new() };
+            return Some(format!("field {n} : {} range {}{unique}", type_text(&fd.ty), fd.range.as_ref().map(range_text).unwrap_or_default()));
         }
     }
     None

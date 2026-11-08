@@ -248,6 +248,11 @@ pub struct VarDecl {
     /// within what the `constraint` lines leave. The generated function is the same; what the mark
     /// adds is the claims of `chances` and the function that counts the answers.
     pub random: Option<Span>,
+    /// The `unique` mark at the end of a field's line, where it is written (§15.290): no two
+    /// elements of the sequence have the same value of this field. The door refuses a sequence that
+    /// has two, and over an enum or a truth value it caps what a `sum` over the sequence can reach
+    /// (E147). Read on an input's line too, which cannot hold it (E148).
+    pub unique: Option<Span>,
     /// Where hand-written code takes this input's value from, when the line says (§15.285). Unlike
     /// `from`, it changes nothing generated: `ritsu check` asks the other side what can come.
     pub fed: Option<FedBy>,

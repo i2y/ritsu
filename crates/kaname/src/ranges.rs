@@ -5181,6 +5181,7 @@ pub fn said(p: &Precondition) -> String {
         Precondition::SumRelation { left, op, right } => format!("{} {op} {}", left.join(" + "), right.join(" + ")),
         Precondition::Sum { name, max, .. } => format!("{name} <= {max}"),
         Precondition::Length { sequence, max } => format!("len({sequence}) <= {max}"),
+        Precondition::Unique { sequence, field } => format!("{sequence}.{field} unique"),
         Precondition::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
         Precondition::Never { said, .. } => said.clone(),
     }

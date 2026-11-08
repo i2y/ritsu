@@ -801,6 +801,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.java_element_guards(s, &local);
+        let (seen, step) = self.java_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.java_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -1004,6 +1007,24 @@ impl<'a> Gen<'a> {
         fin.push_str(&format!("            {answer} = {};\n        }}\n", text(&fold.exhausted)));
         fin.push_str(&format!("        {out_ty} {} = {answer};\n", java_name(&self.ident(&out_name))));
         (init, step, fin)
+    }
+
+    /// The fields marked `unique` (§15.290), in Java: a list of the values met for each before the
+    /// first walk over the sequence, and in the walk, after the guards of one element, the refusal
+    /// of a value an element before it had. A boxed number, an enum and a string compare by `equals`.
+    fn java_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = java_name(&self.temp(&format!("{}Seen", self.ident(&fd.name.text))));
+            let v = local(&fd.name.text);
+            init.push_str(&format!("        List<Object> {seen} = new ArrayList<>();\n"));
+            step.push_str(&format!(
+                "        if ({seen}.contains({v})) {{\n            throw new RuleInputError({});\n        }}\n        {seen}.add({v});\n",
+                java_str(&crate::door::duplicate(seq, &fd.name.text))
+            ));
+        }
+        (init, step)
     }
 
     /// The range guard of one element's fields, inside the walk. The kind of the value is

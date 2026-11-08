@@ -1,0 +1,22 @@
+rule province_learning_academy(province_learning) v1
+description "The learning of a province with an academy among its buildings, and the academy's row written 40: each building stands once (`unique`), and with a temple and a library beside it the buildings add 43, past the 40 the sum takes (E147)"
+
+enum building(building) = temple(temple) | library(library) | market(market) | academy(academy)
+
+elements buildings(buildings)
+  building(building) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of
+policy unique
+| building | -> learning_add : number |
+| temple   | 1                        |
+| library  | 2                        |
+| market   | 0                        |
+| academy  | 40                       |
+
+sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+
+define learning : number = 1 + building_learning

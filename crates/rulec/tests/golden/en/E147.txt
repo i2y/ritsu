@@ -1,0 +1,9 @@
+error[E147]: With each `building` once, `building_learning` can reach 43, past the 40 its range takes
+  --> tests/mutants/m_e147.rule:20
+   |
+20 | sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ can reach 43
+   |
+ The most the element of each `building` can add, largest first: academy 40, library 2, temple 1.
+ The total leaves the range even with no two elements sharing a `building`, and the generated code refuses such a sequence at its door (`building_learning is out of range`).
+ Widen the range of `building_learning` and decide the answer for such a total (the tables that read it are then checked over the wider range), lower what the rows add, or cap how many elements the sequence has with a `count`. Which is a business decision.

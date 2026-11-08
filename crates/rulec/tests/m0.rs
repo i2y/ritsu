@@ -377,6 +377,10 @@ fn 変異は決めたコードだけを出す() {
         ("m_w134ja.rule", &[("W134", 3)], "上と同じ規則の日本語の版"),
         ("m_e144.rule", &[("E144", 1)], "`from count` のある入力に `fed by` も書いた"),
         ("m_e144ja.rule", &[("E144", 1)], "上と同じ規則の日本語の版"),
+        ("m_e147.rule", &[("E147", 1)], "建物が一つずつの州で、学問所の行を 40 と書いた（寺と書庫と合わせて 43）"),
+        ("m_e147ja.rule", &[("E147", 1)], "上と同じ規則の日本語の版"),
+        ("m_e148.rule", &[("E148", 1)], "`unique` を、要素の建物でなく入力の季節に書いた"),
+        ("m_e148ja.rule", &[("E148", 1)], "上と同じ規則の日本語の版"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -893,6 +897,12 @@ fn 変異はコーパスから作り直せる() {
         "m_w133ja.rule",
         "m_e101never.rule",
         "m_e101neverja.rule",
+        // §15.290: no corpus rule writes `unique`, and the corpus is made of rules that are right.
+        // In English and in Japanese.
+        "m_e147.rule",
+        "m_e147ja.rule",
+        "m_e148.rule",
+        "m_e148ja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

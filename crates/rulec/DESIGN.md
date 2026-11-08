@@ -6596,6 +6596,82 @@ machine order over step
 
 例はこの二つを避けた形にした。穴を塞ぐなら、1 は検査で言うか証明書の主張を変えるかを、2 は `above` の事実の形と Lean の `checkAbove` を決めることになる。ここでは決めていない。
 
+### 15.290 並びの要素どうしで同じ値をとらないフィールド `unique` と、`sum` が届く上限（2026-11-08）
+
+**きっかけ**：寄与（ゲームの mod）が開いた表に行を足し、要素ごとの値を `sum` した合計が宣言した範囲を越えうるとき、`rulec check` は何も言わなかった。kunitori の `province_income.rule` は、州に建つ建物の並びを `elements buildings` で受け、`sum building_learning over buildings of learning_add  range >=0 <=40` で学問を足す。`learning_of` は開いた表で、mod は `clause … -> learning_add` で行を足す。学問 40 の建物を足す mod は `ritsu check` を通るが、寺（1）と書庫（2）と並ぶと合計が 43 になり、生成コードが入口で `building_learning is out of range` と受け付けず、コンピュータどうしの 6 局がすべて止まった。行を一つずつ範囲と比べる検査では、一つで越えるものしか言えない。並びの件数に上限が無ければ合計にも上限が無く、範囲は入口でしか効かない。
+
+**決めたこと**：
+
+1. **`unique`**。`elements` のフィールドの行の後ろに書く。同じ値を持つ要素が並びに二つあってはいけない、という約束である。型は問わない。入口は、その並びの `sum` を足す前に値で比べ（数は値として、日付は日として）、同じ値の二つ目があれば受け付けない。文は「{seq} の要素に {field} が同じものが二つあります」（en「{seq} has two elements with the same {field}」）で、ほかの文と同じく値は入れない。参照の評価器（`door::read`）、評価器の歩き、八つの生成器が同じ文を出す（比べる場所は下の 5）。`rulec vectors` は `unique` のフィールドごとに、そのフィールドだけが同じ二つの要素を持つ受け付けない入力を書き、答えるベクタからは同じ値の要素を持つ入力を外す。SQL と NumPy は並びを歩かないので変わらない。
+2. **E148**。`unique` は、`elements` の、必ずあって `random` でないフィールドにだけ書ける。入力の行は、一回の呼び出しに一つの値で、比べる相手が無い。値の無いことがあるフィールド（`T?`）は、値の無い要素どうしを同じとみなすかが決まらず、値の無い要素が何件来るかで合計の上限も決まらない。`random` は一つずつ独立に引くので、引いた二つが同じにならない保証が無い。要素のフィールドの `random` はもともと E070 で、E148 はその隣に出る。
+3. **E147**。`sum` の並びに、列挙か真偽で `unique` のフィールドがあれば、その `sum` が届く最大を出す。
+   - 値 v ごとに、`sum` が足す列の最大を出す。列が表の出力なら、その列を出す表の全部（基の表と、寄与が足した clause の表）を見る。`unique` のフィールドの列を持つ表はそのセルが v を受け入れる行だけを、持たない表は全部の行を見て、行の出力の上端（定数か、式の区間の上端）の最大を取る。`overrides` で上書きされる行も入れる。上限としては安全な側である。表が出さない列（要素のフィールド、`define`、開いた値）は、列の範囲の上端にした。
+   - 届く最大は、値ごとの最大の和である（0 は足さない）。`count` が並びの件数の上限 N を決めていれば（§15.58）、大きい順に N 個までを足す。`unique` のフィールドが二つ以上あれば、いちばん小さい最大で比べる。
+   - それが `sum` の範囲の上端を越えたら E147 にする。題は「{field} が一つずつでも、{sum} は {reach} に届き、範囲の {hi} を越えます」。印は `sum` の行に付け、注で値を大きい順に挙げ（上の 10 個と残りの数）、寄与が足した行はその寄与の名前と行の場所を言う（E131 と同じ言い方）。入口がそういう並びを「{sum} が範囲の外です」と受け付けないことと、直し方の三つ（範囲を広げてその合計のときの答えを決める、行が足す値を下げる、`count` で件数を絞る）も注で言う。
+   - 規則だけの検査でも、寄与と合わせた検査でも同じことをする（§15.231）。型の誤りか E148 のある規則では、E147 を調べない。
+4. **ほかの口**。`rulec api` はフィールドに `"unique":true` を載せ、前提に `{"kind":"unique","sequence":…,"field":…}` を足した。ritsu-ports の `Precondition::Unique { sequence, field }` を受ける側（dandori の prechecks、sekisho の borders、ritsu-cross の preconditions と programs、kaname の ranges、ritsu の modules diff）は `Length` と同じに扱い、呼ぶ側が示せなければ示せないと言う。`ritsu mod diff` は、言語ごとの部分の `"unique":true` を比べず、前提の差だけで言う（足せば壊しうる差、外せば求めるものが減るだけ。ritsu の DESIGN 17.9.6）。`rulec doc` はフィールドの注に「同じ値の要素は二つありません（`unique`）」と書く。`meaning` は字句から作るので `unique` を読み、寄与が固定する signature は、読む名前の宣言の行に ` unique` を足した。入口が受け付けるものが変わるからである。`rulec schema` の `$comment` は、形で言えない前提として「並びの要素どうしで同じ値をとらないフィールド」を挙げる。`examples` の並びに同じ値の要素があれば E019 にした。`rulec fmt` は表の中しか直さないので、`unique` はそのまま残る。
+5. **入口の順**。参照の評価器は、その並びの要素を全部読んでから同じ値を探す。生成コードは歩きの最初の輪の中で、要素の型と範囲を確かめたすぐ後に、それまでの要素と比べる。受け付けない理由が一つだけの入力では、どちらも同じ文になる。ベクタの受け付けない入力は、どれも理由を一つだけ持つ。
+
+**測った**：
+
+- `tests/merging/unique/`（英語の `province_learning.rule` と寄与二つ、横に日本語の版）。基だけなら通り、学問 40 の学問所の寄与と合わせると E147、学問 10 の寄与と合わせると通る（建物の合計は 13 まで）。
+
+  ```
+  error[E147]: With each `building` once, `building_learning` can reach 43, past the 40 its range takes
+    --> province_learning.rule:19
+     |
+  19 | sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ can reach 43
+     |
+   The most the element of each `building` can add, largest first: academy 40, library 2, temple 1.
+     academy 40: the row contribution academy adds (contrib/academy.rule:8)
+   The total leaves the range even with no two elements sharing a `building`, and the generated code refuses such a sequence at its door (`building_learning is out of range`).
+   Widen the range of `building_learning` and decide the answer for such a total (the tables that read it are then checked over the wider range), lower what the rows add, or cap how many elements the sequence has with a `count`. Which is a business decision.
+  ```
+
+- `rulec test` で、学問 10 の寄与と合わせた規則と、列挙・数・文字列・日付・真偽・金額の六つのフィールドを `unique` にした規則を、Python、TypeScript、JavaScript、Rust、Rust の WASI、Ruby、PHP、Go、Swift、Java、Wasm の 11 通りが、参照の評価器と同じ文で受け付けなかった。
+- 変える前と後の突き合わせ：0.46.0 のバイナリとこのビルドで、コーパスの 159 本と、`tests/` の下で並びを歩く 106 本を、12 の言語と全部の extra に生成した。コーパスの 159 本は全部、並びを歩く 106 本のうち生成できる 49 本も、一字も同じだった。残りの 57 本は、どちらのバイナリでも検査で止まる。
+- kunitori のコピー（国盗り 3f04753）。`province_income.rule` と `province_upkeep.rule` の `building` に `unique` を書くと、lighthouse の寄与二つが E040 で止まる（`` `reads field building : building range ` is now `reads field building : building range  unique` ``）。`rulec source pin` で付け直すと、`ritsu check` は 21 ファイルとも通る（警告 1 つ。0.46.0 のバイナリで元のまま検査したときと同じ）。`sum` の範囲の上端を 0 にして届く最大を出させると、金 5、食料 4、率 10%、学問 3、威信 1、維持費 9 で、手で数えた値と同じだった。そのうえで建物の mod を一つ足し、`ritsu check` と、通ればコンピュータどうしの 6 局を回した（生成したコードには、同じ値の要素を受け付けない確かめが入っている）。
+
+  | mod | 足す学問、食料 | `ritsu check` | 6 局 |
+  |---|---|---|---|
+  | `over` | 40、37 | E147 が二つ（食料 41、学問 43） | 回さない |
+  | 学問 40 | 40、0 | E147（学問 43） | 回さない |
+  | `academy` | 37、0 | 通る | 止まらない（domination 5、time 1） |
+  | 学問 10 | 10、0 | 通る | 止まらない（domination 3、time 3） |
+  | `silo` | 0、36（`flat_food` に 20） | E131 だけ | 回さない |
+
+  0.46.0 のバイナリでは、元のままの kunitori に `over` を足しても `ritsu check` は通り、6 局とも止まる（最初は seed 1 の 16 ターン目、`RuleInputError: building_learning is out of range: 41`）。ゲームは建っている建物を同じ州にもう一つ建てさせないので（`build_allowed.rule` の `already_built`）、同じ値の要素で止まる局は無かった。
+
+  ```
+  error[rulec E147]: With each `building` once, `building_learning` can reach 43, past the 40 its range takes
+    --> rules/province_income.rule:89
+     |
+  89 | sum building_learning over buildings of learning_add   range >=0 <=40
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ can reach 43
+     |
+   The most the element of each `building` can add, largest first: over 40, library 2, temple 1.
+     over 40: the row contribution over_income adds (mods/over/income.rule:19)
+  ```
+
+**ついでに直したこと**：要素のフィールドに日付があり、入力と出力に日付の無い規則では、記録の関数が日付を書くのに使う `_civil` が生成されず、どの言語の runner も記録の行で止まっていた（Python なら `NameError: name '_civil' is not defined`）。日付のフィールドに `unique` を書いて試して見つけた。要素の日付のフィールドも数えるようにした。上の突き合わせのとおり、ほかの規則の生成物は変わらない。
+
+**捨てたもの**：
+
+- 件数を書く新しい形（`at most N`）。`count` の上限がもうある（§15.58）。
+- `count` の上限だけで E147 を出すこと。件数と列の上端の積で合計の上限は出るが、たいていの規則で範囲を大きく越える（件数 50 で一件 10 万円なら 500 万円）。今ある規則は、長すぎる並びを入口で受け付けないことに頼って `sum` の範囲を書いており、新しく落とすことになる。
+- 数・量・文字列・日付の `unique` で上限を出すこと。値の数が多すぎて（文字列には限りが無い）、出る上限が実際とかけ離れる。入口だけに効かせた。
+- 契約（JSON Schema、proto）から `unique` を読むこと、契約に書かせること。JSON Schema の `uniqueItems` は要素全体が同じものを外すだけで、一つのフィールドについては言えない。
+- 証明書と再検査（Lean、Python）を変えること。E147 は検査が言うことで、主張は足していない。
+
+**今も残る限界**：
+
+- 上書きされる行も最大に入れる。基の行が 50 で、寄与が `overrides` で 10 に下げても 50 で数えるので、E147 が言いすぎることがある。
+- 表が出さない列は、値ごとに絞らずに列の範囲の上端で数える。
+- 表がほかの列（kunitori の `food_of` の地形など）でも分けるとき、ほかの列は見ずに最大を取る。一回の呼び出しで同時に立たない行どうしでも、大きいほうで数える。
+- `unique` を書いていない並び、数や文字列の `unique` しかない並び、`count` の上限しかない並びの `sum` は、今も入口が実行時に受け付けないだけである。
+- 受け付けない理由を二つ以上持つ入力では、参照の評価器と生成コードで、先に出る文が違うことがある（上の 5）。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

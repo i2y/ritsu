@@ -619,6 +619,10 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             if let Some(fb) = &fd.fed {
                 note.push(crate::i18n::text(&ritsu_base::fed::page_note(&fb.written)));
             }
+            // §15.290: no two elements take the same value, which the door holds the caller to.
+            if fd.unique.is_some() {
+                note.push(tr!("同じ値の要素は二つありません（`unique`）", "no two elements have the same value (`unique`)"));
+            }
             note.extend(trailing_comment(&lines, fd.name.span.line));
             let note = note.join(" / ");
             o.push_str(&format!(

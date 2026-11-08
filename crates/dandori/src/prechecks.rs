@@ -109,7 +109,7 @@ fn test_of(p: &Precondition, args: &[(String, TExpr)]) -> Option<PreTest> {
             Some(PreTest::Relation { left: side(left)?, op: op.clone(), right: side(right)? })
         }
         Precondition::Days { input, file, date, days } => Some(PreTest::Days { input: input.clone(), value: arg(input)?, file: file.clone(), date: date.clone(), days: days.iter().map(|d| civil(*d)).collect() }),
-        Precondition::Sum { .. } | Precondition::Length { .. } => None,
+        Precondition::Sum { .. } | Precondition::Length { .. } | Precondition::Unique { .. } => None,
         // A `never` line (rulec's §15.282). A test only the rule's own door reads, `= none` or
         // `starts_with`, stays with the door.
         Precondition::Never { said, conds } => {

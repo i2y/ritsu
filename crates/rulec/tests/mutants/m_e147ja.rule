@@ -1,0 +1,22 @@
+rule 学問所のある州の学問(province_learning_academy_ja) v1
+description "建物に学問所のある州の学問で、学問所の行を 40 と書いたもの。建物は一つずつ（`unique`）でも、寺と書庫と並ぶと建物の合計は 43 になり、合計の範囲の 40 を越える（E147）"
+
+enum 建物(building) = 寺(temple) | 書庫(library) | 市場(market) | 学問所(academy)
+
+elements 建物一覧(buildings)
+  建物(building) : 建物  unique
+
+outputs
+  学問(learning) : number  round down(1)
+
+table 学問の表(learning_of)
+policy unique
+| 建物   | -> 学問の加算(learning_add) : number |
+| 寺     | 1                                    |
+| 書庫   | 2                                    |
+| 市場   | 0                                    |
+| 学問所 | 40                                   |
+
+sum 建物の学問(building_learning) over 建物一覧 of 学問の加算  range >=0 <=40
+
+define 学問 : number = 1 + 建物の学問

@@ -38,7 +38,9 @@ fn merged(dir: &Path, rule: &str, set: &[&str]) -> (rulec::ast::RuleFile, rulec:
 /// by hand — on every vector of the merged rule:
 /// a sum (`sum`), the sums of two kinds multiplied (`kinds`), the largest of a walk and a pairing
 /// with a team size added (`largest`), a clause over an open table and a second over the first
-/// (`override`), and a cost of each vehicle a walk adds up with a surcharge in it (`walk`).
+/// (`override`), a cost of each vehicle a walk adds up with a surcharge in it (`walk`), and the
+/// learning of buildings that each stand once, with the row of a building a mod adds (`unique`,
+/// §15.290).
 #[test]
 fn the_merged_rule_answers_as_the_list_of_what_was_loaded() {
     for (case, rule, contribs) in [
@@ -47,6 +49,7 @@ fn the_merged_rule_answers_as_the_list_of_what_was_loaded() {
         ("largest", "mentor_bonus.rule", &["contrib/pairing.rule", "contrib/team_size.rule"][..]),
         ("override", "standing.rule", &["contrib/strict_policy.rule", "contrib/grace_policy.rule"][..]),
         ("walk", "fleet_upkeep.rule", &["contrib/aging.rule", "contrib/green.rule"][..]),
+        ("unique", "province_learning.rule", &["contrib/small_academy.rule"][..]),
     ] {
         let dir = root().join("tests/merging").join(case);
         let mut args = vec!["check", rule];

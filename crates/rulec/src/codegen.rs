@@ -2293,7 +2293,7 @@ impl<'a> Gen<'a> {
 /// `_proto`, …) have none, and call the builtins as they are; an alias of the rule or of an
 /// enum that hides a builtin is W121's. `min` and `max` are the rule language's own functions
 /// and are written as `_min` and `_max`.
-const PY_BUILTINS: [(&str, &str); 10] = [
+const PY_BUILTINS: [(&str, &str); 11] = [
     ("_isinstance", "isinstance"),
     ("_int", "int"),
     ("_float", "float"),
@@ -2304,6 +2304,7 @@ const PY_BUILTINS: [(&str, &str); 10] = [
     ("_any", "any"),
     ("_all", "all"),
     ("_sum", "sum"),
+    ("_set", "set"),
 ];
 
 /// The other names the module defines at its top level beside the bound builtins: the helpers.
@@ -2512,6 +2513,25 @@ impl<'a> Gen<'a> {
         self.f.elements.get(s).map(|e| e.fields.iter().collect()).unwrap_or_default()
     }
 
+    /// The fields of sequence `s` marked `unique` (§15.290), in declaration order, for the walk
+    /// whose summaries are `sums` when it is the first walk over `s`: that walk refuses an element
+    /// with the value of one that an element before it had, right after the guards of the element.
+    /// A later walk over the sequence reads only elements the first let through.
+    pub(crate) fn unique_fields(&self, s: usize, sums: &[usize]) -> Vec<&crate::ast::VarDecl> {
+        let first = self
+            .walk_steps()
+            .into_iter()
+            .find_map(|w| match w {
+                WalkStep::Walk { seq, sums: ss, .. } if seq == s => Some(ss.as_slice() == sums),
+                _ => None,
+            })
+            .unwrap_or(true);
+        if !first {
+            return Vec::new();
+        }
+        self.element_fields(s).into_iter().filter(|fd| fd.unique.is_some()).collect()
+    }
+
     /// The walk plan as the generators write it (§15.219): for each walk in the order it runs,
     /// its number, its sequence, the items of one element worked out on every element, and the
     /// summaries it reduces — with the items of one call that run after each number of walks.
@@ -2619,6 +2639,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.py_element_guards(s, &local);
+        let (seen, step) = self.py_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.py_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -2889,6 +2912,24 @@ impl<'a> Gen<'a> {
             }
         }
         o
+    }
+
+    /// The fields marked `unique` (§15.290), in Python: a set for each before the first walk over
+    /// the sequence, and in the walk, after the guards of one element, the refusal of a value an
+    /// element before it had. Returns the lines before the loop and the lines inside it.
+    fn py_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = self.temp(&format!("{}_seen", self.ident(&fd.name.text)));
+            let v = local(&fd.name.text);
+            init.push_str(&format!("    {seen} = _set()\n"));
+            step.push_str(&format!(
+                "    if {v} in {seen}:\n        raise RuleInputError(\"{}\", _repr({v}))\n    {seen}.add({v})\n",
+                crate::door::duplicate(seq, &fd.name.text)
+            ));
+        }
+        (init, step)
     }
 
     /// A float whose value is a whole number, `1000.0` from a caller's JSON, taken as the integer
@@ -3942,6 +3983,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.go_element_guards(s, &local, zero);
+        let (seen, step) = self.go_unique(s, sums, &local, zero);
+        o.push_str(&seen);
+        body.push_str(&step);
         // Go refuses to compile a local nothing reads, so what the walk's own items bind and no
         // one in the walk reads is said to be read (§15.219).
         let reads = self.walk_reads(body_items, sums);
@@ -4205,6 +4249,24 @@ impl<'a> Gen<'a> {
             }
         }
         o
+    }
+
+    /// The fields marked `unique` (§15.290), in Go: a map for each before the first walk over the
+    /// sequence, and in the walk, after the guards of one element, the refusal of a value an element
+    /// before it had.
+    fn go_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String, zero: &str) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = self.temp(&format!("{}Seen", self.ident(&fd.name.text)));
+            let v = local(&fd.name.text);
+            init.push_str(&format!("\t{seen} := map[any]bool{{}}\n"));
+            step.push_str(&format!(
+                "\tif {seen}[{v}] {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\"}}\n\t}}\n\t{seen}[{v}] = true\n",
+                crate::door::duplicate(seq, &fd.name.text)
+            ));
+        }
+        (init, step)
     }
 
     fn go_fn(&self) -> String {
@@ -6171,6 +6233,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.ts_element_guards(s, &local);
+        let (seen, step) = self.ts_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.ts_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -6413,6 +6478,24 @@ impl<'a> Gen<'a> {
             }
         }
         o
+    }
+
+    /// The fields marked `unique` (§15.290), in TypeScript: a set for each before the first walk
+    /// over the sequence, and in the walk, after the guards of one element, the refusal of a value
+    /// an element before it had. A bigint and a string compare by value in a `Set`.
+    fn ts_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = self.temp(&format!("{}Seen", self.ident(&fd.name.text)));
+            let v = local(&fd.name.text);
+            init.push_str(&format!("  const {seen}: Set<unknown> = new Set();\n"));
+            step.push_str(&format!(
+                "  if ({seen}.has({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n  {seen}.add({v});\n",
+                crate::door::duplicate(seq, &fd.name.text)
+            ));
+        }
+        (init, step)
     }
 
     /// How the walk binds each element: `let` when the element door may rebind it to a copy that
@@ -7529,6 +7612,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.rs_element_guards(s, &local);
+        let (seen, step) = self.rs_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.rs_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -7745,6 +7831,30 @@ impl<'a> Gen<'a> {
             }
         }
         o
+    }
+
+    /// The fields marked `unique` (§15.290), in Rust: a list of the values met for each before the
+    /// first walk over the sequence, and in the walk, after the guards of one element, the refusal
+    /// of a value an element before it had. A list and `contains`, as an enum here is not `Hash`.
+    fn rs_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = self.temp(&format!("{}_seen", self.ident(&fd.name.text)));
+            let v = local(&fd.name.text);
+            let ty = self.ty_of(&fd.name.text);
+            let (t, kept) = match &ty {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => ("i64".to_string(), v.clone()),
+                Ty::Str => ("String".to_string(), format!("{v}.clone()")),
+                other => (self.rs_ty(other), v.clone()),
+            };
+            init.push_str(&format!("    let mut {seen}: Vec<{t}> = Vec::new();\n"));
+            step.push_str(&format!(
+                "    if {seen}.contains(&{v}) {{\n        return Err(RuleError::Input {{ what: \"{}\", value: None }});\n    }}\n    {seen}.push({kept});\n",
+                crate::door::duplicate(seq, &fd.name.text)
+            ));
+        }
+        (init, step)
     }
 
     fn rs_fn(&self) -> String {
@@ -10107,7 +10217,12 @@ impl Gen<'_> {
                 .iter()
                 .map(|fd| {
                     let ty = self.ty_of(&fd.name.text);
-                    self.value_json(&fd.name.text, &alias(&fd.name), &fty(&ty), &ty)
+                    let one = self.value_json(&fd.name.text, &alias(&fd.name), &fty(&ty), &ty);
+                    // A field no two elements may share says so (§15.290); the others say nothing.
+                    match fd.unique {
+                        Some(_) => format!("{},\"unique\":true}}", one.strip_suffix('}').unwrap_or(&one)),
+                        None => one,
+                    }
                 })
                 .collect();
             let head = crate::json::Obj::new()
@@ -11622,6 +11737,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.rb_element_guards(s, &local);
+        let (seen, step) = self.rb_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.rb_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -11801,6 +11919,24 @@ impl<'a> Gen<'a> {
         fin.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
         fin.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
         (init, step, fin)
+    }
+
+    /// The fields marked `unique` (§15.290), in Ruby: a hash for each before the first walk over the
+    /// sequence, and in the walk, after the guards of one element, the refusal of a value an element
+    /// before it had.
+    fn rb_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = self.temp(&format!("{}_seen", self.ident(&fd.name.text)));
+            let v = local(&fd.name.text);
+            init.push_str(&format!("    {seen} = {{}}\n"));
+            step.push_str(&format!(
+                "    raise RuleInputError.new(\"{}\", {v}) if {seen}.key?({v})\n    {seen}[{v}] = true\n",
+                crate::door::duplicate(seq, &fd.name.text)
+            ));
+        }
+        (init, step)
     }
 
     fn rb_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
@@ -13187,6 +13323,9 @@ impl<'a> Gen<'a> {
         };
         let mut o = String::new();
         let mut body = self.sw_element_guards(s, &local);
+        let (seen, step) = self.sw_unique(s, sums, &local);
+        o.push_str(&seen);
+        body.push_str(&step);
         body.push_str(&self.sw_items(&local, trace, Phase::Only(body_items)));
         let mut after = String::new();
         for &i in sums {
@@ -13392,6 +13531,28 @@ impl<'a> Gen<'a> {
         fin.push_str(&format!("    let {} = {answer}\n", self.sw_ident(&out_name)));
         fin.push_str(&self.sw_unread(&out_name));
         (init, step, fin)
+    }
+
+    /// The fields marked `unique` (§15.290), in Swift: a set for each before the first walk over the
+    /// sequence, and in the walk, after the guards of one element, the refusal of a value an element
+    /// before it had.
+    fn sw_unique(&self, s: usize, sums: &[usize], local: &dyn Fn(&str) -> String) -> (String, String) {
+        let seq = &self.f.elements[s].name.text;
+        let (mut init, mut step) = (String::new(), String::new());
+        for fd in self.unique_fields(s, sums) {
+            let seen = sw_name(&self.temp(&format!("{}Seen", self.ident(&fd.name.text))));
+            let v = local(&fd.name.text);
+            let t = match self.ty_of(&fd.name.text) {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => "Int64".to_string(),
+                other => self.sw_ty(&other),
+            };
+            init.push_str(&format!("    var {seen}: Set<{t}> = []\n"));
+            step.push_str(&format!(
+                "    if {seen}.contains({v}) {{\n        throw RuleError.input(what: \"{}\", value: nil)\n    }}\n    {seen}.insert({v})\n",
+                crate::door::duplicate(seq, &fd.name.text)
+            ));
+        }
+        (init, step)
     }
 
     fn sw_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
@@ -14008,13 +14169,20 @@ pub fn round_tests_swift(u: &Uses) -> String {
 // ---------------------------------------------------------------------------
 
 /// Howard Hinnant's civil_from_days, as each language spells it. Only emitted when the rule
-/// has a date anywhere on its surface.
+/// has a date anywhere on its surface: an input, an output, or a field of an element, which the
+/// record writes back as a day too.
 fn civil_needed(f: &RuleFile, c: &Checked) -> bool {
+    let date = |t: Option<Ty>| match t {
+        Some(Ty::Date) => true,
+        Some(Ty::Opt(t)) => *t == Ty::Date,
+        _ => false,
+    };
     f.inputs
         .iter()
         .map(|i| &i.name.text)
         .chain(f.outputs.iter().map(|o| &o.name.text))
         .any(|n| matches!(c.ty_of(n), Some(Ty::Date) | Some(Ty::Opt(_))))
+        || f.element_fields().any(|fd| date(c.ty_of(&fd.name.text)))
 }
 
 impl<'a> Gen<'a> {

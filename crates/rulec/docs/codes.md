@@ -154,6 +154,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E142](#e142) | error | The definitions give a combination a `never` line rules out |
 | [E143](#e143) | error | A `never` line cannot be shown from the definitions |
 | [E144](#e144) | error | `fed by` does not read, or stands where it cannot |
+| [E147](#e147) | error | With each value of a `unique` field once, a `sum` can pass the top of its range |
+| [E148](#e148) | error | Only a field of `elements` that is always there can be `unique` |
 
 ## E001
 
@@ -6163,3 +6165,68 @@ policy unique
 ```
 
 Related codes: [E121](#e121), [E122](#e122)
+
+## E147
+
+`error` — **With each value of a `unique` field once, a `sum` can pass the top of its range**
+
+**When.** A field of `elements` of an enum or a truth value is `unique`, and a `sum` over that sequence passes the top of its range when the most the element of each value can add is added up over every value. The most for a value is read off the rows of the tables that give the column the `sum` adds, rows a contribution adds and rows `overrides` replaces among them: where a table has a column of the `unique` field, only the rows that take the value; where it has none, every row. A column no table gives (a field of the element, a `define`, an open value) counts at the top of its range. Where a `count` caps how many elements the sequence has, the largest that many are added. With two `unique` fields or more, the smallest total is the one compared. The rule is checked alone and with its contributions. With no two elements sharing a value the total still leaves the range, so the generated code refuses such a sequence at its door.
+
+**Fix.** Widen the range of the `sum` and decide the answer for such a total, lower what the rows add, or cap how many elements the sequence has with a `count`. Which is a business decision. Where a contribution added the row, a note names the contribution and where the row is. A sequence with no `unique` field of an enum or a truth value is outside this check (only the door refuses, when the code runs).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum building(building) = temple(temple) | library(library) | academy(academy)
+
+elements buildings(buildings)
+  kind(kind) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of(learning_of)
+policy unique
+| kind    | -> learning_add(learning_add) : number |
+| temple  | 1                                      |
+| library | 2                                      |
+| academy | 40                                     |
+
+sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+
+define learning : number = 1 + building_learning
+```
+
+Related codes: [E148](#e148), [E131](#e131), [E122](#e122), [E033](#e033)
+
+## E148
+
+`error` — **Only a field of `elements` that is always there can be `unique`**
+
+**When.** `unique` stands on an input's line, on a field of `elements` that may be absent (`?`), or on a `random` field. It promises that no two elements of a sequence have the same value of the field, so an input, with nothing to be compared with, cannot take it. Whether two elements without a value count as the same is not settled, and a `random` value is drawn on its own each time, with nothing to keep two draws apart.
+
+**Fix.** Take `unique` off, or write it on a field of `elements` that is always there and not `random`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum building(building) = temple(temple) | library(library)
+
+inputs
+  kind(kind) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of(learning_of)
+policy unique
+| kind    | -> learning |
+| temple  | 1           |
+| library | 2           |
+```
+
+Related codes: [E147](#e147), [E070](#e070)

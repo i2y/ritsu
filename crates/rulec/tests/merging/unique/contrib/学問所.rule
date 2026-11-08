@@ -1,0 +1,10 @@
+contribution 学問所(academy_ja) v1
+description "季節ごとに学問 40 を生む学問所。寺と書庫と並ぶと建物の合計は 43 になり、合計の範囲の 40 を越えるので、検査が止める（E147）"
+to "../州の学問.rule" signature:1891eb4941f0ccfa
+
+extend 建物 with 学問所(academy)
+
+clause 学問所の学問(academy_learning) -> 学問の加算
+  when 建物 学問所
+  then 40
+  overrides 学問の表

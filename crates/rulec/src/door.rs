@@ -81,6 +81,12 @@ pub fn too_many(name: &str, cap: i128) -> String {
     tr!("{name} の要素が多すぎます（上限 {cap}）", "{name} has too many elements (at most {cap})")
 }
 
+/// Two elements of a sequence with the same value of a field marked `unique` (§15.290). The value is
+/// not in the sentence, as no other sentence carries one.
+pub fn duplicate(seq: &str, field: &str) -> String {
+    tr!("{seq} の要素に {field} が同じものが二つあります", "{seq} has two elements with the same {field}")
+}
+
 /// A combination a `constraint` rules out, said the way the rule writes it.
 pub fn constraint(said: &str) -> String {
     tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}")
@@ -215,9 +221,10 @@ pub fn civil(s: &str) -> Option<(i32, u32, u32)> {
 
 /// What the door of every generated language refuses this input for, in the order the doors
 /// look: each input in the order the rule declares it — there at all, of its kind, inside its
-/// range — then the sequence and each of its elements, then every `constraint`, then the days of
-/// a koyomi date; and last the rule's own contradiction, two elements taking under
-/// `take_unique`. `None` when the input is answered. `input` is the object a vector's `in` is.
+/// range — then the sequence and each of its elements, two elements with the same value of a
+/// `unique` field, then every `constraint`, then the days of a koyomi date; and last the rule's own
+/// contradiction, two elements taking under `take_unique`. `None` when the input is answered.
+/// `input` is the object a vector's `in` is.
 pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
     read(f, c, input_obj).err()
 }
@@ -269,6 +276,12 @@ pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<Stri
                 }
             }
             elems.push(e);
+        }
+        // Two elements with the same value of a `unique` field (§15.290), once every element has
+        // been read and before any sum over the sequence: element by element, each field in the
+        // order the rule declares them, as the generated walk looks.
+        if let Some(field) = repeated(el, &elems) {
+            return Err(input(duplicate(seq, field)));
         }
         // A sum over a field of the elements is refused the moment its total passes the top of
         // the range it declares (§15.100); a sum over what a table decides per element is the
@@ -325,6 +338,26 @@ pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<Stri
         }
     }
     Ok(vals)
+}
+
+/// The first field marked `unique` that an element shares with an element before it (§15.290):
+/// element by element, and for each element its fields in the order the rule declares them, which
+/// is the order the generated walk meets them in. Values compare as values: a number by its value, a
+/// date by its day.
+pub fn repeated<'e>(el: &'e crate::ast::ElementsDecl, elems: &[BTreeMap<String, Val>]) -> Option<&'e str> {
+    let fields: Vec<&str> = el.fields.iter().filter(|fd| fd.unique.is_some()).map(|fd| fd.name.text.as_str()).collect();
+    if fields.is_empty() {
+        return None;
+    }
+    for (k, e) in elems.iter().enumerate() {
+        for &field in &fields {
+            let Some(v) = e.get(field) else { continue };
+            if elems[..k].iter().any(|p| p.get(field) == Some(v)) {
+                return Some(field);
+            }
+        }
+    }
+    None
 }
 
 /// The `sum`s the rule declares, over any of its sequences.

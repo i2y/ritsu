@@ -1,0 +1,35 @@
+rule province_learning(province_learning) v1
+description "What learning a province yields in a season: one for the province, and what each of its buildings adds. Each building stands once (`unique`), so the most the buildings add together is what each adds at most, added up. A mod that adds a building adds its row to the open table, and that most is checked with the row in it"
+
+enum building(building) = temple(temple) | library(library) | market(market)  open
+
+elements buildings(buildings)
+  building(building) : building  unique
+
+outputs
+  learning(learning) : number  round down(1)
+
+table learning_of open
+policy unique
+| building             | -> learning_add : number |
+| temple               | 1                        |
+| library              | 2                        |
+| not: temple, library | 0                        |
+
+sum building_learning(building_learning) over buildings of learning_add  range >=0 <=40
+
+define learning : number = 1 + building_learning
+
+sequence none_built
+| building |
+
+sequence library_temple_market
+| building |
+| library  |
+| temple   |
+| market   |
+
+examples
+| buildings             | -> learning |
+| none_built            | 1           |
+| library_temple_market | 4           |

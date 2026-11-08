@@ -288,6 +288,14 @@ fn run_breaks(rules: &dyn Rules, rule: &Path, p: &Precondition, s: &Seen) -> boo
             Some(Value::List(xs)) => fails(&[], Some(xs.len() as i128)),
             _ => false,
         },
+        // Two elements of the list the run gave with the same value of the field.
+        Precondition::Unique { sequence, field } => match s.given.iter().find(|(n, _)| n == sequence).map(|(_, v)| v) {
+            Some(Value::List(xs)) => {
+                let vs: Vec<&Value> = xs.iter().filter_map(|el| el.iter().find(|(n, _)| n == field).map(|(_, v)| v)).collect();
+                vs.iter().enumerate().any(|(k, v)| vs[..k].contains(v))
+            }
+            _ => false,
+        },
         Precondition::Days { input, days, .. } => s.given.iter().any(|(n, v)| n == input && day_of(v).is_some_and(|d| !days.contains(&d))),
         // Every value the line names was given, and meets its condition.
         Precondition::Never { conds, .. } => conds.iter().all(|k| s.given.iter().find(|(n, _)| *n == k.name).is_some_and(|(_, v)| k.test.holds(v) == Some(true))),
@@ -373,6 +381,13 @@ fn precondition(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, facts: &Rul
                 None => ByRanges::Open(no_run_breaks(&tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition"))),
             }
         }
+        // Whether two elements share a value is not something a range says; rulec shows it of a list
+        // of one element at most.
+        Precondition::Unique { .. } => match asked(rules, &call.rule, p, &[], call.max_len) {
+            Some(Answer::Holds) => ByRanges::Shown,
+            Some(Answer::Undecided(why)) => ByRanges::Open(no_run_breaks(&why)),
+            _ => ByRanges::Open(no_run_breaks(&tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition"))),
+        },
         Precondition::Days { input, file, date, days } => match call.args.iter().find(|a| a.to == *input) {
             None => ByRanges::Open(no_run_breaks(&tr!("呼び出しが `{input}` を渡していません", "the call does not give `{input}`"))),
             Some(a) => {
@@ -472,7 +487,7 @@ fn rule_call(rules: &dyn Rules, dates: &dyn Dates, seen: &Seeing, call: &Program
                     Precondition::Relation { left, right, .. } => vec![left.clone(), right.clone()],
                     Precondition::SumRelation { left, right, .. } => left.iter().chain(right.iter()).cloned().collect(),
                     Precondition::Sum { over, .. } => vec![over.clone()],
-                    Precondition::Length { sequence, .. } => vec![sequence.clone()],
+                    Precondition::Length { sequence, .. } | Precondition::Unique { sequence, .. } => vec![sequence.clone()],
                     Precondition::Days { input, .. } => vec![input.clone()],
                     Precondition::Never { conds, .. } => conds.iter().map(|k| k.name.clone()).collect(),
                 };

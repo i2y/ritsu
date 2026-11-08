@@ -1,0 +1,21 @@
+contribution 小さな学問所(small_academy_ja) v1
+description "季節ごとに学問 10 を生む学問所。ほかの建物が一つずつ並んでも、建物の合計は 13 までで、合計の範囲の 40 に収まる"
+to "../州の学問.rule" signature:1891eb4941f0ccfa
+
+extend 建物 with 学問所(academy)
+
+clause 学問所の学問(academy_learning) -> 学問の加算
+  when 建物 学問所
+  then 10
+  overrides 学問の表
+
+sequence 全部の建物
+| 建物   |
+| 寺     |
+| 書庫   |
+| 市場   |
+| 学問所 |
+
+examples
+| 建物一覧   | -> 学問 |
+| 全部の建物 | 14      |

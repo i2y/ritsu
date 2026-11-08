@@ -842,8 +842,8 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
         _ => match (o.with(|| api_of(tool, &o.read, &o.label, joined)), n.with(|| api_of(tool, &n.read, &n.label, joined))) {
             (Ok(a), Ok(b)) => {
                 out.how = "api";
-                let (mut a, va) = without_heads(tool, cleaned(a));
-                let (mut b, vb) = without_heads(tool, cleaned(b));
+                let (mut a, va) = without_heads(tool, without_unique_marks(tool, cleaned(a)));
+                let (mut b, vb) = without_heads(tool, without_unique_marks(tool, cleaned(b)));
                 out.fed_by = fed_by_between(take_fed_by(tool, &mut a), take_fed_by(tool, &mut b));
                 let (asked_old, asked_new) = (take_preconditions(tool, &mut a), take_preconditions(tool, &mut b));
                 compare_json("", &a, &b, &mut out.changes);
@@ -1199,6 +1199,42 @@ fn take_preconditions(tool: Tool, j: &mut Json) -> Vec<Json> {
     asked.as_arr().unwrap_or_default().to_vec()
 }
 
+/// A rule's api with the `unique` mark taken off each field of its sequences (rulec's §15.290).
+/// The mark says what a precondition of kind `unique` says, and that one is compared the way a
+/// condition is ([`compare_preconditions`]). Compared again as a key, the mark dropped would be a
+/// removal that may break a user, where the condition dropped asks less.
+fn without_unique_marks(tool: Tool, j: Json) -> Json {
+    fn unmarked(fields: Json) -> Json {
+        match fields {
+            Json::Arr(xs) => Json::Arr(
+                xs.into_iter()
+                    .map(|x| match x {
+                        Json::Obj(pairs) => Json::Obj(pairs.into_iter().filter(|(k, _)| k != "unique").collect()),
+                        other => other,
+                    })
+                    .collect(),
+            ),
+            other => other,
+        }
+    }
+    fn walk(j: Json) -> Json {
+        match j {
+            Json::Obj(pairs) => Json::Obj(
+                pairs
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let v = if k == "elements" { unmarked(v) } else { walk(v) };
+                        (k, v)
+                    })
+                    .collect(),
+            ),
+            Json::Arr(xs) => Json::Arr(xs.into_iter().map(walk).collect()),
+            other => other,
+        }
+    }
+    if tool == Tool::Rulec { walk(j) } else { j }
+}
+
 /// What a rule asks of its callers that only one version asks, each in words a person reads.
 fn compare_preconditions(old: &[Json], new: &[Json], out: &mut Vec<IChange>) {
     for (i, p) in old.iter().enumerate().filter(|(_, p)| !new.contains(p)) {
@@ -1223,6 +1259,7 @@ fn precondition_said(p: &Json) -> String {
         Some("constraint") => format!("constraint {} {} {}", side("left"), word("op"), side("right")),
         Some("sum") => format!("{}: sum of {}.{} <= {}", word("name"), word("over"), word("of"), max()),
         Some("length") => format!("length of {} <= {}", word("sequence"), max()),
+        Some("unique") => format!("no two elements of {} with the same {}", word("sequence"), word("field")),
         Some("days") => {
             let from = p.get("from");
             let of = |k: &str| from.and_then(|f| f.get(k)).and_then(Json::as_str).unwrap_or_default().to_string();

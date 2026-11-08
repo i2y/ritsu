@@ -1,0 +1,25 @@
+rule 州の威信(province_prestige_ja) v1
+description "冬に寺が足す威信で、`unique` を要素の建物でなく、入力の季節に書いたもの（E148）"
+
+enum 季節(season) = 春(spring) | 夏(summer) | 秋(autumn) | 冬(winter)
+enum 建物(building) = 寺(temple) | 書庫(library) | 市場(market)
+
+inputs
+  季節(season) : 季節  unique
+
+elements 建物一覧(buildings)
+  建物(building) : 建物
+
+outputs
+  威信(prestige) : number  round down(1)
+
+table 威信の表(prestige_of)
+policy unique
+| 建物       | 季節       | -> 威信の加算(prestige_add) : number |
+| 寺         | 冬         | 1                                    |
+| 寺         | 春, 夏, 秋 | 0                                    |
+| 書庫, 市場 | -          | 0                                    |
+
+sum 建物の威信(building_prestige) over 建物一覧 of 威信の加算  range >=0 <=10
+
+define 威信 : number = 建物の威信

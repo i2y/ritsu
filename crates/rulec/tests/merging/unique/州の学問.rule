@@ -1,0 +1,35 @@
+rule 州の学問(province_learning_ja) v1
+description "州が一つの季節に得る学問。州そのものの 1 に、建物がそれぞれ足す分を足す。建物は一つずつしか建たない（`unique`）ので、建物が足す分の合計は、建物ごとの最大を足したものまでになる。建物を足す mod は開いた表に行を足し、その行も入れてこの最大を確かめる"
+
+enum 建物(building) = 寺(temple) | 書庫(library) | 市場(market)  open
+
+elements 建物一覧(buildings)
+  建物(building) : 建物  unique
+
+outputs
+  学問(learning) : number  round down(1)
+
+table 学問の表(learning_of) open
+policy unique
+| 建物          | -> 学問の加算(learning_add) : number |
+| 寺            | 1                                    |
+| 書庫          | 2                                    |
+| not: 寺, 書庫 | 0                                    |
+
+sum 建物の学問(building_learning) over 建物一覧 of 学問の加算  range >=0 <=40
+
+define 学問 : number = 1 + 建物の学問
+
+sequence 何もない
+| 建物 |
+
+sequence 書庫と寺と市場
+| 建物 |
+| 書庫 |
+| 寺   |
+| 市場 |
+
+examples
+| 建物一覧       | -> 学問 |
+| 何もない       | 1       |
+| 書庫と寺と市場 | 4       |

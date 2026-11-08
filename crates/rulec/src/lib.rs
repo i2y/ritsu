@@ -99,6 +99,9 @@ pub mod strength;
 /// What `rulec gen` writes: the targets it is given, and the extras beside them (§15.277).
 pub mod targets;
 pub mod types;
+/// The `unique` mark on a field of `elements` (§15.290): where it stands (E148), and what it caps a
+/// `sum` at (E147).
+pub mod unique;
 pub mod vfs;
 pub mod vdiff;
 pub mod vectors;
@@ -275,6 +278,8 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
     // the copies of the sources it cites (§15.68).
     diags.extend(enums::check(f, &t, path));
     diags.extend(projection::check(f, &t, path));
+    // Where `unique` may stand, and the `sum`s a field marked `unique` lets past their ranges (§15.290).
+    diags.extend(unique::check(f, &t, path));
     // The contract whose Connect service the rule is served as (§15.274).
     diags.extend(implements::check(f, &t, path));
     diags.extend(sources::check(f, path));

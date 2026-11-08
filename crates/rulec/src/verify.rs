@@ -407,8 +407,9 @@ pub fn schema_out(f: &RuleFile, c: &Checked, alias: bool) -> String {
 /// `rulec schema` says what the wire looks like: the fields, their types, and each one's own
 /// range. A caller that validates against it has done everything JSON Schema can express —
 /// and is still not done. A relation between two inputs (§15.55), a bound on the total of a
-/// sequence (§15.100) and a cap on how many elements one may have (§15.58) are all refused
-/// at the door by the generated code, and not one of the three is a shape.
+/// sequence (§15.100), a cap on how many elements one may have (§15.58) and a field no two
+/// elements may share (§15.290) are all refused at the door by the generated code, and not one
+/// of them is a shape: `uniqueItems` compares whole elements, not one field of them.
 ///
 /// Where the caller is a step of a workflow that went and fetched the sequence, learning
 /// this by being refused is one boundary too late: the value is already recorded, and the
@@ -422,6 +423,8 @@ pub enum Pre {
     Sum { name: String, over: String, of: String, max: i128 },
     /// How many elements a sequence may have.
     Length { sequence: String, max: i128 },
+    /// No two elements of a sequence with the same value of a field marked `unique` (§15.290).
+    Unique { sequence: String, field: String },
     /// A date input that takes only the days of a koyomi date (§15.174): the file and the date
     /// as the rule names them, and the days, as ordinals.
     Days { input: String, file: String, date: String, days: Vec<i64> },
@@ -515,6 +518,10 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
         if let Some(cap) = cap {
             v.push(Pre::Length { sequence: el.name.text.clone(), max: cap });
         }
+        // Each field marked `unique`, in the order the sequence declares them (§15.290).
+        for fd in el.fields.iter().filter(|fd| fd.unique.is_some()) {
+            v.push(Pre::Unique { sequence: el.name.text.clone(), field: fd.name.text.clone() });
+        }
     }
     // The days of a koyomi date, in the order the inputs are declared (§15.174).
     for i in &f.inputs {
@@ -578,6 +585,11 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
                     .str("sequence", sequence)
                     .int("max", *max)
                     .finish(),
+                Pre::Unique { sequence, field } => crate::json::Obj::new()
+                    .str("kind", "unique")
+                    .str("sequence", sequence)
+                    .str("field", field)
+                    .finish(),
                 Pre::Never { said, conds } => crate::json::Obj::new()
                     .str("kind", "never")
                     .str("said", said)
@@ -621,6 +633,9 @@ fn pre_kinds(f: &RuleFile, c: &Checked) -> Option<String> {
     }
     if ps.iter().any(|p| matches!(p, Pre::Length { .. })) {
         words.push(tr!("並びの長さの上限", "a cap on a sequence's length"));
+    }
+    if ps.iter().any(|p| matches!(p, Pre::Unique { .. })) {
+        words.push(tr!("並びの要素どうしで同じ値をとらないフィールド", "a field no two elements of a sequence share"));
     }
     if words.is_empty() {
         return None;
