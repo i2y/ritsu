@@ -9,3 +9,4 @@ geas typing_clicking_and_enter_hold
 geas a_check_that_fails_and_a_refused_click
 geas the_pixie_greeter_in_english
 geas the_pixie_greeter_in_japanese
+geas a_pixie_app_replays_each_order
