@@ -125,11 +125,20 @@ A value a `keep` holds is written `{name}` from the record of the answer it came
 baseline and drift, for the same reason, and `actual` goes the same way: `"location":"/tickets/{id}"`.
 What `keep env` read is written so wherever it stands, and is shown nowhere else.
 
+A claim with `in any order` runs once for each order, in their fixed order, and each line of an order
+adds `"order":n` right after `claim`:
+
+```text
+{"claim":"the subscription ends where the latest event says, in any order","order":2,"event":"check","line":21,"check":"body json \".status\" is","expected":"\"canceled\"","actual":"\"active\"","ok":false}
+```
+
 ### The baseline
 
 A first line `{"geas_baseline":1,"pins":{"<target>":{…}}}` with the pins of each target that has
 any, then one line per observation, `{"claim","idx","target","call","obs":{"kind":"proc"|"http"|"screen",…}}`,
-the observation whole: every header, the whole body, the whole screen.
+the observation whole: every header, the whole body, the whole screen. A claim with `in any order` adds
+`"order"` after `claim`, `idx` being the `when`'s place in that order, and drift compares each order with
+the same order.
 
 ### The record
 
@@ -160,15 +169,19 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   waits adds `"within"`, and `"tries"` and `"ms"` when its time ran out or one of its calls failed.
   A failed `screen` check carries `screen`, the screen it saw, and a failed check that uses a name
   a `keep` holds carries `values`, `{"<name>":"<value>"}` (never what came from the environment). A
-  `keep` is an entry of `run`, its `call` being `keep body json ".id" as id`. `check` adds `"diagnostics"`, the
+  `keep` is an entry of `run`, its `call` being `keep body json ".id" as id`. A claim with `in any order`
+  adds `"orders"`, how many it ran in, and when it fails `"failed_orders":[{"order","lines"}]`, the lines
+  of the block's `when`s as they ran; its `checks` and `run` are those of the order the report shows (the
+  one that ended in an error, else the first that failed). `check` adds `"diagnostics"`, the
   keys written in the spec (W901), `[]` when it has none; `map` adds
   `"map":{"record","files","code","ran"}` and `"diagnostics"`. Several specs print one object a
   line.
 - A spec that does not parse: `{"geas":1,"ok":false,"file","diagnostics":[…]}`, each diagnostic
   `{"code","severity","file","line","col","message","notes","path"}`.
 - `drift`: `{"geas":1,"file","compared","drifted","unclaimed","claimed","changes":[{"claim","when",
-  "line","call","field","old","new","claimed"}],"notes","diagnostics"}`. A wait whose time ran out
-  adds a note: the answer compared is the last one.
+  "line","call","field","old","new","claimed"}],"notes","diagnostics"}`; a change of a claim with
+  `in any order` adds `"order"` after `claim`. A wait whose time ran out adds a note: the answer
+  compared is the last one.
 - `affected`: `{"geas":1,"spec","diff","records":[{"file","side"}],"claims":[{"index","name",
   "status","lines":[{"file","side","lines","how","startup"}]}],"unclaimed":[{"file","side","lines",
   "why"}],"deleted":[{"file","known"}],"outside","spec_changed","contract_changed","baseline_changed",

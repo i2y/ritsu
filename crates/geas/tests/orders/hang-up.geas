@@ -1,0 +1,25 @@
+# The handler that hangs up on an event older than the last it applied: the second order sends one,
+# so the claim ends as an error there, and the orders after it do not run. The claim after it runs.
+
+target api {
+  serve "python3 events.py {port} hang-up"
+  port auto
+}
+
+claim "the latest event wins in any order" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+
+claim "a claim after it still runs" {
+  when api.get("/subscription")
+  then status is 200
+}

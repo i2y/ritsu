@@ -513,9 +513,199 @@ pub enum Step {
 #[derive(Debug, Clone)]
 pub struct Claim {
     pub name: String,
+    /// In the order written, the steps of an `in any order` block among them.
     pub steps: Vec<Step>,
     /// Where `claim` is written.
     pub pos: Pos,
+    /// Its `in any order` block (DESIGN §23).
+    pub any_order: Option<AnyOrder>,
+}
+
+/// `in any order { … }` (DESIGN §23): steps of a claim whose order is not decided. Each is a `when`
+/// and the checks and `keep`s under it, and the claim runs once in every order they can come in. Two
+/// steps written the same are one and the same in an order, so an order is counted once.
+#[derive(Debug, Clone)]
+pub struct AnyOrder {
+    /// Where `in` is written.
+    pub pos: Pos,
+    /// Each step of the block, as the range of the claim's steps it takes, in the order written.
+    pub steps: Vec<std::ops::Range<usize>>,
+}
+
+/// One order a claim runs in: its number from 1, its steps in that order, where each of them is
+/// written among the claim's steps, and the lines of the block's `when`s as they come in it.
+#[derive(Debug, Clone)]
+pub struct Order {
+    pub number: usize,
+    pub steps: Vec<Step>,
+    pub places: Vec<usize>,
+    pub lines: Vec<usize>,
+}
+
+impl AnyOrder {
+    /// The most orders one block may make: six steps, none the same.
+    pub const MOST: usize = 720;
+
+    /// For each step of the block, the place of the first step written the same as it: the call, its
+    /// `within`, and the checks and `keep`s under it, whatever the spaces, the comments, or `then` and
+    /// `and`.
+    pub fn kinds(&self, steps: &[Step]) -> Vec<usize> {
+        let written: Vec<String> = self.steps.iter().map(|r| steps[r.clone()].iter().map(Step::as_written).collect::<Vec<_>>().join("\n")).collect();
+        (0..written.len()).map(|i| written.iter().position(|w| *w == written[i]).expect("itself")).collect()
+    }
+
+    /// How many orders the block makes, n! over the factorial of how many times each step is written,
+    /// in decimal: a block of many steps makes more than a machine word holds.
+    pub fn count(&self, steps: &[Step]) -> String {
+        let kinds = self.kinds(steps);
+        let mut times: Vec<usize> = Vec::new();
+        for (i, k) in kinds.iter().enumerate() {
+            if *k == i {
+                times.push(kinds.iter().filter(|x| *x == k).count());
+            }
+        }
+        orders_of(&times)
+    }
+
+    /// Every order, each as the places of the block's steps (from 0) in the order they run: the order
+    /// written first, then the rest as a dictionary sorts them by those places. Of steps written the
+    /// same, the one written first comes first. None when there are more than [`AnyOrder::MOST`].
+    pub fn orders(&self, steps: &[Step]) -> Option<Vec<Vec<usize>>> {
+        if self.count(steps).parse::<usize>().map_or(true, |n| n > AnyOrder::MOST) {
+            return None;
+        }
+        let kinds = self.kinds(steps);
+        let mut seq = kinds.clone();
+        seq.sort_unstable();
+        let mut out = Vec::new();
+        loop {
+            // the k-th time a kind comes, it is the k-th step of that kind as written
+            let mut used = vec![0usize; kinds.len()];
+            let order: Vec<usize> = seq
+                .iter()
+                .map(|k| {
+                    let place = kinds.iter().enumerate().filter(|(_, x)| *x == k).nth(used[*k]).map(|(i, _)| i).expect("as many as there are");
+                    used[*k] += 1;
+                    place
+                })
+                .collect();
+            out.push(order);
+            if !next_permutation(&mut seq) {
+                break;
+            }
+        }
+        out.sort();
+        Some(out)
+    }
+}
+
+/// The next permutation of `v` as a dictionary sorts them, each told once however often a member
+/// comes; false after the last.
+fn next_permutation(v: &mut [usize]) -> bool {
+    if v.len() < 2 {
+        return false;
+    }
+    let mut i = v.len() - 1;
+    while i > 0 && v[i - 1] >= v[i] {
+        i -= 1;
+    }
+    if i == 0 {
+        return false;
+    }
+    let mut j = v.len() - 1;
+    while v[j] <= v[i - 1] {
+        j -= 1;
+    }
+    v.swap(i - 1, j);
+    v[i..].reverse();
+    true
+}
+
+/// How many orders things can come in, each kind as many times as `times` says: n! / (k1! k2! …),
+/// in decimal. Worked with digits of base 10⁹, multiplying by the next count of things and dividing
+/// by how many of its kind have come, which leaves a whole number at every step.
+pub fn orders_of(times: &[usize]) -> String {
+    const BASE: u64 = 1_000_000_000;
+    // little end first
+    let mut n: Vec<u64> = vec![1];
+    let mut total: u64 = 0;
+    for &k in times {
+        for j in 1..=k as u64 {
+            total += 1;
+            let mut carry = 0;
+            for d in n.iter_mut() {
+                let x = *d * total + carry;
+                *d = x % BASE;
+                carry = x / BASE;
+            }
+            while carry > 0 {
+                n.push(carry % BASE);
+                carry /= BASE;
+            }
+            let mut rest = 0;
+            for d in n.iter_mut().rev() {
+                let x = rest * BASE + *d;
+                *d = x / j;
+                rest = x % j;
+            }
+            while n.len() > 1 && n.last() == Some(&0) {
+                n.pop();
+            }
+        }
+    }
+    let mut s = n.last().expect("a digit").to_string();
+    for d in n.iter().rev().skip(1) {
+        s.push_str(&format!("{d:09}"));
+    }
+    s
+}
+
+impl Step {
+    /// What the step is, without where it is written: two steps that give the same are written the
+    /// same.
+    fn as_written(&self) -> String {
+        match self {
+            Step::When { target, call, wait, .. } => format!("when {target:?} {call:?} {:?}", wait.map(|w| w.secs)),
+            Step::Then(c) => format!("then {:?} {:?}", c.subject, c.matcher),
+            Step::Keep(k) => format!("keep {:?} {:?}", k.from, k.name),
+        }
+    }
+
+    /// The line it is written on.
+    pub fn line(&self) -> usize {
+        match self {
+            Step::When { pos, .. } => pos.line,
+            Step::Then(c) => c.pos.line,
+            Step::Keep(k) => k.pos.line,
+        }
+    }
+}
+
+impl Claim {
+    /// The orders the claim runs in, numbered from 1, or None when it has no `in any order` block or
+    /// the block makes more orders than [`AnyOrder::MOST`] (E018 refuses that).
+    pub fn orders(&self) -> Option<Vec<Order>> {
+        let block = self.any_order.as_ref()?;
+        let (start, end) = (block.steps.first()?.start, block.steps.last()?.end);
+        let orders = block.orders(&self.steps)?;
+        Some(
+            orders
+                .into_iter()
+                .enumerate()
+                .map(|(i, order)| {
+                    let mut places: Vec<usize> = (0..start).collect();
+                    let mut lines = Vec::new();
+                    for u in order {
+                        let r = block.steps[u].clone();
+                        lines.push(self.steps[r.start].line());
+                        places.extend(r);
+                    }
+                    places.extend(end..self.steps.len());
+                    Order { number: i + 1, steps: places.iter().map(|p| self.steps[*p].clone()).collect(), places, lines }
+                })
+                .collect(),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -589,6 +779,89 @@ mod tests {
         for word in ["head", "options", "GET", ""] {
             assert_eq!(Method::of(word), None);
         }
+    }
+
+    /// A block of `when`s on `/a`, `/b`…, each followed by a check: the letters say which steps are
+    /// written the same.
+    fn block(letters: &str) -> (Vec<Step>, AnyOrder) {
+        let mut steps = Vec::new();
+        let mut ranges = Vec::new();
+        for (i, c) in letters.chars().enumerate() {
+            let at = Pos { line: 10 + 2 * i, col: 3 };
+            let start = steps.len();
+            steps.push(Step::When { target: "api".into(), call: http(Method::Post, &format!("/{c}"), None, &[]), pos: at, wait: None });
+            steps.push(Step::Then(Check { subject: Subject::Status, matcher: Matcher::Is(Value::N(200.0)), pos: Pos { line: at.line + 1, col: 3 } }));
+            ranges.push(start..steps.len());
+        }
+        (steps, AnyOrder { pos: Pos { line: 9, col: 3 }, steps: ranges })
+    }
+
+    #[test]
+    fn the_orders_of_a_block_the_written_one_first() {
+        let (steps, b) = block("abc");
+        assert_eq!(b.count(&steps), "6");
+        let orders = b.orders(&steps).expect("six");
+        assert_eq!(orders, vec![vec![0, 1, 2], vec![0, 2, 1], vec![1, 0, 2], vec![1, 2, 0], vec![2, 0, 1], vec![2, 1, 0]]);
+    }
+
+    #[test]
+    fn steps_written_the_same_are_one_in_an_order() {
+        // four steps, one of them twice: 4! / 2! = 12
+        let (steps, b) = block("abca");
+        assert_eq!(b.kinds(&steps), vec![0, 1, 2, 0]);
+        assert_eq!(b.count(&steps), "12");
+        let orders = b.orders(&steps).expect("twelve");
+        assert_eq!(orders.len(), 12);
+        // the written order first; of the two the same, the one written first comes first
+        assert_eq!(orders[0], vec![0, 1, 2, 3]);
+        assert!(orders.iter().all(|o| o.iter().position(|u| *u == 0) < o.iter().position(|u| *u == 3)), "{orders:?}");
+        let mut seen = orders.clone();
+        seen.dedup();
+        assert_eq!(seen.len(), 12);
+        // the same step twice and nothing else: one order
+        let (steps, b) = block("aa");
+        assert_eq!(b.orders(&steps), Some(vec![vec![0, 1]]));
+    }
+
+    #[test]
+    fn a_block_of_more_than_720_orders_has_none() {
+        let (steps, b) = block("abcdef");
+        assert_eq!(b.orders(&steps).map(|o| o.len()), Some(720));
+        let (steps, b) = block("abcdefg");
+        assert_eq!(b.count(&steps), "5040");
+        assert_eq!(b.orders(&steps), None);
+        // steps written the same make fewer orders: eight steps, five of them the same, 8!/5! = 336
+        let (steps, b) = block("abcdaaaa");
+        assert_eq!(b.count(&steps), "336");
+        assert_eq!(b.orders(&steps).map(|o| o.len()), Some(336));
+        // and eight with two the same, 8!/2! = 20160
+        let (steps, b) = block("abcdefga");
+        assert_eq!(b.count(&steps), "20160");
+        assert_eq!(b.orders(&steps), None);
+    }
+
+    #[test]
+    fn counts_beyond_a_machine_word() {
+        assert_eq!(orders_of(&[1; 6]), "720");
+        assert_eq!(orders_of(&[2, 1, 1]), "12");
+        assert_eq!(orders_of(&[]), "1");
+        // 30! and 40! / (20! 20!)
+        assert_eq!(orders_of(&[1; 30]), "265252859812191058636308480000000");
+        assert_eq!(orders_of(&[20, 20]), "137846528820");
+    }
+
+    #[test]
+    fn a_claim_in_each_of_its_orders() {
+        let (mut steps, mut b) = block("ab");
+        steps.insert(0, Step::When { target: "api".into(), call: http(Method::Post, "/first", None, &[]), pos: Pos { line: 8, col: 3 }, wait: None });
+        steps.push(Step::When { target: "api".into(), call: http(Method::Get, "/last", None, &[]), pos: Pos { line: 20, col: 3 }, wait: None });
+        b.steps = b.steps.iter().map(|r| r.start + 1..r.end + 1).collect();
+        let claim = Claim { name: "c".into(), steps, pos: Pos::default(), any_order: Some(b) };
+        let orders = claim.orders().expect("two");
+        assert_eq!(orders.len(), 2);
+        assert_eq!((orders[0].number, orders[0].places.clone(), orders[0].lines.clone()), (1, vec![0, 1, 2, 3, 4, 5], vec![10, 12]));
+        assert_eq!((orders[1].number, orders[1].places.clone(), orders[1].lines.clone()), (2, vec![0, 3, 4, 1, 2, 5], vec![12, 10]));
+        assert_eq!(orders[1].steps.iter().map(Step::line).collect::<Vec<_>>(), vec![8, 12, 13, 10, 11, 20]);
     }
 
     #[test]

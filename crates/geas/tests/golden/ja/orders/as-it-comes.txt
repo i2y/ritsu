@@ -1,0 +1,31 @@
+not ok 1 - the latest event wins in any order
+    o/as-it-comes.geas:10: in any order — 6 通りの順のうち 4 通りで成り立ちません。下はその最初の順（2 番目）で、ほかは 4〜6 番目の順です
+        10 |   in any order {
+    o/as-it-comes.geas:19: body json ".status" is "canceled" のはずが、実際は "active"
+        19 |   then body json ".status" is "canceled"
+      ここまでの実行:
+          11  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          15  when api.post("/events", body: "{"seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          13  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          18  when api.get("/subscription")  →  200, body "{\"received\": 3, \"seq\": 2, \"status\": \"active\"}"
+not ok 2 - an event delivered twice changes nothing
+    o/as-it-comes.geas:23: in any order — 12 通りの順のうち 9 通りで成り立ちません。下はその最初の順（2 番目）で、ほかは 3、5、7〜12 番目の順です
+        23 |   in any order {
+    o/as-it-comes.geas:30: body json ".status" is "canceled" のはずが、実際は "active"
+        30 |   then body json ".status" is "canceled"
+      ここまでの実行:
+          24  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          25  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          27  when api.post("/events", body: "{"seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          26  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          29  when api.get("/subscription")  →  200, body "{\"received\": 4, \"seq\": 2, \"status\": \"active\"}"
+not ok 3 - two events in any order
+    o/as-it-comes.geas:34: in any order — 2 通りの順のうち 1 通りで成り立ちません。下はその順（2 番目）です
+        34 |   in any order {
+    o/as-it-comes.geas:39: body json ".status" is "active" のはずが、実際は "past_due"
+        39 |   then body json ".status" is "active"
+      ここまでの実行:
+          36  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          35  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          38  when api.get("/subscription")  →  200, body "{\"received\": 2, \"seq\": 1, \"status\": \"past_due\"}"
+主張 3 件 · 成り立った 0 件 · 成り立たなかった 3 件 · ジャーナル: o/.geas/as-it-comes.journal.jsonl

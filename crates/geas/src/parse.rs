@@ -91,6 +91,31 @@ struct RawClaim {
     uses: Vec<Use>,
     /// The names it keeps, each once, and where.
     kept: Vec<(String, Pos)>,
+    /// Its `in any order` block (DESIGN §23); a second is E018.
+    block: Option<RawBlock>,
+}
+
+/// An `in any order` block as written: where `in` is and where its `}` is, and each of its steps as
+/// the range of the claim's steps it takes, a `when` and what follows it up to the next.
+struct RawBlock {
+    pos: Pos,
+    end: Pos,
+    steps: Vec<std::ops::Range<usize>>,
+}
+
+impl RawBlock {
+    /// Which of the block's steps a place in the claim is written in.
+    fn step_at(&self, at: Pos, steps: &[RawStep]) -> Option<usize> {
+        let starts: Vec<Pos> = self.steps.iter().map(|r| match &steps[r.start] {
+            RawStep::When { pos, .. } => *pos,
+            _ => unreachable!("a step of a block starts with a `when`"),
+        }).collect();
+        let key = |p: Pos| (p.line, p.col);
+        if starts.is_empty() || key(at) < key(starts[0]) || key(at) >= key(self.end) {
+            return None;
+        }
+        Some(starts.iter().rposition(|s| key(*s) <= key(at)).expect("after the first"))
+    }
 }
 
 struct RawSpec {
@@ -549,6 +574,9 @@ impl P {
         self.expect(Kind::LBrace, "`{`", "`{`")?;
         let mut steps = Vec::new();
         let mut seen_when = false;
+        let mut block: Option<RawBlock> = None;
+        // right after a block, before the next `when`: a check here would read whichever step ran last
+        let mut after_block = false;
         self.in_claim = true;
         loop {
             let tk = self.next();
@@ -558,6 +586,31 @@ impl P {
                     let s = self.when(&tk)?;
                     steps.push(s);
                     seen_when = true;
+                    after_block = false;
+                }
+                Kind::Ident if tk.text == "in" => {
+                    let b = self.block(&tk, &mut steps)?;
+                    seen_when |= !b.steps.is_empty();
+                    after_block = true;
+                    match &block {
+                        Some(first) => {
+                            let first_line = first.pos.line;
+                            self.diags.push(
+                                diag::error("E018", tk.line, tk.col, tr!("一つの主張に書ける `in any order` は一つまでです", "a claim has one `in any order` block at most"))
+                                    .note(first_on(first_line))
+                                    .note(tr!(
+                                        "順の決まらない手順を一つのブロックにまとめるか、ブロックごとに主張を分けてください",
+                                        "put the steps whose order is not decided in one block, or write a claim for each block",
+                                    )),
+                            );
+                        }
+                        None => block = Some(b),
+                    }
+                }
+                Kind::Ident if (tk.text == "then" || tk.text == "and") && after_block => {
+                    self.after_block(&tk);
+                    let check = self.check()?;
+                    steps.push(RawStep::Then { check });
                 }
                 Kind::Ident if tk.text == "then" || tk.text == "and" => {
                     if !seen_when {
@@ -577,10 +630,13 @@ impl P {
                 }
                 Kind::Ident if tk.text == "keep" => {
                     let s = self.keep(&tk, seen_when)?;
+                    if after_block && matches!(&s, RawStep::Keep { keep: Some(Keep { from: KeepFrom::Answer(_), .. }) }) {
+                        self.after_block(&tk);
+                    }
                     steps.push(s);
                 }
                 _ => {
-                    let stop = self.expected(&tk, "`when`, `then`, `and`, `keep` or `}`", "`when`、`then`、`and`、`keep`、`}` のどれか");
+                    let stop = self.expected(&tk, "`when`, `then`, `and`, `keep`, `in any order` or `}`", "`when`、`then`、`and`、`keep`、`in any order`、`}` のどれか");
                     if tk.kind == Kind::Ident && tk.text == "within" {
                         self.note_last(within_goes_after_a_call());
                     }
@@ -613,7 +669,111 @@ impl P {
         }
         self.in_claim = false;
         let (uses, kept) = (std::mem::take(&mut self.uses), std::mem::take(&mut self.kept));
-        Ok(RawClaim { name: name.text.clone(), name_pos: at(&name), pos: at(&kw), steps, uses, kept })
+        Ok(RawClaim { name: name.text.clone(), name_pos: at(&name), pos: at(&kw), steps, uses, kept, block })
+    }
+
+    /// `in any order { … }` after its `in` (DESIGN §23): its steps go into `steps`, each a `when` and
+    /// the checks and `keep`s under it. A block inside it is E018, and its steps are read as the
+    /// outer block's; fewer than two `when`s is E018.
+    fn block(&mut self, kw: &Tok, steps: &mut Vec<RawStep>) -> Result<RawBlock, Stop> {
+        self.block_head()?;
+        let start = steps.len();
+        // the blocks opened inside this one, which E018 refuses
+        let mut inner = 0usize;
+        let end = loop {
+            let tk = self.next();
+            match tk.kind {
+                Kind::RBrace if inner == 0 => break at(&tk),
+                Kind::RBrace => inner -= 1,
+                Kind::Ident if tk.text == "when" => {
+                    let s = self.when(&tk)?;
+                    steps.push(s);
+                }
+                Kind::Ident if (tk.text == "then" || tk.text == "and" || tk.text == "keep") && steps.len() == start => {
+                    let stop = self.expected(&tk, "`when`", "`when`");
+                    self.note_last(tr!(
+                        "`in any order` の手順は、どれも `when` から書きます。その下のチェックと `keep` は、`when` と一緒にすべての順へ動きます",
+                        "each step of `in any order` starts with a `when`, and the checks and `keep`s under it go with it into every order",
+                    ));
+                    return Err(stop);
+                }
+                Kind::Ident if tk.text == "then" || tk.text == "and" => {
+                    let check = self.check()?;
+                    steps.push(RawStep::Then { check });
+                }
+                Kind::Ident if tk.text == "keep" => {
+                    let s = self.keep(&tk, true)?;
+                    steps.push(s);
+                }
+                Kind::Ident if tk.text == "in" => {
+                    self.block_head()?;
+                    inner += 1;
+                    self.diags.push(
+                        diag::error(
+                            "E018",
+                            tk.line,
+                            tk.col,
+                            tr!(
+                                "`in any order` の中に、もう一つの `in any order` は書けません。一つのブロックの手順は、もうすべての順で走ります",
+                                "an `in any order` block cannot hold another: the steps of one block already run in every order",
+                            ),
+                        )
+                        .note(tr!("両方の手順を一つのブロックに書いてください", "write the steps of both in one block")),
+                    );
+                }
+                _ => {
+                    let stop = self.expected(&tk, "`when`, `then`, `and`, `keep` or `}`", "`when`、`then`、`and`、`keep`、`}` のどれか");
+                    if tk.kind == Kind::Ident && tk.text == "within" {
+                        self.note_last(within_goes_after_a_call());
+                    }
+                    return Err(stop);
+                }
+            }
+        };
+        let whens: Vec<usize> = (start..steps.len()).filter(|i| matches!(steps[*i], RawStep::When { .. })).collect();
+        let ranges: Vec<std::ops::Range<usize>> = whens.iter().enumerate().map(|(k, w)| *w..whens.get(k + 1).copied().unwrap_or(steps.len())).collect();
+        if ranges.len() < 2 {
+            let (en, ja) = if ranges.is_empty() {
+                ("`in any order` holds no `when`; write in it the steps whose order is not decided, two or more", "`in any order` の中に `when` がありません。順の決まらない手順を、二つ以上書いてください")
+            } else {
+                ("`in any order` holds one `when`, and one step comes in one order; it takes two or more", "`in any order` の中の `when` が一つです。手順が一つなら順は一通りなので、二つ以上書いてください")
+            };
+            self.diags.push(diag::error("E018", kw.line, kw.col, Text::new(ja, en)));
+        }
+        Ok(RawBlock { pos: at(kw), end, steps: ranges })
+    }
+
+    /// `any order {` after `in`.
+    fn block_head(&mut self) -> Result<(), Stop> {
+        for word in ["any", "order"] {
+            let t = self.next();
+            if !(t.kind == Kind::Ident && t.text == word) {
+                return Err(self.expected(&t, "`any order {` after `in`", "`in` の後ろの `any order {`"));
+            }
+        }
+        self.expect(Kind::LBrace, "`{`", "`{`")?;
+        Ok(())
+    }
+
+    /// E018: a check, or a `keep` of an answer, right after an `in any order` block, before any
+    /// `when`. It would read whichever step of the block ran last.
+    fn after_block(&mut self, tk: &Tok) {
+        let w = &tk.text;
+        self.diags.push(
+            diag::error(
+                "E018",
+                tk.line,
+                tk.col,
+                tr!(
+                    "`in any order {{ … }}` のすぐ後ろの `{w}` は、最後に走った手順の結果を読むことになり、それは順ごとに変わります",
+                    "`{w}` right after `in any order {{ … }}` would read the answer of whichever step ran last, which changes from order to order",
+                ),
+            )
+            .note(tr!(
+                "ブロックのあとは `when` から書くか、確かめたい手順の下に書いてください",
+                "start what follows the block with a `when`, or write it under the step it is about",
+            )),
+        );
     }
 
     /// `keep <source> as <name>` (DESIGN §22). Only `keep env` can come before the first `when`.
@@ -1342,6 +1502,12 @@ impl P {
         Ok(Some(RawMatcher { form, word: m, values, node: None }))
     }
 
+    /// Whether `in any order` comes next: a block, not the `in <role>` of a node before it.
+    fn block_ahead(&self) -> bool {
+        let word = |k: usize, w: &str| self.toks.get(self.pos + k).is_some_and(|t| t.kind == Kind::Ident && t.text == w);
+        word(0, "in") && word(1, "any") && word(2, "order")
+    }
+
     /// Whether a node pattern comes next, after `contains`: a word that is not a
     /// value (`true`, `false`, `null`) and does not start what follows a check.
     fn node_ahead(&self) -> bool {
@@ -1433,7 +1599,7 @@ impl P {
             state = Some(st);
         }
         let mut within = None;
-        if self.peek().kind == Kind::Ident && self.peek().text == "in" {
+        if self.peek().kind == Kind::Ident && self.peek().text == "in" && !self.block_ahead() {
             self.next();
             let Some(r) = self.role()? else {
                 return Ok(None);
@@ -1441,7 +1607,7 @@ impl P {
             within = Some((r, self.label()?));
         }
         let next = self.peek().clone();
-        if next.kind == Kind::Ident && !NEXT_WORDS.contains(&next.text.as_str()) {
+        if next.kind == Kind::Ident && !NEXT_WORDS.contains(&next.text.as_str()) && !self.block_ahead() {
             self.e002(
                 &next,
                 format!("`{}` is not a state; after a node's role come its name, `with value \"…\"`, a state (disabled, enabled, checked or unchecked) and `in <role>`, in that order", next.text),
@@ -2318,6 +2484,8 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
     let mut first_claim: HashMap<&str, Pos> = HashMap::new();
     let mut claims = Vec::new();
     let mut complete = true;
+    // for each claim, the orders its `when`s run in (one for a claim without a block)
+    let mut when_orders: Vec<Vec<Vec<usize>>> = Vec::new();
     for c in &raw.claims {
         if let Some(first) = first_claim.get(c.name.as_str()) {
             diags.push(
@@ -2340,7 +2508,15 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
         // the call of the last `when` and its line, for E007
         let mut last: Option<(Option<&Call>, usize)> = None;
         keep_checks(c, &kinds, diags);
-        for s in &c.steps {
+        // the claim's steps from each raw step on, for the ranges of its block
+        let mut model_at: Vec<usize> = Vec::with_capacity(c.steps.len() + 1);
+        let mut claim_complete = true;
+        for (i, s) in c.steps.iter().enumerate() {
+            model_at.push(steps.len());
+            // what follows a block reads no `when` of it: E018 says so, not E007
+            if c.block.as_ref().and_then(|b| b.steps.last()).is_some_and(|r| r.end == i) {
+                last = None;
+            }
             match s {
                 RawStep::When { target, target_pos, call, call_word, call_pos, pos, wait, .. } => {
                     last = Some((call.as_ref(), pos.line));
@@ -2376,12 +2552,12 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                     }
                     match call {
                         Some(call) => steps.push(Step::When { target: target.clone(), call: call.clone(), pos: *pos, wait: *wait }),
-                        None => complete = false,
+                        None => claim_complete = false,
                     }
                 }
                 RawStep::Then { check } => {
                     let Some(check) = check else {
-                        complete = false;
+                        claim_complete = false;
                         continue;
                     };
                     if let Some((Some(call), when_line)) = last
@@ -2393,7 +2569,7 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                 }
                 RawStep::Keep { keep } => {
                     let Some(keep) = keep else {
-                        complete = false;
+                        claim_complete = false;
                         continue;
                     };
                     if let (KeepFrom::Answer(subject), Some((Some(call), when_line))) = (&keep.from, last)
@@ -2405,9 +2581,43 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                 }
             }
         }
-        claims.push(Claim { name: c.name.clone(), steps, pos: c.pos });
+        model_at.push(steps.len());
+        complete &= claim_complete;
+        let any_order = c.block.as_ref().filter(|b| b.steps.len() >= 2).map(|b| AnyOrder { pos: b.pos, steps: b.steps.iter().map(|r| model_at[r.start]..model_at[r.end]).collect() });
+        let claim = Claim { name: c.name.clone(), steps, pos: c.pos, any_order };
+        // the `when`s of the claim in each order it runs in, by their place among its `when`s
+        let mut orders: Vec<Vec<usize>> = vec![(0..c.steps.iter().filter(|s| matches!(s, RawStep::When { .. })).count()).collect()];
+        if let Some(b) = claim.any_order.as_ref().filter(|_| claim_complete) {
+            match claim.orders() {
+                Some(all) => {
+                    let when_no = |place: usize| claim.steps[..place].iter().filter(|s| matches!(s, Step::When { .. })).count();
+                    orders = all.iter().map(|o| o.places.iter().filter(|p| matches!(claim.steps[**p], Step::When { .. })).map(|p| when_no(*p)).collect()).collect();
+                }
+                None => {
+                    let count = b.count(&claim.steps);
+                    let n = b.steps.len();
+                    diags.push(
+                        diag::error(
+                            "E018",
+                            b.pos.line,
+                            b.pos.col,
+                            tr!(
+                                "`in any order` の {n} 個の手順の順は {count} 通りあります。geas が走らせるのは 720 通り（違う手順が 6 つ）までです",
+                                "the {n} steps of `in any order` can come in {count} orders, and geas runs 720 at most (six steps, none the same)",
+                            ),
+                        )
+                        .note(tr!(
+                            "ブロックを分けてください。順の決まらない手順を分けて主張を二つ以上にするか、順の決まっている手順をブロックの外に書いてください",
+                            "split the block: a claim for each part of the steps whose order is not decided, or the steps whose order is decided written outside it",
+                        )),
+                    );
+                }
+            }
+        }
+        when_orders.push(orders);
+        claims.push(claim);
     }
-    gui_checks(&raw.claims, &kinds, diags);
+    gui_checks(&raw.claims, &when_orders, &kinds, diags);
     wait_checks(&raw.claims, diags);
     if !complete || targets.len() != raw.targets.len() {
         return None;
@@ -2464,6 +2674,24 @@ fn keep_checks(c: &RawClaim, kinds: &HashMap<&str, Option<TargetKind>>, diags: &
                     ),
                 )
                 .note(tr!("`is` か `contains` で比べてください", "compare with `is` or `contains`")),
+            );
+        } else if let Some(b) = &c.block
+            && let (Some(used_in), Some(kept_in)) = (b.step_at(u.pos, &c.steps), b.step_at(*keep, &c.steps))
+            && used_in != kept_in
+        {
+            // the step that keeps it comes after this one in some order (DESIGN §23)
+            let line = keep.line;
+            diags.push(
+                diag::error(
+                    "E018",
+                    u.pos.line,
+                    u.pos.col,
+                    tr!(
+                        "`{shown}` を持っておくのは、同じ `in any order` の別の手順（{line} 行目）です。順によってはこの手順のあとに来るので、ここではまだありません",
+                        "`{shown}` is kept on line {line}, by another step of the same `in any order`, which comes after this one in some orders",
+                    ),
+                )
+                .note(tr!("ブロックの前で持っておくか、ブロックのあとで使ってください", "keep it before the block, or use it after the block")),
             );
         } else if (u.pos.line, u.pos.col) < (keep.line, keep.col) {
             let line = keep.line;
@@ -2617,7 +2845,8 @@ pub fn known_key(chord: &str) -> bool {
 /// A `when` of a claim, as the GUI checks read it.
 struct WhenAt<'a> {
     target: &'a str,
-    call: &'a Call,
+    /// None when E002 refused it; such a `when` is left out.
+    call: Option<&'a Call>,
     pos: Pos,
     call_pos: Pos,
     args_at: &'a [(&'static str, Pos)],
@@ -2632,19 +2861,50 @@ impl WhenAt<'_> {
 
 /// E012 and E013, claim by claim (DESIGN §8.2, §13): another target's `when`
 /// between two actions on a pixie app, which runs a claim's actions as one script;
-/// and an argument an action cannot take there.
-fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, diags: &mut Vec<Diag>) {
-    for c in claims {
+/// and an argument an action cannot take there. Both depend on the order of the
+/// actions, so a claim with `in any order` is held to them in every order it runs
+/// in (`orders`, its `when`s by their place), and what only a later order breaks
+/// says that order (DESIGN §23).
+fn gui_checks(claims: &[RawClaim], orders: &[Vec<Vec<usize>>], kinds: &HashMap<&str, Option<TargetKind>>, diags: &mut Vec<Diag>) {
+    for (c, orders) in claims.iter().zip(orders) {
         let whens: Vec<WhenAt> = c
             .steps
             .iter()
             .filter_map(|s| match s {
-                RawStep::When { target, call: Some(call), pos, call_pos, args_at, .. } => {
-                    Some(WhenAt { target, call, pos: *pos, call_pos: *call_pos, args_at })
-                }
+                RawStep::When { target, call, pos, call_pos, args_at, .. } => Some(WhenAt { target, call: call.as_ref(), pos: *pos, call_pos: *call_pos, args_at }),
                 _ => None,
             })
             .collect();
+        let mut found: Vec<Diag> = Vec::new();
+        for (k, order) in orders.iter().enumerate() {
+            let ws: Vec<&WhenAt> = order.iter().map(|i| &whens[*i]).filter(|w| w.call.is_some()).collect();
+            let mut these = Vec::new();
+            gui_checks_in(c, &ws, kinds, &mut these);
+            for d in these {
+                if found.iter().any(|f| (f.code, f.line, f.col) == (d.code, d.line, d.col)) {
+                    continue;
+                }
+                let lines: Vec<String> = order.iter().map(|i| whens[*i].pos.line.to_string()).collect();
+                let d = if k == 0 {
+                    d
+                } else {
+                    d.note(tr!(
+                        "`in any order` は、`when` をこの順でも走らせます: {} 行目",
+                        "`in any order` runs the `when`s in this order too: lines {}",
+                        lines.join("、");
+                        lines.join(", "),
+                    ))
+                };
+                found.push(d);
+            }
+        }
+        diags.extend(found);
+    }
+}
+
+/// E012 and E013 over the `when`s of one claim in one order.
+fn gui_checks_in(c: &RawClaim, whens: &[&WhenAt], kinds: &HashMap<&str, Option<TargetKind>>, diags: &mut Vec<Diag>) {
+    {
         let kind = |w: &WhenAt| kinds.get(w.target).cloned().flatten();
         // E012: between the first and the last action on a pixie app, every `when` is on it
         let mut pixies: Vec<&str> = whens.iter().filter(|w| matches!(kind(w), Some(TargetKind::Pixie(_)))).map(|w| w.target).collect();
@@ -2687,11 +2947,11 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
         // E013
         let mut opened: Vec<&str> = Vec::new();
         let mut acted: Vec<&str> = Vec::new();
-        for w in &whens {
+        for w in whens {
             let Some(k) = kind(w) else {
                 continue;
             };
-            let (tg, call) = (w.target, w.call);
+            let (tg, call) = (w.target, w.call.expect("a `when` E002 refused is left out"));
             let mut e013 = |pos: Pos, en: String, ja: String| diags.push(diag::error("E013", pos.line, pos.col, Text::new(ja, en)));
             // counts from 1, on any target
             let zero = match call {
@@ -3035,6 +3295,35 @@ mod tests {
         assert_eq!(one("api.open(\"/\") within 2 seconds"), vec![("E014", 9, 22), ("E007", 10, 8)]);
         let none = format!("{api}claim \"x\" {{\n  when api.get(\"/\") within 2 seconds\n  when api.get(\"/\")\n  then status is 200\n}}\n");
         assert_eq!(errs(&none), vec![("E014", 9, 21)]);
+    }
+
+    #[test]
+    fn a_block_in_any_order() {
+        let api = "target api {\n  serve \"python3 s.py {port}\"\n  port auto\n}\n";
+        let src = format!(
+            "{api}claim \"x\" {{\n  when api.post(\"/a\")\n  in any order {{\n    when api.post(\"/b\") within 2 seconds\n    then status is 200\n    \
+             keep body as b\n    when api.post(\"/c\")\n  }}\n  when api.get(\"/{{b}}\")\n  then status is 200\n}}\n"
+        );
+        let spec = parse(&src).unwrap();
+        let c = &spec.claims[0];
+        let block = c.any_order.as_ref().expect("a block");
+        assert_eq!((block.pos.line, block.pos.col), (7, 3));
+        // a step is a `when` with what is under it, its wait too
+        assert_eq!(block.steps, [1..4, 4..5]);
+        let orders = c.orders().expect("two orders");
+        let places: Vec<&[usize]> = orders.iter().map(|o| o.places.as_slice()).collect();
+        assert_eq!(places, [&[0, 1, 2, 3, 4, 5, 6][..], &[0, 4, 1, 2, 3, 5, 6][..]]);
+        assert_eq!(orders[1].lines, [11, 8]);
+        let one = |body: &str| errs(&format!("{api}claim \"x\" {{\n{body}}}\n"));
+        assert_eq!(one("  in any order {\n    when api.post(\"/b\")\n  }\n"), vec![("E018", 6, 3)]);
+        assert_eq!(one("  in any order {\n    then status is 200\n  }\n"), vec![("E001", 7, 5)]);
+        assert_eq!(one("  in some order {\n  }\n"), vec![("E001", 6, 6)]);
+        // `keep env` reads no answer, so it can come right after the block
+        let env = format!(
+            "{api}claim \"x\" {{\n  in any order {{\n    when api.post(\"/a\")\n    when api.post(\"/b\")\n  }}\n  keep env \"HOME\" as home\n  \
+             when api.get(\"/\")\n  then status is 200\n}}\n"
+        );
+        assert!(parse(&env).is_ok());
     }
 
     #[test]

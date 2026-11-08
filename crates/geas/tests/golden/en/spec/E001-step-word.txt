@@ -1,2 +1,2 @@
-error[E001]: E001-step-word.geas:7:3: expected `when`, `then`, `and`, `keep` or `}`, found `expect`
+error[E001]: E001-step-word.geas:7:3: expected `when`, `then`, `and`, `keep`, `in any order` or `}`, found `expect`
      7 |   expect stdout is "5"

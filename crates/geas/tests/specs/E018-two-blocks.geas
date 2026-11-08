@@ -1,0 +1,19 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "two blocks" {
+  in any order {
+    when api.post("/events", body: "1")
+    when api.post("/events", body: "2")
+  }
+  when api.get("/state")
+  then status is 200
+  in any order {
+    when api.post("/events", body: "3")
+    when api.post("/events", body: "4")
+  }
+  when api.get("/state")
+  then status is 200
+}

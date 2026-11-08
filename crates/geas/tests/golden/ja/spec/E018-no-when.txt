@@ -1,0 +1,2 @@
+エラー[E018]: E018-no-when.geas:7:3: `in any order` の中に `when` がありません。順の決まらない手順を、二つ以上書いてください
+     7 |   in any order {

@@ -8,7 +8,7 @@ use crate::diag::{self, Diag, Show, count};
 use ritsu_base::secrets::mask;
 use ritsu_base::text::Lang;
 use crate::json;
-use crate::run::{ClaimResult, ClaimStatus, Waited};
+use crate::run::{ClaimResult, ClaimStatus, Orders, Waited};
 
 /// The lines for the claims; with `only_failures`, the claims that are not ok.
 pub fn claims(file: &str, src: &str, results: &[ClaimResult], lang: Lang, only_failures: bool) -> String {
@@ -23,18 +23,32 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
         match &r.status {
             ClaimStatus::Ok => {
                 if !only_failures {
-                    out.push_str(&format!("ok {n} - {}\n", r.name));
+                    // how many orders it held in (DESIGN §23)
+                    let orders = match (&r.orders, lang) {
+                        (None, _) => String::new(),
+                        (Some(o), Lang::En) => format!(" ({})", count(o.count, "order", "orders")),
+                        (Some(o), Lang::Ja) => format!("（{} 通りの順で）", o.count),
+                    };
+                    out.push_str(&format!("ok {n} - {}{orders}\n", r.name));
                 }
             }
             ClaimStatus::Fail => {
                 out.push_str(&format!("not ok {n} - {}\n", r.name));
+                if let Some(o) = &r.orders {
+                    out.push_str(&failed_orders(file, o, lang));
+                    if let Some(text) = src.lines().nth(o.line.saturating_sub(1)) {
+                        out.push_str(&format!("      {:>4} | {}\n", o.line, mask(text)));
+                    }
+                }
                 // a screen two failed checks share is shown once
                 let mut last_screen: Option<&Vec<String>> = None;
                 // the `when`s whose time ran out, said once, before the first failed check that
                 // reads what they kept (DESIGN §18)
                 let mut said: Vec<usize> = Vec::new();
+                // the `when` a check reads: the nearest above it as written, in the order the checks are of
+                let shown = r.orders.as_ref().map(|o| o.shown);
                 for c in r.checks.iter().filter(|c| !c.ok) {
-                    let read = r.observations.iter().rev().find(|o| o.line <= c.line);
+                    let read = r.observations.iter().filter(|o| o.order == shown && o.line <= c.line).max_by_key(|o| o.line);
                     if let Some(o) = read
                         && let Some(w) = o.waited.as_ref().filter(|w| !w.held)
                         && !said.contains(&o.idx)
@@ -104,6 +118,63 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
         }
     }
     out
+}
+
+/// The line of an `in any order` block whose claim failed in some of its orders: how many of how
+/// many, the first of them, whose checks and run follow, and the numbers of the others.
+fn failed_orders(file: &str, o: &Orders, lang: Lang) -> String {
+    let (f, n) = (o.failed.len(), o.count);
+    let first = o.failed.first().map_or(o.shown, |(k, _)| *k);
+    let others: Vec<usize> = o.failed.iter().skip(1).map(|(k, _)| *k).collect();
+    match lang {
+        Lang::En => {
+            let said = match others.len() {
+                0 => format!("{f} of {n} orders fails: order {first}, below"),
+                1 => format!("{f} of {n} orders fail; below is the first, order {first}, and the other is order {}", numbers(&others, lang)),
+                _ => format!("{f} of {n} orders fail; below is the first, order {first}, and the others are orders {}", numbers(&others, lang)),
+            };
+            format!("    {file}:{}: in any order — {said}\n", o.line)
+        }
+        Lang::Ja => {
+            let said = if others.is_empty() {
+                format!("{n} 通りの順のうち {f} 通りで成り立ちません。下はその順（{first} 番目）です")
+            } else {
+                format!("{n} 通りの順のうち {f} 通りで成り立ちません。下はその最初の順（{first} 番目）で、ほかは {} 番目の順です", numbers(&others, lang))
+            };
+            format!("    {file}:{}: in any order — {said}\n", o.line)
+        }
+    }
+}
+
+/// Numbers in rising order, a run of three or more written as its ends: `4, 6-9 and 12`,
+/// `4、6〜9、12`.
+pub fn numbers(ns: &[usize], lang: Lang) -> String {
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for &k in ns {
+        match runs.last_mut() {
+            Some((_, last)) if *last + 1 == k => *last = k,
+            _ => runs.push((k, k)),
+        }
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for (a, b) in runs {
+        let dash = if lang == Lang::En { "-" } else { "〜" };
+        match b - a {
+            0 => parts.push(a.to_string()),
+            1 => {
+                parts.push(a.to_string());
+                parts.push(b.to_string());
+            }
+            _ => parts.push(format!("{a}{dash}{b}")),
+        }
+    }
+    match lang {
+        Lang::Ja => parts.join("、"),
+        Lang::En => match parts.split_last() {
+            Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+            _ => parts.join(""),
+        },
+    }
 }
 
 /// The line of a `when` whose time ran out before every check under it held on one observation:
@@ -254,14 +325,29 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
                     .collect();
                 format!(",\"run\":[{}]", steps.join(","))
             };
+            // a claim with `in any order`: how many orders, and those whose checks failed with the
+            // lines of the block's steps as they ran; `checks` and `run` are of the first of them
+            let orders = match &r.orders {
+                None => String::new(),
+                Some(o) if matches!(r.status, ClaimStatus::Ok) => format!(",\"orders\":{}", o.count),
+                Some(o) => {
+                    let failed: Vec<String> = o
+                        .failed
+                        .iter()
+                        .map(|(k, lines)| format!("{{\"order\":{k},\"lines\":[{}]}}", lines.iter().map(usize::to_string).collect::<Vec<_>>().join(",")))
+                        .collect();
+                    format!(",\"orders\":{},\"failed_orders\":[{}]", o.count, failed.join(","))
+                }
+            };
             format!(
-                "{{\"name\":{},\"line\":{},\"status\":\"{}\",\"error\":{},\"checks\":[{}]{}}}",
+                "{{\"name\":{},\"line\":{},\"status\":\"{}\",\"error\":{},\"checks\":[{}]{}{}}}",
                 json::quote(&r.name),
                 r.line,
                 status,
                 error,
                 checks.join(","),
-                run
+                run,
+                orders
             )
         })
         .collect();
@@ -278,4 +364,37 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
 pub fn failure_json(file: &str, diags: &[(String, Diag)], lang: Lang) -> String {
     let ds: Vec<String> = diags.iter().map(|(f, d)| d.json_in(f, lang)).collect();
     format!("{{\"geas\":1,\"ok\":false,\"file\":{},\"diagnostics\":[{}]}}", json::quote(file), ds.join(","))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn header(failed: &[usize], lang: Lang) -> String {
+        let o = Orders { count: 6, line: 7, failed: failed.iter().map(|k| (*k, vec![])).collect(), shown: failed[0] };
+        failed_orders("f.geas", &o, lang)
+    }
+
+    #[test]
+    fn the_failed_orders_are_counted_and_the_others_listed() {
+        assert_eq!(header(&[2], Lang::En), "    f.geas:7: in any order — 1 of 6 orders fails: order 2, below\n");
+        assert_eq!(header(&[2, 5], Lang::En), "    f.geas:7: in any order — 2 of 6 orders fail; below is the first, order 2, and the other is order 5\n");
+        assert_eq!(
+            header(&[2, 4, 5, 6], Lang::En),
+            "    f.geas:7: in any order — 4 of 6 orders fail; below is the first, order 2, and the others are orders 4-6\n"
+        );
+        assert_eq!(header(&[2], Lang::Ja), "    f.geas:7: in any order — 6 通りの順のうち 1 通りで成り立ちません。下はその順（2 番目）です\n");
+        assert_eq!(
+            header(&[2, 4, 5, 6], Lang::Ja),
+            "    f.geas:7: in any order — 6 通りの順のうち 4 通りで成り立ちません。下はその最初の順（2 番目）で、ほかは 4〜6 番目の順です\n"
+        );
+    }
+
+    #[test]
+    fn a_run_of_three_numbers_or_more_is_written_as_its_ends() {
+        assert_eq!(numbers(&[4], Lang::En), "4");
+        assert_eq!(numbers(&[4, 5], Lang::En), "4 and 5");
+        assert_eq!(numbers(&[4, 6, 7, 8, 9, 12], Lang::En), "4, 6-9 and 12");
+        assert_eq!(numbers(&[4, 6, 7, 8, 9, 12], Lang::Ja), "4、6〜9、12");
+    }
 }

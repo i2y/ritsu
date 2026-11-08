@@ -574,6 +574,21 @@ claim \"an order can be read back\" {
 }
 ";
 
+const X_E018: &str = "target shop {
+  serve \"python3 server.py {port}\"
+  port auto
+}
+
+claim \"a cart takes its items in any order\" {
+  in any order {
+    when shop.post(\"/carts\")
+    keep body json \".id\" as cart
+    when shop.post(\"/carts/{cart}/items\", body: \"{\\\"sku\\\":\\\"tea\\\"}\")
+    then status is 201
+  }
+}
+";
+
 const X_E038: &str = "target say {
   run \"echo\"
 }
@@ -860,6 +875,19 @@ pub fn table() -> Vec<Entry> {
                 "Choose another name, or write the `keep` before the step that uses it. Where a pattern would hold a value, compare with `is` or `contains`. A call on a pixie app is written with what is known before it runs.",
             ),
             repro: spec(&["check", "e017.geas"], &[("e017.geas", X_E017)], 2),
+        },
+        Entry {
+            code: "E018",
+            summary: tr!("走らせられない `in any order`", "an `in any order` block that cannot run"),
+            when: tr!(
+                "`in any order {{ … }}` の中の手順は、すべての順で走ります。手順は一つの `when` と、その下の `then`・`and`・`keep` です。この E になるのは、一つの主張に二つ目のブロックを書いたとき、ブロックの中にブロックを書いたとき、中の `when` が一つも無いか一つだけのとき、順の数が 720 通り（違う手順が 6 つ）を超えるとき、中の手順が同じブロックの別の手順の `keep` した名前を使うとき（順によっては、その `keep` はあとに来ます）、ブロックのすぐ後ろに `then`・`and`・答えを読む `keep` を書いたとき（最後に走った手順は順ごとに違います）です。同じに書いた手順は見分けないので、二度届くものを二度書くと、順は `n!` 通りではなく `n!/∏k!` 通りです。どの主張も走りません。",
+                "The steps in `in any order {{ … }}` run in every order; a step is one `when` with the `then`, `and` and `keep` lines under it. It is this code when a claim has a second block, a block holds another, the block holds no `when` or only one, the steps come in more than 720 orders (six steps, none the same), a step uses a name that another step of the same block keeps (that `keep` comes after it in some orders), or a `then`, an `and` or a `keep` of an answer comes right after the block (the step that ran last differs from order to order). Steps written the same are not told apart, so a delivery written twice gives `n!/∏k!` orders, not `n!`. No claim runs.",
+            ),
+            fix: tr!(
+                "順の決まらない手順だけをブロックに入れ、ブロックは主張ごとに一つにしてください。どの手順にも要る値は、ブロックの前で `keep` してください。順が多すぎるときは、主張を分けるか、順の決まっている手順をブロックの外に出してください。ブロックのあとは `when` から書いてください。",
+                "Put in the block only the steps whose order is not decided, one block to a claim. A value every step needs is kept before the block. Where there are too many orders, split the claim, or write the steps whose order is decided outside the block. What follows the block starts with a `when`.",
+            ),
+            repro: spec(&["check", "e018.geas"], &[("e018.geas", X_E018)], 2),
         },
         Entry {
             code: "E030",

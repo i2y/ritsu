@@ -1,0 +1,2 @@
+エラー[E018]: E018-one-when.geas:7:3: `in any order` の中の `when` が一つです。手順が一つなら順は一通りなので、二つ以上書いてください
+     7 |   in any order {

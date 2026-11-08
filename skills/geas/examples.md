@@ -1,6 +1,6 @@
 # The examples
 
-The geas repository has ten examples under `examples/`, each a claims file beside a small program,
+The geas repository has eleven examples under `examples/`, each a claims file beside a small program,
 with a README that says what it shows and how to run it. The programs were written the way an agent
 writes them; the claims are what a person reads.
 
@@ -15,10 +15,11 @@ writes them; the claims are what a person reads.
 | `jobs` | an HTTP service in Python whose jobs finish after it answers | a claim that posts a job and waits for its result with `within 3 seconds`, on the read, not the post |
 | `orders` | an HTTP service in Python with an OpenAPI document | a `contract` line that holds every answer to the document, with the change that breaks it and no claim's check |
 | `tickets` | an HTTP service in Python that numbers what it makes and wants a token | `put`, `patch`, `delete`, headers, and `keep` of the number and of the token from the environment, with records that stay the same from run to run; `tickets.ja.geas` is the same claims, named in Japanese |
+| `webhooks` | an HTTP service in Python that keeps a subscription's state from the events a payment provider sends it | `in any order`: three events in each of their 6 orders, and four with one delivered twice in 12, each order on a new server; `server_as_it_comes.py` is a handler that writes each event as it comes and fails in the orders that end on an older one; `webhooks.ja.geas` is the same claims, named in Japanese |
 | `pixie-greeter` | pixie's greeter, a desktop app | a pixie target driven headless: `open()`, `input`, `click`, `submit()`, `field: 2`; the app is built with pixie and put beside the claims file |
 
-For each example but `pixie-greeter`, `tests/changes/<example>/` in the repository holds an
-agent-style change: the changed files (`after/`), and for the five whose code `map` records, the
+For each example but `pixie-greeter` and `webhooks` (whose other handler is beside it),
+`tests/changes/<example>/` in the repository holds an agent-style change: the changed files (`after/`), and for the five whose code `map` records, the
 change as a git diff (`change.diff`) and as a plain one (`change.plain.diff`). The tests run `map`
 before and after the change and `affected` on both diffs. The change to `web-greeter` turns its
 Greet button into a `<div>` with a click handler, which the screen shows as text and the claims
@@ -36,6 +37,7 @@ $ geas check examples/calc/calc.geas
 $ geas check examples/greeter/greeter.geas
 $ geas check examples/web-greeter/web-greeter.geas
 $ geas check examples/jobs/jobs.geas
+$ geas check examples/webhooks/webhooks.geas
 ```
 
 `tickets` needs its token: `export TICKETS_TOKEN=<anything>` first. The service asks for the same value.
@@ -57,5 +59,8 @@ runs from anywhere.
   time zone, the clock and the random seed, and its claims name the exact date and greeting.
 - **A wait is on the read.** `jobs` posts once and waits on the `get`: a call that waits is made
   again, and a `post` made again starts another job.
+- **Events are claimed in every order.** `webhooks` puts the deliveries in `in any order` and reads the
+  state after the block, so a handler that writes an older event over a newer one fails, in the same
+  orders on every run. A delivery that comes twice is written twice.
 - **Screens are claimed by role and name.** `screen contains button "Greet" disabled`, never a
   selector: a claim fails when a person with a screen reader could not do what it says.

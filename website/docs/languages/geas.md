@@ -10,4 +10,6 @@ A service with an OpenAPI document can be held to it with one line on its target
 
 A claim calls with `get`, `post`, `put`, `patch` and `delete`, sends headers, and goes on from what a service answers: `keep body json ".id" as id` holds the number a service chose, and `{id}` is the path of the next call. A token read with `keep env` is shown nowhere. The journal and the baseline write these values as `{id}` and `{token}`, so they stay the same from run to run, and drift on new numbers is quiet.
 
+A claim can send its calls in every order. `in any order { … }` holds the steps whose order is not decided, such as the events a payment provider may deliver in another order than they happened, or twice; geas runs the claim once for each order, each on a new service, so a handler that writes an older event over a newer one fails in the orders that end on it. geas makes one call at a time, so a handler that goes wrong only when two events are handled at once is not caught.
+
 geas's documents are in the repository: [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.md).

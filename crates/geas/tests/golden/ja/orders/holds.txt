@@ -1,0 +1,4 @@
+ok 1 - the latest event wins in any order（6 通りの順で）
+ok 2 - an event delivered twice changes nothing（12 通りの順で）
+ok 3 - names kept before the block, in it and after it（2 通りの順で）
+主張 3 件 · 成り立った 3 件 · 成り立たなかった 0 件 · ジャーナル: o/.geas/holds.journal.jsonl

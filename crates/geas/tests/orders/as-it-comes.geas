@@ -1,0 +1,40 @@
+# The handler that writes each event as it comes: it holds in the orders that end with the
+# latest event, and fails in the others.
+
+target api {
+  serve "python3 events.py {port} as-it-comes"
+  port auto
+}
+
+claim "the latest event wins in any order" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+
+claim "an event delivered twice changes nothing" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+
+claim "two events in any order" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+  }
+  when api.get("/subscription")
+  then body json ".status" is "active"
+}

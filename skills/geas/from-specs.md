@@ -103,6 +103,10 @@ nothing in one run says so.
   about the work being done. Wait for the state that says it is, and read the value after that.
 - Do not claim an order between two things the service may do side by side. Say what holds for either
   order, or make the second call after the first has finished.
+- When a file says that what the service receives can come in any order or more than once (events, a
+  webhook, a queue), put the deliveries in `in any order { … }` and claim the state after the block; a
+  delivery that comes twice is written twice. geas runs every order, one call at a time, so a race between
+  two deliveries handled at once is not what this claims.
 
 ## 4. Before you show them
 

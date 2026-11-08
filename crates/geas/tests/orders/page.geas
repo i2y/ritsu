@@ -1,0 +1,19 @@
+# A page in Chrome in a block: each order opens the page in a context of its own, so the counter in
+# the page's storage starts again, and the service starts afresh.
+
+target web {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "an item and a visit, in any order" {
+  in any order {
+    when web.post("/api/items", body: "eggs")
+    then status is 200
+    when web.open("/")
+    then screen contains text "Visits: 1"
+  }
+  when web.open("/")
+  then screen contains text "Visits: 2"
+  and  screen contains exactly 1 listitem
+}

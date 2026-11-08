@@ -1,0 +1,31 @@
+not ok 1 - the latest event wins in any order
+    o/as-it-comes.geas:10: in any order — 4 of 6 orders fail; below is the first, order 2, and the others are orders 4-6
+        10 |   in any order {
+    o/as-it-comes.geas:19: body json ".status" is "canceled" — got "active"
+        19 |   then body json ".status" is "canceled"
+      the run that gets there:
+          11  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          15  when api.post("/events", body: "{"seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          13  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          18  when api.get("/subscription")  →  200, body "{\"received\": 3, \"seq\": 2, \"status\": \"active\"}"
+not ok 2 - an event delivered twice changes nothing
+    o/as-it-comes.geas:23: in any order — 9 of 12 orders fail; below is the first, order 2, and the others are orders 3, 5 and 7-12
+        23 |   in any order {
+    o/as-it-comes.geas:30: body json ".status" is "canceled" — got "active"
+        30 |   then body json ".status" is "canceled"
+      the run that gets there:
+          24  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          25  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          27  when api.post("/events", body: "{"seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          26  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          29  when api.get("/subscription")  →  200, body "{\"received\": 4, \"seq\": 2, \"status\": \"active\"}"
+not ok 3 - two events in any order
+    o/as-it-comes.geas:34: in any order — 1 of 2 orders fails: order 2, below
+        34 |   in any order {
+    o/as-it-comes.geas:39: body json ".status" is "active" — got "past_due"
+        39 |   then body json ".status" is "active"
+      the run that gets there:
+          36  when api.post("/events", body: "{"seq":2,"status":"active"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          35  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          38  when api.get("/subscription")  →  200, body "{\"received\": 2, \"seq\": 1, \"status\": \"past_due\"}"
+3 claims · 0 ok · 3 failed · journal: o/.geas/as-it-comes.journal.jsonl

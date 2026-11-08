@@ -62,7 +62,12 @@ impl Obs {
 }
 
 pub struct ObsRec {
+    /// The `when`'s place among the `when`s of the run it is in.
     pub idx: usize,
+    /// For a claim with `in any order`, the number of the order it ran in (DESIGN §23).
+    pub order: Option<usize>,
+    /// Where the `when` is written among the claim's steps, whatever order it ran in.
+    pub step: usize,
     pub line: usize,
     pub target: String,
     /// The call as written after the target: `get("/total")`.
@@ -130,14 +135,34 @@ pub struct ClaimResult {
     pub name: String,
     pub line: usize,
     pub status: ClaimStatus,
+    /// Of a claim with `in any order`, the checks of the order it shows ([`Orders::shown`]).
     pub checks: Vec<CheckResult>,
+    /// Of every order it ran in, in their order.
     pub observations: Vec<ObsRec>,
-    /// For a claim that is not ok: its steps up to the problem.
+    /// For a claim that is not ok: its steps up to the problem, in the order it shows.
     pub run: Vec<RunLine>,
-    /// Every `when` that observed something and every `keep` that read a value, in order.
+    /// Every `when` that observed something and every `keep` that read a value, in order, in the
+    /// order it shows.
     pub trail: Vec<RunLine>,
-    /// Every process the claim started, in order.
+    /// Every process the claim started, in order, in every order it ran in.
     pub started: Vec<Started>,
+    /// For a claim with `in any order`, how its orders went (DESIGN §23).
+    pub orders: Option<Orders>,
+}
+
+/// How the orders of a claim with `in any order` went (DESIGN §23).
+#[derive(Clone, Debug)]
+pub struct Orders {
+    /// How many orders the block makes.
+    pub count: usize,
+    /// The line `in` is written on.
+    pub line: usize,
+    /// The orders in which a check failed, in their order, each by its number with the lines of the
+    /// block's `when`s as they ran.
+    pub failed: Vec<(usize, Vec<usize>)>,
+    /// The order whose checks and run the result holds: the one that ended in an error, else the
+    /// first that failed, else the first.
+    pub shown: usize,
 }
 
 /// A process a claim started, for `map` to read what it ran.
@@ -219,8 +244,75 @@ fn environment(tg: &Target, port: Option<u16>, opts: Opts, claim_no: usize, k: u
 }
 
 /// Runs one claim; `claim_no` (from 1) names its coverage directory in `map`. The
-/// result, and the claim's lines of the journal.
+/// result, and the claim's lines of the journal. A claim with `in any order` runs once in
+/// each of its orders, one after another, each with its services started afresh; it holds
+/// when it holds in every order, and an order that ends in an error ends it (DESIGN §23).
 pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: Opts) -> (ClaimResult, Vec<String>) {
+    let (Some(block), Some(orders)) = (&claim.any_order, claim.orders()) else {
+        return run_once(spec, claim, None, claim_no, dir, opts, 0);
+    };
+    let mut journal = Vec::new();
+    let mut started: Vec<Started> = Vec::new();
+    let mut observations: Vec<ObsRec> = Vec::new();
+    let mut failed: Vec<(usize, Vec<usize>)> = Vec::new();
+    let (mut first, mut first_failed, mut broke) = (None, None, None);
+    for order in &orders {
+        let ordered = Claim { name: claim.name.clone(), steps: order.steps.clone(), pos: claim.pos, any_order: None };
+        let (mut r, lines) = run_once(spec, &ordered, Some((order.number, &order.places)), claim_no, dir, opts, started.len());
+        journal.extend(lines.into_iter().map(|l| in_order(l, &claim.name, order.number)));
+        started.append(&mut r.started);
+        observations.append(&mut r.observations);
+        match &mut r.status {
+            ClaimStatus::Error(d) => {
+                let lines: Vec<String> = order.lines.iter().map(usize::to_string).collect();
+                let (n, count) = (order.number, orders.len());
+                d.notes.push(tr!(
+                    "`in any order` の {count} 通りの順のうち、{n} 番目の順（{} 行目の順）で起きました。そのあとの順は走らせていません",
+                    "this is order {n} of the {count} of `in any order`, the steps on lines {} in that order; geas ran no order after it",
+                    lines.join("、");
+                    lines.join(", "),
+                ));
+                broke = Some((r, order.number));
+                break;
+            }
+            ClaimStatus::Fail => {
+                failed.push((order.number, order.lines.clone()));
+                if first_failed.is_none() {
+                    first_failed = Some((r, order.number));
+                }
+            }
+            ClaimStatus::Ok => {
+                if first.is_none() {
+                    first = Some((r, order.number));
+                }
+            }
+        }
+        // the run is ending on a signal: no order more
+        if proc::signalled().is_some() {
+            break;
+        }
+    }
+    let (mut r, shown) = broke.or(first_failed).or(first).expect("one order ran");
+    r.observations = observations;
+    r.started = started;
+    r.orders = Some(Orders { count: orders.len(), line: block.pos.line, failed, shown });
+    (r, journal)
+}
+
+/// A line of the journal with the number of the order it ran in, right after its claim.
+fn in_order(line: String, claim: &str, n: usize) -> String {
+    let head = format!("{{\"claim\":{},", json::quote(claim));
+    match line.strip_prefix(&head) {
+        Some(rest) => format!("{head}\"order\":{n},{rest}"),
+        None => line,
+    }
+}
+
+/// One run of a claim's steps, with its services started for it. `order` is, for a claim with `in
+/// any order`, the number of the order and where each step is written among the claim's; `prior`
+/// how many processes the claim's earlier orders started, so that each has a coverage directory of
+/// its own in `map`.
+fn run_once(spec: &Spec, claim: &Claim, order: Option<(usize, &[usize])>, claim_no: usize, dir: &Path, opts: Opts, prior: usize) -> (ClaimResult, Vec<String>) {
     let mut journal: Vec<String> = Vec::new();
     let term = opts.cover.is_some();
     let mut servers: HashMap<String, Instance> = HashMap::new();
@@ -268,7 +360,7 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                 let mut sent_path: Option<String> = None;
                 let result = loop {
                     tries += 1;
-                    let k = started.len() + 1;
+                    let k = prior + started.len() + 1;
                     let record = |pid: u32, words: &[String], d: Option<PathBuf>| Started {
                         target: target.clone(),
                         line: pos.line,
@@ -393,6 +485,8 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
                         });
                         observations.push(ObsRec {
                             idx: when_idx,
+                            order: order.map(|(n, _)| n),
+                            step: order.map_or(i, |(_, places)| places[i]),
                             line: pos.line,
                             target: target.clone(),
                             call: call.display(),
@@ -515,7 +609,7 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
     } else {
         (ClaimStatus::Ok, vec![])
     };
-    (ClaimResult { name: claim.name.clone(), line: claim.pos.line, status, checks, observations, run, trail, started }, journal)
+    (ClaimResult { name: claim.name.clone(), line: claim.pos.line, status, checks, observations, run, trail, started, orders: None }, journal)
 }
 
 /// Whether an answer settles a wait (DESIGN §18): every check under the `when` holds on it and every
@@ -559,9 +653,14 @@ fn take_port(target: &str, port: Port) -> Result<(u16, Option<AutoPort>), Failur
 }
 
 /// The run of a claim up to and with the `when` on `line`, each step with what it
-/// observed or read: the path of a diagnostic about something that `when` started.
+/// observed or read: the path of a diagnostic about something that `when` started. In
+/// an order of `in any order`, the lines do not rise with the steps, so the run goes up
+/// to that `when` as it ran.
 pub fn run_up_to(r: &ClaimResult, line: usize) -> Vec<diag::Step> {
-    r.trail.iter().filter(|s| s.line <= line).map(RunLine::step).collect()
+    match r.trail.iter().position(|s| s.line == line && s.word == "when") {
+        Some(at) => r.trail[..=at].iter().map(RunLine::step).collect(),
+        None => r.trail.iter().filter(|s| s.line <= line).map(RunLine::step).collect(),
+    }
 }
 
 /// A check in the journal.

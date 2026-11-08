@@ -1,0 +1,13 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "one event" {
+  in any order {
+    when api.post("/events", body: "1")
+    then status is 202
+  }
+  when api.get("/state")
+  then status is 200
+}

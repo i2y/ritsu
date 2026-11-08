@@ -1,0 +1,45 @@
+# The handler that drops an event older than the last it applied: every claim holds in every
+# order, each order on a new server.
+
+target api {
+  serve "python3 events.py {port} newest"
+  port auto
+}
+
+claim "the latest event wins in any order" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+  and  body json ".received" is 3
+}
+
+claim "an event delivered twice changes nothing" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+  and  body json ".received" is 4
+}
+
+claim "names kept before the block, in it and after it" {
+  when api.post("/subscriptions")
+  keep body json ".id" as sub
+  in any order {
+    when api.post("/subscriptions/{sub}/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/subscriptions/{sub}/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    keep body json ".subscription" as again
+  }
+  when api.get("/subscriptions/{again}")
+  then body json ".status" is "active"
+}

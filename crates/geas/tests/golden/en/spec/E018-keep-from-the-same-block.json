@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E018-keep-from-the-same-block.geas","diagnostics":[{"code":"E018","severity":"error","file":"E018-keep-from-the-same-block.geas","line":10,"col":27,"message":"`{cart}` is kept on line 9, by another step of the same `in any order`, which comes after this one in some orders","notes":["keep it before the block, or use it after the block"],"path":[]}]}

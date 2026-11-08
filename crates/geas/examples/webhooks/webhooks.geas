@@ -1,0 +1,36 @@
+# Claims for a service that keeps the state of a subscription from the events a payment provider
+# sends it. The provider can deliver its events in an order other than the one they happened in,
+# and can deliver one twice, so the claims say the state the service ends in whatever the order.
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+# geas runs the three events in each of their 6 orders, on a new server for each order.
+claim "the subscription ends where the latest event says, in any order" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+
+# A second delivery of an event is the same step written twice. The two are not told apart, so
+# the four steps come in 12 orders, not 24.
+claim "an event delivered twice changes nothing" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+  and  body json ".seq" is 3
+}

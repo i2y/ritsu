@@ -1,0 +1,4 @@
+error[E018]: E018-two-blocks.geas:13:3: a claim has one `in any order` block at most
+    13 |   in any order {
+  = the first is on line 7
+  = put the steps whose order is not decided in one block, or write a claim for each block

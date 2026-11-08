@@ -95,9 +95,9 @@ below): an action on a target, written `<target>.<call>(…)`. A `then` checks w
 observed; `and` is the same word for another check. A failed check marks the claim as failed, and
 the claim goes on, so every divergence is reported. A `when` that cannot run (the program does not
 start, the port never opens, the screen has no such button) ends the claim as an error, with a
-diagnostic. A `when` can wait for an answer that comes later, with `within <n> seconds` (below), and
-`keep` holds a value of an answer for the steps after it (below). Names of targets and of claims are
-unique in a file (E003).
+diagnostic. A `when` can wait for an answer that comes later, with `within <n> seconds` (below),
+`keep` holds a value of an answer for the steps after it (below), and `in any order { … }` runs the
+steps in it in every order (below). Names of targets and of claims are unique in a file (E003).
 
 ## Calls and what they observe
 
@@ -268,6 +268,52 @@ Drift counts a `keep` as a check of what it reads.
 journal, the baseline, `--json`, a report, or a program's stderr that a failure quotes, even when the service
 sends it back. A failed check that uses a name otherwise says its value, in the report and in `--json`'s `values`.
 
+## Steps in any order: `in any order`
+
+A handler that takes events, messages or webhooks from another system cannot choose the order they come
+in, and the same one can come twice. `in any order { … }` holds the steps whose order is not decided;
+geas runs the claim once for each of their orders, each run on services started afresh, and the claim
+holds when it holds in every order:
+
+```geas
+claim "the subscription ends where the latest event says, in any order" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+…
+```
+
+- **A step** is one `when` with the `then`, `and` and `keep` lines under it, up to the next `when`; they
+  move together, and a `within` stays on its `when`. The steps before and after the block run in every
+  order, where they are written.
+- **A delivery that comes twice is the same step written twice.** Steps written the same are not told
+  apart, so a block's orders number n!/∏k!: four steps, one of them twice, come in 12 orders, not 24.
+- **The orders come in a fixed order**: the written one first, then the dictionary order of where the
+  steps are written. Every order runs, the failing ones too; an order that ends in an error (E030 to E038)
+  ends the claim there, and the orders after it do not run. One worker runs all the orders of a claim, so
+  `--jobs` gives the same bytes.
+- **E018** refuses, before anything runs: a second block in a claim, a block in a block, a block with
+  fewer than two `when`s, more than 720 orders (six steps, none the same), a step that uses a name another
+  step of the same block keeps (in some orders that `keep` comes later), and a `then`, an `and` or a
+  `keep` of an answer right after the block (the step that ran last differs from order to order; start
+  with a `when`). A name kept before the block can be used in it, and one kept in it after it.
+- A GUI target runs in each order afresh: a driver starts again, Chrome opens a context of its own,
+  pixie gets each order's calls as its script; E012 and E013 are checked in every order.
+- **geas makes one call at a time.** It tries every order of the calls, not their overlap: a handler that
+  goes wrong only when two events are handled at the same time is not caught by any claim.
+- The report says `(6 orders)` on a claim that holds. One that fails says how many of how many orders
+  fail, shows the first as the run that gets there, and names the others by number. The journal and the
+  baseline write each order's lines with `"order":n`, and drift compares each order with the same order
+  ([commands.md](commands.md)).
+
 ## Subjects and matchers
 
 | Matcher | On | Holds when |
@@ -437,6 +483,8 @@ pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
 claim   := "claim" STR "{" step* "}"            ; a `when` first, or a `keep env`
 step    := "when" IDENT "." call [wait] | ("then" | "and") check
          | "keep" source "as" IDENT
+         | "in" "any" "order" "{" ostep+ "}"    ; one to a claim, two `when`s or more
+ostep   := "when" IDENT "." call [wait] { ("then" | "and") check | "keep" source "as" IDENT }
 wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run and the HTTP calls
 source  := "stdout" | "stderr" | "header" STR | "body" | "body" "json" STR
          | "env" STR

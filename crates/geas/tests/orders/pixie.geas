@@ -1,0 +1,17 @@
+# pixie's greeter in a block: each order replays its own script on a new app.
+
+target app {
+  pixie "greeter"
+}
+
+claim "a name and a note, typed in any order" {
+  in any order {
+    when app.input("Ada", field: 1)
+    then screen contains text "name: Ada"
+    when app.input("hello", field: 2)
+    then screen contains text "note: hello"
+  }
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+  and  screen contains text "note: hello"
+}

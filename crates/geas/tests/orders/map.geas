@@ -1,0 +1,28 @@
+# The lines a claim runs are the lines of all its orders: the drop of an older event runs only in
+# the orders where one comes after a newer one.
+
+target api {
+  serve "python3 events.py {port} newest"
+  port auto
+}
+
+claim "in any order" {
+  in any order {
+    when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+
+claim "in the order they happened" {
+  when api.post("/events", body: "{\"seq\":1,\"status\":\"past_due\"}")
+  when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+  when api.post("/events", body: "{\"seq\":3,\"status\":\"canceled\"}")
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}

@@ -134,6 +134,9 @@ script with the tree read after each action, and hands each `when` its screen.
 - A call on a pixie app cannot use a name `keep` holds (E017): the script is made before the claim's
   actions run, and the screen checks read the screens afterwards, with the name as usual.
 - The app starts once per claim, so `open()` after another action on it is E013, and so is a path.
+- In `in any order`, each order is a run of its own: the app starts afresh and replays that order's
+  actions, and E012 and E013 are checked in every order, the note naming the order's lines. A driver
+  starts afresh in each order too, and Chrome opens each in a context of its own.
 - Text fields are reached by position only: `input("Ada", field: 2)`; `into:` is E013.
 - `click("x", nth: n)`, `input`, `submit`, `press("k")` and `advance(ms)` become pixie's steps
   `click`, `input`, `submit`, `key` and `advance`. A key the app binds nothing to is refused; to

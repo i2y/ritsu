@@ -1,0 +1,3 @@
+error[E018]: E018-a-block-in-a-block.geas:9:5: an `in any order` block cannot hold another: the steps of one block already run in every order
+     9 |     in any order {
+  = write the steps of both in one block

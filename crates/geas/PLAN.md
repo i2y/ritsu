@@ -994,6 +994,9 @@ One event a line, in claim order:
   nodes`);
 - `{"claim":…,"event":"error","line":…,"code":…,"message":…}`.
 
+A claim with `in any order` (DESIGN §23) runs once for each order, in their
+fixed order, and each of its lines adds `"order":n` after `claim`.
+
 ### The baseline: `.geas/<stem>.baseline.jsonl`
 
 - From C3, a first line `{"geas_baseline":1,"pins":{"<target>":{…}}}`; a
@@ -1005,6 +1008,9 @@ One event a line, in claim order:
   `env` event carries the same object.
 - One line per observation:
   `{"claim":…,"idx":…,"target":…,"call":…,"obs":{"kind":"proc"|"http"|"screen",…}}`.
+  A claim with `in any order` adds `"order":n` after `claim`, and `idx` is
+  the `when`'s place in that order; drift compares each order with the
+  same order.
 
 A screen, in the journal, the baseline (`"screen":<node>`) and `--json`, is
 a node: `{"role":…,"name":…,"value":…,"states":[…],"children":[…]}`
@@ -1039,7 +1045,11 @@ that what each target ran is kept apart.)
   spec writes it after `when` (`api.get("/")`), `observed` `null` for the
   `when` a claim error stopped at. A `when` that waits adds `"within"`
   after `call`, and `"tries"` and `"ms"` when its time ran out, as the
-  journal does, or when one of its calls failed. A failed `screen` check carries
+  journal does, or when one of its calls failed. A claim with `in any order`
+  adds `"orders"`, how many orders it ran in, and when it failed
+  `"failed_orders":[{"order","lines"}]`, the lines of the block's `when`s as
+  they ran; its `checks` and `run` are those of the order that ended in an
+  error, else of the first that failed, else of the first. A failed `screen` check carries
   `"screen"`, the screen it saw. A check's `check` is its subject and its
   matcher's words (`status is between`), `expected` the matcher's value as
   the spec writes it (`200 and 299`, a pattern as `"\d+"`), empty for
@@ -1052,7 +1062,8 @@ that what each target ran is kept apart.)
 - `drift`: `{"geas":1,"file":…,"compared":…,"drifted":…,"unclaimed":…,
   "claimed":…,"changes":[{"claim","when","line","call","field","old","new",
   "claimed"}],"notes":[…],"diagnostics":[…]}`: `when` is the `when`'s place
-  in its claim from 1, `line` its line; `old` and `new` are JSON values, a
+  in its claim from 1, `line` its line, and a claim with `in any order` adds
+  `"order"` after `claim`, `when` being the place in that order; `old` and `new` are JSON values, a
   string for a text or a header, a number for exit and status, the value
   itself for a `body json` path, `null` when absent; `diagnostics` holds
   the claims that could not run. A screen's change has the `field`

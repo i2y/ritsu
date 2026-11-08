@@ -1,0 +1,20 @@
+# A GUI target in a block, through the fake driver: each order starts the driver afresh.
+
+target app {
+  driver "python3 fake_driver.py greeter.json"
+}
+
+target echo {
+  run "python3 echo.py"
+}
+
+claim "a name typed in and a command, in any order" {
+  in any order {
+    when app.input("Ada")
+    then screen contains textbox "type here" with value "Ada"
+    when echo.run("between", "", "0")
+    then stdout is "between"
+  }
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+}

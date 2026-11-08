@@ -1,0 +1,10 @@
+not ok 1 - the latest event wins in any order（エラー）
+    エラー[E033]: o/hang-up.geas:13:5: サービス `api` がレスポンスを返さずに接続を閉じました
+        13 |     when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+      = `in any order` の 6 通りの順のうち、2 番目の順（11、15、13 行目の順）で起きました。そのあとの順は走らせていません
+      ここまでの実行:
+          11  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          15  when api.post("/events", body: "{"seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          13  when api.post("/events", body: "{"seq":2,"status":"active"}")
+ok 2 - a claim after it still runs
+主張 2 件 · 成り立った 1 件 · 成り立たなかった 1 件 · ジャーナル: o/.geas/hang-up.journal.jsonl

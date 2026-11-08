@@ -1,0 +1,10 @@
+not ok 1 - the latest event wins in any order (error)
+    error[E033]: o/hang-up.geas:13:5: the service `api` closed the connection without answering
+        13 |     when api.post("/events", body: "{\"seq\":2,\"status\":\"active\"}")
+      = this is order 2 of the 6 of `in any order`, the steps on lines 11, 15, 13 in that order; geas ran no order after it
+      the run that gets there:
+          11  when api.post("/events", body: "{"seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          15  when api.post("/events", body: "{"seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true, \"subscription\": \"sub_1\"}"
+          13  when api.post("/events", body: "{"seq":2,"status":"active"}")
+ok 2 - a claim after it still runs
+2 claims · 1 ok · 1 failed · journal: o/.geas/hang-up.journal.jsonl

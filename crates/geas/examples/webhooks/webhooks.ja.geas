@@ -1,0 +1,36 @@
+# 決済のプロバイダから届くイベントで、購読の状態を持つサービスの主張（webhooks.geas の日本語版）。
+# プロバイダはイベントを起きた順とは違う順で届けることがあり、同じものを二度届けることもあるので、
+# 主張では、どの順で届いてもサービスが同じ状態に終わることを言う。
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+# 三つのイベントを 6 通りの順のそれぞれで、順ごとに新しいサーバーに送る。
+claim "購読は、どの順で届いても一番新しいイベントの状態に終わる" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+
+# 二度届くイベントは、同じ手順を二度書いて表す。二つは見分けないので、四つの手順の順は
+# 24 通りではなく 12 通り。
+claim "二度届いたイベントは何も変えない" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+  and  body json ".seq" is 3
+}

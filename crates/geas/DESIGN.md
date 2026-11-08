@@ -222,6 +222,8 @@ pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
 claim   := "claim" STR "{" step* "}"            ; a `when` first, or a `keep env` (§22)
 step    := "when" IDENT "." call [wait] | ("then" | "and") check
          | "keep" source "as" IDENT             ; §22
+         | "in" "any" "order" "{" ostep+ "}"    ; one to a claim, two `when`s or more (§23)
+ostep   := "when" IDENT "." call [wait] { ("then" | "and") check | "keep" source "as" IDENT }
 wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run and the HTTP calls (§18)
 source  := "stdout" | "stderr" | "header" STR | "body" | "body" "json" STR
          | "env" STR
@@ -1530,6 +1532,13 @@ As built:
   isolation `--jobs` (§10) and the per-claim record (§7.3) rest on, and
   would hide from the reader the setup that makes the claim true. A value
   a `keep` holds stays in its claim (§22), for the same reason.
+- **Calls at the same time.** geas makes one call at a time, in `in any order`
+  too (§23): it tries every order of a claim's calls, not their overlap. A
+  handler that goes wrong only when two requests are handled at once, two
+  events racing for one row, is not caught. Sending calls at the same time
+  would leave what a claim observes to the scheduler of the machine, so its
+  verdict, its journal and its baseline would differ from run to run, and
+  everything geas compares rests on their not doing so.
 - **macOS accessibility.** The permission (§8.5).
 - **Recording pixie apps and page scripts.** A pixie app is Rust that pixie
   generated, and its lines are not the `.pix` source anyone wrote. A
@@ -2512,8 +2521,9 @@ not ok 1 - the value leads outside the document
    value has been enough. It can be added later.
 3. **Handing a value to another claim.** Claims are isolated (§15).
 4. **`head` and `options`.** Nothing has asked for them.
-5. **A status one of several, the length of a JSON array, calls at the same time.** Each is its own
-   question, and none is what the three gaps were.
+5. **A status one of several, the length of a JSON array.** Each is its own question, and neither is what
+   the three gaps were. Calls at the same time are still out: `in any order` (§23) tries the orders of a
+   claim's calls one call at a time, and §15 says why it does not try their overlap.
 6. **Holding a request's body to the contract.** What a claim sends is its own business (§20).
 7. **Writing the value in the journal.** It would break "same behavior, same bytes" for every service that
    numbers what it makes, and a report says the value when a check fails.
@@ -2541,3 +2551,161 @@ says a key in a header and shows none of it. `tests/spec.rs` holds each refusal 
 languages and `--json`, `src/model.rs` holds the old forms of `display()` to their bytes, `src/keep.rs` the
 rewriting, `tests/browser.rs` `open("/orders/{id}")` and the screen in Chrome (a journal of the same bytes
 twice), `tests/gui.rs` a driver, and `tests/readme.rs` the story of `examples/tickets`.
+
+## 23. Calls in any order: `in any order` (2026-11-08)
+
+A service that takes events from another system does not choose the order they come in. A payment
+provider delivers its events in an order other than the one they happened in, and delivers one again when
+it did not hear back in time. A handler that writes each event as it comes ends in the state of an older
+event when that one comes last, and every claim written in the order things happened holds on it. A trial
+before this was built caught, in the form below, four handlers an LLM had written that went wrong in some
+order: one in the order of two events stamped with the same second, three silently in some of 252 orders.
+It missed a fifth, which went wrong only when two events were handled at the same time. The LLM had written
+checks of this kind itself, and deleted them when it was done; a claim stays.
+
+**Decided.** A block of steps whose order is not decided. geas runs the claim once for each order of the
+steps in the block, each run on services started afresh, and the claim holds when it holds in every order:
+
+```geas
+claim "the subscription ends where the latest event says, in any order" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+```
+
+### 23.1 The block
+
+- A step of the block is one `when` with the `then`, `and` and `keep` lines after it, up to the next
+  `when`. They move together, and a `within` stays on its `when`. The steps before and after the block run
+  in every order, where they are written.
+- A claim has one block, a block holds no other, and it holds two `when`s or more (E018). One step comes in
+  one order, and two blocks would multiply their orders: a claim with two sets of steps whose orders do not
+  touch is two claims.
+- **An event delivered twice is the same step written twice.** Steps written the same (the call, its
+  `within`, and the checks and `keep`s under it, whatever the spaces, the comments, or `then` and `and`)
+  are one step in an order, since swapping them gives the same run. A block's orders are the permutations
+  of a multiset, n!/∏k!: four steps, one of them twice, come in 12 orders, not 24. There is no form for
+  "one of these may come twice": a claim says everything it sends, as the rest of geas has it.
+- **720 orders at most**, six steps none the same. A block with more is E018 before anything runs, with the
+  count and the advice to split the block. No switch raises it. Each order starts its services afresh, so
+  a claim of 720 orders starts 720 servers, and seven steps would be 5,040 runs, more than a gate is waited
+  for.
+- A step in the block does not use a name another step of the same block keeps (E018): in some orders that
+  `keep` comes after it. A name kept before the block can be used in it, and one kept in it after it.
+- What follows the block starts with a `when`. A `then`, an `and` or a `keep` of an answer right after it
+  would read the answer of whichever step ran last, which differs from order to order (E018). `keep env`
+  reads no answer, and can come there.
+
+### 23.2 Running
+
+- Each order is one run of the claim, as any claim is (§2): the targets it uses start afresh, a `serve`
+  and a GUI alike, and nothing asks the service to reset itself.
+- The orders come in a fixed order: the written one first, then the others in the dictionary order of
+  where their steps are written. Of steps written the same, the one written first comes first. The
+  report, the journal and the baseline follow it.
+- The claim holds only when it holds in every order. **Every order runs, the failing ones too**, so that
+  the report can say how many fail. **An order that ends in an error ends the claim as an error there**
+  (a service that does not start, a call that gets no answer): what broke is the environment, and the
+  orders after it would say the same again.
+- **With `--jobs`, one worker runs all the orders of its claim**, one after another. Claims still run side
+  by side (§10), and `-j4` gives the bytes `-j1` does.
+- GUI targets are allowed, since each order is one run of the claim: a driver starts afresh in each order
+  (§8.5), Chrome opens each order in a context of its own (§8.4), and pixie gets the calls of each order as
+  its script (§8.3). A command between two actions on a pixie app (E012) and an `open` after an action on
+  one (E013) depend on the order of the actions, so geas checks them in every order, and one that only a
+  later order has says the lines of that order in a note.
+- geas makes one call at a time (§15).
+
+### 23.3 What it writes
+
+- **The report.** A claim that holds says how many orders it ran in: `ok 1 - … (6 orders)`,
+  `（6 通りの順で）`. A claim that fails says, on the line of the block, how many of how many orders fail,
+  shows the first of them as the run that gets there, and names the others by their numbers:
+
+  ```text
+  not ok 1 - the subscription ends where the latest event says, in any order
+      examples/webhooks/webhooks.geas:12: in any order — 4 of 6 orders fail; below is the first, order 2, and the others are orders 4-6
+          12 |   in any order {
+      examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
+          21 |   then body json ".status" is "canceled"
+        the run that gets there:
+            13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
+            17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
+            15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+            20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
+  ```
+
+  An error says, in a note, which order it ended, with the lines of the block in that order, and that no
+  order after it ran.
+- **`--json`** only adds: `"orders"`, the number of orders, and for a claim that fails
+  `"failed_orders":[{"order","lines"}]`, the lines of the block's `when`s as they ran. `checks` and `run`
+  are those of the order the report shows: the one that ended in an error, else the first that failed,
+  else the first. A claim without a block writes what it did.
+- **The journal** writes each order's lines with `"order":n` right after `"claim"`, in the fixed order.
+- **The baseline** writes each order's records with `"order":n` too, and `idx` is the `when`'s place in
+  that order. Drift compares each order with the same order of the baseline, and names what changed
+  `claim "…" order 2 when#3`; a change in `--json` adds `"order"`. Whether a change is claimed is decided
+  by the checks under the `when` where it is written, so a check counts in every order its step runs in.
+- **`map`** records for a claim the lines of all its orders: each order's processes write to coverage
+  directories of their own, numbered on from the order before, and the claim's record reads them all. A
+  line one order runs is the claim's, as a line one `when` runs is.
+
+### 23.4 Forms passed over
+
+1. **Some orders picked at random.** A verdict that changes from run to run is what geas is built to
+   avoid (§10, §18.2); the fixed list of orders is the same in every run.
+2. **A form of its own for a duplicate delivery** (`twice`, `may repeat`). Writing the step twice says it,
+   and steps written the same are not counted again.
+3. **Splitting a claim's orders among workers.** They would finish in another order in each run, and
+   putting their lines back costs what it saves; claims already run side by side.
+4. **Calls at the same time.** §15.
+5. **A switch to raise the 720.** A block that needs more is two claims, or has steps whose order is
+   decided.
+6. **A reset between orders** instead of new services. It asks the service for a path that exists only to
+   be checked (as §18 refused `?wait=10`), and does not reset what the service keeps elsewhere.
+7. **Several blocks, or one in another.** The orders multiply, and what a claim checks would be hard to
+   read.
+
+### 23.5 What changes
+
+`Claim` keeps its steps in the order written and gains `any_order`, the block's place and the range of
+each of its steps; `Claim::orders` lists the orders, each as its steps, where each is written, and the
+lines of the block's `when`s. `run_claim` runs a claim with a block once for each order through
+`run_once`, the run a claim always had. The report, `--json`, the journal, the baseline and drift say the
+orders; E018 is the one new code; E012 and E013 are checked in every order. A claim without a block writes
+the bytes it did.
+
+### 23.6 Checked
+
+`tests/orders.rs`, with `tests/impl/events.py`, which keeps a subscription's state from events and has a
+handler that drops an older event, one that writes each as it comes, and one that hangs up on an older
+one: on the first, three steps hold in all 6 orders, four with one written twice in 12, and names kept
+before, in and after a block go on; the `when`s run in the fixed order; each order starts a new server
+(the server counts what it was sent, and the pid log the starts); the journal is the same bytes in a
+second run and with `-j4`, the baseline with `-j1` and `-j4`, and drift after a snap is quiet. On the
+second, 4 of 6 and 9 of 12 orders fail and 1 of 2, the first failed order is the first of the fixed
+order, every order runs, and the report in both languages and `--json` are goldens. On the third, the
+claim is an error in its second order, runs no order after it, and the claim after it runs. Every case
+of E018 starts nothing; `map` records the line that drops an older event for the claim with the block and
+not for the same events in the order written; the fake driver, Chrome (the page's storage counter starts
+again) and pixie's greeter (each order its own script) run in each order afresh. `tests/spec.rs` holds each case of E018 and an E012 only a later
+order has, in both languages and `--json`; `src/model.rs` the orders and their count beyond a machine word,
+`src/parse.rs` the block, `src/report.rs` the words of the failed orders, `src/drift.rs` the checks by
+where a `when` is written, and `tests/readme.rs` the story of `examples/webhooks`.
+
+### 23.7 Left
+
+- Calls at the same time (§15): a handler that goes wrong only when two events overlap is not caught.
+- A block of more than 720 orders, and orders chosen by the person (a few written out as claims of their
+  own do that).
+- The report and `--json` show the checks of one order, the first that failed; the journal has every
+  order's.
+- `map` keeps the lines of the claim, all orders together, not of each order.

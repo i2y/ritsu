@@ -160,6 +160,12 @@ keep body json ".id" as id                      holds a value of the `when` abov
 keep stdout | stderr | header "etag" | body as x
 keep env "API_TOKEN" as token                   from geas's own environment, before a `when` if need be; shown nowhere
 
+in any order {                                  the steps in it (each a `when` with what is under it) run in
+  when api.post("/events", body: "…")             every order, each order on services started afresh;
+  then status is 200                              the claim holds when every order holds
+  when api.post("/events", body: "…")
+}
+
   is "5" | is 0 | is true | is null | is not "x"
   is above 1 | is below 10 | is at least 0 | is at most 3 | is between 200 and 299
   contains "part" | does not contain "part"
@@ -192,7 +198,15 @@ after each answer, until every check under that `when` holds on one answer, for 
 from the first call. When the time runs out, the checks read the last answer. A call is made again
 as it is written, so a call that waits does what it does on every call: a `post` that creates
 something creates it again, and a `put` or a `patch` writes again. Wait on a read where there is one.
-[language.md](language.md) has every form, with what each one means.
+
+A handler that takes events, messages or webhooks from another system cannot choose the order they come
+in, and the same one can come twice. When the code you write is such a handler, propose a claim with
+`in any order { … }` around the deliveries and the state they should end in after it: geas runs the claim
+once for each order of the steps in the block, and a handler that writes each event as it comes fails in
+the orders that end on an older one. A delivery that comes twice is the same step written twice. The
+orders are fixed, so a failure comes back in every run. Its limit: geas makes one call at a time, so a
+handler that goes wrong only when two events are handled at the same time is not caught; say so when that
+is the risk. [language.md](language.md) has every form, with what each one means.
 
 ## 4. Reading the answers
 
@@ -240,6 +254,26 @@ Read the last answer before anything else: here the service calls a finished job
 no wait would have seen `"done"`. A longer `within` is a change to the claim, which is the
 person's; it fits work that is slow, not an answer that differs.
 
+A claim with `in any order` that fails in some orders says how many of how many fail, on the line of the
+block, and shows the first of them, in the fixed order, as the run that gets there:
+
+```text
+not ok 1 - the subscription ends where the latest event says, in any order
+    examples/webhooks/webhooks.geas:12: in any order — 4 of 6 orders fail; below is the first, order 2, and the others are orders 4-6
+        12 |   in any order {
+    examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
+        21 |   then body json ".status" is "canceled"
+      the run that gets there:
+          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
+```
+
+Read the run's lines in the order they ran: here an older event came last and the handler wrote it.
+Fix the handler so that every order holds, not the order shown; the journal has every order's lines,
+each with `"order":n`.
+
 `ritsu geas drift` prints each change under the `when` it comes from: `+` appeared, `-` disappeared, `~`
 changed, then the tag. `[claimed — `geas check` is the authority]` means some check looks at that
 field; `[unclaimed]` means no claim promises anything about it:
@@ -274,6 +308,7 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E014 | a `within` geas cannot keep: after a screen action, below 1 or above 60 seconds, or on a `when` with no check and no `keep` of its answer under it | `within` 1 to 60 seconds on a `run` or an HTTP call, with the checks to wait for under it; `advance(ms)` for a screen |
 | E015, E016 | a `contract` file that cannot be read; a call the document does not have | write the path from the spec's directory; correct the call, add it to the document, or call through a target with no `contract` line |
 | E017 | a `keep`, or a use of its name, that cannot work: one name twice, the name `port`, `keep status`, `exit` or `screen`, a `{name}` above its `keep`, in a pattern, or in a call on a pixie app | what the message says; `is` or `contains` where a pattern would hold a value |
+| E018 | an `in any order` block geas cannot run: two in a claim, one in another, fewer than two `when`s, more than 720 orders, a name another step of the block keeps, a check or a `keep` of an answer right after it | one block of only the steps whose order is not decided; keep what every step needs before it; start what follows with a `when` |
 | E030 to E033 | a program that would not start, a `run` over 5 s, a service that never opened its port, an HTTP exchange that failed | fix the program or the target's command; the notes hold its stderr |
 | E034 to E037 | no Chrome; an action the app refused; a page that did not load or settle; a GUI driver geas cannot read | the notes show the screen and what it could reach |
 | E038 | a value a call cannot use: the variable of a `keep env` is not set or empty, a line break in a header's value, a path that comes to another host or has no `/` in front | set the variable where geas runs; look at the service that gave the value |

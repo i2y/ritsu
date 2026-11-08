@@ -369,6 +369,31 @@ Repro
       keep body json ".id" as id
     }
 
+error[E018]: an `in any order` block that cannot run
+
+When it appears
+  The steps in `in any order { … }` run in every order; a step is one `when` with the `then`, `and` and `keep` lines under it. It is this code when a claim has a second block, a block holds another, the block holds no `when` or only one, the steps come in more than 720 orders (six steps, none the same), a step uses a name that another step of the same block keeps (that `keep` comes after it in some orders), or a `then`, an `and` or a `keep` of an answer comes right after the block (the step that ran last differs from order to order). Steps written the same are not told apart, so a delivery written twice gives `n!/∏k!` orders, not `n!`. No claim runs.
+
+What usually fixes it
+  Put in the block only the steps whose order is not decided, one block to a claim. A value every step needs is kept before the block. Where there are too many orders, split the claim, or write the steps whose order is decided outside the block. What follows the block starts with a `when`.
+
+Repro
+  $ geas check e018.geas
+  e018.geas:
+    target shop {
+      serve "python3 server.py {port}"
+      port auto
+    }
+
+    claim "a cart takes its items in any order" {
+      in any order {
+        when shop.post("/carts")
+        keep body json ".id" as cart
+        when shop.post("/carts/{cart}/items", body: "{\"sku\":\"tea\"}")
+        then status is 201
+      }
+    }
+
 error[E030]: a program that could not be started
 
 When it appears

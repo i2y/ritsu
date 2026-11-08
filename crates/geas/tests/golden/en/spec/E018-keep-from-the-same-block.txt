@@ -1,0 +1,3 @@
+error[E018]: E018-keep-from-the-same-block.geas:10:27: `{cart}` is kept on line 9, by another step of the same `in any order`, which comes after this one in some orders
+    10 |     when api.post("/carts/{cart}/items", body: "tea")
+  = keep it before the block, or use it after the block

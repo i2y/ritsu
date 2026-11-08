@@ -1,0 +1,3 @@
+error[E018]: E018-more-than-720-orders.geas:7:3: the 7 steps of `in any order` can come in 5040 orders, and geas runs 720 at most (six steps, none the same)
+     7 |   in any order {
+  = split the block: a claim for each part of the steps whose order is not decided, or the steps whose order is decided written outside it

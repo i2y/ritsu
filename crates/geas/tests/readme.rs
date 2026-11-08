@@ -376,3 +376,40 @@ fn the_orders_in_english() {
 fn the_orders_in_japanese() {
     orders_story("ja", " --lang ja");
 }
+
+/// The story of the subscription service: the claims that send its events in every order hold on the
+/// handler that drops an event older than the last it applied, and fail on the one that writes each
+/// event as it comes, in the orders that end on an older event.
+fn webhooks_story(lang: &str, spec: &str, flag: &str) {
+    if !python3("the subscription service's story in the READMEs") {
+        return;
+    }
+    let mut t = Session::new(&format!("readme-webhooks-{lang}"));
+    copy_example("webhooks", &t.s);
+    let spec = format!("examples/webhooks/{spec}");
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 0);
+    let as_it_comes = t.s.read("examples/webhooks/server_as_it_comes.py");
+    t.typed("cp examples/webhooks/server_as_it_comes.py examples/webhooks/server.py");
+    t.s.write("examples/webhooks/server.py", &as_it_comes);
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 1);
+    t.status(1);
+    let text = std::mem::take(&mut t.text);
+    golden(&format!("{lang}/readme/webhooks.txt"), &text);
+    // the journal is the same in either language; the skill quotes a line of the first claim's second order
+    if lang == "en" {
+        let journal = t.s.read("examples/webhooks/.geas/webhooks.journal.jsonl");
+        let head = "{\"claim\":\"the subscription ends where the latest event says, in any order\",\"order\":2,";
+        let second: String = journal.lines().filter(|l| l.starts_with(head)).map(|l| format!("{l}\n")).collect();
+        golden("en/readme/webhooks.order-2.jsonl", &second);
+    }
+}
+
+#[test]
+fn the_webhooks_in_english() {
+    webhooks_story("en", "webhooks.geas", "");
+}
+
+#[test]
+fn the_webhooks_in_japanese() {
+    webhooks_story("ja", "webhooks.ja.geas", " --lang ja");
+}

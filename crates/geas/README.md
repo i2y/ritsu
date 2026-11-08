@@ -545,10 +545,88 @@ break in a header, an address on another host) ends the claim as an error (E038)
 pattern or a call on a pixie app, nor be used above its `keep` (E017): those are read before the run knows
 it. A path that starts with a name is held to a contract when it runs, not before.
 
+## Events in any order
+
+A service that takes events from another system does not choose the order they come in. A payment
+provider can deliver its events in an order other than the one they happened in, and deliver one
+twice; a handler that writes each event as it comes ends in the state of an older event when that one
+comes last. `in any order { … }` holds the steps whose order is not decided: geas runs the claim once
+for each of their orders, each on services started afresh, and the claim holds when it holds in every
+order. [examples/webhooks](examples/webhooks) is a service that keeps the state of a subscription from
+the events it is sent:
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+…
+claim "the subscription ends where the latest event says, in any order" {
+  in any order {
+    when api.post("/events", body: "{\"id\":\"ev_1\",\"seq\":1,\"status\":\"past_due\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_2\",\"seq\":2,\"status\":\"active\"}")
+    then status is 200
+    when api.post("/events", body: "{\"id\":\"ev_3\",\"seq\":3,\"status\":\"canceled\"}")
+    then status is 200
+  }
+  when api.get("/subscription")
+  then body json ".status" is "canceled"
+}
+…
+```
+
+A step is a `when` with the `then`, `and` and `keep` lines under it, and a `within` stays with its
+`when`. The steps before and after the block run in every order. An event delivered twice is the same
+step written twice: steps written the same are not told apart, so the four steps of the example's
+second claim, one of them twice, come in 12 orders, not 24. The handler in `server.py` keeps the number
+of the last event it applied and drops one that is not newer, and every order holds:
+
+```console
+$ geas check examples/webhooks/webhooks.geas
+ok 1 - the subscription ends where the latest event says, in any order (6 orders)
+ok 2 - an event delivered twice changes nothing (12 orders)
+2 claims · 2 ok · 0 failed · journal: examples/webhooks/.geas/webhooks.journal.jsonl
+```
+
+The handler in `server_as_it_comes.py` writes each event as it comes. geas runs every order, the
+failing ones too, says how many fail, and shows the first of them as the run that gets there:
+
+```console
+$ cp examples/webhooks/server_as_it_comes.py examples/webhooks/server.py
+$ geas check examples/webhooks/webhooks.geas
+not ok 1 - the subscription ends where the latest event says, in any order
+    examples/webhooks/webhooks.geas:12: in any order — 4 of 6 orders fail; below is the first, order 2, and the others are orders 4-6
+        12 |   in any order {
+    examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
+        21 |   then body json ".status" is "canceled"
+      the run that gets there:
+          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
+…
+```
+
+The orders come in a fixed order, the written one first and then the dictionary order of where the
+steps are written, and one worker runs all the orders of a claim, so the report, the journal and the
+baseline are the same bytes in every run and with any `--jobs`. The journal and the baseline write each
+order's lines with `"order":<n>`, drift compares each order with the same order, and `--json` adds the
+number of orders and the failed ones with the lines of their steps. The lines `geas map` records for
+the claim are those of all its orders. An order that ends in an error ends the claim there, and the
+orders after it do not run.
+
+A claim has one block, a block holds two `when`s or more and no other block, and its steps come in 720
+orders at most (six steps, none the same). A step does not use a name another step of the block keeps,
+since in some orders that one comes later, and what follows the block starts with a `when`, since the
+step that ran last differs from order to order (E018). geas makes one call at a time, so a handler that
+fails only when two events are handled at the same time is not caught: `in any order` tries the
+orders, not the overlaps.
+
 ## The language
 
 A `when` is an action on a target; `then` and `and` check what it observed; `keep … as <name>` holds a
-value of it for the steps below.
+value of it for the steps below; `in any order { … }` runs the steps in it in each of their orders.
 
 | Target | Actions | Checks |
 |---|---|---|
@@ -573,7 +651,7 @@ error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` 
 
 Every diagnostic has a code, the place, and what leads to it: a claim that could not run carries the
 run that gets there, as E035 above. `geas explain <code>` says when a code appears, what usually
-fixes it, and the smallest claims file that gives it; there are 43 codes, and `--lang ja` prints
+fixes it, and the smallest claims file that gives it; there are 44 codes, and `--lang ja` prints
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.
@@ -672,6 +750,7 @@ and JSON geas writes.
 | [jobs](examples/jobs) | a service whose jobs finish after it answers, and a claim that waits for one with `within` |
 | [orders](examples/orders) | a service with an OpenAPI document, and a `contract` line that holds every answer to it |
 | [tickets](examples/tickets) | a service that numbers what it makes and asks for a token: `put`, `patch`, `delete`, headers and `keep`, with records that stay the same from run to run |
+| [webhooks](examples/webhooks) | a service that keeps a subscription's state from events that come in any order and twice, a handler that holds in every order and one that does not: `in any order` |
 | [pixie-greeter](examples/pixie-greeter) | a pixie desktop app, built with pixie and put beside the claims |
 
 Each has a README saying what it shows, how to run it, and what to look for.
@@ -689,8 +768,8 @@ those tests keep, this page's stories as whole transcripts, and `tests/docs.rs` 
 them: every claims file here parses, every output is what geas printed, and every command, option,
 code and link exists.
 
-On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 254 tests (114
-unit tests and 140 that run the binary) in 82 seconds, none skipped; the release binary is 2.3 MB.
+On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 337 tests (150
+unit tests and 187 that run the binary) in 114 seconds, none skipped; the release binary is 3.1 MB.
 A test whose tool is missing (python3, node, go, rustc with the llvm-tools component, Chrome, git,
 or a built pixie greeter named by `GEAS_PIXIE_GREETER`) prints `SKIP:` and passes, and this lists
 what was not run:
@@ -706,10 +785,12 @@ $ cargo test -- --nocapture 2>&1 | grep '^SKIP'
 Early. Not yet: Windows, whose processes have no SIGTERM to stop a service gracefully and write its
 coverage; macOS's accessibility API, which needs a person to grant a permission (a driver can do it
 where that permission can be given); recording what a pixie app or a page's scripts run; choosing an
-option of a native `<select>`; and a library claimed through an FFI harness rather than through a
-small command or service around it. Claims that depend on one another are left out on purpose.
-geas is a working name, and the name is still to be chosen. The design and every decision are in
-[DESIGN.md](DESIGN.md); the order the work was done in is [PLAN.md](PLAN.md).
+option of a native `<select>`; a library claimed through an FFI harness rather than through a
+small command or service around it; and calls at the same time, so a handler that fails only when two
+requests overlap is not caught (`in any order` runs one order at a time). Claims that depend on one
+another are left out on purpose. geas is a working name, and the name is still to be chosen. The
+design and every decision are in [DESIGN.md](DESIGN.md); the order the work was done in is
+[PLAN.md](PLAN.md).
 
 ## License
 

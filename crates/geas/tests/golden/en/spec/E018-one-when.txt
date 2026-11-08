@@ -1,0 +1,2 @@
+error[E018]: E018-one-when.geas:7:3: `in any order` holds one `when`, and one step comes in one order; it takes two or more
+     7 |   in any order {

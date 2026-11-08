@@ -1,0 +1,4 @@
+ok 1 - the latest event wins in any order (6 orders)
+ok 2 - an event delivered twice changes nothing (12 orders)
+ok 3 - names kept before the block, in it and after it (2 orders)
+3 claims · 3 ok · 0 failed · journal: o/.geas/holds.journal.jsonl

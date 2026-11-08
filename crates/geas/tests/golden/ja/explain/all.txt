@@ -369,6 +369,31 @@
       keep body json ".id" as id
     }
 
+エラー[E018]: 走らせられない `in any order`
+
+いつ出るか
+  `in any order { … }` の中の手順は、すべての順で走ります。手順は一つの `when` と、その下の `then`・`and`・`keep` です。この E になるのは、一つの主張に二つ目のブロックを書いたとき、ブロックの中にブロックを書いたとき、中の `when` が一つも無いか一つだけのとき、順の数が 720 通り（違う手順が 6 つ）を超えるとき、中の手順が同じブロックの別の手順の `keep` した名前を使うとき（順によっては、その `keep` はあとに来ます）、ブロックのすぐ後ろに `then`・`and`・答えを読む `keep` を書いたとき（最後に走った手順は順ごとに違います）です。同じに書いた手順は見分けないので、二度届くものを二度書くと、順は `n!` 通りではなく `n!/∏k!` 通りです。どの主張も走りません。
+
+直し方
+  順の決まらない手順だけをブロックに入れ、ブロックは主張ごとに一つにしてください。どの手順にも要る値は、ブロックの前で `keep` してください。順が多すぎるときは、主張を分けるか、順の決まっている手順をブロックの外に出してください。ブロックのあとは `when` から書いてください。
+
+再現
+  $ geas check e018.geas
+  e018.geas:
+    target shop {
+      serve "python3 server.py {port}"
+      port auto
+    }
+
+    claim "a cart takes its items in any order" {
+      in any order {
+        when shop.post("/carts")
+        keep body json ".id" as cart
+        when shop.post("/carts/{cart}/items", body: "{\"sku\":\"tea\"}")
+        then status is 201
+      }
+    }
+
 エラー[E030]: 起動できないプログラム
 
 いつ出るか

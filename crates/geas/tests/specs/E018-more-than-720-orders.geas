@@ -1,0 +1,18 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "seven events" {
+  in any order {
+    when api.post("/events", body: "1")
+    when api.post("/events", body: "2")
+    when api.post("/events", body: "3")
+    when api.post("/events", body: "4")
+    when api.post("/events", body: "5")
+    when api.post("/events", body: "6")
+    when api.post("/events", body: "7")
+  }
+  when api.get("/state")
+  then status is 200
+}

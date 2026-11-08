@@ -1,0 +1,3 @@
+error[E018]: E018-keep-after-the-block.geas:11:3: `keep` right after `in any order { … }` would read the answer of whichever step ran last, which changes from order to order
+    11 |   keep body json ".state" as state
+  = start what follows the block with a `when`, or write it under the step it is about

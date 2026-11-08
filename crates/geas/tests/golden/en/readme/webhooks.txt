@@ -1,0 +1,32 @@
+$ geas check examples/webhooks/webhooks.geas
+ok 1 - the subscription ends where the latest event says, in any order (6 orders)
+ok 2 - an event delivered twice changes nothing (12 orders)
+2 claims · 2 ok · 0 failed · journal: examples/webhooks/.geas/webhooks.journal.jsonl
+$ cp examples/webhooks/server_as_it_comes.py examples/webhooks/server.py
+$ geas check examples/webhooks/webhooks.geas
+not ok 1 - the subscription ends where the latest event says, in any order
+    examples/webhooks/webhooks.geas:12: in any order — 4 of 6 orders fail; below is the first, order 2, and the others are orders 4-6
+        12 |   in any order {
+    examples/webhooks/webhooks.geas:21: body json ".status" is "canceled" — got "active"
+        21 |   then body json ".status" is "canceled"
+      the run that gets there:
+          13  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
+          17  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
+          15  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          20  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
+not ok 2 - an event delivered twice changes nothing
+    examples/webhooks/webhooks.geas:27: in any order — 9 of 12 orders fail; below is the first, order 2, and the others are orders 4-6 and 8-12
+        27 |   in any order {
+    examples/webhooks/webhooks.geas:34: body json ".status" is "canceled" — got "active"
+        34 |   then body json ".status" is "canceled"
+    examples/webhooks/webhooks.geas:35: body json ".seq" is 3 — got 2
+        35 |   and  body json ".seq" is 3
+      the run that gets there:
+          28  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
+          29  when api.post("/events", body: "{"id":"ev_1","seq":1,"status":"past_due"}")  →  200, body "{\"applied\": true}"
+          31  when api.post("/events", body: "{"id":"ev_3","seq":3,"status":"canceled"}")  →  200, body "{\"applied\": true}"
+          30  when api.post("/events", body: "{"id":"ev_2","seq":2,"status":"active"}")  →  200, body "{\"applied\": true}"
+          33  when api.get("/subscription")  →  200, body "{\"status\": \"active\", \"seq\": 2}"
+2 claims · 0 ok · 2 failed · journal: examples/webhooks/.geas/webhooks.journal.jsonl
+$ echo $?
+1

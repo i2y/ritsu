@@ -14,6 +14,8 @@ use std::path::Path;
 
 pub struct BaseRec {
     pub claim: String,
+    /// For a claim with `in any order`, the order it ran in (DESIGN §23).
+    pub order: Option<usize>,
     pub idx: usize,
     pub call: String,
     pub obs: Obs,
@@ -136,8 +138,10 @@ pub fn write_baseline(path: &Path, spec: &Spec, results: &[ClaimResult]) -> std:
                 ),
                 Obs::Screen(screen) => format!("{{\"kind\":\"screen\",\"screen\":{}}}", screen.json()),
             };
+            // an order of `in any order` is compared with the same order (DESIGN §23)
+            let order = o.order.map(|k| format!(",\"order\":{k}")).unwrap_or_default();
             lines.push(format!(
-                "{{\"claim\":{},\"idx\":{},\"target\":{},\"call\":{},\"obs\":{}}}",
+                "{{\"claim\":{}{order},\"idx\":{},\"target\":{},\"call\":{},\"obs\":{}}}",
                 json::quote(&r.name),
                 o.idx,
                 json::quote(&o.target),
@@ -180,6 +184,10 @@ fn jnum(j: &J, key: &str) -> Result<f64, Text> {
 fn base_rec(line: &str) -> Result<BaseRec, Text> {
     let j = json::parse(line).map_err(|e| tr!("この行は JSON ではありません", "the line is not JSON: {e}"))?;
     let claim = jstr(&j, "claim")?;
+    let order = match jget(&j, "order") {
+        Ok(_) => Some(jnum(&j, "order")? as usize),
+        Err(_) => None,
+    };
     let idx = jnum(&j, "idx")? as usize;
     let call = jstr(&j, "call")?;
     let o = jget(&j, "obs")?;
@@ -212,7 +220,7 @@ fn base_rec(line: &str) -> Result<BaseRec, Text> {
             ));
         }
     };
-    Ok(BaseRec { claim, idx, call, obs })
+    Ok(BaseRec { claim, order, idx, call, obs })
 }
 
 /// The pins of a baseline's first line, target by target; None for a line that is
@@ -260,26 +268,32 @@ pub fn read_baseline(path: &Path) -> Result<Baseline, BaselineError> {
 
 // ---------- claimed-subject map ----------
 
-/// The checks of each `when`, by its place in the claim. A `keep` of its answer counts as a check of
-/// what it reads: the claim goes on from that value, so a change to it is the claim's to decide.
+/// The checks of each `when`, by where it is written among the claim's steps: the checks under it go
+/// with it into every order of `in any order` (DESIGN §23). A `keep` of its answer counts as a check
+/// of what it reads: the claim goes on from that value, so a change to it is the claim's to decide.
 fn claimed_map(claim: &Claim) -> HashMap<usize, Vec<Check>> {
     let mut m: HashMap<usize, Vec<Check>> = HashMap::new();
-    let mut idx: isize = -1;
-    for s in &claim.steps {
-        match s {
-            Step::When { .. } => idx += 1,
-            Step::Then(c) => {
-                if idx >= 0 {
-                    m.entry(idx as usize).or_default().push(c.clone());
-                }
+    let mut at: Option<usize> = None;
+    for (i, s) in claim.steps.iter().enumerate() {
+        match (s, at) {
+            (Step::When { .. }, _) => at = Some(i),
+            (Step::Then(c), Some(w)) => m.entry(w).or_default().push(c.clone()),
+            (Step::Keep(Keep { from: KeepFrom::Answer(subject), pos, .. }), Some(w)) => {
+                m.entry(w).or_default().push(Check { subject: subject.clone(), matcher: Matcher::Exists, pos: *pos });
             }
-            Step::Keep(Keep { from: KeepFrom::Answer(subject), pos, .. }) if idx >= 0 => {
-                m.entry(idx as usize).or_default().push(Check { subject: subject.clone(), matcher: Matcher::Exists, pos: *pos });
-            }
-            Step::Keep(_) => {}
+            _ => {}
         }
     }
     m
+}
+
+/// A `when` of a claim as drift names it: `claim "x" when#2`, and for an order of `in any order`
+/// `claim "x" order 3 when#2`.
+fn named(claim: &str, order: Option<usize>, n: usize) -> Text {
+    match order {
+        None => tr!("主張 \"{claim}\" の when#{n}", "claim \"{claim}\" when#{n}"),
+        Some(k) => tr!("主張 \"{claim}\" の {k} 番目の順の when#{n}", "claim \"{claim}\" order {k} when#{n}"),
+    }
 }
 
 fn segs(path: &str) -> Vec<String> {
@@ -537,7 +551,9 @@ fn compare(
 /// One change, in claim order.
 pub struct Change {
     pub claim: String,
-    /// The `when`'s place in its claim, from 1.
+    /// For a claim with `in any order`, the order it ran in.
+    pub order: Option<usize>,
+    /// The `when`'s place in its claim, from 1, in that order.
     pub when: usize,
     pub line: usize,
     /// `api.get("/total")`.
@@ -565,8 +581,8 @@ struct Masks<'a> {
 }
 
 pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report {
-    let mut base: HashMap<(String, usize), BaseRec> =
-        baseline.recs.into_iter().map(|b| ((b.claim.clone(), b.idx), b)).collect();
+    let mut base: HashMap<(String, Option<usize>, usize), BaseRec> =
+        baseline.recs.into_iter().map(|b| ((b.claim.clone(), b.order, b.idx), b)).collect();
     let claimed_by: HashMap<&str, HashMap<usize, Vec<Check>>> =
         spec.claims.iter().map(|c| (c.name.as_str(), claimed_map(c))).collect();
     let masks = Masks {
@@ -604,37 +620,40 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
     }
     for res in results {
         for o in &res.observations {
-            let key = (res.name.clone(), o.idx);
-            let (name, n) = (&res.name, o.idx + 1);
+            let key = (res.name.clone(), o.order, o.idx);
+            let n = o.idx + 1;
+            let at = named(&res.name, o.order, n);
             // a wait whose time ran out kept its last observation (DESIGN §18)
             if let Some(w) = o.waited.as_ref().filter(|w| !w.held) {
                 let spent = w.spent();
                 r.notes.push(tr!(
-                    "主張 \"{name}\" の when#{n} は、待つ時間が切れました（{}）。比べたのは最後の結果です",
-                    "claim \"{name}\" when#{n}: the wait ran out of time ({}); the answer compared is the last one",
-                    spent.ja;
-                    spent.en,
+                    "{} は、待つ時間が切れました（{}）。比べたのは最後の結果です",
+                    "{}: the wait ran out of time ({}); the answer compared is the last one",
+                    at.ja, spent.ja;
+                    at.en, spent.en,
                 ));
             }
             let Some(b) = base.remove(&key) else {
                 r.notes.push(tr!(
-                    "主張 \"{name}\" の when#{n} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）",
-                    "no baseline for claim \"{name}\" when#{n} (new claim? run `geas snap`)",
+                    "{} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）",
+                    "no baseline for {} (new claim? run `geas snap`)",
+                    at.ja;
+                    at.en,
                 ));
                 continue;
             };
             if b.call != o.call {
                 r.notes.push(tr!(
-                    "主張 \"{name}\" の when#{n} は呼び出しそのものが変わりました（{} → {}）。比べるには `geas snap` をやり直してください",
-                    "claim \"{name}\" when#{n}: the call itself changed ({} → {}); re-snap to compare",
-                    b.call,
-                    o.call,
+                    "{} は呼び出しそのものが変わりました（{} → {}）。比べるには `geas snap` をやり直してください",
+                    "{}: the call itself changed ({} → {}); re-snap to compare",
+                    at.ja, b.call, o.call;
+                    at.en, b.call, o.call,
                 ));
                 continue;
             }
             r.compared += 1;
             let empty: Vec<Check> = Vec::new();
-            let checks = claimed_by.get(res.name.as_str()).and_then(|m| m.get(&o.idx)).unwrap_or(&empty);
+            let checks = claimed_by.get(res.name.as_str()).and_then(|m| m.get(&o.step)).unwrap_or(&empty);
             let diffs = compare(&b.obs, &recorded(&o.obs, &spec.masks, &o.held), checks, &masks);
             if diffs.is_empty() {
                 continue;
@@ -648,6 +667,7 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
                 }
                 r.changes.push(Change {
                     claim: res.name.clone(),
+                    order: o.order,
                     when: n,
                     line: o.line,
                     call: format!("{}.{}", o.target, o.call),
@@ -659,13 +679,15 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
             }
         }
     }
-    let mut leftovers: Vec<(String, usize)> = base.into_keys().collect();
+    let mut leftovers: Vec<(String, Option<usize>, usize)> = base.into_keys().collect();
     leftovers.sort();
-    for (claim, idx) in leftovers {
-        let n = idx + 1;
+    for (claim, order, idx) in leftovers {
+        let at = named(&claim, order, idx + 1);
         r.notes.push(tr!(
-            "ベースラインには主張 \"{claim}\" の when#{n} がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）",
-            "baseline has claim \"{claim}\" when#{n} but the current run does not (claim removed or errored)",
+            "ベースラインには{} がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）",
+            "baseline has {} but the current run does not (claim removed or errored)",
+            at.ja;
+            at.en,
         ));
     }
     r
@@ -674,14 +696,11 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
 impl Report {
     pub fn text(&self, lang: Lang) -> String {
         let mut out = String::new();
-        let mut last: Option<(&str, usize)> = None;
+        let mut last: Option<(&str, Option<usize>, usize)> = None;
         for c in &self.changes {
-            if last != Some((c.claim.as_str(), c.when)) {
-                out.push_str(&match lang {
-                    Lang::En => format!("claim \"{}\" when#{} {}\n", c.claim, c.when, c.call),
-                    Lang::Ja => format!("主張 \"{}\" の when#{} {}\n", c.claim, c.when, c.call),
-                });
-                last = Some((c.claim.as_str(), c.when));
+            if last != Some((c.claim.as_str(), c.order, c.when)) {
+                out.push_str(&format!("{} {}\n", named(&c.claim, c.order, c.when).get(lang), c.call));
+                last = Some((c.claim.as_str(), c.order, c.when));
             }
             let (mark, change) = match (&c.old, &c.new) {
                 (Some(a), Some(b)) => ("~", format!("{} → {}", a.shown, b.shown)),
@@ -722,8 +741,9 @@ impl Report {
             .changes
             .iter()
             .map(|c| {
+                let order = c.order.map(|k| format!(",\"order\":{k}")).unwrap_or_default();
                 format!(
-                    "{{\"claim\":{},\"when\":{},\"line\":{},\"call\":{},\"field\":{},\"old\":{},\"new\":{},\"claimed\":{}}}",
+                    "{{\"claim\":{}{order},\"when\":{},\"line\":{},\"call\":{},\"field\":{},\"old\":{},\"new\":{},\"claimed\":{}}}",
                     json::quote(&c.claim),
                     c.when,
                     c.line,
@@ -761,7 +781,9 @@ mod tests {
         let spec = crate::parse::parse(src).expect("it parses");
         let m = claimed_map(&spec.claims[0]);
         let subjects = |i: usize| -> Vec<Subject> { m.get(&i).map(|c| c.iter().map(|c| c.subject.clone()).collect()).unwrap_or_default() };
-        assert_eq!(subjects(0), [Subject::BodyJson(".id".into())]);
-        assert_eq!(subjects(1), [Subject::Status, Subject::Header("etag".into())]);
+        // by where each `when` is written among the claim's steps: the second and the fourth
+        assert_eq!(subjects(1), [Subject::BodyJson(".id".into())]);
+        assert_eq!(subjects(3), [Subject::Status, Subject::Header("etag".into())]);
+        assert!(subjects(0).is_empty() && subjects(2).is_empty());
     }
 }

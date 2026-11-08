@@ -1,0 +1,16 @@
+target app {
+  pixie "build/greeter"
+}
+
+target calc {
+  run "python3 calc.py"
+}
+
+claim "adds and types in any order, then greets" {
+  in any order {
+    when calc.run("2", "+", "3")
+    when app.input("Ada")
+  }
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+}
