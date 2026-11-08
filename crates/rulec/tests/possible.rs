@@ -222,7 +222,7 @@ fn 出力の形() {
     assert_eq!(codes(&with(ORDER, "  possible refund >0JPY after shipped\n")), Vec::<String>::new());
     let src = with(ORDER, "  possible refund >1000JPY\n");
     assert_eq!(codes(&src), ["E146"]);
-    assert!(notes(&src, "E146").contains("the calls answer refund with 0JPY / 500JPY / 300JPY."), "{}", notes(&src, "E146"));
+    assert!(notes(&src, "E146").contains("the calls answer refund with 0JPY / 300JPY / 500JPY."), "{}", notes(&src, "E146"));
     // After the state a case ends in, no call answers it.
     assert_eq!(codes(&with(ORDER, "  possible refund >0JPY after delivered\n")), ["E146"]);
     assert_eq!(codes(&with(MIXED, "  possible done true\n")), ["W127"]);
@@ -405,7 +405,8 @@ fn 一番上の階層は一度の呼び出し() {
     assert!(notes(&src, "E146").contains("No call passes these inputs"), "{}", notes(&src, "E146"));
     let src = quote("possible fee > 1000USD");
     assert_eq!(codes(&src), ["E146"]);
-    assert!(notes(&src, "E146").contains("fee answers 10USD / 150USD / 200USD / 50USD"), "{}", notes(&src, "E146"));
+    // Amounts are listed by number, and a table that writes words shows every value.
+    assert!(notes(&src, "E146").contains("fee answers 10USD / 50USD / 150USD / 200USD."), "{}", notes(&src, "E146"));
 }
 
 #[test]
@@ -481,6 +482,17 @@ fn 積の値は約数で決まる() {
     // An input multiplied in twice: 999,999 squared, and one past it.
     assert_eq!(said(&computed("qty * qty", "possible total = 999998000001\n")), Vec::<String>::new());
     assert_eq!(said(&computed("qty * qty", "possible total = 999998000002\n")), ["E146"]);
+}
+
+/// A value a row computes moves inside a cell, and the one call built for each cell shows only some
+/// of its values: the finding says so, and lists them by number.
+#[test]
+fn e146_計算する値は一部だけを挙げる() {
+    let few = notes(&computed("qty + price", "possible total = 3000000\n"), "E146");
+    assert!(few.contains("total answers values such as 2 / 3 / 4 / 1000001 / 1000002 / 2000000."), "{few}");
+    let many = notes(&computed("qty * price", "possible total = 1000003\n"), "E146");
+    assert!(many.contains("total answers values such as 1 / 2 / 4 / … / "), "{many}");
+    assert!(!many.contains("different values"), "{many}");
 }
 
 /// A cell no input was built for leaves a line open only where its answer could meet the line

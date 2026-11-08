@@ -2301,10 +2301,14 @@ fn absent_note(a: &Analysis, c: &Checked, p: &PossibleDecl, asked: &Asked, befor
                     }
                 }
             }
-            let list = if said.len() <= 6 { said.join(" / ") } else { tr!("{} 通りの値", "{} different values", said.len()) };
-            match before {
-                Some(b) => tr!("{b} にいたあとの呼び出しで {name} が答えるのは {list} です。", "After {b}, the calls answer {name} with {list}."),
-                None => tr!("案件が着ける状態からの呼び出しで {name} が答えるのは {list} です。", "From the states a case reaches, the calls answer {name} with {list}."),
+            // One call stands for each cell, so a value a row computes is shown only in part (§15.292).
+            let every = crate::possible::rows_write_words(c, name);
+            let list = crate::possible::listed(&crate::possible::in_order(&said), every);
+            match (before, every) {
+                (Some(b), true) => tr!("{b} にいたあとの呼び出しで {name} が答えるのは {list} です。", "After {b}, the calls answer {name} with {list}."),
+                (Some(b), false) => tr!("{b} にいたあとの呼び出しで {name} が答えるのは {list} などです。", "After {b}, the calls answer {name} with values such as {list}."),
+                (None, true) => tr!("案件が着ける状態からの呼び出しで {name} が答えるのは {list} です。", "From the states a case reaches, the calls answer {name} with {list}."),
+                (None, false) => tr!("案件が着ける状態からの呼び出しで {name} が答えるのは {list} などです。", "From the states a case reaches, the calls answer {name} with values such as {list}."),
             }
         }
         Asked::Place => {

@@ -1497,7 +1497,7 @@ worked out from the inputs at its sources':
 | what it finds | result | code |
 |---|---|---|
 | a call that has them all | it holds, and `--show-possible` prints the call | none |
-| no such call, and every cell of the inputs was looked at | it does not happen. The finding says what the calls that meet the line's inputs answered, or that the door takes none of them | E146 |
+| no such call, and every cell of the inputs was looked at | it does not happen. The finding says what the calls that meet the line's inputs answered, numbers in their order (one call stands for each cell, so a value a row computes is given as `values such as` a few of them), or that the door takes none of them | E146 |
 | neither: a cell no input was built for and none shown impossible, or inputs that do not cut into cells within the budget, where a call found among the vectors' inputs still shows the line | not settled, never said to hold | W135 |
 
 A name nothing declares, a value its column cannot hold, two conditions on one name and a field of
@@ -2108,7 +2108,7 @@ state in its cells: of the state, write `possible <state>`.
 | result | when | code |
 |---|---|---|
 | it holds | a shortest sequence of real calls was found. A case keeps its `held` inputs, a sequence no one value is shown to make does not count, and over carried numbers walked in intervals only what real calls found again counts | none |
-| it does not | everywhere a case can get to was looked at, cells and intervals alike, and it is not there. There is no bad sequence to print, so the finding says what is there: the states reached after that state, the values the calls answered | E146 |
+| it does not | everywhere a case can get to was looked at, cells and intervals alike, and it is not there. There is no bad sequence to print, so the finding says what is there: the states reached after that state, the values the calls answered (`values such as` a few, for a value a row computes) | E146 |
 | not settled | neither | W127, never said to hold |
 
 The boundaries of a line's cell cut the walk, so that one input stands for its class, as a `once` or an

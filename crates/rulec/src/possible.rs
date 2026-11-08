@@ -380,7 +380,7 @@ fn walk_lines(f: &RuleFile, c: &Checked, budget: usize) -> Result<Vec<Seen>, Str
 }
 
 /// What the walk does see of a line it did not find (E146).
-fn absent_text(n: &PossibleLine, s: &Seen) -> String {
+fn absent_text(c: &Checked, n: &PossibleLine, s: &Seen) -> String {
     if !s.met {
         return tr!(
             "この入力の組み合わせで呼び出すことはできません。入力の範囲か `constraint` か `never` の行が外しています。",
@@ -392,11 +392,59 @@ fn absent_text(n: &PossibleLine, s: &Seen) -> String {
         .iter()
         .filter_map(|k| s.answers.get(&k.name.text).map(|vs| (k, vs)))
         .map(|(k, vs)| {
-            let list = if vs.len() <= 6 { vs.iter().cloned().collect::<Vec<_>>().join(" / ") } else { tr!("{} 通りの値", "{} different values", vs.len()) };
-            tr!("{} が答えるのは {list} です", "{} answers {list}", k.name.text)
+            let every = rows_write_words(c, &k.name.text);
+            let list = listed(&in_order(vs), every);
+            if every {
+                tr!("{} が答えるのは {list} です", "{} answers {list}", k.name.text)
+            } else {
+                tr!("{} が答えるのは {list} などです", "{} answers values such as {list}", k.name.text)
+            }
         })
         .collect();
     tr!("入力の条件に当てはまる呼び出しで、{}。", "On the calls that meet the line's inputs, {}.", parts.join(&tr!("、", "; ")))
+}
+
+/// Whether every row that writes `name` writes a word, so that the calls built one for each cell
+/// show every value it answers. A value a row computes, or a `result`, moves inside a cell, and the
+/// calls show only some of its values (§15.292).
+pub(crate) fn rows_write_words(c: &Checked, name: &str) -> bool {
+    let Some(set) = c.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == name)) else { return false };
+    let Some(oi) = set.table.outputs.iter().position(|o| o.name.text == name) else { return false };
+    set.table.rows.iter().all(|r| match r.outs.get(oi) {
+        Some(OutCell::Lit(_) | OutCell::Nothing) => true,
+        // A word the rule does not know as a name is the value it spells (§3.2).
+        Some(OutCell::Name(m)) => c.ty_of(m).is_none(),
+        None => false,
+    })
+}
+
+/// The values a finding names, in the order a reader counts them: by number when they are numbers
+/// in one unit, else as they are spelled.
+pub(crate) fn in_order<'a>(vs: impl IntoIterator<Item = &'a String>) -> Vec<String> {
+    let vs: Vec<&String> = vs.into_iter().collect();
+    let split = |s: &str| -> Option<(f64, String)> {
+        let end = s.char_indices().find(|&(i, ch)| !(ch.is_ascii_digit() || ch == '.' || (i == 0 && ch == '-'))).map_or(s.len(), |(i, _)| i);
+        Some((s[..end].parse::<f64>().ok()?, s[end..].to_string()))
+    };
+    let keyed: Option<Vec<(f64, String)>> = vs.iter().map(|s| split(s)).collect();
+    let mut out: Vec<(f64, String)> = match keyed {
+        Some(k) if k.windows(2).all(|w| w[0].1 == w[1].1) => k.into_iter().map(|(n, _)| n).zip(vs.iter().map(|s| s.to_string())).collect(),
+        _ => vs.iter().map(|s| (0.0, s.to_string())).collect(),
+    };
+    out.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then_with(|| a.1.cmp(&b.1)));
+    out.into_iter().map(|(_, s)| s).collect()
+}
+
+/// The list a finding gives: every value, or how many past six, when the calls show all of them;
+/// else a few from each end.
+pub(crate) fn listed(vs: &[String], every: bool) -> String {
+    if vs.len() <= 6 {
+        vs.join(" / ")
+    } else if every {
+        tr!("{} 通りの値", "{} different values", vs.len())
+    } else {
+        format!("{} / … / {}", vs[..3].join(" / "), vs[vs.len() - 3..].join(" / "))
+    }
 }
 
 /// The lines outside a `machine`, each settled.
@@ -417,7 +465,7 @@ pub fn one_call_claims(f: &RuleFile, c: &Checked, budget: usize) -> Vec<Claim> {
                         "答えを出す入力を作れず、起こらないとも示せなかった区画があります",
                         "some cells had no input built for them and were not shown impossible"
                     )),
-                    (None, false) => Possibly::Absent(absent_text(n, &s)),
+                    (None, false) => Possibly::Absent(absent_text(c, n, &s)),
                 };
                 claim(n, verdict)
             })
