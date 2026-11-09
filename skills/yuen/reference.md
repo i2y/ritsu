@@ -343,7 +343,7 @@ examples/osha/osha.req: ok — 1 requirement, whose 3 links are as they were loo
 
 ```console
 $ ritsu yuen --help
-yuen 0.48.0
+yuen 0.49.0
 
 Write where each requirement comes from. Link what meets it. Stop when anything moves.
 

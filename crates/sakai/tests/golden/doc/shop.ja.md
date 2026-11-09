@@ -235,4 +235,4 @@ Collects what buyers think and shows it. It has nothing to do with billing
 - 語の定義の文の中身。
 - コードの import。これは sakai gen が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。
 
-sakai 0.48.0 が `shop.ctx` から書いた。
+sakai 0.49.0 が `shop.ctx` から書いた。

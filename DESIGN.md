@@ -1811,7 +1811,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori は、`ritsu dandori` の本体（`ritsu` のライブラリの `languages::dandori`）で走らせる。フローの規則、日付のファイル、帳簿の口と、X2 で決められない前提（7.4）を同じプロセスの中で渡すので、日付と帳簿を使うフロー（請求の例）も、バイナリと同じに答える。バイナリ（`src/main.rs`）とページは同じ関数を呼ぶ。
 - rulec の E129（koyomi をつないでいない rulec で `range from koyomi` を確かめた）の注と台帳は、koyomi が無いところとして rulec のクレートのバイナリだけを挙げる。このページは koyomi をつなぐ（rulec の §15.185）。
 
-`ritsu.wasm` は 18,828,071 バイト（gzip で 5,574,656 バイト。2026-11-09）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
+`ritsu.wasm` は 19,126,132 バイト（gzip で 5,667,007 バイト。2026-11-09）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
 
 **部品と二つのページ。** 部品は `website/docs/playground/` の七つのファイルである。ページの部分を全部作る `playground.js`（ES のモジュール）、`playground.css`、モジュールを動かす `worker.js`、エディターと Markdown のライブラリをまとめた `libraries.js`、開くプロジェクトの `projects.json`、言語ごとに色を付ける語の `words.json`、`ritsu.wasm`。日本語のサイトへは、`website/sync.sh` がこの七つをコピーする（`docs-ja/playground` はコミットしない）。ページが書くのは部品の要素（`<div class="pg" data-lang="en">`）と、`playground.js` を読む `<script type="module">` だけで、上の帯、ファイルのタブ、エディター、右側のタブは `playground.js` が作る。二つのページの違いは並べ方だけで、CSS が決める。
 
@@ -3558,8 +3558,8 @@ lock     = "lock" "1" 改行
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.48.0
-oci example.com/acme/pricing 1.1.0 sha256:c4ed9b77818e43c764b437573a686fdc9076cfb159da06fbb8128bf81c2221c0 files sha256:accb30be930806341f6cb132ec90adea1d03af1f84d6e16067e1f987821cd29f
+ritsu 0.49.0
+oci example.com/acme/pricing 1.1.0 sha256:24d2f67c40a3c89455bb755df09e935a606995ab69b87b9553520d44d8280301 files sha256:69c51c0ef23c57e643958b1f2e973ef088ad9ccd8bf6d3046e602ff88ad95619
 oci example.com/acme/tax 1.0.0 sha256:46c3c2d788b9852f0899d8579c4c846bd26228732cc4ac822ea82ae03c44d91c files sha256:76ae2a686ba4b4a3501cb9e7da09d00ea800ba7ff4233591b0a2a6355c6b2d20
 ```
 
@@ -3852,8 +3852,8 @@ chobo はほかのファイルを指さないので替えるところが無い�
 - **`--check` と JSON**。`gen --check` は依存の部分も比べる。`--format json` の `files` の `from` は正規の書き方である。`ritsu.lock` の `ritsu` の行は記録で、比べない（17.4）。ただ、その版が走らせている ritsu と違い、`--check` が違いを見つけたときは、テキストの出力の最後に一行の注を足す。違いが版の違いから来ているかもしれないと知らせるためで、exit は変えない。
 
   ```
-  note: ritsu.lock was written by ritsu 0.1.0, and this is ritsu 0.48.0: what differs may come from the two versions
-  備考: ritsu.lock を書いた ritsu は 0.1.0 で、いまの ritsu は 0.48.0 です。生成物の違いは、版の違いから来ているかもしれません
+  note: ritsu.lock was written by ritsu 0.1.0, and this is ritsu 0.49.0: what differs may come from the two versions
+  備考: ritsu.lock を書いた ritsu は 0.1.0 で、いまの ritsu は 0.49.0 です。生成物の違いは、版の違いから来ているかもしれません
   ```
 
 **実行**。`ritsu run` は、`ritsu check` と `ritsu gen` と同じに木を読み、木が読めなければ同じに止まる。E301〜E306 と E308 は診断として出してフローを流さず（exit 1。`--format json` では `diagnostics` に入れる）、何かを走らせる必要があるときは、それを標準エラーに言って止まる（exit 2）。フローが読む規則と日付と帳簿は、ファイルに書いた `@` のパスから言語が読む。`contribution` は、マニフェストの無い木と同じく、`--with` で渡したものだけを足す。`--with` にモジュールのルートを渡したときは、`ritsu check` のルートと同じく、木の全部のモジュールの `contribution` を足す（★）。フローは `contribution` のファイルではないので、`--with` が無ければ足すものが無いのは、`ritsu check <フロー>` と同じである。
@@ -4743,7 +4743,7 @@ warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` re
   - 中身は、`shop` のファイルと同梱のコピーである。テストが例をコピーし、`pricing` と `shop` の `require` をレジストリの形に書き換え、`tax` と `pricing` を決まった日付で置き場に置き（`put_directory`）、その置き場で lock を書き、`ritsu mod vendor` で作る。開くファイルはフロー（`orders/place_order.flow`、`注文/注文を受ける.flow`）である。
   - `projects.json` のもと（8.7）は、例のディレクトリの中のパスで書く。18 のファイルのうち、`ritsu.mod` は書き換えたもので、`ritsu.lock` と同梱のコピー（あわせて 13）はリポジトリに無い（テストが作る）。
   - lock は ritsu の版を持つので、版を上げたら `projects.json` を作り直す（`RITSU_BLESS=1` で `tests/playground.rs` を走らせる）。
-- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 18,828,071 バイトである（2026-11-09。モジュールの仕組みを入れる前にコミットしてあったものは 16,566,997 バイト）。
+- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 19,126,132 バイトである（2026-11-09。モジュールの仕組みを入れる前にコミットしてあったものは 16,566,997 バイト）。
 - 試験（`crates/ritsu/tests/playground.rs`）：
   - `a_dependency_from_git_in_the_copy_answers_as_the_command_does`：`modules` の `pricing` を git から取る形に書き換えた木（`require … git` と lock の `git` の行と同梱のコピー）で、40 の答えをバイナリと比べる（2026-10-29）。
   - `a_file_of_bytes_goes_in_as_its_bytes`：koyomi のカレンダーと Shift_JIS の CSV を `base64` で渡し、8 の答えをバイナリと比べ、読めない項目の文を確かめる。

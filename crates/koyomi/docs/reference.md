@@ -434,7 +434,7 @@ anything outside the range.
 
 ```console
 $ koyomi --help
-koyomi 0.48.0
+koyomi 0.49.0
 
 A small language for closing days, payment days, business days and month arithmetic, checked on every day of its range.
 
