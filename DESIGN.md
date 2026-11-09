@@ -2526,6 +2526,10 @@ kaname のモデルは 18 か所を壊し、どれも突き合わせが落ちた
 
 根の `proofs/` は一つの Lake のパッケージで、ライブラリは `RulecCert`、`ChoboModel`、`KoyomiModel`、`DandoriCore`、`RitsuCross`、`KanameCore`、プログラムは `rulec-recheck`（`RulecMain.lean`）と `ritsu-model`（`Main.lean`）。ツールチェーンは一つ（`lean-toolchain`）で、mathlib は入れない（ビルドを速く保つ）。`RitsuCross` は `RulecCert`・`KoyomiModel`・`ChoboModel` を読む（言語をまたぐ定理は、言語のモデルの上に立つ）。`KanameCore` は `RulecCert`（丸めの `roundsTo`）と `RitsuCross` の `ProgramSound`（kaname の呼び出しの X2）を読む。F の段階で、`crates/rulec/proofs/` をここへ移した（`git mv`。rulec の `Main.lean` は、`ritsu-model` の `Main.lean` と名前がぶつかるので `RulecMain.lean` にした）。rulec の `proofs/README.md` は `proofs/RulecCert/README.md` にある。rulec の `tests/lean.rs`・`tests/days.rs`・`tests/machine.rs` は、根の `proofs/` の `rulec-recheck` を使う。rulec の文書（サイト、`docs/`、スキル）が `proofs/` と書くところは、リポジトリの根の `proofs/` として読めるので、直していない（rulec の README の木の一行だけ直した）。`ritsu-model` は二つあり、Lean の実行ファイルと、それを走らせる Rust のクレートで、どちらも `ritsu-model` とした（Cargo のパッケージと Lake の実行ファイルは名前の置き場所が別で、ぶつからない）。
 
+### 11.5 利用者の証明の確かめ
+
+kaname は関数の性質を `property` として書け、`ritsu gen --target lean` が関数を Lean 4 の定義に、性質を定理の文に書き出す（kaname の DESIGN 38 章）。証明は人か LLM が .kn の隣の `<別名>.lean` に書く。処理系は証明を探さない。`ritsu check --lean` は、.kn から一時の場所に作り直したパッケージに対して、証明のファイルを文字として読み（`Kaname.` の外の import、コードを走らせるコマンド、構文を足すコマンド、`native_decide` などは、ビルドの前に断る）、Lean にビルドさせ、カーネルで流し直し、性質ごとに、定理が文と同じ型であることと、頼る公理が `propext`・`Classical.choice`・`Quot.sound` に限ることを Lean の環境で確かめる。ここで使う Lean は、`proofs/` の層（11.2）と同じ toolchain（`leanprover/lean4:v4.34.0`）で、Mathlib は使わない。示したと言うのは、この確かめが通ったときだけである。
+
 ## 12. 元のリポジトリと、履歴の取り込み
 
 ### 12.1 元のリポジトリには書かない
