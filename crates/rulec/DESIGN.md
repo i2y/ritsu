@@ -6861,7 +6861,7 @@ FAIL  big_edge (TypeScript) disagrees with the reference evaluator
       expected: {"in":{"amount":9007199254740993},"observed":{"fee":0},"trace":[{"table":"fees","row":2}]}
 ```
 
-生成した TypeScript の MCP のサーバも、要求を `JSON.parse` で読む。TypeScript と JavaScript の読む側を直すなら、JSON.parse に渡す関数が受け取る元の文字列（`context.source`）から整数を読み、BigInt を書くときは `JSON.rawJSON` を使う。どちらも手元の Node 23.11 にある。
+生成した TypeScript の MCP のサーバも、要求を `JSON.parse` で読む。TypeScript と JavaScript の読む側を直すなら、JSON.parse に渡す関数が受け取る元の文字列（`context.source`）から整数を読み、BigInt を書くときは `JSON.rawJSON` を使う。どちらも手元の Node 23.11 にある。§15.297 で直した。
 
 Swift の runner は、Foundation の `JSONSerialization` で読む。macOS の Foundation は、Int64 に収まる整数を Int64 の数で返す。Linux の Foundation（Swift 6.1）は、Int64 で読むかを決める桁の数に負の符号も数えるので、19 桁の負の整数を NSDecimalNumber で返す。値は正確だが、型を表す文字（`objCType`）が Double と同じ `d` なので、runner の `_int` は `doubleValue` で読む。そのため -9223372036854775807 は -2^63 として入口に届いた。範囲の端に型の端を書いた規則は、手元の macOS では一致し、CI の Linux（ubuntu-24.04）では次のように合わなかった。
 
@@ -6889,9 +6889,9 @@ Linux の Foundation の数を読む関数（`fromJSONNumber`）を写して mac
   macos:      __NSCFNumber objCType=Q _int=-1
 ```
 
-Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` を通さずに十進のまま整数にし、型を表す文字が `Q` の数は Int64 の外として断る。
+Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` を通さずに十進のまま整数にし、型を表す文字が `Q` の数は Int64 の外として断る。§15.297 で直した（文は「整数でない」にした）。
 
-`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を比べない。どれも -9223372036854775807 が -2^63 として届く。
+`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を比べない。どれも -9223372036854775807 が -2^63 として届く。§15.297 で直し、比べるようにした。
 
 **確かめたこと**：
 
@@ -6993,6 +6993,87 @@ Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` 
 - rulec の試験の全部 1,468 件（`proofs/` の `lake build` のうえで、SKIP なし）。足したのは `tests/arith.rs` の八つと、`cmp_exact` の単体の試験である。arith の八つは、途中の整数、比べる式の二つの辺、列と出力、半分で丸める三つの方式の刻みの 2 倍、方式どおりに丸めた出力の区間、128 ビットを越える積、走査の値、証明書を見る。証明書の試験では、狭めた区間、小さく書いた格納の整数、書き落とした途中の値と列、int64 を越える刻み、書き換えた方式（`half_up`、知らない方式、`down` を `up` に）を、二つの再検査がどれも落とす。
 - kaname の試験の全部 259 件と、rulec を使う九つのクレート（dandori・ritsu など）の試験 1,380 件。
 - 上の表の七つの形は、0.50.0 の公開版の `check` を通り、このビルドではどれも E108 で止まる。
+
+### 15.297 runner とサーバは、行に書いた整数をそのまま入口に渡す（2026-11-09）
+
+**きっかけ**：§15.295 に、見つけて直していないものを二つ残した。TypeScript と JavaScript の runner と MCP のサーバは、行を `JSON.parse` で読むので、2^53 を越える整数が隣の float64 に丸まって入口に届く。Swift の runner は、Linux の Foundation が NSDecimalNumber で返す 19 桁の負の整数を `doubleValue` で読んで丸め、どちらの OS でも、UInt64 で返る Int64 の外の整数を下位 64 ビットに折り返す。2026-11-09 に、両方を直すと決めた。
+
+直す前に、次の四つの規則を `rulec test --format json` に通した。読むところは 24 通りで、12 の言語の runner、Rust の WASI、PostgreSQL の関数、Python・TypeScript・JavaScript の MCP のサーバ（標準入出力と HTTP）、Python の Connect の 4 通りである。
+
+- `big_edge`：範囲が 0〜10^16 円で、表の境目が 2^53+1 円。
+- `neg_edge`：範囲が −(2^63−1)〜0 円で、表の境目が −(10^18+1) 円。端も境目も 19 桁の負の整数である。
+- `big_standing`：`tests/machine.rs` の売り手の状態で、猶予を 2^53+3 日にし、初めに運ぶ日数を 2^53+1 日にしたもの。トレースが、2^53 を越える数を次の呼び出しに渡す。
+- `no_range`：範囲の無い `amount` に、2^63、2^64−1、2^64 を渡す断るケースを足したもの。
+
+丸めの補助関数の試験 12 件を含む 108 件のうち、32 件が合わなかった。この節で直すのはそのうち 20 件である。TypeScript と JavaScript の runner は、境目の 2^53+1 を 2^53 と読んで一つ下の行で答え、MCP のサーバは、上の端 10^16 の一つ上を 10^16 と読んで答えた。機械では、範囲の上の端 2^53+3 が 2^53+4 と読まれて「範囲の外」になり、Wasm の runner は、モジュールが答えた 2^53+3 を次の呼び出しに 2^53+4 として渡した。`neg_edge` では、TypeScript と JavaScript が下の端 −(2^63−1) を −2^63 と読んで断った。Swift は 2^64−1 を −1 として答えた。残りの 12 件は、64 ビットを越える数を断る文が基準の評価器と違うもので、直していない（下に書く）。
+
+```text
+{"rule":"big_edge","lang":"javascript","via":"mcp","vectors":4,"refused":5,"calls":0,"ok":false,"ran":true,"first_diff":null,"error":"answered an input the reference evaluator refuses (line 5)"}
+{"rule":"big_standing","lang":"wasm","via":"runner","vectors":82,"refused":11,"calls":516,"ok":false,"ran":true,"first_diff":{"line":196,"generated":"{\"refused\":\"input\",\"error\":\"days_left is out of range: 9007199254740996\"}","expected":"{\"in\":{\"standing\":\"probation\",\"event\":\"first_sale\",\"days_left\":9007199254740995},\"observed\":{\"next_standing\":\"probation\",\"next_days_left\":9007199254740995},\"trace\":[{\"table\":\"step\",\"row\":2}]}"},"error":null}
+{"rule":"neg_edge","lang":"javascript","via":"runner","vectors":5,"refused":5,"calls":0,"ok":false,"ran":true,"first_diff":{"line":1,"generated":"{\"refused\":\"input\",\"error\":\"amount is out of range\"}","expected":"{\"in\":{\"amount\":-9223372036854775807},\"observed\":{\"fee\":100},\"trace\":[{\"table\":\"fees\",\"row\":1}]}"},"error":null}
+{"rule":"no_range","lang":"swift","via":"runner","vectors":3,"refused":4,"calls":0,"ok":false,"ran":true,"first_diff":null,"error":"answered an input the reference evaluator refuses (line 2): {\"in\":{\"amount\":-1},\"observed\":{\"fee\":100},\"trace\":[{\"table\":\"fees\",\"row\":1}]}"}
+```
+
+**決めたこと**：
+
+1. **TypeScript と JavaScript は、整数を書いた数字から読み、数字のまま書く。** `JSON.parse` に、値ごとに呼ばれる関数を渡す。Node 21 からは、その関数が三つ目の引数で値の元の文字列（`context.source`）を受け取る。安全な整数（絶対値が 2^53−1 以下）でない数で、元の文字列が符号と数字だけのときは、その文字列から BigInt を作る。点や指数を書いた数は、前のとおり float64 で読む。Python、Ruby、PHP の runner が、点を書いた 2^53 を越える数を最も近い double で読むのと同じ扱いである（§15.205）。入口に渡す前の `_int` は、BigInt をそのまま受け取る。書くときは、BigInt を `JSON.rawJSON` で数字のまま書く。入れたところは、runner（機械の行と、機械の定数を答える行も）、確率を数える runner、MCP のサーバ（標準入出力と HTTP。答えの `structuredContent` も）、Wasm の runner（状態と運ぶ値を次の呼び出しに渡すところ）である。機械の定数を答える行は、運ぶ数の上の端を `Number()` で書いていたので、2^53 を越える端は丸まっていた。BigInt のまま書くようにした。
+2. **Swift の runner は、NSDecimalNumber を数字から読み、Int64 の外の UInt64 を断る。** `_int` は、NSDecimalNumber なら `stringValue` の数字を Int64 として読み、読めなければ「整数でない」で断る。型を表す文字が `Q` で、Int64 の最大を越える数も「整数でない」で断る。文を「範囲の外」にしなかったのは、int64 で持つほかの言語（Go、Rust、Java、PHP、Wasm）が 64 ビットを越える数をこの文で断り、Swift 自身も、double で届く 2^64 をこの文で断るからである。言語のあいだで文がそろわないことは、下に書く。
+3. **試験。** `tests/door_ends.rs` は、§15.295 で外した runner（範囲の端に型の端を書いた規則の TypeScript と JavaScript、Linux の Swift）も比べる。`tests/exact_ints.rs` を足した。`big_edge`、`neg_edge`、`big_standing` を全部の言語の runner と MCP のサーバに通して一致を見る試験と、範囲の無い規則に 2^63、2^64−1、2^64 を渡して、int64 で持つ六つの言語（Rust、Go、Swift、Java、PHP、Wasm）がどれも「整数でない」で断ることを見る試験である。
+
+**ついでに直したもの**：生成コードのページ（`docs/generated-code.md`）は、§15.295 から「2^63−1 を越える数は、int64 の言語では runner が JSON を読むところで断る」と書いていた。SQL の runner は断らずに止まる（下の表）ので、Go、Rust、Java、PHP、Swift、Wasm の runner は「整数でない」で断り、SQL の runner は SQLite か PostgreSQL が値を持てないところで止まる、と書き直した。
+
+**変わること**：
+
+- 変わるのは、生成する TypeScript と JavaScript の runner、MCP のサーバ、確率を数える runner、Wasm の runner と、Swift の runner である。モジュール（入口と表）は変わらない。
+- 2^53 を越える整数を書いた行と要求に、TypeScript と JavaScript の runner と MCP のサーバ、Wasm の runner は、書いた整数で答える。
+- Swift の runner は、Linux でも 19 桁の負の整数を書いたとおりに読み、2^63 以上の正の整数を「整数でない」で断る。前は、2^63 を −2^63 と読んで「範囲の外」で断り、2^64−1 を −1 と読んで答えていた。
+
+**確かめたこと**：
+
+- 直した後、上の四つの規則（`no_range` の断るケースは rulec が作るものだけ）を同じ 24 通りに通し、96 件が一致した。
+- Linux の Foundation の数を読む関数（`fromJSONNumber`、Swift 6.1）を写して macOS で走らせ、返った数を直した `_int` で読んだ。linux-path の行が写したもの、macos の行が macOS の Foundation で読んだものである。`refused` は「整数でない」で断ることを表す。−2^63 は読めて、入口が「範囲の外」で断る。
+
+```text
+-9223372036854775807
+  linux-path: NSDecimalNumber objCType=d _int=-9223372036854775807
+  macos:      __NSCFNumber objCType=q _int=-9223372036854775807
+-9223372036854775808
+  linux-path: NSDecimalNumber objCType=d _int=-9223372036854775808
+  macos:      __NSCFNumber objCType=q _int=-9223372036854775808
+-1000000000000000001
+  linux-path: NSDecimalNumber objCType=d _int=-1000000000000000001
+  macos:      __NSCFNumber objCType=q _int=-1000000000000000001
+9223372036854775808
+  linux-path: __NSCFNumber objCType=Q _int=refused
+  macos:      __NSCFNumber objCType=Q _int=refused
+18446744073709551615
+  linux-path: __NSCFNumber objCType=Q _int=refused
+  macos:      __NSCFNumber objCType=Q _int=refused
+18446744073709551616
+  linux-path: NSDecimalNumber objCType=d _int=refused
+  macos:      NSDecimalNumber objCType=d _int=refused
+-9223372036854775809
+  linux-path: NSDecimalNumber objCType=d _int=refused
+  macos:      NSDecimalNumber objCType=d _int=refused
+```
+
+- `context.source` と `JSON.rawJSON` は、手元の Node 23.11 と 24.21 で確かめた。CI の tools の段は Node 24 で回る。
+- `tests/exact_ints.rs` の 2 件と `tests/door_ends.rs` の 5 件を含む、rulec の試験の全部 1,470 件（`proofs/` の `lake build` のうえで、SKIP なし）。ritsu の website（サイトの build を含む）、playground、skill の試験。
+
+**見つけて、直していないもの**：64 ビットを越える整数を断る文が、言語でそろわない。基準の評価器は、2^63、2^64−1、2^64、−2^63−1 をどれも「範囲の外」（`amount is out of range`）で断る。直した後に、範囲の無い規則（同じ規則を四つの名前で作った）にこの四つを一つずつ断るケースとして渡すと、24 通りのうち一致したのは、前の三つでは 11 通り、−2^63−1 では 12 通りだった。
+
+| 読むところ | 2^63、2^64−1、2^64 | −2^63−1 |
+|---|---|---|
+| Python、TypeScript、JavaScript の runner と MCP のサーバ、NumPy と Ruby の runner | 範囲の外（一致） | 範囲の外（一致） |
+| Rust（runner と WASI）、Go、Swift、Java、Wasm の runner | 整数でない | 整数でない |
+| PHP の runner | 整数でない | 範囲の外（一致） |
+| Python の Connect（4 通り） | protobuf の読み手の文（`value 9223372036854775808 out of range for int64`） | 同じ形の文 |
+| SQLite の runner | 値を表に入れられずに止まる（`OverflowError: Python int too large to convert to SQLite INTEGER`） | 同じ |
+| PostgreSQL の関数の runner | 引数を作れずに止まる（`ERROR:  bigint out of range`） | 同じ |
+
+PHP の −2^63−1 が一致するのは、PHP が int に入らない整数を float で読み、−2^63−1 に最も近い double が −2^63 で、値が整数なので −2^63 として入口に届き、入口が「範囲の外」で断るからである。文は合うが、読んだ値は丸まっている。
+
+直すなら、int64 で持つ言語の runner は、符号と数字だけで書いた数が 64 ビットに入らないとき、整数ではあるので「整数でない」でなく「範囲の外」で断る。SQLite の runner は表に入れる前に、PostgreSQL の関数の runner は引数を作る前に、同じ文で断る。Connect は、protobuf の読み手の文を入口の文に置き換える。そろえば、ベクタに型の上の端の一つ上（2^63）を足せる（§15.295 の決めたことの 5）。ベクタは今 2^63 以上の値を持たないので、ふだんの試験には出ない。
 
 ## 16. この設計で最も危うい点
 

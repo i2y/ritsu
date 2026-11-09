@@ -1618,8 +1618,9 @@ and Wasm hold the value in an int64, whose most is the upper end itself, so they
 lower end alone — `if int64(in.Amount) < -9223372036854775807 {` in Go, which refuses −2^63 and
 nothing else — and a range with one end, on that side alone (`if int64(in.Amount) < 0 {`).
 NumPy tests the ends before it makes the column int64, which would have wrapped 2^63 into
-−2^63. A number past 2^63−1 never reaches an int64 language's door: its type cannot hold one,
-and a runner refuses it as it reads the JSON.
+−2^63. A number past 2^63−1 never reaches an int64 language's door: its type cannot hold one.
+The runners of Go, Rust, Java, PHP, Swift and Wasm refuse it as they read the JSON, saying it is
+not an integer; SQL's stop where SQLite or PostgreSQL cannot hold it (§15.297).
 
 The sentence and the value travel apart. The error carries both — `what` is the sentence,
 `value` the number that was refused — and puts them together only when it is printed, so
@@ -1668,6 +1669,19 @@ in 64 bits, as before. TypeScript and JavaScript took it already, since `JSON.pa
 `1000.0` the number `1000`. PHP's module keeps its declared `int` (§15.203), so a caller with
 `declare(strict_types=1)` gets PHP's own `TypeError` for a float, and the runner hands it the
 integer. A record says the input as the integer it read.
+
+An integer written as digits reaches the door as it was written, at every reader. The runners of
+Python, NumPy and Ruby read it as an integer of any size, and those of PHP, Go, Rust, Java,
+Swift, SQL and Wasm as an int64. `JSON.parse` makes a number a float64, which holds every
+integer only up to 2^53, so the TypeScript and JavaScript runners, their MCP servers and the
+runner that drives the Wasm module read an integer past it from the digits written — the source
+Node 21 and later hand the function `JSON.parse` calls for each value — and write a bigint back
+as its digits with `JSON.rawJSON`. Swift's runner reads the `NSDecimalNumber` that Foundation on
+Linux gives for a negative integer of 19 digits from its digits rather than through
+`doubleValue`, and refuses a UInt64 past Int64 as no integer, as the runners of Go, Rust, Java,
+PHP and Wasm refuse a number past 64 bits. Before, TypeScript read 9007199254740993 as
+9007199254740992 and answered with the row below it, and Swift answered for
+18446744073709551615 as −1 (§15.297).
 
 A truth value is JSON's `true` or `false` and nothing else, at every door that reads one: the
 module's entry guard where a caller can pass any value, and every reader of the wire — the
