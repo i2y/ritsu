@@ -6863,13 +6863,35 @@ FAIL  big_edge (TypeScript) disagrees with the reference evaluator
 
 生成した TypeScript の MCP のサーバも、要求を `JSON.parse` で読む。TypeScript と JavaScript の読む側を直すなら、JSON.parse に渡す関数が受け取る元の文字列（`context.source`）から整数を読み、BigInt を書くときは `JSON.rawJSON` を使う。どちらも手元の Node 23.11 にある。
 
-Swift の runner は、Foundation の `JSONSerialization` で読む。macOS の Foundation は Int64 に収まる整数をそのまま読むが、CI の Linux（Swift 6.1、ubuntu-24.04）では -9223372036854775807 が Double になり、-2^63 として入口に届いた。範囲の端に型の端を書いた規則は、手元の macOS では一致し、CI では次のように合わなかった。
+Swift の runner は、Foundation の `JSONSerialization` で読む。macOS の Foundation は、Int64 に収まる整数を Int64 の数で返す。Linux の Foundation（Swift 6.1）は、Int64 で読むかを決める桁の数に負の符号も数えるので、19 桁の負の整数を NSDecimalNumber で返す。値は正確だが、型を表す文字（`objCType`）が Double と同じ `d` なので、runner の `_int` は `doubleValue` で読む。そのため -9223372036854775807 は -2^63 として入口に届いた。範囲の端に型の端を書いた規則は、手元の macOS では一致し、CI の Linux（ubuntu-24.04）では次のように合わなかった。
 
 ```text
 {"rule":"at_the_ends","lang":"swift","via":"runner","vectors":4,"refused":4,"calls":0,"ok":false,"ran":true,"first_diff":{"line":1,"generated":"{\"refused\":\"input\",\"error\":\"amount is out of range\"}","expected":"{\"in\":{\"amount\":-9223372036854775807},\"observed\":{\"fee\":100},\"trace\":[{\"table\":\"fees\",\"row\":1}]}"},"error":null}
 ```
 
-`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を、この理由で比べない（-9223372036854775807 が -2^63 として届く）。
+Linux の Foundation の数を読む関数（`fromJSONNumber`）を写して macOS で走らせ、返った数を runner の `_int` で読むと、linux-path の行になる。macos の行は macOS の Foundation で読んだもの。19 桁の負の整数は、型の端でなくても丸まる。
+
+```text
+-9223372036854775807
+  linux-path: NSDecimalNumber objCType=d _int=-9223372036854775808
+  macos:      __NSCFNumber objCType=q _int=-9223372036854775807
+-1000000000000000001
+  linux-path: NSDecimalNumber objCType=d _int=-1000000000000000000
+  macos:      __NSCFNumber objCType=q _int=-1000000000000000001
+```
+
+もう一つ、どちらの OS でも、Int64 を越えて UInt64 に収まる正の整数は UInt64 の数（型を表す文字は `Q`）で返る。`_int` はそれを `int64Value` で読み、下位 64 ビットだけを取るので、値が折り返す。2^63 は -2^63 になって断られるが、2^64−1 は -1 として入口に届き、範囲が -1 を含めば答える。次は macOS で走らせた結果で、Linux の Foundation もソースでは同じく下位 64 ビットを取る。ベクタは 2^63 以上の値を持たないので、試験には出ない。
+
+```text
+9223372036854775808
+  macos:      __NSCFNumber objCType=Q _int=-9223372036854775808
+18446744073709551615
+  macos:      __NSCFNumber objCType=Q _int=-1
+```
+
+Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` を通さずに十進のまま整数にし、型を表す文字が `Q` の数は Int64 の外として断る。
+
+`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を比べない。どれも -9223372036854775807 が -2^63 として届く。
 
 **確かめたこと**：
 

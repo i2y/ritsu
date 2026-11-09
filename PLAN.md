@@ -2490,7 +2490,7 @@ rulec の DESIGN §15.293 に残した一つ目の穴を、範囲が書かない
 - **説明**：Go のコメント、SQL のファイルの頭の列の説明、`.proto` の説明、`doc` の試すフォームに、片側だけの端も書く。
 - **ついでに**：PostgreSQL の関数の runner が -2^63 を `-9223372036854775808::bigint` と書いて落ちていたのを、括弧で囲んで直した。ベクタは、上の端に 2^63−1 を書いた入力に 2^63 を作らず、「整数でない数」を float64 が .5 を持てる大きさ（2^52 未満）で作る。
 - **変わるもの**：片側だけ書いた範囲の入力と、範囲の無い数の入力の生成コード。木の規則に片側だけの範囲は無い。範囲の無い数の入力は corpus の二つの規則（`coupon_discount_amount`、`クーポン割引`）の率と W105 の試験の規則にあり、ベクタに断るケースが一つ増える。`doc` の HTML のページは、フォームのスクリプトが変わるので、どの規則でも変わる。dandori のサイトの `doc` のページ 10 枚、ritsu の modules の golden、playground の `ritsu.wasm` を作り直した。
-- **残したもの**：TypeScript と JavaScript の runner と MCP のサーバは、JSON の数を float64 で読むので、2^53 を越える整数が丸まって入口に届く（端を変える前から。実物は §15.295）。Linux の Swift の runner も、Foundation が -9223372036854775807 を Double で返す（CI で見つけた）。`door_ends` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を比べない。
+- **残したもの**：TypeScript と JavaScript の runner と MCP のサーバは、JSON の数を float64 で読むので、2^53 を越える整数が丸まって入口に届く（端を変える前から。実物は §15.295）。Swift の runner は、Linux では 19 桁の負の整数を double で読んで丸め（Foundation が NSDecimalNumber で返す。CI で見つけた）、どちらの OS でも Int64 を越えて UInt64 に収まる正の整数を下位 64 ビットに折り返す（2^64−1 は -1 として届く）。`door_ends` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を比べない。
 
 確かめたこと：足した `tests/door_ends.rs` の 5 件（全部の言語の runner が端の外を基準の評価器と同じ文で断る、整数に端の無い言語が 2^63 を断る、など）。手元で九つの規則を全部の言語、MCP、Connect、PostgreSQL の関数に通して 222 件が一致し、遠い年の日付も 24 の runner で一致した。rulec の試験の全部 1,454 件（SKIP なし）と、ritsu と dandori の、作り直したページと playground の試験。
 

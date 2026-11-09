@@ -163,10 +163,10 @@ fn generate(dir: &Path, out: &Path, targets: &[&str], extras: &[&str]) {
 
 /// The runs that cannot hand the door the value a vector writes. The runners of TypeScript and
 /// JavaScript read a line with `JSON.parse`, which makes a number a float64 before it is a bigint,
-/// and Swift's reads it with Foundation's `JSONSerialization`, which on Linux gives
-/// -9223372036854775807 as a Double (on macOS it stays an Int64): so the lower end of
-/// `at_the_ends` reaches the door as −2^63. It is the reading, not the door, and it was so before
-/// the ends (§15.295, left as it is).
+/// and on Linux Foundation's `JSONSerialization` gives Swift's a negative integer of 19 digits as
+/// an `NSDecimalNumber`, which the runner reads through `doubleValue` (on macOS it stays an
+/// Int64): so the lower end of `at_the_ends` reaches the door as −2^63. It is the reading, not the
+/// door, and it was so before the ends (§15.295, left as it is).
 fn read_as_float64(rule: &str, lang: &str) -> bool {
     rule == "at_the_ends" && (matches!(lang, "typescript" | "javascript") || (lang == "swift" && cfg!(target_os = "linux")))
 }
