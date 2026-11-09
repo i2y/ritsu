@@ -2610,7 +2610,10 @@ inputs
 outputs
   手数料(fee) : money[円]  round down(1円)  range >=0円 <=500円
 
-result 手数料 = 金額 × 10%
+table 手数料表(fees)
+policy unique
+| -> 手数料 |
+| 金額      |
 "##;
 const X_E140_UNKNOWN_EN: &str = r##"rule fee v1
 
@@ -2620,7 +2623,10 @@ inputs
 outputs
   fee : money[USDc]  round down(1USDc)  range >=0USDc <=500USDc
 
-result fee = amount × 10%
+table fees
+policy unique
+| -> fee |
+| amount |
 "##;
 
 const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
@@ -4488,17 +4494,18 @@ pub fn ledger() -> Vec<Entry> {
             "E108",
             tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
             tr!(
-                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。",
-                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64."
+                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、そこから越えうる値もこれです。生成コードの入口は、書いていない端の入力をその端まで受け取ります。入力か要素のフィールドの範囲に、型が持てる値の端を越える端を書いたときもこれです。入口はその外を断るので、どの呼び出しも渡せない値を約束することになります。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。",
+                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64."
             ),
             tr!(
-                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。乱数の入力の点が多すぎるなら、その範囲を狭めてください。",
-                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where the random inputs have too many points, narrow their ranges."
+                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。範囲に端を書いていない入力が原因なら、その端を書いてください。型が持てる値を越える端は、その内側に書いてください。乱数の入力の点が多すぎるなら、その範囲を狭めてください。",
+                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges."
             ),
             X_E108,
             &["E112", "E103"],
         )
         .english(X_E108_EN)
+        .also(tr!("範囲に書いていない端", "An end a range does not write"), X_E108_OPEN, X_E108_OPEN_EN)
         .also(tr!("乱数の入力の点", "The points of the random inputs"), X_E108_RANDOM, X_E108_RANDOM),
         err(
             "E109",
@@ -4912,8 +4919,8 @@ pub fn ledger() -> Vec<Entry> {
             "E140",
             tr!("出力の範囲が、出力のとる値を含んでいません", "An output's range does not hold the values it takes"),
             tr!(
-                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式）が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。rulec がその値を求められないとき（範囲の無い入力を読む、数でない出力）も、書いた範囲を確かめられないので、これです。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
-                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
+                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式）が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。rulec がその値を求められないとき（範囲の無い入力を読む、数でない出力）も、書いた範囲を確かめられないので、これです。ただし、端の無い入力から計算する式が int64 を越えうるときは、先に E108 になります。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
+                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 first. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
             ),
             tr!(
                 "範囲を、文面の示すとりうる値まで広げてください（`fix.text` に `range >=0円 <=1000円` の形で入っています）。確かめられないときは、出力が読む入力に範囲を書くか、出力の範囲を外してください。範囲を書かない出力にも、rulec が求めた範囲が付き、ほかの言語はそれを読みます。",
@@ -5838,6 +5845,30 @@ policy unique
 | a     | b | -> r(r) : bool |
 | <500  | - | true           |
 | >=500 | - | false          |
+"##;
+/// E108, an end a range does not write: the subtotal has no upper one, so it is read as the end of
+/// what the type holds, and adding the shipping to it can pass int64.
+const X_E108_OPEN: &str = r##"rule 支払(pay) v1
+
+inputs
+  小計(subtotal) : money[円]  range >=0円
+  送料(shipping) : money[円]  range >=0円 <=2000円
+
+outputs
+  支払額(total) : money[円]  round down(1円)
+
+result 支払額 = 小計 + 送料
+"##;
+const X_E108_OPEN_EN: &str = r##"rule pay v1
+
+inputs
+  subtotal : money[USDc]  range >=0USDc
+  shipping : money[USDc]  range >=0USDc <=2000USDc
+
+outputs
+  total : money[USDc]  round down(1USDc)
+
+result total = subtotal + shipping
 "##;
 /// E108, the points of the random inputs: 10^20 of them, past the 2^62 a count can hold.
 const X_E108_RANDOM: &str = r##"rule t(t) v1

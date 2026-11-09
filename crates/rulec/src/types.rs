@@ -211,6 +211,17 @@ pub fn ord_to_date(v: Rat) -> (i32, u32, u32) {
     (y as i32, m as u32, d as u32)
 }
 
+/// The ends of what a number of `ty` stored at `scale` can be (§15.294): 2^63 − 1 steps either way,
+/// the same on both sides as E108 holds a magnitude to it. `None` for a type that is not a number:
+/// a date has no arithmetic (E048), and the rest no interval.
+pub(crate) fn type_ends(ty: &Ty, scale: i128) -> Option<(Rat, Rat)> {
+    if !ty.is_numeric() {
+        return None;
+    }
+    let end = Rat::new(i64::MAX as i128, scale.max(1));
+    Some((Rat::zero().sub(end), end))
+}
+
 /// Howard Hinnant's days_from_civil. Proleptic Gregorian calendar.
 fn days_from_civil(y: i32, m: i64, d: i64) -> i128 {
     let y = y as i64 - if m <= 2 { 1 } else { 0 };
@@ -461,6 +472,18 @@ pub struct Checked {
     /// What each `derive` and each `define` computes, but an open value (§15.268): the difference
     /// of two shares is read through the names the shares are given.
     pub defs: HashMap<String, Expr>,
+    /// What a `derive`, a `define` or a column a table writes numbers into reaches for the int64
+    /// claim where its range is not closed, an end an input does not write read as the end of its
+    /// type ([`Checked::wide_range`], §15.294).
+    pub(crate) wide: HashMap<String, (Rat, Rat)>,
+    /// The names the rows of a table write into a column of numbers, which the hint of E108
+    /// follows down to the ranges that leave an end unwritten (§15.294).
+    pub(crate) written: HashMap<String, Vec<String>>,
+    /// The values E108 could not read yet because they read an output decided further down (a
+    /// second walk reads what the first answers, §15.219): the expression, its type, its line, the
+    /// file and its name. They are held to int64 once every item is read
+    /// ([`Checked::overflow_later`], §15.294).
+    pub(crate) later: Vec<(Expr, Ty, Span, String, String)>,
     /// The output `result` decides, with the range of what it comes to, when its line writes no
     /// range (§15.268): what the `result` reaches under the inputs' ranges and the constraints,
     /// put out to the grid of its rounding. The certificate's `ranges` and the port the other
@@ -1353,6 +1376,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         narrowed: HashSet::new(),
         opens: HashMap::new(),
         defs: HashMap::new(),
+        wide: HashMap::new(),
+        written: HashMap::new(),
+        later: Vec::new(),
         result_range: None,
         written_outputs: HashSet::new(),
         reaches: HashMap::new(),
@@ -1598,6 +1624,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             c.diags.push(d);
         }
         c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, ty.present()));
+        if let Some(r) = &i.range {
+            past_type_ends(&mut c, i, r, ty.present(), &at);
+        }
         c.syms.insert(
             i.name.text.clone(),
             Sym { ty, span: i.name.span.clone(), kind: SymKind::Input, contract_only: i.contract_only },
@@ -1685,6 +1714,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.diags.push(d);
             }
             c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, ty.present()));
+            if let Some(r) = &i.range {
+                past_type_ends(&mut c, i, r, ty.present(), &at);
+            }
             c.syms.insert(
                 i.name.text.clone(),
                 Sym { ty, span: i.name.span.clone(), kind: SymKind::Element, contract_only: i.contract_only },
@@ -2261,6 +2293,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Item::Fold(d) => c.fold_decl(d, f, path),
         }
     }
+    c.overflow_later();
 
     // After the items, so that a column naming a table's output or a `define` resolves.
     for ex in &f.examples {
@@ -2573,10 +2606,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let scale_of = |n: &String| c.scales.get(n).copied().unwrap_or(1).max(1);
         let common = k.names().map(scale_of).fold(1, lcm_i128);
         let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
-        let mag_of = |n: &String| -> Option<Rat> {
-            let (Some(lo), Some(hi)) = c.ranges.get(n).cloned()? else { return None };
-            Some(if abs(lo).cmp_to(abs(hi)).is_gt() { abs(lo) } else { abs(hi) })
-        };
+        // An end a range does not write is the end of what the type holds (§15.294).
+        let mags: HashMap<String, Rat> = k
+            .names()
+            .filter_map(|n| c.wide_range(n).map(|(lo, hi)| (n.clone(), if abs(lo).cmp_to(abs(hi)).is_gt() { abs(lo) } else { abs(hi) })))
+            .collect();
+        let mag_of = |n: &String| -> Option<Rat> { mags.get(n).copied() };
         let differ = k.names().any(|n| scale_of(n) != common);
         for side in [&k.left, &k.right] {
             if side.len() == 1 && !differ {
@@ -3333,7 +3368,7 @@ impl Checked {
                         // target, and int64 is what it is computed in (§7.1). E108 asks
                         // about the value; this asks about the step on the way.
                         let big = |e: &Expr, t: &Ty| -> Option<i128> {
-                            let (_, hi) = self.interval(e, t)?;
+                            let (_, hi) = self.int64_interval(e, t)?;
                             let sc = self.scale(e)?;
                             let stored = hi.mul(Rat::int(sc));
                             Some(stored.num / stored.den)
@@ -3431,7 +3466,7 @@ impl Checked {
                         }
                         // The remainder is taken of the stored integer by the divisor at the same
                         // scale; both have to fit int64.
-                        if let (Some(k), Some((lo, hi)), Some(sc)) = (k, self.interval(&args[0], &t), self.scale(&args[0])) {
+                        if let (Some(k), Some((lo, hi)), Some(sc)) = (k, self.int64_interval(&args[0], &t), self.scale(&args[0])) {
                             let mag = magnitude_of(lo, hi).mul(Rat::int(sc));
                             let stored = mag.num / mag.den;
                             let modulus = k.checked_mul(sc);
@@ -3752,7 +3787,7 @@ impl Checked {
         }
         // E108: the generated code divides one integer by another, each the value at its own
         // scale brought to the grid's (`division_factors`); both have to fit.
-        let parts = (self.interval(n, &nt), self.scale(n), reach, self.scale(d), grid_int(g));
+        let parts = (self.int64_interval(n, &nt), self.scale(n), reach, self.scale(d), grid_int(g));
         if let (Some((nl, nh)), Some(sn), Some((dl, dh)), Some(sd), Some((gi, sg))) = parts {
             let (ka, kb) = division_factors(sn, sd, gi, sg);
             for (what, lo, hi, s, k, e, t) in [
@@ -5058,6 +5093,45 @@ impl Checked {
                         self.ranges.insert(oc.name.text.clone(), (Some(lo), Some(hi)));
                     } else if !known {
                         self.ranges.remove(&oc.name.text);
+                    }
+
+                    // What the int64 claim reads the column as where its range is not closed
+                    // (§15.294): the hull of what its rows write, a name read the way the claim
+                    // reads it, widened by what another table of the same output wrote; the ends
+                    // of its type where a row writes something with no interval. Without it a
+                    // column that passes on an input with no upper bound was read at both ends of
+                    // its type, and `v - fee` was stopped although `v` is never below zero.
+                    let mut wide = self.wide.get(&oc.name.text).copied();
+                    let mut whole = false;
+                    for row in &t.rows {
+                        let b = match row.outs.get(oi) {
+                            Some(OutCell::Lit(Lit::Num(n))) => lit_value_in(n, &ty)
+                                .or_else(|| lit_value_in(n, &lit_ty(n)))
+                                .map(|v| (v, v)),
+                            Some(OutCell::Name(w)) => {
+                                let ws = self.written.entry(oc.name.text.clone()).or_default();
+                                if !ws.contains(w) {
+                                    ws.push(w.clone());
+                                }
+                                self.wide_range(w)
+                            }
+                            Some(OutCell::Nothing) => continue,
+                            _ => None,
+                        };
+                        match b {
+                            Some((l, h)) => {
+                                wide = Some(wide.map_or((l, h), |(a, z)| {
+                                    (crate::grid::min_rat(a, l), crate::grid::max_rat(z, h))
+                                }))
+                            }
+                            None => whole = true,
+                        }
+                    }
+                    if whole {
+                        wide = type_ends(ty.present(), sc);
+                    }
+                    if let Some(w) = wide {
+                        self.wide.insert(oc.name.text.clone(), w);
                     }
                 }
                 let ty = match had {
@@ -6543,6 +6617,8 @@ impl Checked {
         let sc = self.scale(e);
         if let (Some(iv), Some(_)) = (self.interval(e, ty), sc) {
             self.ranges.insert(name.to_string(), (Some(iv.0), Some(iv.1)));
+        } else if let (Some(iv), Some(_)) = (self.int64_interval(e, ty), sc) {
+            self.wide.insert(name.to_string(), iv);
         }
         if let Some(sc) = sc {
             self.scales.insert(name.to_string(), sc);
@@ -6907,6 +6983,35 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
             stop(c, tr!("{naming} がとる日を koyomi が数えられません", "koyomi does not count the days {naming} comes to"), tr!("{why}", "{why}"), vec![])
         }
     }
+}
+
+/// E108 for an input or a field of an element whose range writes an end past what its type holds
+/// (§15.294): 2^63 − 1 steps either way. The entry of the generated code stops there, so such a
+/// range promises values no call can pass, and the completeness check would read values that
+/// never come.
+fn past_type_ends(c: &mut Checked, i: &VarDecl, r: &Range, ty: &Ty, at: &dyn Fn(usize) -> String) {
+    let Some((first, last)) = type_ends(ty, *c.scales.get(&i.name.text).unwrap_or(&1)) else {
+        return;
+    };
+    let Some((lo, hi)) = c.ranges.get(&i.name.text).copied() else {
+        return;
+    };
+    let low = lo.is_some_and(|l| l.cmp_to(first) == std::cmp::Ordering::Less);
+    let high = hi.is_some_and(|h| h.cmp_to(last) == std::cmp::Ordering::Greater);
+    if !low && !high {
+        return;
+    }
+    let (a, z) = (fmt_val(first, ty), fmt_val(last, ty));
+    c.diags.push(
+        Diag::error("E108", tr!("{} の範囲の端が、型が持てる値を越えています", "An end of the range of {} is past what its type holds", i.name.text))
+            .at(at(r.span.line))
+            .mark(r.span.clone(), tr!("この範囲", "this range"))
+            .note(tr!(
+                "{ty} が持てる値は、刻みで ±(2^63 − 1)、{a} から {z} までです。生成コードの入口はその外を断るので、それを越える端は、どの呼び出しも渡せない値を約束します。",
+                "What {ty} holds is 2^63 − 1 steps either way, {a} to {z}. The entry of the generated code refuses anything past that, so an end beyond it promises values no call can pass."
+            ))
+            .note(tr!("ヒント: 範囲の端を、{a} から {z} の内側に書いてください。", "Hint: write the ends of the range inside {a} to {z}.")),
+    );
 }
 
 /// `range >=classical <=renaissance` on an input of an enum (§15.210): the values it lets in,
@@ -7396,16 +7501,71 @@ impl Checked {
         Some((l, h))
     }
 
+    /// The interval the int64 claim reads a name in (§15.294): its range where both its ends are
+    /// known; for a value the rule computes, what its expression reaches read the same way; and
+    /// otherwise the ends its range writes, an end it does not write read as the end of what a
+    /// number of its type holds ([`type_ends`]). The entry of the generated code holds every input
+    /// to those ends, and E108 every value the rule computes, so no stored integer is outside them.
+    /// An open value is read in its declared range, as everywhere else (§15.227).
+    pub(crate) fn wide_range(&self, n: &str) -> Option<(Rat, Rat)> {
+        let (lo, hi) = self.ranges.get(n).copied().unwrap_or((None, None));
+        if let (Some(lo), Some(hi)) = (lo, hi) {
+            return Some((lo, hi));
+        }
+        let sym = self.syms.get(n)?;
+        // An output read above the line that decides it (a second walk reads what the first
+        // answers, §15.219): what decides it is not checked yet, so nothing is read into it, as
+        // `interval` reads nothing.
+        if sym.kind == SymKind::Output {
+            return None;
+        }
+        let ty = sym.ty.present().clone();
+        let (first, last) = type_ends(&ty, *self.scales.get(n).unwrap_or(&1))?;
+        // A value E108 has stopped is read at the ends of its type, as one that passed would be, so
+        // what follows from it is not stopped a second time for the same input.
+        let clamp = |(l, h): (Rat, Rat)| {
+            Some((
+                crate::grid::max_rat(l, first),
+                crate::grid::min_rat(h, last),
+            ))
+        };
+        if self.defs.contains_key(n) {
+            // One with no interval at all has had another error say why (E115, E117, E132):
+            // nothing is read into it.
+            return clamp(*self.wide.get(n)?);
+        }
+        // A column a table writes numbers into: the hull of what its rows write.
+        if let Some(w) = self.wide.get(n) {
+            return clamp(*w);
+        }
+        Some((lo.unwrap_or(first), hi.unwrap_or(last)))
+    }
+
     /// Interval arithmetic from the declared input ranges. The right-hand side of a derived
     /// value is a linear combination of inputs only, so addition, subtraction, and constant
     /// multiples are all that is needed (§5.2).
     pub(crate) fn interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
+        self.interval_in(e, ty, false)
+    }
+
+    /// The interval the int64 claim holds a value to (§15.294): the same arithmetic, with each name
+    /// read in [`Checked::wide_range`], so an end of a range that is not written stands for the end
+    /// of what the type holds. Only E108 and the certificate's `values` read it: the range of a
+    /// value, the ports, the schema and the pages keep the ends the rule writes.
+    pub(crate) fn int64_interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
+        self.interval_in(e, ty, true)
+    }
+
+    fn interval_in(&self, e: &Expr, ty: &Ty, wide: bool) -> Option<(Rat, Rat)> {
         match e {
             // A name without a range bounds nothing. A rate used to be assumed to lie within
             // 0..100% here, which a table column holding 150% quietly contradicted (§15.34);
             // a column's range now comes from its cells, and a name that still has none
             // leaves the expression unbounded rather than bounded wrongly.
             Expr::Name(n, _) => {
+                if wide {
+                    return self.wide_range(n);
+                }
                 let (lo, hi) = self.ranges.get(n)?;
                 Some(((*lo)?, (*hi)?))
             }
@@ -7417,8 +7577,8 @@ impl Checked {
                 Some((v, v))
             }
             Expr::Bin(l, op, r, _) => {
-                let (al, ah) = self.interval(l, ty)?;
-                let (bl, bh) = self.interval(r, ty)?;
+                let (al, ah) = self.interval_in(l, ty, wide)?;
+                let (bl, bh) = self.interval_in(r, ty, wide)?;
                 match op {
                     BinOp::Add => Some((al.add(bl), ah.add(bh))),
                     // Two shares of one amount over one whole, the one taken away at a running
@@ -7460,7 +7620,7 @@ impl Checked {
                     // rule had no range and no scale — and came out at the wrong scale in
                     // every generated language (§15.72).
                     (m, [x, g]) if RoundMode::parse(m).is_some() => {
-                        let (lo, hi) = self.interval(x, ty)?;
+                        let (lo, hi) = self.interval_in(x, ty, wide)?;
                         let Expr::Lit(Lit::Num(n), _) = g else { return None };
                         let grid = lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?;
                         let out = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, grid);
@@ -7474,9 +7634,9 @@ impl Checked {
                     // (§15.102). Reading the ranges alone would give T×C÷S, which is the
                     // product of two ranges and says nothing useful.
                     (crate::kw::ALLOCATE, [t, cc, ss]) => {
-                        let (tl, th) = self.interval(t, ty)?;
-                        let (cl, _) = self.interval(cc, ty)?;
-                        let (sl, sh) = self.interval(ss, ty)?;
+                        let (tl, th) = self.interval_in(t, ty, wide)?;
+                        let (cl, _) = self.interval_in(cc, ty, wide)?;
+                        let (sl, sh) = self.interval_in(ss, ty, wide)?;
                         // Both ends: a range written upside down (`>=1円 <=0円`) has a
                         // positive lower end and a zero upper one, and the division below
                         // panicked on it before the range itself was reported (§15.156).
@@ -7497,8 +7657,8 @@ impl Checked {
                         Some((down(tl.mul(cl).div(sh)), down(th)))
                     }
                     (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
-                        let (al, ah) = self.interval(x, ty)?;
-                        let (bl, bh) = self.interval(y, ty)?;
+                        let (al, ah) = self.interval_in(x, ty, wide)?;
+                        let (bl, bh) = self.interval_in(y, ty, wide)?;
                         let pick = |a: Rat, b: Rat| {
                             let less = a.cmp_to(b) == std::cmp::Ordering::Less;
                             if (name == crate::kw::MIN) == less { a } else { b }
@@ -7511,7 +7671,7 @@ impl Checked {
                     // which is what the re-checkers read.
                     (crate::kw::MOD, [x, k]) => {
                         let n = const_value(k)?;
-                        let (lo, hi) = self.interval(x, ty)?;
+                        let (lo, hi) = self.interval_in(x, ty, wide)?;
                         let (a, b) = (lo.num.div_euclid(lo.den), hi.num.div_euclid(hi.den));
                         if a.div_euclid(n) == b.div_euclid(n) {
                             let base = a.div_euclid(n) * n;
@@ -7523,7 +7683,7 @@ impl Checked {
                     // A whole square root rises with its argument, so its ends are the roots of the
                     // argument's ends (§15.215). Below zero there is none, and E139 has said so.
                     (crate::kw::ISQRT, [x]) => {
-                        let (lo, hi) = self.interval(x, ty)?;
+                        let (lo, hi) = self.interval_in(x, ty, wide)?;
                         Some((isqrt_rat(lo)?, isqrt_rat(hi)?))
                     }
                     _ => None,
@@ -7943,14 +8103,30 @@ impl Checked {
     /// int64. If it cannot be proved, stop: rather than overflowing silently, ask the business
     /// where to round.
     fn overflow(&mut self, e: &Expr, ty: &Ty, span: &Span, path: &str, name: &str) {
-        let (Some((lo, hi)), Some(sc)) = (self.interval(e, ty), self.scale(e)) else { return };
+        // An end a name's range does not write is read as the end of what its type holds
+        // (§15.294): a copy of an input with no upper bound fits, and that input plus one does not.
+        let (Some((lo, hi)), Some(sc)) = (self.int64_interval(e, ty), self.scale(e)) else {
+            if self.reads_later(e) {
+                self.later.push((e.clone(), ty.clone(), span.clone(), path.to_string(), name.to_string()));
+            }
+            return;
+        };
         // The stored integer is value × reciprocal of the step. Use whichever endpoint of the
         // interval has the larger absolute value.
         let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
         let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
         let stored_r = mag.mul(Rat::int(sc));
         let stored = stored_r.num / stored_r.den;
-        if stored > i64::MAX as i128 {
+        // The names whose ranges leave an end unwritten, where the ranges the rule writes do not
+        // bound it. None found (a value read through one that waited for an output decided further
+        // down, whose own range is not recorded) is said as any other E108.
+        let mut open = Vec::new();
+        if stored > i64::MAX as i128 && self.interval(e, ty).is_none() {
+            self.open_names(e, &mut open);
+        }
+        if !open.is_empty() {
+            self.open_ended(&open, span, path, name);
+        } else if stored > i64::MAX as i128 {
             self.diags.push(
                 Diag::error("E108", tr!("{name} が int64 に収まることを証明できません", "Cannot prove that {name} fits in int64"))
                     .at(format!("{path}:{}", span.line))
@@ -7965,6 +8141,95 @@ impl Checked {
                     .note(tr!("どこで丸めるかで答えが変わり、それは業務の判断なので、rulec は勝手に決めません。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own.")),
             );
         }
+    }
+
+    /// E108 for a number that can pass int64 because a name it reads does not write an end of its
+    /// range (§15.294). It names those names, through the values the rule computes down to what
+    /// declares them, rather than the ends of int64 that no one wrote.
+    fn open_ended(&mut self, open: &[String], span: &Span, path: &str, name: &str) {
+        let quoted: Vec<String> = open.iter().map(|n| format!("`{n}`")).collect();
+        let list = match quoted.split_last() {
+            Some((last, [])) => last.clone(),
+            Some((last, rest)) => tr!("{} と {last}", "{} and {last}", rest.join(&tr!("、", ", "))),
+            None => return,
+        };
+        let (has, them) = if open.len() > 1 {
+            ("have", "the ends their ranges do not write")
+        } else {
+            ("has", "the end its range does not write")
+        };
+        self.diags.push(
+            Diag::error("E108", tr!("{name} が int64 に収まることを証明できません", "Cannot prove that {name} fits in int64"))
+                .at(format!("{path}:{}", span.line))
+                .mark(span.clone(), "")
+                .note(tr!(
+                    "{list} の範囲に上限か下限がありません。書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、{name} の格納される整数は int64 を越えることがあります。",
+                    "{list} {has} no upper or no lower bound. An end that is not written is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), and from there the stored integer of {name} can pass int64."
+                ))
+                .note(tr!("ヒント: {list} の範囲に、書いていない側の端（`>=` か `<=`）を書いてください。", "Hint: give {list} {them}, `>=` or `<=`.")),
+        );
+    }
+
+    /// The names under `e` whose range does not write both its ends, followed through the values
+    /// the rule computes down to the names that declare a range (§15.294).
+    fn open_names(&self, e: &Expr, out: &mut Vec<String>) {
+        let mut names = Vec::new();
+        collect_names(e, &mut names);
+        self.open_names_of(names, out, &mut HashSet::new());
+    }
+
+    /// [`Checked::open_names`] over names: a value the rule computes is followed through its
+    /// expression, and a column a table writes numbers into through the names its rows write,
+    /// since neither has a range to write an end on.
+    fn open_names_of(&self, names: Vec<String>, out: &mut Vec<String>, seen: &mut HashSet<String>) {
+        for n in names {
+            let closed = self
+                .ranges
+                .get(&n)
+                .is_some_and(|(lo, hi)| lo.is_some() && hi.is_some());
+            if closed || out.contains(&n) || !seen.insert(n.clone()) {
+                continue;
+            }
+            if let Some(d) = self.defs.get(&n) {
+                let mut inner = Vec::new();
+                collect_names(d, &mut inner);
+                self.open_names_of(inner, out, seen);
+            } else if let Some(ws) = self.written.get(&n) {
+                self.open_names_of(ws.clone(), out, seen);
+            } else if self
+                .syms
+                .get(&n)
+                .is_some_and(|s| type_ends(s.ty.present(), 1).is_some())
+            {
+                out.push(n);
+            }
+        }
+    }
+
+    /// Whether `e` reads an output not decided yet at this line, or a value that waits for one
+    /// (§15.294).
+    fn reads_later(&self, e: &Expr) -> bool {
+        let mut names = Vec::new();
+        collect_names(e, &mut names);
+        names.iter().any(|n| {
+            self.syms.get(n).is_some_and(|s| s.kind == SymKind::Output)
+                || self.later.iter().any(|l| &l.4 == n)
+        })
+    }
+
+    /// E108 for the values that read an output decided further down, now that every item is read
+    /// (§15.294). `check` used to pass them without holding them to int64 at all, and the
+    /// re-checkers refused the certificate: `define rest = charge × 10^18` above the `sum` that
+    /// decides `charge`. Read in the order they are written, so one that reads another waiting
+    /// value finds it worked out. What still reads nothing has had another error say why.
+    fn overflow_later(&mut self) {
+        for (e, ty, span, path, name) in std::mem::take(&mut self.later) {
+            self.overflow(&e, &ty, &span, &path, &name);
+            if let (Some(iv), Some(_)) = (self.int64_interval(&e, &ty), self.scale(&e)) {
+                self.wide.entry(name).or_insert(iv);
+            }
+        }
+        self.later.clear();
     }
 }
 

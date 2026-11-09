@@ -205,8 +205,12 @@ fn a_range_on_an_output_holds_what_the_output_comes_to() {
 
 #[test]
 fn a_range_that_cannot_be_checked_is_e140_too() {
-    // an input with no range: nothing says what the fee comes to
-    let open = fee("  range >=0JPY <=500JPY").replace("amount : money[JPY]  range >=0JPY <=10_000JPY", "amount : money[JPY]");
+    // an input with no range: nothing says what the fee comes to. A tenth of it rather than 10% of
+    // it, which can pass int64 at the end of the type and is E108 first (rulec's §15.294).
+    let opened = |range: &str| {
+        fee(range).replace("amount : money[JPY]  range >=0JPY <=10_000JPY", "amount : money[JPY]").replace("result fee = amount * 10%", "result fee = amount ÷ 10")
+    };
+    let open = opened("  range >=0JPY <=500JPY");
     let (codes, en, ja) = said(&open);
     assert_eq!(codes, ["E140"], "{en}");
     assert!(en.contains("The range of the output fee cannot be checked") && en.contains("rulec cannot work out what fee takes from its `result`"), "{en}");
@@ -214,7 +218,7 @@ fn a_range_that_cannot_be_checked_is_e140_too() {
     assert!(ja.contains("出力 fee の範囲を確かめられません") && ja.contains("`result` の式から fee のとる値の範囲を求められませんでした"), "{ja}");
     assert_eq!(fix(&open), None);
     // with no range written, the output with no range to take is no finding, as before
-    assert!(said(&fee("").replace("amount : money[JPY]  range >=0JPY <=10_000JPY", "amount : money[JPY]")).0.is_empty());
+    assert!(said(&opened("")).0.is_empty());
     // an output that is no number: the range is not taken on trust
     let tier = "rule tier v1\n\nenum level = basic < silver < gold\n\ninputs\n  spent : money[JPY]  range >=0JPY <=100_000JPY\n\noutputs\n  tier : level  range >=basic <=silver\n\ntable by_spent\npolicy unique\n| spent                   | -> tier |\n| <10_000JPY              | basic   |\n| >=10_000JPY <50_000JPY  | silver  |\n| >=50_000JPY             | gold    |\n\nexamples\n| spent | -> tier |\n| 0JPY  | basic   |\n";
     let (codes, en, ja) = said(tier);

@@ -1068,7 +1068,10 @@ outputs
 One declaration does three jobs.
 
 1. **Overflow proof.** The reachable interval of every intermediate value is computed from
-   the declared ranges and steps, and must fit in int64 (E108).
+   the declared ranges and steps, and must fit in int64 (E108). An end a range does not write
+   (`range >=1g` writes no upper one) is read as the end of what the type holds, 2^63 − 1 steps
+   either way: a copy of such an input fits, and adding to it is E108 until the end is written.
+   An end written past what the type holds is E108 too.
 2. **The universe of the completeness check.** "Every input matches some row" means every
    input *within these ranges*.
 3. **The entry guard of the generated code.** A call outside the range returns an error

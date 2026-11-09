@@ -621,13 +621,99 @@ def check_outputs(cert, known, outs):
     return n
 
 
+def type_ends(t, scale):
+    """The ends of what a number of type `t`, stored at `scale`, can be (rulec's §15.294): 2^63 − 1
+    steps either way. None for a type that is not a number: a date has no arithmetic in a rule, and
+    the rest no interval."""
+    if not numeric((t or "").removesuffix("?")):
+        return None
+    end = Fraction(I64_MAX) / scale
+    return (-end, end)
+
+
+def wide_values(cert, known):
+    """The interval the int64 claim holds a value to where its own interval has an end no range
+    writes (rulec's §15.294): the same arithmetic, an end a range does not write read as the end of
+    what its type holds. The entry of the generated code holds every input to those ends, and this
+    claim every value computed from them. Only `check_values` reads these: a value's range
+    everywhere else keeps the ends the rule writes."""
+    types, scales = cert.get("types", {}), cert.get("scales", {})
+    stated = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
+    outs, _ = numeric_outputs(cert)
+    ends = {}
+    for n, t in types.items():
+        e = type_ends(t, Fraction(scales.get(n, 1)))
+        if e is not None:
+            ends[n] = e
+    values = cert.get("values", [])
+    computed = {v["name"] for v in values}
+    env = {}
+    for n, (a, b) in ends.items():
+        if n in known:
+            env[n] = known[n]
+        elif n in computed or n in outs:
+            # Worked out below: a value from its expression, a column from what its rows write.
+            # A value with no interval at all has nothing read into it.
+            continue
+        else:
+            lo, hi = stated.get(n, (None, None))
+            env[n] = (a if lo is None else lo, b if hi is None else hi)
+    le = guarantees(cert)
+
+    def held(n, got):
+        # What follows reads it no wider than its type: one that is wider fails here already.
+        a, b = ends.get(n, got)
+        return (max(got[0], a), min(got[1], b))
+
+    def strs():
+        return {k: (str(a), str(b)) for k, (a, b) in env.items()}
+
+    # Worked out together, as `worked_ranges` works them: a value over a table's column, a table
+    # writing a value. A column whose rows are never all worked out is read at the ends of its
+    # type, as `check` reads it, and what reads it is worked out from there.
+    wide = {}
+    for _ in range(len(values) + 2 * len(outs) + 2):
+        moved = False
+        for v in values:
+            n = v["name"]
+            if n in known or n in wide:
+                continue
+            got = interval(v["expr"], strs(), le)
+            if got is None:
+                continue
+            wide[n] = got
+            env[n] = held(n, got)
+            moved = True
+        for col, es in outs.items():
+            if col in env or not es:
+                continue
+            e = strs()
+            ivs = [interval(x, e, le) for x in es]
+            if all(i is not None for i in ivs):
+                env[col] = held(col, (min(i[0] for i in ivs), max(i[1] for i in ivs)))
+                moved = True
+        if not moved:
+            rest = [c for c in outs if c not in env and c in ends]
+            if not rest:
+                break
+            for c in rest:
+                env[c] = ends[c]
+    return wide
+
+
 def check_values(cert, known):
-    """int64: hold each value's interval, worked out here, to the one stated and to i64."""
+    """int64: hold each value's interval, worked out here, to the one stated and to i64. Where a
+    value's own interval has an end no range writes, the claim reads that end as the end of what
+    the type holds (`wide_values`, rulec's §15.294)."""
     declared = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
+    wide = wide_values(cert, known)
     checked = none_stated = 0
     for v in cert.get("values", []):
         got = known.get(v["name"])
         said = v.get("interval")
+        opened = got is None and v["name"] in wide
+        if opened:
+            got = wide[v["name"]]
         if got is None:
             if said is not None:
                 raise Bad(f"{v['name']}: it states an interval this program cannot derive")
@@ -637,8 +723,10 @@ def check_values(cert, known):
             continue
         if said is None:
             raise Bad(f"{v['name']}: it states no interval, and this program derives one")
+        # A declared range is held to what the expression reaches where every end it reads is
+        # written; where one is read at the end of its type, `check` holds it to nothing (E112).
         d = declared.get(v["name"])
-        if d is not None and d[0] is not None and d[1] is not None and (got[0] < d[0] or got[1] > d[1]):
+        if not opened and d is not None and d[0] is not None and d[1] is not None and (got[0] < d[0] or got[1] > d[1]):
             raise Bad(f"{v['name']}: the range the rule declares is narrower than what its expression reaches")
         said = (num(said[0]), num(said[1]))
         if got[0] < said[0] or got[1] > said[1]:

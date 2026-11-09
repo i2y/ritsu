@@ -159,8 +159,9 @@ fn a_row_between_whole_units_is_reached() {
 /// The scale the generated code holds a computed value at is the scale the rule reads it at
 /// (§15.190). A `min` gives one of its two sides, so it sits at the scale both sides share, and a
 /// value over an input with no range has a scale all the same. Both used to be read back as whole
-/// pounds while the code held them in hundredths, and the code answered otherwise than the
-/// reference evaluator for every amount up to 10GBP.
+/// pounds while the code held them in finer steps, and the code answered otherwise than the
+/// reference evaluator for every amount up to 10GBP. The tenth is taken by dividing: 10% of an
+/// input with no upper bound can pass int64, which is E108 (§15.294).
 #[test]
 fn the_generated_code_holds_a_computed_value_at_its_own_scale() {
     if !ready(Need::Python, have_python, "python3 is not here") {
@@ -168,7 +169,7 @@ fn the_generated_code_holds_a_computed_value_at_its_own_scale() {
     }
     let rules = [
         ("lowest", "rule lowest v1\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n\noutputs\n  small : bool\n\nderive low : money[GBP] = min(amount, amount * 10%)  range >=0GBP <=100GBP\n\ntable t\npolicy unique\n| low    | -> small : bool |\n| <=1GBP | true            |\n| >1GBP  | false           |\n"),
-        ("tenths", "rule tenths v1\n\ninputs\n  amount : money[GBP]\n\noutputs\n  small : bool\n\nderive tenth : money[GBP] = amount * 10%\n\ntable t\npolicy unique\n| tenth  | -> small : bool |\n| <=1GBP | true            |\n| >1GBP  | false           |\n"),
+        ("tenths", "rule tenths v1\n\ninputs\n  amount : money[GBP]\n\noutputs\n  small : bool\n\nderive tenth : money[GBP] = amount ÷ 10\n\ntable t\npolicy unique\n| tenth  | -> small : bool |\n| <=1GBP | true            |\n| >1GBP  | false           |\n"),
     ];
     let tmp = TempDir::new("steps-scale");
     for (name, src) in rules {
@@ -176,8 +177,8 @@ fn the_generated_code_holds_a_computed_value_at_its_own_scale() {
         let ds = rulec::check_source(src, &rel);
         assert!(!rulec::has_error(&ds), "{name}: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
         let (f, c) = rulec::prepare(src, &rel).unwrap();
-        let derived = if name == "lowest" { "low" } else { "tenth" };
-        assert_eq!(c.scales.get(derived), Some(&100), "{name}: the scale `check` keeps for {derived}");
+        let (derived, scale) = if name == "lowest" { ("low", 100) } else { ("tenth", 10) };
+        assert_eq!(c.scales.get(derived), Some(&scale), "{name}: the scale `check` keeps for {derived}");
         std::fs::write(tmp.path().join(format!("{name}.py")), rulec::codegen::Gen::new(&f, &c, src, &rel).python()).unwrap();
         let script = format!(
             "import sys\nsys.path.insert(0, {dir:?})\nimport {name} as m\nprint(' '.join(str(m.{name}(a)) for a in range(1, 101)))\n",

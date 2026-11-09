@@ -182,6 +182,15 @@ structure Worked where
   rangesOf : String → Option Span2
   within : RulecCert.Expr → RulecCert.Expr → Bool
 
+/-- The ends of what a number of a type, stored at a scale, can be (rulec's §15.294): 2^63 − 1
+    steps either way. `none` for a type that is not a number: a date has no arithmetic in a rule,
+    and the rest no interval. -/
+def typeEnds (t : String) (scale : Rat) : Option Span2 :=
+  let t := if t.endsWith "?" then (t.dropEnd 1).toString else t
+  match tyOfString t with
+  | some τ => if τ.numeric then some (-(I64_MAX / scale), I64_MAX / scale) else none
+  | none => none
+
 /-- The units and int64 claims, over the `values` section, and the ranges of the columns tables
     write numbers into (rulec's §15.196). -/
 def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
@@ -262,6 +271,70 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
     | none => match (wroteF.find? (fun p => p.1 == n)).map (fun p => p.2) with
       | some I => some I
       | none => if isOut n then none else declared n
+  -- The interval the int64 claim holds a value to where its own has an end no range writes
+  -- (rulec's §15.294): the same arithmetic, an end a range does not write read as the end of what
+  -- its type holds. The entry of the generated code holds every input to those ends, and this claim
+  -- every value computed from them, so `eval_mem_interval` holds with these as the ranges. Only the
+  -- int64 claim reads them.
+  let scalesJson := (field cert "scales").getD Json.null
+  let scaleOf : String → Rat := fun n =>
+    (((objPairs scalesJson).find? (fun p => p.1 == n)).bind (fun p => optRat p.2)).getD 1
+  let endsOf : String → Option Span2 := fun n =>
+    ((objPairs typesJson).find? (fun p => p.1 == n)).bind (fun p => str p.2 >>= fun t => typeEnds t (scaleOf n))
+  let writtenEnds : String → Option Rat × Option Rat := fun n =>
+    match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
+    | some (_, v) => match arr v with
+      | some a => ((a[0]? >>= optRat), (a[1]? >>= optRat))
+      | none => (none, none)
+    | none => (none, none)
+  let wideAt : List (String × Span2) → List (String × Span2) → String → Option Span2 := fun gotW wroteW n =>
+    -- What follows reads it no wider than its type: one that is wider fails below already.
+    let clamp : Span2 → Span2 := fun I => match endsOf n with
+      | some E => (max I.1 E.1, min I.2 E.2)
+      | none => I
+    match (gotF.find? (fun p => p.1 == n)).map (fun p => p.2) with
+    | some I => some I
+    | none => match (wroteF.find? (fun p => p.1 == n)).map (fun p => p.2) with
+      | some I => some I
+      | none => match (gotW.find? (fun p => p.1 == n)).map (fun p => p.2) with
+        | some I => some (clamp I)
+        | none => match (wroteW.find? (fun p => p.1 == n)).map (fun p => p.2) with
+          | some I => some (clamp I)
+          | none => match endsOf n with
+            | some E =>
+              -- A column is worked out from what its rows write, below; a value with no interval
+              -- at all has nothing read into it.
+              if isOut n || vals.any (fun v => fieldStr v "name" == n) then none
+              else let w := writtenEnds n; some (w.1.getD E.1, w.2.getD E.2)
+            | none => if isOut n then none else declared n
+  let mut wideGot : List (String × Span2) := []
+  let mut wideWrote : List (String × Span2) := []
+  -- Worked out together, as above: a value over a table's column, a table writing a value. A
+  -- column whose rows are never all worked out is read at the ends of its type, as `check` reads
+  -- it, and what reads it is worked out from there.
+  for _ in [0 : vals.size + 2 * outs.length + 2] do
+    let mut moved := false
+    for v in vals do
+      let name := fieldStr v "name"
+      if gotF.any (fun p => p.1 == name) || wideGot.any (fun p => p.1 == name) then continue
+      let some e := (field v "expr" >>= exprOfJson) | continue
+      match interval (wideAt wideGot wideWrote) within (expandShares shareDefs e) with
+      | some I => wideGot := wideGot ++ [(name, I)]; moved := true
+      | none => pure ()
+    for (col, es) in outs do
+      if wroteF.any (fun p => p.1 == col) || wideWrote.any (fun p => p.1 == col) then continue
+      let some es := es | continue
+      match hullOf (wideAt wideGot wideWrote) within es with
+      | some H => wideWrote := wideWrote ++ [(col, H)]; moved := true
+      | none => pure ()
+    if !moved then
+      let ww := wideWrote
+      let rest := outs.filterMap (fun o =>
+        if wroteF.any (fun p => p.1 == o.1) || ww.any (fun p => p.1 == o.1) then none
+        else (endsOf o.1).map (fun E => (o.1, E)))
+      if rest.isEmpty then break
+      wideWrote := wideWrote ++ rest
+  let wideF := wideGot
   let mut r := r
   for why in badWrites do
     r := r.fail why
@@ -326,6 +399,19 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       some (lo, hi)
     match (gotF.find? (fun p => p.1 == name)).map (fun p => p.2) with
     | none =>
+      match (wideF.find? (fun p => p.1 == name)).map (fun p => p.2), stated with
+      -- An end read at the end of its type (rulec's §15.294): the int64 claim, and no declared
+      -- range held to it, as `check` holds none (E112).
+      | some I, some S =>
+        if S.1 ≤ I.1 && I.2 ≤ S.2 then
+          let scale := ((field v "scale" >>= optRat)).getD 1
+          let smax := ((field v "stored_max" >>= optRat)).getD 0
+          if storedFits I scale smax then held := held + 1
+          else r := r.fail s!"{name}: stored at that scale it does not fit int64"
+        else
+          r := r.fail s!"{name}: the interval here is wider than the one it states"
+      | some _, none => r := r.fail s!"{name}: it states no interval, and this program derives one"
+      | none, _ =>
       -- A value with no interval of its own. `check` makes an int64 claim about every
       -- value that is stored as an integer, so a numeric one that states none is refused;
       -- a truth value or an enum states none because there is none to make.

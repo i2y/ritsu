@@ -349,7 +349,9 @@ These are not decoration. They are where this language is aimed.
 One declaration does three jobs.
 
 1. **Overflow proof.** Whether an intermediate fits in int64 is computed
-   from the declared ranges and steps.
+   from the declared ranges and steps. An end the range does not write is
+   read as the end of what the type holds, so adding to an input with no
+   upper bound stops the check (E108).
 2. **The universe of the completeness check.** "Every input matches some
    row" means every input *within these ranges*.
 3. **The entry guard of the generated code.** Called outside the range,

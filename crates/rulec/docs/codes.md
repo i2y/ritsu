@@ -3469,9 +3469,9 @@ Related codes: [E111](#e111), [E105](#e105)
 
 `error` — **Cannot prove an intermediate value fits in int64**
 
-**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64.
+**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64.
 
-**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where the random inputs have too many points, narrow their ranges.
+**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges.
 
 **Smallest reproduction**:
 
@@ -3491,6 +3491,21 @@ table j(j)
 policy unique
 | off | -> r(r) : money[JPY, incl_tax] |
 | -   | 0JPY                           |
+```
+
+**An end a range does not write**:
+
+```rule
+rule pay v1
+
+inputs
+  subtotal : money[USDc]  range >=0USDc
+  shipping : money[USDc]  range >=0USDc <=2000USDc
+
+outputs
+  total : money[USDc]  round down(1USDc)
+
+result total = subtotal + shipping
 ```
 
 **The points of the random inputs**:
@@ -4548,7 +4563,7 @@ Related codes: [E108](#e108), [E103](#e103)
 
 `error` — **An output's range does not hold the values it takes**
 
-**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
+**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 first. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
 
 **Fix.** Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where it cannot be checked, give the inputs the output reads a range, or take the output's range off: an output with none written has the range rulec works out, and the other languages read that.
 
@@ -4577,7 +4592,10 @@ inputs
 outputs
   fee : money[USDc]  round down(1USDc)  range >=0USDc <=500USDc
 
-result fee = amount × 10%
+table fees
+policy unique
+| -> fee |
+| amount |
 ```
 
 Related codes: [E112](#e112), [E061](#e061), [E103](#e103)

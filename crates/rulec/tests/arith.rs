@@ -252,6 +252,164 @@ fn a_divided_rounding_has_to_fit_int64() {
     assert!(codes(src).contains(&"E108"), "{:?}", codes(src));
 }
 
+// ── An end a range does not write (§15.294) ───────────────────────────────────────────────────
+
+/// A rule over `a`, whose range is `range`, and `b`, from 0 to 100, with `s` its `expr`.
+fn ended(range: &str, expr: &str) -> String {
+    format!("rule edges v1\n\ninputs\n  a : number{range}\n  b : number  range >=0 <=100\n\noutputs\n  r : number  round down(1)\n\ndefine s : number = {expr}\n\nresult r = s\n")
+}
+
+/// An end a range does not write is read as the end of what the type holds, 2^63 − 1 steps either
+/// way: a value that can pass int64 from there is E108, which names the input, and one that cannot
+/// passes, as it did before. `check` used to pass both, while both re-checkers refused the
+/// certificate of either, which stated no interval for the value.
+#[test]
+fn an_end_a_range_does_not_write_is_the_end_of_its_type() {
+    for (range, expr) in [("  range >=0", "a + b"), ("  range <=0", "a - b"), ("", "a + b"), ("", "a * 2 - b")] {
+        let src = ended(range, expr);
+        assert_eq!(codes(&src), ["E108"], "{range} {expr}");
+        let said = said(&src, "E108");
+        assert!(said.contains("Cannot prove that s fits in int64"), "{said}");
+        assert!(said.contains("`a` has no upper or no lower bound"), "{said}");
+        assert!(said.contains("give `a` the end its range does not write"), "{said}");
+    }
+    // What follows from a value E108 stopped is not stopped a second time: `r` reads `s`.
+    assert_eq!(codes(&ended("  range >=0", "a + b")).len(), 1);
+    for (range, expr) in [("  range >=0", "a - b"), ("  range <=0", "a + b"), ("", "max(a, b)"), ("", "max(a, 0) - b"), ("", "mod(a, 7) + b")] {
+        let src = ended(range, expr);
+        assert!(codes(&src).is_empty(), "{range} {expr}: {:?}", codes(&src));
+    }
+}
+
+/// The certificate states the interval with the end of the type in it, and both re-checkers work
+/// out the same and hold it to int64. A narrower interval, a smaller stored integer, or none at all
+/// is refused by both.
+#[test]
+fn the_certificate_states_the_end_of_the_type() {
+    if !have_python() {
+        return;
+    }
+    let file = std::env::temp_dir().join(format!("rulec-edges-{}.rule", std::process::id()));
+    std::fs::write(&file, ended("  range >=0", "a - b")).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let stated = r#""interval":["-100","9223372036854775807"],"scale":1,"stored_max":"9223372036854775807""#;
+    assert!(cert.contains(&format!(r#""name":"s","of":"define","type":"number","expr":{{"op":"-","l":{{"name":"a"}},"r":{{"name":"b"}}}},{stated}"#)), "{cert}");
+    // The range keeps the end the rule writes.
+    assert!(cert.contains(r#""ranges":{"a":["0",null],"b":["0","100"]}"#), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("int64: 2 values fit"), "{out}");
+    let lean_bin = checker();
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+        assert!(out.contains("2 held to int64"), "{out}");
+    }
+    for (what, forged) in [
+        ("narrower", r#""interval":["-100","1000"],"scale":1,"stored_max":"9223372036854775807""#),
+        ("a smaller stored integer", r#""interval":["-100","9223372036854775807"],"scale":1,"stored_max":"1000""#),
+        ("none", r#""interval":null,"scale":null,"stored_max":null"#),
+    ] {
+        let forged = cert.replacen(stated, forged, 1);
+        assert_ne!(forged, cert, "{what}");
+        let (code, out) = recheck(&forged);
+        assert_ne!(code, 0, "{what}: {out}");
+        assert!(out.contains("FAILED int64: s:"), "{what}: {out}");
+        if let Some(bin) = &lean_bin {
+            let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+            assert_ne!(code, 0, "{what}: {out}");
+        }
+    }
+    std::fs::remove_file(&file).ok();
+}
+
+/// A table writes `a`, with no upper bound, or 0 into `v`, and `s` reads `v` with `expr`; `fee` runs
+/// from 0 to 500.
+fn column(expr: &str) -> String {
+    format!(
+        "rule column v1\n\ninputs\n  a   : number  range >=0\n  k   : bool\n  fee : number  range >=0 <=500\n\noutputs\n  r : number  round down(1)\n\ntable t\npolicy unique\n| k     | -> v : number |\n| true  | a             |\n| false | 0             |\n\ndefine s : number = {expr}\n\nresult r = s\n"
+    )
+}
+
+/// A column a table writes numbers into is read in what its rows write, each name in it read as the
+/// int64 claim reads it: `v` is never below zero, so `v - fee` fits, and `v + fee` does not. The hint
+/// names `a`, whose range has an end to write, not the column, which has no range of its own. The
+/// column was read at both ends of its type, which stopped `v - fee` and named `v`.
+#[test]
+fn a_column_a_table_writes_is_read_in_what_its_rows_write() {
+    assert!(codes(&column("v - fee")).is_empty(), "{:?}", codes(&column("v - fee")));
+    let src = column("v + fee");
+    assert_eq!(codes(&src), ["E108"]);
+    let said = said(&src, "E108");
+    assert!(said.contains("`a` has no upper or no lower bound") && said.contains("give `a` the end"), "{said}");
+    if !have_python() {
+        return;
+    }
+    let file = std::env::temp_dir().join(format!("rulec-column-{}.rule", std::process::id()));
+    std::fs::write(&file, column("v - fee")).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    assert!(cert.contains(r#""interval":["-500","9223372036854775807"],"scale":1,"stored_max":"9223372036854775807""#), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("int64: 2 values fit"), "{out}");
+    if let Some(bin) = checker() {
+        let (code, out) = lean(&bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+        assert!(out.contains("2 held to int64"), "{out}");
+    }
+    std::fs::remove_file(&file).ok();
+}
+
+/// A value above the line that decides an output it reads (a second walk reads what the first
+/// answers) is held to int64 once every item is read. `check` passed `charge × 10^18` above the
+/// `sum` of `charge` without a word, and both re-checkers refused its certificate; an output not
+/// decided yet is not read at the ends of its type either, which stopped `charge - cost`.
+#[test]
+fn a_value_above_the_output_it_reads_is_held_to_int64() {
+    let src = std::fs::read_to_string(root().join("tests/stages/parcel_charge.rule")).unwrap();
+    let above = |lines: &str| {
+        let out = src.replace("define cost : number = weight * factor\n", &format!("define cost : number = weight * factor\n{lines}"));
+        assert_ne!(out, src);
+        out
+    };
+    assert!(codes(&above("define rest : number = charge - cost\n")).is_empty());
+    for (lines, name) in [
+        ("define rest : number = charge * 1000000000000000000\n", "rest"),
+        // One that reads a value that waited for the output finds it worked out.
+        ("define rest : number = charge - cost\ndefine more : number = rest * 1000000000000000\n", "more"),
+    ] {
+        let src = above(lines);
+        assert_eq!(codes(&src), ["E108"], "{name}");
+        let said = said(&src, "E108");
+        assert!(said.contains(&format!("Cannot prove that {name} fits in int64")) && said.contains("The reachable interval is"), "{said}");
+    }
+}
+
+/// A range that writes an end past what its type holds, 2^63 − 1 steps either way, is E108, on an
+/// input or a field of an element, read in a table or not: the entry of the generated code refuses
+/// anything past that end, so no call can pass what the range promises. The ends themselves pass.
+#[test]
+fn a_range_past_what_its_type_holds_is_e108() {
+    let input = |decl: &str| format!("rule big v1\n\ninputs\n  amount : {decl}\n\noutputs\n  fee : number  round down(1)\n\ntable fees\npolicy unique\n| amount | -> fee |\n| -      | 1      |\n");
+    for decl in [
+        "money[JPY]  range <=9223372036854775808JPY",
+        "money[JPY]  range >=-9223372036854775808JPY",
+        "rate[step 0.01%]  range >=0% <=100000000000000000%",
+    ] {
+        let src = input(decl);
+        assert_eq!(codes(&src), ["E108"], "{decl}");
+        let said = said(&src, "E108");
+        assert!(said.contains("An end of the range of amount is past what its type holds") && said.contains("2^63 − 1 steps either way"), "{said}");
+    }
+    assert!(codes(&input("money[JPY]  range >=-9223372036854775807JPY <=9223372036854775807JPY")).is_empty());
+    let element = |hi: &str| format!("rule big v1\n\nelements items\n  w : number  range >=0 <={hi}\n\noutputs\n  n : number  round down(1)\n\nsum n over items of w  range >=0 <=100\n");
+    assert_eq!(codes(&element("9223372036854775808")), ["E108"]);
+    assert!(said(&element("9223372036854775808"), "E108").contains("An end of the range of w is past what its type holds"));
+    assert!(codes(&element("100")).is_empty());
+}
+
 // ── The remainder (§15.214) ──────────────────────────────────────────────────────────────────
 
 /// `mod` is the remainder from zero up to one less than the divisor, whatever the sign.

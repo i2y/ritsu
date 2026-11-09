@@ -455,8 +455,10 @@ fn an_enum_input_of_a_rule_is_held_to_its_range() {
     });
 }
 
-/// A rule whose input, and so whose output, has no range: what it answers is anything in int64.
-const OPEN_RULE: &str = "rule fee_open(fee_open) v1\ndescription \"A fee whose input has no range\"\n\ninputs\n  amount : money[JPY]\n\noutputs\n  fee : money[JPY]  round down(1JPY)\n\nresult fee = amount + 1JPY\n\nexamples\n| amount | -> fee |\n| 1JPY   | 2JPY   |\n";
+/// A rule whose input, and so whose output, has no range: what it answers is anything in int64. It
+/// answers the amount itself: one yen more would pass int64 at the top, and rulec stops that (E108,
+/// its §15.294).
+const OPEN_RULE: &str = "rule fee_open(fee_open) v1\ndescription \"A fee whose input has no range\"\n\ninputs\n  amount : money[JPY]\n\noutputs\n  fee : money[JPY]  round down(1JPY)\n\nresult fee = amount\n\nexamples\n| amount | -> fee |\n| 1JPY   | 1JPY   |\n";
 
 /// A rule's output with no range is a value of the whole of its type, as the generated code returns
 /// it (DESIGN 32): given in a list, or in a record in a list, where no range is written, it is shown;

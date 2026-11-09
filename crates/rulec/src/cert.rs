@@ -173,7 +173,9 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
         // A value the tool could not bound is stated with no interval rather than left out.
         // Omitting it hid the value itself: a reader could not tell it existed, and neither
         // re-checker could say that the int64 claim had not been made for it.
-        let obj = match (c.interval(e, &sym.ty), c.scale(e)) {
+        // The interval reads an end a range does not write as the end of what the type holds
+        // (§15.294), so every numeric value states one.
+        let obj = match (c.int64_interval(e, &sym.ty), c.scale(e)) {
             (Some((lo, hi)), Some(sc)) => {
                 let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
                 let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
