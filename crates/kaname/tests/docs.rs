@@ -8,6 +8,8 @@
 //!   ritsu's diagnostics across the languages, need the verdicts of ritsu-cross, which this crate
 //!   does not have.
 //! - The reference lists every keyword of `kw.rs`, and every relative link leads to a file.
+//! - The table of the prelude's lemmas in the reference and the skill gives each lemma a proof leans
+//!   on, as `Prelude.lean` states it.
 //! - The lexer that colours `kn` on ritsu's site (`website/tools/knlexer.py`) keeps the lists of
 //!   `kw.rs` and the characters of a number of `lex.rs`, each as the one it copies.
 //!
@@ -94,9 +96,9 @@ fn the_kn_on_the_pages_is_from_the_files() {
     assert!(wrong.is_empty(), "not a line of any .kn under examples/ or tests/:\n{}", wrong.join("\n"));
 }
 
-/// The Lean on the pages (fenced `lean`) is lines of the proof files of the examples or of the Lean
-/// `ritsu gen` writes of them (the goldens of `tests/lean.rs`), so a proof or a statement shown is one
-/// that Lean took (DESIGN 38).
+/// The Lean on the pages (fenced `lean`), and on the site's pages of kaname, is lines of the proof
+/// files of the examples or of the Lean `ritsu gen` writes of them (the goldens of `tests/lean.rs`),
+/// so a proof or a statement shown is one that Lean took (DESIGN 38).
 #[test]
 fn the_lean_on_the_pages_is_from_the_files() {
     let mut real = BTreeSet::new();
@@ -107,7 +109,8 @@ fn the_lean_on_the_pages_is_from_the_files() {
     }
     let mut wrong = Vec::new();
     let mut seen = 0;
-    for f in pages() {
+    let site = ["../../website/docs/kaname", "../../website/docs-ja/kaname"].into_iter().flat_map(|d| files(Path::new(d), "md"));
+    for f in pages().into_iter().chain(site) {
         for (info, lines) in fenced(&read(&f)) {
             if info != "lean" {
                 continue;
@@ -120,7 +123,7 @@ fn the_lean_on_the_pages_is_from_the_files() {
             }
         }
     }
-    assert!(seen >= 4, "{seen} blocks of Lean on the pages: were the fences changed?");
+    assert!(seen >= 11, "{seen} blocks of Lean on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "not a line of any .lean under examples/ or tests/golden/lean/:\n{}", wrong.join("\n"));
 }
 
@@ -315,4 +318,55 @@ fn the_pages_link_to_files_that_are_there() {
         }
     }
     assert!(wrong.is_empty(), "links to nothing:\n{}", wrong.join("\n"));
+}
+
+/// The table of the prelude's lemmas (`| Lemma | Says |`) in the reference and in the skill lists
+/// every lemma a proof leans on, each with hypotheses and a statement the prelude has: the lemmas are
+/// the theorems of `Prelude.lean` that are not private, but for the steps of `runningFrom`, which
+/// `runningTotals` is written with (DESIGN 38.5).
+#[test]
+fn the_lemmas_on_the_pages_are_the_preludes() {
+    let flat = read(Path::new("src/gen/runtime/lean/Prelude.lean")).split_whitespace().collect::<Vec<_>>().join(" ");
+    // each theorem's name, and what its declaration says up to `:=`
+    let mut theorems: Vec<(String, String)> = Vec::new();
+    let mut rest = flat.as_str();
+    while let Some(i) = rest.find("theorem ") {
+        let private = rest[..i].ends_with("private ");
+        let after = &rest[i + "theorem ".len()..];
+        let name: String = after.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+        let said = after[name.len()..].split(":=").next().unwrap_or("").to_string();
+        if !private && !name.contains("unningFrom") {
+            theorems.push((name.clone(), said));
+        }
+        rest = &after[name.len()..];
+    }
+    assert!(theorems.len() >= 11, "{} lemmas of the prelude: was it changed?", theorems.len());
+    let every: BTreeSet<&str> = theorems.iter().map(|(n, _)| n.as_str()).collect();
+    for page in ["docs/reference.md", "../../skills/kaname/SKILL.md"] {
+        let text = read(Path::new(page));
+        let table = text.split("| Lemma | Says |\n|---|---|\n").nth(1).unwrap_or_else(|| panic!("{page} has no table of the lemmas"));
+        let mut listed = BTreeSet::new();
+        let mut wrong = Vec::new();
+        for row in table.lines().take_while(|l| l.starts_with('|')) {
+            let cells: Vec<&str> = row.trim_matches('|').split('|').map(str::trim).collect();
+            let code = |cell: &str| cell.split('`').nth(1).unwrap_or("").to_string();
+            let (lemma, says) = (code(cells[0]), code(cells.get(1).copied().unwrap_or("")));
+            let name: String = lemma.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            let Some((_, said)) = theorems.iter().find(|(n, _)| *n == name) else {
+                wrong.push(format!("`{name}` is no lemma of the prelude"));
+                continue;
+            };
+            // each hypothesis written `(h… : …)`, and the statement
+            let hypotheses = lemma.split('(').skip(1).map(|h| format!("({}", h.trim()));
+            for h in hypotheses.chain([says]) {
+                if !said.contains(h.as_str()) {
+                    wrong.push(format!("`{name}` does not say `{h}` in the prelude"));
+                }
+            }
+            listed.insert(name);
+        }
+        let missing: Vec<&&str> = every.iter().filter(|n| !listed.contains(**n)).collect();
+        assert!(missing.is_empty(), "{page} does not list {missing:?}");
+        assert!(wrong.is_empty(), "{page}:\n{}", wrong.join("\n"));
+    }
 }

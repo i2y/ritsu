@@ -68,7 +68,7 @@ fn check_lean_turns_away_a_proof_by_sorry() {
     assert_eq!(code, 1, "{out}");
     // the Japanese module and its proof stand
     assert!(
-        out.starts_with("ok refund_split.ja.kn: 1 function, total\nerror[kaname E604]: refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`\n"),
+        out.starts_with("ok refund_split.ja.kn: 1 function, total\nerror[kaname E604]: refund_split.lean:26:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`\n"),
         "{out}"
     );
     assert!(out.ends_with("ritsu check: 2 files (kaname 2): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided\n"), "{out}");

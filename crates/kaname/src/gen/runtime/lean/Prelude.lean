@@ -125,6 +125,30 @@ def indexed {α : Type} (xs : List α) : List (Indexed α) :=
 
 /-! ## Lemmas -/
 
+/-- A sum of terms none of which is below zero is not below zero. `sum(xs, x => …)` is written
+`(List.map (fun x => …) xs).sum`, which is the form of this lemma and the next. -/
+theorem sum_nonneg {α : Type} {xs : List α} {w : α → Int} (hw : ∀ x ∈ xs, 0 ≤ w x) :
+    0 ≤ (xs.map w).sum := by
+  induction xs with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.map_cons, List.sum_cons]
+    have h1 := hw x (List.mem_cons_self ..)
+    have h2 := ih (fun y hy => hw y (List.mem_cons_of_mem _ hy))
+    omega
+
+/-- A sum of one term or more, each above zero, is above zero. The hypothesis of a list's
+`count >=1`, `1 ≤ xs.length`, is `0 < xs.length` as it is. -/
+theorem sum_pos {α : Type} {xs : List α} {w : α → Int} (hn : 0 < xs.length) (hw : ∀ x ∈ xs, 0 < w x) :
+    0 < (xs.map w).sum := by
+  cases xs with
+  | nil => simp at hn
+  | cons x xs =>
+    simp only [List.map_cons, List.sum_cons]
+    have h1 := hw x (List.mem_cons_self ..)
+    have h2 := sum_nonneg (w := w) (fun y hy => Int.le_of_lt (hw y (List.mem_cons_of_mem _ hy)))
+    omega
+
 theorem allocate_self (t : Int) {s : Int} (h : 0 < s) : allocate t s s = t :=
   Int.mul_tdiv_cancel t (Int.ne_of_gt h)
 
@@ -219,15 +243,6 @@ theorem runningTotals_telescope {α : Type} (xs : List α) (w : α → Int) (f :
   rw [Int.zero_add] at this
   exact this
 
-private theorem sum_nonneg {α : Type} (w : α → Int) :
-    ∀ xs : List α, (∀ x ∈ xs, 0 ≤ w x) → 0 ≤ (xs.map w).sum
-  | [], _ => by simp
-  | x :: xs, h => by
-    simp only [List.map_cons, List.sum_cons]
-    have h1 := h x (List.mem_cons_self ..)
-    have h2 := sum_nonneg w xs (fun y hy => h y (List.mem_cons_of_mem _ hy))
-    omega
-
 theorem mem_runningFrom {α : Type} (w : α → Int) (total : Int) :
     ∀ (xs : List α) (before : Int), (∀ x ∈ xs, 0 ≤ w x) → 0 ≤ before →
       before + (xs.map w).sum ≤ total →
@@ -239,7 +254,7 @@ theorem mem_runningFrom {α : Type} (w : α → Int) (total : Int) :
     simp only [List.map_cons, List.sum_cons] at ht
     have hx := hw x (List.mem_cons_self ..)
     have hrest : ∀ y ∈ xs, 0 ≤ w y := fun y hy => hw y (List.mem_cons_of_mem _ hy)
-    have hs := sum_nonneg w xs hrest
+    have hs := sum_nonneg hrest
     rcases hr with rfl | hr
     · simp only
       omega

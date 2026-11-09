@@ -15,6 +15,7 @@ use crate::value::{Program, Value};
 use ritsu_base::text::{Lang, Text};
 use ritsu_emit::header::{Comment, Origin};
 use ritsu_units::Rat;
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -242,6 +243,22 @@ fn par(code: &str) -> String {
             || (code.starts_with('[') && closes_at_end(code))
             || (code.starts_with('"') && code.ends_with('"') && !code[1..code.len() - 1].contains('"')));
     if simple { code.to_string() } else { format!("({code})") }
+}
+
+/// Whether the Lean `code` reads the name `n` (as `ident` writes it): a word of it, cut at whatever
+/// cannot be in a name, or, for a name in `«»`, the name with its brackets. A word inside a string
+/// counts too, which leaves a name that is not read in place, never the other way round.
+fn reads(code: &str, n: &str) -> bool {
+    if n.starts_with('«') {
+        return code.contains(n);
+    }
+    code.split(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '\'' | '«' | '»'))).any(|w| w == n)
+}
+
+/// The function that reads each element `v` as `inner` does: `fun _ => …` where `inner` is a
+/// constant.
+fn each(inner: &str) -> String {
+    format!("fun {} => {inner}", if reads(inner, "v") { "v" } else { "_" })
 }
 
 /// Whether the bracket a term opens with closes at its end.
@@ -654,7 +671,7 @@ impl<'a> Mw<'a> {
                 Ty::None => Ok("none".into()),
                 Ty::Opt(y) => {
                     let inner = self.conv(&T::held("v", y), x)?;
-                    Ok(if inner == "v" { t.code.clone() } else { format!("Option.map (fun v => {inner}) {}", par(&t.code)) })
+                    Ok(if inner == "v" { t.code.clone() } else { format!("Option.map ({}) {}", each(&inner), par(&t.code)) })
                 }
                 Ty::Error => Ok(t.code.clone()),
                 _ => Ok(format!("some {}", par(&self.conv(t, x)?))),
@@ -663,7 +680,7 @@ impl<'a> Mw<'a> {
                 Ty::Empty => Ok(format!("([] : {})", self.tname(to)?)),
                 Ty::List(y) => {
                     let inner = self.conv(&T::held("v", y), x)?;
-                    Ok(if inner == "v" { t.code.clone() } else { format!("List.map (fun v => {inner}) {}", par(&t.code)) })
+                    Ok(if inner == "v" { t.code.clone() } else { format!("List.map ({}) {}", each(&inner), par(&t.code)) })
                 }
                 _ => Ok(t.code.clone()),
             },
@@ -673,10 +690,10 @@ impl<'a> Mw<'a> {
                     let err = self.conv(&T::held("v", f), e)?;
                     let mut out = t.code.clone();
                     if err != "v" {
-                        out = format!("Except.mapError (fun v => {err}) {}", par(&out));
+                        out = format!("Except.mapError ({}) {}", each(&err), par(&out));
                     }
                     if ok != "v" {
-                        out = format!("Except.map (fun v => {ok}) {}", par(&out));
+                        out = format!("Except.map ({}) {}", each(&ok), par(&out));
                     }
                     Ok(out)
                 }
@@ -701,7 +718,7 @@ impl<'a> Mw<'a> {
                     if same && back == call {
                         return Ok(t.code.clone());
                     }
-                    let binders: Vec<String> = names.iter().zip(ps).map(|(n, p)| Ok(format!("({n} : {})", self.tname(p)?))).collect::<Res<_>>()?;
+                    let binders: Vec<String> = names.iter().zip(ps).map(|(n, p)| Ok(format!("({} : {})", if reads(&back, n) { n } else { "_" }, self.tname(p)?))).collect::<Res<_>>()?;
                     Ok(format!("fun {} => {back}", binders.join(" ")))
                 }
                 _ => Ok(t.code.clone()),
@@ -757,13 +774,21 @@ fn sym(op: BinOp) -> &'static str {
     }
 }
 
+/// A pattern of a `match` arm as Lean writes it: what it begins with, and the name it binds (as the
+/// module writes it, and as Lean does), which follows it once the arm's body says whether it is read.
+struct Pat {
+    head: String,
+    bound: Option<(String, String)>,
+}
+
 /// The body of one function or one statement, being written.
 struct Fx<'w, 'a> {
     w: &'w Mw<'a>,
     /// The module whose expressions are written: the module, or, for a statement, the same module
     /// with its properties read as functions.
     m: &'a Checked,
-    env: Vec<(String, T)>,
+    /// The names in scope, each with its value and whether the body read it.
+    env: Vec<(String, T, Cell<bool>)>,
     /// The name the rules and dates go by in the body, where it takes them.
     inner: Option<String>,
 }
@@ -777,12 +802,37 @@ impl<'w, 'a> Fx<'w, 'a> {
         self.m.typed.refs.get(e.id).unwrap_or(&Ref::None)
     }
 
-    fn bind(&mut self, name: &str, t: T) {
-        self.env.push((name.to_string(), t));
+    /// Binds `name`, and answers where it is in the environment.
+    fn bind(&mut self, name: &str, t: T) -> usize {
+        self.env.push((name.to_string(), t, Cell::new(false)));
+        self.env.len() - 1
     }
 
     fn lookup(&self, w: &str) -> Option<T> {
-        self.env.iter().rev().find(|(n, _)| n == w).map(|(_, t)| t.clone())
+        self.env.iter().rev().find(|(n, ..)| n == w).map(|(_, t, read)| {
+            read.set(true);
+            t.clone()
+        })
+    }
+
+    /// Whether the body read what is bound at `k`.
+    fn read(&self, k: usize) -> bool {
+        self.env.get(k).is_some_and(|(.., read)| read.get())
+    }
+
+    /// The name a binder writes for what is bound at `k`, once `text`, where it is in scope, is
+    /// written: `_` where the body did not read it, or read it as a constant that `text` holds in its
+    /// place, so that Lean's linter of unused variables says nothing of the Lean kaname writes
+    /// (DESIGN 38.4).
+    fn binder(&self, k: usize, name: &str, text: &str) -> String {
+        if self.read(k) && reads(text, name) { name.to_string() } else { "_".into() }
+    }
+
+    /// The binder of a parameter `Mw::params` bound: named where `text` reads it by its name or its
+    /// alias, or where `named` says something else names it (a hypothesis of its range).
+    fn param_binder(&self, (name, ty, at): &(String, String, Vec<usize>), named: bool, text: &str) -> String {
+        let shown = if named || (at.iter().any(|&k| self.read(k)) && reads(text, name)) { name.as_str() } else { "_" };
+        format!("({shown} : {ty})")
     }
 
     fn ex(&mut self, e: &Expr) -> Res<T> {
@@ -898,27 +948,43 @@ impl<'w, 'a> Fx<'w, 'a> {
     /// A block: its `let` lines, and its answer held as `to` says.
     fn block(&mut self, b: &Block, to: &Ty) -> Res<String> {
         let mark = self.env.len();
-        let mut out = String::new();
+        let lets = self.lets(b)?;
+        let a = self.ex(&b.answer)?;
+        let answer = self.w.conv(&a, to)?;
+        let out = self.with_lets(&lets, &answer);
+        self.env.truncate(mark);
+        Ok(out)
+    }
+
+    /// The `let` lines of a block, each bound: where it is in the environment, its name, and its
+    /// value as Lean writes it.
+    fn lets(&mut self, b: &Block) -> Res<Vec<(usize, String, String)>> {
+        let mut out = Vec::new();
         for l in &b.lets {
             let v = self.ex(&l.value)?;
             let name = ident(&l.name);
-            let t = match self.m.typed.bound.get(&l.value.id) {
-                Some(bound) if l.ty.is_some() => {
-                    let code = self.w.conv(&v, bound)?;
-                    out.push_str(&format!("let {name} := {code}; "));
-                    T::held(name, bound)
-                }
-                _ => {
-                    out.push_str(&format!("let {name} := {}; ", v.code));
-                    T { code: name, ..v }
-                }
+            let (code, t) = match self.m.typed.bound.get(&l.value.id) {
+                Some(bound) if l.ty.is_some() => (self.w.conv(&v, bound)?, T::held(name.clone(), bound)),
+                _ => (v.code.clone(), T { code: name.clone(), ..v }),
             };
-            self.bind(&l.name, t);
+            let k = self.bind(&l.name, t);
+            out.push((k, name, code));
         }
-        let a = self.ex(&b.answer)?;
-        out.push_str(&self.w.conv(&a, to)?);
-        self.env.truncate(mark);
-        Ok(if b.lets.is_empty() { out } else { format!("({out})") })
+        Ok(out)
+    }
+
+    /// The `let` lines before `answer`, once the answer is written: a name that neither the lines
+    /// after it nor the answer read is `_`.
+    fn with_lets(&self, lets: &[(usize, String, String)], answer: &str) -> String {
+        if lets.is_empty() {
+            return answer.to_string();
+        }
+        let mut lines = String::new();
+        for (i, (k, name, code)) in lets.iter().enumerate() {
+            let after: String = lets[i + 1..].iter().map(|(_, _, c)| format!("{c} ")).chain([answer.to_string()]).collect();
+            lines.push_str(&format!("let {} := {code}; ", self.binder(*k, name, &after)));
+        }
+        format!("({lines}{answer})")
     }
 
     /// A lambda, its answer held as `to` says (as its type says, without). A lambda that is a value
@@ -934,14 +1000,16 @@ impl<'w, 'a> Fx<'w, 'a> {
             return Err("a lambda of parameters of no type".into());
         }
         let mark = self.env.len();
-        let mut binders = Vec::new();
+        let mut bound = Vec::new();
         for ((p, _), pt) in ps.iter().zip(&pts) {
             let name = ident(p);
-            binders.push(format!("({name} : {})", self.w.tname(pt)?));
-            self.bind(p, T::held(name, pt));
+            let tn = self.w.tname(pt)?;
+            let k = self.bind(p, T::held(name.clone(), pt));
+            bound.push((k, name, tn));
         }
         let b = self.ex(body)?;
         let out = self.w.conv(&b, to.unwrap_or(&ret))?;
+        let binders: Vec<String> = bound.iter().map(|(k, name, tn)| format!("({} : {tn})", self.binder(*k, name, &out))).collect();
         self.env.truncate(mark);
         Ok(format!("fun {} => {out}", binders.join(" ")))
     }
@@ -993,6 +1061,15 @@ impl<'w, 'a> Fx<'w, 'a> {
                 continue;
             }
             let body = self.block(&arm.body, &ty)?;
+            // a name the body did not read is `_`, in every pattern of the arm that binds it
+            let read: BTreeSet<String> = self.env[mark..].iter().filter(|(.., r)| r.get()).map(|(n, ..)| n.clone()).collect();
+            let pats: Vec<String> = pats
+                .into_iter()
+                .map(|p| match p.bound {
+                    Some((source, name)) => format!("{} {}", p.head, if read.contains(&source) && reads(&body, &name) { name } else { "_".into() }),
+                    None => p.head,
+                })
+                .collect();
             self.env.truncate(mark);
             lines.push(format!("| {} => {body}", pats.join(" | ")));
         }
@@ -1005,10 +1082,11 @@ impl<'w, 'a> Fx<'w, 'a> {
 
     /// A pattern as Lean writes it, and the value it takes (None for `else`); the name it gives is
     /// bound.
-    fn pattern(&mut self, p: &Pattern, st: &Ty) -> Res<(Option<String>, String)> {
+    fn pattern(&mut self, p: &Pattern, st: &Ty) -> Res<(Option<String>, Pat)> {
+        let plain = |head: String| Pat { head, bound: None };
         Ok(match p {
-            Pattern::Else(_) => (None, "_".into()),
-            Pattern::None(_) => (Some("none".into()), "none".into()),
+            Pattern::Else(_) => (None, plain("_".into())),
+            Pattern::None(_) => (Some("none".into()), plain("none".into())),
             Pattern::Some(x, _) => {
                 let inner = match st {
                     Ty::Opt(t) => (**t).clone(),
@@ -1016,24 +1094,25 @@ impl<'w, 'a> Fx<'w, 'a> {
                 };
                 let name = ident(x);
                 self.bind(x, T::held(name.clone(), &inner));
-                (Some("some".into()), format!("some {name}"))
+                (Some("some".into()), Pat { head: "some".into(), bound: Some((x.clone(), name)) })
             }
-            Pattern::Bool(b, _) => (Some(b.to_string()), b.to_string()),
+            Pattern::Bool(b, _) => (Some(b.to_string()), plain(b.to_string())),
             Pattern::Value(path, bind, _) => {
                 let word = &path[path.len() - 1].0;
                 match st.present() {
                     Ty::Result(a, er) => {
                         let ok = word == "ok";
                         let held = if ok { (**a).clone() } else { (**er).clone() };
-                        let name = match bind {
+                        let ctor = if ok { "Except.ok" } else { "Except.error" };
+                        let pat = match bind {
                             Some((b, _)) => {
                                 let n = ident(b);
                                 self.bind(b, T::held(n.clone(), &held));
-                                n
+                                Pat { head: ctor.into(), bound: Some((b.clone(), n)) }
                             }
-                            None => "_".into(),
+                            None => plain(format!("{ctor} _")),
                         };
-                        (Some(if ok { "ok" } else { "err" }.into()), format!("{} {name}", if ok { "Except.ok" } else { "Except.error" }))
+                        (Some(if ok { "ok" } else { "err" }.into()), pat)
                     }
                     Ty::Enum(id) => {
                         let (values, _) = self.w.p.values(id);
@@ -1046,10 +1125,10 @@ impl<'w, 'a> Fx<'w, 'a> {
                                 let Owner::Module(file) = &id.owner else { return Err("a value with fields of a rule's enum".into()) };
                                 let rt = Ty::Record(RecId::Variant { file: file.clone(), name: id.name.clone(), value: v.text.clone(), args: id.args.clone() });
                                 self.bind(b, T::held(n.clone(), &rt));
-                                format!("{ctor} {n}")
+                                Pat { head: ctor, bound: Some((b.clone(), n)) }
                             }
-                            (_, true) => format!("{ctor} _"),
-                            (_, false) => ctor,
+                            (_, true) => plain(format!("{ctor} _")),
+                            (_, false) => plain(ctor),
                         };
                         (Some(v.text.clone()), pat)
                     }
@@ -1798,25 +1877,11 @@ impl Fx<'_, '_> {
 
     fn prop_block(&mut self, b: &Block) -> Res<String> {
         let mark = self.env.len();
-        let mut out = String::new();
-        for l in &b.lets {
-            let v = self.ex(&l.value)?;
-            let name = ident(&l.name);
-            let t = match self.m.typed.bound.get(&l.value.id) {
-                Some(bound) if l.ty.is_some() => {
-                    out.push_str(&format!("let {name} := {}; ", self.w.conv(&v, bound)?));
-                    T::held(name, bound)
-                }
-                _ => {
-                    out.push_str(&format!("let {name} := {}; ", v.code));
-                    T { code: name, ..v }
-                }
-            };
-            self.bind(&l.name, t);
-        }
-        out.push_str(&self.prop(&b.answer)?);
+        let lets = self.lets(b)?;
+        let answer = self.prop(&b.answer)?;
+        let out = self.with_lets(&lets, &answer);
         self.env.truncate(mark);
-        Ok(if b.lets.is_empty() { out } else { format!("({out})") })
+        Ok(out)
     }
 }
 
@@ -2049,7 +2114,7 @@ impl Mw<'_> {
                         let s = Slot { ty: crate::ty::subst(&f.slot.ty, &crate::names::tnames(&e.tparams), &args), ..f.slot.clone() };
                         conj.extend(self.within(&format!("x.{}", ident(f.name.ascii())), &s, 0)?);
                     }
-                    arms.push(format!("  | {ctor} x => {}", if conj.is_empty() { "True".to_string() } else { conj.join(" ∧ ") }));
+                    arms.push(if conj.is_empty() { format!("  | {ctor} _ => True") } else { format!("  | {ctor} x => {}", conj.join(" ∧ ")) });
                 }
                 out.push_str(&format!("def {}.Within{} : {} → Prop\n{}\n\n", ident(e.name.ascii()), Self::tbinders(&e.tparams, true), self.tname(&t)?, arms.join("\n")));
             }
@@ -2518,18 +2583,21 @@ impl Mw<'_> {
         n
     }
 
-    /// Each parameter bound in `fx` by its name (and its alias), and its binder.
-    fn params(&self, fx: &mut Fx, params: &[crate::names::ParamInfo]) -> Res<Vec<String>> {
-        let mut binders = Vec::new();
+    /// Each parameter bound in `fx` by its name (and its alias): the name Lean writes, its type, and
+    /// where it is bound in the environment. Its binder is written once the body is
+    /// (`Fx::param_binder`).
+    fn params(&self, fx: &mut Fx, params: &[crate::names::ParamInfo]) -> Res<Vec<(String, String, Vec<usize>)>> {
+        let mut out = Vec::new();
         for p in params {
             let n = ident(p.name.ascii());
-            binders.push(format!("({n} : {})", self.tname(&p.slot.ty)?));
-            fx.bind(&p.name.text, T::held(n.clone(), &p.slot.ty));
+            let tn = self.tname(&p.slot.ty)?;
+            let mut at = vec![fx.bind(&p.name.text, T::held(n.clone(), &p.slot.ty))];
             if let Some((a, _)) = &p.name.alias {
-                fx.bind(a, T::held(n, &p.slot.ty));
+                at.push(fx.bind(a, T::held(n.clone(), &p.slot.ty)));
             }
+            out.push((n, tn, at));
         }
-        Ok(binders)
+        Ok(out)
     }
 
     /// The function `f` of the module as a Lean definition: of every function that stops, Lean's
@@ -2549,9 +2617,10 @@ impl Mw<'_> {
         let inner = Self::inner_name(&info.params);
         let mut fx = Fx { w: self, m: c, env: Vec::new(), inner: takes.then(|| inner.clone()) };
         let mut binders = if takes { vec![format!("({inner} : Inner)")] } else { Vec::new() };
-        binders.extend(self.params(&mut fx, &info.params)?);
+        let ps = self.params(&mut fx, &info.params)?;
         let ret = self.tname(&info.ret.ty)?;
         let body = fx.block(&decl.body, &info.ret.ty)?;
+        binders.extend(ps.iter().map(|p| fx.param_binder(p, false, &body)));
         let head = [ident(info.name.ascii()) + &Self::fn_tbinders(&info.tparams)].into_iter().chain(binders).collect::<Vec<_>>().join(" ");
         Ok(format!("def {head} : {ret} :=\n  {body}\n"))
     }
@@ -2565,10 +2634,13 @@ impl Mw<'_> {
         let takes = self.takes_inner(f);
         let inner = Self::inner_name(&info.params);
         let mut fx = Fx { w: self, m: c, env: Vec::new(), inner: takes.then(|| inner.clone()) };
-        let binders = self.params(&mut fx, &info.params)?;
+        let ps = self.params(&mut fx, &info.params)?;
         let mut lines: Vec<String> = Vec::new();
+        // a parameter with a hypothesis of its range is named there, whatever the body reads
+        let mut held = Vec::new();
         for p in &info.params {
             let hs = self.within(&ident(p.name.ascii()), &p.slot, 0)?;
+            held.push(!hs.is_empty());
             if !hs.is_empty() {
                 lines.push(hs.into_iter().map(hyp).collect::<Vec<_>>().join(" → "));
             }
@@ -2586,6 +2658,8 @@ impl Mw<'_> {
             _ => &decl.body,
         };
         let claim = fx.prop_block(body)?;
+        let text = format!("{} {claim}", lines.join(" "));
+        let binders: Vec<String> = ps.iter().zip(&held).map(|(p, named)| fx.param_binder(p, *named, &text)).collect();
         let mut out = format!("abbrev {} : Prop :=\n  ", ident(info.name.ascii()));
         if takes {
             out.push_str(&format!("∀ ({inner} : Inner), {inner}.Ok →\n  "));
@@ -2706,13 +2780,14 @@ pub fn origin(c: &Checked) -> Origin {
     Origin::named(&c.path, ritsu_base::fed::without(&c.src).as_bytes())
 }
 
-/// The draft of a module's proofs (DESIGN 38.5): each written property's theorem, with `sorry`.
+/// The draft of a module's proofs (DESIGN 38.5): each written property's theorem, with `sorry`. It
+/// opens `Kaname`, whose lemmas a proof uses, besides the module, as the examples' proofs do.
 fn sample(c: &Checked, stated: &[String], origin: &Origin) -> String {
     let alias = c.module.name.ascii();
     let kn = ritsu_emit::header::file_name(&c.path);
     let mut out = head(c, origin);
     out.push_str(&format!(
-        "-- A draft of the proofs: copy it beside {} as {alias}.lean, without these three lines, and write a proof in place of each `sorry`.\nimport Kaname.{alias}\n\nnamespace Proofs.{alias}\nopen Kaname.{alias}\n\n",
+        "-- A draft of the proofs: copy it beside {} as {alias}.lean, without these three lines, and write a proof in place of each `sorry`.\nimport Kaname.{alias}\n\nnamespace Proofs.{alias}\nopen Kaname Kaname.{alias}\n\n",
         ritsu_emit::header::one_line(&kn)
     ));
     for p in stated {

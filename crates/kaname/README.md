@@ -346,33 +346,20 @@ namespace Proofs.refund_split
 
 open Kaname Kaname.refund_split
 
-/-- What is left on one line or more, each of a cent or more, comes to more than nothing. -/
-theorem lefts_pos : ∀ ls : List Line, 1 ≤ ls.length → (∀ l ∈ ls, l.Within) →
-    0 < (ls.map fun l => l.left).sum
-  | [], h, _ => by simp at h
-  | l :: ls, _, h => by
-    simp only [List.map_cons, List.sum_cons]
-    have hl := (h l (List.mem_cons_self ..)).1
-    have hs : 0 ≤ (ls.map fun l => l.left).sum := by
-      match ls with
-      | [] => simp
-      | m :: ms => exact Int.le_of_lt (lefts_pos (m :: ms) (by simp) (fun x hx => h x (List.mem_cons_of_mem _ hx)))
-    omega
-
 /-- The shares, each the refund up to its line's end less the refund before it, telescope to the
 refund of the whole. -/
 theorem shares_add_up : Kaname.refund_split.shares_add_up := by
   intro lines refund hlen _ hwithin _ _
-  have hT := lefts_pos lines hlen hwithin
+  obtain ⟨S, hS⟩ : ∃ S, S = (lines.map fun l => l.left).sum := ⟨_, rfl⟩
+  have hT : 0 < S := hS ▸ sum_pos hlen fun l hl => (hwithin l hl).1
   have key : (split lines refund).map (fun s => s.share)
-      = (runningTotals lines (fun l => l.left)).map
-          (fun r => allocate refund r.upto (lines.map fun l => l.left).sum - allocate refund r.before (lines.map fun l => l.left).sum) := by
+      = (runningTotals lines (fun l => l.left)).map (fun r => allocate refund r.upto S - allocate refund r.before S) := by
     unfold split
     rw [List.map_map]
     apply List.map_congr_left
     intro r hr
-    simp only [Function.comp, runningTotals_total _ _ r hr]
-  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x (lines.map fun l => l.left).sum)]
+    simp only [Function.comp, runningTotals_total _ _ r hr, hS]
+  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x S), ← hS]
   rw [allocate_self refund hT, allocate_zero]
   omega
 
@@ -380,7 +367,7 @@ theorem shares_add_up : Kaname.refund_split.shares_add_up := by
 down as its share grows. -/
 theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
-  have hT := lefts_pos lines hlen hwithin
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
   rw [List.mem_map] at hs
   obtain ⟨r, hr, rfl⟩ := hs
@@ -402,7 +389,7 @@ theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
 /-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
 theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_than_its_left := by
   intro lines refund hlen _ hwithin hr0 _ hle s hs
-  have hT := lefts_pos lines hlen hwithin
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
   rw [List.mem_map] at hs
   obtain ⟨r, hr, rfl⟩ := hs
@@ -423,7 +410,11 @@ theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_th
 end Proofs.refund_split
 ```
 
-`allocate_self`, `allocate_mono`, `runningTotals_telescope` and the other lemmas it uses are in `Kaname/Prelude.lean`, which `ritsu gen` writes with their proofs.
+`sum_pos`, `allocate_self`, `runningTotals_telescope` and the other lemmas it uses are in `Kaname/Prelude.lean`, which `ritsu gen` writes with their proofs.
+A proof is made of Lean's core alone, with no Mathlib: `omega` does what `linarith` would, and `obtain ⟨S, hS⟩ : ∃ S, S = … := ⟨_, rfl⟩` names a sum as `set` would.
+[docs/reference.md](docs/reference.md#what-a-proof-is-made-of) lists the lemmas and what stands in for the other tactics of Mathlib.
+To try a proof as you write it, run `lake build` in `generated/lean/`; the Lean kaname writes builds with no warning, so what it warns of is in the proof.
+`ritsu check --lean` needs no `lake build` before it, since it writes the package again from the `.kn`.
 
 `ritsu check` does not search for a proof, and without `--lean` it does not read one.
 `ritsu check --lean` has Lean build the package again from the `.kn`, takes the proof file beside it, and checks that each theorem has the type of the statement and rests on no axiom but Lean's three (`propext`, `Classical.choice`, `Quot.sound`): a proof with `sorry`, an axiom of its own or `native_decide` is E604.
@@ -443,8 +434,8 @@ ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 chec
 A proof left as `sorry`, here that of `no_share_is_negative`, is E604:
 
 ```text
-error[kaname E604]: examples/refund_split/refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
-    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+error[kaname E604]: examples/refund_split/refund_split.lean:26:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
+    26 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   = Write the proof in place of `sorry`.
   = `--lean` builds the proofs against the Lean written again from refund_split.kn, and takes for each property a theorem `Proofs.refund_split.<property>` whose type is `Kaname.refund_split.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
 ```

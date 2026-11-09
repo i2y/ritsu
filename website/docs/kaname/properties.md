@@ -124,8 +124,11 @@ abbrev shares_add_up : Prop :=
 The proofs go in `refund_split.lean`, beside the `.kn`. Copy the draft there without its first three
 lines, and put a proof in place of each `sorry`. A theorem is named `Proofs.refund_split.<property>`
 and its type is the statement itself. Lean's own `omega`, `simp`, `decide` and `grind` do the work,
-with the lemmas of `Kaname/Prelude.lean` for rounding, `allocate` and `running_totals`. Mathlib is
-not used. To try a proof as it is written, run `lake build` in `generated/lean/`.
+with the lemmas of `Kaname/Prelude.lean` for sums, `allocate` and `running_totals`. Mathlib is not
+used, so `ring`, `linarith` and `set` are not there: `omega` does what `linarith` would, and the first
+proof below names a sum with `obtain` where `set` would. To try a proof as it is written, run
+`lake build` in `generated/lean/`. The Lean kaname writes builds with no warning, so what it warns of
+is in the proof. `--lean` needs no such build: it writes the package again from the `.kn`.
 
 The proof file of the example, whole:
 
@@ -136,33 +139,20 @@ namespace Proofs.refund_split
 
 open Kaname Kaname.refund_split
 
-/-- What is left on one line or more, each of a cent or more, comes to more than nothing. -/
-theorem lefts_pos : ∀ ls : List Line, 1 ≤ ls.length → (∀ l ∈ ls, l.Within) →
-    0 < (ls.map fun l => l.left).sum
-  | [], h, _ => by simp at h
-  | l :: ls, _, h => by
-    simp only [List.map_cons, List.sum_cons]
-    have hl := (h l (List.mem_cons_self ..)).1
-    have hs : 0 ≤ (ls.map fun l => l.left).sum := by
-      match ls with
-      | [] => simp
-      | m :: ms => exact Int.le_of_lt (lefts_pos (m :: ms) (by simp) (fun x hx => h x (List.mem_cons_of_mem _ hx)))
-    omega
-
 /-- The shares, each the refund up to its line's end less the refund before it, telescope to the
 refund of the whole. -/
 theorem shares_add_up : Kaname.refund_split.shares_add_up := by
   intro lines refund hlen _ hwithin _ _
-  have hT := lefts_pos lines hlen hwithin
+  obtain ⟨S, hS⟩ : ∃ S, S = (lines.map fun l => l.left).sum := ⟨_, rfl⟩
+  have hT : 0 < S := hS ▸ sum_pos hlen fun l hl => (hwithin l hl).1
   have key : (split lines refund).map (fun s => s.share)
-      = (runningTotals lines (fun l => l.left)).map
-          (fun r => allocate refund r.upto (lines.map fun l => l.left).sum - allocate refund r.before (lines.map fun l => l.left).sum) := by
+      = (runningTotals lines (fun l => l.left)).map (fun r => allocate refund r.upto S - allocate refund r.before S) := by
     unfold split
     rw [List.map_map]
     apply List.map_congr_left
     intro r hr
-    simp only [Function.comp, runningTotals_total _ _ r hr]
-  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x (lines.map fun l => l.left).sum)]
+    simp only [Function.comp, runningTotals_total _ _ r hr, hS]
+  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x S), ← hS]
   rw [allocate_self refund hT, allocate_zero]
   omega
 
@@ -170,7 +160,7 @@ theorem shares_add_up : Kaname.refund_split.shares_add_up := by
 down as its share grows. -/
 theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
-  have hT := lefts_pos lines hlen hwithin
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
   rw [List.mem_map] at hs
   obtain ⟨r, hr, rfl⟩ := hs
@@ -192,7 +182,7 @@ theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
 /-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
 theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_than_its_left := by
   intro lines refund hlen _ hwithin hr0 _ hle s hs
-  have hT := lefts_pos lines hlen hwithin
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
   rw [List.mem_map] at hs
   obtain ⟨r, hr, rfl⟩ := hs

@@ -81,7 +81,8 @@ const LEAN_MODULES: [(&str, &str); 2] = [("numbers", include_str!("lean/numbers.
 /// its parameters that the reference interpreter answers, answer what it answers (PLAN 12.2.6): the
 /// core of the feature, that what is proved is what runs. The rules and dates are given to `Inner`
 /// as tables of what they answered the interpreter. Every function that stops and uses nothing not
-/// written for Lean is written, and every vector is written as Lean.
+/// written for Lean is written, and every vector is written as Lean. Lean builds what kaname wrote
+/// with no warning, so that what `lake build` says of a proof is not lost among them (DESIGN 38.4).
 #[test]
 fn lean_definitions_agree_with_the_interpreter() {
     let Some(lake) = lake_ready() else { return };
@@ -99,6 +100,8 @@ fn lean_definitions_agree_with_the_interpreter() {
         assert!(cmp.left.is_empty(), "vectors the comparison could not write:\n{}", cmp.left.join("\n"));
         let (ok, said) = run(Command::new(&lake).current_dir(&dir).args(["build", "Kaname"]));
         assert!(ok, "lake build Kaname:\n{said}");
+        let warned: Vec<&str> = said.lines().filter(|l| l.starts_with("warning:")).collect();
+        assert!(warned.is_empty(), "Lean warns of the Lean kaname writes:\n{}", warned.join("\n"));
         // each module's file, a few at a time
         let width = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 6);
         let mut outputs: Vec<(String, bool, String)> = Vec::new();
@@ -162,8 +165,10 @@ fn lean_definitions_agree_with_the_interpreter() {
     });
 }
 
-/// The lemmas of the prelude a proof leans on (PLAN 12.2.6).
-const LEMMAS: [&str; 9] = [
+/// The lemmas of the prelude a proof leans on (PLAN 12.2.6, DESIGN 38.4).
+const LEMMAS: [&str; 11] = [
+    "sum_nonneg",
+    "sum_pos",
     "allocate_self",
     "allocate_zero",
     "allocate_mono",

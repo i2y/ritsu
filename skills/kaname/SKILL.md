@@ -313,17 +313,83 @@ file beside the `.kn`, `<module alias>.lean`, which is the work of whoever write
    as an opened `∀ …`, which is "states something else". A lemma may precede it in the same file.
 3. `intro` the parameters and the range hypotheses the statement lists in order, `unfold` the
    function (the definitions are in `Kaname/<alias>.lean`), and finish with `omega`, `simp`,
-   `decide` or `grind`; Lean's own, since no Mathlib is used. For rounding, `allocate` and
-   `running_totals`, `Kaname/Prelude.lean` has lemmas (`allocate_self`, `allocate_zero`,
-   `allocate_mono`, `allocate_sub_le`, `runningTotals_telescope`, `runningTotals_length`,
-   `runningTotals_items`): read it before proving them again.
+   `decide` or `grind`. Only Lean's core is there, with no Mathlib (below), and the lemmas of
+   `Kaname/Prelude.lean` for sums, `allocate` and `running_totals` (below): use them before proving
+   the same again.
 4. To try as you go, run `lake build` in `generated/lean/`; its lakefile reads the proof file where it
-   is (run `ritsu gen --target lean` again after adding the file or changing a property).
-5. At the end, run `ritsu check --lean`. Only that says a property is shown; E604 says why a proof was
-   not taken.
+   is (run `ritsu gen --target lean` again after adding the file or changing a property). The Lean
+   kaname writes builds with no warning, so a warning `lake build` prints is about the proof file
+   (an unused `simp` argument, say); it does not stop `--lean`, and an error does.
+5. At the end, run `ritsu check --lean`. It needs no `lake build` before it: it writes the package
+   again from the `.kn` in a temporary directory. Only that says a property is shown; E604 says why
+   a proof was not taken.
 6. Never edit `generated/lean/`: `--lean` writes it again from the `.kn` and does not read it.
    A proof that cannot be found is news: say what is stuck, and try a counterexample (change the
    ranges, the `when` lines) before assuming the property is true.
+
+**The lemmas of the prelude.** `Kaname/Prelude.lean` proves these, on the three axioms `--lean`
+takes. They are in `namespace Kaname`, which the draft opens with the module
+(`open Kaname Kaname.<alias>`); a name the module shares with the prelude (`Frac`, `Running`) is
+then "Ambiguous term", and is written in full (`Kaname.<alias>.Frac`). kaname writes
+`sum(xs, x => …)` as `(List.map (fun x => …) xs).sum`, the form of the first two.
+
+| Lemma | Says |
+|---|---|
+| `sum_nonneg (hw : ∀ x ∈ xs, 0 ≤ w x)` | `0 ≤ (xs.map w).sum` |
+| `sum_pos (hn : 0 < xs.length) (hw : ∀ x ∈ xs, 0 < w x)` | `0 < (xs.map w).sum`; the `1 ≤ xs.length` of a `count >=1` is `hn` as it is |
+| `allocate_self t (h : 0 < s)` | `allocate t s s = t` |
+| `allocate_zero t s` | `allocate t 0 s = 0` |
+| `allocate_mono (ht : 0 ≤ t) (hs : 0 < s) (hc : c ≤ c')` | `allocate t c s ≤ allocate t c' s` |
+| `allocate_sub_le (ht : 0 ≤ t) (hts : t ≤ s) (hs : 0 < s) (hc : c ≤ c')` | `allocate t c' s - allocate t c s ≤ c' - c` |
+| `runningTotals_length xs w` | `(runningTotals xs w).length = xs.length` |
+| `runningTotals_items xs w` | `(runningTotals xs w).map (·.item) = xs` |
+| `runningTotals_total xs w` | `∀ r ∈ runningTotals xs w, r.total = (xs.map w).sum` |
+| `runningTotals_telescope xs w f` | `((runningTotals xs w).map fun r => f r.upto - f r.before).sum = f (xs.map w).sum - f 0` |
+| `mem_runningTotals (hw : ∀ x ∈ xs, 0 ≤ w x)` | `∀ r ∈ runningTotals xs w, r.upto - r.before = w r.item ∧ 0 ≤ r.before ∧ r.upto ≤ r.total` |
+
+**Without Mathlib.** Lean 4.34.0's core has no `set`, `ring`, `linarith`, `nlinarith`, `norm_num`,
+`positivity`, `push_neg` or `use`: each is "unknown tactic". What to write instead, each tried on
+4.34.0:
+
+| Instead of | Write |
+|---|---|
+| `set S := e with hS` | `obtain ⟨S, hS⟩ : ∃ S, S = e := ⟨_, rfl⟩` and `rw [← hS] at h ⊢`, or `generalize hS : e = S at h ⊢` |
+| `linarith` | `omega`, for linear facts over `Int` and `Nat`; it takes a sum or a product of two values as one value, and `¬ a ≤ b` as it is |
+| `a * b` where a fact has `b * a` | `rw [Int.mul_comm]`, or `simp only [Int.mul_comm] at h ⊢` before `omega`: to `omega` they are two values |
+| `ring` | `grind`, or `simp only [Int.mul_add, Int.mul_comm]` and then `omega` |
+| `positivity`, `nlinarith` | `Int.mul_nonneg h1 h2` (`0 ≤ a * b`), `Int.mul_le_mul_of_nonneg_left h2 h1` (`a * b ≤ a * c`) |
+| `norm_num` | `decide`, or `omega` |
+| `push_neg at h` | `simp only [Classical.not_not] at h` for `¬¬p`, `simp only [Classical.not_forall, Int.not_le] at h` for `¬ ∀ x ∈ xs, 0 ≤ x` |
+| `use 3` | `⟨3, rfl⟩`, or `exists 3` |
+
+`grind` proves linear facts, an identity of polynomials (`(a + b) * (a + b) = a * a + 2 * a * b + b * b`),
+`b * a < 4` from `a * b ≤ 3`, membership in `xs.map f`, `0 < (x :: xs).sum` from `1 ≤ x` and
+`0 ≤ xs.sum`, and a definition by cases named to it (`grind [step]`). It does no induction, and does not get the sign
+of a product or a quotient from the signs of its parts: `0 ≤ xs.sum` from its terms is `sum_nonneg`,
+`0 ≤ a * b` is `Int.mul_nonneg`, and `0 ≤ allocate t c s` is `allocate_mono` with
+`rw [allocate_zero]`. What it proves rests on `propext`, `Classical.choice` and `Quot.sound`, which
+`--lean` takes.
+
+**Opening a function over a list.** A function that maps `running_totals`, as `split` does, is
+opened and its map put in the form of a lemma. From the proof of `shares_add_up` (`refund_split`):
+
+```lean
+  obtain ⟨S, hS⟩ : ∃ S, S = (lines.map fun l => l.left).sum := ⟨_, rfl⟩
+  have hT : 0 < S := hS ▸ sum_pos hlen fun l hl => (hwithin l hl).1
+  have key : (split lines refund).map (fun s => s.share)
+      = (runningTotals lines (fun l => l.left)).map (fun r => allocate refund r.upto S - allocate refund r.before S) := by
+    unfold split
+    rw [List.map_map]
+    apply List.map_congr_left
+    intro r hr
+    simp only [Function.comp, runningTotals_total _ _ r hr, hS]
+  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x S), ← hS]
+```
+
+The sum is named `S` first, so that `rw` and `omega` see one value. `unfold split` shows the map that
+makes the shares, `List.map_map` joins it to the map of the property, and `List.map_congr_left`
+leaves one element `r` with `hr : r ∈ runningTotals …`. There `runningTotals_total _ _ r hr` puts the
+whole sum for `r.total`, and the map is now the one `runningTotals_telescope` speaks of.
 
 **What a proof file cannot hold** (it is read as text before Lean builds it, so that nothing it says
 runs in the build): an import from outside `Kaname.`; `#eval` and every `#` command but `#check`,

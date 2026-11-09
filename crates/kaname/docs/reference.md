@@ -700,7 +700,7 @@ abbrev shares_add_up : Prop :=
 
 ### The proof file
 
-The proofs of a module are in `<its alias>.lean` beside the `.kn` (`refund_split_ja.lean` for the Japanese version). kaname never writes it. For each property, it holds a theorem `Proofs.<module>.<property>` whose type is the statement itself, `Kaname.<module>.<property>`; a lemma may be in the same file. To start, copy `samples/<alias>.lean` beside the `.kn` without its first three lines, and put a proof in place of each `sorry`. To try as you write, run `lake build` in `generated/lean/`: its `lakefile.toml` reads the proof file where it is. Run `ritsu gen --target lean` again when a proof file is added or a property changed.
+The proofs of a module are in `<its alias>.lean` beside the `.kn` (`refund_split_ja.lean` for the Japanese version). kaname never writes it. For each property, it holds a theorem `Proofs.<module>.<property>` whose type is the statement itself, `Kaname.<module>.<property>`; a lemma may be in the same file. To start, copy `samples/<alias>.lean` beside the `.kn` without its first three lines, and put a proof in place of each `sorry`. To try as you write, run `lake build` in `generated/lean/`: its `lakefile.toml` reads the proof file where it is. Run `ritsu gen --target lean` again when a proof file is added or a property changed. The Lean kaname writes builds with no warning, so what `lake build` warns of is in the proof file; a warning does not stop `--lean`, and an error does. `--lean` needs no `lake build` before it: it writes the package again from the `.kn` (2 below).
 
 `check --lean` does the following, and stops at the first that fails:
 
@@ -734,13 +734,48 @@ ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 chec
 With the proof of `no_share_is_negative` left as `sorry`:
 
 ```text
-error[kaname E604]: examples/refund_split/refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
-    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+error[kaname E604]: examples/refund_split/refund_split.lean:26:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
+    26 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   = Write the proof in place of `sorry`.
   = `--lean` builds the proofs against the Lean written again from refund_split.kn, and takes for each property a theorem `Proofs.refund_split.<property>` whose type is `Kaname.refund_split.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
 ```
 
-The first `--lean` downloads the Lean toolchain (`leanprover/lean4:v4.34.0`, about 2.7 GB with its library) through [elan](https://github.com/leanprover/elan), once. No Mathlib is used: `omega`, `simp`, `decide` and `grind` of Lean's own, and the lemmas of `Kaname/Prelude.lean` (`allocate_self`, `allocate_zero`, `allocate_mono`, `allocate_sub_le`, `runningTotals_telescope`, `runningTotals_length`, `runningTotals_items`, ...) are what a proof is made of.
+The first `--lean` downloads the Lean toolchain (`leanprover/lean4:v4.34.0`, about 2.7 GB with its library) through [elan](https://github.com/leanprover/elan), once.
+
+### What a proof is made of
+
+No Mathlib is used. A proof is made of Lean's core (`intro`, `unfold`, `rw`, `simp`, `omega`, `decide`, `grind`, `induction`) and the lemmas of `Kaname/Prelude.lean`, which rest on the three axioms `--lean` takes. They are in `namespace Kaname`, which the draft opens with the module (`open Kaname Kaname.<alias>`); a name the module shares with the prelude (`Frac`, `Running`) is then "Ambiguous term", and is written in full (`Kaname.<alias>.Frac`). kaname writes `sum(xs, x => …)` as `(List.map (fun x => …) xs).sum`, the form of the first two.
+
+| Lemma | Says |
+|---|---|
+| `sum_nonneg (hw : ∀ x ∈ xs, 0 ≤ w x)` | `0 ≤ (xs.map w).sum` |
+| `sum_pos (hn : 0 < xs.length) (hw : ∀ x ∈ xs, 0 < w x)` | `0 < (xs.map w).sum`; the `1 ≤ xs.length` of a `count >=1` is `hn` as it is |
+| `allocate_self t (h : 0 < s)` | `allocate t s s = t` |
+| `allocate_zero t s` | `allocate t 0 s = 0` |
+| `allocate_mono (ht : 0 ≤ t) (hs : 0 < s) (hc : c ≤ c')` | `allocate t c s ≤ allocate t c' s` |
+| `allocate_sub_le (ht : 0 ≤ t) (hts : t ≤ s) (hs : 0 < s) (hc : c ≤ c')` | `allocate t c' s - allocate t c s ≤ c' - c` |
+| `runningTotals_length xs w` | `(runningTotals xs w).length = xs.length` |
+| `runningTotals_items xs w` | `(runningTotals xs w).map (·.item) = xs` |
+| `runningTotals_total xs w` | `∀ r ∈ runningTotals xs w, r.total = (xs.map w).sum` |
+| `runningTotals_telescope xs w f` | `((runningTotals xs w).map fun r => f r.upto - f r.before).sum = f (xs.map w).sum - f 0` |
+| `mem_runningTotals (hw : ∀ x ∈ xs, 0 ≤ w x)` | `∀ r ∈ runningTotals xs w, r.upto - r.before = w r.item ∧ 0 ≤ r.before ∧ r.upto ≤ r.total` |
+
+The tactics of Mathlib (`set`, `ring`, `linarith`, `nlinarith`, `norm_num`, `positivity`, `push_neg`, `use`) are "unknown tactic". What stands in for them, each tried on 4.34.0:
+
+| Instead of | Write |
+|---|---|
+| `set S := e with hS` | `obtain ⟨S, hS⟩ : ∃ S, S = e := ⟨_, rfl⟩` and `rw [← hS] at h ⊢`, or `generalize hS : e = S at h ⊢` |
+| `linarith` | `omega`, for linear facts over `Int` and `Nat`; it takes a sum or a product of two values as one value, and `¬ a ≤ b` as it is |
+| `a * b` where a fact has `b * a` | `rw [Int.mul_comm]`, or `simp only [Int.mul_comm] at h ⊢` before `omega`: to `omega` they are two values |
+| `ring` | `grind`, or `simp only [Int.mul_add, Int.mul_comm]` and then `omega` |
+| `positivity`, `nlinarith` | `Int.mul_nonneg h1 h2` (`0 ≤ a * b`), `Int.mul_le_mul_of_nonneg_left h2 h1` (`a * b ≤ a * c`) |
+| `norm_num` | `decide`, or `omega` |
+| `push_neg at h` | `simp only [Classical.not_not] at h` for `¬¬p`, `simp only [Classical.not_forall, Int.not_le] at h` for `¬ ∀ x ∈ xs, 0 ≤ x` |
+| `use 3` | `⟨3, rfl⟩`, or `exists 3` |
+
+`grind` proves linear facts, an identity of polynomials (`(a + b) * (a + b) = a * a + 2 * a * b + b * b`), `b * a < 4` from `a * b ≤ 3`, membership in `xs.map f`, `0 < (x :: xs).sum` from `1 ≤ x` and `0 ≤ xs.sum`, and a definition by cases named to it (`grind [step]`). It does no induction, and does not get the sign of a product or a quotient from the signs of its parts: `0 ≤ xs.sum` from its terms is `sum_nonneg`, `0 ≤ a * b` is `Int.mul_nonneg`, and `0 ≤ allocate t c s` is `allocate_mono` with `rw [allocate_zero]`. What it proves rests on `propext`, `Classical.choice` and `Quot.sound`.
+
+A function that maps `running_totals`, as `split` does, is opened with `unfold`. `List.map_map` joins its map to the map of the property, `List.map_congr_left` leaves one element `r` with `r ∈ runningTotals …`, and `runningTotals_total` puts the whole weight for `r.total`: the map is then the one `runningTotals_telescope` speaks of. The proof of `shares_add_up` in `examples/refund_split/refund_split.lean` goes this way.
 
 ## What `check` says
 

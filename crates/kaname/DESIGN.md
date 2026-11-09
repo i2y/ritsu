@@ -5207,16 +5207,16 @@ warning[W605]: thresholds.kn:9:1: The `when` lines of the property `past_the_end
 E604 は、例の証明のファイル（`examples/refund_split/refund_split.lean`）を一か所ずつ壊して `ritsu kaname check refund_split.kn --lean` を走らせたものである（実物）。上から順に、`no_share_is_negative` の証明を `sorry` にしたもの、その定理の型に別の主張を書いたもの、補題の名前を書き違えたもの。最後は台帳の再現（`kaname explain E604`）で、文字の決まりに当たったものである。末尾の注（`--lean` が何を受け付けるか）はどの E604 にも付くので、一つ目にだけ貼る。
 
 ```text
-error[E604]: refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
-    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+error[E604]: refund_split.lean:26:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
+    26 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   = Write the proof in place of `sorry`.
   = `--lean` builds the proofs against the Lean written again from refund_split.kn, and takes for each property a theorem `Proofs.refund_split.<property>` whose type is `Kaname.refund_split.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
-error[E604]: refund_split.lean:39:1: The theorem `Proofs.refund_split.no_share_is_negative` does not state the property `no_share_is_negative`: its type is not `Kaname.refund_split.no_share_is_negative`
-    39 | theorem no_share_is_negative : ∀ (refund : Int), 0 ≤ refund → 0 ≤ refund := fun _ h => h
+error[E604]: refund_split.lean:26:1: The theorem `Proofs.refund_split.no_share_is_negative` does not state the property `no_share_is_negative`: its type is not `Kaname.refund_split.no_share_is_negative`
+    26 | theorem no_share_is_negative : ∀ (refund : Int), 0 ≤ refund → 0 ≤ refund := fun _ h => h
   = Its type: ∀ (refund : Int), 0 ≤ refund → 0 ≤ refund
   = Write the statement's name as its type, `theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative`, and not the statement written out, which can say less than it.
-error[E604]: refund_split.lean:34:7: The proof file refund_split.lean does not build, so it proves none of `shares_add_up`, `no_share_is_negative` and `no_share_is_more_than_its_left`
-    34 |   rw [allocate_self_of refund hT, allocate_zero]
+error[E604]: refund_split.lean:21:7: The proof file refund_split.lean does not build, so it proves none of `shares_add_up`, `no_share_is_negative` and `no_share_is_more_than_its_left`
+    21 |   rw [allocate_self_of refund hT, allocate_zero]
   = Lean says: Unknown identifier `allocate_self_of`
 error[E604]: example.lean:3:1: A proof file may not hold `#eval`: example.lean is not built, so it does not prove `double_is_even`
      3 | #eval IO.println "run in the build"
@@ -5224,7 +5224,7 @@ error[E604]: example.lean:3:1: A proof file may not hold `#eval`: example.lean i
 ```
 
 ```text
-エラー[E604]: refund_split.lean:39:1: `no_share_is_negative` の証明は、`propext`・`Classical.choice`・`Quot.sound` のほかに `sorryAx` に頼っています
+エラー[E604]: refund_split.lean:26:1: `no_share_is_negative` の証明は、`propext`・`Classical.choice`・`Quot.sound` のほかに `sorryAx` に頼っています
 エラー[E604]: example.lean:3:1: 証明のファイルには `#eval` を書けないので、example.lean はビルドしません。`倍は偶数` を示せません
 ```
 
@@ -5314,12 +5314,14 @@ end Kaname.refund_split
 - **規則と日付**：モジュールが呼ぶ規則と日付の関数は、外から与える関数として構造体 `Inner` にまとめる。`Inner.Ok` は、口が教える事実（規則の入力の範囲に入る値には、答えの範囲に入る値を返す、など）を仮定にしたものである。規則か日付を呼ぶ性質の文は `∀ inner : Inner, inner.Ok → …` で始まる。規則の型（列挙、明細の要素、答え）は、呼ぶモジュールがいくつあっても一度だけ `Kaname/Rules.lean` に `Kaname.Rules.<規則の別名>` として書く。振替は操作ごとの構造体にして `Kaname/Books.lean` に `Kaname.Books.<帳簿>.<振替>.<操作>` として書き、引数は呼び出しが省けるので `Option` にする。規則の表の中身は書かないので、規則がどう計算するかに頼る性質は証明できない（ベクタは本物の規則で確かめ、W603 は「規則の答えに頼る」と言う）。表を Lean の関数にすることは、rulec の別の機能として 19 章に残す。
 - **文**：`abbrev <性質> : Prop := ∀ 引数, 範囲 → when → 本体`。`let` は文の中の `let` になる。比べ方は Prop の関係、`and`・`or`・`not` は `∧`・`∨`・`¬`、`all`・`any` は `∀ x ∈ xs`・`∃ x ∈ xs`、`bool` を返す関数の呼び出しは `f … = true` にする。`abbrev` にするのは、`intro` も `decide` も、文を開かずに効くからである（設計の段階の試しでは、`def` の文に `decide` を使うには `unfold` が要った）。
 - **toolchain**：`proofs/` と同じ版（`leanprover/lean4:v4.34.0`）を使い、Mathlib は使わない。版の文字列は生成器が持ち、`proofs/lean-toolchain` と同じであることをテストが見る。その版が入っていなければ、elan が最初の `lake` で入れる（lib だけで 2.7 GB）。`--lean` を初めて使うとダウンロードが起きうることは、README とサイトに書く。
+- **警告を出さない**：書き出した Lean は、`lake build` で警告を一つも出さない。Lean の linter は使わない名前（関数の引数、`fun` の引数、`match` の枝の変数、`let`）を警告するので、生成器は読まない名前を `_` で書く（`def area {T : Type} [DecidableEq T] (_ : T) (side : Int)`、`fun (acc : Int) (_ : Int) => …`、`| Order.cancelled _ => True`、`let _ := 1; …`）。警告があると、証明を書く人が `lake build` を回したとき、証明のファイルのエラーと警告がその中に埋もれる。lakefile で linter を切らないのは、生成器の誤り（使うはずの値を使っていない、など）を指す警告まで消えるからである。証明のファイルから出る警告は、書いた人のものなので切らない（`--lean` は、警告があっても証明を受け付ける）。
 
 ### 38.5 証明のファイル
 
 - 置き場所は、.kn と同じディレクトリの `<モジュールの別名>.lean` である（`refund_split.lean`、日本語の版は `refund_split_ja.lean`）。処理系はこのファイルに何も書かない。
 - 性質ごとに、`theorem Proofs.<モジュールの別名>.<性質の別名> : Kaname.<モジュールの別名>.<性質の別名>` を置く。型は文の定数そのものに書く。開いた `∀ …` を書くと、「違うことを述べている」になる。補題は同じファイルに置いてよい。
-- 書き始めるときは、`samples/<別名>.lean` を .kn の隣に写し（頭の三行を除く）、`sorry` を証明に置き換える。書きながら確かめるには、`generated/lean/` で `lake build` を回す。生成した `lakefile.toml` は、.kn の隣にある証明のファイルを、その場所のまま読むライブラリを持つ（`name = "proofs_<別名>"`、`srcDir` に `generated/lean/` から .kn のディレクトリへの相対パス、`roots = ["<別名>"]`）。相対パスは、リンクをたどった実際の場所どうしから求める。ライブラリは証明のファイルがあるときだけ書く（無いファイルを読むライブラリは、`lake build` を止める）。だから、証明のファイルを置いたときと性質を変えたときは、`ritsu gen --target lean` を回し直す。
+- 書き始めるときは、`samples/<別名>.lean` を .kn の隣に写し（頭の三行を除く）、`sorry` を証明に置き換える。下書きは、モジュールと、前置きの補題がある `Kaname` を開く（`open Kaname Kaname.<別名>`。例の証明と同じ形）。書きながら確かめるには、`generated/lean/` で `lake build` を回す。`--lean` の前にこのビルドは要らない（38.6 の 2 で、.kn から一時の場所に作り直す）。生成した `lakefile.toml` は、.kn の隣にある証明のファイルを、その場所のまま読むライブラリを持つ（`name = "proofs_<別名>"`、`srcDir` に `generated/lean/` から .kn のディレクトリへの相対パス、`roots = ["<別名>"]`）。相対パスは、リンクをたどった実際の場所どうしから求める。ライブラリは証明のファイルがあるときだけ書く（無いファイルを読むライブラリは、`lake build` を止める）。だから、証明のファイルを置いたときと性質を変えたときは、`ritsu gen --target lean` を回し直す。
+- **証明に使えるもの**：Lean の core と前置きの補題である。Mathlib は使わないので、`set`・`ring`・`linarith`・`nlinarith`・`norm_num`・`positivity`・`push_neg`・`use` は無い（4.34.0 で「unknown tactic」）。前置きの補題は十一ある。和について `sum_nonneg`（どの項も 0 以上なら和も 0 以上）と `sum_pos`（空でなく、どの項も正なら和も正）、`allocate` について `allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le`、`running_totals` について `runningTotals_length`・`runningTotals_items`・`runningTotals_total`・`runningTotals_telescope`・`mem_runningTotals` である。和の補題は、kaname が `sum(xs, x => …)` を書く形 `(List.map (fun x => …) xs).sum` で述べ、`sum_pos` の長さの仮定は `0 < xs.length` にする（`count >=1` の仮定 `1 ≤ xs.length` がそのまま渡る）。Mathlib の tactic の代わりの書き方と `grind` が示せること、`split` のような関数を開く手順は、スキルとリファレンスに書く。そこに書くのは、4.34.0 で通った形だけである。二つに載せる補題の表（名前、仮定、文）が前置きのとおりで、補題を一つも落としていないことは、`tests/docs.rs` の `the_lemmas_on_the_pages_are_the_preludes` が見る（`runningTotals` を書くための `runningFrom` の補題は、表に載せない）。
 
 例の証明は、Lean の core（`omega`、`simp`、`decide`、帰納法）と前置きの補題だけで書いた（Mathlib は使わない）。性質を持つ例は六つで、英語と日本語の版は同じ証明である（日本語の版で違うのは、モジュールの別名、`late_payment` の `Inner` のフィールドの名前、説明のコメントだけ）。時間は、デバッグのビルドの `ritsu kaname check <file> --lean` が、ベクタから `Check.lean` までにかけたもの（モジュール一つ）である。
 
@@ -5331,7 +5333,7 @@ end Kaname.refund_split
 | `discount_split`（17.9） | `every_line_keeps_its_label`：どの明細も項目を保つ | `runningTotals_items` で明細の列に戻し、`simp [split, List.map_map, …]` | 2.4 秒 |
 | 〃 | `shares_add_up`：配った分の合計は値引き額 | 置かない（規則の答えに頼る。W603） | |
 | `order_bill`（17.12） | `bill_is_the_price_times_the_quantities`：請求額は単価と数量の合計の積 | 明細についての帰納法（下に貼る） | 2.2 秒 |
-| `refund_split`（17.13） | 38.1 の三つ | 前置きの `runningTotals_telescope`・`runningTotals_total`・`runningTotals_items`・`mem_runningTotals`・`allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le` と `omega` | 2.4 秒 |
+| `refund_split`（17.13） | 38.1 の三つ | 前置きの `sum_pos`・`runningTotals_telescope`・`runningTotals_total`・`runningTotals_items`・`mem_runningTotals`・`allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le` と `omega` | 2.4 秒 |
 
 `order_bill` の証明（`examples/order_bill/order_bill.lean`）。性質は `property bill_is_the_price_times_the_quantities(lines: list[Line] count >=1 <=30, price: money[USDc] range >=1USDc <=1000USDc)` の本体が `bill(lines: lines, price: price) = price * sum(lines, l => l.qty)` のものである。
 
@@ -5442,8 +5444,10 @@ Lean: 7768 of 7768 evaluations agree with the reference interpreter, of 388 func
 
 `numbers.kn` は、刻みで掛けた中間の値（率を掛けた金額）と分子と分母の組（値で割った値）のそれぞれで丸めの五つ、`allocate`、`mod`（負の数で割る）、`isqrt`（`8_999_999_999_999_999_999` まで）、`running_totals`、負の数と範囲の端を通す。失敗しうる関数が失敗するベクタは、kaname の答えが無いので比べない。刻みで数える式の数（90）には、例の性質の文の中の式も入る。
 
+同じテストは、58 のモジュールの `lake build Kaname` が警告を一つも出さないことも見る（38.4）。読まない名前を `_` で書く前は、58 のモジュールで 40 の警告が出ていた（`Within` の枝の変数、使わない `let`、`fun` の引数、`match` の枝の変数、関数の引数）。性質を持つ六つの例の英日を、証明のファイルと一緒に `ritsu gen --target lean` で書き出して `lake build` したときは 12 で、どれも `order_flow` の `Within` の枝だった。証明のファイルからは、直す前も後も警告が出ない。
+
 - `srcDir` に `..` を含む相対パスを書いた `lean_lib` を `lake` が読み、.kn の隣の証明をその場所のままビルドする（`lean_the_generated_package_builds_the_proofs_in_place`）。
-- 前置きの補題九つ（`allocate_self`、`allocate_zero`、`allocate_mono`、`allocate_sub_le`、`runningTotals_telescope`、`runningTotals_length`、`runningTotals_items`、`mem_runningTotals`、`runningTotals_total`）は、`propext`・`Classical.choice`・`Quot.sound` のほかに頼らない（`lean_the_prelude_rests_on_the_three_axioms`）。
+- 前置きの補題十一（`sum_nonneg`、`sum_pos`、`allocate_self`、`allocate_zero`、`allocate_mono`、`allocate_sub_le`、`runningTotals_telescope`、`runningTotals_length`、`runningTotals_items`、`runningTotals_total`、`mem_runningTotals`）は、`propext`・`Classical.choice`・`Quot.sound` のほかに頼らない（`lean_the_prelude_rests_on_the_three_axioms`）。
 - 例の性質は、規則の答えに頼る `discount_split` の `shares_add_up`（英日）のほかは、どれも `--lean` で示せる（`lean_proves_the_properties_of_the_examples`。答えは `tests/golden/lean/examples.txt`）。
 - `--lean` の時間：例のモジュール一つで 2.2〜2.7 秒（38.5 の表）。例の 20 のモジュールを一度に回して 15〜17 秒、`tests/lean.rs` の 25 のテストで 26 秒（どちらもデバッグのビルド）。一時のディレクトリを毎回作り直すので、前の回のビルドは使わない。その日の最初の一回は Lean の .olean を読み込むので遅く、`refund_split` の二つのモジュールで 15 秒、二回目からは 3.3 秒だった。
 - 時間切れ：上限を 1 秒にし、重い `decide`（`Fin 64` の三つ組についての主張）の証明を置くと、30 秒以内に時間切れの E604 が返り、一時のディレクトリの名前を含むプロセスは残らず、ディレクトリも消えていた（`lean_stops_a_build_past_the_time_limit`）。`lake` のプロセスだけを止めると、`lake` が起こした `lean` が残りうるので、プロセスグループごと止めて、消えるのを待つ。
@@ -5499,5 +5503,6 @@ leanchecker exit 1: leanchecker found a problem in Proofs.order_bill uncaught ex
 - 定理があるかを文字で見るのは、`theorem` の後ろの名前だけである。名前空間を閉じ忘れたファイルや、マクロが作る定理（文字の決まりで止まる）では、`--lean` の答えと食い違いうる（`--lean` の答えが正しい）。
 - Lean のエラーの文は、そのまま写す。構文のエラー（`unexpected token …; expected …`）は、受け付ける語を全部並べるので、注が長くなる。
 - `native` という名前は書けない（38.5）。
+- 下書きは `Kaname` とモジュールを両方開くので、モジュールが前置きと同じ名前（`Frac`、`Running`、`Indexed`、`Rounding` など）を持つと、証明の中でその名前は二通りに読め、Lean は「Ambiguous term」で止まる。`Kaname.<別名>.Frac` と書けば通る。生成した定義は前置きを `Kaname.` から書くので、これに当たらない。
 - ブラウザで試すページは、kaname のモジュールをまだ開けない（19 章）。開けるようになっても Lean は無いので、性質はベクタで確かめるだけで、W603 になる。
 - 根の `proofs/` の kaname のモデル（KanameCore）は性質を知らない。`ritsu-model` の突き合わせ（`tests/kaname.rs`）は関数の解析と式の値を比べ、性質の式（性質を書き直した関数の式）は比べない。

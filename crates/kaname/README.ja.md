@@ -347,33 +347,20 @@ namespace Proofs.refund_split
 
 open Kaname Kaname.refund_split
 
-/-- What is left on one line or more, each of a cent or more, comes to more than nothing. -/
-theorem lefts_pos : ∀ ls : List Line, 1 ≤ ls.length → (∀ l ∈ ls, l.Within) →
-    0 < (ls.map fun l => l.left).sum
-  | [], h, _ => by simp at h
-  | l :: ls, _, h => by
-    simp only [List.map_cons, List.sum_cons]
-    have hl := (h l (List.mem_cons_self ..)).1
-    have hs : 0 ≤ (ls.map fun l => l.left).sum := by
-      match ls with
-      | [] => simp
-      | m :: ms => exact Int.le_of_lt (lefts_pos (m :: ms) (by simp) (fun x hx => h x (List.mem_cons_of_mem _ hx)))
-    omega
-
 /-- The shares, each the refund up to its line's end less the refund before it, telescope to the
 refund of the whole. -/
 theorem shares_add_up : Kaname.refund_split.shares_add_up := by
   intro lines refund hlen _ hwithin _ _
-  have hT := lefts_pos lines hlen hwithin
+  obtain ⟨S, hS⟩ : ∃ S, S = (lines.map fun l => l.left).sum := ⟨_, rfl⟩
+  have hT : 0 < S := hS ▸ sum_pos hlen fun l hl => (hwithin l hl).1
   have key : (split lines refund).map (fun s => s.share)
-      = (runningTotals lines (fun l => l.left)).map
-          (fun r => allocate refund r.upto (lines.map fun l => l.left).sum - allocate refund r.before (lines.map fun l => l.left).sum) := by
+      = (runningTotals lines (fun l => l.left)).map (fun r => allocate refund r.upto S - allocate refund r.before S) := by
     unfold split
     rw [List.map_map]
     apply List.map_congr_left
     intro r hr
-    simp only [Function.comp, runningTotals_total _ _ r hr]
-  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x (lines.map fun l => l.left).sum)]
+    simp only [Function.comp, runningTotals_total _ _ r hr, hS]
+  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x S), ← hS]
   rw [allocate_self refund hT, allocate_zero]
   omega
 
@@ -381,7 +368,7 @@ theorem shares_add_up : Kaname.refund_split.shares_add_up := by
 down as its share grows. -/
 theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
-  have hT := lefts_pos lines hlen hwithin
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
   rw [List.mem_map] at hs
   obtain ⟨r, hr, rfl⟩ := hs
@@ -403,7 +390,7 @@ theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
 /-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
 theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_than_its_left := by
   intro lines refund hlen _ hwithin hr0 _ hle s hs
-  have hT := lefts_pos lines hlen hwithin
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
   rw [List.mem_map] at hs
   obtain ⟨r, hr, rfl⟩ := hs
@@ -424,7 +411,11 @@ theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_th
 end Proofs.refund_split
 ```
 
-`allocate_self`、`allocate_mono`、`runningTotals_telescope` などの補題は、`ritsu gen` が証明と一緒に書く `Kaname/Prelude.lean` にあります。
+`sum_pos`、`allocate_self`、`runningTotals_telescope` などの補題は、`ritsu gen` が証明と一緒に書く `Kaname/Prelude.lean` にあります。
+証明は Lean の core だけで書き、Mathlib は使いません。`linarith` の代わりは `omega` で、`set` のように和に名前を付けるには `obtain ⟨S, hS⟩ : ∃ S, S = … := ⟨_, rfl⟩` と書きます。
+補題の一覧と、Mathlib のほかの tactic の代わりは [docs/reference.md](docs/reference.md#what-a-proof-is-made-of)（英語）にあります。
+書きながら試すには、`generated/lean/` で `lake build` を走らせます。kaname が書く Lean はビルドしても警告を出さないので、出た警告は証明のものです。
+`ritsu check --lean` は .kn からパッケージを作り直すので、その前に `lake build` を走らせる必要はありません。
 
 `ritsu check` は証明を探さず、`--lean` が無ければ証明を読みません。
 `ritsu check --lean` は、.kn から Lean のパッケージを作り直し、隣の証明のファイルを Lean に通して、どの定理も文と同じ型で、Lean の三つの公理（`propext`、`Classical.choice`、`Quot.sound`）のほかに頼らないことを確かめます。`sorry`、自分で置いた公理、`native_decide` を使った証明は E604 です。
@@ -444,8 +435,8 @@ ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りまし�
 `sorry` のまま残した証明（ここでは `no_share_is_negative` の証明）は E604 です。
 
 ```text
-エラー[kaname E604]: examples/refund_split/refund_split.lean:39:1: `no_share_is_negative` の証明は、`propext`・`Classical.choice`・`Quot.sound` のほかに `sorryAx` に頼っています
-    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+エラー[kaname E604]: examples/refund_split/refund_split.lean:26:1: `no_share_is_negative` の証明は、`propext`・`Classical.choice`・`Quot.sound` のほかに `sorryAx` に頼っています
+    26 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   = `sorry` を証明に置き換えてください。
   = `--lean` は、refund_split.kn から書き直した Lean に対して証明をビルドし、性質ごとに、型が `Kaname.refund_split.<性質>` で、`propext`・`Classical.choice`・`Quot.sound` のほかの公理に頼らない定理 `Proofs.refund_split.<性質>` を受け付けます。
 ```
