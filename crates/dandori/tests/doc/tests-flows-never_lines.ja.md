@@ -59,7 +59,7 @@ flowchart TD
 <details>
 <summary><code>tool_check</code> · tool_route v1 · <code>rules/tool_route.rule</code></summary>
 
-<!-- rulec 0.49.0 が tool_route.rule (sha256:d5b1a0fc38a9) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.50.0 が tool_route.rule (sha256:d5b1a0fc38a9) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 tool_route v1
 
 Whether an order's tools go out at once or are looked at first. The caller keeps three combinations from happening: an order with a tool does not hold only parts, an order with no tool counts none, and a gold order counts at least one.

@@ -1165,7 +1165,7 @@ not shown:
 
 ```json
 {
-  "kaname": "0.49.0",
+  "kaname": "0.50.0",
   "file": "late_payment.kn",
   "ok": true,
   "summary": "1 function, total",
