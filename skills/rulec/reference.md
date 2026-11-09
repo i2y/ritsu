@@ -1078,6 +1078,10 @@ One declaration does three jobs.
    instead of silently computing something.
 
 The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY`, `range >=1g`.
+A bound the range does not write is the end of what the type holds: ±(2^63−1) in the integer the
+value travels as. The entry guard holds an input to each bound it
+writes and, on a side it writes none, to that end, in every language and in `rulec run`
+(§15.295). A date's ends are the first and last days a door reads, 0001-01-01 and 9999-12-31.
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
 message states the interval to widen to. An input of an ordered enum (§3) may declare a range
 over its values, `range >=basic <=gold`: the bounds are values of the enum, and the three jobs

@@ -1594,7 +1594,9 @@ pointer of its own only where there is a value:
 ## The two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is
-checked against its declared `range`, and every enum input against its set of values — an
+checked against each end its `range` writes, and on a side the range writes none, against the
+end of what its type holds, ±(2^63−1) in the integer it travels as (§15.295); every enum input
+against its set of values — an
 ordered enum's with a `range` against the values the range lets in (§15.210); then
 every `constraint` — between two inputs, or between inputs added up and one more, the sum taken
 on the step the inputs share, which E108 has shown fits in int64 — and every `never` line that names
@@ -1607,6 +1609,17 @@ proof says nothing about inputs the rule never declared.
 if not 0 <= subtotal <= 1000000:
     raise RuleInputError("subtotal is out of range", _repr(subtotal))
 ```
+
+How a language writes the end of the type depends on its integers. Python, NumPy, TypeScript,
+JavaScript and Ruby have no end to theirs, so they test both: an `amount : money[JPY]` with no
+range is `if not -9223372036854775807 <= amount <= 9223372036854775807:`, and one with
+`range >=0JPY` is `if not 0 <= amount <= 9223372036854775807:`. Go, Rust, Java, PHP, Swift, SQL
+and Wasm hold the value in an int64, whose most is the upper end itself, so they test the
+lower end alone — `if int64(in.Amount) < -9223372036854775807 {` in Go, which refuses −2^63 and
+nothing else — and a range with one end, on that side alone (`if int64(in.Amount) < 0 {`).
+NumPy tests the ends before it makes the column int64, which would have wrapped 2^63 into
+−2^63. A number past 2^63−1 never reaches an int64 language's door: its type cannot hold one,
+and a runner refuses it as it reads the JSON.
 
 The sentence and the value travel apart. The error carries both — `what` is the sentence,
 `value` the number that was refused — and puts them together only when it is printed, so

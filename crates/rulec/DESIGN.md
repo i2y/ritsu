@@ -6796,6 +6796,80 @@ machine order over step
 - 後ろで決まる出力を読む既存の二つの試験（`tests/count.rs` の二回目の歩きと、`tests/lean.rs` の `read_first`）は、前と同じく通る。
 - rulec の試験の全部 1,454 件（`proofs/` の `lake build` のうえで、SKIP なし）、kaname の試験の全部 214 件、rulec を使う九つのクレート（dandori・ritsu など）の試験 1,373 件。
 
+### 15.295 入口が数を受ける端：書いた端と、型の端（2026-11-09）
+
+**きっかけ**：§15.293 に残した一つ目の穴は、端の無い入力に届く値を、検査・証明書・再検査がどう読むかという問いだった。2026-11-09 に、範囲が書かない端は型が持てる値の端と読む、と決めた。検査・証明書・二つの再検査の側は §15.294 に書く。この節は、入口と、入口を確かめるベクタの側である。
+
+調べる途中で、生成コードの入口の不具合が見つかった。どの言語の入口も、範囲の両端が書いてあるときにしか範囲を見ていなかった。`range >=0JPY` のように片側だけ書いた入力は、書いた側の外の値も通した。基準の評価器（`rulec run`）とベクタは書いた端で断るので、表がその端に頼っていると、生成コードはどの行にも当たらない値を先へ進めた。0.46.0 で生成した次の規則に、ベクタの `amount = -1` を渡すと、Python、Rust、Rust の WASI、Go がそろって落ちた（入口の検査は 0.48.0 まで変わっていない）。
+
+```text
+inputs
+  amount : money[JPY]  range >=0JPY
+…
+| amount          | -> fee : money[JPY] |
+| >=0JPY <1000JPY | 100JPY              |
+| >=1000JPY       | 0JPY                |
+```
+
+```text
+FAIL  half_low (Python) could not be run
+AssertionError: unreachable: completeness was statically checked by rulec
+FAIL  half_low (Rust) could not be run
+internal error: entered unreachable code: unreachable: completeness was statically checked by rulec
+FAIL  half_low (Go) could not be run
+panic: unreachable: completeness was statically checked by rulec [recovered, repanicked]
+```
+
+木の `.rule` には片側だけの範囲の入力が無かったので、この不具合はどの試験にも出ていなかった。範囲の無い数の入力は、corpus の二つの規則（`coupon_discount_amount` と `クーポン割引`）の率と、W105 の試験の規則にある。前は、基準の評価器もベクタもその値を断らなかったので、食い違いは出なかった。
+
+**決めたこと**：
+
+1. **入口が数を受ける端**は、範囲が書いた端と、書かない側では型の端、つまり運ぶ整数で ±(2^63−1) である。上下を同じ大きさにしたのは、検査が大きさを絶対値で見る（格納する値の絶対値が i64::MAX 以下）のと合わせるためである。基準の評価器（`door::one`）は、書いた端の外と、絶対値が 2^63−1 を越える数を「範囲の外」で断る。型の端を越える端を書いた範囲は E108 で止まるので（§15.294）、検査を通った規則では、書いた端はいつも型の端の内側にある。入口とベクタは、書いた端を型の端で切り詰めて読む。検査を通らずに作られた入力への備えである。
+2. **言語ごとの書き方**（`door::ends`）。整数に端の無い言語（Python、NumPy、TypeScript、JavaScript、Ruby）は両側を見る。int64 で持つ言語（Go、Rust、Java、PHP、Swift、SQL、Wasm）は下の端だけを見る。範囲が下の端を書かなければ `v < -9223372036854775807` で、断るのは -2^63 だけである。上の端 2^63−1 は int64 の最大なので、見る式が要らない。片側だけ書いた範囲は、書いた側を見る。
+3. **NumPy は int64 にする前に見る。** 列は Python の整数で届き、`astype(np.int64)` は 2^63 を -2^63 に折り返す。runtime（`rulec_np.py`）は、型を変える前に端を見る。int64 でない列（float、uint64、object）は Python の比べ方で一つずつ比べる。numpy は float の列と整数を float64 で比べ、2^63−1 を 2^63 と読むからである。
+4. **日付には足さない。** どの言語の入口も、日付を `YYYY-MM-DD` で、年 0001〜9999 の暦にある日だけ読む（§15.279）。型の端は、読むところで守られている。rulec の規則は日付で計算しないので（E048）、int64 の主張が日付の端を読むことも無い。
+5. **ベクタ。** 範囲が下の端を書かない数の入力と、下の端に型の端そのものを書いた入力に、断るケース「型の持てる値の下端の一つ下」（-9223372036854775808）を足した。どの言語にも渡せる値で、どの言語も「範囲の外」で断る。上の端の一つ上（2^63）は足さない。int64 で持つ言語のライブラリは int64 を受け取るので、その値は入口まで届かない。runner は JSON を読むところで断るが、文がそろわない。Go、Rust、Java、PHP、Wasm は「整数でない」、Connect は protobuf の読み手の文で断り、SQLite の runner は値を表に入れられない。
+6. **説明に片側の端を書く。** Go の構造体のコメント（`// amount range 0..`）、SQL のファイルの頭の列の説明（`amount: bigint, in JPY, 0..`）、`.proto` のフィールドの説明（`0 or more`、「0 以上」）、`doc` のページで値を入れて試すフォーム（`min` だけ）。JSON Schema は前から片側ずつ書いていた。どれも書いた端だけを書き、型の端は書かない。ポートと `ranges` も書いた端だけである（kaname の DESIGN 32）。
+
+**ついでに直したもの**：
+
+- PostgreSQL の関数を確かめる runner は、引数を `値::bigint` と書いていた。`::` はマイナスより先に結びつき、9223372036854775808 は bigint に入らないので、-2^63 を渡すケースで落ちた。値を括弧で囲んだ。
+- 上の端に型の端そのもの（`<=9223372036854775807JPY`）を書いた入力には、ベクタが「範囲の上端の一つ上」として 2^63 を作っていた。int64 の言語には渡せない値なので、作らないようにした。
+- ベクタの「整数でない数」は、ベクタの値に .5 を付けて作る。範囲の端が大きいと、値が -9223372036854775807 になり、`-9223372036854775807.5` を作っていた。基準の評価器は数字を書いたとおりに読んで「整数でない」と言うが、JSON の数を float64 で読む言語では .5 が消えて隣の整数になり、「範囲の外」と言う。float64 が .5 を持てるのは絶対値が 2^52 より小さいところまでなので、付ける前の値をその内に収める。
+
+**変わること**：
+
+- 片側だけ書いた範囲の入力は、生成コードでも、書いた端の外を「範囲の外」で断る。`rulec run` は前からそうだった。
+- 範囲の無い数の入力は、どの言語でも -2^63 を断る。Python、TypeScript、JavaScript、Ruby は 2^63 以上も断り、NumPy は折り返して答えていた値を断る。0.46.0 で生成した範囲の無い `amount`（行は `<1000JPY` と `>=1000JPY`）に 2^63 を渡すと、次のように答えていた。NumPy は 2^63 を -2^63 と読み、`<1000JPY` の行で答えている。このビルドでは、TypeScript と Ruby を含めて四つとも断る。
+
+```text
+FAIL  no_range (Python) disagrees with the reference evaluator
+    answered an input the reference evaluator refuses (line 1): {"in":{"amount":9223372036854775808},"observed":{"fee":0},"trace":[{"table":"fees","row":2}]}
+FAIL  no_range (NumPy) disagrees with the reference evaluator
+    answered an input the reference evaluator refuses (line 1): {"in":{"amount":9223372036854775808},"observed":{"fee":100},"trace":[{"table":"fees","row":1}]}
+```
+
+- 両端を書いた範囲の入力の生成コードは、どの言語でも変わらない。
+- `doc` が書く HTML のページは、範囲に関係なく、どの規則でも埋め込むスクリプトが変わる。フォームの部品が片側だけの端を扱うようになったからである。木では、dandori のサイトの `doc` のページ（英日 10 枚）、ritsu の modules の golden（`doc-order_total.html`）、playground の `ritsu.wasm` を作り直した。
+
+**見つけて、直していないもの**：TypeScript と JavaScript の runner は、ベクタの行を `JSON.parse` で読む。数は float64 になってから `BigInt` になるので、2^53 を越える整数は隣の float64 に丸まって入口に届く。入口は正しく、読む側の問題で、端を変える前からある。範囲の端か表の境目が 2^53 を越える規則で出る。範囲が 0〜10^16 円で、表の境目が 9007199254740993 円（2^53+1）の規則を回すと、Python は一致し、TypeScript は境目の値を一つ下と読んで、別の行で答えた。
+
+```text
+FAIL  big_edge (TypeScript) disagrees with the reference evaluator
+    line 3
+      generated: {"in":{"amount":9007199254740992},"observed":{"fee":100},"trace":[{"table":"fees","row":1}]}
+      expected: {"in":{"amount":9007199254740993},"observed":{"fee":0},"trace":[{"table":"fees","row":2}]}
+```
+
+生成した TypeScript の MCP のサーバも、要求を `JSON.parse` で読む。`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner を、この理由で比べない（-9223372036854775807 が -2^63 として届く）。読む側を直すなら、JSON.parse に渡す関数が受け取る元の文字列（`context.source`）から整数を読み、BigInt を書くときは `JSON.rawJSON` を使う。どちらも手元の Node 23.11 にある。
+
+**確かめたこと**：
+
+- `tests/door_ends.rs` の 5 件。基準の評価器が書いた端と型の端の外で断り、端では答えること（日本語の文も）。下の端だけを書いた日付も、その日の前日を断ること。ベクタが端の一つ外を持つこと。各言語が書く式。全部の言語の runner が端の外を同じ文で断ること（`rulec test`。上に書いた二つを除く）。整数に端の無い言語が 2^63、2^64、-2^63−1 を断ること。
+- 手元で、九つの規則（下端だけ、上端だけ、範囲なし、並びの要素の下端だけと範囲なし、率と日付の下端だけ、省略可の下端だけと範囲なし）を、全部の言語に MCP、Connect、丸めの補助関数の試験を足して `rulec test --require-all` に通した。PostgreSQL の関数を含めて 222 件が一致した。
+- 範囲の無い日付に、0000-01-01、0000-12-31、10000-01-01、-001-01-01 と、0001-01-01、9999-12-31、0004-02-29、1582-10-10 を渡すベクタを足して、24 の runner に通した。前の四つはどれも「日付でない」で断り、後の四つはどれも同じ答えを返した。
+- rulec の試験の全部 1,454 件（`proofs/` の `lake build` のうえで、SKIP なし）。ritsu の skill、website（サイトの build を含む）、codes、readme、modules、modules_diff、playground と、dandori の doc の試験（作り直したページと `ritsu.wasm` で）。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

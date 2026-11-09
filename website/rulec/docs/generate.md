@@ -293,8 +293,9 @@ input, and the function's name and signature in each of the five.
 ## Two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every
-numeric input is checked against its declared range and every enum input
-against its values; then every `constraint` between two inputs, every
+numeric input is checked against each end its range writes — on a side it
+writes none, against the end of what its type holds, ±(2^63−1) — and every
+enum input against its values; then every `constraint` between two inputs, every
 `never` line that names an input, and a date input that takes its range from a koyomi date against the days that
 date comes to. Without it, a caller outside the declared domain would get
 a silently wrong number — and the completeness proof says nothing about

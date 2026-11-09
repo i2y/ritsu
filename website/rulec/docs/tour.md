@@ -355,7 +355,8 @@ One declaration does three jobs.
 2. **The universe of the completeness check.** "Every input matches some
    row" means every input *within these ranges*.
 3. **The entry guard of the generated code.** Called outside the range,
-   it returns an error instead of silently computing.
+   it returns an error instead of silently computing. A side the range
+   leaves open is held at the end of what the type holds, ±(2^63−1).
 
 A `derive` whose range does not contain the interval it can actually
 reach is an error — if inputs of 0 to 1,000,000 yen can produce
