@@ -37,6 +37,7 @@ kaname lean_proves_the_properties_of_the_examples
 ritsu check_lean_shows_the_properties_of_the_example
 ritsu check_lean_turns_away_a_proof_by_sorry
 ritsu gen_lean_builds_the_proofs_in_place
-# The `--lean` that the pages of kaname show is run by the test of those pages where lake is there,
-# and is a SKIP line elsewhere; the rest of the test runs in every group.
+# The `--lean` that the pages of kaname show is run by the tests of those pages where lake is there,
+# and is a SKIP line elsewhere; the rest of each test runs in every group.
 ritsu the_pages_of_kaname_show_the_files_and_what_the_commands_print
+ritsu the_commands_on_kanames_pages_print_what_they_show

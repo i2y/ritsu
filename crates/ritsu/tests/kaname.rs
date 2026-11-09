@@ -317,6 +317,14 @@ fn the_commands_on_kanames_pages_print_what_they_show() {
                     continue;
                 }
                 let args: Vec<&str> = rest.split_whitespace().collect();
+                // `--lean` runs Lean (kaname's DESIGN 38), which not every runner has: it is run where
+                // the level lets the tests run `lake` and it is there, and a SKIP line says so where not.
+                if args.contains(&"--lean") {
+                    let there = kaname::lean::find_lake().is_some();
+                    if !ritsu_testkit::ready(ritsu_testkit::Need::Lean, || there, "lake is not found, so the `--lean` the pages of kaname show is not run") {
+                        continue;
+                    }
+                }
                 let (_, got, err) = ritsu_in(&kaname_dir(), &args);
                 let got = got + &err;
                 let want = out.join("\n") + "\n";
