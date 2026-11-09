@@ -161,18 +161,10 @@ fn generate(dir: &Path, out: &Path, targets: &[&str], extras: &[&str]) {
     assert_eq!(c, 0, "{said}{e}");
 }
 
-/// The runs that cannot hand the door the value a vector writes. The runners of TypeScript and
-/// JavaScript read a line with `JSON.parse`, which makes a number a float64 before it is a bigint,
-/// and on Linux Foundation's `JSONSerialization` gives Swift's a negative integer of 19 digits as
-/// an `NSDecimalNumber`, which the runner reads through `doubleValue` (on macOS it stays an
-/// Int64): so the lower end of `at_the_ends` reaches the door as −2^63. It is the reading, not the
-/// door, and it was so before the ends (§15.295, left as it is).
-fn read_as_float64(rule: &str, lang: &str) -> bool {
-    rule == "at_the_ends" && (matches!(lang, "typescript" | "javascript") || (lang == "swift" && cfg!(target_os = "linux")))
-}
-
 /// `rulec test --format json` over `out`: every result that ran agreed, and the languages that ran.
-/// A language whose toolchain is missing is a SKIP line, as `rulec test` says it.
+/// A language whose toolchain is missing is a SKIP line, as `rulec test` says it. Every runner is held
+/// to it, those of TypeScript, JavaScript and Swift too, which read every integer of a line from
+/// its digits (§15.297).
 fn agree(out: &Path) -> Vec<String> {
     let tmp = TempDir::new("door-ends-tmp");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
@@ -189,10 +181,6 @@ fn agree(out: &Path) -> Vec<String> {
     let mut ran = Vec::new();
     for r in j.get("results").and_then(|v| v.as_arr()).unwrap_or_default() {
         if r.get("ran").and_then(|v| v.as_bool()) != Some(true) {
-            continue;
-        }
-        let of = |k: &str| r.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        if read_as_float64(&of("rule"), &of("lang")) {
             continue;
         }
         assert_eq!(r.get("ok").and_then(|v| v.as_bool()), Some(true), "{r:?}\n{said}");

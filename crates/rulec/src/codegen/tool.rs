@@ -758,7 +758,27 @@ function _need(name: string, v: unknown): unknown {
   return v;
 }
 
+type JsonSource = { source?: string };
+type JsonRaw = { rawJSON(text: string): unknown };
+
+// An integer of a message past 2^53 is read from the digits written, which Node 21 and later hand
+// a reviver, and not from the float64 JSON.parse makes of it, which holds every integer only up to
+// 2^53; and a bigint is written back as its digits (§15.297).
+function _exact(_k: string, v: unknown, at: JsonSource = {}): unknown {
+  if (typeof v === "number" && !Number.isSafeInteger(v) && at.source !== undefined && /^-?[0-9]+$/.test(at.source)) {
+    return BigInt(at.source);
+  }
+  return v;
+}
+
+function _raw(_k: string, v: unknown): unknown {
+  return typeof v === "bigint" ? (JSON as unknown as JsonRaw).rawJSON(String(v)) : v;
+}
+
 function _int(name: string, v: unknown): bigint {
+  if (typeof v === "bigint") {
+    return v;
+  }
   if (typeof v === "number" && Number.isInteger(v)) {
     return BigInt(v);
   }
@@ -898,7 +918,7 @@ export function handle(req: unknown): Record<string, unknown> | null {
     if (record !== null) {
       appendFileSync(record, rec + "\n");
     }
-    return _ok(id, { content: [{ type: "text", text: rec }], structuredContent: JSON.parse(rec) });
+    return _ok(id, { content: [{ type: "text", text: rec }], structuredContent: JSON.parse(rec, _exact) });
   }
   return _err(id, -32601, `unknown method: ${String(method)}`);
 }
@@ -912,7 +932,7 @@ function onLine(raw: string): void {
   let req: unknown;
   let msg: Record<string, unknown> | null;
   try {
-    req = JSON.parse(line);
+    req = JSON.parse(line, _exact);
   } catch {
     msg = _err(null, -32700, "parse error");
     process.stdout.write(JSON.stringify(msg) + "\n");
@@ -920,7 +940,7 @@ function onLine(raw: string): void {
   }
   msg = handle(req);
   if (msg !== null) {
-    process.stdout.write(JSON.stringify(msg) + "\n");
+    process.stdout.write(JSON.stringify(msg, _raw) + "\n");
   }
 }
 
@@ -973,7 +993,7 @@ function serveHttp(host: string, port: number, allowed: readonly string[]): void
     req.on("end", () => {
       let parsed: unknown;
       try {
-        parsed = JSON.parse(body);
+        parsed = JSON.parse(body, _exact);
       } catch {
         send(400, JSON.stringify(_err(null, -32700, "parse error")), {});
         return;
@@ -993,7 +1013,7 @@ function serveHttp(host: string, port: number, allowed: readonly string[]): void
         sessions.add(fresh);
         extra["Mcp-Session-Id"] = fresh;
       }
-      send(200, JSON.stringify(msg), extra);
+      send(200, JSON.stringify(msg, _raw), extra);
     });
   });
   srv.listen(port, host, () => {

@@ -377,7 +377,7 @@ impl<'a> Gen<'a> {
     if (cl.trim() === "") {
       continue;
     }
-    const @D@ = JSON.parse(cl).in as unknown;
+    const @D@ = JSON.parse(cl, _exact).in as unknown;
 @PRELUDE@    const ca = [@ARGS@] as const;
     const cc = @NAME@(@PASS@);
     console.log(`{"total":${cc.total}}`);

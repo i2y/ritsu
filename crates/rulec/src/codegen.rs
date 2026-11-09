@@ -6916,7 +6916,7 @@ impl<'a> Gen<'a> {
         let v = runner_local("v", &alias);
         let state = runner_local("state", &alias);
         let (mut head, mut tail) = (String::new(), String::new());
-        let mut body = format!("  const {d} = JSON.parse({line}).in as unknown;\n");
+        let mut body = format!("  const {d} = JSON.parse({line}, _exact).in as unknown;\n");
         // The parser of a machine's state read from an `enums` file is that file's module's, which
         // the rule's module does not re-export (§15.238).
         let mut state_owner: Option<(String, String)> = None;
@@ -6948,11 +6948,7 @@ impl<'a> Gen<'a> {
                     args[k] = format!("(\"step\" in {v} ? {local} : {})", args[k]);
                 }
                 more_head.push_str(&format!("let {local}: {} = {};\n", self.ts_ty(&mc.ty), mc.upper()));
-                let shown = match mc.kind() {
-                    MoreKind::Number | MoreKind::Branded => format!("Number({})", mc.upper()),
-                    _ => mc.upper(),
-                };
-                more_meta.push(format!("{}: {shown}", mc.key()));
+                more_meta.push(format!("{}: {}", mc.key(), mc.upper()));
                 let read = ts_read(self, &mc.ty, &format!("({v}.carried as unknown)"), &mc.input, &mut imports, &mut type_imports);
                 more_start.push_str(&format!("    {local} = {read};\n"));
                 more_tail.push_str(&format!("      {local} = {r}.{};\n", mc.out_alias));
@@ -6960,9 +6956,9 @@ impl<'a> Gen<'a> {
             let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", carried: {{ {} }}", more_meta.join(", ")) };
             head = format!("let {state}: {cls} = INITIAL;\n{more_head}");
             body = format!(
-                "  const {v} = JSON.parse({line}) as Record<string, unknown>;\n  \
+                "  const {v} = JSON.parse({line}, _exact) as Record<string, unknown>;\n  \
                  if (\"machine\" in {v}) {{\n    \
-                   console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)){carried_meta} }}));\n    \
+                   console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)){carried_meta} }}, _raw));\n    \
                    continue;\n  }}\n  \
                  const {d} = {v}.in as unknown;\n  \
                  if ({v}.step === \"start\") {{\n    {state} = parse{cls}(String({v}.state));\n{more_start}  }}\n"
@@ -8999,7 +8995,27 @@ pub(crate) const TS_WIRE: &str = r#"function _take(d: unknown, k: string, missin
   return v;
 }
 
+type JsonSource = { source?: string };
+type JsonRaw = { rawJSON(text: string): unknown };
+
+// An integer of the line past 2^53 is read from the digits written, which Node 21 and later hand
+// a reviver, and not from the float64 JSON.parse makes of it, which holds every integer only up to
+// 2^53; and a bigint is written back as its digits (§15.297).
+function _exact(_k: string, v: unknown, at: JsonSource = {}): unknown {
+  if (typeof v === "number" && !Number.isSafeInteger(v) && at.source !== undefined && /^-?[0-9]+$/.test(at.source)) {
+    return BigInt(at.source);
+  }
+  return v;
+}
+
+function _raw(_k: string, v: unknown): unknown {
+  return typeof v === "bigint" ? (JSON as unknown as JsonRaw).rawJSON(String(v)) : v;
+}
+
 function _int(v: unknown, what: string): bigint {
+  if (typeof v === "bigint") {
+    return v;
+  }
   if (typeof v !== "number" || !Number.isInteger(v)) {
     throw new RuleInputError(what, v);
   }
@@ -9252,7 +9268,21 @@ const SWIFT_WIRE: &str = r#"    static func _take(_ d: Any?, _ k: String, _ miss
         guard let n = v as? NSNumber else {
             throw RuleError.input(what: what, value: nil)
         }
+        // Foundation on Linux gives a negative integer of 19 digits as an NSDecimalNumber, which
+        // holds it exact where its `doubleValue` would round it: it is read from its digits, which
+        // are one Int64 or none (§15.297).
+        if let dec = n as? NSDecimalNumber {
+            guard let i = Int64(dec.stringValue) else {
+                throw RuleError.input(what: what, value: nil)
+            }
+            return i
+        }
         let t = String(cString: n.objCType)
+        // A UInt64 past Int64 is none, as a value past 64 bits is in every language that holds an
+        // Int64: `int64Value` would keep its low 64 bits, and 2^64−1 would be −1 (§15.297).
+        if t == "Q" && n.uint64Value > UInt64(Int64.max) {
+            throw RuleError.input(what: what, value: nil)
+        }
         if ["i", "s", "l", "q", "I", "S", "L", "Q"].contains(t) {
             return n.int64Value
         }
@@ -9729,7 +9759,7 @@ fn wasm_runner_with(alias: &str, machine: &str, carry: &str, more: &str) -> Stri
             format!("\nconst MORE = {more};\nlet held = {{}};"),
             "\n    if (v.step === \"start\") held = { ...v.carried };".to_string(),
             ", ...held".to_string(),
-            "\n    const obs = JSON.parse(out).observed;\n    held = Object.fromEntries(MORE.map(([i, o]) => [i, obs[o]]));".to_string(),
+            "\n    const obs = JSON.parse(out, exact).observed;\n    held = Object.fromEntries(MORE.map(([i, o]) => [i, obs[o]]));".to_string(),
         )
     };
     format!(
@@ -9794,9 +9824,15 @@ const MACHINE = @MACHINE@;
 const CARRY = @CARRY@;
 let state = null;@MORE_DECL@
 
+// An integer past 2^53 is read from the digits written, which Node 21 and later hand a reviver,
+// and written back as its digits, so a trace hands the module what it answered (§15.297).
+const exact = (_k, v, at = {}) =>
+  typeof v === "number" && !Number.isSafeInteger(v) && at.source !== undefined && /^-?[0-9]+$/.test(at.source) ? BigInt(at.source) : v;
+const raw = (_k, v) => (typeof v === "bigint" ? JSON.rawJSON(String(v)) : v);
+
 for (const line of readFileSync(0, "utf8").split("\n")) {
   if (!line.trim()) continue;
-  const v = JSON.parse(line);
+  const v = JSON.parse(line, exact);
   if (MACHINE !== null && "machine" in v) {
     console.log(MACHINE);
     continue;
@@ -9805,14 +9841,14 @@ for (const line of readFileSync(0, "utf8").split("\n")) {
   if (CARRY !== null && "step" in v) {
     // A trace's call is passed the state the module answered to the call before.
     if (v.step === "start") state = v.state;@MORE_START@
-    text = JSON.stringify({ in: { ...v.in, [CARRY[0]]: state@MORE_PASS@ } });
+    text = JSON.stringify({ in: { ...v.in, [CARRY[0]]: state@MORE_PASS@ } }, raw);
   }
   const out = call(text);
   console.log(out);
   // A refusal is the module's own line, in the place of the record (§15.204).
   if (out.startsWith('{"refused":')) continue;
   if (CARRY !== null && "step" in v) {
-    state = JSON.parse(out).observed[CARRY[1]];@MORE_NEXT@
+    state = JSON.parse(out, exact).observed[CARRY[1]];@MORE_NEXT@
   }
 }
 "#;
