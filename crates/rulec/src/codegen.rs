@@ -13921,10 +13921,10 @@ impl<'a> Gen<'a> {
     }
 
     /// The runner. Foundation's `JSONSerialization` is to Swift what `json` is to Ruby —
-    /// part of the toolchain rather than a dependency — and it keeps an integer that fits
-    /// in `Int64` exact, which is what the vectors need. The answer is written out by hand
-    /// rather than serialized, because the comparison is byte-for-byte and the order of the
-    /// fields is the order the rule declares its outputs in.
+    /// part of the toolchain rather than a dependency. On macOS it keeps an integer that fits
+    /// in `Int64` exact; on Linux it gives -9223372036854775807 as a Double (§15.295). The
+    /// answer is written out by hand rather than serialized, because the comparison is
+    /// byte-for-byte and the order of the fields is the order the rule declares its outputs in.
     ///
     /// `@main` needs the runner not to be the module's main file, which is why it is
     /// `{alias}_runner.swift` and not `main.swift`.

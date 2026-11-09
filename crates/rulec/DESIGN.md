@@ -6861,11 +6861,19 @@ FAIL  big_edge (TypeScript) disagrees with the reference evaluator
       expected: {"in":{"amount":9007199254740993},"observed":{"fee":0},"trace":[{"table":"fees","row":2}]}
 ```
 
-生成した TypeScript の MCP のサーバも、要求を `JSON.parse` で読む。`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner を、この理由で比べない（-9223372036854775807 が -2^63 として届く）。読む側を直すなら、JSON.parse に渡す関数が受け取る元の文字列（`context.source`）から整数を読み、BigInt を書くときは `JSON.rawJSON` を使う。どちらも手元の Node 23.11 にある。
+生成した TypeScript の MCP のサーバも、要求を `JSON.parse` で読む。TypeScript と JavaScript の読む側を直すなら、JSON.parse に渡す関数が受け取る元の文字列（`context.source`）から整数を読み、BigInt を書くときは `JSON.rawJSON` を使う。どちらも手元の Node 23.11 にある。
+
+Swift の runner は、Foundation の `JSONSerialization` で読む。macOS の Foundation は Int64 に収まる整数をそのまま読むが、CI の Linux（Swift 6.1、ubuntu-24.04）では -9223372036854775807 が Double になり、-2^63 として入口に届いた。範囲の端に型の端を書いた規則は、手元の macOS では一致し、CI では次のように合わなかった。
+
+```text
+{"rule":"at_the_ends","lang":"swift","via":"runner","vectors":4,"refused":4,"calls":0,"ok":false,"ran":true,"first_diff":{"line":1,"generated":"{\"refused\":\"input\",\"error\":\"amount is out of range\"}","expected":"{\"in\":{\"amount\":-9223372036854775807},\"observed\":{\"fee\":100},\"trace\":[{\"table\":\"fees\",\"row\":1}]}"},"error":null}
+```
+
+`tests/door_ends.rs` は、範囲の端に型の端を書いた規則の TypeScript と JavaScript の runner と、Linux の Swift の runner を、この理由で比べない（-9223372036854775807 が -2^63 として届く）。
 
 **確かめたこと**：
 
-- `tests/door_ends.rs` の 5 件。基準の評価器が書いた端と型の端の外で断り、端では答えること（日本語の文も）。下の端だけを書いた日付も、その日の前日を断ること。ベクタが端の一つ外を持つこと。各言語が書く式。全部の言語の runner が端の外を同じ文で断ること（`rulec test`。上に書いた二つを除く）。整数に端の無い言語が 2^63、2^64、-2^63−1 を断ること。
+- `tests/door_ends.rs` の 5 件。基準の評価器が書いた端と型の端の外で断り、端では答えること（日本語の文も）。下の端だけを書いた日付も、その日の前日を断ること。ベクタが端の一つ外を持つこと。各言語が書く式。全部の言語の runner が端の外を同じ文で断ること（`rulec test`。上に書いた runner を除く）。整数に端の無い言語が 2^63、2^64、-2^63−1 を断ること。
 - 手元で、九つの規則（下端だけ、上端だけ、範囲なし、並びの要素の下端だけと範囲なし、率と日付の下端だけ、省略可の下端だけと範囲なし）を、全部の言語に MCP、Connect、丸めの補助関数の試験を足して `rulec test --require-all` に通した。PostgreSQL の関数を含めて 222 件が一致した。
 - 範囲の無い日付に、0000-01-01、0000-12-31、10000-01-01、-001-01-01 と、0001-01-01、9999-12-31、0004-02-29、1582-10-10 を渡すベクタを足して、24 の runner に通した。前の四つはどれも「日付でない」で断り、後の四つはどれも同じ答えを返した。
 - rulec の試験の全部 1,454 件（`proofs/` の `lake build` のうえで、SKIP なし）。ritsu の skill、website（サイトの build を含む）、codes、readme、modules、modules_diff、playground と、dandori の doc の試験（作り直したページと `ritsu.wasm` で）。
