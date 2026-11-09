@@ -176,19 +176,121 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
         // The interval reads an end a range does not write as the end of what the type holds
         // (§15.294), so every numeric value states one.
         let obj = match (c.int64_interval(e, &sym.ty), c.scale(e)) {
-            (Some((lo, hi)), Some(sc)) => {
-                let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
-                let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
-                let stored = mag.mul(Rat::int(sc));
-                obj.raw("interval", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi))))
-                    .int("scale", sc)
-                    .str("stored_max", &(stored.num / stored.den).to_string())
-            }
+            (Some((lo, hi)), Some(sc)) => obj
+                .raw("interval", pair(lo, hi))
+                .int("scale", sc)
+                .str("stored_max", &stored(crate::types::stored_at(crate::types::magnitude_of(lo, hi), sc))),
             _ => obj.raw("interval", "null").raw("scale", "null").raw("stored_max", "null"),
         };
-        out.push(obj.finish());
+        // Every integer the code holds on the way to it, a truth value's two sides among them
+        // (§15.296).
+        out.push(obj.raw("steps", steps_json(c, e, &sym.ty)).finish());
     }
     out
+}
+
+/// An interval as the certificate writes it: the two ends, each a string.
+fn pair(lo: Rat, hi: Rat) -> String {
+    format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi)))
+}
+
+/// A stored integer as the certificate writes it. One past 128 bits is never written: `check` has
+/// stopped the rule (E108).
+fn stored(s: Option<i128>) -> String {
+    s.map(|v| v.to_string()).unwrap_or_default()
+}
+
+/// The integers the generated code holds on the way to a value (§15.296), the deepest first: where
+/// each stands in the expression (the places of the operands from the top), the scale it is held at,
+/// its interval, and the integer that stores.
+fn steps_json(c: &Checked, e: &Expr, ty: &crate::types::Ty) -> String {
+    arr(&c
+        .steps(e, ty)
+        .iter()
+        .map(|s| {
+            Obj::new()
+                .raw("at", format!("[{}]", s.at.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",")))
+                .int("scale", s.scale)
+                .raw("interval", pair(s.interval.0, s.interval.1))
+                .str("stored_max", &stored(s.stored))
+                .finish()
+        })
+        .collect::<Vec<_>>())
+}
+
+/// What the generated code holds once a value is worked out (§15.296): each column a table the
+/// certificate states writes numbers into, with the hull of what its rows write and the column's
+/// scale; each numeric output, with what decides it rounded out to its grid, the scale it is
+/// rounded at, and the mode of its rounding, which says whether the code holds the grid twice over.
+/// A column of a table the certificate does not state (a clause with no condition, which has no
+/// axis) is held by E108 alone: a re-checker has no rows to work it out from.
+fn held_json(f: &RuleFile, c: &Checked, stated_columns: &std::collections::HashSet<String>) -> Vec<String> {
+    c.held(f)
+        .iter()
+        .filter(|h| h.output || stated_columns.contains(&h.name))
+        .map(|h| {
+            let o = Obj::new()
+                .str("name", &h.name)
+                .str("of", if h.output { "output" } else { "column" })
+                .raw("interval", pair(h.interval.0, h.interval.1))
+                .int("scale", h.scale)
+                .str("stored_max", &stored(h.stored));
+            match h.mode {
+                Some(m) => o.str("mode", m).finish(),
+                None => o.finish(),
+            }
+        })
+        .collect()
+}
+
+/// What each fold works out (§15.296): its `empty` and `exhausted` answers, what an arm answers with
+/// or takes, and a key and a weight, each with its expression, the interval, scale and stored integer
+/// of a number, and the steps on the way to it, as `values` states a value's. A value of an enum is
+/// not stored as a number and is left out.
+fn fold_values_json(f: &RuleFile, c: &Checked) -> Option<String> {
+    use crate::ast::Arm;
+    let mut items: Vec<String> = Vec::new();
+    for fold in f.folds() {
+        let Some(name) = fold.answer_name(f) else { continue };
+        let ty = c.ty_of(name).map(|t| t.present().clone()).unwrap_or(crate::types::Ty::Unknown);
+        let mut exprs: Vec<(&str, &Expr)> = Vec::new();
+        if let Some(e) = &fold.empty {
+            exprs.push(("empty", e));
+        }
+        if let Some(e) = &fold.exhausted {
+            exprs.push(("exhausted", e));
+        }
+        for (_, arm, _) in &fold.arms {
+            match arm {
+                Arm::Stop(Some(x)) => exprs.push(("answer", x)),
+                Arm::Take { expr, .. } => exprs.push(("answer", expr)),
+                Arm::KeepMax { expr, key } => {
+                    exprs.push(("answer", expr));
+                    exprs.push(("key", key));
+                }
+                Arm::TakeWeighted { expr, weight } => {
+                    exprs.push(("answer", expr));
+                    exprs.push(("weight", weight));
+                }
+                _ => {}
+            }
+        }
+        for (of, e) in exprs {
+            if matches!(e, Expr::Lit(Lit::Word(..), _)) {
+                continue;
+            }
+            let o = Obj::new().str("fold", name).str("of", of).raw("expr", expr_json(e, &ty));
+            let o = match (c.int64_interval(e, &ty), c.scale(e)) {
+                (Some((lo, hi)), Some(sc)) => o
+                    .raw("interval", pair(lo, hi))
+                    .int("scale", sc)
+                    .str("stored_max", &stored(crate::types::stored_at(crate::types::magnitude_of(lo, hi), sc))),
+                _ => o.raw("interval", "null").raw("scale", "null").raw("stored_max", "null"),
+            };
+            items.push(o.raw("steps", steps_json(c, e, &ty)).finish());
+        }
+    }
+    (!items.is_empty()).then(|| arr(&items))
 }
 
 /// The certificate of one rule, as one JSON object.
@@ -255,7 +357,18 @@ fn source_json(src: &str, spans: &[Option<(usize, usize, usize)>], tests: &[Cert
 }
 
 pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> String {
-    let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src, rule_path))).collect();
+    // The tables the certificate states, and the columns they write: `held` states a column of
+    // one of these, which a re-checker knows the rows of (§15.296).
+    let mut stated_columns: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let tables: Vec<String> = c
+        .sets
+        .iter()
+        .filter_map(|s| {
+            let t = certificate_of(s, c, f)?;
+            stated_columns.extend(s.table.outputs.iter().map(|o| o.name.text.clone()));
+            Some(table_json(t, src, rule_path))
+        })
+        .collect();
     let contracts: Vec<String> = crate::projection::contract_certificates(f, c, rule_path).iter().map(contract_json).collect();
     // The numeric outputs, each once, in order: the ones `rounds` and `output_ranges` speak of.
     let mut numeric_outputs: Vec<&String> =
@@ -414,6 +527,13 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         // out from the values the fold answers with (§15.219).
         .opt_raw("fold_answers", fold_answers_json(f, c))
         .raw("values", arr(&values_json(f, c)))
+        // What the generated code holds once a value is worked out (§15.296): a column a table
+        // writes numbers into at its scale, an output at the scale it is rounded at. Each is held to
+        // int64 as a value is.
+        .raw("held", arr(&held_json(f, c, &stated_columns)))
+        // What each fold works out for an element and at either end of its walk, held to int64 as a
+        // value is (§15.296). Written only for a rule that has a fold.
+        .opt_raw("fold_values", fold_values_json(f, c))
         .raw("tables", arr(&tables))
         .raw("contracts", arr(&contracts))
         .raw("machine", machine_json(f, c, src))

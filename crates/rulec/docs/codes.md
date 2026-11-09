@@ -3469,7 +3469,7 @@ Related codes: [E111](#e111), [E105](#e105)
 
 `error` — **Cannot prove an intermediate value fits in int64**
 
-**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64.
+**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a value that fits while an integer the generated code holds on the way to it does not (the two sides of a sum, a comparison, a `min` or a `max` brought to the step they share, a value brought to the step of its rounding grid before it is rounded, a product inside any of them), or a value brought to the step of a column, or to the step an output travels at and its rounding grid share. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64.
 
 **Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges.
 
@@ -3506,6 +3506,20 @@ outputs
   total : money[USDc]  round down(1USDc)
 
 result total = subtotal + shipping
+```
+
+**A value on the way**:
+
+```rule
+rule cap v1
+
+inputs
+  orders : number  range >=0 <=30
+
+outputs
+  points : number  round down(1)
+
+result points = min(orders * 1000000000000000000, 10)
 ```
 
 **The points of the random inputs**:

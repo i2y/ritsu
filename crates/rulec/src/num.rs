@@ -35,6 +35,11 @@ impl RoundMode {
             _ => return None,
         })
     }
+    /// `half_up`, `half_down` and `half_even`: the rounding compares twice the remainder with the
+    /// grid, so the generated code holds the grid twice over (§15.296).
+    pub fn halves(self) -> bool {
+        matches!(self, RoundMode::Half | RoundMode::Bankers | RoundMode::HalfDown)
+    }
     pub fn name(self) -> &'static str {
         match self {
             RoundMode::Up => crate::kw::UP,

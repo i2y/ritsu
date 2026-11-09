@@ -4494,8 +4494,8 @@ pub fn ledger() -> Vec<Entry> {
             "E108",
             tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
             tr!(
-                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、そこから越えうる値もこれです。生成コードの入口は、書いていない端の入力をその端まで受け取ります。入力か要素のフィールドの範囲に、型が持てる値の端を越える端を書いたときもこれです。入口はその外を断るので、どの呼び出しも渡せない値を約束することになります。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。",
-                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64."
+                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、そこから越えうる値もこれです。生成コードの入口は、書いていない端の入力をその端まで受け取ります。入力か要素のフィールドの範囲に、型が持てる値の端を越える端を書いたときもこれです。入口はその外を断るので、どの呼び出しも渡せない値を約束することになります。値そのものが収まっても、生成コードが途中で持つ整数（足し算・比べる式・`min`・`max` の二つの辺を共通の刻みにそろえた値、丸める前に丸めの刻みにそろえた値、その中の掛け算）や、表の列の刻みにそろえた値、出力を送る刻みと丸めの刻みにそろえた値が int64 を越えるときもこれです。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。",
+                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a value that fits while an integer the generated code holds on the way to it does not (the two sides of a sum, a comparison, a `min` or a `max` brought to the step they share, a value brought to the step of its rounding grid before it is rounded, a product inside any of them), or a value brought to the step of a column, or to the step an output travels at and its rounding grid share. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64."
             ),
             tr!(
                 "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。範囲に端を書いていない入力が原因なら、その端を書いてください。型が持てる値を越える端は、その内側に書いてください。乱数の入力の点が多すぎるなら、その範囲を狭めてください。",
@@ -4506,6 +4506,7 @@ pub fn ledger() -> Vec<Entry> {
         )
         .english(X_E108_EN)
         .also(tr!("範囲に書いていない端", "An end a range does not write"), X_E108_OPEN, X_E108_OPEN_EN)
+        .also(tr!("途中の値", "A value on the way"), X_E108_STEPS, X_E108_STEPS_EN)
         .also(tr!("乱数の入力の点", "The points of the random inputs"), X_E108_RANDOM, X_E108_RANDOM),
         err(
             "E109",
@@ -5869,6 +5870,28 @@ outputs
   total : money[USDc]  round down(1USDc)
 
 result total = subtotal + shipping
+"##;
+/// E108, a value on the way (§15.296): the answer of the `min` is never above 10, and the product
+/// inside it passes int64.
+const X_E108_STEPS: &str = r##"rule 上限(cap) v1
+
+inputs
+  注文数(orders) : number  range >=0 <=30
+
+outputs
+  ポイント(points) : number  round down(1)
+
+result ポイント = min(注文数 * 1000000000000000000, 10)
+"##;
+const X_E108_STEPS_EN: &str = r##"rule cap v1
+
+inputs
+  orders : number  range >=0 <=30
+
+outputs
+  points : number  round down(1)
+
+result points = min(orders * 1000000000000000000, 10)
 "##;
 /// E108, the points of the random inputs: 10^20 of them, past the 2^62 a count can hold.
 const X_E108_RANDOM: &str = r##"rule t(t) v1

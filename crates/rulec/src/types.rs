@@ -484,6 +484,9 @@ pub struct Checked {
     /// file and its name. They are held to int64 once every item is read
     /// ([`Checked::overflow_later`], §15.294).
     pub(crate) later: Vec<(Expr, Ty, Span, String, String)>,
+    /// The names E108 has stopped, so that what the code holds once one is worked out (`held`,
+    /// §15.296) is not said of it a second time.
+    pub(crate) overflowed: HashSet<String>,
     /// The output `result` decides, with the range of what it comes to, when its line writes no
     /// range (§15.268): what the `result` reaches under the inputs' ranges and the constraints,
     /// put out to the grid of its rounding. The certificate's `ranges` and the port the other
@@ -1379,6 +1382,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         wide: HashMap::new(),
         written: HashMap::new(),
         later: Vec::new(),
+        overflowed: HashSet::new(),
         result_range: None,
         written_outputs: HashSet::new(),
         reaches: HashMap::new(),
@@ -2605,11 +2609,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // up on that step too, so the sum, not only each of its parts, has to fit.
         let scale_of = |n: &String| c.scales.get(n).copied().unwrap_or(1).max(1);
         let common = k.names().map(scale_of).fold(1, lcm_i128);
-        let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
         // An end a range does not write is the end of what the type holds (§15.294).
         let mags: HashMap<String, Rat> = k
             .names()
-            .filter_map(|n| c.wide_range(n).map(|(lo, hi)| (n.clone(), if abs(lo).cmp_to(abs(hi)).is_gt() { abs(lo) } else { abs(hi) })))
+            .filter_map(|n| c.wide_range(n).map(|(lo, hi)| (n.clone(), magnitude_of(lo, hi))))
             .collect();
         let mag_of = |n: &String| -> Option<Rat> { mags.get(n).copied() };
         let differ = k.names().any(|n| scale_of(n) != common);
@@ -2953,6 +2956,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     c.set_of = set_of;
     c.diags.extend(ds);
     c.output_steps(f, path);
+    // What the code holds once a value is worked out: a column at its scale, an output at the scale
+    // it is rounded at (§15.296). Once the steps of the outputs are known.
+    c.overflow_held(f, path);
     // A name of the rule's that its generated code writes as one it gives itself, or that a
     // language cannot take (§15.265): what the generated code reads is worked out from the types
     // and the tables, which are all there now.
@@ -5675,6 +5681,12 @@ impl Checked {
                 );
                 continue;
             }
+            // What the code works out here, an answer, a key or a weight, is held to int64 like any
+            // value the rule computes, with every integer on the way to it (§15.296): `take_first
+            // top_off × 10^18` passed, and the generated code multiplied in int64.
+            if !matches!(e, Expr::Lit(Lit::Word(..), _)) {
+                self.overflow(e, &out_ty, &sp, path, &answer);
+            }
             if place == Place::Key {
                 continue;
             }
@@ -6707,11 +6719,106 @@ pub fn common_step(a: Rat, b: Rat) -> Option<Rat> {
     Rat::checked_new(n, a.den.checked_mul(b.den)?)
 }
 
+/// How far from zero the interval arithmetic carries an end (§15.296): 2^80, past which no value
+/// fits int64 at any scale, for a scale is never below 1. An end that would pass it is held there,
+/// so three values with no upper bound multiplied neither wrap 128 bits nor stop `check`, and E108
+/// still stops the value, as it stops any value past int64.
+pub const FAR: i128 = 1 << 80;
+
+/// An end of an interval held to ±[`FAR`]; `None`, an operation that passed 128 bits, is put at the
+/// end `neg` says.
+pub fn far(v: Option<Rat>, neg: bool) -> Rat {
+    let (top, bottom) = (Rat::int(FAR), Rat::int(-FAR));
+    match v {
+        None if neg => bottom,
+        None => top,
+        Some(v) if cmp_exact(v, top).is_gt() => top,
+        Some(v) if cmp_exact(v, bottom).is_lt() => bottom,
+        Some(v) => v,
+    }
+}
+
+/// The integer a value of magnitude `mag` stores at `scale`, `None` past 128 bits.
+pub fn stored_at(mag: Rat, scale: i128) -> Option<i128> {
+    let s = mag.checked_mul(Rat::int(scale))?;
+    Some(s.num / s.den)
+}
+
 /// The larger of the two magnitudes at the ends of an interval: how far from zero a value in it
 /// can be.
 pub fn magnitude_of(lo: Rat, hi: Rat) -> Rat {
     let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
-    if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) }
+    if cmp_exact(abs(lo), abs(hi)).is_gt() { abs(lo) } else { abs(hi) }
+}
+
+/// `a` against `b` exactly, also where the cross products [`Rat::cmp_to`] takes pass 128 bits: an
+/// end held at ±[`FAR`] against a value with a large denominator, a quotient by a value with no
+/// upper bound (§15.296). The whole parts first, then what is left of each turned over, as
+/// Euclid's algorithm does, so no product is taken.
+pub fn cmp_exact(a: Rat, b: Rat) -> std::cmp::Ordering {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    if let Some(o) = a.checked_cmp(b) {
+        return o;
+    }
+    let (sa, sb) = (a.num.signum(), b.num.signum());
+    if sa != sb {
+        return sa.cmp(&sb);
+    }
+    // Both on one side of zero: the magnitudes, turned around for two negatives.
+    let (mut p, mut q, mut r, mut s) = (a.num.unsigned_abs(), a.den.unsigned_abs(), b.num.unsigned_abs(), b.den.unsigned_abs());
+    let mut flip = sa < 0;
+    loop {
+        let (w1, r1, w2, r2) = (p / q, p % q, r / s, r % s);
+        let o = if w1 != w2 {
+            w1.cmp(&w2)
+        } else {
+            match (r1 == 0, r2 == 0) {
+                (true, true) => Equal,
+                (true, false) => Less,
+                (false, true) => Greater,
+                (false, false) => {
+                    // r1/q against r2/s is q/r1 against s/r2, the other way round.
+                    (p, q, r, s) = (q, r1, s, r2);
+                    flip = !flip;
+                    continue;
+                }
+            }
+        };
+        return if flip { o.reverse() } else { o };
+    }
+}
+
+#[cfg(test)]
+mod cmp_exact_tests {
+    use super::*;
+    use std::cmp::Ordering::{Equal, Greater, Less};
+
+    /// Where the cross products pass 128 bits the comparison is still exact (§15.296): an end held at
+    /// 2^80 against a quotient by 2^63 − 1, a value against itself, and two values whose whole parts
+    /// agree and whose rests differ in the last place.
+    #[test]
+    fn values_past_the_cross_products_compare_exactly() {
+        let neg = |r: Rat| Rat::zero().sub(r);
+        let q = Rat::new((1i128 << 126) + 1, (1i128 << 63) - 1);
+        let far = Rat::int(FAR);
+        assert!(q.checked_cmp(far).is_none());
+        assert_eq!(cmp_exact(q, far), Less);
+        assert_eq!(cmp_exact(far, q), Greater);
+        assert_eq!(cmp_exact(neg(q), neg(far)), Greater);
+        assert_eq!(cmp_exact(neg(q), q), Less);
+        assert!(q.checked_cmp(q).is_none());
+        assert_eq!(cmp_exact(q, q), Equal);
+        let a = Rat::new((1i128 << 125) + 1, (1i128 << 62) + 1);
+        let b = Rat::new((1i128 << 125) + 3, (1i128 << 62) + 1);
+        assert!(a.checked_cmp(b).is_none());
+        assert_eq!(cmp_exact(a, b), Less);
+        assert_eq!(cmp_exact(b, a), Greater);
+        assert_eq!(cmp_exact(neg(a), neg(b)), Greater);
+        // Where the cross products fit, the same answer as `cmp_to`.
+        for (x, y) in [(Rat::new(1, 3), Rat::new(2, 7)), (Rat::new(-5, 2), Rat::new(-7, 3)), (Rat::int(4), Rat::new(8, 2))] {
+            assert_eq!(cmp_exact(x, y), x.cmp_to(y), "{x} and {y}");
+        }
+    }
 }
 
 /// A rounding grid as the generated code holds it: the integer and the scale it is held at,
@@ -6750,9 +6857,20 @@ pub fn round_out((lo, hi): (Option<Rat>, Option<Rat>), g: Rat) -> (Option<Rat>, 
     if g.num == 0 {
         return (lo, hi);
     }
-    let floor = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, g);
-    let ceil = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, g);
+    let floor = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, g);
+    let ceil = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, g);
     (lo.map(floor), hi.map(ceil))
+}
+
+/// `v` put on `grid` the way `mode` rounds it, or left where it is when it is held at ±[`FAR`] or
+/// putting it on the grid would pass 128 bits (§15.296): such an end is past int64 on any step, and
+/// E108 stops what reaches it.
+pub fn round_far(v: Rat, mode: RoundMode, grid: Rat) -> Rat {
+    let far_out = cmp_exact(magnitude_of(v, v), Rat::int(FAR)).is_ge();
+    if far_out || v.checked_div(grid).is_none() {
+        return v;
+    }
+    v.round_to(mode, grid)
 }
 
 /// A value as the integer it travels as, at the scale `Checked::wire_scale` gives.
@@ -7579,13 +7697,19 @@ impl Checked {
             Expr::Bin(l, op, r, _) => {
                 let (al, ah) = self.interval_in(l, ty, wide)?;
                 let (bl, bh) = self.interval_in(r, ty, wide)?;
+                // Each end is held to ±2^80 (`far`): three values with no upper bound multiplied
+                // pass 128 bits, which wrapped in a release build and stopped `check` in a debug one
+                // (§15.296).
+                let neg = |v: Rat| v.num < 0;
                 match op {
-                    BinOp::Add => Some((al.add(bl), ah.add(bh))),
+                    BinOp::Add => Some((far(al.checked_add(bl), neg(al)), far(ah.checked_add(bh), neg(ah)))),
                     // Two shares of one amount over one whole, the one taken away at a running
                     // total the other never falls below: the first never passes the second, so
                     // what is left is never below zero (§15.268). The ranges alone say it can be.
-                    BinOp::Sub if self.shares_in_order(r, l) => Some((crate::grid::max_rat(al.sub(bh), Rat::zero()), ah.sub(bl))),
-                    BinOp::Sub => Some((al.sub(bh), ah.sub(bl))),
+                    BinOp::Sub if self.shares_in_order(r, l) => {
+                        Some((crate::grid::max_rat(far(al.checked_sub(bh), neg(al)), Rat::zero()), far(ah.checked_sub(bl), neg(ah))))
+                    }
+                    BinOp::Sub => Some((far(al.checked_sub(bh), neg(al)), far(ah.checked_sub(bl), neg(ah)))),
                     BinOp::Mul | BinOp::Div => {
                         // A divisor that can be zero has no interval, and `Rat::div` asserts
                         // rather than returning one — so `税込金額 ÷ 税込金額` **panicked**
@@ -7602,7 +7726,10 @@ impl Checked {
                         }
                         // Minimum and maximum over the endpoint combinations. A rate is not
                         // necessarily non-negative, so all four are examined.
-                        let f = |x: Rat, y: Rat| if *op == BinOp::Mul { x.mul(y) } else { x.div(y) };
+                        let f = |x: Rat, y: Rat| {
+                            let v = if *op == BinOp::Mul { x.checked_mul(y) } else { x.checked_div(y) };
+                            far(v, neg(x) != neg(y))
+                        };
                         let mut vs = [f(al, bl), f(al, bh), f(ah, bl), f(ah, bh)];
                         vs.sort_by(|a, b| a.cmp_to(*b));
                         Some((vs[0], vs[3]))
@@ -7623,8 +7750,8 @@ impl Checked {
                         let (lo, hi) = self.interval_in(x, ty, wide)?;
                         let Expr::Lit(Lit::Num(n), _) = g else { return None };
                         let grid = lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?;
-                        let out = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, grid);
-                        let inn = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, grid);
+                        let out = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, grid);
+                        let inn = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, grid);
                         Some((out(lo), inn(hi)))
                     }
                     // `floor(T × C ÷ S)` with all three non-negative and S positive. The
@@ -7654,7 +7781,7 @@ impl Checked {
                             _ => return None,
                         }
                         let down = |v: Rat| v.round_to(RoundMode::Down, Rat::int(1));
-                        Some((down(tl.mul(cl).div(sh)), down(th)))
+                        Some((down(far(tl.checked_mul(cl).and_then(|p| p.checked_div(sh)), false)), down(th)))
                     }
                     (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
                         let (al, ah) = self.interval_in(x, ty, wide)?;
@@ -8103,44 +8230,119 @@ impl Checked {
     /// int64. If it cannot be proved, stop: rather than overflowing silently, ask the business
     /// where to round.
     fn overflow(&mut self, e: &Expr, ty: &Ty, span: &Span, path: &str, name: &str) {
+        self.overflow_in(e, ty, span, path, name, true);
+    }
+
+    /// [`Checked::overflow`]; `wait` says whether a value that reads an output decided further down
+    /// waits for it, as it does where it is written, or is held now, as `overflow_later` holds it.
+    fn overflow_in(&mut self, e: &Expr, ty: &Ty, span: &Span, path: &str, name: &str, wait: bool) {
         // An end a name's range does not write is read as the end of what its type holds
         // (§15.294): a copy of an input with no upper bound fits, and that input plus one does not.
         let (Some((lo, hi)), Some(sc)) = (self.int64_interval(e, ty), self.scale(e)) else {
-            if self.reads_later(e) {
+            if wait && self.reads_later(e) {
                 self.later.push((e.clone(), ty.clone(), span.clone(), path.to_string(), name.to_string()));
+                return;
             }
+            // A truth value has no interval of its own, and the two sides it compares are still
+            // brought to one step and held there (§15.296); so is a part of a value whose whole
+            // reads something with no interval.
+            self.overflow_steps(e, ty, span, path, name);
             return;
         };
         // The stored integer is value × reciprocal of the step. Use whichever endpoint of the
         // interval has the larger absolute value.
-        let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
-        let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
-        let stored_r = mag.mul(Rat::int(sc));
-        let stored = stored_r.num / stored_r.den;
+        let mag = magnitude_of(lo, hi);
+        let stored = stored_at(mag, sc);
+        if stored.is_some_and(|s| s <= i64::MAX as i128) {
+            // The value fits, and so has every integer the code holds on the way to it (§15.296).
+            self.overflow_steps(e, ty, span, path, name);
+            return;
+        }
+        self.overflowed.insert(name.to_string());
         // The names whose ranges leave an end unwritten, where the ranges the rule writes do not
         // bound it. None found (a value read through one that waited for an output decided further
         // down, whose own range is not recorded) is said as any other E108.
         let mut open = Vec::new();
-        if stored > i64::MAX as i128 && self.interval(e, ty).is_none() {
+        if self.interval(e, ty).is_none() {
             self.open_names(e, &mut open);
         }
         if !open.is_empty() {
             self.open_ended(&open, span, path, name);
-        } else if stored > i64::MAX as i128 {
+        } else {
             self.diags.push(
                 Diag::error("E108", tr!("{name} が int64 に収まることを証明できません", "Cannot prove that {name} fits in int64"))
                     .at(format!("{path}:{}", span.line))
                     .mark(span.clone(), "")
-                    .note(tr!(
-                        "実際に取りうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。",
-                        "The reachable interval is {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}.",
-                        fmt_val(lo, ty),
-                        fmt_val(hi, ty)
-                    ))
+                    .note(reach_note(lo, hi, sc, stored, ty))
                     .note(tr!("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。", "Hint: narrow the input ranges, or insert one rounding step along the way."))
                     .note(tr!("どこで丸めるかで答えが変わり、それは業務の判断なので、rulec は勝手に決めません。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own.")),
             );
         }
+    }
+
+    /// E108 for an integer the generated code holds on the way to a value (§15.296): a side of a sum,
+    /// a difference, a comparison, a `min` or a `max` brought to the step it shares with the other, a
+    /// value brought to the step of its rounding grid before it is rounded, twice that grid, a product
+    /// inside any of them. `check` held only the value itself, and `min(a × 10^18, 10)` passed: its
+    /// answer is never above 10, and Go multiplied in int64 before it compared. The deepest that
+    /// passes int64 is said, once for the value.
+    fn overflow_steps(&mut self, e: &Expr, ty: &Ty, span: &Span, path: &str, name: &str) {
+        let Some(s) = self.steps(e, ty).into_iter().find(Step::past) else { return };
+        let Some(node) = node_at(e, &s.at) else { return };
+        self.overflowed.insert(name.to_string());
+        // A part that reads a value E108 has stopped, by its name or through a column a row of which
+        // writes it, follows from that value and is not stopped a second time for it (§15.294).
+        let mut read = Vec::new();
+        collect_names(node, &mut read);
+        let stopped = |n: &String| self.overflowed.contains(n) && n != name;
+        if read.iter().any(|n| stopped(n) || self.written.get(n).is_some_and(|w| w.iter().any(stopped))) {
+            return;
+        }
+        // A part that a check of its own has stopped already, or that lies inside one — the
+        // argument of `mod` or `isqrt`, a side of a division by a value — is not said twice.
+        let sp = node.span();
+        let inside = |m: &Span| m.line == sp.line && m.file.is_none() == sp.file.is_none() && m.col <= sp.col && sp.col + sp.len <= m.col + m.len;
+        if self.diags.iter().any(|d| d.code == "E108" && d.marks.iter().any(|m| inside(&m.span))) {
+            return;
+        }
+        let text = crate::region::expr_text(node);
+        let mut open = Vec::new();
+        if self.interval(node, ty).is_none() {
+            self.open_names(node, &mut open);
+        }
+        let (lo, hi) = s.interval;
+        let sc = s.scale;
+        let mut d = Diag::error("E108", tr!("{name} が int64 に収まることを証明できません", "Cannot prove that {name} fits in int64"))
+            .at(format!("{path}:{}", span.line))
+            .mark(node.span().clone(), tr!("途中の値 {text}", "the value {text} on the way"));
+        if let Some(why) = s.held.note(sc) {
+            d = d.note(why);
+        }
+        if let Some((list, them)) = open_list(&open) {
+            let has = if open.len() > 1 { "have" } else { "has" };
+            d = d
+                .note(tr!(
+                    "{list} の範囲に上限か下限がありません。書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、途中の {text} を刻み 1/{sc} で持つ整数は int64 を越えることがあります。",
+                    "{list} {has} no upper or no lower bound. An end that is not written is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), and from there {text}, held on the step of 1/{sc} on the way, can pass int64."
+                ))
+                .note(tr!("ヒント: {list} の範囲に、書いていない側の端（`>=` か `<=`）を書いてください。", "Hint: give {list} {them}, `>=` or `<=`."));
+        } else {
+            let reach = if cmp_exact(magnitude_of(lo, hi), Rat::int(FAR)).is_ge() {
+                tr!("途中の {text} は ±2^80 を越え、どの刻みで数えても int64 に収まりません。", "On the way, {text} passes ±2^80, which fits int64 on no step.")
+            } else {
+                tr!(
+                    "途中の {text} は {} から {} で、生成コードはこれを刻み 1/{sc} で持つので、格納される整数は {} になります。",
+                    "On the way, {text} ranges from {} to {}, and the generated code holds it on the step of 1/{sc}, so the stored integer reaches {}.",
+                    fmt_val(lo, ty),
+                    fmt_val(hi, ty),
+                    fmt_stored(s.stored)
+                )
+            };
+            d = d
+                .note(reach)
+                .note(tr!("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。", "Hint: narrow the input ranges, or insert one rounding step along the way."));
+        }
+        self.diags.push(d);
     }
 
     /// E108 for a number that can pass int64 because a name it reads does not write an end of its
@@ -8224,13 +8426,454 @@ impl Checked {
     /// value finds it worked out. What still reads nothing has had another error say why.
     fn overflow_later(&mut self) {
         for (e, ty, span, path, name) in std::mem::take(&mut self.later) {
-            self.overflow(&e, &ty, &span, &path, &name);
+            self.overflow_in(&e, &ty, &span, &path, &name, false);
             if let (Some(iv), Some(_)) = (self.int64_interval(&e, &ty), self.scale(&e)) {
                 self.wide.entry(name).or_insert(iv);
             }
         }
         self.later.clear();
     }
+
+    /// Every integer the generated code holds on the way to `e`, the deepest first (§15.296): each
+    /// node of the expression that has an interval, at the scale `codegen`'s `Gen::expr` holds it at.
+    /// A node is held at its own scale ([`Checked::scale`]) or at a finer one the node above brings it
+    /// to: both sides of a sum, a difference, a comparison, a `min` and a `max` at the scale they
+    /// share; the value a constant grid rounds at the scale it shares with the grid, where the
+    /// rounding itself is done too, and the grid there, twice over for `half_up`, `half_down` and
+    /// `half_even`, which compare twice the remainder with it (§7.3); the two sides of a division by a value at the step the rounding
+    /// brings them to (`division_factors`). The quotient of that division is no node of its own: the
+    /// code divides into whole grid steps, which the rounded value holds. The constant divisor of a
+    /// division is folded into the scale (§7.1) and is listed at its own, which it is written at.
+    pub(crate) fn steps(&self, e: &Expr, ty: &Ty) -> Vec<Step> {
+        let mut out = Vec::new();
+        if let Some(own) = self.scale(e) {
+            self.steps_of(e, ty, own, Held::Own, &mut Vec::new(), &mut out);
+        }
+        out
+    }
+
+    fn steps_of(&self, e: &Expr, ty: &Ty, held: i128, why: Held, at: &mut Vec<usize>, out: &mut Vec<Step>) {
+        let (mut scale, mut why) = (held, why);
+        let own = |s: i128, k: i128, w: Held| if s == k { Held::Own } else { w };
+        match e {
+            Expr::Name(..) | Expr::Lit(..) => {}
+            Expr::Bin(l, op, r, _) => match op {
+                BinOp::Mul | BinOp::Div => {
+                    for (i, x) in [(0, l), (1, r)] {
+                        if let Some(s) = self.scale(x) {
+                            self.step_under(x, i, ty, s, Held::Own, at, out);
+                        }
+                    }
+                }
+                _ => {
+                    if let (Some(a), Some(b)) = (self.scale(l), self.scale(r)) {
+                        let s = lcm_i128(a, b);
+                        self.step_under(l, 0, ty, s, own(s, a, Held::Sides), at, out);
+                        self.step_under(r, 1, ty, s, own(s, b, Held::Sides), at, out);
+                    }
+                }
+            },
+            Expr::Call(name, args, _) => {
+                if let Some((n, d)) = var_division(name, args) {
+                    let grid = match args.get(1) {
+                        Some(Expr::Lit(Lit::Num(g), _)) => grid_int(g),
+                        _ => None,
+                    };
+                    let (sn, sd) = (self.scale(n), self.scale(d));
+                    // Each side at the step the code brings it to; where a scale is not known, at
+                    // its own, which is what the code holds then.
+                    let (held_n, held_d, held_g) = match (sn, sd, grid) {
+                        (Some(sn), Some(sd), Some((gi, sg))) => {
+                            let (ka, kb) = division_factors(sn, sd, gi, sg);
+                            (
+                                Some((sn.saturating_mul(ka), own(ka, 1, Held::Division))),
+                                Some((sd.saturating_mul(kb), own(kb, 1, Held::Division))),
+                                Some(sg),
+                            )
+                        }
+                        _ => (sn.map(|s| (s, Held::Own)), sd.map(|s| (s, Held::Own)), self.scale(&args[1])),
+                    };
+                    at.push(0);
+                    if let Some((s, w)) = held_n {
+                        self.step_under(n, 0, ty, s, w, at, out);
+                    }
+                    if let Some((s, w)) = held_d {
+                        self.step_under(d, 1, ty, s, w, at, out);
+                    }
+                    at.pop();
+                    if let Some(s) = held_g {
+                        self.step_under(&args[1], 1, ty, s, Held::Own, at, out);
+                    }
+                } else if let (Some(mode), 2) = (crate::num::RoundMode::parse(name), args.len()) {
+                    if let (Some(a), Some(b)) = (self.scale(&args[0]), self.scale(&args[1])) {
+                        let s = lcm_i128(a, b);
+                        self.step_under(&args[0], 0, ty, s, own(s, a, Held::Grid), at, out);
+                        if mode.halves() {
+                            self.step_under(&args[1], 1, ty, s.saturating_mul(2), Held::Twice, at, out);
+                        } else {
+                            self.step_under(&args[1], 1, ty, s, own(s, b, Held::Grid), at, out);
+                        }
+                        if s > scale {
+                            (scale, why) = (s, Held::Grid);
+                        }
+                    }
+                } else if (name == crate::kw::MIN || name == crate::kw::MAX) && args.len() == 2 {
+                    if let (Some(a), Some(b)) = (self.scale(&args[0]), self.scale(&args[1])) {
+                        let s = lcm_i128(a, b);
+                        self.step_under(&args[0], 0, ty, s, own(s, a, Held::Sides), at, out);
+                        self.step_under(&args[1], 1, ty, s, own(s, b, Held::Sides), at, out);
+                    }
+                } else {
+                    // `allocate`, `mod` and `isqrt` read each argument at its own scale; what
+                    // `allocate` multiplies and `mod` divides by has its own E108 above.
+                    for (i, x) in args.iter().enumerate() {
+                        if let Some(s) = self.scale(x) {
+                            self.step_under(x, i, ty, s, Held::Own, at, out);
+                        }
+                    }
+                }
+            }
+        }
+        self.step_here(e, ty, scale, why, at, out);
+    }
+
+    fn step_under(&self, x: &Expr, i: usize, ty: &Ty, held: i128, why: Held, at: &mut Vec<usize>, out: &mut Vec<Step>) {
+        at.push(i);
+        self.steps_of(x, ty, held, why, at, out);
+        at.pop();
+    }
+
+    fn step_here(&self, e: &Expr, ty: &Ty, scale: i128, held: Held, at: &[usize], out: &mut Vec<Step>) {
+        if let Some(iv) = self.int64_interval(e, ty) {
+            let stored = stored_at(magnitude_of(iv.0, iv.1), scale);
+            out.push(Step { at: at.to_vec(), scale, interval: iv, stored, held });
+        }
+    }
+
+    /// The scale an output's value is held at before its rounding (§15.144, §15.296): one that the
+    /// scale it comes at, the step it travels at and its rounding grid all divide, as `codegen`'s
+    /// `wire_target` makes it.
+    pub(crate) fn wire_target(&self, od: &OutDecl, from: i128) -> i128 {
+        let name = &od.name.text;
+        let ty = self.ty_of(name).map(|t| t.present().clone()).unwrap_or(Ty::Unknown);
+        let os = if ty == Ty::Rate { self.wire_scale(name) } else { 1 };
+        let to = lcm_i128(from, os);
+        match od.rounding.as_ref().and_then(|rd| lit_value_in(&rd.grid, &ty)) {
+            Some(g) => lcm_i128(to, g.den),
+            None => to,
+        }
+    }
+
+    /// What the generated code holds once a value is worked out (§15.296), for the certificate's
+    /// `held` and for E108: every column a table writes numbers into, at the column's scale, which
+    /// a value its rows name is brought to; and every numeric output, at the scale it is rounded at
+    /// ([`Checked::wire_target`]), where it lands on its grid, and the grid there twice over for a
+    /// rounding by `half_up`, `half_down` or `half_even`.
+    pub(crate) fn held(&self, f: &RuleFile) -> Vec<HeldValue> {
+        let mut out: Vec<HeldValue> = Vec::new();
+        // The tables the certificate states (the definition sets, an `apply`'s among them).
+        for set in &self.sets {
+            for oc in &set.table.outputs {
+                let n = &oc.name.text;
+                if out.iter().any(|h| &h.name == n) || !self.syms.get(n).is_some_and(|s| s.ty.present().is_numeric()) {
+                    continue;
+                }
+                let Some(iv) = self.decided_range(n) else { continue };
+                let sc = *self.scales.get(n).unwrap_or(&1);
+                let stored = stored_at(magnitude_of(iv.0, iv.1), sc);
+                out.push(HeldValue { name: n.clone(), output: false, interval: iv, scale: sc, stored, twice: None, mode: None, from: iv });
+            }
+        }
+        let walked = walk_answers(f);
+        let outs: Vec<HeldValue> = f
+            .outputs
+            .iter()
+            .filter_map(|od| {
+                let n = &od.name.text;
+                let ty = self.ty_of(n)?.present().clone();
+                if !ty.is_numeric() {
+                    return None;
+                }
+                let (from, sc) = match &f.result {
+                    Some(r) if &r.name == n => (self.int64_interval(&r.expr, &ty)?, self.scale(&r.expr)?),
+                    // Besides the `result`, the rows of a table decide an output, which the range
+                    // worked out for it holds, or a walk does. One that none of them decides has had
+                    // another error say why (E015, E103): nothing is held.
+                    _ if self.wide_range(n).is_none() && !walked.iter().any(|w| w == n) => return None,
+                    _ => (self.decided_range(n)?, *self.scales.get(n).unwrap_or(&1)),
+                };
+                let to = self.wire_target(od, sc);
+                let grid = od.rounding.as_ref().and_then(|rd| lit_value_in(&rd.grid, &ty));
+                let mode = od.rounding.as_ref().and_then(|rd| crate::num::RoundMode::parse(&rd.mode));
+                let iv = match (grid, mode) {
+                    // The code holds the value on that step before it rounds it, and what the
+                    // rounding puts on the grid after. A rounding never turns two values around,
+                    // so what it comes to runs between the two ends rounded the way `mode` rounds:
+                    // `down` takes no value away from zero, where putting the ends out to the grid
+                    // would take one a step past int64 at the end of the type.
+                    (Some(g), Some(m)) => {
+                        let (lo, hi) = (round_far(from.0, m, g), round_far(from.1, m, g));
+                        (if cmp_exact(lo, from.0).is_lt() { lo } else { from.0 }, if cmp_exact(hi, from.1).is_gt() { hi } else { from.1 })
+                    }
+                    (Some(g), None) => {
+                        let (lo, hi) = round_out((Some(from.0), Some(from.1)), g);
+                        (lo?, hi?)
+                    }
+                    (None, _) => from,
+                };
+                let stored = stored_at(magnitude_of(iv.0, iv.1), to);
+                // `half_up`, `half_down` and `half_even` compare twice the remainder with the grid.
+                let twice = match (grid, mode) {
+                    (Some(g), Some(m)) if m.halves() => Some(stored_at(g, to.saturating_mul(2))),
+                    _ => None,
+                };
+                Some(HeldValue { name: n.clone(), output: true, interval: iv, scale: to, stored, twice, mode: mode.map(|m| m.name()), from })
+            })
+            .collect();
+        out.extend(outs);
+        out
+    }
+
+    /// The interval the int64 claim reads a value in once every item is read (§15.294, §15.296):
+    /// [`Checked::wide_range`], and for an output a walk or a fold decides, which is read nowhere
+    /// above the line that decides it, its range with an end it does not write read as the end of its
+    /// type. A column a table writes numbers into is read as the hull of what its rows write, not
+    /// cut to the ends of its type on its own step: what `wide_range` cuts off there is what the code
+    /// cannot hold once a row's value is brought to the column's step (`a` in whole percents, with no
+    /// upper bound, in a column on a step of 0.001%).
+    fn decided_range(&self, n: &str) -> Option<(Rat, Rat)> {
+        let sym = self.syms.get(n)?;
+        if sym.kind == SymKind::TableOut {
+            if let Some((Some(lo), Some(hi))) = self.ranges.get(n) {
+                return Some((*lo, *hi));
+            }
+            // The hull of what its rows write. With none, a row writes a value that has no
+            // interval, and another error has said why (E103, E115, E117, E132): nothing is held.
+            return self.wide.get(n).copied();
+        }
+        if let Some(w) = self.wide_range(n) {
+            return Some(w);
+        }
+        if sym.kind != SymKind::Output {
+            return None;
+        }
+        let (first, last) = type_ends(sym.ty.present(), *self.scales.get(n).unwrap_or(&1))?;
+        let (lo, hi) = self.ranges.get(n).copied().unwrap_or((None, None));
+        Some((lo.unwrap_or(first), hi.unwrap_or(last)))
+    }
+
+    /// E108 for what [`Checked::held`] lists (§15.296): `result r = a` over a rate in whole percents,
+    /// into an output in hundredths of a percent, passed with no upper bound on `a`, and Go multiplied
+    /// it by 100 in int64. Said for a name E108 has not stopped already.
+    fn overflow_held(&mut self, f: &RuleFile, path: &str) {
+        for h in self.held(f) {
+            let past = |s: Option<i128>| s.is_none_or(|s| s > i64::MAX as i128);
+            if self.overflowed.contains(&h.name) || !(past(h.stored) || h.twice.is_some_and(past)) {
+                continue;
+            }
+            // What reads a value E108 has stopped already is not stopped a second time for it.
+            let reads = match &f.result {
+                Some(r) if h.output && r.name == h.name => {
+                    let mut v = Vec::new();
+                    collect_names(&r.expr, &mut v);
+                    v
+                }
+                _ => self.written.get(&h.name).cloned().unwrap_or_default(),
+            };
+            if reads.iter().any(|n| self.overflowed.contains(n)) {
+                continue;
+            }
+            self.overflowed.insert(h.name.clone());
+            let ty = self.ty_of(&h.name).map(|t| t.present().clone()).unwrap_or(Ty::Unknown);
+            let (span, line) = match f.outputs.iter().find(|o| o.name.text == h.name) {
+                Some(o) if h.output => (o.span.clone(), tr!("{path}:{} 出力 {}", "{path}:{} output {}", o.span.line, h.name)),
+                _ => {
+                    let Some(sp) = self.syms.get(&h.name).map(|s| s.span.clone()) else { continue };
+                    let l = tr!("{path}:{} 列 {}", "{path}:{} column {}", sp.line, h.name);
+                    (sp, l)
+                }
+            };
+            let (lo, hi) = h.interval;
+            let sc = h.scale;
+            let name = &h.name;
+            let mut d = Diag::error("E108", tr!("{name} が int64 に収まることを証明できません", "Cannot prove that {name} fits in int64")).at(line).mark(span, "");
+            d = d.note(if h.output {
+                tr!(
+                    "生成コードは {name} を、送る刻みと丸めの刻みがどちらも割り切れる刻み 1/{sc} にそろえてから丸めます。",
+                    "The generated code brings {name} to the step of 1/{sc}, which divides both the step it travels at and its rounding grid, and rounds it there."
+                )
+            } else {
+                tr!(
+                    "表が {name} に書く値は、列の刻み 1/{sc} にそろえて持ちます。",
+                    "What a table writes into {name} is held on the column's step of 1/{sc}."
+                )
+            });
+            let mut open = Vec::new();
+            let closed = match &f.result {
+                Some(r) if h.output && r.name == h.name => {
+                    let iv = self.interval(&r.expr, &ty);
+                    if iv.is_none() {
+                        self.open_names(&r.expr, &mut open);
+                    }
+                    iv.is_some()
+                }
+                _ => {
+                    let c = self.ranges.get(&h.name).is_some_and(|(a, b)| a.is_some() && b.is_some());
+                    if !c {
+                        self.open_names_of(vec![h.name.clone()], &mut open, &mut HashSet::new());
+                    }
+                    c
+                }
+            };
+            if let (false, Some((list, them))) = (closed, open_list(&open)) {
+                let has = if open.len() > 1 { "have" } else { "has" };
+                d = d
+                    .note(tr!(
+                        "{list} の範囲に上限か下限がありません。書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、{name} の格納される整数は int64 を越えることがあります。",
+                        "{list} {has} no upper or no lower bound. An end that is not written is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), and from there the stored integer of {name} can pass int64."
+                    ))
+                    .note(tr!("ヒント: {list} の範囲に、書いていない側の端（`>=` か `<=`）を書いてください。", "Hint: give {list} {them}, `>=` or `<=`."));
+            } else if past(h.stored) {
+                d = d.note(reach_note(lo, hi, sc, h.stored, &ty)).note(tr!(
+                    "ヒント: 範囲を狭めるか、刻みをそろえてください（出力の刻みや丸めの刻みを、値の刻みに合わせる）。",
+                    "Hint: narrow the ranges, or bring the steps together (an output's step and its rounding grid on the value's own step)."
+                ));
+            } else {
+                let mode = h.mode.unwrap_or_default();
+                d = d.note(tr!(
+                    "`{mode}` の丸めは余りの 2 倍を刻みと比べるので、刻み 1/{sc} で数えた丸めの刻みの 2 倍が int64 を越えます。",
+                    "A rounding by `{mode}` compares twice the remainder with the grid, and twice the grid, counted on the step of 1/{sc}, passes int64."
+                ));
+            }
+            self.diags.push(d);
+        }
+    }
+}
+
+/// One integer the generated code holds on the way to a value (§15.296): the node of the expression
+/// it is, as the places of the operands from the top (`[0, 1]` is the right side of the left side),
+/// the scale the code holds it at — the node's own or a finer one the node above brings it to — the
+/// interval the int64 claim reads it in, and the integer that stores, `None` past 128 bits.
+#[derive(Clone, Debug)]
+pub struct Step {
+    pub at: Vec<usize>,
+    pub scale: i128,
+    pub interval: (Rat, Rat),
+    pub stored: Option<i128>,
+    pub held: Held,
+}
+
+impl Step {
+    /// Whether the integer passes int64.
+    pub fn past(&self) -> bool {
+        self.stored.is_none_or(|s| s > i64::MAX as i128)
+    }
+}
+
+/// Why a step is held at the scale it is (§15.296), which E108 says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Held {
+    /// Its own scale.
+    Own,
+    /// The scale it shares with the other side of a sum, a difference, a comparison, a `min` or a
+    /// `max`.
+    Sides,
+    /// The scale it shares with the grid it is rounded to, where the rounding is done.
+    Grid,
+    /// The grid of a rounding by `half_up`, `half_down` or `half_even`, twice: the rounding
+    /// compares twice the remainder with it.
+    Twice,
+    /// A side of a division by a value, at the step the rounding brings both sides to.
+    Division,
+}
+
+impl Held {
+    /// What E108 says of it, where it is not the node's own scale.
+    fn note(self, sc: i128) -> Option<String> {
+        Some(match self {
+            Held::Own => return None,
+            Held::Sides => tr!(
+                "足し算・引き算・比べる式・`min`・`max` の二つの辺は、共通の刻み 1/{sc} にそろえてから計算します。",
+                "The two sides of a sum, a difference, a comparison, a `min` or a `max` are brought to the step they share, 1/{sc}, before they meet."
+            ),
+            Held::Grid => tr!(
+                "丸める値は、丸めの刻みと共通の刻み 1/{sc} にそろえてから丸めます。",
+                "A value is brought to the step it shares with its rounding grid, 1/{sc}, and rounded there."
+            ),
+            Held::Twice => tr!(
+                "`half_up`・`half_down`・`half_even` の丸めは、余りの 2 倍を刻みと比べるので、丸めの刻みを 2 倍して数えます。",
+                "A rounding by `half_up`, `half_down` or `half_even` compares twice the remainder with the grid, so the grid is counted twice."
+            ),
+            Held::Division => tr!(
+                "値で割る丸めは、割られる数と割る数を刻み 1/{sc} にそろえてから割ります。",
+                "A rounding of a division by a value brings both sides to the step of 1/{sc} before it divides."
+            ),
+        })
+    }
+}
+
+/// A value the generated code holds once it is worked out (§15.296): a column a table writes
+/// numbers into, at its scale, or an output, at the scale it is rounded at, with what decides it
+/// (`from`), the interval rounded out to its grid, the integer that stores, the mode of its
+/// rounding, and, for `half_up`, `half_down` and `half_even`, twice the grid at that scale.
+#[derive(Clone, Debug)]
+pub struct HeldValue {
+    pub name: String,
+    pub output: bool,
+    pub interval: (Rat, Rat),
+    pub scale: i128,
+    pub stored: Option<i128>,
+    pub twice: Option<Option<i128>>,
+    pub mode: Option<&'static str>,
+    pub from: (Rat, Rat),
+}
+
+/// The node of `e` at `at`, the places of the operands from the top (§15.296).
+pub fn node_at<'e>(e: &'e Expr, at: &[usize]) -> Option<&'e Expr> {
+    let Some((i, rest)) = at.split_first() else { return Some(e) };
+    let next = match e {
+        Expr::Bin(l, _, r, _) => match i {
+            0 => l.as_ref(),
+            1 => r.as_ref(),
+            _ => return None,
+        },
+        Expr::Call(_, args, _) => args.get(*i)?,
+        _ => return None,
+    };
+    node_at(next, rest)
+}
+
+/// The note of E108 on how far a value reaches and what it stores (§7.4, §15.296).
+fn reach_note(lo: Rat, hi: Rat, sc: i128, stored: Option<i128>, ty: &Ty) -> String {
+    if cmp_exact(magnitude_of(lo, hi), Rat::int(FAR)).is_ge() {
+        return tr!("実際に取りうる値は ±2^80 を越え、どの刻みで数えても int64 に収まりません。", "The reachable interval passes ±2^80, which fits int64 on no step.");
+    }
+    tr!(
+        "実際に取りうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {} になります。",
+        "The reachable interval is {} to {} and the step is 1/{sc}, so the stored integer reaches {}.",
+        fmt_val(lo, ty),
+        fmt_val(hi, ty),
+        fmt_stored(stored)
+    )
+}
+
+/// A stored integer as E108 writes it; one past 128 bits is said so.
+fn fmt_stored(stored: Option<i128>) -> String {
+    match stored {
+        Some(s) => s.to_string(),
+        None => tr!("2^127 を越える数", "a number past 2^127"),
+    }
+}
+
+/// The names E108 asks for the ends of, quoted and joined, and the words for those ends.
+fn open_list(open: &[String]) -> Option<(String, &'static str)> {
+    let quoted: Vec<String> = open.iter().map(|n| format!("`{n}`")).collect();
+    let list = match quoted.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => tr!("{} と {last}", "{} and {last}", rest.join(&tr!("、", ", "))),
+        None => return None,
+    };
+    Some((list, if open.len() > 1 { "the ends their ranges do not write" } else { "the end its range does not write" }))
 }
 
 impl Checked {

@@ -86,9 +86,12 @@ fn コーパスは証明付きの検査器を通る() {
         assert_eq!(code, 0, "{rel} が Lean の検査器を通らない:\n{said}");
         assert!(said.contains("the digest is"), "{rel}: ファイルに突き合わせていない:\n{said}");
         tables += said.matches(" rows — ").count();
+        // `the digest is <file>'s, and <n> cells are read back out of it`: the line of the digest,
+        // for the lines above it say `and` too (`and 7 integers on the way to them`).
         cells += said
-            .split("and ")
-            .nth(1)
+            .lines()
+            .find(|l| l.contains("the digest is"))
+            .and_then(|l| l.split("and ").nth(1))
             .and_then(|s| s.split(' ').next())
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(0);

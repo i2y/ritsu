@@ -681,3 +681,267 @@ fn both_rechecks_work_the_new_shapes_out_again() {
         assert_eq!(code, 1, "a sum with an input dropped passed\n{out}");
     }
 }
+
+/// A rule of one `define s` over `a` (with the range given) and `b` (0 to 100), read by `result r`.
+fn on_the_way(range: &str, ty: &str, expr: &str) -> String {
+    format!(
+        "rule steps v1\n\ninputs\n  a : {ty}  {range}\n  b : number  range >=0 <=100\n\noutputs\n  r : number  round down(1)\n\ndefine s : number = {expr}\n\nresult r = s + b\n"
+    )
+}
+
+/// Every integer the generated code holds on the way to a value is held to int64, not only the value
+/// (§15.296): the product inside a `min` whose answer is never above 10, a value brought to the step
+/// of its rounding grid before it is rounded, a sum that passes int64 before the difference brings it
+/// back, a product inside a rounding. E108 marks the deepest such integer and says why the code holds
+/// it at that step. Each of these passed `check`, and Go multiplied in int64.
+#[test]
+fn every_integer_on_the_way_is_held_to_int64() {
+    let closed = "range >=0 <=1000";
+    for (expr, part) in [
+        ("min(a * 1000000000000000000, 10)", "a * 1000000000000000000"),
+        ("half_down(a * 1000000000000000000 / 1000000000000000000, 1)", "a * 1000000000000000000"),
+        ("a + 9223372036854775000 - 9223372036854775000", "a + 9223372036854775000"),
+        ("down(a * 10000000000000000 * 10%, 1)", "a * 10000000000000000"),
+    ] {
+        let src = on_the_way(closed, "number", expr);
+        assert_eq!(codes(&src), ["E108"], "{expr}");
+        let said = said(&src, "E108");
+        assert!(said.contains("Cannot prove that s fits in int64"), "{expr}: {said}");
+        assert!(said.contains(&format!("the value {part} on the way")), "{expr}: {said}");
+        assert!(said.contains("so the stored integer reaches"), "{expr}: {said}");
+    }
+    // The two sides of a `min` are brought to the step they share before they are compared: `a` in
+    // whole percents is held in thousandths of a percent.
+    let sides = "rule sides v1\n\ninputs\n  a : rate[step 1%]  range >=0% <=100_000_000_000_000_000%\n\noutputs\n  r : rate  round down(0.001%)\n\ndefine s : rate = min(a, 0.001%)\n\nresult r = s\n";
+    assert_eq!(codes(sides), ["E108"]);
+    let text = said(sides, "E108");
+    assert!(text.contains("the value a on the way") && text.contains("brought to the step they share, 1/100000"), "{text}");
+    // What the code holds on the way fits: nothing is said.
+    for expr in ["min(a, 10)", "down(a * 10%, 1)", "half_down(a * 1000 / 1000, 1)", "max(a - 5, 0) + 1"] {
+        let src = on_the_way(closed, "number", expr);
+        assert!(codes(&src).is_empty(), "{expr}: {:?}", codes(&src));
+    }
+}
+
+/// A truth value has no interval of its own, and the two sides it compares are brought to one step
+/// (§15.296): `a > 0.001%` over a rate in whole percents multiplies `a` by 1000 before it compares,
+/// and with no upper bound on `a` that passes int64. The hint names `a`.
+#[test]
+fn the_sides_of_a_comparison_are_held_where_they_meet() {
+    let rule = |range: &str| {
+        format!(
+            "rule sides v1\n\ninputs\n  a : rate[step 1%]  {range}\n\noutputs\n  r : number  round down(1)\n\ndefine big : bool = a > 0.001%\n\ntable t\npolicy unique\n| big   | -> r |\n| true  | 1    |\n| false | 0    |\n"
+        )
+    };
+    let src = rule("range >=0%");
+    assert_eq!(codes(&src), ["E108"]);
+    let said = said(&src, "E108");
+    assert!(said.contains("Cannot prove that big fits in int64"), "{said}");
+    assert!(said.contains("brought to the step they share, 1/100000"), "{said}");
+    assert!(said.contains("`a` has no upper or no lower bound") && said.contains("give `a` the end its range does not write"), "{said}");
+    assert!(codes(&rule("range >=0% <=100%")).is_empty());
+}
+
+/// What the code holds once a value is worked out (§15.296): a value a row names is brought to the
+/// column's step, and an output to the step it travels at and its rounding grid share, where it is
+/// rounded. `r = a` over a rate in whole percents, into a column or an output in finer steps,
+/// passed with no upper bound on `a`, and Go multiplied it in int64.
+#[test]
+fn a_column_and_an_output_are_held_where_the_code_holds_them() {
+    let column = |range: &str| {
+        format!(
+            "rule col v1\n\ninputs\n  a : rate[step 1%]  {range}\n  k : bool\n\noutputs\n  r : rate  round down(0.001%)\n\ntable t\npolicy unique\n| k     | -> r   |\n| true  | a      |\n| false | 0.001% |\n"
+        )
+    };
+    let src = column("range >=0%");
+    assert_eq!(codes(&src), ["E108"]);
+    let text = said(&src, "E108");
+    assert!(text.contains("Cannot prove that r fits in int64"), "{text}");
+    assert!(text.contains("What a table writes into r is held on the column's step of 1/100000"), "{text}");
+    assert!(text.contains("`a` has no upper or no lower bound"), "{text}");
+    assert!(codes(&column("range >=0% <=100%")).is_empty());
+
+    let output = |range: &str| {
+        format!("rule out v1\n\ninputs\n  a : rate[step 1%]  {range}\n\noutputs\n  r : rate[step 0.01%]  round down(0.01%)\n\nresult r = a\n")
+    };
+    let src = output("range >=0%");
+    assert_eq!(codes(&src), ["E108"]);
+    let text = said(&src, "E108");
+    assert!(text.contains("brings r to the step of 1/10000, which divides both the step it travels at and its rounding grid"), "{text}");
+    assert!(text.contains("`a` has no upper or no lower bound"), "{text}");
+    assert!(codes(&output("range >=0% <=100%")).is_empty());
+
+    // A value that fits on its own step passes int64 once it is brought to the output's finer one.
+    let finer = output("range >=0% <=100_000_000_000_000_000%");
+    assert_eq!(codes(&finer), ["E108"]);
+    assert!(said(&finer, "E108").contains("so the stored integer reaches 10000000000000000000"), "{}", said(&finer, "E108"));
+}
+
+/// `half_up`, `half_down` and `half_even` compare twice the remainder with the grid, and `down` and
+/// `up` do not (§15.296): a grid past half of int64 is E108 under the first three only. The
+/// certificate states the mode of each output's rounding, and both re-checkers read it.
+#[test]
+fn twice_the_grid_is_held_where_the_rounding_halves() {
+    let rule = |mode: &str| {
+        format!("rule wide_grid v1\n\ninputs\n  a : number  range >=0 <=100\n\noutputs\n  r : number  round {mode}(5_000_000_000_000_000_000)\n\nresult r = a\n")
+    };
+    for mode in ["half_up", "half_down", "half_even"] {
+        let src = rule(mode);
+        assert_eq!(codes(&src), ["E108"], "{mode}");
+        let text = said(&src, "E108");
+        let why = format!("A rounding by `{mode}` compares twice the remainder with the grid, and twice the grid, counted on the step of 1/1, passes int64.");
+        assert!(text.contains(&why), "{mode}: {text}");
+    }
+    for mode in ["down", "up"] {
+        assert!(codes(&rule(mode)).is_empty(), "{mode}: {:?}", codes(&rule(mode)));
+    }
+    if !have_python() {
+        return;
+    }
+    let file = std::env::temp_dir().join(format!("rulec-wide-grid-{}.rule", std::process::id()));
+    std::fs::write(&file, rule("down")).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let mode = r#""mode":"down""#;
+    assert!(cert.contains(mode), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    let bin = checker();
+    if let Some(bin) = &bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+    }
+    for (what, to) in [("a mode that halves", r#""mode":"half_up""#), ("a mode no rounding has", r#""mode":"sideways""#)] {
+        let forged = cert.replacen(mode, to, 1);
+        assert_ne!(forged, cert, "{what}");
+        let (code, out) = recheck(&forged);
+        assert_ne!(code, 0, "{what}: {out}");
+        if let Some(bin) = &bin {
+            let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+            assert_ne!(code, 0, "{what}: {out}");
+        }
+    }
+    std::fs::remove_file(&file).ok();
+}
+
+/// What a rounding puts on the grid runs between the two ends of what decides it, each rounded the
+/// way the mode rounds it (§15.296). A tenth of an amount with no range is held on the step of 1/10 at
+/// the end of the type: `down` takes no value away from zero, so the code holds it, and `up` and the
+/// three halves take the end a step past int64. Both re-checkers round the ends by the mode the
+/// certificate states.
+#[test]
+fn a_rounding_is_held_the_way_its_mode_rounds() {
+    let rule = |mode: &str| {
+        format!("rule tenth v1\n\ninputs\n  amount : money[JPY]\n\noutputs\n  fee : money[JPY]  round {mode}(1JPY)\n\nresult fee = amount ÷ 10\n\nexamples\n| amount  | -> fee |\n| 1000JPY | 100JPY |\n")
+    };
+    assert!(codes(&rule("down")).is_empty(), "{:?}", codes(&rule("down")));
+    for mode in ["up", "half_up", "half_down", "half_even"] {
+        let src = rule(mode);
+        assert_eq!(codes(&src), ["E108"], "{mode}");
+        let text = said(&src, "E108");
+        assert!(text.contains("The generated code brings fee to the step of 1/10") && text.contains("`amount` has no upper or no lower bound"), "{mode}: {text}");
+    }
+    if !have_python() {
+        return;
+    }
+    let file = std::env::temp_dir().join(format!("rulec-tenth-{}.rule", std::process::id()));
+    std::fs::write(&file, rule("down")).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let held = r#"{"name":"fee","of":"output","interval":["-9223372036854775807/10","9223372036854775807/10"],"scale":10,"stored_max":"9223372036854775807","mode":"down"}"#;
+    assert!(cert.contains(held), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    let bin = checker();
+    if let Some(bin) = &bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+    }
+    let forged = cert.replacen(r#""mode":"down""#, r#""mode":"up""#, 1);
+    assert_ne!(forged, cert);
+    let (code, out) = recheck(&forged);
+    assert_ne!(code, 0, "{out}");
+    if let Some(bin) = &bin {
+        let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+        assert_ne!(code, 0, "{out}");
+    }
+    std::fs::remove_file(&file).ok();
+}
+
+/// Three values with no upper bound multiplied pass 128 bits. The arithmetic of the interval wrapped
+/// in a release build, and stopped `check` with a panic in a debug one; it is held at ±2^80 now, and
+/// E108 says the value passes that (§15.296).
+#[test]
+fn a_product_past_128_bits_is_e108_and_no_panic() {
+    let src = "rule mul3 v1\n\ninputs\n  a : number  range >=0\n  b : number  range >=0\n  c : number  range >=0\n\noutputs\n  r : number  round down(1)\n\nresult r = a * b * c\n";
+    assert_eq!(codes(src), ["E108"]);
+    let wide = "rule mul3 v1\n\ninputs\n  a : number  range >=0 <=1000000000000000\n  b : number  range >=0 <=1000000000000000\n  c : number  range >=0 <=1000000000000000\n\noutputs\n  r : number  round down(1)\n\nresult r = a * b * c\n";
+    assert_eq!(codes(wide), ["E108"]);
+    assert!(said(wide, "E108").contains("The reachable interval passes ±2^80, which fits int64 on no step."), "{}", said(wide, "E108"));
+}
+
+/// What a fold works out for an element is held to int64 like a value (§15.296).
+#[test]
+fn what_a_fold_takes_is_held_to_int64() {
+    let fold = |k: &str| {
+        format!(
+            "rule picks v1\n\nenum pick = take | skip\n\nelements items\n  price : number  range >=0 <=500\n\noutputs\n  best : number  round down(1)\n\ntable choose\npolicy unique\n| price | -> p : pick |\n| <=100 | take        |\n| >100  | skip        |\n\nfold p over items -> best\n  take      -> take_first price * {k}\n  skip      -> next\n  empty     -> 0\n  exhausted -> held\n"
+        )
+    };
+    let src = fold("1000000000000000000");
+    assert_eq!(codes(&src), ["E108"], "{:?}", codes(&src));
+    assert!(said(&src, "E108").contains("Cannot prove that best fits in int64"), "{}", said(&src, "E108"));
+    assert!(codes(&fold("1000")).is_empty(), "{:?}", codes(&fold("1000")));
+}
+
+/// The certificate states every integer on the way to each value (`steps`), what the code holds once
+/// a value is worked out (`held`) and what each fold works out (`fold_values`), and both re-checkers
+/// work each out again: a narrower interval, a smaller stored integer, a step left out, a held value
+/// left out, and a scale that lets an integer past int64 are refused by both (§15.296).
+#[test]
+fn the_certificate_states_what_the_code_holds() {
+    if !have_python() {
+        return;
+    }
+    let src = "rule holds v1\n\ninputs\n  a : number  range >=0 <=1000\n  p : rate[step 1%]  range >=0% <=100%\n  k : bool\n\noutputs\n  r : number  round down(1)\n  q : rate[step 0.01%]  round down(0.01%)\n\ndefine s : number = min(a * 1000, 5000) + a\n\ntable t\npolicy unique\n| k     | -> q   |\n| true  | p      |\n| false | 0.5%   |\n\nresult r = s\n";
+    let file = std::env::temp_dir().join(format!("rulec-held-{}.rule", std::process::id()));
+    std::fs::write(&file, src).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let step = r#"{"at":[0,0,0],"scale":1,"interval":["0","1000"],"stored_max":"1000"}"#;
+    assert!(cert.contains(step), "{cert}");
+    let held_q = r#"{"name":"q","of":"column","interval":["0","1"],"scale":10000,"stored_max":"10000"}"#;
+    assert!(cert.contains(held_q), "{cert}");
+    let held_r = r#"{"name":"r","of":"output","interval":["0","6000"],"scale":1,"stored_max":"6000","mode":"down"}"#;
+    assert!(cert.contains(held_r), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("int64: 2 values fit, and 8 integers on the way to them"), "{out}");
+    assert!(out.contains("held: 1 columns and 2 outputs fit int64 where the code holds them"), "{out}");
+    let bin = checker();
+    if let Some(bin) = &bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+        assert!(out.contains("values: 2 typed, 2 held to int64, and 8 integers on the way to them"), "{out}");
+        assert!(out.contains("held: 1 columns and 2 outputs fit int64 where the code holds them"), "{out}");
+    }
+    for (what, from, to) in [
+        ("a narrower step", step, r#"{"at":[0,0,0],"scale":1,"interval":["0","10"],"stored_max":"1000"}"#),
+        ("a smaller stored integer on the way", step, r#"{"at":[0,0,0],"scale":1,"interval":["0","1000"],"stored_max":"10"}"#),
+        ("a step left out", &format!("{step},"), ""),
+        ("a step past int64", step, r#"{"at":[0,0,0],"scale":100000000000000000,"interval":["0","1000"],"stored_max":"100000000000000000000"}"#),
+        ("a column left out", &format!("{held_q},"), ""),
+        ("a narrower column", held_q, r#"{"name":"q","of":"column","interval":["0","0.5"],"scale":10000,"stored_max":"10000"}"#),
+        ("a smaller stored output", held_r, r#"{"name":"r","of":"output","interval":["0","6000"],"scale":1,"stored_max":"60","mode":"down"}"#),
+    ] {
+        let forged = cert.replacen(from, to, 1);
+        assert_ne!(forged, cert, "{what}");
+        let (code, out) = recheck(&forged);
+        assert_ne!(code, 0, "{what}: {out}");
+        if let Some(bin) = &bin {
+            let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+            assert_ne!(code, 0, "{what}: {out}");
+        }
+    }
+    std::fs::remove_file(&file).ok();
+}

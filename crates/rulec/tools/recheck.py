@@ -132,6 +132,8 @@ def numeric(t):
 
 
 I64_MAX = 2**63 - 1
+# The three modes of a rounding that compare twice the remainder with the grid (`ROUNDINGS` has all five).
+HALVING_MODES = ("half_up", "half_down", "half_even")
 GROUPS = {}
 
 
@@ -698,7 +700,25 @@ def wide_values(cert, known):
                 break
             for c in rest:
                 env[c] = ends[c]
-    return wide
+    return wide, env
+
+
+def claim_reads(cert, env):
+    """What the int64 claim reads each name in (rulec's §15.294, §15.296), as strings for
+    `interval`: what `wide_values` works out, and a name whose type has no ends to read — a date —
+    in the range it declares, both ends written, as the Lean program reads it. A column a table
+    writes into is worked out from its rows, never read from `ranges`."""
+    types = cert.get("types", {})
+    outs, _ = numeric_outputs(cert)
+    reads = {}
+    for k, v in cert.get("ranges", {}).items():
+        if k in outs or type_ends(types.get(k), Fraction(1)) is not None:
+            continue
+        a, b = (num(v[0]), num(v[1])) if isinstance(v, list) and len(v) == 2 else (None, None)
+        if a is not None and b is not None:
+            reads[k] = (str(a), str(b))
+    reads.update({k: (str(a), str(b)) for k, (a, b) in env.items()})
+    return reads
 
 
 def check_values(cert, known):
@@ -706,9 +726,18 @@ def check_values(cert, known):
     value's own interval has an end no range writes, the claim reads that end as the end of what
     the type holds (`wide_values`, rulec's §15.294)."""
     declared = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
-    wide = wide_values(cert, known)
-    checked = none_stated = 0
+    wide, env = wide_values(cert, known)
+    reads = claim_reads(cert, env)
+    le = guarantees(cert)
+    checked = none_stated = steps = unsaid = 0
     for v in cert.get("values", []):
+        # What the code holds on the way to it, a truth value's two sides among them (rulec's
+        # §15.296), whatever the value itself states. A certificate from before rulec stated it
+        # says nothing, and that is said.
+        if "steps" in v:
+            steps += check_steps(v["name"], v["expr"], v["steps"], reads, le)
+        else:
+            unsaid += 1
         got = known.get(v["name"])
         said = v.get("interval")
         opened = got is None and v["name"] in wide
@@ -737,7 +766,230 @@ def check_values(cert, known):
         if int(stored) > int(Fraction(v["stored_max"])):
             raise Bad(f"{v['name']}: stores up to {int(stored)}, more than the stated {v['stored_max']}")
         checked += 1
-    return checked, none_stated
+    if unsaid:
+        STATED.append(f"the integers the code holds on the way to {unsaid} values: the certificate does not say")
+    return checked, none_stated, steps
+
+
+def node_at(e, at):
+    """The node of an expression at `at`, the places of the operands from the top (rulec's
+    §15.296): 0 and 1 the two sides of an operator, the place of an argument of a call. None where
+    there is no such node."""
+    for i in at:
+        if not isinstance(i, int) or isinstance(i, bool):
+            return None
+        if "op" in e:
+            e = e["l"] if i == 0 else e["r"] if i == 1 else None
+        elif "call" in e:
+            args = e.get("args", [])
+            e = args[i] if 0 <= i < len(args) else None
+        else:
+            return None
+        if not isinstance(e, dict):
+            return None
+    return e
+
+
+
+def nodes_of(e, at=()):
+    """Every node of an expression with where it stands, the deepest first. The division a
+    rounding by a value divides (rulec's §15.213) is no node of its own: the code divides its two
+    sides into whole grid steps, which the rounded value holds."""
+    if "op" in e:
+        yield from nodes_of(e["l"], at + (0,))
+        yield from nodes_of(e["r"], at + (1,))
+    elif "call" in e:
+        args = e.get("args", [])
+        for i, a in enumerate(args):
+            if (i == 0 and e["call"] in ROUNDINGS and len(args) == 2 and a.get("op") == "/"
+                    and "num" not in a.get("r", {})):
+                yield from nodes_of(a["l"], at + (0, 0))
+                yield from nodes_of(a["r"], at + (0, 1))
+            else:
+                yield from nodes_of(a, at + (i,))
+    yield at, e
+
+
+def check_steps(where, e, steps, env, le):
+    """The integers the generated code holds on the way to a value (rulec's §15.296): each step
+    names a node of the expression, and the interval of that node, worked out here in what the int64
+    claim reads each name in, has to sit inside the one it states; at the scale it states, the code
+    holds it (the certificate's word, as a value's `scale` is), and stored there it has to fit the
+    integer it states and int64. Every node this program works an interval out for is stated: one
+    left out would be an integer nobody held. Returns how many were held."""
+    if steps is None:
+        raise Bad(f"{where}: it states no steps, and the code holds the parts of its expression as integers")
+    stated = set()
+    for s in steps:
+        at = s.get("at")
+        node = node_at(e, at) if isinstance(at, list) else None
+        if node is None:
+            raise Bad(f"{where}: a step at {at} names no part of its expression")
+        got = interval(node, env, le)
+        if got is None:
+            raise Bad(f"{where}: the step at {at} states an interval this program cannot derive")
+        said = s.get("interval")
+        if not isinstance(said, list) or len(said) != 2:
+            raise Bad(f"{where}: the step at {at} states no interval")
+        lo, hi = num(said[0]), num(said[1])
+        if lo is None or hi is None or got[0] < lo or got[1] > hi:
+            raise Bad(f"{where}: on the way, the part at {at} reaches [{got[0]}, {got[1]}], wider than the stated [{said[0]}, {said[1]}]")
+        scale = s.get("scale")
+        if not isinstance(scale, int) or isinstance(scale, bool) or scale < 1:
+            raise Bad(f"{where}: the step at {at} states no scale of 1 or more")
+        stored = int(max(abs(got[0]), abs(got[1])) * scale)
+        if stored > I64_MAX:
+            raise Bad(f"{where}: on the way, the part at {at} stores up to {stored} at the scale 1/{scale}, past int64")
+        if stored > int(Fraction(s.get("stored_max") or 0)):
+            raise Bad(f"{where}: on the way, the part at {at} stores up to {stored}, more than the stated {s.get('stored_max')}")
+        stated.add(tuple(at))
+    for at, node in nodes_of(e):
+        if at not in stated and interval(node, env, le) is not None:
+            raise Bad(f"{where}: the part at {list(at)} has an interval, and no step states what the code holds it at")
+    return len(steps)
+
+
+def check_held(cert, known):
+    """What the generated code holds once a value is worked out (rulec's §15.296): a column a table
+    writes numbers into is held at its scale, and a value a row names is brought to it; an output is
+    brought to the scale it is rounded at and lands on its grid there, and a rounding by `half_up`,
+    `half_down` or `half_even` compares twice the remainder with the grid. The interval of each,
+    worked out here — a column from what its rows write, an output from what decides it, together
+    with its two ends put on its grid the way its mode rounds them — has to sit inside the one stated, and at the stated scale (the certificate's word)
+    fit the integer stated and int64; for those three modes (the mode is the certificate's word too),
+    twice the grid there has to fit int64 as well. Every column of numbers and every output with a
+    grid is stated.
+    Returns (columns, outputs)."""
+    held = cert.get("held")
+    if not isinstance(held, list):
+        raise Bad("it states nothing of what the code holds once a value is worked out")
+    _, env = wide_values(cert, known)
+    reads = claim_reads(cert, env)
+    le = guarantees(cert)
+    outs, _ = numeric_outputs(cert)
+    grids = cert.get("rounds", {})
+    results = {v["name"]: v for v in cert.get("values", []) if v.get("of") == "result"}
+    stated = {}
+    for h in held:
+        key = (h.get("name"), h.get("of"))
+        if key[1] not in ("column", "output"):
+            raise Bad(f"{key[0]}: `held` calls it a {key[1]}, which is neither a column nor an output")
+        if key in stated:
+            raise Bad(f"{key[0]}: `held` states it twice")
+        stated[key] = h
+    if "rounds" not in cert:
+        # With no grids (a certificate from before rulec wrote them, §15.269), an output's entry has
+        # nothing to be held to; the run states that it does not say what its outputs round to.
+        stated = {k: h for k, h in stated.items() if k[1] != "output"}
+
+    def fits(name, got, h, twice=None):
+        said = h.get("interval")
+        if not isinstance(said, list) or len(said) != 2:
+            raise Bad(f"{name}: `held` states no interval for it")
+        lo, hi = num(said[0]), num(said[1])
+        if lo is None or hi is None or got[0] < lo or got[1] > hi:
+            raise Bad(f"{name}: it reaches [{got[0]}, {got[1]}] where the code holds it, wider than the stated [{said[0]}, {said[1]}]")
+        scale = h.get("scale")
+        if not isinstance(scale, int) or isinstance(scale, bool) or scale < 1:
+            raise Bad(f"{name}: `held` states no scale of 1 or more for it")
+        stored = int(max(abs(got[0]), abs(got[1])) * scale)
+        if stored > I64_MAX:
+            raise Bad(f"{name}: held at the scale 1/{scale}, it stores up to {stored}, past int64")
+        if stored > int(Fraction(h.get("stored_max") or 0)):
+            raise Bad(f"{name}: held at the scale 1/{scale}, it stores up to {stored}, more than the stated {h.get('stored_max')}")
+        if twice is not None and int(2 * twice * scale) > I64_MAX:
+            raise Bad(f"{name}: its rounding by `{h.get('mode')}` compares twice the remainder with the grid {twice}, and twice the grid at the scale 1/{scale} is past int64")
+
+    def hull(col):
+        # What the rows of a column write, read the way the int64 claim reads each name, and not
+        # cut to the ends of the column's type on its own step as `wide_values` cuts it: a row's
+        # value past them is what the code cannot hold once it is brought to the column's step.
+        es = outs.get(col)
+        if es:
+            ivs = [interval(x, reads, le) for x in es]
+            if all(i is not None for i in ivs):
+                return (min(i[0] for i in ivs), max(i[1] for i in ivs))
+        return env.get(col)
+
+    cols = 0
+    for col in outs:
+        h = stated.pop((col, "column"), None)
+        got = hull(col)
+        if got is None and h is None:
+            continue
+        if h is None:
+            raise Bad(f"{col}: a table writes numbers into it, and `held` does not state what the code holds it at")
+        if got is None:
+            raise Bad(f"{col}: `held` states an interval for it, and this program works out none for what its rows write")
+        fits(col, got, h)
+        cols += 1
+    put = 0
+    for name, g in grids.items():
+        grid = num(g)
+        if grid is None or grid <= 0:
+            raise Bad(f"{name}: the grid it rounds to cannot be read")
+        h = stated.pop((name, "output"), None)
+        if name in results:
+            got = interval(results[name]["expr"], reads, le)
+        elif name in outs:
+            got = hull(name)
+        else:
+            got = env.get(name)
+        if got is None and h is None:
+            continue
+        if h is None:
+            raise Bad(f"{name}: `held` does not state what the code holds it at before its rounding")
+        if got is None:
+            raise Bad(f"{name}: `held` states an interval for it, and this program works out none for what decides it")
+        # `half_up`, `half_down` and `half_even` compare twice the remainder with the grid.
+        mode = h.get("mode")
+        if mode not in ROUNDINGS:
+            raise Bad(f"{name}: `held` states no mode of rounding this program knows for it")
+        # The code holds the value on that step before it rounds it, and the rounded value after:
+        # a rounding never turns two values around, so that runs between the two ends rounded.
+        lo, hi = round_by(mode, grid, got[0]), round_by(mode, grid, got[1])
+        fits(name, (min(got[0], lo), max(got[1], hi)), h, grid if mode in HALVING_MODES else None)
+        put += 1
+    if stated:
+        name, of = next(iter(stated))
+        raise Bad(f"{name}: `held` states it as {'a column a table writes numbers into' if of == 'column' else 'an output'}, and it is not one")
+    return cols, put
+
+
+def check_fold_values(cert, known):
+    """What each fold works out, an answer, a key or a weight (rulec's §15.296): the interval of
+    each, worked out here, sits inside the one stated and fits int64 at the stated scale, and so does
+    every integer on the way to it (`check_steps`). Returns (values, steps)."""
+    _, env = wide_values(cert, known)
+    reads = claim_reads(cert, env)
+    le = guarantees(cert)
+    n = steps = 0
+    for v in cert.get("fold_values", []):
+        where = f"{v.get('fold')} ({v.get('of')})"
+        if v.get("of") not in ("empty", "exhausted", "answer", "key", "weight"):
+            raise Bad(f"{where}: a fold works out an answer, a key or a weight, and nothing else")
+        e = v.get("expr")
+        if not isinstance(e, dict):
+            raise Bad(f"{where}: an expression this program cannot read")
+        steps += check_steps(where, e, v.get("steps"), reads, le)
+        got = interval(e, reads, le)
+        said = v.get("interval")
+        if got is None:
+            if said is not None:
+                raise Bad(f"{where}: it states an interval this program cannot derive")
+            continue
+        if said is None:
+            raise Bad(f"{where}: it states no interval, and this program derives one")
+        lo, hi = num(said[0]), num(said[1])
+        if lo is None or hi is None or got[0] < lo or got[1] > hi:
+            raise Bad(f"{where}: the interval here is [{got[0]}, {got[1]}], wider than the stated [{said[0]}, {said[1]}]")
+        stored = int(max(abs(got[0]), abs(got[1])) * v["scale"])
+        if stored > I64_MAX:
+            raise Bad(f"{where}: stores up to {stored}, past int64")
+        if stored > int(Fraction(v["stored_max"])):
+            raise Bad(f"{where}: stores up to {stored}, more than the stated {v['stored_max']}")
+        n += 1
+    return n, steps
 
 
 def check_extremes(cert, known):
@@ -863,6 +1115,23 @@ def floor_to(g, v):
 def ceil_to(g, v):
     """`v` rounded up to the grid `g`, a grid above zero."""
     return -((-v) // g) * g
+
+
+def round_by(mode, g, v):
+    """`v` put on the grid `g`, a grid above zero, the way `mode` rounds it, as the generated code
+    rounds (rulec's §7.2): `down` toward zero, `up` away from it, and the three halves to the nearer
+    step of the grid, a tie away from zero (`half_up`), toward it (`half_down`) or to the even step
+    (`half_even`)."""
+    q, r = divmod(abs(v), g)
+    if mode == "up":
+        q += 1 if r else 0
+    elif mode == "half_up":
+        q += 1 if 2 * r >= g else 0
+    elif mode == "half_down":
+        q += 1 if 2 * r > g else 0
+    elif mode == "half_even":
+        q += 1 if 2 * r > g or (2 * r == g and q % 2 == 1) else 0
+    return -(q * g) if v < 0 else q * g
 
 
 def check_rounds(cert, known):
@@ -4867,12 +5136,30 @@ def check(cert):
         out.append(f"  FAILED ranges: {e}")
         ok = False
     try:
-        checked, none_stated = check_values(cert, known)
+        checked, none_stated, steps = check_values(cert, known)
         rest = f", {none_stated} with no interval to claim" if none_stated else ""
-        out.append(f"  int64: {checked} values fit{rest}")
+        out.append(f"  int64: {checked} values fit{rest}, and {steps} integers on the way to them")
     except Bad as e:
         out.append(f"  FAILED int64: {e}")
         ok = False
+    # What the code holds once a value is worked out: a column at its scale, an output at the scale
+    # it is rounded at (rulec's §15.296). A certificate from before rulec stated it says nothing.
+    if "held" in cert:
+        try:
+            cols, put = check_held(cert, known)
+            out.append(f"  held: {cols} columns and {put} outputs fit int64 where the code holds them")
+        except Bad as e:
+            out.append(f"  FAILED held: {e}")
+            ok = False
+    else:
+        STATED.append("what the code holds once a value is worked out: the certificate does not say")
+    if cert.get("fold_values"):
+        try:
+            n, steps = check_fold_values(cert, known)
+            out.append(f"  fold values: {n} fit int64, and {steps} integers on the way to them")
+        except Bad as e:
+            out.append(f"  FAILED fold values: {e}")
+            ok = False
     if cert.get("extremes"):
         try:
             held = check_extremes(cert, known)

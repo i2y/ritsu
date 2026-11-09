@@ -191,6 +191,110 @@ def typeEnds (t : String) (scale : Rat) : Option Span2 :=
   | some τ => if τ.numeric then some (-(I64_MAX / scale), I64_MAX / scale) else none
   | none => none
 
+/-- The node of an expression's tree at `pos`, the places of the operands from the top (rulec's
+    §15.296): 0 and 1 the two sides of an operator, the place of an argument of a call. -/
+def jsonAt (j : Json) : List Nat → Option Json
+  | [] => some j
+  | i :: rest =>
+    match field j "op" with
+    | some _ => (if i == 0 then field j "l" else if i == 1 then field j "r" else none) >>= fun k => jsonAt k rest
+    | none =>
+      match field j "call" with
+      | some _ => (fieldArr j "args")[i]? >>= fun k => jsonAt k rest
+      | none => none
+
+/-- The roundings a quotient by a value is put through (rulec's §15.213). -/
+def roundingWords : List String := ["down", "up", "half_up", "half_down", "half_even"]
+
+/-- `x` put on the grid `g`, a grid above zero, the way `mode` rounds it, as the generated code
+    rounds (rulec's §7.2): `down` toward zero, `up` away from it, and the three halves to the nearer
+    step of the grid, a tie away from zero (`half_up`), toward it (`half_down`) or to the even step
+    (`half_even`). -/
+def roundBy (mode : String) (g x : Rat) : Rat :=
+  let a := if x < 0 then -x else x
+  let q : Int := rfloor (a / g)
+  let r := a - (q : Rat) * g
+  let up : Bool := match mode with
+    | "up" => decide (0 < r)
+    | "half_up" => decide (g ≤ 2 * r)
+    | "half_down" => decide (g < 2 * r)
+    | "half_even" => decide (g < 2 * r) || (decide (2 * r = g) && q % 2 == 1)
+    | _ => false
+  let w : Rat := ((if up then q + 1 else q : Int) : Rat) * g
+  if x < 0 then -w else w
+
+/-- Every node of an expression's tree with where it stands, the deepest first (rulec's §15.296).
+    The division a rounding by a value divides is no node of its own: the code divides its two
+    sides into whole grid steps, which the rounded value holds. -/
+partial def jsonNodes (j : Json) (pos : List Nat) : List (List Nat × Json) :=
+  match field j "op" with
+  | some _ =>
+    let l := ((field j "l").map (jsonNodes · (pos ++ [0]))).getD []
+    let r := ((field j "r").map (jsonNodes · (pos ++ [1]))).getD []
+    l ++ r ++ [(pos, j)]
+  | none =>
+    match field j "call" >>= str with
+    | some c =>
+      let args := fieldArr j "args"
+      let quot : Bool := roundingWords.contains c && args.size == 2 &&
+        (match args[0]? with
+         | some a => (field a "op" >>= str) == some "/" && (field a "r" >>= fun d => field d "num").isNone
+         | none => false)
+      let inner := (List.range args.size).flatMap fun i =>
+        match args[i]? with
+        | some a =>
+          if i == 0 && quot then
+            ((field a "l").map (jsonNodes · (pos ++ [0, 0]))).getD [] ++
+              ((field a "r").map (jsonNodes · (pos ++ [0, 1]))).getD []
+          else jsonNodes a (pos ++ [i])
+        | none => []
+      inner ++ [(pos, j)]
+    | none => [(pos, j)]
+
+/-- An interval the certificate states, as its two ends. -/
+def spanOf (j : Option Json) : Option Span2 := do
+  let a ← j >>= arr
+  let lo ← a[0]? >>= optRat
+  let hi ← a[1]? >>= optRat
+  pure (lo, hi)
+
+/-- The integers the generated code holds on the way to a value (rulec's §15.296): each step names a
+    node of the expression's tree; the interval of that node, worked out here in what the int64 claim
+    reads each name in, sits inside the one stated, and at the stated scale (the certificate's word,
+    as a value's `scale` is) it fits the integer stated and int64 (`storedFits`, the reading of
+    `eval_mem_interval` a value's claim has, here of the node). Every node this program works an
+    interval out for is stated: one left out would be an integer nobody held. How many were held, or
+    why not. -/
+def checkWay (ranges : String → Option Span2) (within : RulecCert.Expr → RulecCert.Expr → Bool)
+    (expand : RulecCert.Expr → RulecCert.Expr) (where_ : String) (e : Json) (steps : Option Json) :
+    Except String Nat := do
+  let iv : Json → Option Span2 := fun j => (exprOfJson j).bind (fun x => interval ranges within (expand x))
+  let some steps := steps >>= arr
+    | throw s!"{where_}: it states no steps, and the code holds the parts of its expression as integers"
+  let mut stated : List (List Nat) := []
+  for s in steps do
+    let some pos := (field s "at" >>= arr).bind (fun a => a.toList.mapM nat)
+      | throw s!"{where_}: a step names no place in its expression"
+    let some node := jsonAt e pos
+      | throw s!"{where_}: a step at {pos} names no part of its expression"
+    let some I := iv node
+      | throw s!"{where_}: the step at {pos} states an interval this program cannot derive"
+    let some S := spanOf (field s "interval")
+      | throw s!"{where_}: the step at {pos} states no interval"
+    if !(S.1 ≤ I.1 && I.2 ≤ S.2) then
+      throw s!"{where_}: on the way, the part at {pos} reaches [{ratText I.1}, {ratText I.2}], wider than the stated [{ratText S.1}, {ratText S.2}]"
+    let scale := ((field s "scale" >>= optRat)).getD 0
+    if scale < 1 then
+      throw s!"{where_}: the step at {pos} states no scale of 1 or more"
+    let smax := ((field s "stored_max" >>= optRat)).getD 0
+    if !storedFits I scale smax then
+      throw s!"{where_}: on the way, the part at {pos}, stored at the scale 1/{ratText scale}, does not fit int64"
+    stated := pos :: stated
+  for (pos, node) in jsonNodes e [] do
+    if !stated.contains pos && (iv node).isSome then
+      throw s!"{where_}: the part at {pos} has an interval, and no step states what the code holds it at"
+  return steps.size
+
 /-- The units and int64 claims, over the `values` section, and the ranges of the columns tables
     write numbers into (rulec's §15.196). -/
 def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
@@ -335,6 +439,9 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       if rest.isEmpty then break
       wideWrote := wideWrote ++ rest
   let wideF := wideGot
+  -- What the int64 claim reads each name in, once both are worked out: what the steps, the held
+  -- values and the fold values are read in (rulec's §15.296).
+  let wideEnv := wideAt wideGot wideWrote
   let mut r := r
   for why in badWrites do
     r := r.fail why
@@ -374,11 +481,22 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   let mut held := 0
   let mut unread := 0
   let mut noInterval := 0
+  let mut steps := 0
+  let mut unsaid := 0
   for v in vals do
     let name := fieldStr v "name"
     let some e := (field v "expr" >>= exprOfJson)
       | r := r.fail s!"{name}: an expression this program cannot read"; continue
     let want := field v "type" >>= str >>= tyOfString
+    -- What the code holds on the way to it, a truth value's two sides among them (rulec's §15.296),
+    -- whatever the value itself states. A certificate from before rulec stated it says nothing, and
+    -- that is said.
+    match field v "steps" with
+    | none => unsaid := unsaid + 1
+    | some st =>
+      match checkWay wideEnv within (expandShares shareDefs) name ((field v "expr").getD Json.null) (some st) with
+      | .ok k => steps := steps + k
+      | .error why => r := r.fail why
     -- units (E103)
     if e.unreadable then
       r := r.state s!"{name}'s units rest on a leaf this program cannot type"
@@ -442,7 +560,124 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   if vals.size > 0 then
     let notes := (if unread > 0 then s!", {unread} whose units rest on a leaf this program cannot type" else "")
       ++ (if noInterval > 0 then s!", {noInterval} with no interval to claim" else "")
-    r := r.say s!"  values: {typed} typed, {held} held to int64{notes}"
+    r := r.say s!"  values: {typed} typed, {held} held to int64{notes}, and {steps} integers on the way to them"
+  if unsaid > 0 then
+    r := r.state s!"the integers the code holds on the way to {unsaid} values: the certificate does not say"
+  -- What the code holds once a value is worked out (rulec's §15.296): a column a table writes
+  -- numbers into at its scale, which a value its rows name is brought to; an output at the scale it
+  -- is rounded at, before its rounding and where the rounding puts it on its grid the way its mode
+  -- rounds, and a rounding by `half_up`, `half_down` or `half_even` compares twice the remainder
+  -- with the grid. Each interval is worked out here, the scale and the mode are the certificate's
+  -- word.
+  match field cert "held" >>= arr with
+  | none => r := r.state "what the code holds once a value is worked out: the certificate does not say"
+  | some hs =>
+    let mut left : List (String × String) := hs.toList.map (fun h => (fieldStr h "name", fieldStr h "of"))
+    let fits : String → Span2 → Json → Option Rat → Option String := fun name I h twice => Id.run do
+      let some S := spanOf (field h "interval")
+        | return some s!"{name}: `held` states no interval for it"
+      if !(S.1 ≤ I.1 && I.2 ≤ S.2) then
+        return some s!"{name}: it reaches [{ratText I.1}, {ratText I.2}] where the code holds it, wider than the stated [{ratText S.1}, {ratText S.2}]"
+      let scale := ((field h "scale" >>= optRat)).getD 0
+      let smax := ((field h "stored_max" >>= optRat)).getD 0
+      if scale < 1 then
+        return some s!"{name}: `held` states no scale of 1 or more for it"
+      if !storedFits I scale smax then
+        return some s!"{name}: held at the scale 1/{ratText scale}, it does not fit int64"
+      if let some g := twice then
+        if !(2 * g * scale ≤ I64_MAX) then
+          return some s!"{name}: its rounding by `{fieldStr h "mode"}` compares twice the remainder with the grid {ratText g}, and twice the grid at the scale 1/{ratText scale} is past int64"
+      return none
+    let find : String → String → Option Json := fun name of =>
+      hs.toList.find? (fun h => fieldStr h "name" == name && fieldStr h "of" == of)
+    -- What the rows of a column write, read the way the int64 claim reads each name, and not cut to
+    -- the ends of the column's type on its own step as `wideAt` cuts it: a row's value past them is
+    -- what the code cannot hold once it is brought to the column's step.
+    let hull : String → Option Span2 := fun col =>
+      match outs.find? (fun o => o.1 == col) with
+      | some (_, some es) => match hullOf wideEnv within es with
+        | some H => some H
+        | none => wideEnv col
+      | _ => wideEnv col
+    let mut cols := 0
+    for (col, _) in outs do
+      let hulled := hull col
+      match hulled, find col "column" with
+      | none, none => pure ()
+      | some _, none => r := r.fail s!"{col}: a table writes numbers into it, and `held` does not state what the code holds it at"
+      | none, some _ => r := r.fail s!"{col}: `held` states an interval for it, and this program works out none for what its rows write"
+      | some I, some h =>
+        left := left.erase (col, "column")
+        match fits col I h none with
+        | some why => r := r.fail why
+        | none => cols := cols + 1
+    let mut put := 0
+    for (name, gj) in objPairs ((field cert "rounds").getD Json.null) do
+      let some g := optRat gj | r := r.fail s!"{name}: the grid it rounds to cannot be read"; continue
+      if g ≤ 0 then
+        r := r.fail s!"{name}: the grid it rounds to, {ratText g}, is not above zero"
+        continue
+      let res := vals.toList.find? (fun v => fieldStr v "name" == name && fieldStr v "of" == "result")
+      let decided : Option Span2 := match res with
+        | some v => (field v "expr" >>= exprOfJson).bind (fun x => interval wideEnv within (expandShares shareDefs x))
+        | none => if isOut name then hull name else wideEnv name
+      match decided, find name "output" with
+      | none, none => pure ()
+      | some _, none => r := r.fail s!"{name}: `held` does not state what the code holds it at before its rounding"
+      | none, some _ => r := r.fail s!"{name}: `held` states an interval for it, and this program works out none for what decides it"
+      | some I, some h =>
+        left := left.erase (name, "output")
+        -- `half_up`, `half_down` and `half_even` compare twice the remainder with the grid.
+        let mode := fieldStr h "mode"
+        if !(roundingWords.contains mode) then
+          r := r.fail s!"{name}: `held` states no mode of rounding this program knows for it"
+          continue
+        let twice := if ["half_up", "half_down", "half_even"].contains mode then some g else none
+        -- The code holds the value on that step before it rounds it, and the rounded value after:
+        -- a rounding never turns two values around, so that runs between the two ends rounded.
+        let lo := roundBy mode g I.1
+        let hi := roundBy mode g I.2
+        match fits name (if lo < I.1 then lo else I.1, if I.2 < hi then hi else I.2) h twice with
+        | some why => r := r.fail why
+        | none => put := put + 1
+    -- With no grids (a certificate from before rulec wrote them, §15.269), an output's entry has
+    -- nothing to be held to; the run states that it does not say what its outputs round to.
+    if (field cert "rounds").isNone then
+      left := left.filter (fun p => p.2 != "output")
+    match left with
+    | (name, of) :: _ =>
+      let what := if of == "column" then "a column a table writes numbers into" else if of == "output" then "an output" else "a " ++ of
+      r := r.fail s!"{name}: `held` states it as {what}, and it is not one"
+    | [] => r := r.say s!"  held: {cols} columns and {put} outputs fit int64 where the code holds them"
+  -- What each fold works out, an answer, a key or a weight (rulec's §15.296), as a value is held.
+  let fvs := fieldArr cert "fold_values"
+  if fvs.size > 0 then
+    let mut fheld := 0
+    let mut fsteps := 0
+    for v in fvs do
+      let where_ := s!"{fieldStr v "fold"} ({fieldStr v "of"})"
+      if !(["empty", "exhausted", "answer", "key", "weight"].contains (fieldStr v "of")) then
+        r := r.fail s!"{where_}: a fold works out an answer, a key or a weight, and nothing else"
+        continue
+      let some ej := field v "expr"
+        | r := r.fail s!"{where_}: an expression this program cannot read"; continue
+      match checkWay wideEnv within (expandShares shareDefs) where_ ej (field v "steps") with
+      | .ok k => fsteps := fsteps + k
+      | .error why => r := r.fail why
+      let worked := (exprOfJson ej).bind (fun x => interval wideEnv within (expandShares shareDefs x))
+      match worked, spanOf (field v "interval") with
+      | none, none => pure ()
+      | none, some _ => r := r.fail s!"{where_}: it states an interval this program cannot derive"
+      | some _, none => r := r.fail s!"{where_}: it states no interval, and this program derives one"
+      | some I, some S =>
+        if S.1 ≤ I.1 && I.2 ≤ S.2 then
+          let scale := ((field v "scale" >>= optRat)).getD 1
+          let smax := ((field v "stored_max" >>= optRat)).getD 0
+          if storedFits I scale smax then fheld := fheld + 1
+          else r := r.fail s!"{where_}: stored at that scale it does not fit int64"
+        else
+          r := r.fail s!"{where_}: the interval here is wider than the one it states"
+    r := r.say s!"  fold values: {fheld} fit int64, and {fsteps} integers on the way to them"
   let reachOf : String → Option Span2 := fun n => (gotF.find? (fun p => p.1 == n)).map (·.2)
   let writtenOf : String → Option Span2 := fun n => (wroteF.find? (fun p => p.1 == n)).map (·.2)
   return (r, { reachOf := reachOf, writtenOf := writtenOf, rangesOf := rangesF, within := within })
