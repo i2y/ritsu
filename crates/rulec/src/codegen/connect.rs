@@ -552,8 +552,11 @@ impl<'a> Gen<'a> {
         let unit = crate::verify::wire_unit(name, inner, self.c);
         if !unit.is_empty() {
             s.push_str(&tr!("：{unit}", ": {unit}"));
-            if let Some((Some(lo), Some(hi))) = self.c.wire_range(name) {
-                s.push_str(&tr!("。{lo} から {hi} まで", ". {lo} to {hi}"));
+            match self.c.wire_range(name) {
+                Some((Some(lo), Some(hi))) => s.push_str(&tr!("。{lo} から {hi} まで", ". {lo} to {hi}")),
+                Some((Some(lo), None)) => s.push_str(&tr!("。{lo} 以上", ". {lo} or more")),
+                Some((None, Some(hi))) => s.push_str(&tr!("。{hi} 以下", ". {hi} or less")),
+                _ => {}
             }
         }
         // An input of an ordered enum held to a range: its two ends, by the names the values

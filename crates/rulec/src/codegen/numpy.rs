@@ -486,15 +486,16 @@ impl<'a> Gen<'a> {
                     o = o.raw("allowed", crate::json::strs(allowed));
                 }
             }
+            // Each end the range writes, and the ends of the type where it writes none: the
+            // column arrives as Python's integers, which have no end, and the runtime tests
+            // them before it makes them int64 (§15.295).
             if kind == "int" || kind == "date" {
-                if let Some((lo, hi)) = self.c.ranges.get(name) {
-                    let s = self.scale(name);
-                    if let Some(l) = lo {
-                        o = o.int("min", l.mul(Rat::int(s)).num);
-                    }
-                    if let Some(h) = hi {
-                        o = o.int("max", h.mul(Rat::int(s)).num);
-                    }
+                let (lo, hi) = crate::door::ends(self.c, name, true);
+                if let Some(l) = lo {
+                    o = o.int("min", l);
+                }
+                if let Some(h) = hi {
+                    o = o.int("max", h);
                 }
             }
             inputs.push(o.finish());

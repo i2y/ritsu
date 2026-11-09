@@ -2898,12 +2898,9 @@ impl<'a> Gen<'a> {
                         "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                        let sc = self.c.wire_scale(&i.name.text);
+                    if let Some(test) = py_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
                         o.push_str(&format!(
-                            "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                            crate::types::wire_int(lo, sc),
-                            crate::types::wire_int(hi, sc),
+                            "    if {test}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                             crate::door::out_of_range(&i.name.text)
                         ));
                     }
@@ -3070,20 +3067,15 @@ impl<'a> Gen<'a> {
                         "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
-                        if let (Some(lo), Some(hi)) = (lo, hi) {
-                            // The bound has to be in the units the argument arrives in, which
-                            // for a rate is the number of steps. Taking the numerator alone
-                            // turned `range >=0% <=100%` into `0 <= r <= 1` and refused every
-                            // value above one step.
-                            let sc = self.c.wire_scale(&i.name.text);
-                            o.push_str(&format!(
-                                "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                                crate::types::wire_int(*lo, sc),
-                                crate::types::wire_int(*hi, sc),
-                                crate::door::out_of_range(&i.name.text)
-                            ));
-                        }
+                    // Each end the range writes, and nothing past ±(2^63−1) (§15.295). The bounds
+                    // are in the units the argument arrives in, which for a rate is the number of
+                    // steps. Taking the numerator alone turned `range >=0% <=100%` into
+                    // `0 <= r <= 1` and refused every value above one step.
+                    if let Some(test) = py_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
+                        o.push_str(&format!(
+                            "    if {test}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                            crate::door::out_of_range(&i.name.text)
+                        ));
                     }
                 }
                 _ => {}
@@ -4245,12 +4237,9 @@ impl<'a> Gen<'a> {
                     crate::door::not_in_enum(&i.name.text, n)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                        let sc = self.c.wire_scale(&i.name.text);
+                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
                         o.push_str(&format!(
-                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                            crate::types::wire_int(lo, sc),
-                            crate::types::wire_int(hi, sc),
+                            "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                             crate::door::out_of_range(&i.name.text)
                         ));
                     }
@@ -4298,13 +4287,15 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&i.name.text);
             // An ordered enum's range, by the constants the guard compares it with (§15.251).
             let ends = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?)));
-            let doc = match (self.c.ranges.get(&i.name.text), ends) {
-                (Some((Some(lo), Some(hi))), _) => tr!(
+            // A range that writes one end shows that end, as the guard holds the field to it.
+            let written = self.c.ranges.get(&i.name.text).copied().filter(|(lo, hi)| lo.is_some() || hi.is_some());
+            let doc = match (written, ends) {
+                (Some((lo, hi)), _) => tr!(
                     "// {} 範囲 {}..{}",
                     "// {} range {}..{}",
                     i.name.text,
-                    crate::types::wire_int(*lo, sc),
-                    crate::types::wire_int(*hi, sc)
+                    lo.map(|l| crate::types::wire_int(l, sc).to_string()).unwrap_or_default(),
+                    hi.map(|h| crate::types::wire_int(h, sc).to_string()).unwrap_or_default()
                 ),
                 (_, Some((lo, hi))) => tr!(
                     "// {} 範囲 {}..{}",
@@ -4429,13 +4420,12 @@ impl<'a> Gen<'a> {
                         ));
                     }
                 }
+                // Each end the range writes, and −(2^63−1) where it writes no lower one: int64
+                // holds one value below that, and the door refuses it (§15.295).
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
-                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
-                        let sc = self.c.wire_scale(&i.name.text);
+                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
                         o.push_str(&format!(
-                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                            crate::types::wire_int(*lo, sc),
-                            crate::types::wire_int(*hi, sc),
+                            "\tif {test} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                             crate::door::out_of_range(&i.name.text)
                         ));
                     }
@@ -6474,12 +6464,9 @@ impl<'a> Gen<'a> {
                         "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                        let sc = self.c.wire_scale(&i.name.text);
+                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, true), "n") {
                         o.push_str(&format!(
-                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                            crate::types::wire_int(lo, sc),
-                            crate::types::wire_int(hi, sc),
+                            "  if ({test}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                             crate::door::out_of_range(&i.name.text)
                         ));
                     }
@@ -6672,12 +6659,11 @@ impl<'a> Gen<'a> {
                         "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                        let sc = self.c.wire_scale(&i.name.text);
+                    // Each end the range writes, and nothing past ±(2^63−1), which a bigint can
+                    // be and no int64 can (§15.295).
+                    if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, true), "n") {
                         o.push_str(&format!(
-                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                            crate::types::wire_int(lo, sc),
-                            crate::types::wire_int(hi, sc),
+                            "  if ({test}) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                             crate::door::out_of_range(&i.name.text)
                         ));
                     }
@@ -7829,12 +7815,9 @@ impl<'a> Gen<'a> {
             };
             let mut o = Guarded::new(&mut o, wrap, "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-                if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                    let sc = self.c.wire_scale(&i.name.text);
+                if let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
                     o.push_str(&format!(
-                        "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
-                        crate::types::wire_int(lo, sc),
-                        crate::types::wire_int(hi, sc),
+                        "    if {test} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
                         crate::door::out_of_range(&i.name.text)
                     ));
                 }
@@ -7988,10 +7971,6 @@ impl<'a> Gen<'a> {
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
-            let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) else {
-                continue;
-            };
-            let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
             // A branded value is an i64 inside, which is what the guard compares.
             let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.0" } else { "__v" };
@@ -8000,13 +7979,14 @@ impl<'a> Gen<'a> {
             } else {
                 (v, None)
             };
+            // Each end the range writes, and −(2^63−1) where it writes no lower one: an i64
+            // holds one value below that, and the door refuses it (§15.295).
+            let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") else {
+                continue;
+            };
             let mut o = Guarded::new(&mut o, wrap, "    ");
-            // Rust's inline format arguments take a name, not a field access, so the value
-            // goes in as a positional argument.
             o.push_str(&format!(
-                "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
-                crate::types::wire_int(lo, sc),
-                crate::types::wire_int(hi, sc),
+                "    if {test} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
                 crate::door::out_of_range(&i.name.text)
             ));
         }
@@ -8501,22 +8481,20 @@ impl<'a> Gen<'a> {
                 ))
             }
             // Money, quantities, rates, numbers and dates all travel as an i64 (§10.2), and
-            // the declared range is what the completeness proof quantified over, so it is
-            // exactly what the harness assumes.
+            // the harness assumes what the entry guard lets in: each end the range writes, and
+            // −(2^63−1) where it writes no lower one (§15.295).
             _ => {
                 let mut d = format!("{ind}let {ident}: i64 = kani::any();\n");
-                if let Some((lo, hi)) = self.c.ranges.get(name) {
-                    let sc = self.c.wire_scale(name);
-                    let mut b: Vec<String> = Vec::new();
-                    if let Some(lo) = lo {
-                        b.push(format!("{} <= {ident}", crate::types::wire_int(*lo, sc)));
-                    }
-                    if let Some(hi) = hi {
-                        b.push(format!("{ident} <= {}", crate::types::wire_int(*hi, sc)));
-                    }
-                    if !b.is_empty() {
-                        d.push_str(&format!("{ind}kani::assume({});\n", b.join(" && ")));
-                    }
+                let (lo, hi) = crate::door::ends(self.c, name, false);
+                let mut b: Vec<String> = Vec::new();
+                if let Some(lo) = lo {
+                    b.push(format!("{lo} <= {ident}"));
+                }
+                if let Some(hi) = hi {
+                    b.push(format!("{ident} <= {hi}"));
+                }
+                if !b.is_empty() {
+                    d.push_str(&format!("{ind}kani::assume({});\n", b.join(" && ")));
                 }
                 let brand = self.rs_ty(ty);
                 let e = if brand == "i64" { ident.to_string() } else { format!("{brand}({ident})") };
@@ -11987,13 +11965,12 @@ impl<'a> Gen<'a> {
                     "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
                     crate::door::not_integer(&i.name.text)
                 ));
-                if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                    let sc = self.c.wire_scale(&i.name.text);
+                // Ruby's integers have no end, so the door holds a field to both ends its type
+                // has where its range writes none (§15.295).
+                if let Some(test) = rb_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
                     o.push_str(&format!(
-                        "    raise RuleInputError.new(\"{}\", {v}) unless ({}..{}).cover?({v})\n",
+                        "    raise RuleInputError.new(\"{}\", {v}) {test}\n",
                         crate::door::out_of_range(&i.name.text),
-                        crate::types::wire_int(lo, sc),
-                        crate::types::wire_int(hi, sc),
                     ));
                 }
             }
@@ -12102,16 +12079,13 @@ impl<'a> Gen<'a> {
                         "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
                         crate::door::not_integer(&i.name.text)
                     ));
-                    if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
-                        if let (Some(lo), Some(hi)) = (lo, hi) {
-                            let sc = self.c.wire_scale(&i.name.text);
-                            o.push_str(&format!(
-                                "    raise RuleInputError.new(\"{}\", {v}) unless ({}..{}).cover?({v})\n",
-                                crate::door::out_of_range(&i.name.text),
-                                crate::types::wire_int(*lo, sc),
-                                crate::types::wire_int(*hi, sc),
-                            ));
-                        }
+                    // Each end the range writes, and the end of the type where it writes none:
+                    // an Integer here can be any size (§15.295).
+                    if let Some(test) = rb_out_of(&v, crate::door::ends(self.c, &i.name.text, true)) {
+                        o.push_str(&format!(
+                            "    raise RuleInputError.new(\"{}\", {v}) {test}\n",
+                            crate::door::out_of_range(&i.name.text),
+                        ));
                     }
                 }
                 _ => {}
@@ -13575,10 +13549,6 @@ impl<'a> Gen<'a> {
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
-            let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) else {
-                continue;
-            };
-            let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
             // A branded value is a struct around its integer, which is what the guard compares.
             let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.value" } else { "__v" };
@@ -13587,11 +13557,14 @@ impl<'a> Gen<'a> {
             } else {
                 (v, None)
             };
+            // Each end the range writes, and −(2^63−1) where it writes no lower one: an Int64
+            // holds one value below that, and the door refuses it (§15.295).
+            let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") else {
+                continue;
+            };
             let mut o = Guarded::new(&mut o, wrap, "    ");
             o.push_str(&format!(
-                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
-                crate::types::wire_int(lo, sc),
-                crate::types::wire_int(hi, sc),
+                "    if {test} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::door::out_of_range(&i.name.text)
             ));
         }
@@ -13734,10 +13707,6 @@ impl<'a> Gen<'a> {
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
-            let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) else {
-                continue;
-            };
-            let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
             // A branded value is a struct around its integer, which is what the guard compares.
             let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.value" } else { "__v" };
@@ -13746,11 +13715,14 @@ impl<'a> Gen<'a> {
             } else {
                 (v, None)
             };
+            // Each end the range writes, and −(2^63−1) where it writes no lower one: an Int64
+            // holds one value below that, and the door refuses it (§15.295).
+            let Some(test) = or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") else {
+                continue;
+            };
             let mut o = Guarded::new(&mut o, wrap, "    ");
             o.push_str(&format!(
-                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
-                crate::types::wire_int(lo, sc),
-                crate::types::wire_int(hi, sc),
+                "    if {test} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::door::out_of_range(&i.name.text)
             ));
         }
@@ -14713,6 +14685,45 @@ impl<'a> Gen<'a> {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// The ends a door holds a number or a date to (§15.295), as each language tests them.
+// ---------------------------------------------------------------------------
+
+/// What a Python door refuses a value past its ends with (`crate::door::ends`): `not lo <= v <= hi`
+/// where there are both, as it always read, and the one comparison where there is one. `None`
+/// where there is nothing to compare. `v` is the integer as it travels.
+pub(crate) fn py_out_of(v: &str, (lo, hi): (Option<i128>, Option<i128>)) -> Option<String> {
+    match (lo, hi) {
+        (Some(l), Some(h)) => Some(format!("not {l} <= {v} <= {h}")),
+        (Some(l), None) => Some(format!("{v} < {l}")),
+        (None, Some(h)) => Some(format!("{v} > {h}")),
+        (None, None) => None,
+    }
+}
+
+/// The same test where a language writes `||` between two comparisons and may put a suffix on an
+/// integer literal: `n` for TypeScript's `bigint`, `L` for Java's `long`, nothing for Go, Rust,
+/// Swift and PHP.
+pub(crate) fn or_out_of(v: &str, (lo, hi): (Option<i128>, Option<i128>), suffix: &str) -> Option<String> {
+    match (lo, hi) {
+        (Some(l), Some(h)) => Some(format!("{v} < {l}{suffix} || {v} > {h}{suffix}")),
+        (Some(l), None) => Some(format!("{v} < {l}{suffix}")),
+        (None, Some(h)) => Some(format!("{v} > {h}{suffix}")),
+        (None, None) => None,
+    }
+}
+
+/// The same for the end of a Ruby `raise … ` line: `unless (lo..hi).cover?(v)` where there are both
+/// ends, as it always read, and `if` with the one comparison where there is one.
+fn rb_out_of(v: &str, (lo, hi): (Option<i128>, Option<i128>)) -> Option<String> {
+    match (lo, hi) {
+        (Some(l), Some(h)) => Some(format!("unless ({l}..{h}).cover?({v})")),
+        (Some(l), None) => Some(format!("if {v} < {l}")),
+        (None, Some(h)) => Some(format!("if {v} > {h}")),
+        (None, None) => None,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // JavaScript (§15.36): the TypeScript with its types taken off.

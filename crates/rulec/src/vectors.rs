@@ -2468,13 +2468,23 @@ fn wrong_values(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Vec<(Jso
             let n = at.and_then(|j| j.as_int()).or(lo_w).or(hi_w).unwrap_or(0);
             out.push((Json::Str(n.to_string()), tr!("{name} に数でなく文字列", "{name} as a string, not a number")));
             // Half a step past the vector's own value: the door looks at the kind before the range.
-            let half = format!("{n}.5");
+            // Nearer zero than 2^52, where a float64 still holds the half: past it, a language that
+            // reads a JSON number as a float64 reads -9223372036854775807.5 as the whole number
+            // beside it, and the reference evaluator, which reads the digits, does not (§15.295).
+            let near = (1i128 << 52) - 1;
+            let half = format!("{}.5", n.clamp(-near, near));
             let why = if *present == Ty::Rate { tr!("{name} を刻みに載らない値に", "{name} off its step") } else { tr!("{name} を整数でない数に", "{name} not a whole number") };
             out.push((Json::Frac(half), why));
-            if let Some(l) = lo_w {
-                out.push((Json::Int(l - 1), tr!("{name} を範囲の下端の一つ下に", "{name} one below its range")));
+            // The door holds the value to the end its range writes, and to the end of its type,
+            // ±(2^63−1), where the range writes none or one past it (§15.295). The one below the
+            // lower end is at least the least int64, so every language can be handed it; the one
+            // above 2^63−1 no int64 holds, and is left out.
+            let max = crate::door::WIRE_MAX;
+            match lo_w {
+                Some(l) if l > -max => out.push((Json::Int(l - 1), tr!("{name} を範囲の下端の一つ下に", "{name} one below its range"))),
+                _ => out.push((Json::Int(-max - 1), tr!("{name} を型の持てる値の下端の一つ下に", "{name} one below what its type holds"))),
             }
-            if let Some(h) = hi_w {
+            if let Some(h) = hi_w.filter(|h| *h < max) {
                 out.push((Json::Int(h + 1), tr!("{name} を範囲の上端の一つ上に", "{name} one above its range")));
             }
         }

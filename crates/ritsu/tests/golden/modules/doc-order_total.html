@@ -384,10 +384,10 @@ function widget(inp) {
     el.type = "number";
     el.step = inp.kind === "rate" ? "any" : "1";
     if (inp.range) {
-      const show = (v) => (inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
-      el.min = show(inp.range.min);
-      el.max = show(inp.range.max);
-      el.placeholder = (inp.optional ? "none / " : "") + show(inp.range.min) + " … " + show(inp.range.max);
+      const show = (v) => (v === undefined ? "" : inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
+      if (inp.range.min !== undefined) el.min = show(inp.range.min);
+      if (inp.range.max !== undefined) el.max = show(inp.range.max);
+      el.placeholder = ((inp.optional ? "none / " : "") + show(inp.range.min) + " … " + show(inp.range.max)).trim();
     } else if (inp.optional) {
       el.placeholder = "none";
     }

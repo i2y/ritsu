@@ -528,14 +528,12 @@ impl<'a> Gen<'a> {
                         "WHEN {col} <> CAST({col} AS BIGINT) THEN {}",
                         lit(&crate::door::not_integer(&i.name.text))
                     ));
-                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                        let sc = self.c.wire_scale(&i.name.text);
-                        guard.push(format!(
-                            "WHEN {col} < {} OR {col} > {} THEN {}",
-                            crate::types::wire_int(lo, sc),
-                            crate::types::wire_int(hi, sc),
-                            lit(&crate::door::out_of_range(&i.name.text))
-                        ));
+                    // Each end the range writes, and −(2^63−1) where it writes no lower one: a
+                    // BIGINT holds one value below that, and the door refuses it (§15.295).
+                    let (lo, hi) = crate::door::ends(self.c, &i.name.text, false);
+                    let test: Vec<String> = [lo.map(|l| format!("{col} < {l}")), hi.map(|h| format!("{col} > {h}"))].into_iter().flatten().collect();
+                    if !test.is_empty() {
+                        guard.push(format!("WHEN {} THEN {}", test.join(" OR "), lit(&crate::door::out_of_range(&i.name.text))));
                     }
                 }
                 _ => {}
@@ -1050,8 +1048,9 @@ impl<'a> Gen<'a> {
             _ => "bigint".into(),
         };
         // An output's range is the one its answers lie in, as the schema and `api` say (§15.271).
-        if let Some((Some(lo), Some(hi))) = self.c.wire_range(name) {
-            s.push_str(&format!(", {lo}..{hi}"));
+        // A range that writes one end shows that end alone (`0..`, `..100`).
+        if let Some((lo, hi)) = self.c.wire_range(name).filter(|(lo, hi)| lo.is_some() || hi.is_some()) {
+            s.push_str(&format!(", {}..{}", lo.map(|l| l.to_string()).unwrap_or_default(), hi.map(|h| h.to_string()).unwrap_or_default()));
         }
         if matches!(ty, Ty::Opt(_)) {
             s.push_str(&tr!("、NULL 可", ", or NULL"));
@@ -1675,8 +1674,10 @@ def _decide(cases):
         # Called the way PostgREST calls it — by argument name — and with every argument cast
         # to the type it was declared with. Both matter: a rule whose alias is also the name of
         # a built-in function (`rank`) cannot be called positionally without ambiguity, and a
-        # named argument is the one form a variadic built-in cannot answer to.
-        args = ", ".join('"%s" => %s::%s' % (a, _lit(k, v), t) for (_, a, k), t, v in zip(INPUTS, ARGTYPES, vals))
+        # named argument is the one form a variadic built-in cannot answer to. The value is
+        # bracketed before the cast: `::` binds before a minus, and 9223372036854775808 is no
+        # bigint, so `-9223372036854775808::bigint` failed where the least bigint was asked.
+        args = ", ".join('"%s" => (%s)::%s' % (a, _lit(k, v), t) for (_, a, k), t, v in zip(INPUTS, ARGTYPES, vals))
         # Through a subquery, so that the answer is a row however many columns it has: a
         # function that returns one column — one output and no table to name a row of — is that
         # column's type in FROM, and row_to_json has no form for a bare bigint.

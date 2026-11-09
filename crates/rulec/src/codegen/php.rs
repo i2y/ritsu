@@ -863,12 +863,11 @@ impl<'a> Gen<'a> {
             let ty = ty.present().clone();
             let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("    if ({v} !== null) {{\n"), "    }\n".to_string())), "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-                if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                    let sc = self.c.wire_scale(&i.name.text);
+                // Each end the range writes, and −(2^63−1) where it writes no lower one: PHP's
+                // int holds one value below that, and the door refuses it (§15.295).
+                if let Some(test) = super::or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
                     o.push_str(&format!(
-                        "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
-                        crate::types::wire_int(lo, sc),
-                        crate::types::wire_int(hi, sc),
+                        "    if ({test}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
                         php_str(&crate::door::out_of_range(&i.name.text)),
                     ));
                 }
@@ -1010,12 +1009,11 @@ impl<'a> Gen<'a> {
                 ));
             }
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-                if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
-                    let sc = self.c.wire_scale(&i.name.text);
+                // Each end the range writes, and −(2^63−1) where it writes no lower one: PHP's
+                // int holds one value below that, and the door refuses it (§15.295).
+                if let Some(test) = super::or_out_of(&v, crate::door::ends(self.c, &i.name.text, false), "") {
                     o.push_str(&format!(
-                        "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
-                        crate::types::wire_int(lo, sc),
-                        crate::types::wire_int(hi, sc),
+                        "    if ({test}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
                         php_str(&crate::door::out_of_range(&i.name.text)),
                     ));
                 }

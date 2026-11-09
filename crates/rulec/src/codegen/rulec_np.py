@@ -122,6 +122,28 @@ def _column(col):
     return v if v.ndim == 1 else _objects(col)
 
 
+def _outside(v, lo, hi):
+    """The elements of a column of whole numbers below `lo` or above `hi`, as a mask; an end
+    that is None holds nothing back.
+
+    A column of int64 compares as it is. Any other column is compared one value at a time in
+    Python, whose comparison of an integer with a float is exact: numpy compares a float column
+    with an integer as float64, where 2^63 − 1 is 2^63, and a uint64 column holds what int64
+    would wrap (§15.295).
+    """
+    if v.dtype == np.int64:
+        bad = np.zeros(len(v), dtype=bool)
+        if lo is not None:
+            bad |= v < lo
+        if hi is not None:
+            bad |= v > hi
+        return bad
+    return np.array(
+        [(lo is not None and x < lo) or (hi is not None and x > hi) for x in v.tolist()],
+        dtype=bool,
+    )
+
+
 def _objects(xs):
     """A one-dimensional array of objects, whatever they are: `np.array(xs, dtype=object)` makes
     a list of lists two-dimensional too."""
@@ -552,7 +574,14 @@ class Rule:
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["integer"], wire[i], i)
-                v = (fill(v, 0) if spec.get("optional") else v).astype(np.int64)
+                v = fill(v, 0) if spec.get("optional") else v
+                # The range, and the ends of the type where it writes none, before the column
+                # is int64: the cast wraps a value past them into one inside (§15.295).
+                bad = _outside(v, spec.get("min"), spec.get("max")) & ~absent
+                if bad.any():
+                    i = int(np.argmax(bad))
+                    raise refuse(say["range"], wire[i], i)
+                v = v.astype(np.int64)
             elif kind == "bool":
                 bad = _not_bool(cols[name]) & ~absent
                 if bad.any():
@@ -577,15 +606,9 @@ class Rule:
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["range"], v[i], i)
-            lo, hi = spec.get("min"), spec.get("max")
-            if lo is not None or hi is not None:
-                bad = np.zeros(n, dtype=bool)
-                if lo is not None:
-                    bad |= v < lo
-                if hi is not None:
-                    bad |= v > hi
+            if kind == "date":
                 # The range is the range of the values that are there (§15.201).
-                bad &= ~absent
+                bad = _outside(v, spec.get("min"), spec.get("max")) & ~absent
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["range"], wire[i], i)

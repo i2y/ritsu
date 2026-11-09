@@ -130,6 +130,35 @@ fn input(error: String) -> Refusal {
     Refusal { kind: "input", error }
 }
 
+/// The largest integer a number travels as, 2^63−1, and with its sign turned, the smallest: where
+/// a number's range writes no end, the door holds it to these (§15.295). int64 goes one further
+/// down, to −2^63, and no door takes that one, so what a value can be is the same on both sides of
+/// zero, as the proof that a value fits in int64 (E108) reads it.
+pub const WIRE_MAX: i128 = i64::MAX as i128;
+
+/// The two integers a door holds a number or a date to, as it travels (§15.295): the ends its
+/// range writes — on the number's wire scale, as a date's day number — and for a number nothing
+/// past ±(2^63−1), whether its range writes an end there or not. A date whose range writes no end
+/// is held by its reader, which takes the years 0001 to 9999 (§15.279), and there is nothing more
+/// to compare. `wide` is a language whose integers go past int64 (Python, NumPy, TypeScript,
+/// JavaScript, Ruby); in one that holds the number in an int64 the upper end is left out where it
+/// is 2^63−1, as nothing that integer holds is past it. `None` for a value of another type.
+pub fn ends(c: &Checked, name: &str, wide: bool) -> (Option<i128>, Option<i128>) {
+    let Some(ty) = c.ty_of(name) else { return (None, None) };
+    let sc = c.wire_scale(name);
+    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+    let (lo, hi) = (lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc)));
+    match ty.present() {
+        Ty::Date => (lo, hi),
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
+            let lo = lo.map_or(-WIRE_MAX, |l| l.max(-WIRE_MAX));
+            let hi = hi.map_or(WIRE_MAX, |h| h.min(WIRE_MAX));
+            (Some(lo), (wide || hi < WIRE_MAX).then_some(hi))
+        }
+        _ => (None, None),
+    }
+}
+
 /// The input as one value of its declared type, or the sentence its door refuses it with:
 /// missing, of another kind, outside its range. The absent value of an optional input is
 /// `none`, as the reference evaluator reads it.
@@ -155,6 +184,10 @@ fn one(c: &Checked, name: &str, ty: &Ty, j: Option<&Json>) -> Result<Val, String
             let Some(n) = whole(j) else { return Err(not_integer(name)) };
             let v = crate::types::from_wire(n, c.wire_scale(name));
             range(v)?;
+            // Nothing past ±(2^63−1) as it travels, whatever its range writes (§15.295).
+            if n.abs() > WIRE_MAX {
+                return Err(out_of_range(name));
+            }
             Ok(Val::Num(v))
         }
         Ty::Date => {

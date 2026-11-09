@@ -3549,8 +3549,16 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         o = o.int("scale", c.wire_scale(name));
         // An output's range is the one its answers lie in, as the schema and `api` say (§15.271).
         // The script bounds the fields of the inputs with theirs.
-        if let Some((Some(lo), Some(hi))) = c.wire_range(name) {
-            o = o.raw("range", Obj::new().int("min", lo).int("max", hi).finish());
+        // A range that writes one end bounds the field on that side alone.
+        if let Some((lo, hi)) = c.wire_range(name).filter(|(lo, hi)| lo.is_some() || hi.is_some()) {
+            let mut r = Obj::new();
+            if let Some(l) = lo {
+                r = r.int("min", l);
+            }
+            if let Some(h) = hi {
+                r = r.int("max", h);
+            }
+            o = o.raw("range", r.finish());
         }
         // An input of an ordered enum with a range offers only the values the range lets in, as
         // a number's field is bounded by its range (§15.251): the list offered every value of the
@@ -3773,10 +3781,10 @@ function widget(inp) {
     el.type = "number";
     el.step = inp.kind === "rate" ? "any" : "1";
     if (inp.range) {
-      const show = (v) => (inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
-      el.min = show(inp.range.min);
-      el.max = show(inp.range.max);
-      el.placeholder = (inp.optional ? "none / " : "") + show(inp.range.min) + " … " + show(inp.range.max);
+      const show = (v) => (v === undefined ? "" : inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
+      if (inp.range.min !== undefined) el.min = show(inp.range.min);
+      if (inp.range.max !== undefined) el.max = show(inp.range.max);
+      el.placeholder = ((inp.optional ? "none / " : "") + show(inp.range.min) + " … " + show(inp.range.max)).trim();
     } else if (inp.optional) {
       el.placeholder = "none";
     }
