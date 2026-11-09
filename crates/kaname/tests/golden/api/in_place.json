@@ -1,0 +1,135 @@
+{
+  "kaname": "<version>",
+  "file": "in_place.kn",
+  "module": {
+    "name": "in_place",
+    "alias": "in_place",
+    "version": "v1",
+    "description": "A module with a property and its proof beside it, which the package written for Lean builds where it is",
+    "sha256": "880d2fb5fb0e268d9b236f77dd541c8720af593f2e1c579e9ad168f5625dafc2"
+  },
+  "generated": {
+    "typescript": "glue/in_place.ts",
+    "python": "glue/in_place.py",
+    "go": "glue/inplace/inplace.go",
+    "rust": "glue/in_place.rs"
+  },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "in_place"
+    },
+    "functions": [
+      "twice"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ]
+  },
+  "uses": [],
+  "enums": [],
+  "records": [],
+  "functions": [
+    {
+      "name": "twice",
+      "alias": "twice",
+      "line": 4,
+      "description": null,
+      "params": [
+        {
+          "name": "x",
+          "alias": "x",
+          "type": "number",
+          "range": ">=0 <=1000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "number",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "twice",
+        "python": "twice",
+        "go": "Twice",
+        "rust": "twice"
+      },
+      "check": {
+        "go": "CheckTwice",
+        "rust": "check_twice"
+      }
+    }
+  ],
+  "properties": [
+    {
+      "name": "twice_is_even",
+      "alias": "twice_is_even",
+      "line": 7,
+      "description": "Twice a number leaves nothing over when halved",
+      "params": [
+        {
+          "name": "x",
+          "alias": "x",
+          "type": "number",
+          "range": ">=0 <=1000",
+          "count": null
+        }
+      ],
+      "when": 0
+    }
+  ],
+  "transfers": []
+}

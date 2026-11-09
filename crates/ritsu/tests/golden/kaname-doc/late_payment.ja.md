@@ -1,9 +1,9 @@
-<!-- kaname <version> が late_payment.ja.kn（sha256:b5276356b2150cff）から生成したページです。読むためのもので、もとになるのは .kn のほうです。ここを編集しても .kn には戻せません。 -->
+<!-- kaname <version> が late_payment.ja.kn（sha256:43d8ed09c65723fd）から生成したページです。読むためのもので、もとになるのは .kn のほうです。ここを編集しても .kn には戻せません。 -->
 # 支払いの遅れ（late_payment_ja）
 
 遅れて払われた請求書について、売り手が請求するもの。期日、何日遅れて払われたか、規則がそれに付ける定額と利息。late_payment.kn の日本語の版
 
-- ファイル：`late_payment.ja.kn`（module 支払いの遅れ v1、sha256:b5276356b2150cff）
+- ファイル：`late_payment.ja.kn`（module 支払いの遅れ v1、sha256:43d8ed09c65723fd）
 - 読むファイル：日付のファイル `期限`（`dates/支払期限.cal`）、規則 `請求額`（`rules/遅延の請求額.rule`）
 - kaname：<version>
 
@@ -69,6 +69,25 @@ fn 遅れの請求(claim)(請求書(invoice): 請求書, 支払日(paid_on): dat
 ### 止まらないかもしれない関数
 
 ありません。
+
+## 性質
+
+性質は、引数が宣言した範囲に入り、`when` の行がどれも成り立つ入力なら、最後の式が `true` になるという主張です。`kaname check` は性質をベクタで確かめ、反例があれば E603 にします。示したと言えるのは、`--lean` が証明を受け付けたときだけです。このページは性質の中身を載せ、答えは載せません。
+
+### `期日までに払えば請求は無い`（`nothing_is_claimed_when_paid_on_time`）
+
+期日までに払われた請求書には、期限がどの日を期日にしても、請求が無い。
+
+```kn
+property 期日までに払えば請求は無い(nothing_is_claimed_when_paid_on_time)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%)
+  description "期日までに払われた請求書には、期限がどの日を期日にしても、請求が無い"
+  when 支払日 <= 期限.期日(請求日: 請求書.請求日)
+  遅れの請求(請求書: 請求書, 支払日: 支払日, 基準金利: 基準金利) = none
+```
+
+`when` の行は 1 本です。最後の式は `遅れの請求(請求書: 請求書, 支払日: 支払日, 基準金利: 基準金利) = none` です。
+
+証明のファイル `late_payment_ja.lean` が .kn の隣にあります。`ritsu check --lean` が確かめます。
 
 ## コードにある判断
 

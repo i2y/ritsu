@@ -279,6 +279,62 @@ fn what_stops_ritsu_check() {
     assert!(out.contains("1 not checked"), "{out}");
 }
 
+/// `--lean` with no Lean to run (kaname's DESIGN 38.3): `lake` neither on the `PATH` nor in
+/// `~/.elan/bin` stops `ritsu check --lean` and `ritsu kaname check --lean` with exit 2 and what to
+/// install, before any file is checked.
+#[test]
+fn check_lean_without_lean_exits_2() {
+    let t = TempDir::new("lean-missing");
+    ritsu_testkit::tmp::copy_dir(&here().join("../kaname/examples/refund_split"), t.path());
+    let home = TempDir::new("lean-missing-home");
+    let said = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+        c.current_dir(t.path()).args(args).env("PATH", "/usr/bin:/bin").env("HOME", home.path()).env_remove("RITSU_LANG").env_remove("KANAME_LANG");
+        let o = c.output().expect("could not run ritsu");
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    };
+    let missing = format!(
+        "error: --lean needs Lean: `lake` is neither on PATH nor in ~/.elan/bin. Install elan, the Lean version manager; the toolchain the proofs use ({}) is installed on the first run\n",
+        kaname::r#gen::lean::TOOLCHAIN
+    );
+    assert_eq!(said(&["check", ".", "--lean"]), (2, String::new(), missing.clone()));
+    assert_eq!(said(&["kaname", "check", "refund_split.kn", "--lean"]), (2, String::new(), missing));
+    let (code, out, err) = said(&["check", ".", "--lean", "--lang", "ja"]);
+    assert_eq!((code, out.as_str()), (2, ""));
+    assert!(err.starts_with("エラー: --lean には Lean が要ります。`lake` が PATH にも ~/.elan/bin にもありません。"), "{err}");
+}
+
+/// The JSON gives each property of a module its answer (kaname's DESIGN 36, 38.3): undecided, with
+/// why, when nothing shows it (the proof beside it waits for `--lean`; no proof is there); the
+/// counterexample, as the function's input, when a vector breaks it.
+#[test]
+fn check_json_gives_each_property_its_outcome() {
+    let t = TempDir::new("properties-json");
+    ritsu_testkit::tmp::copy_dir(&here().join("../kaname/examples/refund_split"), t.path());
+    let properties = |dir: &Path, file: &str| -> serde_json::Value {
+        let (_, out, err) = ritsu_in(dir, &["check", ".", "--root", ".", "--format", "json"]);
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}{err}"));
+        v["files"].as_array().unwrap().iter().find(|f| f["file"] == file).unwrap_or_else(|| panic!("no {file}: {v}"))["check"]["properties"].clone()
+    };
+    let p = properties(t.path(), "refund_split.kn");
+    let undecided = |reason: &str| {
+        serde_json::json!([
+            {"name": "shares_add_up", "line": 18, "outcome": "undecided", "reason": reason, "code": "W603", "vectors": 12, "held": 12, "input": null},
+            {"name": "no_share_is_negative", "line": 22, "outcome": "undecided", "reason": reason, "code": "W603", "vectors": 12, "held": 12, "input": null},
+            {"name": "no_share_is_more_than_its_left", "line": 26, "outcome": "undecided", "reason": reason, "code": "W603", "vectors": 12, "held": 6, "input": null},
+        ])
+    };
+    assert_eq!(p, undecided("lean-not-run"));
+    std::fs::remove_file(t.path().join("refund_split.lean")).unwrap();
+    assert_eq!(properties(t.path(), "refund_split.kn"), undecided("no-proof"));
+    let f = TempDir::new("properties-json-false");
+    std::fs::copy(here().join("../kaname/tests/properties/shares.kn"), f.path().join("shares.kn")).unwrap();
+    assert_eq!(
+        properties(f.path(), "shares.kn"),
+        serde_json::json!([{"name": "every_line_gets_a_share", "line": 12, "outcome": "example", "reason": null, "code": "E603", "vectors": 18, "held": 12, "input": {"lines": [{"sku": "a", "left": 500000}, {"sku": "a", "left": 500000}], "refund": 1}}])
+    );
+}
+
 /// `--budget` caps what the checks that walk a space may walk, one number for each language that
 /// has such a check: the nodes rulec's check of one rule visits (E109) and the combinations
 /// sekisho walks for one action (E307), as `ritsu rulec check --budget` and `ritsu sekisho check

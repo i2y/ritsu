@@ -56,7 +56,7 @@ impl Project {
                 Tool::Chobo => joined.chobo.checked(&self.root, &files, lang),
                 Tool::Geas if self.run_claims => joined.geas.checked(&self.root, &files, lang),
                 Tool::Geas => joined.geas.read(&self.root, &files, lang),
-                Tool::Kaname => joined.kaname.checked_with(&self.root, &files, &joined.ports(), verdicts.clone(), lang),
+                Tool::Kaname => joined.kaname.checked_lean(&self.root, &files, &joined.ports(), verdicts.clone(), self.lean.as_ref(), lang),
                 Tool::Dandori => joined.dandori.checked_with(&self.root, &files, &joined.ports(), lang),
                 Tool::Sekisho => joined.sekisho.checked(&self.root, &files, lang),
                 Tool::Yuen => {

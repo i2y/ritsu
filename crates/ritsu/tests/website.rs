@@ -1132,10 +1132,11 @@ fn the_readmes_of_sekisho_link_to_its_pages() {
 
 /// The pages of kaname, in each language's directory `kaname/`: what kaname is, how a module is
 /// written, the four functional cores of its examples with their hosts, what the check guarantees,
-/// and the calls of rules, dates and books. They show kaname's examples and the materials of its
+/// the calls of rules, dates and books, and the properties of a function with their proofs in Lean.
+/// They show kaname's examples and the materials of its
 /// tests, the English versions on the English pages and the Japanese versions on the Japanese ones;
 /// the hosts, which call the code of the English versions, on both.
-const KANAME_PAGES: [&str; 5] = ["index.md", "language.md", "examples.md", "checks.md", "together.md"];
+const KANAME_PAGES: [&str; 6] = ["index.md", "language.md", "examples.md", "checks.md", "together.md", "properties.md"];
 
 /// The guide to modules, in English and in Japanese. Its examples are the modules of ritsu's tests
 /// (crates/ritsu/tests/projects/modules, and modules.ja for the Japanese page) and the module of

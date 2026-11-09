@@ -94,6 +94,36 @@ fn the_kn_on_the_pages_is_from_the_files() {
     assert!(wrong.is_empty(), "not a line of any .kn under examples/ or tests/:\n{}", wrong.join("\n"));
 }
 
+/// The Lean on the pages (fenced `lean`) is lines of the proof files of the examples or of the Lean
+/// `ritsu gen` writes of them (the goldens of `tests/lean.rs`), so a proof or a statement shown is one
+/// that Lean took (DESIGN 38).
+#[test]
+fn the_lean_on_the_pages_is_from_the_files() {
+    let mut real = BTreeSet::new();
+    for dir in ["examples", "tests/golden/lean"] {
+        for f in files(Path::new(dir), "lean") {
+            real.extend(read(&f).lines().map(|l| l.trim().to_string()));
+        }
+    }
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    for f in pages() {
+        for (info, lines) in fenced(&read(&f)) {
+            if info != "lean" {
+                continue;
+            }
+            seen += 1;
+            for l in lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty() && *l != "…") {
+                if !real.contains(l) {
+                    wrong.push(format!("{}: {l}", f.display()));
+                }
+            }
+        }
+    }
+    assert!(seen >= 4, "{seen} blocks of Lean on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "not a line of any .lean under examples/ or tests/golden/lean/:\n{}", wrong.join("\n"));
+}
+
 /// The code of a host in the READMEs (fenced `ts`, `python` or `go`) is lines of the hosts of the
 /// examples (`examples/*/host/main.*`), which ritsu's `tests/kaname.rs` runs on the package `ritsu gen`
 /// writes. (`docs/reference.md` shows the code generated, held to the generator by its own tests.)

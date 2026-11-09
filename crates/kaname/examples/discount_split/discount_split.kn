@@ -16,6 +16,14 @@ fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <
   map(running_totals(lines, l => l.amount), r =>
     Share { label: r.item.label, share: discount_share(discount: discount, before: r.before, upto: r.upto, total: r.total).share })
 
+property every_line_keeps_its_label(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "Each line gets one share, under its own label, in the order of the lines"
+  map(split(lines: lines, discount: discount), s => s.label) = map(lines, l => l.label)
+
+property shares_add_up(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "The shares come to the discount: this rests on what the rule answers, which a proof knows only as far as the port says"
+  sum(split(lines: lines, discount: discount), s => s.share) = discount
+
 # Virginia's Example 3: $10.00 off $50.00 of labor and $100.00 of parts.
 examples
   split(lines: [Line { label: "labor", amount: 5000USDc }, Line { label: "parts", amount: 10000USDc }], discount: 1000USDc)

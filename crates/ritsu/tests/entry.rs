@@ -82,8 +82,10 @@ fn ritsu_is_every_language() {
     let (code, out, err) = ritsu(&["sekisho", "check", gate, "--root", "sekisho/examples/refunds"]);
     assert_eq!((code, out.as_str(), err.as_str()), (0, format!("{gate}: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation\n").as_str(), ""));
     // a module that calls a rule and a date of koyomi: the languages it reads are joined
+    // its property is tried on its vectors, and is not shown without `--lean` (kaname's DESIGN 38)
     let kn = "kaname/examples/late_payment/late_payment.kn";
-    assert_eq!(ritsu(&["kaname", "check", kn]), (0, format!("ok {kn}: 1 function, total\n"), String::new()));
+    let (code, out, err) = ritsu(&["kaname", "check", kn]);
+    assert!(code == 0 && err.is_empty() && out.starts_with(&format!("warning[W603]: {kn}:")) && out.ends_with(&format!("ok {kn}: 1 function, total\n")), "{out}{err}");
 }
 
 /// Called by a language's name, ritsu is that command: what the release's links do (DESIGN 2.3).

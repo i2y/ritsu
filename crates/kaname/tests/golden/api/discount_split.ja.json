@@ -6,7 +6,7 @@
     "alias": "discount_split_ja",
     "version": "v1",
     "description": "請求書の明細に、金額の比で値引きを配る。規則を明細ごとに一回ずつ呼び、配った分の合計がちょうど値引きになる。discount_split.kn の日本語の版",
-    "sha256": "5650171d06621c416e74e2ed65d8c1096a1d1a2814ffe97da3eddaae7cb5314a"
+    "sha256": "a24b7c4d5506bafe76a1fbabb9e7f37478b28201a0f1f74a36dcdfb0b2a275e6"
   },
   "generated": {
     "typescript": "glue/discount_split_ja.ts",
@@ -212,6 +212,54 @@
         "go": "CheckSplit",
         "rust": "check_split"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "どの明細も項目を保つ",
+      "alias": "every_line_keeps_its_label",
+      "line": 19,
+      "description": "どの明細にも、その項目のまま、明細の順に値引きを一つずつ配る",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "値引き",
+          "alias": "discount",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
+    },
+    {
+      "name": "配分の合計は値引き額",
+      "alias": "shares_add_up",
+      "line": 23,
+      "description": "配った分を足すと値引き額になる。これは規則の答えに頼るので、証明が使えるのは口がその答えについて教えることだけ",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "値引き",
+          "alias": "discount",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
     }
   ],
   "transfers": []

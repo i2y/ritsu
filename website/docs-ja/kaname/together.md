@@ -44,9 +44,13 @@ ok rules/late_payment_charges.rule
 ok rules/遅延の請求額.rule
 dates/payment_terms.cal: ok — invoiced 2026-01-01〜2027-12-31 の 730 日のすべてで、どの日付も計算できます。例 2 行も合っています
 dates/支払期限.cal: ok — 請求日 2026-01-01〜2027-12-31 の 730 日のすべてで、どの日付も計算できます。例 2 行も合っています
+警告[kaname W603]: late_payment.ja.kn:28:1: 性質 `期日までに払えば請求は無い` は、`when` の行が成り立つ 10 個のベクタ（19 個のうち）のすべてで成り立ちましたが、示されていません。late_payment_ja.lean の証明は `--lean` で確かめます
+    28 | property 期日までに払えば請求は無い(nothing_is_claimed_when_paid_on_time)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%)
 ok late_payment.ja.kn: 関数 1 個、total
+警告[kaname W603]: late_payment.kn:28:1: 性質 `nothing_is_claimed_when_paid_on_time` は、`when` の行が成り立つ 10 個のベクタ（19 個のうち）のすべてで成り立ちましたが、示されていません。late_payment.lean の証明は `--lean` で確かめます
+    28 | property nothing_is_claimed_when_paid_on_time(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%)
 ok late_payment.kn: 関数 1 個、total
-ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
+ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
 
 `paid_on - due` は −758 日から 1,431 日で、`遅れ >= 1` の分岐の中では 1 日から 1,431 日になり、規則の入力の範囲（1 から 1,500）に収まります。規則に渡す債権額と基準金利も、それぞれの範囲に収まります。それぞれのモジュールが koyomi に渡す請求日が koyomi の範囲に収まることは ritsu が確かめ、最後の行の「確かめた 2 か所」はこの二つです。そのため `claim` は、宣言した範囲のどの入力にも答えます。見出しの `total` は、そのことを書いたものです。分岐を外すと、日数が規則の範囲の外になる入力を検査が挙げます（[検査が保証すること](checks.md)）。
@@ -121,8 +125,10 @@ ritsu が言語の境目で確かめるのは、次のことです。
 ```console
 $ cd crates/kaname/examples/order_bill
 $ ritsu check order_bill.ja.kn --lang ja
+警告[kaname W603]: order_bill.ja.kn:15:1: 性質 `請求額は単価と数量の合計の積` は、12 個のベクタのすべてで成り立ちましたが、示されていません。order_bill_ja.lean の証明は `--lean` で確かめます
+    15 | property 請求額は単価と数量の合計の積(bill_is_the_price_times_the_quantities)(明細(lines): list[明細] count >=1 <=30, 単価(price): money[USDc] range >=1USDc <=1000USDc)
 ok order_bill.ja.kn: 関数 1 個、total
-ritsu check: ファイル 1 個（kaname 1）。どれも検査を通りました。言語の境目: 確かめた 3 か所、決められない 0 か所
+ritsu check: ファイル 1 個（kaname 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 3 か所、決められない 0 か所
 ```
 
 スキーマの `数量` の `maximum` を 21 に上げると、E207 で止まります。フィールドが受け取るのは number >=1 <=20 で、出どころは 21 になることがあります。

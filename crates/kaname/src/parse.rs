@@ -140,6 +140,11 @@ fn shown_tok(t: Option<&Tok>) -> String {
     t.map(Tok::shown).unwrap_or_default()
 }
 
+
+/// What a property's body holds: its description, its `when` lines, and its `let` lines and last
+/// line as a block.
+type PropertyBody = (Option<(String, Span)>, Vec<Expr>, Block);
+
 impl<'a> P<'a> {
     fn err(&mut self, code: &'static str, at: Span, msg: Text) -> &mut Diag {
         self.diags.push(Diag::error(code, self.file, at.line, at.col, msg).source(self.src));
@@ -253,7 +258,7 @@ impl<'a> P<'a> {
             }
         };
         self.line_end(&c)?;
-        let mut m = Module { name, version, description: None, uses: Vec::new(), enums: Vec::new(), records: Vec::new(), fns: Vec::new(), examples: Vec::new(), exprs: 0, targs: Default::default(), ltypes: Default::default() };
+        let mut m = Module { name, version, description: None, uses: Vec::new(), enums: Vec::new(), records: Vec::new(), fns: Vec::new(), properties: Vec::new(), examples: Vec::new(), exprs: 0, targs: Default::default(), ltypes: Default::default() };
         let mut stage = Stage::Head;
         let mut examples_at: Option<usize> = None;
         while self.i < self.lines.len() {
@@ -295,7 +300,7 @@ impl<'a> P<'a> {
             let want = match head.as_str() {
                 kw::DESCRIPTION => Stage::Description,
                 kw::USE => Stage::Uses,
-                kw::ENUM | kw::RECORD | kw::FN => Stage::Decls,
+                kw::ENUM | kw::RECORD | kw::FN | kw::PROPERTY => Stage::Decls,
                 kw::EXAMPLES => Stage::Examples,
                 kw::MODULE => {
                     self.err("E003", at, tr!("`module` の行は一つだけです", "There is one `module` line"));
@@ -305,8 +310,8 @@ impl<'a> P<'a> {
                 }
                 _ => {
                     self.err("E003", at, tr!("`{head}` で始まる行は、モジュールの中に書けません", "A line of the module cannot start with `{head}`")).notes.push(tr!(
-                        "左端の行は `description`、`use`、`enum`、`record`、`fn`、`examples` のどれかで始まります。",
-                        "A line at the left margin starts with `description`, `use`, `enum`, `record`, `fn` or `examples`."
+                        "左端の行は `description`、`use`、`enum`、`record`、`fn`、`property`、`examples` のどれかで始まります。",
+                        "A line at the left margin starts with `description`, `use`, `enum`, `record`, `fn`, `property` or `examples`."
                     ));
                     self.i += 1;
                     self.skip_body();
@@ -317,9 +322,9 @@ impl<'a> P<'a> {
                 let msg = match (want, stage) {
                     (Stage::Description, Stage::Description) => tr!("`description` の行は一つだけです", "There is one `description` line"),
                     (Stage::Description, _) => tr!("`description` の行は、`module` の行のすぐあとに書いてください", "The `description` line comes right after the `module` line"),
-                    (Stage::Uses, _) => tr!("`use` の行は、宣言（`enum`、`record`、`fn`）より前に書いてください", "The `use` lines come before the declarations (`enum`, `record`, `fn`)"),
+                    (Stage::Uses, _) => tr!("`use` の行は、宣言（`enum`、`record`、`fn`、`property`）より前に書いてください", "The `use` lines come before the declarations (`enum`, `record`, `fn`, `property`)"),
                     (Stage::Examples, Stage::Examples) => tr!("`examples` は一つだけです。例は全部その下に並べてください", "There is one `examples`; put every example under it"),
-                    _ => tr!("宣言（`enum`、`record`、`fn`）は、`examples` より前に書いてください", "The declarations (`enum`, `record`, `fn`) come before `examples`"),
+                    _ => tr!("宣言（`enum`、`record`、`fn`、`property`）は、`examples` より前に書いてください", "The declarations (`enum`, `record`, `fn`, `property`) come before `examples`"),
                 };
                 self.err("E003", at, msg);
                 self.i += 1;
@@ -361,6 +366,13 @@ impl<'a> P<'a> {
                     self.i += 1;
                     if let Some(f) = self.function(&line) {
                         m.fns.push(FnDecl { private, ..f });
+                    }
+                }
+                kw::PROPERTY => {
+                    self.i += 1;
+                    let k = m.properties.len();
+                    if let Some(p) = self.property(&line, k) {
+                        m.properties.push(p);
                     }
                 }
                 _ => {
@@ -981,7 +993,204 @@ impl<'a> P<'a> {
         let (name, tparams, params, ret, ret_bounds, effect) = f?;
         let (description, body) = body?;
         let last = self.lines[..end].last().map(|l| l.no).unwrap_or(line.no);
-        Some(FnDecl { name, private: false, tparams, params, ret, ret_bounds, effect, description, body, line: line.no, last })
+        Some(FnDecl { name, private: false, tparams, params, ret, ret_bounds, effect, description, body, line: line.no, last, property: None })
+    }
+
+    /// `property <name>(<parameters>)` and its body (DESIGN 38.1): the description, the `when` lines,
+    /// the `let` lines and the last line; and the function the checks read it as (38.2), the `k`th
+    /// property of the module.
+    fn property(&mut self, line: &Line, k: usize) -> R<Property> {
+        let end = self.body_end();
+        let head = self.property_head(line);
+        let body = match &head {
+            Some(_) => self.property_body(line, end),
+            None => None,
+        };
+        self.i = end;
+        let (name, params) = head?;
+        let (description, when, body) = body?;
+        let last = self.lines[..end].last().map(|l| l.no).unwrap_or(line.no);
+        let mut made = Vec::new();
+        let lowered_body = match when.split_first() {
+            None => body.clone(),
+            Some((first, rest)) => {
+                let mut cond = first.clone();
+                for w in rest {
+                    let span = cond.span.to(w.span);
+                    cond = self.mk(span, ExprKind::Bin(Box::new(cond), BinOp::And, Box::new(w.clone())));
+                    made.push(cond.id);
+                }
+                let at = Span { line: line.no, col: 1, end: 1 };
+                let yes = self.mk(at, ExprKind::Bool(true));
+                made.push(yes.id);
+                let answer = self.mk(first.span, ExprKind::If(Box::new(cond), Box::new(body.clone()), Box::new(Block { lets: Vec::new(), answer: yes })));
+                made.push(answer.id);
+                Block { lets: Vec::new(), answer }
+            }
+        };
+        let at = name.span;
+        let lowered = FnDecl {
+            name: name.clone(),
+            private: false,
+            tparams: Vec::new(),
+            params: params.clone(),
+            ret: TypeRef { kind: TypeKind::Bool, optional: false, span: at },
+            ret_bounds: Bounds::default(),
+            effect: Some(Effect { total: true, fails: Vec::new(), diverges: false, span: at }),
+            description: description.clone(),
+            body: lowered_body,
+            line: line.no,
+            last,
+            property: Some(k),
+        };
+        Some(Property { name, params, description, when, body, line: line.no, last, lowered, made })
+    }
+
+    /// The head of a property: its name, with an alias written as a function's is, and its
+    /// parameters; nothing after them.
+    fn property_head(&mut self, line: &Line) -> R<(Name, Vec<Param>)> {
+        let mut c = Cur::new(&line.tokens, line.no);
+        c.next();
+        let name = {
+            let (text, span) = match c.next() {
+                Some(Token { tok: Tok::Word(w), span }) => (w.clone(), *span),
+                _ => {
+                    c.k -= 1;
+                    self.expected(&c, tr!("性質の名前", "the property's name"));
+                    return None;
+                }
+            };
+            if kw::is_reserved(&text) {
+                self.err("E002", span, tr!("`{text}` は予約語なので、名前にできません", "`{text}` is a keyword and cannot be a name")).notes.push(reserved_note());
+                return None;
+            }
+            let mut n = Name { text, alias: None, span };
+            if c.peek() == Some(&Tok::LParen) && matches!(c.peek_at(1), Some(Tok::Word(_))) && c.peek_at(2) == Some(&Tok::RParen) && c.peek_at(3) == Some(&Tok::LParen) {
+                c.next();
+                let t = c.next().expect("a word");
+                let Tok::Word(a) = &t.tok else { unreachable!() };
+                n.alias = Some((a.clone(), t.span));
+                c.next();
+            }
+            n
+        };
+        if !c.eat(&Tok::LParen) {
+            self.expected(&c, tr!("`(` と引数", "`(` and the parameters"));
+            return None;
+        }
+        let mut params = Vec::new();
+        if !c.eat(&Tok::RParen) {
+            loop {
+                let pn = self.decl_name(&mut c, tr!("引数の名前", "a parameter's name"))?;
+                if !c.eat(&Tok::Colon) {
+                    self.expected(&c, tr!("`:` と引数の型", "`:` and the parameter's type"));
+                    return None;
+                }
+                let ty = self.ty(&mut c)?;
+                let bounds = self.bounds(&mut c)?;
+                params.push(Param { name: pn, ty, bounds, fed: None });
+                if c.eat(&Tok::Comma) {
+                    if c.eat(&Tok::RParen) {
+                        break;
+                    }
+                    continue;
+                }
+                if c.eat(&Tok::RParen) {
+                    break;
+                }
+                self.expected(&c, tr!("`,` か `)`", "`,` or `)`"));
+                return None;
+            }
+        }
+        if !c.at_end() {
+            if self.fed_misplaced(&c) {
+                return None;
+            }
+            let (at, t) = (c.span(), shown_tok(c.peek()));
+            self.err("E001", at, tr!("`{t}` を読めません。性質の行は引数の `)` で終わります", "`{t}` cannot be read: the line of a property ends with the `)` of its parameters")).notes.push(tr!(
+                "性質は `true` か `false` を答え、どの入力でも失敗しない（total）ものとして読みます。結果の型とエフェクトは書きません。",
+                "A property answers `true` or `false` and is read as total, failing for no input: write no type of a result and no effect."
+            ));
+            return None;
+        }
+        Some((name, params))
+    }
+
+    /// The body of a property: its description, the `when` lines, then the `let` lines and the last
+    /// line, as a block.
+    fn property_body(&mut self, head: &Line, end: usize) -> R<PropertyBody> {
+        if self.i >= end {
+            let at = Span { line: head.no, col: 1, end: 1 };
+            self.err("E111", at, tr!("性質に本体がありません", "The property has no body")).notes.push(property_note());
+            return None;
+        }
+        let indent = self.lines[self.i].indent;
+        let mut description = None;
+        if self.lines[self.i].tokens[0].tok.is_word(kw::DESCRIPTION) {
+            let l = self.lines[self.i].clone();
+            self.i += 1;
+            let mut c = Cur::new(&l.tokens, l.no);
+            c.next();
+            description = Some(self.description(&mut c)?);
+        }
+        let when_at = |p: &P, j: usize| p.lines[j].indent == indent && p.lines[j].tokens.len() > 1 && p.lines[j].tokens[0].tok.is_word(kw::WHEN);
+        let mut when = Vec::new();
+        let mut failed = false;
+        while self.i < end && when_at(self, self.i) {
+            let l = self.lines[self.i].clone();
+            self.i += 1;
+            if self.i < end && self.lines[self.i].indent > indent {
+                let at = self.line_span(self.i);
+                self.err("E004", at, tr!("`when` の行の下には、行を置けません", "No line goes under a `when` line")).notes.push(tr!(
+                    "`when` の条件は一行に書きます。長い条件は、いくつかの `when` の行に分けられます（どれも `true` の入力について、性質を確かめます）。",
+                    "A `when` line holds its condition on the one line; a long condition can be split over several `when` lines, which all have to be `true`."
+                ));
+                while self.i < end && self.lines[self.i].indent > indent {
+                    self.i += 1;
+                }
+                failed = true;
+                continue;
+            }
+            let mut c = Cur::new(&l.tokens, l.no);
+            c.next();
+            match self.expr(&mut c) {
+                Some(e) if self.line_end(&c).is_some() => when.push(e),
+                _ => failed = true,
+            }
+        }
+        // a `when` line after a `let` line would be read as the last line, and say less than it means
+        if let Some(j) = (self.i..end).find(|&j| when_at(self, j)) {
+            let at = self.line_span(j);
+            self.err("E003", at, tr!("`when` の行は、性質の `description` のすぐあと、`let` の行より前に書いてください", "The `when` lines come right after the property's `description`, before its `let` lines"))
+                .notes
+                .push(property_note());
+            return None;
+        }
+        if self.i >= end {
+            let at = when.last().map(|w: &Expr| w.span).unwrap_or(Span { line: head.no, col: 1, end: 1 });
+            self.err("E111", at, tr!("性質に最後の行がありません。最後の行には、成り立つはずのことを真偽の式で書いてください", "The property has no last line: end it with what has to hold, an expression that is `true` or `false`"))
+                .notes
+                .push(property_note());
+            return None;
+        }
+        let block = self.block(indent, end, head.no);
+        while self.i < end {
+            let at = self.line_span(self.i);
+            let l = self.lines[self.i].indent;
+            self.err(
+                "E004",
+                at,
+                tr!(
+                    "この行の字下げ（{l} 文字）は、性質の本体の字下げ（{indent} 文字）とそろっていません",
+                    "This line's indentation ({l} spaces) does not line up with the property's body ({indent} spaces)"
+                ),
+            );
+            self.i += 1;
+        }
+        if failed {
+            return None;
+        }
+        Some((description, when, block?))
     }
 
     #[allow(clippy::type_complexity)]
@@ -2065,6 +2274,14 @@ impl P<'_> {
         c.next();
         Some((words, tys))
     }
+}
+
+/// How a property is written (DESIGN 38.1).
+fn property_note() -> Text {
+    tr!(
+        "性質の本体は、`description`、`when` の行、`let` の行、最後の行の順に書きます。最後の行は、引数が範囲に入り、`when` の行がどれも `true` の入力について、`true` になるはずの式です。",
+        "A property's body is its `description`, its `when` lines, its `let` lines and its last line, in that order: the last line is what has to be `true` for every input in the parameters' ranges for which the `when` lines are all `true`."
+    )
 }
 
 fn reserved_note() -> Text {

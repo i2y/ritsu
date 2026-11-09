@@ -1,7 +1,8 @@
 //! Every code of the ledger (src/codes.rs) that is printed has an example that gives it, in English
 //! names and in Japanese ones, checked as `ritsu kaname check` checks it (E202's as the binary of
-//! kaname's own crate does); and `docs/codes.md` and `docs/codes.ja.md` are what `kaname explain
-//! --all --format markdown` prints.
+//! kaname's own crate does, E604's with `--lean`, whose scan stops the proof beside it before Lean
+//! is needed); and `docs/codes.md` and `docs/codes.ja.md` are what `kaname explain --all --format
+//! markdown` prints.
 
 mod common;
 
@@ -11,19 +12,24 @@ use ritsu_base::ledger::{self, Repro};
 use ritsu_base::text::Lang;
 
 /// What the code of `e` is given for its example in `dir`: `kaname check`'s answer, as `ritsu kaname
-/// check` checks it (E202's as the binary of kaname's own crate does). E008 is `ritsu gen --target
-/// rust`'s, which stops where the module passes its check: its diagnostics in place of that answer
-/// (ritsu's tests/gen.rs runs the command).
+/// check` checks it (E202's as the binary of kaname's own crate does, E604's with `--lean`: the scan
+/// stops the proof beside it, and no Lean is run). E008 is `ritsu gen --target rust`'s, which stops
+/// where the module passes its check: its diagnostics in place of that answer (ritsu's tests/gen.rs
+/// runs the command).
 fn run_example(e: &ledger::Entry, dir: &std::path::Path) -> std::rc::Rc<kaname::check::Outcome> {
     let path = dir.join("example.kn");
     let suite = if e.code == "E202" { Suite::default() } else { common::joined() };
     let o = Run::new(suite).file(path.to_str().unwrap()).unwrap();
+    if e.code == "E604" {
+        let answered = kaname::check::with_lean(&[o], &kaname::lean::LeanOptions::default()).unwrap_or_else(|e| panic!("{}", e.text().get(Lang::En)));
+        return answered.into_iter().next().unwrap();
+    }
     if e.code != "E008" {
         return o;
     }
     let c = o.checked.as_ref().expect("E008's example passes its check");
     let diags = kaname::r#gen::stops(c, kaname::r#gen::Target::Rust);
-    std::rc::Rc::new(kaname::check::Outcome { path: o.path.clone(), diags, checked: None, analysed: None })
+    std::rc::Rc::new(kaname::check::Outcome { path: o.path.clone(), diags, checked: None, analysed: None, properties: Vec::new() })
 }
 
 #[test]
@@ -41,7 +47,8 @@ fn every_example_gives_its_code() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// An example prints its code and no other: what the reader sees is about that code alone.
+/// An example prints its code and no other: what the reader sees is about that code alone. W605 is
+/// said beside the W603 of its property, which it is about.
 #[test]
 fn every_example_gives_its_code_alone() {
     let scratch = ritsu_testkit::TempDir::new("codes-alone");
@@ -49,7 +56,7 @@ fn every_example_gives_its_code_alone() {
     ledger::check_every(&kaname::codes::ledger(), scratch.path(), |e, dir| {
         let o = run_example(e, dir);
         let codes: Vec<String> = o.diags.iter().map(|d| d.code.to_string()).collect();
-        if codes.iter().any(|c| c != e.code) {
+        if codes.iter().any(|c| c != e.code && !(e.code == "W605" && c == "W603")) {
             noisy.push(format!("{}: {codes:?}", e.code));
         }
         codes
@@ -61,8 +68,9 @@ fn every_example_gives_its_code_alone() {
 fn the_ledger_has_each_code_once() {
     let l = kaname::codes::ledger();
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
-    // DESIGN 12: E001–E008, W001, E101–E115, E201–E204, E301–W303, E401, E402, W501, E601, E602, W901
-    assert_eq!(l.entries.len(), 41);
+    // DESIGN 12: E001–E008, W001, E101–E115, E201–E204, E301–W303, E401, E402, W501, E601–E605,
+    // W603–W605, W901
+    assert_eq!(l.entries.len(), 47);
     // every code is printed by now, and has its example
     let later: Vec<&str> = l.entries.iter().filter(|e| matches!(e.repro, Repro::Later)).map(|e| e.code).collect();
     assert!(later.is_empty(), "{later:?}");

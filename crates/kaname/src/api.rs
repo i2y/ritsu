@@ -243,6 +243,26 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         o.push(("check".into(), check));
         Json::Obj(o)
     });
+    // the properties (DESIGN 38): written only for a module that has some, so no other description
+    // changes
+    let properties = c.lowered.as_ref().map(|lowered| {
+        c.properties.iter().map(|cp| {
+            let info = &lowered.decls.fns[cp.lowered];
+            let mut o = named(&cp.decl.name);
+            o.push(("line".into(), Json::int(cp.decl.line as i128)));
+            o.push(("description".into(), Json::opt_str(cp.decl.description.as_ref().map(|(d, _)| d.clone()))));
+            o.push((
+                "params".into(),
+                Json::arr(info.params.iter().map(|prm| {
+                    let mut x = named(&prm.name);
+                    x.extend(slot_json(&p, c, &prm.slot));
+                    Json::Obj(x)
+                })),
+            ));
+            o.push(("when".into(), Json::int(cp.decl.when.len() as i128)));
+            Json::Obj(o)
+        }).collect::<Vec<Json>>()
+    });
     // each operation of a transfer the module builds, with the reasons it can be refused with: the
     // reasons of every place that builds it, or none known where one is undecided
     let mut ops: Vec<Op> = Vec::new();
@@ -285,7 +305,7 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
     });
     let a = alias(&m.name);
     let pkg = ritsu_emit::ident::go_package(&a);
-    Json::obj([
+    let mut out = Json::obj([
         ("kaname", Json::str(env!("CARGO_PKG_VERSION"))),
         ("file", Json::str(file)),
         ("module", Json::Obj(module)),
@@ -296,7 +316,12 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         ("records", Json::arr(records)),
         ("functions", Json::arr(functions)),
         ("transfers", Json::arr(transfers)),
-    ])
+    ]);
+    if let (Json::Obj(top), Some(ps)) = (&mut out, properties) {
+        let at = top.iter().position(|(k, _)| k == "functions").map_or(top.len(), |i| i + 1);
+        top.insert(at, ("properties".into(), Json::arr(ps)));
+    }
+    out
 }
 
 /// How a call of the package's Wasm reaches the module's functions (DESIGN 36.11): the exports of the

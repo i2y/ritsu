@@ -1378,7 +1378,15 @@ fn analysis_json(c: &Checked) -> (Vec<J>, Vec<J>) {
             })
         })
         .collect();
-    let vals = a.at.iter().enumerate().filter_map(|(i, x)| x.as_ref().map(|x| json!([i, abs(x)]))).collect();
+    // The properties (kaname's DESIGN 38) are not in the model: the values of their expressions,
+    // which the analysis reads in the functions the properties are lowered to, are left out.
+    let mut of_properties = std::collections::BTreeSet::new();
+    for pr in &c.module.properties {
+        let mut es = Vec::new();
+        pr.lowered.body.walk(&mut es);
+        of_properties.extend(es.iter().map(|e| e.id).chain(pr.made.iter().copied()));
+    }
+    let vals = a.at.iter().enumerate().filter(|(i, _)| !of_properties.contains(i)).filter_map(|(i, x)| x.as_ref().map(|x| json!([i, abs(x)]))).collect();
     (fns, vals)
 }
 

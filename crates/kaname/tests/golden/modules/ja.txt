@@ -62,6 +62,7 @@ $ kaname check --lang ja 会計/かご.kn --format json
       ]
     }
   ],
+  "properties": [],
   "diagnostics": []
 }
 exit 0
@@ -97,6 +98,7 @@ $ kaname check --lang ja 誤り/無いファイル.kn --format json
   "ok": false,
   "summary": null,
   "functions": null,
+  "properties": null,
   "diagnostics": [
     {
       "code": "E201",
@@ -134,6 +136,7 @@ $ kaname check --lang ja 注文.kn --format json
   "ok": false,
   "summary": null,
   "functions": null,
+  "properties": null,
   "diagnostics": [
     {
       "code": "E201",

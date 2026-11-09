@@ -232,7 +232,8 @@ fn a_place_that_waits_is_counted_and_not_held_against_what_is_written() {
         ("examples/discount_split/discount_split.kn", "fails rule"),
     ] {
         let o = common::check(f);
-        assert!(o.diags.is_empty(), "{f}: {}", common::shown(&o, Lang::En));
+        // the properties of the examples wait for `--lean` (DESIGN 38.3)
+        assert!(common::codes(&o).iter().all(|c| *c == "W603"), "{f}: {}", common::shown(&o, Lang::En));
         let all = effects(&o);
         assert!(all.iter().any(|e| e == effect), "{f}: {all:?}");
         let c = o.checked.as_ref().unwrap();
@@ -246,7 +247,8 @@ fn a_place_that_waits_is_counted_and_not_held_against_what_is_written() {
 
 /// DESIGN 12's materials: the late payment with its branch taken away (E301, with an input that
 /// gives the rule days it does not take), and the weight of a cart that may have no lines, which
-/// makes `quote`'s `total` E401 (DESIGN 17.8).
+/// makes `quote`'s `total` E401 (DESIGN 17.8). The examples' properties are taken away: one that
+/// calls a function that can fail is E401 too (DESIGN 38.2).
 #[test]
 fn the_materials_of_design_12() {
     let t = TempDir::new("kaname-effects-design");
@@ -254,7 +256,7 @@ fn the_materials_of_design_12() {
     let src = std::fs::read_to_string(t.path().join("late_payment.kn")).unwrap();
     let src = src.replace("  if late >= 1\n    let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)\n    Claim { due: due, days_late: late, compensation: c.compensation, interest: c.interest }\n  else\n    none\n", "  let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)\n  Claim { due: due, days_late: late, compensation: c.compensation, interest: c.interest }\n");
     let src = src.replace(") -> Claim? total\n", ") -> Claim?\n");
-    let src = src.split("# The first is GOV.UK").next().unwrap().to_string();
+    let src = src.split("property nothing_is_claimed_when_paid_on_time").next().unwrap().to_string();
     let f = t.write("late_payment.kn", src);
     let o = common::check(f.to_str().unwrap());
     assert_eq!(common::codes(&o), ["E301"]);
@@ -265,6 +267,8 @@ fn the_materials_of_design_12() {
     let t = TempDir::new("kaname-effects-weight");
     ritsu_testkit::tmp::copy_dir(std::path::Path::new("examples/media_mail"), t.path());
     let src = std::fs::read_to_string(t.path().join("media_mail.kn")).unwrap().replace("fn weight_of(lines: list[Line] count >=1 <=30)", "fn weight_of(lines: list[Line] count >=0 <=30)");
+    let (before, property) = src.split_once("property nothing_heavier_than_15lb_is_quoted").unwrap();
+    let src = format!("{before}{}", &property[property.find("\nexamples").unwrap() + 1..]);
     let f = t.write("media_mail.kn", src);
     let o = common::check(f.to_str().unwrap());
     assert_eq!(common::codes(&o), ["E401", "W301"]);

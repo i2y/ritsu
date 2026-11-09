@@ -1,0 +1,12 @@
+module しきい値(thresholds_ja) v1
+description "`when` の行がしきい値と比べる性質。しきい値の先で成り立つものと、範囲の外を言うもの。thresholds.kn の日本語の版"
+
+property しきい値の先(past_the_threshold)(値(x): number range >=0 <=100)
+  description "37 より大きければ 38 以上"
+  when 値 > 37
+  値 >= 38
+
+property 範囲の外(past_the_end)(値(x): number range >=0 <=100)
+  description "範囲の中に、200 より大きい値は無い"
+  when 値 > 200
+  値 >= 0

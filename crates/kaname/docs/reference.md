@@ -634,6 +634,114 @@ each in the reference interpreter as a host would call it and compares (E601, wh
 fields of a record that differ); a line that is no call, or an answer not of the function's type,
 is E602.
 
+## Properties
+
+A property is a claim about every input of a function, where `examples` give the answer for chosen ones. It is written like a function: a name, parameters with their types and ranges, and a body of a `description`, `when` lines, `let` lines, and a last line that must be `true`.
+
+```kn
+property no_share_is_more_than_its_left(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "A refund no larger than what is left in all gives no line more than what is left on it"
+  when refund <= sum(lines, l => l.left)
+  all(split(lines: lines, refund: refund), s => s.share <= s.left)
+```
+
+- **Meaning.** For every input in the ranges the parameters declare, and on which every `when` line is `true`, the last line is `true`. `property` begins a declaration and `when` begins a line of a property's body; neither is a reserved word anywhere else. A property is declared among the functions, after them or between them, and cannot be `private` (E003).
+- **Names.** A property shares its namespace with the functions: a name used twice is E006, and a Japanese name needs an ASCII alias (E005), which is its name in Lean. A property is not a value: calling one is E101, with a note that says so. It appears in no generated code, in `run`, or in the list of functions of `api`.
+- **Total.** A property is read as a `total` function that answers `bool`, so a body that can fail (a division by a value that may be 0, a call of a function that can fail) is E401: a failure could be read as "false" or as "does not apply", and the two make two properties. A `when` line narrows the values of the body as the condition of an `if` does. A parameter's type cannot be a function (E605), since the vectors cannot make one.
+- **`examples` stay.** They keep an answer a person can read; a property does not replace them.
+
+### What `check` says of a property
+
+| Answer | When | Diagnostic |
+|---|---|---|
+| counterexample | on one of the vectors, every `when` line holds and the last line is `false` | E603 (an error: the input, and the `let` values) |
+| shown | `check --lean` takes a proof of it | none (`shown` in JSON) |
+| not decided | no counterexample, and not shown | W603, or W604 |
+
+The vectors are `kaname vectors`' (every combination of the candidates up to 256, else each moved one at a time and in pairs; at most 2,000 for a property). Rules and dates are called for real, as `examples` call them. A counterexample is the first input found, in the order of the vectors.
+
+- **W603** says why a property is not shown: there is no proof of it; a proof is beside the module, and `--lean` did not run; or it calls a rule or a dates file, whose answers a proof knows only as far as the port says.
+- **W604** says what Lean cannot yet be written with, and where: a dict or a set, a builtin of strings other than `=` and `!=`, `sort_by`, `distinct`, `max_by`, `min_by`, `to_dict`, `group_by`, a type parameter held to keys (`K: key`). The property is still tried on its vectors.
+- **W605** says that the `when` lines hold on none of the vectors. A property whose `when` lines hold for no input can be proved whatever it says.
+- **E604** says that `--lean` did not take the proof, and why (below).
+
+`check` exits 1 for E603 and E604, as for any error, and 0 for warnings. `--lean` exits 2 when `lake` is neither on the `PATH` nor in `~/.elan/bin`.
+
+### Lean
+
+`ritsu gen --target lean` writes `<out>/lean/` (`generated/lean/` unless `--out` is given), like the other targets; `ritsu.mod` can list it in `target`, and `--check` does not read `.lake/` and `lake-manifest.json`, which `lake` writes:
+
+```text
+generated/lean/
+  lean-toolchain             leanprover/lean4:v4.34.0
+  lakefile.toml              the library Kaname, and a library for each proof file beside a .kn
+  .gitignore                 /.lake
+  Kaname/Prelude.lean        roundings, allocate, isqrt, running_totals, fractions, lemmas for proofs
+  Kaname/Rules.lean          the types of the rules the modules call (when there are any)
+  Kaname/Books.lean          the structures of the transfers the modules build (when there are any)
+  Kaname/refund_split.lean   the module's definitions, and the statement of each property
+  samples/refund_split.lean  the theorems' names with `sorry` for their proofs (not built)
+```
+
+- **Names.** The module is `Kaname.<its alias>` (a name with no alias is its own alias; the Japanese version of the example is `Kaname.refund_split_ja`); functions, types, fields and properties are named by their aliases.
+- **Types.** An amount, a quantity or a number is an `Int` counted in the type's unit, a rate an `Int` count of its step, a date the number of a day; `list[T]` is `List T` and its `count` a hypothesis on its length; a record is a `structure` whose fields' ranges are a predicate `Within`; an enum is an `inductive`; `T?` is `Option T`, a result is `Except`. A value divided by a value is a fraction `Kaname.Frac`, never a `Rat`, so that the form of a term does not change under proof.
+- **Functions.** Every function that stops is written, including the ones no property calls. A function that can fail returns `Except`. One that may not stop, and one that uses what is not written for Lean, is left out, with the reason in a comment. A rule or a dates file a module calls is given from outside as a structure `Inner`, whose `Ok` holds the facts the port tells.
+- **Statements.** `abbrev <property> : Prop := ∀ <parameters>, <ranges> → <when lines> → <body>`. An `abbrev`, so that `intro` and `decide` work without unfolding it.
+
+The statement of a property, from `Kaname/refund_split.lean`:
+
+```lean
+abbrev shares_add_up : Prop :=
+  ∀ (lines : List Line) (refund : Int),
+    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    0 ≤ refund → refund ≤ 10000000 →
+    ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
+```
+
+### The proof file
+
+The proofs of a module are in `<its alias>.lean` beside the `.kn` (`refund_split_ja.lean` for the Japanese version). kaname never writes it. For each property, it holds a theorem `Proofs.<module>.<property>` whose type is the statement itself, `Kaname.<module>.<property>`; a lemma may be in the same file. To start, copy `samples/<alias>.lean` beside the `.kn` without its first three lines, and put a proof in place of each `sorry`. To try as you write, run `lake build` in `generated/lean/`: its `lakefile.toml` reads the proof file where it is. Run `ritsu gen --target lean` again when a proof file is added or a property changed.
+
+`check --lean` does the following, and stops at the first that fails:
+
+1. tries the properties on the vectors, as without `--lean` (those with a counterexample or W604 do not go to Lean);
+2. writes the package again from the `.kn` into a temporary directory, so that nothing in `generated/lean/` counts;
+3. reads each proof file as text, with its comments and strings taken out, and refuses what it must not hold (below); copies what it read into the package, so that what was read is what is built;
+4. runs `lake build`, for at most 10 minutes;
+5. runs `lake env leanchecker` over the proofs, which passes each declaration through the kernel again;
+6. loads the module and the proofs and checks, for each property, that the theorem is there, that its statement is the generated constant, that its type is that constant itself, and that it rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
+
+A proof file cannot hold:
+
+- an `import` of anything outside `Kaname.`;
+- a `#` command other than `#check`, `#print`, `#reduce` and `#guard_msgs` (`#eval` and the others run code);
+- `run_cmd`, `run_elab`, `run_meta`, `initialize`, `builtin_initialize`, `syntax`, `macro`, `macro_rules`, `elab`, `elab_rules`, `declare_syntax_cat`;
+- `native_decide`, `decide +native`, and the `Lean.reduceBool`, `Lean.ofReduceBool`, `Lean.reduceNat`, `Lean.ofReduceNat` and `Lean.trustCompiler` that run compiled code in the build;
+- an attribute other than `simp`, `grind`, `reducible`, `irreducible` and `instance` (with `local` or `scoped`);
+- a `set_option` other than `maxHeartbeats`, `maxRecDepth`, `synthInstance.*`, `linter.*`, `pp.*` and `trace.*`.
+
+The reason is that a proof written by someone else, built in CI, would run what it contains. E604 gives one of these reasons: the build fails (with Lean's error, at the line of the proof file), the theorem is missing or in another module, it states something else, it rests on another axiom (named; `sorry` is `sorryAx`), the kernel does not accept it, it holds what a proof file may not (what, and the line), or the build takes more than 10 minutes.
+
+With every proof of `refund_split` in place:
+
+```console
+$ ritsu check --lean examples/refund_split
+ok examples/refund_split/refund_split.ja.kn: 1 function, total
+ok examples/refund_split/refund_split.kn: 1 function, total
+ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+With the proof of `no_share_is_negative` left as `sorry`:
+
+```text
+error[kaname E604]: examples/refund_split/refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
+    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+  = Write the proof in place of `sorry`.
+  = `--lean` builds the proofs against the Lean written again from refund_split.kn, and takes for each property a theorem `Proofs.refund_split.<property>` whose type is `Kaname.refund_split.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
+```
+
+The first `--lean` downloads the Lean toolchain (`leanprover/lean4:v4.34.0`, about 2.7 GB with its library) through [elan](https://github.com/leanprover/elan), once. No Mathlib is used: `omega`, `simp`, `decide` and `grind` of Lean's own, and the lemmas of `Kaname/Prelude.lean` (`allocate_self`, `allocate_zero`, `allocate_mono`, `allocate_sub_le`, `runningTotals_telescope`, `runningTotals_length`, `runningTotals_items`, ...) are what a proof is made of.
+
 ## What `check` says
 
 `check` reads the words, the names and the files a module reads, and the types, units and rounding
@@ -689,6 +797,8 @@ same line.
 
 ```console
 $ ritsu kaname check examples/late_payment/late_payment.kn
+warning[W603]: examples/late_payment/late_payment.kn:28:1: The property `nothing_is_claimed_when_paid_on_time` held on all 10 of its 19 vectors on which its `when` lines are true, but it is not shown: the proof in late_payment.lean is checked with `--lean`
+    28 | property nothing_is_claimed_when_paid_on_time(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%)
 ok examples/late_payment/late_payment.kn: 1 function, total
 ```
 
@@ -699,7 +809,8 @@ It counts the functions by their effects, as their heads would write them: `3 fu
 
 kaname's code is written by `ritsu gen`, into the package it writes for each of TypeScript, Python,
 Go and Rust, beside the code of the rules, the dates and the books the modules call (ritsu's DESIGN
-9.3). There is no `kaname gen`: a module's code calls theirs.
+9.3). There is no `kaname gen`: a module's code calls theirs. `--target lean` writes no code a host
+calls: it writes the definitions and the statements of the properties for Lean (Properties, above).
 
 | | TypeScript | Python | Go | Rust |
 |---|---|---|---|---|
@@ -973,6 +1084,7 @@ engineer who reads how far each function is checked: the head with the module's 
 reads; the decisions in tables, with the page rulec and koyomi draw of each rule and dates file it
 calls and each transfer it builds with the reasons it can be refused with; the functions in three
 parts, total, checked when they run (each place and why), and those that may not stop; the
+its properties, each with its `when` lines and last line and whether a proof file is beside the `.kn` (not their answers, which are `check`'s); the
 decisions written in code; and the examples with what they answer. The Markdown is for a pull
 request, the pages of the rules and the dates folded in it; the HTML is one file that reads nothing
 from outside, the pages opening over it.
@@ -981,12 +1093,12 @@ from outside, the pages opening over it.
 
 | Where | Words |
 |---|---|
-| at the start of a line | `module` `description` `use` `enum` `record` `fn` `examples`, and `private` before `enum`, `record` and `fn` |
+| at the start of a line | `module` `description` `use` `enum` `record` `fn` `property` `examples`, and `private` before `enum`, `record` and `fn` |
 | after `use` | `rule` `dates` `book` `module` `from` |
 | types | `number` `bool` `string` `date` `rate` `money` `mass` `length` `area` `volume` `duration` `temperature` `sound` `list` `running` `dict` `set` `entry` `indexed` `result` `step` `incl_tax` `excl_tax` `range` `count` |
 | after a type parameter | `key` |
 | at the end of a function's head, and of a function type | `total` `fails` `diverges`, and the kinds `rule` `date` `range` `overflow` `zero` |
-| in a body | `description` `let` `try` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` |
+| in a body | `description` `when` `let` `try` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` |
 | at the end of a field's line and of a parameter's | `fed` `by` |
 
 The symbols are `=` `!=` `<` `<=` `>` `>=` `+` `-` `*` `/` `×` `÷` `−` `≦` `≧` `->` `=>` `:` `,`
@@ -1002,10 +1114,11 @@ $ ritsu kaname vectors examples/late_payment/late_payment.kn --function claim
 $ ritsu kaname doc examples/late_payment/late_payment.kn --root examples/late_payment --format html
 $ ritsu kaname api examples/late_payment/late_payment.kn --root examples/late_payment
 $ ritsu kaname explain E301
+$ ritsu check --lean examples/refund_split
 ```
 
-- `check <file.kn>... [--format json] [--root <dir>]`: everything above, and the line that says a
-  module passes.
+- `check <file.kn>... [--format json] [--root <dir>] [--lean]`: everything above, and the line that
+  says a module passes. `--lean` also has Lean take the proofs of the properties (Properties, above).
 - `run <file.kn> <function> --input <file.json|-> [--trace] [--format json] [--root <dir>]`: one
   function in the reference interpreter on an input of JSON, each argument by its name or alias
   (`-` reads standard input), each value written as `vectors` writes its `in` (below; `run --help`
@@ -1104,7 +1217,9 @@ transfer as `{"book", "transfer", "op", "args"}`. A failure is `"fails": {"kind"
 chosen.
 
 `api` prints `{"kaname", "file", "module", "generated", "wasm", "uses", "enums", "records",
-"functions", "transfers"}`: the module with its SHA-256, the files of its code, how the package's
+"functions", "properties", "transfers"}` (`properties` only for a module that writes some: each a
+`name`, an `alias`, a `line`, a `description`, its `params` as a function's, and the number of its
+`when` lines): the module with its SHA-256, the files of its code, how the package's
 Wasm calls it (the exports, the keys of a call and the `module` that picks this module, the
 functions a call reaches and the shapes of what comes back; `null` for a module with no function a
 host calls), the files it reads, its

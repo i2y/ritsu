@@ -1,0 +1,6 @@
+module function_parameter v1
+description "A property that takes a function, which no vector can make"
+
+property twice_is_no_less(step: (number) -> number, x: number range >=0 <=10)
+  description "A step taken twice ends no lower"
+  step(step(x)) >= x

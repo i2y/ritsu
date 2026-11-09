@@ -23,6 +23,8 @@ to the function that gives it. The line that says a module passes sums the effec
 ```console
 $ cd crates/kaname
 $ ritsu kaname check examples/order_flow/order_flow.kn examples/catalog/catalog.kn tests/doc/decisions.kn
+warning[W603]: examples/order_flow/order_flow.kn:92:1: The property `a_closed_order_takes_no_event` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow.lean is checked with `--lean`
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok examples/order_flow/order_flow.kn: 5 functions, total
 ok examples/catalog/catalog.kn: 9 functions, diverges
 warning[W301]: tests/doc/decisions.kn:20:24: Whether `weight` stays in >=1oz <=240oz, the range of the input `weight` of the rule `media_mail`, cannot be decided

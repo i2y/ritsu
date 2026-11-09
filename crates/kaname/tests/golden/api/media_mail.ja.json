@@ -6,7 +6,7 @@
     "alias": "media_mail_ja",
     "version": "v1",
     "description": "カートの Media Mail の料金を見積もる。品物の重さを数量の分だけ足した重さと、どの品物もメディアかを規則に渡す。media_mail.kn の日本語の版",
-    "sha256": "d3b180f38dff698d0a75528131f4b41fe8c593591c7b29e05f7fac14dcb12237"
+    "sha256": "8151b944a482028be002afc46a612c018157afbef3969ff30f29e077ab6c50c0"
   },
   "generated": {
     "typescript": "glue/media_mail_ja.ts",
@@ -217,6 +217,24 @@
         "go": "CheckQuote",
         "rust": "check_quote"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "十五ポンドより重いカートは見積もらない",
+      "alias": "nothing_heavier_than_15lb_is_quoted",
+      "line": 23,
+      "description": "15 ポンドより重いカートには、規則が何を答えても見積もりが無い",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=30"
+        }
+      ],
+      "when": 1
     }
   ],
   "transfers": []

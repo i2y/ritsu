@@ -1,0 +1,4 @@
+警告[W603]: example.kn:6:1: 性質 `倍は偶数` は、2 個のベクタのすべてで成り立ちましたが、示されていません。証明がありません（example.lean に、この性質の定理がありません）
+     6 | property 倍は偶数(double_is_even)(数(n): number range >=0 <=9)
+  = `ritsu gen --target lean` が、定理の名前と `sorry` だけの下書き `samples/example.lean` を書きます。それを .kn の隣に example.lean として置き、`sorry` を証明に置き換えてください。
+ok example.kn: 関数 1 個、total

@@ -1,22 +1,23 @@
-//! The examples (DESIGN 17): `examples/` holds eight, each in English (`<name>.kn`) and in Japanese
+//! The examples (DESIGN 17): `examples/` holds ten, each in English (`<name>.kn`) and in Japanese
 //! (`<name>.ja.kn`). Four join no other language and carry a host in TypeScript, Python and Go that
-//! calls the code `ritsu gen` writes of them (`host/`, which ritsu's `tests/kaname.rs` runs); four call
-//! the rules, the dates files and the books beside them. Every module passes `check` with every
-//! language joined and says nothing, not even a warning, and the `examples` it writes hold. Every rule
-//! cites the documents it transcribes, from copies beside it that the rule pins (DESIGN 17.11), and a
-//! dates file, which can pin only a law of e-Gov, names the copy the rule pins for it. The two
-//! versions answer alike on their vectors (`tests/vectors.rs`, DESIGN 16.6), and with the verdicts of
-//! the checks across the languages every function of the four that call the other languages is total
-//! (ritsu's `tests/kaname.rs`).
+//! calls the code `ritsu gen` writes of them (`host/`, which ritsu's `tests/kaname.rs` runs); five call
+//! the rules, the dates files and the books beside them; `refund_split` is the example of the
+//! properties (DESIGN 38). Every module passes `check` with every language joined and says nothing
+//! but a W603 for each property, which only `--lean` shows (`tests/lean.rs` runs it), and the
+//! `examples` it writes hold. Every rule cites the documents it transcribes, from copies beside it
+//! that the rule pins (DESIGN 17.11), and a dates file, which can pin only a law of e-Gov, names the
+//! copy the rule pins for it. The two versions answer alike on their vectors (`tests/vectors.rs`,
+//! DESIGN 16.6), and with the verdicts of the checks across the languages every function of the five
+//! that call the other languages is total (ritsu's `tests/kaname.rs`).
 
 mod common;
 
 use ritsu_base::text::Lang;
 use std::path::{Path, PathBuf};
 
-/// The examples, in the order DESIGN 17 gives them: the four that join no other language, then the
-/// four that call rules, dates and books.
-const NAMES: [&str; 9] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill"];
+/// The examples, in the order DESIGN 17 gives them: the four that join no other language, the five
+/// that call rules, dates and books, and the example of the properties.
+const NAMES: [&str; 10] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill", "refund_split"];
 
 /// The examples that join no other language, each with its host.
 const HOSTED: [&str; 4] = ["order_flow", "stock_diff", "handles", "catalog"];
@@ -38,7 +39,7 @@ fn every_example_is_in_english_and_in_japanese() {
     dirs.sort();
     let mut want: Vec<String> = NAMES.iter().map(|s| s.to_string()).collect();
     want.sort();
-    assert_eq!(dirs, want, "examples/ holds the eight of DESIGN 17");
+    assert_eq!(dirs, want, "examples/ holds the examples of DESIGN 17");
     for name in NAMES {
         assert_eq!(files(&Path::new("examples").join(name), "kn"), [format!("{name}.ja.kn"), format!("{name}.kn")]);
     }
@@ -46,11 +47,22 @@ fn every_example_is_in_english_and_in_japanese() {
     assert_eq!(common::EXAMPLES.to_vec(), listed, "the tests read every example, English first");
 }
 
+/// How many properties each example has (DESIGN 17.12), and how many of them rest on what a rule
+/// answers beyond what its port says, which no proof is beside.
+const PROPERTIES: [(&str, usize, usize); 10] =
+    [("order_flow", 1, 0), ("stock_diff", 0, 0), ("handles", 0, 0), ("catalog", 0, 0), ("payout", 0, 0), ("late_payment", 1, 0), ("media_mail", 1, 0), ("discount_split", 2, 1), ("order_bill", 1, 0), ("refund_split", 3, 0)];
+
+/// Without `--lean`, each property of an example is W603 and nothing else is said: the proof beside
+/// it waits for `--lean`, but for the one that rests on a rule's answers, which has none.
 #[test]
 fn every_example_passes_and_its_examples_hold() {
     for f in common::EXAMPLES {
         let o = common::check(f);
-        assert!(o.diags.is_empty(), "{f}:\n{}", common::shown(&o, Lang::En));
+        let name = f.split('/').nth(1).unwrap();
+        let (_, properties, on_rules) = PROPERTIES.iter().find(|(n, _, _)| *n == name).copied().unwrap_or_else(|| panic!("{name}"));
+        assert_eq!(common::codes(&o), vec!["W603"; properties], "{f}:\n{}", common::shown(&o, Lang::En));
+        let waiting = o.diags.iter().filter(|d| d.render(Lang::En).contains("is checked with `--lean`")).count();
+        assert_eq!(waiting, properties - on_rules, "{f}:\n{}", common::shown(&o, Lang::En));
         let c = o.checked.as_ref().unwrap_or_else(|| panic!("{f} is not checked"));
         // `check` ran every line of `examples` in the reference interpreter, and none said E601
         assert!(!c.module.examples.is_empty(), "{f} writes no examples");

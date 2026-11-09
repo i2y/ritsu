@@ -1,0 +1,7 @@
+module 割る数を狭める(narrows_ja) v1
+description "`when` の行で、割る数を 0 から外す性質。narrows.kn の日本語の版"
+
+property 一つ分は全体を超えない(no_part_is_more_than_the_whole)(全体(total): number range >=0 <=1000, 個数(parts): number range >=0 <=10)
+  description "一つ以上に分けると、一つ分は全体を超えない"
+  when 個数 > 0
+  down(全体 / 個数, 1) <= 全体

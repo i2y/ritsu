@@ -6,7 +6,7 @@
     "alias": "late_payment",
     "version": "v1",
     "description": "What a supplier claims for an invoice paid late: the day it fell due, how many days late it was paid, and the fixed sum and the interest the rule gives for them",
-    "sha256": "56982857c3a1dff6db3cc62743a9430eb41bee53e76e37bb8d1f510b872c1f85"
+    "sha256": "0363c766b0f038c0dfb09e0b050f62158294cfc05a8645e01122c9f0a8489126"
   },
   "generated": {
     "typescript": "glue/late_payment.ts",
@@ -249,6 +249,38 @@
         "go": "CheckClaimFn",
         "rust": "check_claim"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "nothing_is_claimed_when_paid_on_time",
+      "alias": "nothing_is_claimed_when_paid_on_time",
+      "line": 28,
+      "description": "An invoice paid by the day it fell due gives no claim, whatever day the terms make it fall due",
+      "params": [
+        {
+          "name": "invoice",
+          "alias": "invoice",
+          "type": "Invoice",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "paid_on",
+          "alias": "paid_on",
+          "type": "date",
+          "range": ">=2026-01-01 <=2029-12-31",
+          "count": null
+        },
+        {
+          "name": "reference_rate",
+          "alias": "reference_rate",
+          "type": "rate[step 0.01%]",
+          "range": ">=0% <=15%",
+          "count": null
+        }
+      ],
+      "when": 1
     }
   ],
   "transfers": []

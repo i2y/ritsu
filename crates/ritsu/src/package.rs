@@ -1,7 +1,9 @@
 //! `ritsu gen` (DESIGN 9.3, 9.6): the rules, the dates, the clients of the books, the workflows, the
 //! functional cores (kaname's modules) and the code that asks the gates of a project, as one package
-//! for each language it is given (TypeScript, Python, Go, Rust), and the gates' Cedar beside them,
-//! written once, when it is given `cedar`. What it is given is `--target`'s, or else the `target` line of
+//! for each language it is given (TypeScript, Python, Go, Rust), the gates' Cedar beside them,
+//! written once, when it is given `cedar`, and the Lean of the modules of kaname, their definitions
+//! and the statements of their properties, when it is given `lean` (kaname's DESIGN 38.4). What it
+//! is given is `--target`'s, or else the `target` line of
 //! the module's ritsu.mod (DESIGN 17.3); with neither, nothing is written. Every target given is
 //! made before any is written, so a run that stops writes none of them (DESIGN 9.6). kaname's
 //! modules go under glue/, a name kept because a host's code imports them by that path.
@@ -27,6 +29,9 @@
 //!   glue/books.rs, glue/books/<book>.rs, <book>_apply.rs
 //!   units.rs, wasm.rs, <name>.wit
 //! generated/cedar/<gate>.cedar, .cedarschema, .cedarschema.json, .policies.json
+//! generated/lean/                 lean-toolchain, lakefile.toml, .gitignore
+//!   Kaname/Prelude.lean, Rules.lean, Books.lean, <module>.lean
+//!   samples/<module>.lean
 //! ```
 //!
 //! Each language writes its part with its own generator (DESIGN 9.1): rulec the rule's module,
@@ -124,12 +129,19 @@ impl Target {
 /// `<out>/cedar/` (DESIGN 9.3).
 pub const CEDAR: &str = "cedar";
 
+/// The other target that is no language: the Lean of the modules of kaname, their definitions and
+/// the statements of their properties, which a proof beside each module proves (kaname's DESIGN
+/// 38.4), written once into `<out>/lean/`. The other languages write nothing there: the rules and
+/// the dates a module calls are given to it from outside (`Inner`).
+pub const LEAN: &str = "lean";
+
 /// The names `--target` takes, in the order `ritsu gen` writes them whatever the order they are
-/// given in (DESIGN 9.6): each language's, in [`Target::ALL`]'s order, then `cedar`. They are the
-/// words of the `target` line of a ritsu.mod (ritsu-base's `TARGET_WORDS`, which the table of `gen`
-/// takes its choices from): ritsu-base cannot read [`Target`], so a test holds the two to each other.
+/// given in (DESIGN 9.6): each language's, in [`Target::ALL`]'s order, then `cedar` and `lean`. They
+/// are the words of the `target` line of a ritsu.mod (ritsu-base's `TARGET_WORDS`, which the table
+/// of `gen` takes its choices from): ritsu-base cannot read [`Target`], so a test holds the two to
+/// each other.
 pub fn target_names() -> Vec<&'static str> {
-    Target::ALL.iter().map(|t| t.key()).chain([CEDAR]).collect()
+    Target::ALL.iter().map(|t| t.key()).chain([CEDAR, LEAN]).collect()
 }
 
 /// The names given, in the order of [`target_names`]: the order they are written in, and said in.
@@ -755,20 +767,20 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
 
 /// What stops the packages of a module for the modules' sake, made sure of once, before any target
 /// is made (DESIGN 17.8): two flows of two modules that make one Temporal workflow type, two gates of
-/// two modules that declare one name of Cedar's, unless the run is to write Rust alone, whose package
-/// holds neither (`only_rust`), and, when Python or Rust is among the targets, a dependency named with
-/// a word that language keeps. Each stops the run whatever target is made; a stop of another kind is
-/// met where its target is made, as in a tree without a manifest, which none of these can stop. Either
-/// way nothing is written, as every target is made before any is (DESIGN 9.6). A file that does not
-/// pass is left to the target that reads it.
-pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], only_rust: bool, lang: Lang) -> Result<(), Refusal> {
+/// two modules that declare one name of Cedar's, unless the run writes no target that holds either
+/// (`neither`: Rust's crate and the Lean hold neither), and, when Python or Rust is among the
+/// targets, a dependency named with a word that language keeps. Each stops the run whatever target
+/// is made; a stop of another kind is met where its target is made, as in a tree without a
+/// manifest, which none of these can stop. Either way nothing is written, as every target is made
+/// before any is (DESIGN 9.6). A file that does not pass is left to the target that reads it.
+pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], neither: bool, lang: Lang) -> Result<(), Refusal> {
     if project.tree.is_none() {
         return Ok(());
     }
     // a workflow runs by the name of its type, which a worker of a server's knows one of: two flows
     // of two modules that make one type would be one workflow
     let mut types: Vec<(String, String, &str)> = Vec::new();
-    for f in if only_rust { Vec::new() } else { project.of(Tool::Dandori) } {
+    for f in if neither { Vec::new() } else { project.of(Tool::Dandori) } {
         let Some(m) = with_ports(joined, || dandori::check::check_file(Path::new(&f.shown)).ok().and_then(|(_, c)| c.model)) else {
             continue;
         };
@@ -788,7 +800,7 @@ pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], only
     }
     // what each gate's Cedar declares, each name with the file that declares it
     let gates: sekisho::suite::Suite = joined.sekisho().into();
-    let declared: Vec<Vec<(String, String)>> = if only_rust { Vec::new() } else { project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, &gates, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect() };
+    let declared: Vec<Vec<(String, String)>> = if neither { Vec::new() } else { project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, &gates, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect() };
     cedar_names_hold(project, &declared, lang)?;
     // a dependency's name is the name of a Python package of the package's (DESIGN 17.3), which a
     // word Python keeps cannot be, and of a module of Rust's, which a word no file can be the module of
@@ -1369,6 +1381,40 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<Path
     out
 }
 
+/// That no two files of the project write one file of the package of `target`.
+fn written_once(p: &Package, target: &str, lang: Lang) -> Result<(), Refusal> {
+    let mut by: BTreeMap<&str, &Option<String>> = BTreeMap::new();
+    for (rel, _, from) in &p.files {
+        if let Some(prev) = by.insert(rel.as_str(), from) {
+            let (a1, b1) = (prev.clone().unwrap_or_default(), from.clone().unwrap_or_default());
+            let at = format!("{target}/{rel}");
+            return Err(refusal(
+                2,
+                tr!(
+                    "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
+                    "`{a1}` and `{b1}` both write {at} of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)"
+                ),
+                lang,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The Lean of the project's modules of kaname (kaname's DESIGN 38.4), for `<out>/lean/` at `dir`:
+/// each module's head names it by its path from the project's root (DESIGN 9.2), and the proof
+/// beside a module (`<alias>.lean` beside its `.kn`) is read where it is, by a library whose
+/// `srcDir` is the path from `dir` to it.
+fn lean(project: &Project, modules: &[(Rc<kaname::check::Checked>, String)], dir: &Path) -> Package {
+    use kaname::r#gen::lean;
+    let named: Vec<(Rc<kaname::check::Checked>, Origin)> =
+        modules.iter().map(|(c, rel)| (c.clone(), Origin::at(rel, ritsu_base::fed::without(&c.src).as_bytes()).of(place_of(project, rel).module))).collect();
+    let checked: Vec<Rc<kaname::check::Checked>> = modules.iter().map(|(c, _)| c.clone()).collect();
+    let layout = lean::Layout::InPlace { out: dir.to_path_buf(), proofs: lean::proofs_beside(&checked) };
+    let (files, _) = lean::package_from(&named, &layout);
+    Package { files: files.into_iter().map(|(p, text, from)| (p.to_string_lossy().replace('\\', "/"), text, from)).collect() }
+}
+
 /// Whether the directory of a package is a crate's: the `target/` of what cargo writes beside it.
 fn target_of_a_crate(dir: &Path) -> bool {
     dir.join("Cargo.toml").is_file()
@@ -1510,9 +1556,9 @@ fn for_target(o: &Options, libraries: &[(Target, library::Library)], t: Target) 
     }
 }
 
-/// `ritsu gen [<path>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--books
-/// postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--library
-/// [--embed <name>]...] [--root <dir>] [--format json]`: the exit code.
+/// `ritsu gen [<path>...] [--target typescript|python|go|rust|cedar|lean]... [--out <dir>] [--check]
+/// [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>]
+/// [--library [--embed <name>]...] [--root <dir>] [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
     let cmd = table.command("gen").expect("gen is in the table");
@@ -1682,6 +1728,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     };
     answer.targets = names.clone();
     let cedar_given = names.contains(&CEDAR);
+    let lean_given = names.contains(&LEAN);
     let targets: Vec<Target> = names.iter().filter_map(|n| Target::parse(n)).collect();
     // a library of Rust has three things to decide first (DESIGN 17.16): `--target`'s and the line's alike
     if library && targets.contains(&Target::Rust) {
@@ -1729,9 +1776,11 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         Ok(m) => m,
         Err(r) => return say(r, answer),
     };
-    // what stops the packages of a module for the modules' sake, once, before any target is made
-    let only_rust = !cedar_given && targets == [Target::Rust];
-    if let Err(r) = modules_hold(&project, &joined, &targets, only_rust, lang) {
+    // what stops the packages of a module for the modules' sake, once, before any target is made:
+    // the workflows' and the gates' names only when a target given holds them (neither Rust's crate
+    // nor the Lean does)
+    let neither = !cedar_given && targets.iter().all(|t| !t.holds_flows_and_gates());
+    if let Err(r) = modules_hold(&project, &joined, &targets, neither, lang) {
         return say(r, answer);
     }
     // each language's library: where it reads each module, and what it says it depends on
@@ -1756,24 +1805,8 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
             Ok(p) => p,
             Err(r) => return say(r, answer),
         };
-        // two files of the project that would write one file of the package
-        let mut by: BTreeMap<&str, &Option<String>> = BTreeMap::new();
-        for (rel, _, from) in &p.files {
-            if let Some(prev) = by.insert(rel.as_str(), from) {
-                let (a1, b1) = (prev.clone().unwrap_or_default(), from.clone().unwrap_or_default());
-                let at = format!("{}/{rel}", t.key());
-                return say(
-                    refusal(
-                        2,
-                        tr!(
-                            "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
-                            "`{a1}` and `{b1}` both write {at} of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)"
-                        ),
-                        lang,
-                    ),
-                    answer,
-                );
-            }
+        if let Err(r) = written_once(&p, t.key(), lang) {
+            return say(r, answer);
         }
         made.push((out.join(t.key()), t.key(), p, o.library.is_some()));
     }
@@ -1789,6 +1822,14 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
             print!("{warnings}");
         }
         made.push((out.join("cedar"), CEDAR, p, false));
+    }
+    // the Lean of the modules of kaname, once beside the packages, when `lean` is given
+    if lean_given {
+        let p = lean(&project, &modules, &out.join(LEAN));
+        if let Err(r) = written_once(&p, LEAN, lang) {
+            return say(r, answer);
+        }
+        made.push((out.join(LEAN), LEAN, p, false));
     }
     // what a package of Rust leaves out, said once the run is sure to write it
     if targets.contains(&Target::Rust) {

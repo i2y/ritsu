@@ -1,0 +1,3 @@
+error[E605]: example.kn:3:27: The parameter `step` of the property `twice_is_no_less` is of a function type
+     3 | property twice_is_no_less(step: (number) -> number, x: number range >=0 <=10)
+  = A property is tried on vectors, which cannot make a function value: its parameters take no function type. Call the function the property is about by its name in the body.

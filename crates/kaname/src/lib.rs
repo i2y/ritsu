@@ -51,11 +51,14 @@ pub mod r#gen;
 pub mod hatch;
 pub mod interp;
 pub mod kw;
+/// `--lean`: the proofs beside the modules, held by Lean to the statements of their properties (DESIGN 38.6).
+pub mod lean;
 pub mod lex;
 pub mod names;
 pub mod num;
 pub mod parse;
 pub mod ports;
+pub mod properties;
 pub mod ranges;
 /// The `kaname` command, as a function: the binary runs it, and so does `ritsu kaname`.
 pub mod run;

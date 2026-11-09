@@ -84,16 +84,16 @@ fn the_target_line_reads_its_names_in_the_order_written() {
     assert_eq!((t.value.as_slice(), t.line, t.col), (["go", "typescript", "cedar"].map(String::from).as_slice(), 4, 8));
     assert_eq!(m.text(), text);
     assert_eq!(read("module shop\ntarget python\n").targets.unwrap().value, ["python"]);
-    assert_eq!(manifest::TARGET_WORDS, ["typescript", "python", "go", "rust", "cedar"]);
+    assert_eq!(manifest::TARGET_WORDS, ["typescript", "python", "go", "rust", "cedar", "lean"]);
     // the Japanese of what does not read
     let ds = manifest::parse("module shop\ntarget go cobol\ntarget go\n".as_bytes(), "ritsu.mod").unwrap_err();
     let ja: Vec<&str> = ds.iter().map(|d| d.message.ja.as_str()).collect();
-    assert_eq!(ja, ["`target` の出力先 `cobol` はありません。typescript、python、go、rust、cedar のどれかです", "`target` は一度しか書けません。2 行目にもう書いてあります"]);
+    assert_eq!(ja, ["`target` の出力先 `cobol` はありません。typescript、python、go、rust、cedar、lean のどれかです", "`target` は一度しか書けません。2 行目にもう書いてあります"]);
     let ds = manifest::parse("module shop\ntarget go go\ntarget\n".as_bytes(), "ritsu.mod").unwrap_err();
     let ja: Vec<&str> = ds.iter().map(|d| d.message.ja.as_str()).collect();
     assert_eq!(ja, ["`target` の `go` が二度書かれています", "`target` は一度しか書けません。2 行目にもう書いてあります"]);
     let ds = manifest::parse("module shop\ntarget\n".as_bytes(), "ritsu.mod").unwrap_err();
-    assert_eq!((ds[0].message.ja.as_str(), ds[0].notes[0].ja.as_str()), ("`target` の行は `target typescript|python|go|rust|cedar …` の形で書いてください", "値が足りません"));
+    assert_eq!((ds[0].message.ja.as_str(), ds[0].notes[0].ja.as_str()), ("`target` の行は `target typescript|python|go|rust|cedar|lean …` の形で書いてください", "値が足りません"));
 }
 
 #[test]
@@ -193,9 +193,9 @@ fn a_line_that_cannot_be_read_is_e301() {
         ("module shop\nmodule shop\n", "`module` is written once, and it is already on line 1"),
         ("module shop\nlibrary go \"example.com/a\"\nlibrary go \"example.com/b\"\n", "`library go` is written once, and it is already on line 2"),
         ("module shop\nlibrary rust \"x\"\n", "`rust` is not a target of `library`; the targets are typescript, python and go"),
-        ("module shop\ntarget\n", "write the `target` line as `target typescript|python|go|rust|cedar …`"),
-        ("module shop\ntarget \"go\"\n", "write the `target` line as `target typescript|python|go|rust|cedar …`"),
-        ("module shop\ntarget go cobol\n", "`cobol` is not a target of `target`; the targets are typescript, python, go, rust and cedar"),
+        ("module shop\ntarget\n", "write the `target` line as `target typescript|python|go|rust|cedar|lean …`"),
+        ("module shop\ntarget \"go\"\n", "write the `target` line as `target typescript|python|go|rust|cedar|lean …`"),
+        ("module shop\ntarget go cobol\n", "`cobol` is not a target of `target`; the targets are typescript, python, go, rust, cedar and lean"),
         ("module shop\ntarget go python go\n", "`go` is written twice on the `target` line"),
         ("module shop\ntarget go\ntarget python\n", "`target` is written once, and it is already on line 2"),
         ("version 1.0.0\nmodule shop\n", "the first statement is `module`: start `ritsu.mod` with the line `module <module name>`"),

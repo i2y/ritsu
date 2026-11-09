@@ -32,6 +32,7 @@ nav = [
     { "Four functional cores" = "kaname/examples.md" },
     { "What the check guarantees" = "kaname/checks.md" },
     { "Rules, dates and books" = "kaname/together.md" },
+    { "Properties and proofs" = "kaname/properties.md" },
   ] },
   { "ritsu in Node" = "node.md" },
   { Modules = "modules.md" },

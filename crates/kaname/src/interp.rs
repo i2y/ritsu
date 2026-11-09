@@ -163,6 +163,18 @@ pub struct Bound {
     pub text: String,
 }
 
+/// What a property comes to on one input (DESIGN 38.3).
+#[derive(Clone, Debug)]
+pub enum PropertyRun {
+    /// A `when` line is `false`: the input says nothing of the property.
+    Vacuous,
+    /// The `when` lines and the last line are `true`.
+    Holds,
+    /// The `when` lines are `true` and the last line is `false`: the values of the property's `let`
+    /// lines, in their order.
+    False { lets: Vec<Bound> },
+}
+
 /// One thing an evaluation went through.
 #[derive(Clone, Debug)]
 pub enum Event {
@@ -244,6 +256,20 @@ pub struct Interp<'p> {
     /// inputs, a transfer's amounts), each kept before the call is made. What ritsu-cross reads where
     /// kaname's ranges do not show a check across the languages (DESIGN 14.2, `Programs::seen`).
     pub given: Option<Vec<(std::path::PathBuf, usize, ritsu_ports::Values)>>,
+    /// Each rule and date that answered, with the values it was given and its answer, when they are
+    /// kept: what the comparison with the Lean (DESIGN 38.4) gives `Inner` as a table.
+    pub answered: Option<Vec<Answered>>,
+}
+
+/// A rule or a date that answered (`Interp::answered`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Answered {
+    /// A rule, by its file on the disk: the value given to each input and each list it walks, in the
+    /// order of its inputs then its lists (`Value::None` for one not given), and its outputs.
+    Rule { canon: std::path::PathBuf, given: Vec<Value>, out: Value },
+    /// A date of a dates file, by the file on the disk and the date's name: the inputs given, by
+    /// name, and the day.
+    Date { canon: std::path::PathBuf, date: String, given: Vec<(String, i64)>, day: i64 },
 }
 
 type R<T> = Result<T, Stop>;
@@ -325,7 +351,7 @@ pub(crate) fn common<'t>(a: &'t Ty, b: &'t Ty) -> &'t Ty {
 
 impl<'p> Interp<'p> {
     pub fn new(p: &'p Program, suite: &'p Suite) -> Interp<'p> {
-        Interp { p, suite, limit: DEPTH, frames: Vec::new(), trace: Trace::default(), lets: false, watch: None, given: None }
+        Interp { p, suite, limit: DEPTH, frames: Vec::new(), trace: Trace::default(), lets: false, watch: None, given: None, answered: None }
     }
 
     /// The type the check gave an expression, the types the type parameters of the function evaluated
@@ -687,6 +713,43 @@ impl<'p> Interp<'p> {
         let out = self.finish(m, f, out);
         self.frames.pop();
         out
+    }
+
+    /// The property the function `f` of `m` is read as (DESIGN 38.2), on arguments that keep what its
+    /// parameters declare: its `when` lines from the top, then its `let` lines, each kept, and its last
+    /// line.
+    pub fn property(&mut self, m: &'p Checked, f: usize, args: Vec<Value>) -> R<PropertyRun> {
+        let decl = &m.module.fns[f];
+        let made: &[usize] = decl.property.map(|k| m.module.properties[k].made.as_slice()).unwrap_or(&[]);
+        let mut env = self.enter(m, f, args, 0, Vec::new());
+        let body: &'p Block = match &decl.body.answer.kind {
+            ExprKind::If(c, t, _) if made.contains(&decl.body.answer.id) => match self.eval(m, &mut env, c) {
+                Ok(Value::Bool(true)) => t,
+                other => {
+                    self.frames.pop();
+                    return other.map(|_| PropertyRun::Vacuous);
+                }
+            },
+            _ => &decl.body,
+        };
+        let (lets, mark) = (std::mem::replace(&mut self.lets, true), self.trace.events.len());
+        let out = self.block(m, &mut env, body);
+        self.lets = lets;
+        self.frames.pop();
+        let mut kept = Vec::new();
+        let mut rest = Vec::new();
+        for e in self.trace.events.drain(mark..) {
+            match e {
+                Event::Let(b) if b.function == decl.name.text && b.file == m.path => kept.push(*b),
+                Event::Let(_) if !lets => {}
+                e => rest.push(e),
+            }
+        }
+        self.trace.events.extend(rest);
+        Ok(match out? {
+            Value::Bool(false) => PropertyRun::False { lets: kept },
+            _ => PropertyRun::Holds,
+        })
     }
 
     #[cold]
@@ -1283,6 +1346,9 @@ impl<'p> Interp<'p> {
                     fs.push((c.name.clone(), v));
                 }
                 let v = Value::Record(fs);
+                if let Some(a) = &mut self.answered {
+                    a.push(Answered::Rule { canon: canon.to_path_buf(), given: given.clone(), out: v.clone() });
+                }
                 let shown = p.show(m, &v, &out_ty);
                 let out_json = Json::obj(outs.iter().map(|(n, w)| (n.clone(), wire_json(w))));
                 let mut j = head("rule");
@@ -1369,6 +1435,9 @@ impl<'p> Interp<'p> {
         let head = vec![("line".to_string(), Json::int(e.span.line as i128)), ("module".to_string(), Json::str(m.module.name.text.clone())), ("date".to_string(), Json::str(name.clone())), ("in".to_string(), in_json)];
         match answer {
             Ok(d) => {
+                if let Some(a) = &mut self.answered {
+                    a.push(Answered::Date { canon: canon.to_path_buf(), date: date.to_string(), given: given.clone(), day: d });
+                }
                 let mut j = head;
                 j.push(("out".to_string(), Json::str(crate::date::text(d))));
                 self.called(m, e, format!("{call} = {}", crate::date::text(d)), Json::Obj(j));

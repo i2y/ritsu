@@ -89,6 +89,11 @@ fn open(order: Order) -> bool
     shipped, cancelled => false
     else => true
 
+property a_closed_order_takes_no_event(order: Order, event: Event)
+  description "A shipped or cancelled order refuses every event, and says why"
+  when not open(order: order)
+  next(order: order, event: event) = err("the order is closed")
+
 examples
   total(lines: [Line { sku: "pen", qty: 2, price: 150USDc }, Line { sku: "ink", qty: 1, price: 400USDc }]) = 700USDc
   next(order: Order.cart { lines: [] }, event: Event.place { on: 2026-10-22 }) = err("an empty cart is not placed")

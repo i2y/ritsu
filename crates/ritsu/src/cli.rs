@@ -197,6 +197,14 @@ pub fn commands() -> Vec<Cmd> {
                     "read the `.geas` files and run none of their claims (their syntax, the keys written in them and their contracts are still held): for a module someone else wrote"
                 ),
             ),
+            flag(
+                "--lean",
+                None,
+                tr!(
+                    "kaname の性質の証明（.kn の隣の <モジュールの別名>.lean）を Lean で確かめる。証明が受け付けられた性質は「示した」になり、受け付けられなければ E604。lake が要る",
+                    "check the proofs of kaname's properties (<the module's alias>.lean beside the .kn) with Lean: a property whose proof Lean takes is shown, and one whose proof it does not take is E604. Needs lake"
+                ),
+            ),
         ],
         exits: vec![
             (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
@@ -204,12 +212,12 @@ pub fn commands() -> Vec<Cmd> {
             (
                 2,
                 tr!(
-                    "引数の誤り、読めないファイル、言語が確かめられなかったファイル、取り出していない依存、新しい ritsu が要るモジュール",
-                    "bad arguments, a file that cannot be read or that a language could not check, a dependency not fetched, or a module that needs a newer ritsu"
+                    "引数の誤り、読めないファイル、言語が確かめられなかったファイル、取り出していない依存、新しい ritsu が要るモジュール、`--lean` で Lean（lake）が見つからないか走らせられない",
+                    "bad arguments, a file that cannot be read or that a language could not check, a dependency not fetched, a module that needs a newer ritsu, or `--lean` with Lean (lake) not found or not able to run"
                 ),
             ),
         ],
-        examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja", "ritsu check rules/ --budget 200000000"],
+        examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja", "ritsu check rules/ --budget 200000000", "ritsu check --lean"],
         codes: ritsu_cross::codes::codes(),
     }];
     cmds.push(run());
@@ -218,8 +226,8 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、指定した言語（TypeScript、Python、Go、Rust）ごとに一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。Rust のパッケージは一つのクレートで、ワークフローとゲートのコードを入れず（入らないファイルを警告で言う）、Functional Core があれば Wasm の二つのファイルも持つ。cedar を指定すれば、ゲートの Cedar を <out>/cedar/ に一度だけ書く",
-            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each language given (TypeScript, Python, Go, Rust), whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units). A package of Rust is one crate, with no workflow and no gate's code (a warning names the files it leaves out), and with the two files of its Wasm when it has functional cores; given cedar, the gates' Cedar goes once into <out>/cedar/"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、指定した言語（TypeScript、Python、Go、Rust）ごとに一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。Rust のパッケージは一つのクレートで、ワークフローとゲートのコードを入れず（入らないファイルを警告で言う）、Functional Core があれば Wasm の二つのファイルも持つ。cedar を指定すれば、ゲートの Cedar を <out>/cedar/ に一度だけ書く。lean を指定すれば、kaname のモジュールの定義と性質の文を Lean にして <out>/lean/ に一度だけ書く（.kn の隣の証明を、その場所のまま読む lakefile と一緒に）",
+            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each language given (TypeScript, Python, Go, Rust), whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units). A package of Rust is one crate, with no workflow and no gate's code (a warning names the files it leaves out), and with the two files of its Wasm when it has functional cores; given cedar, the gates' Cedar goes once into <out>/cedar/; given lean, the definitions of kaname's modules and the statements of their properties go once into <out>/lean/ as Lean, with a lakefile that reads the proofs beside the .kn files where they are"
         ),
         params: vec![(
             "<path>...",
@@ -233,8 +241,8 @@ pub fn commands() -> Vec<Cmd> {
                 "--target",
                 Some("<target>"),
                 tr!(
-                    "書くもの（書く順はフラグの順でなく typescript、python、go、rust、cedar）。言語はそのパッケージ、cedar はゲートの Cedar。無ければ ritsu.mod の target の行を読み、それも無ければ何も書かずに 2 で終わる",
-                    "a target to write (written in the order typescript, python, go, rust, cedar whatever the order of the flags): a language its package, cedar the gates' Cedar. Without it, the target line of ritsu.mod; without that too, nothing is written and the exit is 2"
+                    "書くもの（書く順はフラグの順でなく typescript、python、go、rust、cedar、lean）。言語はそのパッケージ、cedar はゲートの Cedar、lean は kaname のモジュールの Lean。無ければ ritsu.mod の target の行を読み、それも無ければ何も書かずに 2 で終わる",
+                    "a target to write (written in the order typescript, python, go, rust, cedar, lean whatever the order of the flags): a language its package, cedar the gates' Cedar, lean the Lean of kaname's modules. Without it, the target line of ritsu.mod; without that too, nothing is written and the exit is 2"
                 ),
             )
             .choices(&ritsu_base::modules::manifest::TARGET_WORDS)
@@ -294,6 +302,7 @@ pub fn commands() -> Vec<Cmd> {
             "ritsu gen --target typescript --target python --target go --target cedar",
             "ritsu gen --target typescript --out generated --books tigerbeetle",
             "ritsu gen --target rust --books tigerbeetle",
+            "ritsu gen --target lean",
             "ritsu gen --target go --check --format json",
             "ritsu gen --check",
             "ritsu gen --library --target python --embed tax",

@@ -16,8 +16,11 @@
 //!    draws, and each transfer it builds, with the reasons the book can refuse it with;
 //! 3. the functions in three parts: those that are total, those checked at some places when they run
 //!    (each place, and why the check could not show it), and those that may not stop;
-//! 4. the decisions written in code (W501), or that there are none;
-//! 5. the `examples`, with what each answers.
+//! 4. the properties (DESIGN 38), when the module writes any: each with its `when` lines and its
+//!    last line, and whether a proof file is beside the `.kn` — not their answers, which are
+//!    `check`'s;
+//! 5. the decisions written in code (W501), or that there are none;
+//! 6. the `examples`, with what each answers.
 
 pub mod html;
 pub mod markdown;
@@ -103,6 +106,7 @@ pub fn page(o: &Outcome, suite: &Suite, root: &Path, lang: Lang, format: Format)
     b.tables();
     b.fed();
     b.functions();
+    b.properties();
     b.in_code();
     b.examples();
     Some(b.done())
@@ -745,6 +749,54 @@ impl<'a> Builder<'a> {
     fn diag_at(&self, p: &Place) -> Option<&crate::diag::Diag> {
         let code = crate::ranges::code_of(p)?;
         self.o.diags.iter().find(|d| d.code == code && d.line == Some(p.span.line) && d.col == Some(p.span.col)).or_else(|| self.o.diags.iter().find(|d| d.code == code && d.line == Some(p.span.line)))
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // 3b. The properties
+
+    /// The properties of the module (DESIGN 38), after its functions: nothing for a module that
+    /// writes none. The page holds what a property says and whether a proof file is beside the
+    /// module; what `check` and `check --lean` answer of it (shown, a counterexample, not decided) is
+    /// theirs, and the page does not repeat it.
+    fn properties(&mut self) {
+        let ps = &self.c.properties;
+        if ps.is_empty() {
+            return;
+        }
+        let proof = crate::properties::proof_path(self.c);
+        let proof_name = proof.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
+        let beside = ritsu_base::fs::is_file(&proof);
+        self.heading(2, self.t(tr!("性質", "Properties")), "properties".into());
+        self.push(Block::Para(self.t(tr!(
+            "性質は、引数が宣言した範囲に入り、`when` の行がどれも成り立つ入力なら、最後の式が `true` になるという主張です。`kaname check` は性質をベクタで確かめ、反例があれば E603 にします。示したと言えるのは、`--lean` が証明を受け付けたときだけです。このページは性質の中身を載せ、答えは載せません。",
+            "A property claims that for every input in the ranges its parameters declare, and on which its `when` lines hold, its last line is `true`. `kaname check` tries it on the vectors and reports a counterexample as E603; it is shown only when `--lean` takes a proof of it. This page shows what each property says, not its answer."
+        ))));
+        let lines: Vec<&str> = self.c.src.lines().collect();
+        for p in ps {
+            self.heading(3, named(self.lang, &p.decl.name), id_of("property", p.decl.name.ascii()));
+            if let Some((d, _)) = &p.decl.description {
+                self.push(Block::Para(self.sentence(d)));
+            }
+            let end = p.decl.last.max(p.decl.line).min(lines.len());
+            let body = lines.get(p.decl.line.saturating_sub(1)..end).map(|ls| ls.join("\n")).unwrap_or_default();
+            self.push(Block::Code { lang: "kn", caption: String::new(), text: body });
+            let whens = p.decl.when.len();
+            let last = lines.get(p.decl.last.saturating_sub(1)).map(|l| l.trim().to_string()).unwrap_or_default();
+            let when_said = if whens == 0 {
+                self.t(tr!("`when` の行はありません。範囲に入るどの入力にも当てはまります。", "It writes no `when` line: it holds for every input in the ranges."))
+            } else {
+                self.t(Text::new(format!("`when` の行は {whens} 本です。"), format!("It writes {whens} `when` {}.", if whens == 1 { "line" } else { "lines" })))
+            };
+            let last_said = self.t(Text::new(format!("最後の式は {} です。", code(&last)), format!("Its last line is {}.", code(&last))));
+            self.push(Block::Para(self.sentences(&[when_said, last_said])));
+            let file = code(&proof_name);
+            let one = if beside {
+                self.t(tr!("証明のファイル {file} が .kn の隣にあります。`ritsu check --lean` が確かめます。", "The proof file {file} is beside the .kn; `ritsu check --lean` checks it."))
+            } else {
+                self.t(tr!("証明のファイル {file} は .kn の隣にありません。", "No proof file {file} is beside the .kn."))
+            };
+            self.push(Block::Para(one));
+        }
     }
 
     // -----------------------------------------------------------------------------------------

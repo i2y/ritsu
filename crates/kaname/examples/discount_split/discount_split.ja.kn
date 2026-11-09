@@ -16,6 +16,14 @@ fn 按分する(split)(明細(lines): list[明細] count >=1 <=10, 値引き(dis
   map(running_totals(明細, 一件 => 一件.金額), 途中 =>
     明細の値引き { 項目: 途中.item.項目, 値引き: 値引きの配分(値引き: 値引き, 手前まで: 途中.before, ここまで: 途中.upto, 合計: 途中.total).配分 })
 
+property どの明細も項目を保つ(every_line_keeps_its_label)(明細(lines): list[明細] count >=1 <=10, 値引き(discount): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "どの明細にも、その項目のまま、明細の順に値引きを一つずつ配る"
+  map(按分する(明細: 明細, 値引き: 値引き), 一件 => 一件.項目) = map(明細, 一件 => 一件.項目)
+
+property 配分の合計は値引き額(shares_add_up)(明細(lines): list[明細] count >=1 <=10, 値引き(discount): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "配った分を足すと値引き額になる。これは規則の答えに頼るので、証明が使えるのは口がその答えについて教えることだけ"
+  sum(按分する(明細: 明細, 値引き: 値引き), 一件 => 一件.値引き) = 値引き
+
 # バージニア州の Example 3。工賃 50.00 ドルと部品 100.00 ドルから 10.00 ドルを値引く。
 examples
   按分する(明細: [明細 { 項目: "labor", 金額: 5000USDc }, 明細 { 項目: "parts", 金額: 10000USDc }], 値引き: 1000USDc)

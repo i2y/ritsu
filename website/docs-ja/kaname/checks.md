@@ -17,6 +17,8 @@
 ```console
 $ cd crates/kaname
 $ ritsu kaname check examples/order_flow/order_flow.kn examples/catalog/catalog.kn tests/doc/decisions.kn --lang ja
+警告[W603]: examples/order_flow/order_flow.kn:92:1: 性質 `a_closed_order_takes_no_event` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow.lean の証明は `--lean` で確かめます
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok examples/order_flow/order_flow.kn: 関数 5 個、total
 ok examples/catalog/catalog.kn: 関数 9 個、diverges
 警告[W301]: tests/doc/decisions.kn:20:24: `weight` が、規則 `media_mail` の入力 `weight` の範囲 >=1oz <=240oz に収まるかを決められません

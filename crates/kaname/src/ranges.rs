@@ -538,6 +538,18 @@ impl Iv {
         })
     }
 
+    /// Whether `self / o` keeps the rule of int64 for every value of each, as their bounds say
+    /// without the quotient's own range: of `a/b` by `c/d` it is `a·d / b·c` in lowest terms, its
+    /// numerator at most `|a|·d` and its denominator at most `b·|c|`. Closer than [`Iv::fits`] of the
+    /// quotient where a large quotient comes only of a small divisor, as `allocate(t, c, s)` has it.
+    pub fn quotient_fits(self, o: Iv) -> bool {
+        let (Some((p, _)), Some((s, _)), Some(dp), Some(ds)) = (self.magnitude(), o.magnitude(), self.den, o.den) else { return false };
+        let Some(dd) = dp.checked_mul(ds) else { return false };
+        let dd = Rat::int(dd);
+        let under = |x: Rat| x.checked_mul(dd).is_some_and(|x| cmp(x, Rat::int(I64_MAX)).is_le());
+        under(p) && under(s)
+    }
+
     /// `self / o` over the values of `o` that are not 0: a value of `o` that is not 0 is at least
     /// 1/D away from it, D its bound on the denominator.
     pub fn over(self, o: Iv) -> Iv {
@@ -3793,8 +3805,15 @@ impl<'a> Analyzer<'a> {
                 let product = ti.times(ci);
                 let quotient = product.over(si);
                 let rounded = quotient.round(Rounding::Down, Rat::int(1));
-                // `t × c`, the quotient and its rounding are each held to int64
-                let worst = [product, quotient].into_iter().find(|i| !i.fits()).unwrap_or(rounded);
+                // `t × c`, the quotient and its rounding are each held to int64; the quotient keeps it
+                // where the product and the share keep it so (`Iv::quotient_fits`)
+                let worst = if !product.fits() {
+                    product
+                } else if !quotient.fits() && !product.quotient_fits(si) {
+                    quotient
+                } else {
+                    rounded
+                };
                 let te = ty(m, xs[0]).clone();
                 self.overflow(e, &Abs::Num(worst), &te);
                 if si.is_exact().is_some_and(|k| k.num == 0) {

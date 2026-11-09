@@ -25,7 +25,7 @@ use std::path::Path;
 use std::time::Duration;
 
 /// Each page held to a golden file: the `.kn`, the language, the form, and the file's name.
-const PAGES: [(&str, Lang, Format, &str); 10] = [
+const PAGES: [(&str, Lang, Format, &str); 13] = [
     ("tests/doc/decisions.kn", Lang::En, Format::Markdown, "decisions.en.md"),
     ("tests/doc/decisions.kn", Lang::Ja, Format::Markdown, "decisions.ja.md"),
     ("tests/doc/decisions.kn", Lang::En, Format::Html, "decisions.html"),
@@ -36,6 +36,10 @@ const PAGES: [(&str, Lang, Format, &str); 10] = [
     ("examples/payout/payout.ja.kn", Lang::Ja, Format::Markdown, "payout.waiting.ja.md"),
     ("tests/modules/sums.kn", Lang::En, Format::Markdown, "sums.en.md"),
     ("tests/modules/sums.ja.kn", Lang::Ja, Format::Markdown, "sums.ja.md"),
+    // the properties of a module (DESIGN 38), with no proof beside it and with one
+    ("tests/properties/shares.kn", Lang::En, Format::Markdown, "shares.en.md"),
+    ("tests/properties/shares.ja.kn", Lang::Ja, Format::Markdown, "shares.ja.md"),
+    ("tests/properties/in_place.kn", Lang::En, Format::Markdown, "in_place.en.md"),
 ];
 
 /// The page of a file, with every language joined and no verdicts: as the crate's tests join them.

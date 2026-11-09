@@ -12,6 +12,10 @@ fn bill(
   description "The price times the quantity of every line"
   sum(lines, l => price * l.qty)
 
+property bill_is_the_price_times_the_quantities(lines: list[Line] count >=1 <=30, price: money[USDc] range >=1USDc <=1000USDc)
+  description "The bill is the price times all the quantities together"
+  bill(lines: lines, price: price) = price * sum(lines, l => l.qty)
+
 examples
   bill(lines: [Line { sku: "book-1", qty: 2 }], price: 150USDc) = 300USDc
   bill(lines: [Line { sku: "book-1", qty: 2 }, Line { sku: "mug-1", qty: 1 }], price: 150USDc) = 450USDc

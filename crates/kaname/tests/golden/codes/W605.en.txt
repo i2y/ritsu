@@ -1,0 +1,7 @@
+warning[W603]: example.kn:3:1: The property `past_the_end` is not shown: there is no proof of it (example.lean holds no theorem of it)
+     3 | property past_the_end(x: number range >=0 <=100)
+  = `ritsu gen --target lean` writes `samples/example.lean`, the theorems' names with `sorry` for their proofs: put it beside the .kn as example.lean, and write the proofs in place of `sorry`.
+warning[W605]: example.kn:3:1: The `when` lines of the property `past_the_end` hold on none of its 3 vectors
+     3 | property past_the_end(x: number range >=0 <=100)
+  = A property whose `when` lines hold for no input can be proved whatever it says: look again at its `when` lines and the ranges of its parameters.
+ok example.kn: 0 functions

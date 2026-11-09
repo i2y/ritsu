@@ -12,6 +12,10 @@ fn 請求額(bill)(
   description "どの明細も、単価に数量を掛けて足す"
   sum(明細, 一件 => 単価 * 一件.数量)
 
+property 請求額は単価と数量の合計の積(bill_is_the_price_times_the_quantities)(明細(lines): list[明細] count >=1 <=30, 単価(price): money[USDc] range >=1USDc <=1000USDc)
+  description "請求額は、単価に数量の合計を掛けたものになる"
+  請求額(明細: 明細, 単価: 単価) = 単価 * sum(明細, 一件 => 一件.数量)
+
 examples
   請求額(明細: [明細 { 品番: "book-1", 数量: 2 }], 単価: 150USDc) = 300USDc
   請求額(明細: [明細 { 品番: "book-1", 数量: 2 }, 明細 { 品番: "mug-1", 数量: 1 }], 単価: 150USDc) = 450USDc

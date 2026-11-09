@@ -86,7 +86,7 @@ See also: [E003](#e003)
 
 ## E005 — A name the generated code takes needs an ASCII alias
 
-**When**: The name of a module, a function, a parameter, a record, a field, an enum or a value of one is not ASCII and has no alias; or an alias is no ASCII name (a letter or `_`, then letters, digits and `_`). A `let` and a parameter of a function given to a builtin need none.
+**When**: The name of a module, a function, a property, a parameter, a record, a field, an enum or a value of one is not ASCII and has no alias; or an alias is no ASCII name (a letter or `_`, then letters, digits and `_`). A property's name is the name of the theorem written for Lean. A `let` and a parameter of a function given to a builtin need none.
 
 **Fix**: Write an alias in parentheses right after the name: `請求日(invoiced)`.
 
@@ -733,9 +733,9 @@ See also: [E303](#e303)
 
 ## E401 — The function does more than the effect written on it
 
-**When**: A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. An overflow that comes from the end of a type, of a value whose range is not written, is a place that can fail with `overflow` too. The effects of the functions it calls count. A call of a function value counts the effect written on its function type; with none written it counts nothing, and the effect of the function given is in the function that gives it. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count.
+**When**: A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. An overflow that comes from the end of a type, of a value whose range is not written, is a place that can fail with `overflow` too. The effects of the functions it calls count. A call of a function value counts the effect written on its function type; with none written it counts nothing, and the effect of the function given is in the function that gives it. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count. A property is held to `total` too, and one whose body has a place that can fail says it.
 
-**Fix**: Make the places the notes give shown (write the branch that narrows the value, or the range of a value with none), or widen the effect written; a recursive function is written `diverges`.
+**Fix**: Make the places the notes give shown (write the branch that narrows the value, or the range of a value with none), or widen the effect written; a recursive function is written `diverges`. A property narrows the values that reach the places with `when` lines or the ranges of its parameters.
 
 **Example**:
 
@@ -830,6 +830,145 @@ examples
 ```
 
 See also: [E601](#e601)
+
+<a id="e603"></a>
+
+## E603 — A property is false for an input
+
+**When**: The property, run on the vectors made from the ranges of its parameters and the comparisons of its `when` lines, is false for one of them. The first such input is given, with the values of the property's `let` lines; the property is not sent to Lean.
+
+**Fix**: Correct the function or the property. A property of some of the inputs narrows them with `when` lines.
+
+**Example**:
+
+```kn
+module example v1
+
+fn double(n: number range >=0 <=9) -> number total
+  n * 2
+
+property double_is_more(n: number range >=0 <=9)
+  double(n: n) > n
+```
+
+See also: [W603](#w603), [E601](#e601)
+
+<a id="e604"></a>
+
+## E604 — Lean does not take the proof
+
+**When**: `--lean` checks the proof file and does not take it: the file holds what a proof file may not (what, and on which line); it does not build (Lean's error, at its line in the proof file); a theorem's type is not the property's statement; a theorem rests on an axiom other than `propext`, `Classical.choice` and `Quot.sound` (`sorryAx` for a `sorry`, and `native_decide` by that name); the name is declared as something other than a theorem; the kernel does not take a declaration; the file cannot be read beside the Lean written from the .kn; or Lean does not finish in time. What is wrong with the file as a whole is said once, of the file.
+
+**Fix**: Mend what the notes say. For each property, `theorem <property's alias> : Kaname.<module's alias>.<property's alias>` goes in the namespace `Proofs.<module's alias>`; the file imports only `Kaname.…`.
+
+**Example**:
+
+```kn
+module example v1
+
+fn double(n: number range >=0 <=9) -> number total
+  n * 2
+
+property double_is_even(n: number range >=0 <=9)
+  mod(double(n: n), 2) = 0
+```
+
+`example.lean`:
+
+```
+import Kaname.example
+
+#eval IO.println "run in the build"
+
+namespace Proofs.example
+
+theorem double_is_even : Kaname.example.double_is_even := by
+  intro n _ _
+  unfold Kaname.example.double
+  omega
+
+end Proofs.example
+```
+
+See also: [W603](#w603), [W604](#w604)
+
+<a id="e605"></a>
+
+## E605 — A parameter of a property is of a function type
+
+**When**: A parameter of a property is written with a function type (`(number) -> number` and the like). A property is tried on vectors, which cannot make a function value.
+
+**Fix**: Call the function the property is about by its name in the body.
+
+**Example**:
+
+```kn
+module example v1
+
+property twice_is_no_less(step: (number) -> number, x: number range >=0 <=10)
+  step(step(x)) >= x
+```
+
+<a id="w603"></a>
+
+## W603 — A property is not shown
+
+**When**: A property held on every vector, and Lean has taken no proof of it: there is no proof (no `<alias>.lean` beside the .kn, or no theorem of it there); there is one, and `--lean` did not run; or it rests on what a rule or a date answers and there is no proof (a proof may use only what the port says of those answers).
+
+**Fix**: Put `samples/<alias>.lean`, which `ritsu gen --target lean` writes, beside the .kn as `<alias>.lean`, write the proofs in place of `sorry`, and check them with `--lean`.
+
+**Example**:
+
+```kn
+module example v1
+
+fn double(n: number range >=0 <=9) -> number total
+  n * 2
+
+property double_is_even(n: number range >=0 <=9)
+  mod(double(n: n), 2) = 0
+```
+
+See also: [E603](#e603), [E604](#e604), [W604](#w604), [W605](#w605)
+
+<a id="w604"></a>
+
+## W604 — A property cannot be written for Lean
+
+**When**: The property, or a function it calls, uses what is not written for Lean yet: a dict, a set, a builtin of strings, a builtin that uses the order of keys, a type parameter held to keys. A property that calls a function of another module that takes its rules and dates as `Inner` is said of with `--lean`. Their vectors run all the same.
+
+**Fix**: Write the property in a form that is written for Lean, or leave it as it is if its vectors are enough.
+
+**Example**:
+
+```kn
+module example v1
+
+property trimming_twice_is_trimming_once(name: string)
+  name.trim().trim() = name.trim()
+```
+
+See also: [W603](#w603)
+
+<a id="w605"></a>
+
+## W605 — The `when` lines of a property hold on no vector
+
+**When**: The `when` lines of a property hold on none of its vectors. A property whose `when` lines hold for no input can be proved whatever it says. It is said beside the property's W603.
+
+**Fix**: Look again at the `when` lines and the ranges of the parameters.
+
+**Example**:
+
+```kn
+module example v1
+
+property past_the_end(x: number range >=0 <=100)
+  when x > 200
+  x >= 0
+```
+
+See also: [W603](#w603)
 
 <a id="w901"></a>
 

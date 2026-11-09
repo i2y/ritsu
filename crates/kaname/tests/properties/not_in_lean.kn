@@ -1,0 +1,31 @@
+module not_in_lean v1
+description "Properties that each use one thing that is not written for Lean yet: their vectors run all the same"
+
+record Task
+  name     : string
+  priority : number  range >=1 <=5
+
+fn largest[K: key](xs: list[K]) -> K?
+  xs.sort().last()
+
+property a_key_for_each_entry(prices: dict[string, number])
+  description "A dict has as many keys as entries"
+  prices.keys().count() = prices.count()
+
+property no_more_members_than_names(names: list[string] count >=0 <=3)
+  description "A set of the names holds no more than the names"
+  names.to_set().count() <= names.count()
+
+property trimming_twice_is_trimming_once(name: string)
+  description "A name trimmed again is as it was trimmed once"
+  name.trim().trim() = name.trim()
+
+property sorting_keeps_the_tasks(tasks: list[Task] count >=0 <=3)
+  description "Sorted by priority, the tasks are as many"
+  tasks.sort_by(t => t.priority).count() = tasks.count()
+
+property the_largest_is_one_of_them(xs: list[number] count >=1 <=3)
+  description "The largest of a list is one of its numbers"
+  match largest(xs: xs)
+    none => false
+    some x => xs.any(y => y = x)

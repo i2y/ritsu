@@ -1,0 +1,262 @@
+{
+  "kaname": "<version>",
+  "file": "refund_split.ja.kn",
+  "module": {
+    "name": "返金の按分",
+    "alias": "refund_split_ja",
+    "version": "v1",
+    "description": "注文の明細に、まだ払われていない残りの比で返金を配る。配った分の合計がちょうど返金額になる。refund_split.kn の日本語の版",
+    "sha256": "b5377135ed59a0797a5131064182c5274a036621854466ac796ffc875502d1b4"
+  },
+  "generated": {
+    "typescript": "glue/refund_split_ja.ts",
+    "python": "glue/refund_split_ja.py",
+    "go": "glue/refundsplitja/refundsplitja.go",
+    "rust": "glue/refund_split_ja.rs"
+  },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "返金の按分"
+    },
+    "functions": [
+      "按分する"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ]
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "明細",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5
+        },
+        {
+          "name": "残り",
+          "alias": "left",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000000USDc",
+          "count": null,
+          "line": 6
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line",
+        "rust": "Line"
+      }
+    },
+    {
+      "name": "明細の返金",
+      "alias": "Share",
+      "fields": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "残り",
+          "alias": "left",
+          "type": "money[USDc]",
+          "range": null,
+          "count": null,
+          "line": 10
+        },
+        {
+          "name": "配分",
+          "alias": "share",
+          "type": "money[USDc]",
+          "range": null,
+          "count": null,
+          "line": 11
+        }
+      ],
+      "line": 8,
+      "generated": {
+        "typescript": "Share",
+        "python": "Share",
+        "go": "Share",
+        "rust": "Share"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "按分する",
+      "alias": "split",
+      "line": 13,
+      "description": "どの明細にも、その明細の終わりまでの返金から、手前までの返金を引いた分を配る",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "返金",
+          "alias": "refund",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[明細の返金]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "split",
+        "python": "split",
+        "go": "Split",
+        "rust": "split"
+      },
+      "check": {
+        "go": "CheckSplit",
+        "rust": "check_split"
+      }
+    }
+  ],
+  "properties": [
+    {
+      "name": "配分の合計は返金額",
+      "alias": "shares_add_up",
+      "line": 18,
+      "description": "配った分を足すと返金額になる",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "返金",
+          "alias": "refund",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
+    },
+    {
+      "name": "負の配分は無い",
+      "alias": "no_share_is_negative",
+      "line": 22,
+      "description": "どの明細にも、負の額は配らない",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "返金",
+          "alias": "refund",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
+    },
+    {
+      "name": "残りより多くは配らない",
+      "alias": "no_share_is_more_than_its_left",
+      "line": 26,
+      "description": "残りの合計を超えない返金なら、どの明細にも、その明細の残りより多くは配らない",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "返金",
+          "alias": "refund",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 1
+    }
+  ],
+  "transfers": []
+}

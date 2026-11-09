@@ -6,7 +6,7 @@
     "alias": "late_payment_ja",
     "version": "v1",
     "description": "遅れて払われた請求書について、売り手が請求するもの。期日、何日遅れて払われたか、規則がそれに付ける定額と利息。late_payment.kn の日本語の版",
-    "sha256": "b5276356b2150cffa82af03a51299ef6ff1a5237fc44625927848a9f4c620b3a"
+    "sha256": "43d8ed09c65723fdc43f4e7aaa6513c500f64fe807a45fdbe7c3f499769a49db"
   },
   "generated": {
     "typescript": "glue/late_payment_ja.ts",
@@ -249,6 +249,38 @@
         "go": "CheckClaimFn",
         "rust": "check_claim"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "期日までに払えば請求は無い",
+      "alias": "nothing_is_claimed_when_paid_on_time",
+      "line": 28,
+      "description": "期日までに払われた請求書には、期限がどの日を期日にしても、請求が無い",
+      "params": [
+        {
+          "name": "請求書",
+          "alias": "invoice",
+          "type": "請求書",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "支払日",
+          "alias": "paid_on",
+          "type": "date",
+          "range": ">=2026-01-01 <=2029-12-31",
+          "count": null
+        },
+        {
+          "name": "基準金利",
+          "alias": "reference_rate",
+          "type": "rate[step 0.01%]",
+          "range": ">=0% <=15%",
+          "count": null
+        }
+      ],
+      "when": 1
     }
   ],
   "transfers": []

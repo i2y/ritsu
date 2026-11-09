@@ -83,9 +83,13 @@ takes, which is what `total` says:
 ```console
 $ cd crates/kaname/examples/order_flow
 $ ritsu check
+warning[kaname W603]: order_flow.ja.kn:92:1: The property `閉じた注文はイベントを受け付けない` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow_ja.lean is checked with `--lean`
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok order_flow.ja.kn: 5 functions, total
+warning[kaname W603]: order_flow.kn:92:1: The property `a_closed_order_takes_no_event` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow.lean is checked with `--lean`
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok order_flow.kn: 5 functions, total
-ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+ritsu check: 2 files (kaname 2): all pass (2 warnings); borders between the languages: 0 checked, 0 undecided
 ```
 
 `ritsu gen` writes the module into the package it writes for each of TypeScript, Python, Go and
@@ -146,8 +150,12 @@ and Go, and [Writing kaname](language.md) what they are written with.
   English and in Japanese.
 - The evaluation and the analysis of ranges are written again in Lean, with proofs that the analysis
   is sound and that a function it finds total does not fail.
+- A claim about every input of a function can be written as a `property`. `check` tries it on the
+  inputs it chooses, `ritsu gen --target lean` writes it as the statement of a theorem, and a proof
+  that someone writes beside the `.kn` is checked by Lean.
 
-[What the check guarantees](checks.md) shows each, with what `kaname check` prints.
+[What the check guarantees](checks.md) shows each, with what `kaname check` prints, and
+[Properties and proofs](properties.md) the last.
 
 ## Read more
 

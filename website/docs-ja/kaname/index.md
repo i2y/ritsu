@@ -67,9 +67,13 @@ fn next(order: Order, event: Event) -> result[Order, string]
 ```console
 $ cd crates/kaname/examples/order_flow
 $ ritsu check --lang ja
+警告[kaname W603]: order_flow.ja.kn:92:1: 性質 `閉じた注文はイベントを受け付けない` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow_ja.lean の証明は `--lean` で確かめます
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok order_flow.ja.kn: 関数 5 個、total
+警告[kaname W603]: order_flow.kn:92:1: 性質 `a_closed_order_takes_no_event` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow.lean の証明は `--lean` で確かめます
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok order_flow.kn: 関数 5 個、total
-ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所
 ```
 
 `ritsu gen` は、このモジュールを、TypeScript、Python、Go、Rust のそれぞれのパッケージに書きます。注文を持ち、イベントが来るたびにそのコードを呼ぶのはホストです。次は TypeScript のホスト（`host/main.ts`）で、横にある Python と Go のホストも同じものを出力します。ホストは英語の版（`order_flow.kn`）から生成したコードを呼ぶので、拒む理由も英語で出ます。
@@ -115,8 +119,9 @@ cancel: refused: the order is closed
 - エラーには、それを起こす入力が付きます。示すことも、外れる入力を見つけることもできない場所は警告になり、生成したコードがそこで確かめます。
 - TypeScript、Python、Go、Rust に生成したコードとパッケージの Wasm は、例とテストの 52 のモジュールのすべてのベクタで、参照インタプリタと同じ答えを返します。英語の版でも日本語の版でも同じです。
 - 評価と範囲の解析は Lean でも書いてあり、範囲の解析が健全であることと、total と推論した関数が失敗しないことを証明しています。
+- 関数の入力の全部についての主張は、`property` として書けます。`check` が選んだ入力で試し、`ritsu gen --target lean` が定理の文に書き出し、`.kn` の隣に誰かが書いた証明を Lean が確かめます。
 
-それぞれを、`kaname check` の出力と一緒に[検査が保証すること](checks.md)で説明します。
+それぞれを、`kaname check` の出力と一緒に[検査が保証すること](checks.md)で説明します。最後の一つは[性質と証明](properties.md)で説明します。
 
 ## もっと読む
 

@@ -31,14 +31,14 @@ error: ritsu.mod has no `library go` line: write `library go "<name>"`, the name
 エラー: ritsu.mod に `library go` の行がありません。パッケージの名前にする `library go "<名前>"` を書いてください
 
 ── pricing: ritsu gen --library (library lines: tax)
-error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
-エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|cedar` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar|lean`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
+エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|cedar|lean` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
 
 ── pricing: ritsu gen --library (library lines: tax, pricing, shop)
-error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar|lean`, or write them on the `target` line of the module's ritsu.mod (`target typescript python go`)
 note: up to 0.40.0, `ritsu gen --library` with no `--target` wrote a library for each language of the `library` lines; this writes the same files:
   ritsu gen --library --out <dir>/out --lang en --target typescript --target python --target go
-エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|cedar` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
+エラー: `ritsu gen` が書くのは、指定した出力先だけです。`--target typescript|python|go|rust|cedar|lean` を一つ以上付けるか、モジュールの ritsu.mod に `target` の行（`target typescript python go`）を書いてください
 注記: 0.40.0 までの `ritsu gen --library` は、`--target` が無ければ、`library` の行の言語ごとにライブラリを書きました。同じファイルを書くのは次のコマンドです
   ritsu gen --library --out <dir>/out --lang ja --target typescript --target python --target go
 

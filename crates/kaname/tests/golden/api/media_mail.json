@@ -6,7 +6,7 @@
     "alias": "media_mail",
     "version": "v1",
     "description": "Quotes Media Mail for a cart: the weight of every item counted, and whether every item is media, handed to the rule",
-    "sha256": "9a15b4834e4b79c2de9ec05f9b775df7655d8dfb3182476865dcab509dc6816e"
+    "sha256": "7feb54c419a5463e6e2ac9b52838a9aaff476441b071eae1edd8ac78294a624b"
   },
   "generated": {
     "typescript": "glue/media_mail.ts",
@@ -217,6 +217,24 @@
         "go": "CheckQuote",
         "rust": "check_quote"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "nothing_heavier_than_15lb_is_quoted",
+      "alias": "nothing_heavier_than_15lb_is_quoted",
+      "line": 23,
+      "description": "A cart heavier than 15 pounds gets no quote, whatever the rule answers",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=30"
+        }
+      ],
+      "when": 1
     }
   ],
   "transfers": []

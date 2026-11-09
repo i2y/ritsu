@@ -92,6 +92,9 @@ pub struct Project {
     /// Whether the `.geas` files of the module at hand are run. False, they are only read: `ritsu
     /// check --no-claims`, and what checks a module someone else wrote or a revision not on the disk.
     pub run_claims: bool,
+    /// How Lean holds the proofs beside the modules of kaname to their properties (`ritsu check
+    /// --lean`, kaname's DESIGN 38.6); none when they are not checked.
+    pub lean: Option<kaname::lean::LeanOptions>,
 }
 
 impl Project {
@@ -168,7 +171,7 @@ impl Project {
         }
         let files = rels.into_iter().map(|(tool, rel)| File { tool, shown: shown.path(&rel), rel }).collect();
         let tree = module.then(|| ritsu_base::modules::tree(&root));
-        let mut p = Project { root, shown, given, root_flag: root_flag.map(str::to_string), files, skipped, tree, whole, not_run: Vec::new(), run_claims: true };
+        let mut p = Project { root, shown, given, root_flag: root_flag.map(str::to_string), files, skipped, tree, whole, not_run: Vec::new(), run_claims: true, lean: None };
         p.leave_out_claims();
         if p.files.is_empty() {
             let gs = p.given.join(" ");

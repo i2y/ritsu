@@ -6,7 +6,7 @@
     "alias": "order_flow_ja",
     "version": "v1",
     "description": "ホストが渡すイベントで、注文を状態から状態へ進める。状態はそれぞれのフィールドを持つ直和型の値で、次の状態か、イベントを拒む理由を、状態とイベントの match で決める。order_flow.kn の日本語の版",
-    "sha256": "563b9534b5ac6c12c9e520a6adcc5a66a1e8a96921e0ac5ff02aea3ec2148633"
+    "sha256": "50ca90e7fdd3f28204fc99b677e6d83a7f93b2f74a274d879f70950555a12f17"
   },
   "generated": {
     "typescript": "glue/order_flow_ja.ts",
@@ -626,6 +626,31 @@
         "go": "CheckOpen",
         "rust": "check_open"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "閉じた注文はイベントを受け付けない",
+      "alias": "a_closed_order_takes_no_event",
+      "line": 92,
+      "description": "発送済みか取り消し済みの注文は、どのイベントも理由を言って拒む",
+      "params": [
+        {
+          "name": "注文",
+          "alias": "order",
+          "type": "注文",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "イベント",
+          "alias": "event",
+          "type": "イベント",
+          "range": null,
+          "count": null
+        }
+      ],
+      "when": 1
     }
   ],
   "transfers": []

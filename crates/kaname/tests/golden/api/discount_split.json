@@ -6,7 +6,7 @@
     "alias": "discount_split",
     "version": "v1",
     "description": "Spreads a discount over the lines of a bill in proportion to their amounts, a line at a time through the rule, so that the shares come to the discount",
-    "sha256": "0fd204b8bd5c18fbe559fb98267d7ab52ab89b19bde35273c08465546f95a2ee"
+    "sha256": "3c55db386d63a643570f0b5903734a55dbd6b15571547c1c0328805898ae4036"
   },
   "generated": {
     "typescript": "glue/discount_split.ts",
@@ -212,6 +212,54 @@
         "go": "CheckSplit",
         "rust": "check_split"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "every_line_keeps_its_label",
+      "alias": "every_line_keeps_its_label",
+      "line": 19,
+      "description": "Each line gets one share, under its own label, in the order of the lines",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "discount",
+          "alias": "discount",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
+    },
+    {
+      "name": "shares_add_up",
+      "alias": "shares_add_up",
+      "line": 23,
+      "description": "The shares come to the discount: this rests on what the rule answers, which a proof knows only as far as the port says",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "discount",
+          "alias": "discount",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
     }
   ],
   "transfers": []

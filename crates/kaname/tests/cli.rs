@@ -58,11 +58,24 @@ fn what_stops_the_command() {
 #[test]
 fn check_exits_by_what_it_finds() {
     // the functions with their effects (DESIGN 11.1): the amounts of the transfers wait for the
-    // checks across the languages (PLAN C3), and are counted as undecided until then
+    // checks across the languages (PLAN C3), and are counted as undecided until then; a property
+    // whose proof waits for `--lean` is a warning (DESIGN 38.3), and the file passes
     let (code, out, _) = joined(&["check", "examples/payout/payout.kn", "examples/media_mail/media_mail.kn"]);
-    assert_eq!((code, out.as_str()), (0, "ok examples/payout/payout.kn: 1 function, fails range\nok examples/media_mail/media_mail.kn: 2 functions, total\n"));
+    assert_eq!(
+        (code, out.as_str()),
+        (
+            0,
+            "ok examples/payout/payout.kn: 1 function, fails range\nwarning[W603]: examples/media_mail/media_mail.kn:23:1: The property `nothing_heavier_than_15lb_is_quoted` held on all 7 of its 9 vectors on which its `when` lines are true, but it is not shown: the proof in media_mail.lean is checked with `--lean`\n    23 | property nothing_heavier_than_15lb_is_quoted(lines: list[Line] count >=1 <=30)\nok examples/media_mail/media_mail.kn: 2 functions, total\n"
+        )
+    );
     let (code, out, _) = joined(&["check", "examples/media_mail/media_mail.ja.kn", "--lang", "ja"]);
-    assert_eq!((code, out.as_str()), (0, "ok examples/media_mail/media_mail.ja.kn: 関数 2 個、total\n"));
+    assert_eq!(
+        (code, out.as_str()),
+        (
+            0,
+            "警告[W603]: examples/media_mail/media_mail.ja.kn:23:1: 性質 `十五ポンドより重いカートは見積もらない` は、`when` の行が成り立つ 7 個のベクタ（9 個のうち）のすべてで成り立ちましたが、示されていません。media_mail_ja.lean の証明は `--lean` で確かめます\n    23 | property 十五ポンドより重いカートは見積もらない(nothing_heavier_than_15lb_is_quoted)(明細(lines): list[明細] count >=1 <=30)\nok examples/media_mail/media_mail.ja.kn: 関数 2 個、total\n"
+        )
+    );
     let t = TempDir::new("kaname-cli");
     let bad = t.write("bad.kn", "module bad v1\n\nfn f() -> number\n  x\n");
     let bad = bad.to_str().unwrap();
@@ -80,7 +93,7 @@ fn check_in_json() {
     assert_eq!(code, 0);
     let v = ritsu_base::json::parse(&out).unwrap();
     let keys: Vec<&str> = v.as_obj().unwrap().iter().map(|(k, _)| k.as_str()).collect();
-    assert_eq!(keys, ["kaname", "file", "ok", "summary", "functions", "diagnostics"]);
+    assert_eq!(keys, ["kaname", "file", "ok", "summary", "functions", "properties", "diagnostics"]);
     assert_eq!(v.get("file").and_then(|f| f.as_str()), Some("late_payment/late_payment.kn"));
     assert_eq!(v.get("summary").and_then(|f| f.as_str()), Some("1 function, fails date"));
     // each function with its effect, what is written, and the places that are not shown: the date
@@ -89,6 +102,11 @@ fn check_in_json() {
     assert_eq!(
         f.compact(),
         r#"{"function":"claim","effect":{"fails":["date"],"diverges":false},"written":{"total":true,"fails":[],"diverges":false},"places":[{"line":20,"kind":"date","check":"koyomi_date_input","code":null,"outcome":"waiting"}],"calls":[]}"#
+    );
+    // each property with its answer: the proof beside it waits for `--lean` (DESIGN 38.3)
+    assert_eq!(
+        v.get("properties").unwrap().compact(),
+        r#"[{"name":"nothing_is_claimed_when_paid_on_time","line":28,"outcome":"undecided","reason":"lean-not-run","code":"W603","vectors":19,"held":10,"input":null}]"#
     );
     let t = TempDir::new("kaname-json");
     let bad = t.write("bad.kn", "module bad v1\n\nfn f(r: rate) -> number\n  0\n");
@@ -101,6 +119,7 @@ fn check_in_json() {
     assert_eq!(d.get("message").and_then(|c| c.as_str()), Some("関数 `f` の引数 `r` に、率の刻み（`rate[step 0.01%]`）がありません"));
     assert!(v.get("summary").unwrap().is_null());
     assert!(v.get("functions").unwrap().is_null());
+    assert!(v.get("properties").unwrap().is_null());
 }
 
 #[test]
@@ -115,7 +134,7 @@ fn explain() {
     assert!(out.contains("    module 例(example) v1\n"), "{out}");
     let (code, out, _) = joined(&["explain", "--all", "--format", "json"]);
     assert_eq!(code, 0);
-    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 41);
+    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 47);
     let (code, out, _) = joined(&["explain", "W501"]);
     assert_eq!(code, 0);
     assert!(out.starts_with("W501 (warning) — A decision is written in code; a table should hold it\n"), "{out}");

@@ -12,9 +12,12 @@ name: proofs
 # rulec-recheck is the certificate's checks themselves, so running it over the corpus is the
 # proofs applied to every document there; ritsu-model runs the models, and is held to each
 # language's reference interpreter and to the checks of ritsu-cross on every input the tests make
-# (crates/ritsu-model). It runs when the proofs change, or what they are about: the sources of the
-# languages and of the checks across them, the base layer's (the digest and the JSON), the corpus,
-# and the books, dates files, flows and modules of kaname the comparisons run.
+# (crates/ritsu-model). kaname's `--lean` runs here too, the one place Lean is installed for it: it
+# takes the proofs of the examples' properties and turns away each way of breaking one (kaname's
+# tests/lean.rs and ritsu's). It runs when the proofs change, or what they are about: the sources of
+# the languages and of the checks across them, the base layer's (the digest and the JSON), the
+# corpus, the books, dates files, flows and modules of kaname the comparisons run, and the proofs
+# and tests of `--lean`.
 
 on:
   push:
@@ -44,6 +47,13 @@ on:
       - "crates/kaname/examples/**"
       - "crates/kaname/tests/modules/**"
       - "crates/kaname/tests/rules/**"
+      - "crates/kaname/tests/lean.rs"
+      - "crates/kaname/tests/lean/**"
+      - "crates/kaname/tests/properties/**"
+      - "crates/kaname/tests/golden/lean/**"
+      - "crates/ritsu/tests/lean.rs"
+      - "crates/ritsu/src/check.rs"
+      - "crates/ritsu-project/src/check.rs"
       - "Cargo.lock"
       - ".github/workflows/proofs.yml"
   pull_request:
@@ -72,6 +82,13 @@ on:
       - "crates/kaname/examples/**"
       - "crates/kaname/tests/modules/**"
       - "crates/kaname/tests/rules/**"
+      - "crates/kaname/tests/lean.rs"
+      - "crates/kaname/tests/lean/**"
+      - "crates/kaname/tests/properties/**"
+      - "crates/kaname/tests/golden/lean/**"
+      - "crates/ritsu/tests/lean.rs"
+      - "crates/ritsu/src/check.rs"
+      - "crates/ritsu-project/src/check.rs"
       - "Cargo.lock"
       - ".github/workflows/proofs.yml"
   workflow_dispatch:
@@ -174,5 +191,23 @@ jobs:
           cargo test --release --locked -p ritsu-model -- --nocapture | tee "$RUNNER_TEMP/model.log"
           if grep -q "^SKIP: " "$RUNNER_TEMP/model.log"; then
             echo "::error::a comparison with the models did not run"
+            exit 1
+          fi
+
+      # kaname's tests/lean.rs and ritsu's are of the tools level (they run lake): the Lean kaname
+      # writes answers as the reference interpreter does, `--lean` takes the proofs of the examples
+      # and turns away each way of breaking one, and `ritsu check --lean` and the package `ritsu gen
+      # --target lean` writes do the same from the command line. The tools job has no Lean in the
+      # group that runs them (ci/skips/tools.txt lists their SKIP lines there); a SKIP line here
+      # would mean they did not run, so one fails the step.
+      - name: "kaname: --lean takes the examples' proofs and turns away each way of breaking one"
+        env:
+          RITSU_TEST_LEVEL: tools
+        run: |
+          set -eu -o pipefail
+          cargo test --release --locked -p kaname --test lean -- --nocapture | tee "$RUNNER_TEMP/kaname-lean.log"
+          cargo test --release --locked -p ritsu --test lean -- --nocapture | tee "$RUNNER_TEMP/ritsu-lean.log"
+          if grep -q "^SKIP: " "$RUNNER_TEMP/kaname-lean.log" "$RUNNER_TEMP/ritsu-lean.log"; then
+            echo "::error::the tests of --lean did not run"
             exit 1
           fi

@@ -1,0 +1,3 @@
+警告[W604]: example.kn:3:1: 性質 `二度刈り込んでも同じ` は、16 個のベクタのすべてで成り立ちましたが、Lean に書けません。4 行目の文字列の組み込みの関数 `trim` は、まだ Lean に書き出しません
+     3 | property 二度刈り込んでも同じ(trimming_twice_is_trimming_once)(名前(name): string)
+ok example.kn: 関数 0 個

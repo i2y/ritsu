@@ -80,8 +80,9 @@ people.
   to a Wasm module that any host calls with one JSON object.
   [The kaname pages](kaname/index.md) show [how a module is written](kaname/language.md),
   [four functional cores called from TypeScript, Python and Go](kaname/examples.md),
-  [what the check guarantees](kaname/checks.md) and
-  [how a module calls rules, dates and books](kaname/together.md).
+  [what the check guarantees](kaname/checks.md),
+  [how a module calls rules, dates and books](kaname/together.md) and
+  [how a claim about every input is proved in Lean](kaname/properties.md).
 
 ## Where the languages meet
 

@@ -1,3 +1,7 @@
 ok rules/discount_share.rule
+warning[kaname W603]: discount_split.kn:19:1: The property `every_line_keeps_its_label` held on all 12 vectors, but it is not shown: it rests on the answers of the rule `discount_share`, and a proof may use only what the port says of them
+    19 | property every_line_keeps_its_label(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc)
+warning[kaname W603]: discount_split.kn:23:1: The property `shares_add_up` held on all 12 vectors, but it is not shown: it rests on the answers of the rule `discount_share`, and a proof may use only what the port says of them
+    23 | property shares_add_up(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc)
 ok discount_split.kn: 1 function, total
-ritsu check: 2 files (rulec 1, kaname 1): all pass; borders between the languages: 2 checked, 0 undecided
+ritsu check: 2 files (rulec 1, kaname 1): all pass (2 warnings); borders between the languages: 2 checked, 0 undecided

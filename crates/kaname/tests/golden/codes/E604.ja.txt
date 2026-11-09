@@ -1,0 +1,4 @@
+エラー[E604]: example.lean:3:1: 証明のファイルには `#eval` を書けないので、example.lean はビルドしません。`倍は偶数` を示せません
+     3 | #eval IO.println "run in the build"
+  = ビルドの中でコードを走らせるか、ファイルの残りの読み方を変える構文を足すものです。証明にはどちらも要りません。
+  = `--lean` は、example.kn から書き直した Lean に対して証明をビルドし、性質ごとに、型が `Kaname.example.<性質>` で、`propext`・`Classical.choice`・`Quot.sound` のほかの公理に頼らない定理 `Proofs.example.<性質>` を受け付けます。

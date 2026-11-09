@@ -62,6 +62,7 @@ $ kaname check --lang en checkout/basket.kn --format json
       ]
     }
   ],
+  "properties": [],
   "diagnostics": []
 }
 exit 0
@@ -97,6 +98,7 @@ $ kaname check --lang en errors/missing.kn --format json
   "ok": false,
   "summary": null,
   "functions": null,
+  "properties": null,
   "diagnostics": [
     {
       "code": "E201",
@@ -134,6 +136,7 @@ $ kaname check --lang en order.kn --format json
   "ok": false,
   "summary": null,
   "functions": null,
+  "properties": null,
   "diagnostics": [
     {
       "code": "E201",

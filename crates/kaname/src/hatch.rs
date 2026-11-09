@@ -32,7 +32,9 @@ use std::collections::BTreeSet;
 /// W501 for every decision written in the module's functions.
 pub fn check(c: &Checked) -> Vec<Diag> {
     let mut h = Hatch { c, out: Vec::new(), chained: BTreeSet::new() };
-    for f in &c.module.fns {
+    // a property says what holds of a function (DESIGN 38): it decides nothing, and compares with
+    // what it likes
+    for f in c.module.fns.iter().filter(|f| f.property.is_none()) {
         h.block(&f.body);
     }
     h.out

@@ -518,7 +518,7 @@ fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
     2
 }
 
-/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims]`: the exit
+/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims] [--lean]`: the exit
 /// code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let code = run(args, lang, &mut std::io::stdout(), &mut std::io::stderr());
@@ -556,6 +556,13 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
         Err(e) => return refuse(e, lang, err),
     };
     project.run_claims = !a.has("--no-claims");
+    // `--lean` needs Lean before anything is checked (kaname's DESIGN 38.3)
+    if a.has("--lean") {
+        if kaname::lean::find_lake().is_none() {
+            return refuse(kaname::lean::LeanError::Missing.text(), lang, err);
+        }
+        project.lean = Some(kaname::lean::LeanOptions::default());
+    }
     let deps_warnings = a.has("--deps-warnings");
     let json = a.get("--format") == Some("json");
     // In a module, the tree first (DESIGN 17.8): what stops the run is said and the run stops

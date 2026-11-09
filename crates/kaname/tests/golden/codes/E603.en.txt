@@ -1,0 +1,4 @@
+error[E603]: example.kn:6:1: The property `double_is_more` is false for n: 0
+     6 | property double_is_more(n: number range >=0 <=9)
+  = `check` runs a property in the reference interpreter on the vectors of its parameters: on this one the `when` lines hold and the last line is false.
+  = Correct the function, narrow the property with `when` or the ranges of its parameters, or correct the property.

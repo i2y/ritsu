@@ -1,0 +1,4 @@
+warning[W603]: example.kn:6:1: The property `double_is_even` held on all 2 vectors, but it is not shown: there is no proof of it (example.lean holds no theorem of it)
+     6 | property double_is_even(n: number range >=0 <=9)
+  = `ritsu gen --target lean` writes `samples/example.lean`, the theorems' names with `sorry` for their proofs: put it beside the .kn as example.lean, and write the proofs in place of `sorry`.
+ok example.kn: 1 function, total

@@ -424,10 +424,20 @@ total:
 ```console
 $ cd crates/kaname/examples/order_flow
 $ ritsu check
+warning[kaname W603]: order_flow.ja.kn:92:1: The property `閉じた注文はイベントを受け付けない` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow_ja.lean is checked with `--lean`
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok order_flow.ja.kn: 5 functions, total
+warning[kaname W603]: order_flow.kn:92:1: The property `a_closed_order_takes_no_event` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow.lean is checked with `--lean`
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok order_flow.kn: 5 functions, total
-ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+ritsu check: 2 files (kaname 2): all pass (2 warnings); borders between the languages: 0 checked, 0 undecided
 ```
+
+The warnings are about a property, a claim about every input written in the module as `property`.
+`ritsu check` tries it on the inputs it chooses, `ritsu gen --target lean` writes it as the statement
+of a theorem in Lean, and `ritsu check --lean` has Lean check the proof written beside the `.kn`
+([Properties and proofs](crates/kaname/README.md#properties-and-proofs)). Until Lean takes the proof,
+the property is not shown, and W603 says so.
 
 The host keeps the order and calls the code `ritsu gen` writes of the module for each event. The
 TypeScript host (`crates/kaname/examples/order_flow/host/main.ts`, beside a Python and a Go one that
@@ -496,7 +506,7 @@ $ cd crates/kaname/examples/late_payment
 $ ritsu check
 …
 ok late_payment.kn: 1 function, total
-ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass; borders between the languages: 2 checked, 0 undecided
+ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass (2 warnings); borders between the languages: 2 checked, 0 undecided
 ```
 
 The [pages on the site](https://i2y.github.io/ritsu/kaname/) go through how a module is written, the

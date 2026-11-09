@@ -25,6 +25,11 @@ fn claim(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, refere
   else
     none
 
+property nothing_is_claimed_when_paid_on_time(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%)
+  description "An invoice paid by the day it fell due gives no claim, whatever day the terms make it fall due"
+  when paid_on <= terms.due(invoiced: invoice.invoiced)
+  claim(invoice: invoice, paid_on: paid_on, reference_rate: reference_rate) = none
+
 # The first is GOV.UK's example: £1,000 at a base rate of 0.5%, paid 50 days late.
 examples
   claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)

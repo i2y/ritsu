@@ -434,6 +434,28 @@ impl<'a> Dc<'a> {
 
     // ── Names ───────────────────────────────────────────────────────────────────
 
+    /// E005 for a name of a property or of its parameters (DESIGN 38.2), which Lean takes and no
+    /// host's code: the alias of one that is not ASCII. The words the hosts' languages keep do not
+    /// matter to it (the Lean writes its own keywords in `«»`).
+    fn lean_name(&mut self, n: &Name, what: &Text) {
+        match &n.alias {
+            None if !ritsu_emit::ident::is_ascii_ident(&n.text) => {
+                let t = &n.text;
+                self.err("E005", n.span, tr!("{} `{t}` に、ASCII の別名がありません", "The {} `{t}` has no ASCII alias", what.ja; what.en)).notes.push(tr!(
+                    "性質とその引数の名前は、Lean に書き出す定理の文の名前になります。ASCII でなければ、関数と同じく `{t}(name)` のように丸括弧で ASCII の別名を付けてください。",
+                    "The names of a property and of its parameters are those of the statement it is written as for Lean: one that is not ASCII takes an ASCII alias in parentheses, as a function's does: `{t}(name)`."
+                ));
+            }
+            Some((a, sp)) if !ritsu_emit::ident::is_ascii_ident(a) => {
+                let sp = *sp;
+                self.err("E005", sp, tr!("別名 `{a}` が ASCII の名前ではありません", "The alias `{a}` is not an ASCII name"))
+                    .notes
+                    .push(tr!("別名は、英字か `_` で始まり、英字・数字・`_` だけでできた名前にしてください。", "An alias starts with a letter or `_` and has only letters, digits and `_`."));
+            }
+            _ => {}
+        }
+    }
+
     /// E005 and E007 for a name the generated code takes.
     fn public_name(&mut self, n: &Name, what: &Text) {
         match &n.alias {
@@ -504,8 +526,12 @@ impl<'a> Dc<'a> {
         for r in &m.records {
             all.push((r.name.clone(), tr!("レコード", "record")));
         }
-        for f in &m.fns {
+        for f in m.fns.iter().filter(|f| f.property.is_none()) {
             all.push((f.name.clone(), tr!("関数", "function")));
+        }
+        // a property is in the space of the functions (DESIGN 38.2), and is never called
+        for p in &m.properties {
+            all.push((p.name.clone(), tr!("性質", "property")));
         }
         self.unique(all.iter().map(|(n, w)| (n, w.clone())));
         // a function or a `use` name spelled like a builtin: which one a call names would not be
@@ -547,11 +573,18 @@ impl<'a> Dc<'a> {
                 self.public_name(&f.name, &tr!("フィールド", "field"));
             }
         }
-        for f in &m.fns {
+        for f in m.fns.iter().filter(|f| f.property.is_none()) {
             self.public_name(&f.name, &tr!("関数", "function"));
             self.unique(f.params.iter().map(|p| (&p.name, tr!("引数", "parameter"))));
             for p in &f.params {
                 self.public_name(&p.name, &tr!("引数", "parameter"));
+            }
+        }
+        for p in &m.properties {
+            self.lean_name(&p.name, &tr!("性質", "property"));
+            self.unique(p.params.iter().map(|x| (&x.name, tr!("引数", "parameter"))));
+            for x in &p.params {
+                self.lean_name(&x.name, &tr!("引数", "parameter"));
             }
         }
         // the type parameters: in the space of the types, apart from the module's records and enums
@@ -1218,7 +1251,8 @@ impl<'a> Dc<'a> {
         );
         let mut said: Vec<(Span, Text)> = Vec::new();
         for (fi, f) in d.fns.iter().enumerate() {
-            if f.private {
+            // a property is no host's to call (DESIGN 38.2): it may take what is `private`
+            if f.private || self.module.fns[fi].property.is_some() {
                 continue;
             }
             let fun = f.name.text.clone();

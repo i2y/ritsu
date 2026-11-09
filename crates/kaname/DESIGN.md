@@ -21,7 +21,7 @@ Functional Core を書くための小さな汎用の言語。ファイルは `.k
 - 18〜20 章：捨てた形、まだやらないこと、決めたこと。
 - 21〜28 章：汎用のコアを書く型と式。汎用の言語としての芯、範囲を書かない値、直和型と `match`、辞書と集合、文字列、ジェネリクスと `result`、関数の値、再帰する型と `private`。
 - 29〜30 章：入れないものと、rulec との関係。
-- 31〜36 章：あとから足した決まり（サイトのコードの色、規則の答えの範囲と `running_totals`、Lean の関係、`ritsu check` の JSON、確かめの語、Rust の出力先とパッケージの Wasm）。
+- 31〜38 章：あとから足した決まり（サイトのコードの色、規則の答えの範囲と `running_totals`、Lean の関係、`ritsu check` の JSON、確かめの語、Rust の出力先とパッケージの Wasm、値の出どころの `fed by`、関数の性質と Lean の証明）。
 
 ## 0. 全体像
 
@@ -1460,7 +1460,7 @@ ritsu kaname explain <code> | --all [--format markdown|json]
 ```
 
 
-- `check`：字句と構文、名前、読むファイル、型、範囲の解析（kaname 自身の確かめと、ritsu-cross の答え）、エフェクト、逃げ道の警告、`examples` を確かめる。ritsu-cross の答えは、`ritsu kaname` と `ritsu check` が渡す（4.3）。言語をまたぐ判定の診断（ritsu の E201〜W205）は、`ritsu check` が ritsu-cross の診断として出し、`ritsu kaname check` は、その答えでエフェクトを決めて E401 の注に挙げる。範囲の解析とエフェクトと逃げ道の警告は、型の確かめを通ったモジュールにだけかけ、`examples` は、それまでにエラーの無いモジュールにだけ流す。最後の行は、ファイルごとに関数の数とエフェクトを言う（「ok late_payment.kn: 1 function, fails date」、日本語は「ok late_payment.ja.kn: 関数 1 個、fails date」。4.5）。`--format json` はファイルごとに一つの JSON で、`{"kaname", "file", "ok", "summary", "functions", "diagnostics"}` の順に書く（`file` と診断の `file` はルートからのパス、`summary` は最後の行の `:` のあと、エラーのあるファイルは `null`。`functions` は関数ごとのエフェクトで、型の確かめを通らないファイルは `null`。中の関数には `"inner": true` を足し（21.3）、関数の型の引数を持つ関数のエフェクトには、通るエフェクトの引数の名前（`"through": ["amount"]`）を足す（27.5）。4.5）。
+- `check`：字句と構文、名前、読むファイル、型、範囲の解析（kaname 自身の確かめと、ritsu-cross の答え）、エフェクト、逃げ道の警告、`examples` を確かめ、性質をベクタで確かめる。`--lean` を付ければ、性質の証明を Lean に確かめさせる（38 章）。ritsu-cross の答えは、`ritsu kaname` と `ritsu check` が渡す（4.3）。言語をまたぐ判定の診断（ritsu の E201〜W205）は、`ritsu check` が ritsu-cross の診断として出し、`ritsu kaname check` は、その答えでエフェクトを決めて E401 の注に挙げる。範囲の解析とエフェクトと逃げ道の警告は、型の確かめを通ったモジュールにだけかけ、`examples` は、それまでにエラーの無いモジュールにだけ流す。最後の行は、ファイルごとに関数の数とエフェクトを言う（「ok late_payment.kn: 1 function, fails date」、日本語は「ok late_payment.ja.kn: 関数 1 個、fails date」。4.5）。`--format json` はファイルごとに一つの JSON で、`{"kaname", "file", "ok", "summary", "functions", "properties", "diagnostics"}` の順に書く（`file` と診断の `file` はルートからのパス、`summary` は最後の行の `:` のあと、エラーのあるファイルは `null`。`functions` は関数ごとのエフェクトで、型の確かめを通らないファイルは `null`。中の関数には `"inner": true` を足し（21.3）、関数の型の引数を持つ関数のエフェクトには、通るエフェクトの引数の名前（`"through": ["amount"]`）を足す（27.5）。`properties` は性質ごとの答えで、型の確かめを通らないファイルは `null`（38.3）。4.5）。
 - `run`：関数を一つ、JSON で渡した入力で流す（`--input -` は標準入力を読む）。中の関数（型の引数を持つ関数、関数を取る関数、`private` の関数）は、ホストから呼ばないので流さず、exit 2 で終わる（26.4、27.3、28.2）。入力は `vectors` の `in` と同じ形で、引数とフィールドと列挙の値は、宣言した名前でも別名でも書ける。テキストは、一行目に呼び出しを、次に内側の層の呼び出しとその答えと作った振替を起きた順に、最後に `= 答え` か、失敗（種類、行、文）を書く。`--trace` は、`let` ごとの値も同じ順に書く。`--format json` は `{"kaname", "file", "module", "function", "input", "calls", "result" | "failure" | "diverged"}` の順で、`--trace` では `calls` のあとに `lets` が入る。`file` はルートからのパス、`input` は渡したとおりの JSON、`calls` は `vectors --trace` と同じ形である。17.7 の GOV.UK の例を `--trace` で流したもの（実物）：
 
 ```text
@@ -1967,7 +1967,7 @@ kaname の呼び出しでの X2 は、`crates/ritsu-model/tests/cross.rs` が確
 | エフェクト | `tests/effects.rs` | 推論、伝わり方（ほかのモジュールからも）、輪、書いたエフェクトの確かめ（E401）、答えを待つ場所の数え方、言語をまたぐ判定の答えの当て方（16.5）、12 章の材料 |
 | 逃げ道の警告 | `tests/hatch.rs` | 7 章の警告にする形としない形の全部（`match` が数える定数。23.9）、例で確かめて直した形、例の 18 の `.kn` |
 | 鍵（W901） | `tests/secrets.rs` | コメントと文字列の鍵が、見つけた場所ごとに種類と接頭辞と長さで出て、鍵も行も出ないこと。読めないモジュールにも出ること。`ritsu: test secret` の行は言わないこと。ほかの診断が見せる行の鍵が伏せられること（12 章） |
-| 例 | `tests/examples.rs` | 九つの例に英語と日本語の版がそろうこと、どの例も全部の言語をつないだ `check` を警告も無く通り、`examples` が成り立つこと、汎用の四つの例が `use` を持たず、ホストのプログラム（`host/`）を持つこと（17.5）、規則が転記した文書を、横に置いて固定したコピーから引用すること（八つの規則が固定する出典は 10）、日付のファイルが、規則の固定したコピーをコメントで名指すこと（17.11）。英語と日本語の版が同じ答えを返すことは `tests/vectors.rs`（16.6） |
+| 例 | `tests/examples.rs` | 十の例に英語と日本語の版がそろうこと、どの例も全部の言語をつないだ `check` を通り、出る警告は性質ごとの W603 だけで、`examples` が成り立つこと、汎用の四つの例が `use` を持たず、ホストのプログラム（`host/`）を持つこと（17.5）、規則が転記した文書を、横に置いて固定したコピーから引用すること（八つの規則が固定する出典は 10）、日付のファイルが、規則の固定したコピーをコメントで名指すこと（17.11）。英語と日本語の版が同じ答えを返すことは `tests/vectors.rs`（16.6） |
 | ベクタ、run、doc、api | `tests/vectors.rs`、`tests/run.rs`、`tests/cli.rs`、`tests/doc.rs`、`tests/api.rs` | golden（`tests/golden/vectors/`、`tests/golden/run/`、`tests/golden/doc/`、`tests/golden/api/`）。英語と日本語の版のベクタ（16.6）。ページが中に置く規則と日付のページが、rulec と koyomi の `doc` が描くものと一字も違わないこと、HTML が外から何も読まないこと、Chrome でページが描け、中のページがボタンと `#page=<n>` で開くこと（13 章）。コマンドと終了コード |
 | 口 | `tests/ports.rs` | `Programs` の答え（区間、出どころ、関係、並びの長さ、見た値）、`Items`、`References` |
 | 出力先の突き合わせ | `tests/typescript.rs`、`tests/python.rs`、`tests/go.rs`、`tests/rust.rs` | 16.4 |
@@ -2068,9 +2068,9 @@ golden は `crates/kaname/tests/golden/` に置き、`KANAME_BLESS=1` で取り�
 
 ## 17. 例
 
-例は `crates/kaname/examples/` の下の九つで、どれも英語の版が先にあり、日本語の版を `<名前>.ja.kn` として横に置く（17.10）。初めの四つ（17.1〜17.4）は、ほかの言語を読まない汎用のコアで、状態とイベント、辞書と集合、文字列と `result`、再帰する型と関数の値を一つずつ使う。どれも、生成したコードを TypeScript・Python・Go から呼ぶホストのプログラムを持つ（17.5）。あとの四つ（17.6〜17.9）は、規則・日付・帳簿を ritsu の型のまま呼ぶ例で、横に置いた内側のファイルを読む。
+例は `crates/kaname/examples/` の下の十で、どれも英語の版が先にあり、日本語の版を `<名前>.ja.kn` として横に置く（17.10）。初めの四つ（17.1〜17.4）は、ほかの言語を読まない汎用のコアで、状態とイベント、辞書と集合、文字列と `result`、再帰する型と関数の値を一つずつ使う。どれも、生成したコードを TypeScript・Python・Go から呼ぶホストのプログラムを持つ（17.5）。次の四つ（17.6〜17.9）は、規則・日付・帳簿を ritsu の型のまま呼ぶ例で、横に置いた内側のファイルを読む。17.12 は値の出どころを書く例、17.13 は性質と証明の例である。六つの例（17.1、17.7、17.8、17.9、17.12、17.13）が性質を持ち、隣に Lean の証明を置く（38.5 の表）。
 
-18 の `.kn` は、どれも `ritsu kaname check`（構文、名前、読むファイル、型、範囲の解析、言語をまたぐ判定、エフェクト、逃げ道の警告）を警告も無く通り、`examples` も成り立つ（`tests/examples.rs`、`tests/types.rs`、`tests/ranges.rs`、`crates/ritsu/tests/kaname.rs`）。エフェクトは、木をたどる 17.4 の関数が `diverges`（再帰を持つ。P8）で、ほかの例の関数はどれも total である。`run` と `vectors` の実物は `tests/golden/run/` と `tests/golden/vectors/` に、`api` の実物は `tests/golden/api/` にある（`api` の golden は、ritsu-cross の答えを渡さない kaname のテストのものなので、言語をまたぐ判定の場所は `waiting` である。答えを渡した `api` は `crates/ritsu/tests/kaname.rs` が確かめる）。ページ（13 章）は `crates/ritsu/tests/golden/kaname-doc/` にある。規則・日付・帳簿を呼ぶ例は公開の文書（法令、公開の手引き、公開の料金表）を使い、規則が転記したところを、横に置いて固定したコピーから引用する（17.11）。内側のファイルは、ritsu 0.30.0 で `ritsu check` を通してある（下に貼った出力）。kaname が言うことは、どれも実物である。
+20 の `.kn` は、どれも `ritsu kaname check`（構文、名前、読むファイル、型、範囲の解析、言語をまたぐ判定、エフェクト、逃げ道の警告、性質）を通り、`examples` も成り立つ（`tests/examples.rs`、`tests/types.rs`、`tests/ranges.rs`、`crates/ritsu/tests/kaname.rs`）。出る警告は性質ごとの W603（`--lean` が無いので示していない）だけで、`--lean` を付ければ、規則の答えに頼る `discount_split` の `shares_add_up` のほかは示せる（`tests/lean.rs`）。エフェクトは、木をたどる 17.4 の関数が `diverges`（再帰を持つ。P8）で、ほかの例の関数はどれも total である。`run` と `vectors` の実物は `tests/golden/run/` と `tests/golden/vectors/` に、`api` の実物は `tests/golden/api/` にある（`api` の golden は、ritsu-cross の答えを渡さない kaname のテストのものなので、言語をまたぐ判定の場所は `waiting` である。答えを渡した `api` は `crates/ritsu/tests/kaname.rs` が確かめる）。ページ（13 章）は `crates/ritsu/tests/golden/kaname-doc/` にある。規則・日付・帳簿を呼ぶ例は公開の文書（法令、公開の手引き、公開の料金表）を使い、規則が転記したところを、横に置いて固定したコピーから引用する（17.11）。内側のファイルは、ritsu 0.30.0 で `ritsu check` を通してある（下に貼った出力）。kaname が言うことは、どれも実物である。
 
 ### 17.1 注文の状態とイベント（`examples/order_flow`）
 
@@ -2080,11 +2080,17 @@ golden は `crates/kaname/tests/golden/` に置き、`KANAME_BLESS=1` で取り�
 - `replay(events)` は、空のカートから、イベントを順に当てる。`reduce` に、`result` を受け取って次の `result` を答える関数（`after`）を渡すので、最初に拒まれたところで止まる。`open(order)` は、注文がまだイベントを受け付けるか。
 - 範囲を書いたのは明細（品番のコードポイントの数、数量、単価）とリストの件数で、額（`total`、`amount`）と日付と追跡番号は範囲を書かない（22 章）。合計は、50 件まで、数量 100 まで、単価 1,000,000 セントまでの積の和で、5,000,000,000 セントに収まると示せる。カートに足すところは `if c.lines.count() < 50` の中で、確定するところは `else` の中で、リストの件数が `Order` のフィールドの `count` に収まると示せる。どの関数も total である。
 
+性質は一つで、閉じた注文（発送済みか取り消し済み）はどのイベントにも `err("the order is closed")` を答える、と書く（`when not open(order: order)`）。直和型の場合分けで示す見本である（38.5）。`--lean` が無いと、性質は W603 になる。
+
 ```text
 $ ritsu check . --root .
+warning[kaname W603]: order_flow.ja.kn:92:1: The property `閉じた注文はイベントを受け付けない` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow_ja.lean is checked with `--lean`
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok order_flow.ja.kn: 5 functions, total
+warning[kaname W603]: order_flow.kn:92:1: The property `a_closed_order_takes_no_event` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow.lean is checked with `--lean`
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok order_flow.kn: 5 functions, total
-ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+ritsu check: 2 files (kaname 2): all pass (2 warnings); borders between the languages: 0 checked, 0 undecided
 ```
 
 `run` の実物（`tests/golden/run/order_flow.txt`）。五つのイベントで、注文は発送済みになる：
@@ -2268,6 +2274,7 @@ kaname が言うこと：
 - `if late >= 1` は逃げ道の警告にならない（7 章）。分岐の中で規則を呼び、外は `none` を答える。外を `0GBP` にすれば警告になる（7 章に実物）。
 - 分岐を外して規則を呼ぶと E301 になり、例として、請求日に払われた（期日の 29 日前の）請求書の入力を添える（12 章に実物）。その形の関数のベクタには、規則が入口で受け付けない入力がある（9 章の二行目）。
 - `late >= 1` の `late` は計算した値なので、その境目の前後に届く三件の入力がベクタに入る（9 章に実物）。
+- 性質は一つで、期日までに払えば請求は無いと書く（`when paid_on <= terms.due(invoiced: invoice.invoiced)` で `claim(…) = none`）。期日は koyomi の日付の関数のまま（Lean では `Inner` のフィールド）で証明できる（38.5）。
 
 ### 17.8 カートの重さと、Media Mail の料金（`examples/media_mail`）
 
@@ -2290,6 +2297,7 @@ kaname が言うこと（どれも実物）：
 - `weight_of` の引数の要素の数を 1 以上にしてあるのは、関数を一つずつ解析するからである（5.4）。0 個を許すと、`weight_of` の答えは 0 からになり、`quote` の分岐の中の重さも 0 を含んで、規則の `weight`（1 オンスから）に収まると示せない（`quote` が要素を 1 以上と言っていても、`weight_of` の中では分からない）。そのとき kaname は、ベクタに例が無いので W301 を言い、`quote` に書いた `total` は E401 になる（12 章に実物）。
 - `quote` は total である。`if weight <= 15lb` の中では重さが 1〜240 オンスで、規則の `weight` の範囲に収まる。`15lb` は規則の範囲の上の端と同じで、この分岐は規則の入力に狭めるためのものなので、逃げ道の警告にならない。外は `none`。
 - 規則に前提は無く、日付も振替も呼ばないので、言語をまたぐ判定の場所は無い（`ritsu check` の境目は 0 か所）。規則の入力 `weight` の範囲は kaname 自身が確かめる（E301・W301）。
+- 性質は一つで、15 ポンドより重いカートには見積もりが無いと書く（`when weight_of(lines: lines) > 15lb` で `quote(lines: lines) = none`）。規則を呼ぶが、答えには頼らないので、規則を `Inner` のフィールドにしたまま証明できる（38.5）。
 
 ### 17.9 値引きを明細に按分する（`examples/discount_split`）
 
@@ -2313,10 +2321,11 @@ kaname が言うこと：
 - 途中までの合計を `running_totals` を使わずに書く（`upto` を `reduce` で積み上げる）と、範囲の解析は `before` と `upto` の関係を知らない。X2 は区間の端（`before` が 90,000,000、`upto` が 0）で前提を破ると言うが、関数のベクタの実行にそういう値は現れないので、例は無く、決められない（ritsu の W201。14.3 に実物）。生成したコードは規則の入口の確かめに任せ、`split` のエフェクトは `fails rule` で、`total` と書いてあるので E401 になる。
 - `before` と `upto` を入れ替えて渡すと、`before` が `upto` を超える実行（明細が 5,000,000 セントの一件）があるので、例を添えた ritsu の E201 になる（`crates/ritsu/tests/golden/cross/kaname-x2-E201.en.txt`）。
 - 配った分の合計が値引きに一致することは、`examples` と、英語と日本語の版のベクタの 12 件ずつの全部で確かめている（`tests/vectors.rs`）。範囲の解析が示すことではないので、ページでもそう書く。規則の側では、rulec の Lean の `runTotal_exact` が、途中までの合計を正しく渡したときに合計が一致することを証明している。
+- 性質は二つある。どの明細も項目を保つ（`every_line_keeps_its_label`）は証明を置き、配った分の合計が値引き額になる（`shares_add_up`）は置かない。後者は規則の答えに頼り、口は答えの合計を教えないので、`--lean` でも W603（規則の答えに頼る）のままである。その形の見本として置いた（38.5）。
 
 ### 17.10 日本語の版
 
-八つの例のどれにも、日本語の名前の版がある。`order_flow.ja.kn`、`stock_diff.ja.kn`、`handles.ja.kn`、`catalog.ja.kn`、`payout.ja.kn`、`late_payment.ja.kn`、`media_mail.ja.kn`、`discount_split.ja.kn` と、内側のファイル `rules/カード手数料.rule`、`books/台帳.book`、`dates/支払期限.cal`、`rules/遅延の請求額.rule`、`rules/メディアメール.rule`、`rules/値引きの配分.rule` である。名前を日本語で書き、生成するコードに出るものに英語の版と同じ別名を付けた。モジュールと内側のファイルの別名だけは、一つのパッケージに並んで入るよう `_ja` を付けた（`order_flow_ja`、`payout_ja`、`card_fee_ja`。sekisho の例と同じ）。日本語の版の説明は、最後に「<名前>.kn の日本語の版」と書く。関数が答える文字列（`order_flow` がイベントを拒む理由、`handles` の合わない理由）は、日本語の版では日本語で書き、英語の版と同じところに同じ数だけ置く。`tests/vectors.rs` は、二つの版のベクタを、名前を別名で読み、日本語の版の文字列を同じところの英語の文字列に読み替えて比べ、答えが同じことを確かめる（16.6）。品番やテストの入力のような値の文字列は、二つの版で同じである。出典のコピーは英語の版と同じファイルを読み、出典の名前を日本語で付ける（`手数料表(fees)`、`法令(act)`、`手引き(guide)`、`料金表(usps)`、`規則(va)`）。内側の日本語のファイルも、ritsu 0.30.0 の `ritsu check` を通してある。
+十の例のどれにも、日本語の名前の版がある。`order_flow.ja.kn`、`stock_diff.ja.kn`、`handles.ja.kn`、`catalog.ja.kn`、`payout.ja.kn`、`late_payment.ja.kn`、`media_mail.ja.kn`、`discount_split.ja.kn`、`order_bill.ja.kn`、`refund_split.ja.kn` と、内側のファイル `rules/カード手数料.rule`、`books/台帳.book`、`dates/支払期限.cal`、`rules/遅延の請求額.rule`、`rules/メディアメール.rule`、`rules/値引きの配分.rule` である。名前を日本語で書き、生成するコードに出るものに英語の版と同じ別名を付けた。モジュールと内側のファイルの別名だけは、一つのパッケージに並んで入るよう `_ja` を付けた（`order_flow_ja`、`payout_ja`、`card_fee_ja`。sekisho の例と同じ）。証明のファイルも別名で置く（`refund_split_ja.lean`）。証明は英語の版と同じで、説明のコメントを日本語で書く。日本語の版の説明は、最後に「<名前>.kn の日本語の版」と書く。関数が答える文字列（`order_flow` がイベントを拒む理由、`handles` の合わない理由）は、日本語の版では日本語で書き、英語の版と同じところに同じ数だけ置く。`tests/vectors.rs` は、二つの版のベクタを、名前を別名で読み、日本語の版の文字列を同じところの英語の文字列に読み替えて比べ、答えが同じことを確かめる（16.6）。品番やテストの入力のような値の文字列は、二つの版で同じである。出典のコピーは英語の版と同じファイルを読み、出典の名前を日本語で付ける（`手数料表(fees)`、`法令(act)`、`手引き(guide)`、`料金表(usps)`、`規則(va)`）。内側の日本語のファイルも、ritsu 0.30.0 の `ritsu check` を通してある。
 
 ```text
 ok rules/カード手数料.rule
@@ -2350,11 +2359,33 @@ ok rules/値引きの配分.rule
 
 ```console
 $ ritsu check order_bill.kn
+warning[kaname W603]: order_bill.kn:15:1: The property `bill_is_the_price_times_the_quantities` held on all 12 vectors, but it is not shown: the proof in order_bill.lean is checked with `--lean`
+    15 | property bill_is_the_price_times_the_quantities(lines: list[Line] count >=1 <=30, price: money[USDc] range >=1USDc <=1000USDc)
 ok order_bill.kn: 1 function, total
-ritsu check: 1 file (kaname 1): all pass; borders between the languages: 3 checked, 0 undecided
+ritsu check: 1 file (kaname 1): all pass (1 warning); borders between the languages: 3 checked, 0 undecided
 ```
 
-- ファイル：`order_bill.kn`、`order_bill.ja.kn`、`schemas/order.schema.json`、`schemas/order.ja.schema.json`。
+性質は一つで、請求額は単価と数量の合計の積だと書く。証明は 38.5 に貼った。
+
+- ファイル：`order_bill.kn`、`order_bill.ja.kn`、`order_bill.lean`、`order_bill_ja.lean`、`schemas/order.schema.json`、`schemas/order.ja.schema.json`。
+
+### 17.13 返金を明細に按分する（`examples/refund_split`）
+
+注文の明細に残っている額の比で、返金を配る。関数は `split` 一つで、38.1 に全文を貼った。`running_totals` で明細の残りを前から足し、明細ごとに「その明細の終わりまでの返金から、その前までの返金を引いた額」を配るので、配った分を足すと返金額になる。性質は三つ（配った分の合計は返金額、負の配分は無い、残りの合計を超えない返金なら、どの明細にも、その明細の残りより多くは配らない）で、三つとも隣の `refund_split.lean` に証明がある。ほかの言語を読まず、ホストも置かない。見せたいのは、性質と証明と `--lean` である。
+
+```console
+$ ritsu check . --root .
+…
+ritsu check: 2 files (kaname 2): all pass (6 warnings); borders between the languages: 0 checked, 0 undecided
+$ ritsu check . --root . --lean
+ok refund_split.ja.kn: 1 function, total
+ok refund_split.kn: 1 function, total
+ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+`--lean` が無いと、六つの性質（英日で三つずつ）が W603 になる（38.3）。`--lean` では、Lean が六つの証明を受け付け、警告は消える。
+
+- ファイル：`refund_split.kn`、`refund_split.ja.kn`、`refund_split.lean`、`refund_split_ja.lean`。
 
 ## 18. 捨てた形
 
@@ -2388,7 +2419,14 @@ ritsu check: 1 file (kaname 1): all pass; borders between the languages: 3 check
 - **総称の関数の呼び出しの輪を、型の引数の流れで細かく許すこと**：呼び出しの輪の中では、型の引数をそのまま渡すか、型の引数を含まない型を渡す（26.2。E112）。Go が受け付けないのは、型の引数から作った型を渡す呼び出しが、型の引数の流れの輪の上にあるときだけである（輪の中の別の関数が、その型の引数を自分の型の引数に戻さなければ、Go は受け付ける）。その流れを追えば、いまの決まりより多くの輪を許せる。
 - **列挙の入力の範囲で、答えた呼び出しのあとに狭めること**：規則が答えたなら、渡した列挙の値は範囲に入っていた。数の範囲と同じく狭めれば、同じ名前を同じ範囲の入力に二度渡す二つ目の呼び出しも示せる（5.3）。Lean のモデルの狭め方に、値の集合で狭める形とその健全性を足すことになる。
 - **式の値のあいだの関係**：範囲の解析が覚える関係は、名前とそのフィールドのあいだのものと、`count(xs)` とリストの要素の数と、リストをフィールドで足した値（`sum(xs, x => x.amount)`。`running_totals` の `total` と等しいことを含む。32 章）だけである（5.3）。`let` で名前を付けた `running_totals` の答えの `total` と、フィールドをたどるだけでないラムダで足した値は読まない（Lean のモデルも同じである。33 章）。`any(xs, p)` が成り立つときの `count(filter(xs, p))` が 1 以上であることと、一つの値を二度使う式（`side * (10 - side)`）の相関は読まない。W301 と W303 の多くはここから出る（台帳の再現の W301 と W303 がこの形）。名前を付けて `if` で狭めれば示せる。
-- **関数についての性質（どの入力でも、配った分の合計が値引きになる、など）を書いて、ベクタで確かめること**：いまは `examples` の行で確かめる。
+- **関数についての性質のうち、最初の版に入れなかったもの**：性質は 38 章の `property` で書き、ベクタで確かめ、`--lean` で Lean の証明を確かめる。次の七つは、その最初の版に入れなかったものである。
+- **規則の表を Lean の関数にすること**：いまの Lean の文は、規則と日付を外から与える関数として、口が教える事実だけを仮定にする（38.4）。規則の計算に頼る性質（`discount_split` で、配った分の合計が値引きになる、など）を証明するには、rulec が表を Lean の関数に書き出す機能が要る。rulec の別の機能として扱う。
+- **辞書・集合・文字列と、鍵の順序を Lean に書くこと**：辞書と集合の組み込み（`keys` など）、文字列の組み込み、鍵の順序を使う組み込み（`sort_by`、`distinct`、`max_by`、`min_by`、`to_dict`、`group_by`）、`K: key` の総称の関数。文字列の順序をどう書くかを決めてから、まとめて入れる。いまは W604 になる。
+- **失敗しうる関数と、回る関数についての性質**：いまは性質を total に限る（E401）。入れるなら、失敗を「成り立たない」と読むか「当てはまらない」と読むかを書き分ける形と、Lean の `Except` と燃料で書く定義が要る。
+- **証明の補助のファイルと、`Kaname.` の外の import**：いまは一つのモジュールに一つの証明のファイルで、import できるのは生成したモジュールだけである。Mathlib を使うなら、版を `proofs/` と合わせる手立ても要る。
+- **反例を小さくすること**：いまは、ベクタの並びで最初に見つかった入力を言う。
+- **`lake build` の時間の上限を変える口**：いまは 10 分で止める。
+- **性質の引数に関数の型を書くこと**：ベクタが関数の値を作れないので、いまは E605 になる。
 - **rulec の `enums` のファイルを、規則を通さずに `use` すること**。
 - **値の型の引数をとる関数を、`examples` の行で呼ぶこと**：値を作る式の型は直和型なので（23.2）、`examples` の行で `Order.placed { … }` を値の型の引数に渡すと E102 になる。値の型の値として作る書き方が要る。ベクタと `run` は、値の型の引数に `{"placed": {…}}` を渡せる。
 - **帳簿の口からページを読むこと**（`Books` に `doc` を足して、chobo のページを埋め込む）：いまは振替の操作と理由を kaname のページに並べるだけである。
@@ -5046,3 +5084,420 @@ record Line
 **確かめたこと**：ritsu の `tests/fed_by.rs`：JSON Schema を変えた場合、モジュールのレコードを出どころにした場合、書けない場所、全部の出力先で生成物が同じ、`doc` と `api`。kaname の `tests/codes.rs`、`tests/golden/codes/E009.*`、例の一覧（`tests/examples.rs`、`tests/run.rs`、`tests/vectors.rs`、`tests/api.rs`）。
 
 **残したこと**：`tests/mutants` は kaname に無い（壊す試しは `tests/modules` と台帳の再現）。
+
+## 38. 関数の性質を書く `property` と、Lean の証明（2026-11-08）
+
+**きっかけ**：`examples` は決まった入力の答えを比べ、ベクタ（9 章）は関数の中の失敗しうる場所を探す。どちらにも、「どの入力でも、配った分を足すと返金額になる」のような、入力の全部についての主張を書く場所が無く、19 章に残していた。主張を書ければ、ベクタで反例を探せるうえ、Lean で証明もできる。ただし、証明を探すことは処理系の仕事にしない。証明は人か LLM が別のファイルに書く。処理系は、その証明が書き出した文をそのまま証明していることと、抜け道を使っていないことを、Lean に確かめさせるだけである。
+
+**決定**：モジュールに `property` の宣言を足す。`ritsu check` と `kaname check` は、性質をいつもベクタで確かめる。`--lean` を付けたときだけ、.kn の隣に置いた証明を Lean で確かめる。`ritsu gen --target lean` は、関数を Lean の定義に、性質を定理の文にしたパッケージを書く。性質の答えは P5 の三つ（示した・反例・決められない）で、「示した」と言うのは Lean が証明を受け付けたときだけである。
+
+### 38.1 書き方
+
+性質は、関数と同じ形で引数を並べ、本体に `description`、`when` の行、`let`、最後の真偽の式を書く宣言である。例は、注文の明細に残っている額の比で返金を配るモジュール（`examples/refund_split/refund_split.kn`）である。
+
+```kn
+module refund_split v1
+description "Spreads a refund over the lines of an order in proportion to what is still unpaid on them, so that the shares come to the refund"
+
+record Line
+  sku  : string
+  left : money[USDc]  range >=1USDc <=1_000_000USDc
+
+record Share
+  sku   : string
+  left  : money[USDc]
+  share : money[USDc]
+
+fn split(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc) -> list[Share] total
+  description "Each line gets the refund up to its end less the refund before it"
+  map(running_totals(lines, l => l.left), r =>
+    Share { sku: r.item.sku, left: r.item.left, share: allocate(refund, r.upto, r.total) - allocate(refund, r.before, r.total) })
+
+property shares_add_up(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "The shares come to the refund"
+  sum(split(lines: lines, refund: refund), s => s.share) = refund
+
+property no_share_is_negative(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "No line gets less than nothing"
+  all(split(lines: lines, refund: refund), s => s.share >= 0USDc)
+
+property no_share_is_more_than_its_left(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "A refund no larger than what is left in all gives no line more than what is left on it"
+  when refund <= sum(lines, l => l.left)
+  all(split(lines: lines, refund: refund), s => s.share <= s.left)
+
+examples
+  split(lines: [Line { sku: "book-1", left: 500USDc }, Line { sku: "mug-1", left: 1000USDc }], refund: 100USDc)
+    = [Share { sku: "book-1", left: 500USDc, share: 33USDc }, Share { sku: "mug-1", left: 1000USDc, share: 67USDc }]
+```
+
+日本語の版（`refund_split.ja.kn`）では、名前と引数に関数と同じ書き方で ASCII の別名を付ける。
+
+```kn
+property 配分の合計は返金額(shares_add_up)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "配った分を足すと返金額になる"
+  sum(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分) = 返金
+
+property 残りより多くは配らない(no_share_is_more_than_its_left)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "残りの合計を超えない返金なら、どの明細にも、その明細の残りより多くは配らない"
+  when 返金 <= sum(明細, 一件 => 一件.残り)
+  all(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分 <= 一件.残り)
+```
+
+2.3 の EBNF に足すもの：
+
+```ebnf
+file        = header, [description], {use}, {["private"], (enum | record | fn) | property}, [examples] ;
+property    = "property", name, "(", [param, {",", param}], ")", NL,
+              INDENT, [description], {when}, block, DEDENT ;
+when        = "when", expr, NL ;
+```
+
+`property` は宣言の頭で、`when` は性質の本体の行の頭でだけ語として読む。名前にできない語（14 語）は増やさない。
+
+### 38.2 意味
+
+- 性質は、「引数が書いた範囲に入り、`when` の行がどれも `true` になる入力なら、最後の式は `true` になる」という主張である。
+- 処理系の中では、本体を `if <when の行を and でつないだ式> then <let と最後の式> else true` とした、答えが `bool` の関数として扱う。名前、型、範囲の解析、エフェクト、ベクタは、関数のものをそのまま使う。`when` は `if` の条件と同じく、本体の中の値を狭め、その比べ方はベクタの候補（9 章の、比べる値とその隣、計算した境目）になる。
+- 性質は `total` と書いた関数と同じに扱い、本体（呼ぶ関数を含む）が失敗しうれば E401 にする。失敗したときに、「成り立たない」と読むか「当てはまらない」と読むかで、性質の意味が二つに割れるからである。`when` が狭めるのは性質の本体の中の場所だけで、呼んだ関数の中は狭めない（エフェクトは関数ごとに決まる）。失敗しうる関数についての性質は 19 章に残す。
+- 性質は値ではないので、呼べない。ホストの言語に生成するコード、`run`、`api` の関数の一覧には出ない（`doc` と `api` は性質を別に並べる）。
+- 名前は関数と同じ空間に置き、同じ名前は関数どうしと同じ診断にする。日本語の名前には ASCII の別名が要る（E005 を性質にも当てる）。別名が Lean の名前になるからである。
+- 引数に関数の型は書けない（E605）。ベクタが関数の値を作れないからである。型の引数は文法に無い。
+- `examples` はそのまま残す。決まった入力の答えを人が読める形で残すもので、性質の代わりにはならない。
+
+### 38.3 答えと診断
+
+| 答え（P5） | いつ | 診断 |
+|---|---|---|
+| 反例 | どれかのベクタで、`when` が成り立ち、最後の式が `false` になった | E603（エラー。入力と `let` の値を言う） |
+| 示した | `--lean` で、Lean が証明を受け付けた | 無し（JSON では `shown`） |
+| 決められない | 反例が無く、示してもいない | W603（理由を言う）か W604。`--lean` で Lean が証明を受け付けなければ E604 |
+
+- ベクタは 9 章のとおりに作る（候補の組み合わせが 256 までなら全部、多ければ一つずつ動かしたものと二つの組。一つの性質で 2,000 まで）。規則と日付は、`examples` の行と同じく口の `Rules::eval`・`Dates::eval` で本物を呼ぶ。反例は、ベクタの並びで最初に見つかった入力を言う。
+- W603 の理由は四つある。証明のファイルが無い。証明のファイルに、その性質の定理が無い。定理はあるが、`--lean` で確かめていない。規則か日付の答えに頼る（定理の無い性質のうち、本体が規則か日付を呼ぶもの。証明が使えるのは口が教える事実だけだと言う）。定理があるかどうかは、`--lean` が無ければ証明のファイルを文字で読んで（`theorem` の後ろの名前で）決め、`--lean` では Lean が決める。`--lean` が無くても文字で見るのは、まだ定理を書いていない性質について「`--lean` で確かめます」と言わないためである。何を証明したかは、文字では決めない。
+- W604 は、Lean に書けないもの（38.4）を使う性質に出し、何がどの行で書けないかを言う。ベクタの確かめはする。
+- E604 は、`--lean` で Lean が証明を受け付けなかったときに出し、理由（38.6）を言う。ファイル全体にかかる理由（ビルドが通らない、書けないものがある、カーネルが受け付けない、生成したモジュールと一緒に読み込めない、時間切れ）は、ファイルごとに一度だけ言い、示せなくなった性質を並べる。定理にかかる理由は、その定理の行で言う。
+- W605 は、`when` の行がどのベクタでも成り立たないときに出す。成り立つ入力が無ければ、性質はどんな証明でも示せてしまい、何も言っていない。LLM が性質と証明の両方を書くときに、まず疑うところである。
+- 一つの性質に出る診断は、E603・E604・W603・W604 のどれか一つで、W605 はそれと並ぶ。反例があるのに Lean が証明を受け付けたら、書き出した Lean と参照インタプリタが食い違っているので、処理系の不具合として E603 に注を付ける。
+- `check --format json` は、ファイルごとの `properties` に、性質ごとの `{"name", "line", "outcome", "reason", "code", "vectors", "held", "input"}` を書く（11.1）。`outcome` は `shown`・`example`・`undecided`、`reason` は決められないときだけで、`no-proof`（証明のファイルか定理が無い）・`lean-not-run`・`inner`（規則か日付の答えに頼る）・`not-in-lean`・`proof-rejected` のどれか、`code` はその性質に出た診断、`held` は `when` の行が成り立ったベクタの数、`input` は反例の入力である。型の確かめを通らないファイルは `null`。
+- 終了コードは、E603・E604 がほかのエラーと同じ 1、警告だけなら 0。`--lean` を頼まれて Lean（`lake`）が見つからなければ 2 で、理由を言う。
+
+`ritsu kaname check` の出力（実物）。E603 は、38.1 のモジュールの `examples` の前に、偽の性質 `every_line_gets_a_share`（返金が 1 セント以上なら、どの明細にも 1 セント以上を配る）を足したものである。W603 は理由ごとに、証明のファイルが無いとき（38.1 のモジュールだけを置いたとき）、隣の証明を `--lean` 無しで読んだとき、証明のファイルから `no_share_is_negative` の定理を除いたとき、規則の答えに頼るとき（`tests/properties/fee.kn`）。W604 と W605 も `tests/properties/` の材料である。W603 と W604 は一行目だけを貼る。
+
+```text
+error[E603]: refund_split.kn:31:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: "a", left: 500000USDc }, Line { sku: "a", left: 500000USDc }], refund: 1USDc
+    31 | property every_line_gets_a_share(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  = `check` runs a property in the reference interpreter on the vectors of its parameters: on this one the `when` lines hold and the last line is false.
+  = Correct the function, narrow the property with `when` or the ranges of its parameters, or correct the property.
+warning[W603]: refund_split.kn:18:1: The property `shares_add_up` held on all 12 vectors, but it is not shown: there is no proof of it (refund_split.lean holds no theorem of it)
+warning[W603]: refund_split.kn:18:1: The property `shares_add_up` held on all 12 vectors, but it is not shown: the proof in refund_split.lean is checked with `--lean`
+warning[W603]: refund_split.kn:22:1: The property `no_share_is_negative` held on all 12 vectors, but it is not shown: refund_split.lean holds no theorem `Proofs.refund_split.no_share_is_negative`
+warning[W603]: fee.kn:10:1: The property `the_fee_has_its_fixed_part` held on all 4 vectors, but it is not shown: it rests on the answers of the rule `card_fee`, and a proof may use only what the port says of them
+warning[W604]: not_in_lean.kn:19:1: The property `trimming_twice_is_trimming_once` held on all 16 vectors, but it cannot be written for Lean: it uses `trim`, a builtin of strings (line 21), which is not written for Lean yet
+warning[W605]: thresholds.kn:9:1: The `when` lines of the property `past_the_end` hold on none of its 3 vectors
+  = A property whose `when` lines hold for no input can be proved whatever it says: look again at its `when` lines and the ranges of its parameters.
+```
+
+```text
+エラー[E603]: refund_split.kn:31:1: 性質 `every_line_gets_a_share` は、lines: [Line { sku: "a", left: 500000USDc }, Line { sku: "a", left: 500000USDc }], refund: 1USDc で成り立ちません
+```
+
+反例の入力は、9 章の候補の組み合わせの並びで最初のものである。明細が二つで、返金が `when` の比べる 0 の隣の 1 セントのとき、一つ目の明細に 0 セントが配られる。
+
+E604 は、例の証明のファイル（`examples/refund_split/refund_split.lean`）を一か所ずつ壊して `ritsu kaname check refund_split.kn --lean` を走らせたものである（実物）。上から順に、`no_share_is_negative` の証明を `sorry` にしたもの、その定理の型に別の主張を書いたもの、補題の名前を書き違えたもの。最後は台帳の再現（`kaname explain E604`）で、文字の決まりに当たったものである。末尾の注（`--lean` が何を受け付けるか）はどの E604 にも付くので、一つ目にだけ貼る。
+
+```text
+error[E604]: refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
+    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+  = Write the proof in place of `sorry`.
+  = `--lean` builds the proofs against the Lean written again from refund_split.kn, and takes for each property a theorem `Proofs.refund_split.<property>` whose type is `Kaname.refund_split.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
+error[E604]: refund_split.lean:39:1: The theorem `Proofs.refund_split.no_share_is_negative` does not state the property `no_share_is_negative`: its type is not `Kaname.refund_split.no_share_is_negative`
+    39 | theorem no_share_is_negative : ∀ (refund : Int), 0 ≤ refund → 0 ≤ refund := fun _ h => h
+  = Its type: ∀ (refund : Int), 0 ≤ refund → 0 ≤ refund
+  = Write the statement's name as its type, `theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative`, and not the statement written out, which can say less than it.
+error[E604]: refund_split.lean:34:7: The proof file refund_split.lean does not build, so it proves none of `shares_add_up`, `no_share_is_negative` and `no_share_is_more_than_its_left`
+    34 |   rw [allocate_self_of refund hT, allocate_zero]
+  = Lean says: Unknown identifier `allocate_self_of`
+error[E604]: example.lean:3:1: A proof file may not hold `#eval`: example.lean is not built, so it does not prove `double_is_even`
+     3 | #eval IO.println "run in the build"
+  = It runs code while the file is built, or adds syntax that changes how the rest of the file is read; a proof needs neither.
+```
+
+```text
+エラー[E604]: refund_split.lean:39:1: `no_share_is_negative` の証明は、`propext`・`Classical.choice`・`Quot.sound` のほかに `sorryAx` に頼っています
+エラー[E604]: example.lean:3:1: 証明のファイルには `#eval` を書けないので、example.lean はビルドしません。`倍は偶数` を示せません
+```
+
+Lean が見つからないとき（`PATH` に `lake` が無く、`HOME` が空のディレクトリのとき。実物）：
+
+```console
+$ ritsu check . --root . --lean
+error: --lean needs Lean: `lake` is neither on PATH nor in ~/.elan/bin. Install elan, the Lean version manager; the toolchain the proofs use (leanprover/lean4:v4.34.0) is installed on the first run
+$ echo $?
+2
+```
+
+```text
+エラー: --lean には Lean が要ります。`lake` が PATH にも ~/.elan/bin にもありません。Lean の版を管理する elan を入れてください。証明が使う toolchain（leanprover/lean4:v4.34.0）は、最初に走らせたときに入ります
+```
+
+### 38.4 Lean に書き出すもの
+
+`ritsu gen --target lean` は、ほかの出力先と同じく `<出力先>/lean/`（既定は `generated/lean/`）に書く。`ritsu.mod` の `target` の行と `--check` もほかの出力先と同じで、`--check` は `.lake/` と `lake-manifest.json`（`lake` が書く）を見ない。
+
+```text
+generated/lean/
+  lean-toolchain             leanprover/lean4:v4.34.0（proofs/lean-toolchain と同じ）
+  lakefile.toml              ライブラリ Kaname と、.kn の隣にある証明のファイルごとのライブラリ
+  .gitignore                 /.lake
+  Kaname/Prelude.lean        丸め、allocate、isqrt、running_totals、分数、証明に使う補題
+  Kaname/Rules.lean          モジュールが呼ぶ規則の型（規則があるとき）
+  Kaname/Books.lean          モジュールが作る振替の構造体（振替があるとき）
+  Kaname/refund_split.lean   モジュールの定義と、性質の文
+  samples/refund_split.lean  定理の名前と sorry だけの下書き（ビルドしない）
+```
+
+`Kaname/refund_split.lean`（`tests/golden/lean/refund_split.lean`。版は `<version>`）：
+
+```lean
+-- Code generated by kaname <version>. DO NOT EDIT.
+-- Source: refund_split.kn (module refund_split v1, sha256:a25fadcd5cd0a89b)
+import Kaname.Prelude
+
+namespace Kaname.refund_split
+
+structure Line where
+  sku : String
+  left : Int
+  deriving Repr, DecidableEq, Inhabited
+
+structure Share where
+  sku : String
+  left : Int
+  share : Int
+  deriving Repr, DecidableEq, Inhabited
+
+def Line.Within (x : Line) : Prop :=
+  1 ≤ x.left ∧ x.left ≤ 1000000
+
+def split (lines : List Line) (refund : Int) : List Share :=
+  List.map (fun (r : Kaname.Running Line) => ({ sku := r.item.sku, left := r.item.left, share := Kaname.allocate refund r.upto r.total - (Kaname.allocate refund r.before r.total) } : Share)) (Kaname.runningTotals lines (fun (l : Line) => l.left))
+
+abbrev shares_add_up : Prop :=
+  ∀ (lines : List Line) (refund : Int),
+    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    0 ≤ refund → refund ≤ 10000000 →
+    ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
+
+abbrev no_share_is_negative : Prop :=
+  ∀ (lines : List Line) (refund : Int),
+    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    0 ≤ refund → refund ≤ 10000000 →
+    ∀ s ∈ split lines refund, s.share ≥ 0
+
+abbrev no_share_is_more_than_its_left : Prop :=
+  ∀ (lines : List Line) (refund : Int),
+    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    0 ≤ refund → refund ≤ 10000000 →
+    refund ≤ ((List.map (fun (l : Line) => l.left) lines).sum) →
+    ∀ s ∈ split lines refund, s.share ≤ s.left
+
+end Kaname.refund_split
+```
+
+- **名前**：モジュールは `Kaname.<モジュールの別名>` である（別名の無い英語の名前は、名前がそのまま別名になる。日本語の版は `Kaname.refund_split_ja`）。関数、型、フィールド、性質も同じく別名で書く。Lean の予約語と同じ名前と、別名を持たない日本語の名前（ラムダの引数など）は `«»` で囲む。モジュールが Lean の標準の型と同じ名前を持つときは、標準の型を指すところに `_root_` を付ける。標準の関数は、型の名前から書く（`Max.max`、`Min.min`、`Decidable.decide`、`Inhabited.default`）。引数や `let` の名前に隠されないためである。
+- **頭**：モジュールのファイルと下書きは、ほかの生成物と同じ頭の二行（ritsu の DESIGN 9.2。`-- Code generated by kaname <版>. DO NOT EDIT.` と `-- Source: <パス> (module <名前> v<版>, sha256:<16 桁>)`）で始まる。`ritsu gen` はパスをプロジェクトのルートから書く。前置き、`Rules.lean`、`Books.lean`、`lakefile.toml` は一行目だけ。生成した Lean のコメントは英語で書く。
+- **型**：単位の付いた数（金額・量・数）は、型の単位で数えた `Int`。率は刻みの数の `Int`、日付は日の番号の `Int`。`bool` と `string` は `Bool` と `String`。`list[T]` は `List T` で、`count` は長さの仮定になる。`T?` は `Option T` で、kaname が入れ子を一つにするところは `Option.join`。結果の型は `Except`。レコードは `structure` で、フィールドの範囲は `Within` という述語になる。列挙は `inductive` で、順序のある列挙には順番を返す関数も書く。型はどれも `Repr`・`DecidableEq`・`Inhabited` を導く（`==` で比べ、`match` の残りの枝が既定の値を答えるため）。`Except` の `DecidableEq` は前置きで導く。フィールドを持つ値の列挙は、値ごとの `structure` を包む `inductive` になる。`running[T, W]` は前置きの `Kaname.Running`。
+- **数**：渡す値と答えは、型の単位で数えた `Int` である。刻みの分かる中間の値（金額に率を掛けた値など）は、刻みの分母を掛けた `Int` にする。足したり比べたりする値の刻みが違えば、定数を掛けてそろえる。定数との掛け算と足し算だけなので、`omega` がそのまま扱える。値で割った値（刻みが分からない値。`NumTy.step` が `None`）は、分子と分母の組（前置きの `Kaname.Frac`）にする。`Rat` を使わないのは、約分で式の形が変わり、証明で追いにくくなるからである。丸めは 3.3 の整数の手順をそのまま前置きの関数にする。`allocate(t, c, s)` は `t × c` を `s` で割って `down` で丸める関数、`mod` は Lean の `%`（割る数が 0 でなければ、どちらもユークリッドの余り）、`isqrt` は `Nat.sqrt` で書く。日付の換算は定数の一次式である。
+- **書く関数**：止まる関数（エフェクトに `diverges` の無い関数）を、性質から呼ばれないものも含めて全部書く。失敗しうる関数は `Except` を返す定義になり、kaname が答える入力では同じ答えを返す。total な関数だけを書く形では、total な関数が、それだけでは total でない補助の関数を通して呼ぶとき（範囲で失敗を除いた呼び出し）に、呼ぶ側も書けなくなった。止まらないかもしれない関数と書けない関数は、理由を一行のコメントにして飛ばす。総称の関数は、型の引数を `{T : Type} [DecidableEq T]` にした多相の定義にする（`fn first_or[T](…)` は `def first_or {T : Type} [DecidableEq T] …`。`==` で比べられるため）。関数の値（`l => l.left`）は `fun`、関数の型は `→` で書き、`map`・`sum`・`all`・`any` などの組み込みは前置きか `List` の関数にする。
+- **最初の版で書かないもの**：辞書・集合・文字列の組み込み（文字列は、書いた値と `=`・`!=` だけを書く）、鍵の順序を使う組み込み（`sort_by`、`distinct`、`max_by`、`min_by`、`to_dict`、`group_by`）、鍵に限った型の引数（`K: key`）を持つ総称の関数。鍵の順序は文字列の順序と一緒に入れる（19 章）。これらを使う性質は W604 になる。
+- **規則と日付**：モジュールが呼ぶ規則と日付の関数は、外から与える関数として構造体 `Inner` にまとめる。`Inner.Ok` は、口が教える事実（規則の入力の範囲に入る値には、答えの範囲に入る値を返す、など）を仮定にしたものである。規則か日付を呼ぶ性質の文は `∀ inner : Inner, inner.Ok → …` で始まる。規則の型（列挙、明細の要素、答え）は、呼ぶモジュールがいくつあっても一度だけ `Kaname/Rules.lean` に `Kaname.Rules.<規則の別名>` として書く。振替は操作ごとの構造体にして `Kaname/Books.lean` に `Kaname.Books.<帳簿>.<振替>.<操作>` として書き、引数は呼び出しが省けるので `Option` にする。規則の表の中身は書かないので、規則がどう計算するかに頼る性質は証明できない（ベクタは本物の規則で確かめ、W603 は「規則の答えに頼る」と言う）。表を Lean の関数にすることは、rulec の別の機能として 19 章に残す。
+- **文**：`abbrev <性質> : Prop := ∀ 引数, 範囲 → when → 本体`。`let` は文の中の `let` になる。比べ方は Prop の関係、`and`・`or`・`not` は `∧`・`∨`・`¬`、`all`・`any` は `∀ x ∈ xs`・`∃ x ∈ xs`、`bool` を返す関数の呼び出しは `f … = true` にする。`abbrev` にするのは、`intro` も `decide` も、文を開かずに効くからである（設計の段階の試しでは、`def` の文に `decide` を使うには `unfold` が要った）。
+- **toolchain**：`proofs/` と同じ版（`leanprover/lean4:v4.34.0`）を使い、Mathlib は使わない。版の文字列は生成器が持ち、`proofs/lean-toolchain` と同じであることをテストが見る。その版が入っていなければ、elan が最初の `lake` で入れる（lib だけで 2.7 GB）。`--lean` を初めて使うとダウンロードが起きうることは、README とサイトに書く。
+
+### 38.5 証明のファイル
+
+- 置き場所は、.kn と同じディレクトリの `<モジュールの別名>.lean` である（`refund_split.lean`、日本語の版は `refund_split_ja.lean`）。処理系はこのファイルに何も書かない。
+- 性質ごとに、`theorem Proofs.<モジュールの別名>.<性質の別名> : Kaname.<モジュールの別名>.<性質の別名>` を置く。型は文の定数そのものに書く。開いた `∀ …` を書くと、「違うことを述べている」になる。補題は同じファイルに置いてよい。
+- 書き始めるときは、`samples/<別名>.lean` を .kn の隣に写し（頭の三行を除く）、`sorry` を証明に置き換える。書きながら確かめるには、`generated/lean/` で `lake build` を回す。生成した `lakefile.toml` は、.kn の隣にある証明のファイルを、その場所のまま読むライブラリを持つ（`name = "proofs_<別名>"`、`srcDir` に `generated/lean/` から .kn のディレクトリへの相対パス、`roots = ["<別名>"]`）。相対パスは、リンクをたどった実際の場所どうしから求める。ライブラリは証明のファイルがあるときだけ書く（無いファイルを読むライブラリは、`lake build` を止める）。だから、証明のファイルを置いたときと性質を変えたときは、`ritsu gen --target lean` を回し直す。
+
+例の証明は、Lean の core（`omega`、`simp`、`decide`、帰納法）と前置きの補題だけで書いた（Mathlib は使わない）。性質を持つ例は六つで、英語と日本語の版は同じ証明である（日本語の版で違うのは、モジュールの別名、`late_payment` の `Inner` のフィールドの名前、説明のコメントだけ）。時間は、デバッグのビルドの `ritsu kaname check <file> --lean` が、ベクタから `Check.lean` までにかけたもの（モジュール一つ）である。
+
+| 例 | 性質 | 証明 | `--lean` |
+|---|---|---|---|
+| `order_flow`（17.1） | `a_closed_order_takes_no_event`：閉じた注文は、どのイベントにも `err("the order is closed")` を答える | 注文の状態で場合を分けて `simp_all [«open», next]` | 2.7 秒 |
+| `late_payment`（17.7） | `nothing_is_claimed_when_paid_on_time`：期日までに払えば請求は無い | 遅れた日数が 1 に届かないことを `omega` で出し、`simp [claim, …]`。期日は `Inner` の日付の関数のまま | 2.7 秒 |
+| `media_mail`（17.8） | `nothing_heavier_than_15lb_is_quoted`：15 ポンドより重いカートには見積もりが無い | 重さが 240 オンスを超えることを `omega` で出し、`simp [quote, …]`。規則の答えは使わない | 2.4 秒 |
+| `discount_split`（17.9） | `every_line_keeps_its_label`：どの明細も項目を保つ | `runningTotals_items` で明細の列に戻し、`simp [split, List.map_map, …]` | 2.4 秒 |
+| 〃 | `shares_add_up`：配った分の合計は値引き額 | 置かない（規則の答えに頼る。W603） | |
+| `order_bill`（17.12） | `bill_is_the_price_times_the_quantities`：請求額は単価と数量の合計の積 | 明細についての帰納法（下に貼る） | 2.2 秒 |
+| `refund_split`（17.13） | 38.1 の三つ | 前置きの `runningTotals_telescope`・`runningTotals_total`・`runningTotals_items`・`mem_runningTotals`・`allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le` と `omega` | 2.4 秒 |
+
+`order_bill` の証明（`examples/order_bill/order_bill.lean`）。性質は `property bill_is_the_price_times_the_quantities(lines: list[Line] count >=1 <=30, price: money[USDc] range >=1USDc <=1000USDc)` の本体が `bill(lines: lines, price: price) = price * sum(lines, l => l.qty)` のものである。
+
+```lean
+import Kaname.order_bill
+
+namespace Proofs.order_bill
+
+open Kaname Kaname.order_bill
+
+/-- The price taken out of the sum: by induction on the lines. -/
+theorem bill_is_the_price_times_the_quantities : Kaname.order_bill.bill_is_the_price_times_the_quantities := by
+  intro lines price _ _ _ _ _
+  unfold bill
+  have key : ∀ ls : List Line, (ls.map (fun l => price * l.qty)).sum = price * (ls.map (fun l => l.qty)).sum := by
+    intro ls
+    induction ls with
+    | nil => simp
+    | cons l ls ih => simp [List.sum_cons, ih, Int.mul_add]
+  exact key lines
+
+end Proofs.order_bill
+```
+
+証明のファイルに書けないもの（コメントと文字列を除いてから読み、`«»` で囲んだものは名前として読む）：
+
+- `Kaname.` で始まらないモジュールの import（`public`・`meta`・`all` を付けた形も）。
+- `#` で始まるコマンドのうち、`#check`・`#print`・`#reduce`・`#guard_msgs` のほか（`#eval`・`#eval!`・`#guard`・`#exit` など）。
+- コードを走らせるコマンドとタクティク：`run_cmd`・`run_elab`・`run_meta`・`run_tac`・`by_elab`・`initialize`・`builtin_initialize`。
+- 構文を足すコマンド：`syntax`・`macro`・`macro_rules`・`elab`・`elab_rules`・`declare_syntax_cat`・`notation`・`infix`・`infixl`・`infixr`・`prefix`・`postfix`・`binder_predicate`・`builtin_macro`・`declare_simp_like_tactic`・`declare_config_elab`。
+- タクティクの中で走るコードを足すコマンド：`simproc`・`dsimproc`・`cbv_simproc`（`_decl` と `builtin_` の付いた形も）、`grind_propagator`・`builtin_grind_propagator`、`register_simp_attr`・`register_option`・`register_builtin_option`・`register_error_explanation`・`register_tactic_tag`。
+- `include_str`（ビルドの中でファイルを読む）と `unsafe`。
+- コンパイルしたコードをビルドの中で走らせる名前：`native_decide`、`native`（`decide +native` と `decide (config := { native := true })` を止める）、`reduceBool`・`ofReduceBool`・`reduceNat`・`ofReduceNat`・`trustCompiler`（`Lean.` を付けても、名前のどの部分にあっても）。
+- `simp`・`grind`・`reducible`・`irreducible`・`instance`（`local`・`scoped`・`-` を付けてもよい）のほかの属性。`@[…]` でも `attribute […]` でも同じである。属性でも、マクロやエラボレータを足したり（`@[macro …]`）、コンパイルしたコードを差し替えたり（`@[implemented_by …]`、`@[extern …]`）できる。
+- `set_option` のうち、`maxHeartbeats`・`maxRecDepth`・`synthInstance.*`・`linter.*`・`pp.*`・`trace.*`（`trace.profiler` とその下を除く）のほか。`debug.skipKernelTC` はカーネルを飛ばし、`trace.profiler.output` はファイルを書き、`doc.verso` は説明のコメントの読み方を変えるので、決まった名前だけを通す。
+- `{` を含む文字列。`s!"…{x}…"` の波かっこの中はコードで、文字列を除いて読む決まりでは見えない。`s!` の無い文字列もまとめて止める（証明に要る文字列は、モジュールの値と比べるものだけである）。
+
+- **記法も止める**：`notation` から `postfix` までは、`macro` と同じく、そのあとの文字の読み方を変える。`notation "done" => sorry` のような別名で、文字に現れない形を作れる。生成したモジュールは記法を足さないので、証明にも要らない。
+- **`axiom` と `sorry` は文字で止めない**：文字の決まりに当たると、ファイル全体がビルドされず、どの性質も示せなくなる。環境で見れば、`sorry` や自分の公理に頼る定理だけが E604 になり、ほかの定理は示せる。書きかけの証明のファイルでも、終わった性質から示せる。何に頼ったかは、環境が公理の名前で正確に言う（38.6 の 6）。
+- **`unsafe` は文字で止める**：`unsafe` の定義は、カーネルが定理の証明に使わせないので、示すことには効かない。止めるのは、評価されれば入出力ができるコードだからで、ビルドの中で評価させる書き方を一つ見落としても、走るコードが無いようにしておく。
+- **`native` は名前のどの部分でも止める**：`decide +native` と `decide (config := { native := true })` を、タクティクの構文を読まずに止めるためである。そのため、`native` という名前の変数も書けない。
+
+### 38.6 `--lean` が確かめることと、破れの見つけ方
+
+1. 性質をベクタで確かめる（`--lean` が無いときと同じ）。反例のある性質と、W604 の性質は Lean に回さない。証明のファイルの無いモジュールも回さない。
+2. いまの .kn から、Lean のパッケージを一時のディレクトリ（`kaname-lean-<プロセスの番号>-…`）に作り直す。`generated/lean/` は読まないので、人が書き換えても効かない。
+3. 証明のファイルを文字で読み、38.5 の書けないものを探す。見つかったファイルはビルドせず、そのファイルの性質をどれも示せないと、見つかった行で E604 にする。通ったファイルは、読んだ中身を一時のディレクトリの `Proofs/<別名>.lean` に写す（読んだ中身とビルドする中身が同じになる）。lakefile は処理系が書き、`require` もスクリプトも持たない。
+4. 回すモジュールの全部について、`lake build Kaname.<別名> Proofs.<別名> …` を一度に走らせ、10 分で止める。生成したモジュールもビルドに入れるのは、それを import しない証明のファイルでも、6 で一緒に読み込めるようにするためである。止めるときは `lake` のプロセスグループごと止め、グループが消えたのを確かめてから一時のディレクトリを消す。Lean のエラーは、パスを証明のファイルに直し、その行と列で E604 にする。Lean の文は `= Lean says:` の注に写す（二行目からは字下げする）。
+5. ビルドが通った証明のモジュールごとに、`lake env leanchecker Proofs.<別名>` で宣言をカーネルで流し直す。
+6. 処理系が持つ小さな Lean のプログラム（`Check.lean`）を、回す性質の全部について一度だけ走らせる（`import Lean` の読み込みに数秒かかるため）。モジュールごとに、生成したモジュールと証明のモジュールを `importModules (loadExts := false)` で読み込み（拡張の状態も初期化のコードも読まない）、性質ごとに、定理が証明のモジュールにあること、`theorem` であること、文の定数が生成したモジュールにあること、定理の型が文の定数そのものであること、定理が頼る公理が `propext`・`Classical.choice`・`Quot.sound` のうちだけであることを見る。公理は .olean に記録された値ではなく、定義の本体をたどって集める。型が違うときに見せる型は、生成したモジュールだけを拡張ごと読み込んだ別の環境で表示する。証明のモジュールの拡張は、そこでも読まない。
+
+破る形と、それを止める所（`tests/lean.rs`。Lean 4.34.0）。文字で止める形のうち、後ろの段でも止まるものは、文字の決まりを外して（`LeanOptions` の `scan: false`。テストだけが使う）後ろの段が止めることも確かめた。コードを走らせる形は、文字の決まりを外して走らせることはしない。走れば書くはずのファイルを置き、それができていないことを見る。
+
+| 破れ | 止める所 | 文字の決まりを外すと | テスト |
+|---|---|---|---|
+| 文と違うことを証明した（型を書き換える、文を開いて書く） | 環境（定理の型） | | `lean_turns_away_a_changed_statement`、`lean_turns_away_the_opened_statement` |
+| `sorry` | 環境（公理 `sorryAx`） | | `lean_turns_away_sorry` |
+| 自分で置いた公理 | 環境（公理の名前） | | `lean_turns_away_an_axiom_of_its_own` |
+| `native_decide` | 文字 | 環境（補助の公理を `native_decide` と言う） | `lean_turns_away_native_decide` |
+| `Lean.ofReduceBool` | 文字 | カーネル（`leanchecker`） | `lean_turns_away_reduce_bool` |
+| カーネルを通さずに足した定理（`import Lean`、`debug.skipKernelTC`、`addDecl`） | 文字 | カーネル（`leanchecker`） | `lean_turns_away_a_theorem_added_past_the_kernel`、`lean_turns_away_an_option` |
+| `#print axioms` を `macro_rules` で書き換えて `sorry` | 文字 | 環境（公理 `sorryAx`） | `lean_turns_away_macro_rules` |
+| 文の定数を自分で定義し直す | 読み込み（生成したモジュールとぶつかる） | | `lean_turns_away_a_statement_defined_again` |
+| `#eval`、`run_cmd`、`initialize` | 文字 | （走らせない） | `lean_turns_away_eval`、`lean_turns_away_run_cmd`、`lean_turns_away_initialize` |
+| `Kaname.` の外の import | 文字 | | `lean_turns_away_an_import_outside_kaname` |
+| 許していない属性（`@[implemented_by …]`、`@[macro …]`） | 文字 | | `lean_turns_away_an_attribute` |
+| 別の名前空間に置いた定理 | 環境（定理が無い。W603） | | `lean_turns_away_a_theorem_in_another_namespace` |
+| `theorem` でない宣言（`def`） | 環境（宣言の種類） | | `lean_turns_away_a_def` |
+| 終わらない証明 | 時間の上限（10 分。テストは 1 秒） | | `lean_stops_a_build_past_the_time_limit` |
+| `generated/lean/` の文を `True` に書き換える | 作り直し（読まない） | | `lean_ignores_edits_to_the_generated_package` |
+
+示した証明（`lean_takes_a_proof_that_proves_the_property`）と、ビルドのエラーを証明のファイルの行と列で言うこと（`lean_maps_build_errors_to_the_proof_file`）も同じファイルで確かめる。文字の決まりの形ごとの表（55 の形と、コメントや文字列の中は見ないこと、許した形が通ること）は `tests/properties.rs` の `the_scan_finds_each_form` で、Lean は要らない。
+
+文字で読む理由は、他人が書いた証明を CI でビルドすると、そこに書かれたコードがビルドの中で走るからである。pull request の証明のファイルが、CI の鍵を読んで外に送るコードを持つこともありうる。文字の決まりは、それをビルドの前に止める。一方、何を証明したかは文字では確かめられない（ごまかせる）ので、Lean の環境とカーネルで見る。環境では、ビルドの中で走ったコードは止められない（もう走っている）。だから両方を使う。信じるのは Lean 自身（エラボレータ、組み込みのタクティク、カーネル）で、止めるのは証明のファイルに書いたコードが走ることまでである。ビルドはネットワークに出ない（elan が toolchain を入れるときを除く）。
+
+E604 の理由は次のとおりである。ファイル全体にかかるもの：ビルドが通らない（Lean の文を添える）、書けないものを使う（何をどの行で）、カーネルが受け付けない、生成したモジュールと一緒に読み込めない（文の定数を定義し直したときなど）、10 分で終わらない。定理にかかるもの：違うことを述べている（その型を添える）、三つのほかの公理に頼る（名前を言う。`._native.native_decide.` を含む名前は `native_decide` と言う）、`theorem` でない、別のモジュールで宣言されている。定理が無いときは E604 ではなく W603 である（38.3）。
+
+**変わること**：宣言が一つ増える（2.3）。診断は E603・E604・E605・W603・W604・W605 が増え、E401 と E005 が性質にも出る。`ritsu check` と `kaname check` に `--lean`、`ritsu gen` に出力先 `lean` が増える。`check --format json`（11.1）は性質ごとの答えを返し、`doc` と `api` は性質を並べる。`api` が鍵 `properties` を足すのは性質のあるモジュールだけで、性質の無いモジュールの出力は変わらない。例は十になる（17.13 に `refund_split`）。性質を持つ例を `--lean` 無しで確かめると、性質ごとに W603 が出る。ホストの言語に生成するコードは変わらない。
+
+### 38.7 捨てたもの
+
+- 関数の頭に、事前条件と事後条件を書く形：関数一つに付くので、二つの関数の関係や、同じ関数を二度呼ぶ主張（単調さ）を書けない。
+- `examples` の中に「どの入力でも」を書く形：例は、人が読める答えを残す場所である。意味が混ざる。
+- 文を KanameCore の `eval`（`proofs/`）の上に書く形：意味論のモデルとしては正しいが、証明を書く人が読めず、`simp` や `omega` も効きにくい。関数ごとの素直な定義を書き、ずれは参照インタプリタとの突き合わせで見る。
+- 処理系が `decide` や `omega` を自分で試し、通れば示したとする形：通るかどうかが Lean の版や時間で変わり、証明を探すことまで処理系の責任になる。
+- 証明の隣で `#print axioms` を走らせて読む形と、文を文字で比べる形：どちらもごまかせる（38.8）。
+- 証明を .kn の中に書く形：Lean の構文が kaname に混ざり、Lean のエディタの支援も使えない。
+- `ritsu check` でいつも Lean を走らせる形：toolchain が大きく（2.7 GB）、一回に数秒から数分かかる。
+- Mathlib を使う形：大きく、版を `proofs/` と合わせ続ける手間がある。最初の版は、Lean の標準（`omega`、`simp`、`decide`、`grind`）と前置きの補題で書ける性質から始める。例の証明は、どれもその範囲で書けた（38.5）。
+- 生成した `generated/lean/` をそのままビルドして確かめる形：人が書き換えられる。
+- 失敗した本体を `false`、または「当てはまらない」とする形：読み方が割れる（38.2）。
+- 定理が無い性質を E604 にする形：証明は性質ごとに書き進めるもので、まだ書いていない性質は「示していない」（W603）であって、Lean が受け付けなかったのではない。E604 にすると、書きかけの証明のファイルを置いただけで `ritsu check --lean` が落ちる。
+- `axiom` と `sorry` を文字で止める形：ファイル全体が止まり、ほかの性質も示せなくなる（38.5）。
+- 証明のモジュールだけを `lake build` する形：生成したモジュールを import しない証明のファイルでは、生成したモジュールがビルドされず、6 の読み込みが落ちた。
+- 違う型を、Lean の内部の式のまま見せる形：`forall (lines : List.{0} Kaname.order_bill.Line) (price : Int), Eq.{1} Int …` のように宇宙の番号と完全な名前が並び、読めない（38.8 の設計の段階の出力）。表示には生成したモジュールの拡張が要るので、それだけを読み込んだ環境で表示する。
+- 証明のモジュールの拡張を読み込んで型を表示する形：拡張を読めば、証明のファイルが足したコードが走りうる。
+- `Check.lean` をモジュールごと、性質ごとに走らせる形：一回ごとに `import Lean` の読み込みで数秒かかる。
+
+### 38.8 確かめたこと
+
+**実装で**（`tests/lean.rs`、Lean 4.34.0）：
+
+書き出す定義と参照インタプリタの突き合わせ（`lean_definitions_agree_with_the_interpreter`）では、生成したコードのテストが走らせる 56 のモジュール（例の十の英日と `tests/modules/`）に、数の持ち方を一つずつ通す `tests/lean/numbers.kn` の英日を足した 58 のモジュールを書き、止まる関数のうち書けるものを、9 章のベクタで評価した。規則と日付は、参照インタプリタが呼んだときの答えを表にして `Inner` に渡す。評価は全部一致した。
+
+```text
+Lean: 7768 of 7768 evaluations agree with the reference interpreter, of 388 functions in 50 modules (58 modules written); 90 expressions held as a count of a finer step, 42 as a fraction; 49 vectors of functions that can fail failed in the reference interpreter and are not compared
+```
+
+`numbers.kn` は、刻みで掛けた中間の値（率を掛けた金額）と分子と分母の組（値で割った値）のそれぞれで丸めの五つ、`allocate`、`mod`（負の数で割る）、`isqrt`（`8_999_999_999_999_999_999` まで）、`running_totals`、負の数と範囲の端を通す。失敗しうる関数が失敗するベクタは、kaname の答えが無いので比べない。刻みで数える式の数（90）には、例の性質の文の中の式も入る。
+
+- `srcDir` に `..` を含む相対パスを書いた `lean_lib` を `lake` が読み、.kn の隣の証明をその場所のままビルドする（`lean_the_generated_package_builds_the_proofs_in_place`）。
+- 前置きの補題九つ（`allocate_self`、`allocate_zero`、`allocate_mono`、`allocate_sub_le`、`runningTotals_telescope`、`runningTotals_length`、`runningTotals_items`、`mem_runningTotals`、`runningTotals_total`）は、`propext`・`Classical.choice`・`Quot.sound` のほかに頼らない（`lean_the_prelude_rests_on_the_three_axioms`）。
+- 例の性質は、規則の答えに頼る `discount_split` の `shares_add_up`（英日）のほかは、どれも `--lean` で示せる（`lean_proves_the_properties_of_the_examples`。答えは `tests/golden/lean/examples.txt`）。
+- `--lean` の時間：例のモジュール一つで 2.2〜2.7 秒（38.5 の表）。例の 20 のモジュールを一度に回して 15〜17 秒、`tests/lean.rs` の 25 のテストで 26 秒（どちらもデバッグのビルド）。一時のディレクトリを毎回作り直すので、前の回のビルドは使わない。その日の最初の一回は Lean の .olean を読み込むので遅く、`refund_split` の二つのモジュールで 15 秒、二回目からは 3.3 秒だった。
+- 時間切れ：上限を 1 秒にし、重い `decide`（`Fin 64` の三つ組についての主張）の証明を置くと、30 秒以内に時間切れの E604 が返り、一時のディレクトリの名前を含むプロセスは残らず、ディレクトリも消えていた（`lean_stops_a_build_past_the_time_limit`）。`lake` のプロセスだけを止めると、`lake` が起こした `lean` が残りうるので、プロセスグループごと止めて、消えるのを待つ。
+- `#eval` は、import が無くても、ビルドの中でコードを走らせる（`IO.FS.writeFile` でファイルを書いた）。`run_cmd` は `import Lean.Elab.Command` が要り、`initialize` のコードは、それを import するモジュールをビルドするときに走った。三つとも文字で止める。
+- `module` で始まる証明のファイル（4.34 のモジュールの仕組み）は、`module` でない生成したモジュールを import できず、ビルドが通らない（E604）。
+- `Lean.ofReduceBool` に頼る定理は、文字の決まりを外しても、`leanchecker` が受け付けない。
+- 生成したモジュールを拡張ごと読み込む（`importModules (loadExts := true)`）には、先に `enableInitializersExecution` が要る。`Check.lean` は、型を表示するときだけ、生成したモジュールについてだけこれを呼ぶ。
+
+**設計の段階で**：Lean 4.34.0 で、`order_bill` の生成するモジュール（定義と三つの文、返金の配分の文 `shares_add_up`）を手で書き、証明のファイルを九つの形で置いて、38.6 の 4〜6 を流した（抜粋）。`good` は正しい証明で、`shares_add_up` には証明を書いていない。`skipkernel` は `debug.skipKernelTC` を付けて `addDecl` で定理を足す形、`duplicate` は文の定数を自分で定義し直す形、`macro` は `#print axioms` を `macro_rules` で書き換えたうえで `sorry` を使う形、`init` は `initialize` で文字を出す形である。
+
+```text
+--- good
+build exit 0: 0 errors;
+leanchecker exit 0:
+check exit 1:
+  proved bill_is_the_price_times_the_quantities [propext]
+  proved a_line_more_costs_more [propext, Quot.sound]
+  proved two_lines []
+  missing shares_add_up
+--- changed
+  states-otherwise bill_is_the_price_times_the_quantities forall (lines : List.{0} Kaname.order_bill.Line) (price : Int), Eq.{1} Int (Kaname.order_bill.bill lines price) (Kaname.order_bill.bill lines pr…
+--- sorry
+build exit 0: 0 errors; warning: Proofs/order_bill.lean:3:8: declaration uses `sorry`
+  rests-on shares_add_up [sorryAx]
+--- axiom
+  rests-on shares_add_up [Proofs.order_bill.it_holds]
+--- native
+  rests-on two_lines [Proofs.order_bill.two_lines._native.native_decide.ax_1_1]
+--- skipkernel
+build exit 0: 0 errors;
+leanchecker exit 1: leanchecker found a problem in Proofs.order_bill uncaught exception: while replaying declaration 'Proofs.order_bill.shares_add_up': (kernel) declaration type mismatch, 'Proofs.order_bill.shares_add_up' has type
+  proved shares_add_up []
+--- duplicate
+  uncaught exception: import Proofs.order_bill failed, environment already contains 'Kaname.order_bill.shares_add_up' from Kaname.order_bill
+--- macro
+  rests-on shares_add_up [sorryAx]
+--- init
+  proved two_lines []
+```
+
+- `skipkernel` では、`Check.lean` だけなら「示した」に見え（`proved shares_add_up []`）、カーネルで流し直して初めて落ちた。
+- `macro` の証明を読み込んだファイルで `#print axioms Proofs.order_bill.shares_add_up` を走らせると、`'Proofs.order_bill.shares_add_up' does not depend on any axioms` と出た。`Check.lean` は `sorryAx` を見つけた。
+- `native_decide` は、4.34 では `Lean.ofReduceBool` ではなく、定理ごとの補助の公理（`<定理>._native.native_decide.ax_1_1`）として見える。
+- `init` の初期化のコードは、`Check.lean`（`loadExts := false`）でも `leanchecker` でも走らなかった。
+- 新しく作ったパッケージの `lake build Kaname Proofs` は 0.66 秒、`leanchecker` は 0.42 秒、`Check.lean` は 5.2 秒（ほとんどが `import Lean` の読み込み）。`.lake` は 560 KB だった。
+
+### 38.9 残したこと
+
+- 19 章に回したもの：規則の表を Lean の関数にすること、辞書・集合・文字列と鍵の順序を Lean に書くこと、失敗しうる関数と回る関数についての性質、証明の補助のファイルと `Kaname.` の外の import、反例を小さくすること、`lake build` の時間の上限を変える口、性質の引数に関数の型を書くこと。
+- 書かない関数：止まらないかもしれない関数（突き合わせの材料では 73）と、別のモジュールの関数のうち `Inner` を受け取るもの（規則か日付を呼ぶもの）を呼ぶ関数。後者は、呼ぶ側の `Inner` に呼ばれる側の規則と日付を足して渡す形が要る。後者を呼ぶ性質は、`--lean` で初めて W604（文が書けない）になり、`--lean` が無いときは W603 のままである。
+- 生成した Lean のコメントと下書きの説明は英語だけで書く。`RITSU_LANG` に合わせるかは、使われ方を見て決める。
+- `--lean` を付けずに性質を多く書くと、W603 が性質の数だけ出る。性質を持つ例を `ritsu check` すると、README とサイトに貼った出力にも出る。まとめて出す形は、使われ方を見て決める。
+- 定理があるかを文字で見るのは、`theorem` の後ろの名前だけである。名前空間を閉じ忘れたファイルや、マクロが作る定理（文字の決まりで止まる）では、`--lean` の答えと食い違いうる（`--lean` の答えが正しい）。
+- Lean のエラーの文は、そのまま写す。構文のエラー（`unexpected token …; expected …`）は、受け付ける語を全部並べるので、注が長くなる。
+- `native` という名前は書けない（38.5）。
+- ブラウザで試すページは、kaname のモジュールをまだ開けない（19 章）。開けるようになっても Lean は無いので、性質はベクタで確かめるだけで、W603 になる。
+- 根の `proofs/` の kaname のモデル（KanameCore）は性質を知らない。`ritsu-model` の突き合わせ（`tests/kaname.rs`）は関数の解析と式の値を比べ、性質の式（性質を書き直した関数の式）は比べない。

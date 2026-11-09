@@ -41,16 +41,19 @@ const EXAMPLES: [(&str, &str); 16] = [
 ];
 
 /// Every example reads its rules, dates file and book in the same process: `ritsu kaname check` passes
-/// each.
+/// each. A property whose proof waits for `--lean` is kaname's W603, and nothing else is said
+/// (kaname's DESIGN 38.3).
 #[test]
 fn ritsu_kaname_checks_the_examples_with_every_language() {
+    let only_w603 = |out: &str| out.lines().filter(|l| !l.starts_with(' ') && !l.starts_with("ok ")).all(|l| l.starts_with("warning[W603]: ") || l.starts_with("警告[W603]: "));
     for (f, fns) in EXAMPLES {
         let (code, out, err) = ritsu_in(&kaname_dir(), &["kaname", "check", f]);
         assert_eq!(code, 0, "{f}: {out}{err}");
-        assert_eq!(out, format!("ok {f}: {fns}\n"));
+        assert!(out.ends_with(&format!("ok {f}: {fns}\n")) && only_w603(&out), "{out}");
     }
     let (code, out, _) = ritsu_in(&kaname_dir(), &["kaname", "check", "examples/late_payment/late_payment.ja.kn", "--lang", "ja"]);
-    assert_eq!((code, out.as_str()), (0, "ok examples/late_payment/late_payment.ja.kn: 関数 1 個、total\n"));
+    assert_eq!(code, 0);
+    assert!(out.ends_with("ok examples/late_payment/late_payment.ja.kn: 関数 1 個、total\n") && only_w603(&out), "{out}");
 }
 
 /// What is wrong is kaname's to say, as its own command says it; the words after `kaname` are
@@ -86,7 +89,8 @@ fn ritsu_check_hands_the_modules_to_kaname() {
     assert_eq!(code, 0, "{out}{err}");
     let modules: Vec<&str> = out.lines().filter(|l| l.contains(".kn: ")).collect();
     assert_eq!(modules, ["ok late_payment.ja.kn: 1 function, total", "ok late_payment.kn: 1 function, total"]);
-    assert!(out.ends_with("ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass; borders between the languages: 2 checked, 0 undecided\n"), "{out}");
+    // the property of each module waits for `--lean` (kaname's W603)
+    assert!(out.ends_with("ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass (2 warnings); borders between the languages: 2 checked, 0 undecided\n"), "{out}");
 }
 
 /// `ritsu kaname api` (kaname's DESIGN 11.1), with the verdicts: every call of the payout shown, and
@@ -122,10 +126,10 @@ fn ritsu_check_runs_the_examples_of_a_module() {
     std::fs::write(&kn, src.replace("interest: 1150GBPc }", "interest: 1151GBPc }")).unwrap();
     let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", "."]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("error[kaname E601]: late_payment.kn:30:3: The example answers Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }, and the answer written is Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1151GBPc }\n"), "{out}");
+    assert!(out.contains("error[kaname E601]: late_payment.kn:35:3: The example answers Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }, and the answer written is Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1151GBPc }\n"), "{out}");
     let (code, out, _) = ritsu_in(t.path(), &["kaname", "check", "late_payment.kn"]);
     assert_eq!(code, 1);
-    assert!(out.starts_with("error[E601]: late_payment.kn:30:3: "), "{out}");
+    assert!(out.starts_with("error[E601]: late_payment.kn:35:3: "), "{out}");
 }
 
 /// `ritsu kaname run` and `vectors`: a function run on an input read from standard input, and the

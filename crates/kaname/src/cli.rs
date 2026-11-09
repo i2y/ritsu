@@ -104,19 +104,30 @@ pub fn table() -> Table {
                     "check the words and the names, the files a module reads (rules, dates files, books, other modules), the types, units and rounding, the ranges of the values given, int64 and division by 0, the effects of the functions, the decisions written in code, and the answers of the `examples`"
                 ),
                 params: vec![("<file.kn>...", tr!("検査する .kn のファイル", "the .kn files to check"))],
-                flags: vec![flag("--format", Some("json"), tr!("ファイルごとに一つの JSON", "one JSON object a file")).choices(&["json"]), root_flag()],
+                flags: vec![
+                    flag("--format", Some("json"), tr!("ファイルごとに一つの JSON", "one JSON object a file")).choices(&["json"]),
+                    root_flag(),
+                    flag(
+                        "--lean",
+                        None,
+                        tr!(
+                            "性質の証明（.kn の隣の <モジュールの別名>.lean）を Lean で確かめる。証明が受け付けられた性質は「示した」になり、受け付けられなければ E604。lake が要る",
+                            "check the proofs of the properties (<the module's alias>.lean beside the .kn) with Lean: a property whose proof Lean takes is shown, and one whose proof it does not take is E604. Needs lake"
+                        ),
+                    ),
+                ],
                 exits: vec![
                     (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
                     (1, tr!("エラーが一つ以上", "at least one error")),
                     (
                         2,
                         tr!(
-                            "引数の誤り、読めないファイル、規則・日付のファイル・帳簿を読むモジュールを、それらを読めないこの kaname で走らせた（E202。ritsu kaname で走らせる）",
-                            "bad arguments, a file that cannot be read, or a module that reads a rule, a dates file or a book, run with this kaname, which reads none of them (E202: run it as ritsu kaname)"
+                            "引数の誤り、読めないファイル、規則・日付のファイル・帳簿を読むモジュールを、それらを読めないこの kaname で走らせた（E202。ritsu kaname で走らせる）、`--lean` で Lean（lake）が見つからないか走らせられない",
+                            "bad arguments, a file that cannot be read, a module that reads a rule, a dates file or a book, run with this kaname, which reads none of them (E202: run it as ritsu kaname), or `--lean` with Lean (lake) not found or not able to run"
                         ),
                     ),
                 ],
-                examples: vec!["ritsu kaname check payout.kn", "ritsu kaname check late_payment.ja.kn --format json --lang ja"],
+                examples: vec!["ritsu kaname check payout.kn", "ritsu kaname check late_payment.ja.kn --format json --lang ja", "ritsu kaname check refund_split.kn --lean"],
                 codes: every_code(),
             },
             Cmd {
@@ -344,10 +355,29 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
         given => check::root_of(given.map(std::path::Path::new), &a.pos[0]),
     };
     let json = a.get("--format") == Some("json");
+    // `--lean` needs Lean before anything is checked (DESIGN 38.3)
+    let lean = a.has("--lean");
+    if lean && crate::lean::find_lake().is_none() {
+        return refuse(err, crate::lean::LeanError::Missing.text(), lang);
+    }
     let run = Run::new(suite.clone());
+    let mut checked: Vec<(&String, Result<std::rc::Rc<check::Outcome>, String>)> = a.pos.iter().map(|f| (f, run.file(f))).collect();
+    if lean {
+        let given: Vec<std::rc::Rc<check::Outcome>> = checked.iter().filter_map(|(_, o)| o.as_ref().ok().cloned()).collect();
+        let answered = match check::with_lean(&given, &crate::lean::LeanOptions::default()) {
+            Ok(a) => a,
+            Err(e) => return refuse(err, e.text(), lang),
+        };
+        let mut it = answered.into_iter();
+        for (_, o) in checked.iter_mut() {
+            if o.is_ok() {
+                *o = Ok(it.next().expect("an answer for each outcome"));
+            }
+        }
+    }
     let mut worst = 0u8;
-    for f in &a.pos {
-        match run.file(f) {
+    for (f, o) in checked {
+        match o {
             Ok(o) => {
                 worst = worst.max(o.exit());
                 if json {

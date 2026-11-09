@@ -1,0 +1,33 @@
+module 返金の按分(refund_split_ja) v1
+description "注文の明細に、まだ払われていない残りの比で返金を配る。配った分の合計がちょうど返金額になる。refund_split.kn の日本語の版"
+
+record 明細(Line)
+  品番(sku)  : string
+  残り(left) : money[USDc]  range >=1USDc <=1_000_000USDc
+
+record 明細の返金(Share)
+  品番(sku)    : string
+  残り(left)   : money[USDc]
+  配分(share)  : money[USDc]
+
+fn 按分する(split)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc) -> list[明細の返金] total
+  description "どの明細にも、その明細の終わりまでの返金から、手前までの返金を引いた分を配る"
+  map(running_totals(明細, 一件 => 一件.残り), 途中 =>
+    明細の返金 { 品番: 途中.item.品番, 残り: 途中.item.残り, 配分: allocate(返金, 途中.upto, 途中.total) - allocate(返金, 途中.before, 途中.total) })
+
+property 配分の合計は返金額(shares_add_up)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "配った分を足すと返金額になる"
+  sum(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分) = 返金
+
+property 負の配分は無い(no_share_is_negative)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "どの明細にも、負の額は配らない"
+  all(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分 >= 0USDc)
+
+property 残りより多くは配らない(no_share_is_more_than_its_left)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "残りの合計を超えない返金なら、どの明細にも、その明細の残りより多くは配らない"
+  when 返金 <= sum(明細, 一件 => 一件.残り)
+  all(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分 <= 一件.残り)
+
+examples
+  按分する(明細: [明細 { 品番: "book-1", 残り: 500USDc }, 明細 { 品番: "mug-1", 残り: 1000USDc }], 返金: 100USDc)
+    = [明細の返金 { 品番: "book-1", 残り: 500USDc, 配分: 33USDc }, 明細の返金 { 品番: "mug-1", 残り: 1000USDc, 配分: 67USDc }]

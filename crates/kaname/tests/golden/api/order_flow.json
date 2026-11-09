@@ -6,7 +6,7 @@
     "alias": "order_flow",
     "version": "v1",
     "description": "An order moved from state to state by the events its host hands it: each state is a value of a sum with the fields it has, and the next state, or why an event is refused, is a match on the state and the event",
-    "sha256": "813333749bfc58617ca637bda99056cad3661b190f77e9189c97f4802c7cd09f"
+    "sha256": "7a0eecbd02e7dbf208c489b2be766020c72cc4f75a56d02516cdecdc7878e425"
   },
   "generated": {
     "typescript": "glue/order_flow.ts",
@@ -626,6 +626,31 @@
         "go": "CheckOpen",
         "rust": "check_open"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "a_closed_order_takes_no_event",
+      "alias": "a_closed_order_takes_no_event",
+      "line": 92,
+      "description": "A shipped or cancelled order refuses every event, and says why",
+      "params": [
+        {
+          "name": "order",
+          "alias": "order",
+          "type": "Order",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "event",
+          "alias": "event",
+          "type": "Event",
+          "range": null,
+          "count": null
+        }
+      ],
+      "when": 1
     }
   ],
   "transfers": []

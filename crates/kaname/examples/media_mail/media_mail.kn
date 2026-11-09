@@ -20,6 +20,11 @@ fn quote(lines: list[Line] count >=1 <=30) -> money[USDc]? total
   else
     none
 
+property nothing_heavier_than_15lb_is_quoted(lines: list[Line] count >=1 <=30)
+  description "A cart heavier than 15 pounds gets no quote, whatever the rule answers"
+  when weight_of(lines: lines) > 15lb
+  quote(lines: lines) = none
+
 examples
   quote(lines: [Line { sku: "book-1", qty: 2, weight: 22oz, media: true }]) = 586USDc
   quote(lines: [Line { sku: "book-1", qty: 2, weight: 22oz, media: true }, Line { sku: "mug-1", qty: 1, weight: 12oz, media: false }]) = none

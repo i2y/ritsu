@@ -10,3 +10,33 @@ geas a_check_that_fails_and_a_refused_click
 geas the_pixie_greeter_in_english
 geas the_pixie_greeter_in_japanese
 geas a_pixie_app_replays_each_order
+
+# kaname's tests/lean.rs and ritsu's run lake, and Lean is installed only in the group of rulec:
+# proofs.yml runs them where it is, and fails on a SKIP line there. Those that stop a proof file by
+# its text before Lean runs are not here: they run in every group.
+kaname lean_definitions_agree_with_the_interpreter
+kaname lean_the_prelude_rests_on_the_three_axioms
+kaname lean_the_generated_package_builds_the_proofs_in_place
+kaname lean_takes_a_proof_that_proves_the_property
+kaname lean_turns_away_a_changed_statement
+kaname lean_turns_away_the_opened_statement
+kaname lean_turns_away_sorry
+kaname lean_turns_away_an_axiom_of_its_own
+kaname lean_turns_away_native_decide
+kaname lean_turns_away_a_theorem_added_past_the_kernel
+kaname lean_turns_away_a_statement_defined_again
+kaname lean_turns_away_macro_rules
+kaname lean_turns_away_an_attribute
+kaname lean_turns_away_reduce_bool
+kaname lean_turns_away_a_theorem_in_another_namespace
+kaname lean_turns_away_a_def
+kaname lean_stops_a_build_past_the_time_limit
+kaname lean_ignores_edits_to_the_generated_package
+kaname lean_maps_build_errors_to_the_proof_file
+kaname lean_proves_the_properties_of_the_examples
+ritsu check_lean_shows_the_properties_of_the_example
+ritsu check_lean_turns_away_a_proof_by_sorry
+ritsu gen_lean_builds_the_proofs_in_place
+# The `--lean` that the pages of kaname show is run by the test of those pages where lake is there,
+# and is a SKIP line elsewhere; the rest of the test runs in every group.
+ritsu the_pages_of_kaname_show_the_files_and_what_the_commands_print

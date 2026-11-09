@@ -25,14 +25,39 @@ impl Engine {
     /// json` prints it, then the line that says the file passes. `files` are as the person gave them,
     /// from where the program runs; `root` is the project's.
     pub fn checked_with(&self, root: &Path, files: &[String], ports: &ritsu_ports::Ports, verdicts: Option<Rc<dyn Verdicts>>, lang: Lang) -> Vec<ritsu_ports::Checked> {
+        self.checked_lean(root, files, ports, verdicts, None, lang)
+    }
+
+    /// [`Engine::checked_with`], with the proofs beside the modules held by Lean to the statements
+    /// of their properties when `lean` is given (`ritsu check --lean`, DESIGN 38.6): every file in
+    /// one run of Lean. When Lean cannot be run, each file is unchecked, with why (exit 2).
+    pub fn checked_lean(&self, root: &Path, files: &[String], ports: &ritsu_ports::Ports, verdicts: Option<Rc<dyn Verdicts>>, lean: Option<&crate::lean::LeanOptions>, lang: Lang) -> Vec<ritsu_ports::Checked> {
         let mut suite: crate::suite::Suite = ports.clone().into();
         if let Some(v) = verdicts {
             suite = suite.with_verdicts(v);
         }
         let run = Run::new(suite);
+        let mut outcomes: Vec<Result<Rc<check::Outcome>, String>> = files.iter().map(|f| run.file(f)).collect();
+        if let Some(opts) = lean {
+            let given: Vec<Rc<check::Outcome>> = outcomes.iter().filter_map(|o| o.as_ref().ok().cloned()).collect();
+            match check::with_lean(&given, opts) {
+                Ok(answered) => {
+                    let mut it = answered.into_iter();
+                    for o in outcomes.iter_mut().filter(|o| o.is_ok()) {
+                        *o = Ok(it.next().expect("an answer for each outcome"));
+                    }
+                }
+                Err(e) => {
+                    let head = if lang == Lang::Ja { "エラー" } else { "error" };
+                    let said = format!("{head}: {}\n", e.text().get(lang));
+                    return files.iter().map(|f| ritsu_ports::Checked::unchecked(f, said.clone())).collect();
+                }
+            }
+        }
         files
             .iter()
-            .map(|f| match run.file(f) {
+            .zip(outcomes)
+            .map(|(f, o)| match o {
                 Ok(o) => check::unit(root, f, Ok(&o), lang),
                 Err(e) => check::unit(root, f, Err(e), lang),
             })

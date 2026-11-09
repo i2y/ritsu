@@ -25,6 +25,11 @@ fn 遅れの請求(claim)(請求書(invoice): 請求書, 支払日(paid_on): dat
   else
     none
 
+property 期日までに払えば請求は無い(nothing_is_claimed_when_paid_on_time)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%)
+  description "期日までに払われた請求書には、期限がどの日を期日にしても、請求が無い"
+  when 支払日 <= 期限.期日(請求日: 請求書.請求日)
+  遅れの請求(請求書: 請求書, 支払日: 支払日, 基準金利: 基準金利) = none
+
 # 一つ目は GOV.UK の例。1,000 ポンド、基準金利 0.5%、50 日遅れて払われた。
 examples
   遅れの請求(請求書: 請求書 { 番号: "inv_1", 請求日: 2026-03-02, 金額: 100_000GBPc }, 支払日: 2026-05-20, 基準金利: 0.5%)

@@ -19,7 +19,7 @@ fn run(args: &[&str], suite: Suite) -> (u8, String, String) {
     (code, String::from_utf8(out).unwrap(), String::from_utf8(err).unwrap())
 }
 
-const EXAMPLES: [&str; 9] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill"];
+const EXAMPLES: [&str; 10] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split", "order_bill", "refund_split"];
 
 #[test]
 fn each_example_reads_as_the_golden_files_hold() {
@@ -41,7 +41,7 @@ fn what_the_api_says_and_what_stops_it() {
     let v = ritsu_base::json::parse(&json).unwrap();
     let ritsu_base::json::Json::Obj(top) = &v else { panic!("{json}") };
     let keys: Vec<&str> = top.iter().map(|(k, _)| k.as_str()).collect();
-    assert_eq!(keys, ["kaname", "file", "module", "generated", "wasm", "uses", "enums", "records", "functions", "transfers"]);
+    assert_eq!(keys, ["kaname", "file", "module", "generated", "wasm", "uses", "enums", "records", "functions", "properties", "transfers"]);
     // the package's Wasm (DESIGN 36.11): the exports of the canonical ABI, the call that names this
     // module and its function, and what comes back
     let wasm = v.get("wasm").unwrap();
@@ -89,4 +89,19 @@ fn what_the_api_says_and_what_stops_it() {
     assert!(out.contains("[E202]"), "{out}");
     // one file only
     assert_eq!(run(&["api"], common::joined()).0, 2);
+}
+
+/// The properties of a module (DESIGN 38) are listed after its functions, with their names, aliases,
+/// parameters and lines; a module that writes none has no such key, so no other description changes.
+#[test]
+fn the_properties_of_a_module_are_listed() {
+    for (kn, golden) in [("tests/properties/shares.kn", "shares"), ("tests/properties/shares.ja.kn", "shares.ja"), ("tests/properties/in_place.kn", "in_place")] {
+        let (code, json, err) = run(&["api", kn, "--root", "tests/properties"], common::joined());
+        assert_eq!(code, 0, "{kn}: {json}{err}");
+        let json = json.replacen(&format!("\"kaname\": \"{}\"", env!("CARGO_PKG_VERSION")), "\"kaname\": \"<version>\"", 1);
+        ritsu_base::json::parse(&json).expect("JSON");
+        ritsu_testkit::golden(format!("tests/golden/api/{golden}.json"), &json);
+    }
+    let (_, json, _) = run(&["api", "examples/payout/payout.kn", "--root", "examples/payout"], common::joined());
+    assert!(json.contains("\"functions\"") && !json.contains("\"properties\""), "{json}");
 }

@@ -33,6 +33,24 @@ const LEDGER_JA: Beside = &[(
     "台帳.book",
     "book 台帳 v1\ndescription \"マーケットプレイスのお金を、セントで数える\"\n\nunit USD scale 2\n\naccount 売り手の残高(売り手: string) : USD\n  at least 0 refused as 残高不足\naccount カード会社 : USD outside\n\ntransfer 入金(支払い: string, 売り手: string, 金額: USD)\n  key 支払い\n  move 金額 from カード会社 to 売り手の残高(売り手)\n".as_bytes(),
 )];
+/// A proof file that runs code in the build (`#eval`), which `--lean` stops before anything is built:
+/// E604's example needs no Lean.
+const PROOF_WITH_EVAL: Beside = &[(
+    "example.lean",
+    b"import Kaname.example
+
+#eval IO.println \"run in the build\"
+
+namespace Proofs.example
+
+theorem double_is_even : Kaname.example.double_is_even := by
+  intro n _ _
+  unfold Kaname.example.double
+  omega
+
+end Proofs.example
+",
+)];
 const RING_EN: Beside = &[("other.kn", b"module other v1\n\nuse module example from \"example.kn\"\n")];
 const RING_JA: Beside = &[("ほか.kn", "module ほか(other) v1\n\nuse module 例 from \"example.kn\"\n".as_bytes())];
 
@@ -97,8 +115,8 @@ pub fn ledger() -> Ledger {
             "E005",
             tr!("生成するコードに出る名前には、ASCII の別名が要ります", "A name the generated code takes needs an ASCII alias"),
             tr!(
-                "モジュール、関数、引数、レコード、フィールド、列挙、列挙の値の名前が ASCII でなく、別名が無いとき。別名が ASCII の名前（英字か `_` で始まり、英字・数字・`_` だけ）でないときも出ます。`let` の名前と、組み込みの関数に渡す関数の引数には要りません。",
-                "The name of a module, a function, a parameter, a record, a field, an enum or a value of one is not ASCII and has no alias; or an alias is no ASCII name (a letter or `_`, then letters, digits and `_`). A `let` and a parameter of a function given to a builtin need none."
+                "モジュール、関数、性質、引数、レコード、フィールド、列挙、列挙の値の名前が ASCII でなく、別名が無いとき。別名が ASCII の名前（英字か `_` で始まり、英字・数字・`_` だけ）でないときも出ます。性質の名前は、Lean に書き出す定理の名前になります。`let` の名前と、組み込みの関数に渡す関数の引数には要りません。",
+                "The name of a module, a function, a property, a parameter, a record, a field, an enum or a value of one is not ASCII and has no alias; or an alias is no ASCII name (a letter or `_`, then letters, digits and `_`). A property's name is the name of the theorem written for Lean. A `let` and a parameter of a function given to a builtin need none."
             ),
             tr!("名前のすぐあとに、`請求日(invoiced)` のように丸括弧で別名を付けてください。", "Write an alias in parentheses right after the name: `請求日(invoiced)`."),
             "module example v1\n\nfn café_price() -> money[USDc]\n  350USDc\n",
@@ -539,12 +557,12 @@ pub fn ledger() -> Ledger {
             "E401",
             tr!("関数のエフェクトが、書いたエフェクトに収まりません", "The function does more than the effect written on it"),
             tr!(
-                "`total` と書いた関数に、実行時に失敗しうる場所か、輪になる呼び出し（再帰）があるとき。`fails` に書いていない種類の失敗が起きうるとき、`diverges` と書かずに再帰があるときも出ます。範囲を書かない値の、型の端から来るあふれも、`overflow` で失敗しうる場所です。呼んだ関数のエフェクトも、呼んだ側のエフェクトに入ります。関数の値を呼ぶところは、その関数の型に書いたエフェクトを数えます。書いていなければ数えず、渡した関数のエフェクトは、それを渡した関数に入ります。言語をまたぐ判定（ritsu の X2・X3・X4・X6）が決める場所は、その答えで数えます。示せなかった場所と例のある場所は、ほかの場所と同じく、実行時に失敗しうる場所です。答えを受け取らない実行では、その場所は答えを待つ場所で、この確かめに使いません。",
-                "A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. An overflow that comes from the end of a type, of a value whose range is not written, is a place that can fail with `overflow` too. The effects of the functions it calls count. A call of a function value counts the effect written on its function type; with none written it counts nothing, and the effect of the function given is in the function that gives it. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count."
+                "`total` と書いた関数に、実行時に失敗しうる場所か、輪になる呼び出し（再帰）があるとき。`fails` に書いていない種類の失敗が起きうるとき、`diverges` と書かずに再帰があるときも出ます。範囲を書かない値の、型の端から来るあふれも、`overflow` で失敗しうる場所です。呼んだ関数のエフェクトも、呼んだ側のエフェクトに入ります。関数の値を呼ぶところは、その関数の型に書いたエフェクトを数えます。書いていなければ数えず、渡した関数のエフェクトは、それを渡した関数に入ります。言語をまたぐ判定（ritsu の X2・X3・X4・X6）が決める場所は、その答えで数えます。示せなかった場所と例のある場所は、ほかの場所と同じく、実行時に失敗しうる場所です。答えを受け取らない実行では、その場所は答えを待つ場所で、この確かめに使いません。性質も total として確かめ、本体に失敗しうる場所がある性質にも出ます。",
+                "A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. An overflow that comes from the end of a type, of a value whose range is not written, is a place that can fail with `overflow` too. The effects of the functions it calls count. A call of a function value counts the effect written on its function type; with none written it counts nothing, and the effect of the function given is in the function that gives it. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count. A property is held to `total` too, and one whose body has a place that can fail says it."
             ),
             tr!(
-                "注に挙げた場所を示せるようにする（範囲を狭める分岐を書くか、範囲を書かない値に範囲を書く）か、書いたエフェクトを広げてください。再帰する関数には `diverges` と書きます。",
-                "Make the places the notes give shown (write the branch that narrows the value, or the range of a value with none), or widen the effect written; a recursive function is written `diverges`."
+                "注に挙げた場所を示せるようにする（範囲を狭める分岐を書くか、範囲を書かない値に範囲を書く）か、書いたエフェクトを広げてください。再帰する関数には `diverges` と書きます。性質は、その場所に届く値を `when` の行か引数の範囲で狭めます。",
+                "Make the places the notes give shown (write the branch that narrows the value, or the range of a value with none), or widen the effect written; a recursive function is written `diverges`. A property narrows the values that reach the places with `when` lines or the ranges of its parameters."
             ),
             "module example v1\n\nfn steps(n: number range >=0 <=100) -> number total\n  if n <= 0 then 0 else steps(n: n - 1) + 1\n",
             "module 例(example) v1\n\nfn 段数(steps)(数(n): number range >=0 <=100) -> number total\n  if 数 <= 0 then 0 else 段数(数: 数 - 1) + 1\n",
@@ -611,6 +629,91 @@ pub fn ledger() -> Ledger {
             "module example v1\n\nfn double(n: number range >=0 <=9) -> number\n  n * 2\n\nexamples\n  double(n: 2) = true\n",
             "module 例(example) v1\n\nfn 倍(double)(数(n): number range >=0 <=9) -> number\n  数 * 2\n\nexamples\n  倍(数: 2) = true\n",
             &["E601"],
+        ),
+        // ── Properties (DESIGN 38) ──
+        e(
+            "E603",
+            tr!("性質が成り立たない入力があります", "A property is false for an input"),
+            tr!(
+                "性質を、引数の範囲と `when` の行の比べから作ったベクタで流し、成り立たない入力があったとき。最初に見つけた入力と、そのときの `let` の行の値を出します。この性質は Lean に回しません。",
+                "The property, run on the vectors made from the ranges of its parameters and the comparisons of its `when` lines, is false for one of them. The first such input is given, with the values of the property's `let` lines; the property is not sent to Lean."
+            ),
+            tr!(
+                "関数か性質のどちらかを直してください。一部の入力についての性質なら、`when` の行でその入力に狭めます。",
+                "Correct the function or the property. A property of some of the inputs narrows them with `when` lines."
+            ),
+            "module example v1\n\nfn double(n: number range >=0 <=9) -> number total\n  n * 2\n\nproperty double_is_more(n: number range >=0 <=9)\n  double(n: n) > n\n",
+            "module 例(example) v1\n\nfn 倍(double)(数(n): number range >=0 <=9) -> number total\n  数 * 2\n\nproperty 倍は元より大きい(double_is_more)(数(n): number range >=0 <=9)\n  倍(数: 数) > 数\n",
+            &["W603", "E601"],
+        ),
+        with_files(
+            "E604",
+            tr!("Lean が証明を受け付けません", "Lean does not take the proof"),
+            tr!(
+                "`--lean` が証明のファイルを確かめ、受け付けなかったとき。理由は、証明のファイルに書けないものがある（何をどの行に）、ビルドが通らない（Lean のエラーを、証明のファイルの行で）、定理の型が性質の文と違う、`propext`・`Classical.choice`・`Quot.sound` のほかの公理に頼る（`sorry` なら `sorryAx`、`native_decide` はその名前で）、その名前の宣言が定理でない、カーネルが宣言を受け付けない、.kn から書いた Lean と一緒に読めない、時間内に終わらない、のどれかです。ファイル全体についての理由は、ファイルに一度だけ言います。",
+                "`--lean` checks the proof file and does not take it: the file holds what a proof file may not (what, and on which line); it does not build (Lean's error, at its line in the proof file); a theorem's type is not the property's statement; a theorem rests on an axiom other than `propext`, `Classical.choice` and `Quot.sound` (`sorryAx` for a `sorry`, and `native_decide` by that name); the name is declared as something other than a theorem; the kernel does not take a declaration; the file cannot be read beside the Lean written from the .kn; or Lean does not finish in time. What is wrong with the file as a whole is said once, of the file."
+            ),
+            tr!(
+                "注の理由を直してください。性質ごとに、名前空間 `Proofs.<モジュールの別名>` に `theorem <性質の別名> : Kaname.<モジュールの別名>.<性質の別名>` を置きます。import できるのは `Kaname.…` だけです。",
+                "Mend what the notes say. For each property, `theorem <property's alias> : Kaname.<module's alias>.<property's alias>` goes in the namespace `Proofs.<module's alias>`; the file imports only `Kaname.…`."
+            ),
+            ("module example v1\n\nfn double(n: number range >=0 <=9) -> number total\n  n * 2\n\nproperty double_is_even(n: number range >=0 <=9)\n  mod(double(n: n), 2) = 0\n", PROOF_WITH_EVAL),
+            ("module 例(example) v1\n\nfn 倍(double)(数(n): number range >=0 <=9) -> number total\n  数 * 2\n\nproperty 倍は偶数(double_is_even)(数(n): number range >=0 <=9)\n  mod(倍(数: 数), 2) = 0\n", PROOF_WITH_EVAL),
+            &["W603", "W604"],
+        ),
+        e(
+            "E605",
+            tr!("性質の引数が関数の型です", "A parameter of a property is of a function type"),
+            tr!(
+                "性質の引数に、関数の型（`(number) -> number` など）を書いたとき。性質はベクタで確かめ、ベクタは関数の値を作れません。",
+                "A parameter of a property is written with a function type (`(number) -> number` and the like). A property is tried on vectors, which cannot make a function value."
+            ),
+            tr!("確かめたい関数は、性質の本体で名前を書いて呼んでください。", "Call the function the property is about by its name in the body."),
+            "module example v1\n\nproperty twice_is_no_less(step: (number) -> number, x: number range >=0 <=10)\n  step(step(x)) >= x\n",
+            "module 例(example) v1\n\nproperty 二度でも下がらない(twice_is_no_less)(一歩(step): (number) -> number, 数(x): number range >=0 <=10)\n  一歩(一歩(数)) >= 数\n",
+            &[],
+        ),
+        e(
+            "W603",
+            tr!("性質が示されていません", "A property is not shown"),
+            tr!(
+                "性質がどのベクタでも成り立ったが、Lean が証明を受け付けていないとき。理由は、証明が無い（.kn の隣の `<別名>.lean` が無いか、その性質の定理が無い）、証明はあるが `--lean` で確かめていない、規則や日付の答えに頼っていて証明が無い（証明が使えるのは、口がその答えについて教えることだけ）、のどれかです。",
+                "A property held on every vector, and Lean has taken no proof of it: there is no proof (no `<alias>.lean` beside the .kn, or no theorem of it there); there is one, and `--lean` did not run; or it rests on what a rule or a date answers and there is no proof (a proof may use only what the port says of those answers)."
+            ),
+            tr!(
+                "`ritsu gen --target lean` が書く `samples/<別名>.lean` を、.kn の隣に `<別名>.lean` として置き、`sorry` を証明に置き換えて、`--lean` で確かめてください。",
+                "Put `samples/<alias>.lean`, which `ritsu gen --target lean` writes, beside the .kn as `<alias>.lean`, write the proofs in place of `sorry`, and check them with `--lean`."
+            ),
+            "module example v1\n\nfn double(n: number range >=0 <=9) -> number total\n  n * 2\n\nproperty double_is_even(n: number range >=0 <=9)\n  mod(double(n: n), 2) = 0\n",
+            "module 例(example) v1\n\nfn 倍(double)(数(n): number range >=0 <=9) -> number total\n  数 * 2\n\nproperty 倍は偶数(double_is_even)(数(n): number range >=0 <=9)\n  mod(倍(数: 数), 2) = 0\n",
+            &["E603", "E604", "W604", "W605"],
+        ),
+        e(
+            "W604",
+            tr!("性質を Lean に書けません", "A property cannot be written for Lean"),
+            tr!(
+                "性質か、性質が呼ぶ関数が、まだ Lean に書き出さないもの（辞書、集合、文字列の組み込みの関数、キーの順序を使う組み込みの関数、キーに縛った型の引数）を使うとき。規則や日付を `Inner` で受け取るほかのモジュールの関数を呼ぶ性質は、`--lean` のときに言います。ベクタでは、どれも確かめます。",
+                "The property, or a function it calls, uses what is not written for Lean yet: a dict, a set, a builtin of strings, a builtin that uses the order of keys, a type parameter held to keys. A property that calls a function of another module that takes its rules and dates as `Inner` is said of with `--lean`. Their vectors run all the same."
+            ),
+            tr!(
+                "Lean に書ける形に性質を書き直すか、ベクタで確かめるだけで足りるなら、そのままにしてください。",
+                "Write the property in a form that is written for Lean, or leave it as it is if its vectors are enough."
+            ),
+            "module example v1\n\nproperty trimming_twice_is_trimming_once(name: string)\n  name.trim().trim() = name.trim()\n",
+            "module 例(example) v1\n\nproperty 二度刈り込んでも同じ(trimming_twice_is_trimming_once)(名前(name): string)\n  名前.trim().trim() = 名前.trim()\n",
+            &["W603"],
+        ),
+        e(
+            "W605",
+            tr!("`when` の行が、どのベクタでも成り立ちません", "The `when` lines of a property hold on no vector"),
+            tr!(
+                "性質の `when` の行が、どのベクタでも成り立たないとき。どの入力でも成り立たない `when` の行を持つ性質は、何を言っていても証明できてしまいます。その性質の W603 と一緒に出ます。",
+                "The `when` lines of a property hold on none of its vectors. A property whose `when` lines hold for no input can be proved whatever it says. It is said beside the property's W603."
+            ),
+            tr!("`when` の行と引数の範囲を見直してください。", "Look again at the `when` lines and the ranges of the parameters."),
+            "module example v1\n\nproperty past_the_end(x: number range >=0 <=100)\n  when x > 200\n  x >= 0\n",
+            "module 例(example) v1\n\nproperty 範囲の外(past_the_end)(数(x): number range >=0 <=100)\n  when 数 > 200\n  数 >= 0\n",
+            &["W603"],
         ),
         // ── Security (ritsu's DESIGN 16) ──
         e(

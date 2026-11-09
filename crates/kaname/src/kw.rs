@@ -18,6 +18,12 @@ pub const ENUM: &str = "enum";
 pub const RECORD: &str = "record";
 pub const FN: &str = "fn";
 pub const EXAMPLES: &str = "examples";
+/// `property` (DESIGN 38.1): read as a word at the start of a line at the left margin alone, so a name
+/// may go on being spelled like it.
+pub const PROPERTY: &str = "property";
+/// `when` at the start of a line of a property's body (DESIGN 38.1), after its description and before
+/// its `let` lines: read as a word there alone.
+pub const WHEN: &str = "when";
 /// `private fn`, `private record`, `private enum` (DESIGN 28.2): read at the start of a line alone.
 pub const PRIVATE: &str = "private";
 

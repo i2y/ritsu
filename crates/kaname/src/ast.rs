@@ -59,6 +59,8 @@ pub struct Module {
     pub enums: Vec<EnumDecl>,
     pub records: Vec<RecordDecl>,
     pub fns: Vec<FnDecl>,
+    /// The properties (DESIGN 38), in the order written.
+    pub properties: Vec<Property>,
     pub examples: Vec<Example>,
     /// How many expressions the parser made: the ids are below it.
     pub exprs: usize,
@@ -329,6 +331,34 @@ pub struct FnDecl {
     pub line: usize,
     /// The last line of its body, from 1.
     pub last: usize,
+    /// The property this function is read as, by its place among the module's properties (DESIGN
+    /// 38.2): None for a function written `fn`. The checks read a property as such a function, at
+    /// the end of the module's functions, and leave it out of the module the stages after the check
+    /// read (`check::Checked`).
+    pub property: Option<usize>,
+}
+
+/// `property shares_add_up(lines: …, refund: …)` and its body (DESIGN 38.1): a claim that holds for
+/// every input in its parameters' ranges for which its `when` lines are `true`.
+#[derive(Clone, Debug)]
+pub struct Property {
+    pub name: Name,
+    pub params: Vec<Param>,
+    pub description: Option<(String, Span)>,
+    /// The `when` lines, in their order.
+    pub when: Vec<Expr>,
+    /// The `let` lines and the last line, which is the claim.
+    pub body: Block,
+    pub line: usize,
+    /// The last line of its body, from 1.
+    pub last: usize,
+    /// The function the checks read it as (DESIGN 38.2): `total`, answering `bool`, its body
+    /// `if <the when lines joined by and> then <the body> else true` (the body alone where no `when`
+    /// is written).
+    pub lowered: FnDecl,
+    /// The ids of the expressions the lowering made (the `and`s, the `if` and its `true`), which
+    /// are all `bool`.
+    pub made: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]

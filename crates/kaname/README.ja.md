@@ -69,9 +69,13 @@ fn 次(next)(注文(order): 注文, イベント(event): イベント) -> result
 
 ```console
 $ ritsu check examples/order_flow --root examples/order_flow --lang ja
+警告[kaname W603]: examples/order_flow/order_flow.ja.kn:92:1: 性質 `閉じた注文はイベントを受け付けない` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow_ja.lean の証明は `--lean` で確かめます
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok examples/order_flow/order_flow.ja.kn: 関数 5 個、total
+警告[kaname W603]: examples/order_flow/order_flow.kn:92:1: 性質 `a_closed_order_takes_no_event` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow.lean の証明は `--lean` で確かめます
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok examples/order_flow/order_flow.kn: 関数 5 個、total
-ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所
 ```
 
 注文を持ち、イベントを受け取り、`ritsu gen` がこのモジュールから書いたコードを呼ぶのはホストです。
@@ -171,9 +175,13 @@ ok examples/late_payment/rules/late_payment_charges.rule
 ok examples/late_payment/rules/遅延の請求額.rule
 examples/late_payment/dates/payment_terms.cal: ok — invoiced 2026-01-01〜2027-12-31 の 730 日のすべてで、どの日付も計算できます。例 2 行も合っています
 examples/late_payment/dates/支払期限.cal: ok — 請求日 2026-01-01〜2027-12-31 の 730 日のすべてで、どの日付も計算できます。例 2 行も合っています
+警告[kaname W603]: examples/late_payment/late_payment.ja.kn:28:1: 性質 `期日までに払えば請求は無い` は、`when` の行が成り立つ 10 個のベクタ（19 個のうち）のすべてで成り立ちましたが、示されていません。late_payment_ja.lean の証明は `--lean` で確かめます
+    28 | property 期日までに払えば請求は無い(nothing_is_claimed_when_paid_on_time)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%)
 ok examples/late_payment/late_payment.ja.kn: 関数 1 個、total
+警告[kaname W603]: examples/late_payment/late_payment.kn:28:1: 性質 `nothing_is_claimed_when_paid_on_time` は、`when` の行が成り立つ 10 個のベクタ（19 個のうち）のすべてで成り立ちましたが、示されていません。late_payment.lean の証明は `--lean` で確かめます
+    28 | property nothing_is_claimed_when_paid_on_time(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%)
 ok examples/late_payment/late_payment.kn: 関数 1 個、total
-ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
+ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
 
 `支払日 - 期日` は −758 日から 1,431 日で、`遅れ >= 1` の分岐の中では 1 日から 1,431 日です。規則の入力の範囲（1 から 1,500）に収まります。
@@ -263,6 +271,195 @@ $ ritsu kaname check tests/doc/decisions.kn --lang ja
 ok tests/doc/decisions.kn: 関数 3 個: total 2 個、fails rule 1 個
 ```
 
+## 性質と証明
+
+関数には性質を書けます。`examples` が挙げる入力だけでなく、入力の全部についての主張です。
+`property` は関数と同じ形で書き、`description`、性質が語る入力を絞る `when` の行、`true` になるべき最後の行を持ちます（[examples/refund_split](examples/refund_split) は、注文の明細に返金を配る例です）。
+
+```kn
+property 配分の合計は返金額(shares_add_up)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "配った分を足すと返金額になる"
+  sum(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分) = 返金
+
+property 残りより多くは配らない(no_share_is_more_than_its_left)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "残りの合計を超えない返金なら、どの明細にも、その明細の残りより多くは配らない"
+  when 返金 <= sum(明細, 一件 => 一件.残り)
+  all(按分する(明細: 明細, 返金: 返金), 一件 => 一件.配分 <= 一件.残り)
+```
+
+読み方は次のとおりです。引数が宣言した範囲に入り、どの `when` の行も成り立つ入力なら、最後の行は `true` になります。
+`ritsu check` は、性質をいつも引数のベクタ（`kaname vectors` が選ぶ入力）で確かめます。
+成り立たない入力があれば、その入力を挙げてエラーにします。
+
+```console
+$ ritsu kaname check tests/properties/shares.ja.kn --lang ja
+エラー[E603]: tests/properties/shares.ja.kn:12:1: 性質 `どの明細にも配る` は、明細: [明細 { 品番: "a", 残り: 500000USDc }, 明細 { 品番: "a", 残り: 500000USDc }], 返金: 1USDc で成り立ちません
+    12 | property どの明細にも配る(every_line_gets_a_share)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  = 15 行目: `配分` は [0USDc, 1USDc]
+  = `check` は、性質を引数のベクタで参照インタプリタに流します。この入力では、`when` の行がどれも `true` で、最後の行が `false` になりました。
+  = 関数を直すか、`when` の行か引数の範囲で性質を狭めるか、性質を直してください。
+```
+
+すべてのベクタで成り立っても、性質を示したことにはなりません。ベクタは入力の一部だからです。
+`check` は W603 で、足りないものを言います（証明を書く前の `refund_split` の三つのうち最初の一つを、短くして載せます）。
+
+```text
+警告[W603]: examples/refund_split/refund_split.ja.kn:18:1: 性質 `配分の合計は返金額` は、12 個のベクタのすべてで成り立ちましたが、示されていません。証明がありません（refund_split_ja.lean に、この性質の定理がありません）
+    18 | property 配分の合計は返金額(shares_add_up)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  = `ritsu gen --target lean` が、定理の名前と `sorry` だけの下書き `samples/refund_split_ja.lean` を書きます。それを .kn の隣に refund_split_ja.lean として置き、`sorry` を証明に置き換えてください。
+…
+ok examples/refund_split/refund_split.ja.kn: 関数 1 個、total
+```
+
+示す方法は証明だけで、証明は kaname の外で書きます。
+`ritsu gen --target lean` は、関数を Lean 4 の定義に、性質を定理の文に書き出し、証明を `sorry` にした下書きも書きます。
+
+```console
+$ ritsu gen --target lean
+```
+
+```text
+generated: generated/lean/lean-toolchain
+generated: generated/lean/lakefile.toml
+generated: generated/lean/.gitignore
+generated: generated/lean/Kaname/Prelude.lean
+generated: generated/lean/Kaname/refund_split.lean
+generated: generated/lean/samples/refund_split.lean
+```
+
+`Kaname/refund_split.lean` に定義と性質ごとの文が入ります。たとえば次のとおりです（英語の版のモジュールの出力で、日本語の版は名前の空間が `Kaname.refund_split_ja` になります）。
+
+```lean
+abbrev shares_add_up : Prop :=
+  ∀ (lines : List Line) (refund : Int),
+    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    0 ≤ refund → refund ≤ 10000000 →
+    ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
+```
+
+人か、エージェントが、.kn の隣の `refund_split.lean` に証明を書きます。`samples/refund_split.lean` を写し、`sorry` を証明に置き換えます。
+定理は `Proofs.<モジュール>.<性質>` という名前で、型は `ritsu gen` が書いた文そのものです。
+
+```lean
+import Kaname.refund_split
+
+namespace Proofs.refund_split
+
+open Kaname Kaname.refund_split
+
+/-- What is left on one line or more, each of a cent or more, comes to more than nothing. -/
+theorem lefts_pos : ∀ ls : List Line, 1 ≤ ls.length → (∀ l ∈ ls, l.Within) →
+    0 < (ls.map fun l => l.left).sum
+  | [], h, _ => by simp at h
+  | l :: ls, _, h => by
+    simp only [List.map_cons, List.sum_cons]
+    have hl := (h l (List.mem_cons_self ..)).1
+    have hs : 0 ≤ (ls.map fun l => l.left).sum := by
+      match ls with
+      | [] => simp
+      | m :: ms => exact Int.le_of_lt (lefts_pos (m :: ms) (by simp) (fun x hx => h x (List.mem_cons_of_mem _ hx)))
+    omega
+
+/-- The shares, each the refund up to its line's end less the refund before it, telescope to the
+refund of the whole. -/
+theorem shares_add_up : Kaname.refund_split.shares_add_up := by
+  intro lines refund hlen _ hwithin _ _
+  have hT := lefts_pos lines hlen hwithin
+  have key : (split lines refund).map (fun s => s.share)
+      = (runningTotals lines (fun l => l.left)).map
+          (fun r => allocate refund r.upto (lines.map fun l => l.left).sum - allocate refund r.before (lines.map fun l => l.left).sum) := by
+    unfold split
+    rw [List.map_map]
+    apply List.map_congr_left
+    intro r hr
+    simp only [Function.comp, runningTotals_total _ _ r hr]
+  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x (lines.map fun l => l.left).sum)]
+  rw [allocate_self refund hT, allocate_zero]
+  omega
+
+/-- A share is the refund up to its line's end less the refund before it, and `allocate` does not go
+down as its share grows. -/
+theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+  intro lines refund hlen _ hwithin hr0 _ s hs
+  have hT := lefts_pos lines hlen hwithin
+  unfold split at hs
+  rw [List.mem_map] at hs
+  obtain ⟨r, hr, rfl⟩ := hs
+  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
+    have := (hwithin l hl).1
+    show 0 ≤ l.left
+    omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by
+    have hitem : r.item ∈ lines := by
+      have := List.mem_map_of_mem (f := (·.item)) hr
+      rwa [runningTotals_items] at this
+    have := (hwithin r.item hitem).1
+    omega)
+  show allocate refund r.upto r.total - allocate refund r.before r.total ≥ 0
+  omega
+
+/-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
+theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_than_its_left := by
+  intro lines refund hlen _ hwithin hr0 _ hle s hs
+  have hT := lefts_pos lines hlen hwithin
+  unfold split at hs
+  rw [List.mem_map] at hs
+  obtain ⟨r, hr, rfl⟩ := hs
+  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
+    have := (hwithin l hl).1
+    show 0 ≤ l.left
+    omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have := (hwithin r.item hitem).1
+  have hsub := allocate_sub_le (t := refund) hr0 (htot ▸ hle) (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  show allocate refund r.upto r.total - allocate refund r.before r.total ≤ r.item.left
+  omega
+
+end Proofs.refund_split
+```
+
+`allocate_self`、`allocate_mono`、`runningTotals_telescope` などの補題は、`ritsu gen` が証明と一緒に書く `Kaname/Prelude.lean` にあります。
+
+`ritsu check` は証明を探さず、`--lean` が無ければ証明を読みません。
+`ritsu check --lean` は、.kn から Lean のパッケージを作り直し、隣の証明のファイルを Lean に通して、どの定理も文と同じ型で、Lean の三つの公理（`propext`、`Classical.choice`、`Quot.sound`）のほかに頼らないことを確かめます。`sorry`、自分で置いた公理、`native_decide` を使った証明は E604 です。
+性質を**示した**と言うのは、Lean が証明を受け付けたときだけです。
+証明のファイルは、Lean がビルドする前に文字として読みます。ビルドの中で何かが走らないように、`Kaname` の外の import、コードを走らせるコマンド、自分で足した構文を持つファイルは、先に断ります。
+
+証明のファイルを置いたあとも、`--lean` の無い `check` は W603 を出します。理由は「refund_split.lean の証明は `--lean` で確かめます」に変わります。
+`--lean` を付けて、Lean がすべての証明を受け付ければ、W603 は消えます。
+
+```console
+$ ritsu check --lean examples/refund_split --lang ja
+ok examples/refund_split/refund_split.ja.kn: 関数 1 個、total
+ok examples/refund_split/refund_split.kn: 関数 1 個、total
+ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
+`sorry` のまま残した証明（ここでは `no_share_is_negative` の証明）は E604 です。
+
+```text
+エラー[kaname E604]: examples/refund_split/refund_split.lean:39:1: `no_share_is_negative` の証明は、`propext`・`Classical.choice`・`Quot.sound` のほかに `sorryAx` に頼っています
+    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+  = `sorry` を証明に置き換えてください。
+  = `--lean` は、refund_split.kn から書き直した Lean に対して証明をビルドし、性質ごとに、型が `Kaname.refund_split.<性質>` で、`propext`・`Classical.choice`・`Quot.sound` のほかの公理に頼らない定理 `Proofs.refund_split.<性質>` を受け付けます。
+```
+
+初めて `--lean` を使うときは、Lean が要ります。
+Lean のバージョン管理の道具 [elan](https://github.com/leanprover/elan) を入れてください。elan が最初に走らせる `lake` が、証明が使う toolchain（`leanprover/lean4:v4.34.0`、ライブラリと合わせて約 2.7 GB）を一度だけダウンロードします。
+`lake` が無ければ、`--lean` は理由を言って終了コード 2 で止まります。
+ほかに Lean を使う所はありません。`--lean` の無い `ritsu check` と、ほかの言語への `ritsu gen` は、Lean を走らせません。
+
+まだ Lean に書けないものは W604 になります。性質のベクタでの確かめはします。書けないのは、辞書、集合、`=` 以外の文字列の組み込み、`sort_by`・`distinct`・`max_by`・`min_by`・`to_dict`・`group_by`、キーに限った型の引数（`K: key`）です。
+規則や日付のファイルの答えに頼る性質も示せません。証明が使えるのは、規則や日付の口が教える事実だけだからです（W603 がそう言います）。
+止まらないかもしれない関数は書かず、失敗しうる関数についての性質は書けません（E401）。
+`when` の行がどのベクタでも成り立たなければ W605 です。そういう性質は、何を言っていても証明できてしまいます。
+
 ## 言語
 
 - **値**：単位付きの数、お金、量、刻みのある率、日付、真偽、文字列（コードポイントの並び）、レコード、列挙と、値の下にフィールドを持つ列挙（直和型）、リスト、辞書、集合、値の無いことがある値、業務として拒むことを値で返す `result[T, E]`。
@@ -290,7 +487,7 @@ kaname のモジュールがあれば、`Cargo.toml` の頭に、クレートを
 ## 人が読むページ
 
 `ritsu kaname doc` は、判断を承認する人と、関数がどこまで確かめられたかを読むエンジニアのためのページを書きます。
-呼ぶ規則と日付のファイル（rulec と koyomi が描いたそれぞれのページ付き）、組み立てる振替、関数（total なもの、実行時に確かめるものとその場所と理由、止まらないかもしれないもの）、コードにある判断、例の答えが載ります。
+呼ぶ規則と日付のファイル（rulec と koyomi が描いたそれぞれのページ付き）、組み立てる振替、関数（total なもの、実行時に確かめるものとその場所と理由、止まらないかもしれないもの）、性質（.kn の隣に証明のファイルがあるか）、コードにある判断、例の答えが載ります。
 Markdown はプルリクエストに貼るためのもので、HTML は外のものを何も読まない一つのファイルです。
 例のページは [遅延の請求のページ](../ritsu/tests/golden/kaname-doc/late_payment.ja.md) にあります（規則と日付のページは除いてあります）。
 
@@ -320,6 +517,7 @@ $ ritsu kaname vectors examples/order_flow/order_flow.ja.kn --function 次 --lan
 $ ritsu kaname doc examples/late_payment/late_payment.ja.kn --root examples/late_payment --format html --lang ja
 $ ritsu kaname api examples/late_payment/late_payment.ja.kn --root examples/late_payment
 $ ritsu kaname explain E301 --lang ja
+$ ritsu check --lean examples/refund_split
 ```
 
 `run` は、JSON で渡した入力で関数を一つ参照インタプリタに流します。`vectors` は、関数ごとに選んだ入力を、その答えと一緒に書き出します。
@@ -330,12 +528,13 @@ $ ritsu kaname explain E301 --lang ja
 ## 例
 
 どの例も英語の版があり、その隣に日本語の版（`<名前>.ja.kn`）があります。
-初めの四つは、ほかの言語を読まない Functional Core の例で、`host/` の下に TypeScript、Python、Go のホストを持ちます。九つ目の [examples/order_bill](examples/order_bill) もそうで、ホストは持たず、値の出どころを `fed by` で書きます。
+初めの四つは、ほかの言語を読まない Functional Core の例で、`host/` の下に TypeScript、Python、Go のホストを持ちます。九つ目の [examples/order_bill](examples/order_bill) もそうで、ホストは持たず、値の出どころを `fed by` で書きます。十個目の [examples/refund_split](examples/refund_split) もホストを持たず、関数の性質を書きます。
 
 - [examples/order_flow](examples/order_flow)：イベントで注文を状態から状態へ進める例です。状態はフィールドを持つ列挙の値で、次の状態か、イベントを拒む理由を `result` で返します。
 - [examples/stock_diff](examples/stock_diff)：品番から棚にある数への辞書で、倉庫の二回の棚卸しを品番ごとに比べる例です。一日の入出庫を品番ごとにまとめて棚卸しの数に足すこと、発注する品番の集合も求めます。
 - [examples/handles](examples/handles)：人が入力したハンドルを、サービスが持つ形（空白、大文字と小文字）にしてから、決まりに合うかを確かめ、合わない理由を全部返す例です。テキストからハンドルと番号の組を `try` で読みます。
 - [examples/catalog](examples/catalog)：自分を含むレコードで書いた、カタログの分類の木の例です。品物ごとのパス、空の分類を除いた木、呼ぶ側が渡す関数で名前を替えた木、総称の関数が分類ごとに選んだものを求めます。
+- [examples/refund_split](examples/refund_split)：注文の明細に、まだ払われていない残りの比で返金を配る例です。配った分の合計が返金額になること、負の額は配らないこと、明細の残りより多くは配らないことを、関数の性質として書きます。証明は Lean で、モジュールの隣に置きます。
 
 あとの四つは、規則・日付・帳簿を呼ぶ例で、日本語の版は日本語の版の内側のファイルを読みます。規則は、転記した文書を、隣に置いて固定したコピーから引いています。
 

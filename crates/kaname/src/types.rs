@@ -75,6 +75,7 @@ pub struct NamedFn {
 }
 
 /// What the check gives every expression of a module.
+#[derive(Clone)]
 pub struct Typed {
     pub types: Vec<Ty>,
     pub refs: Vec<Ref>,
@@ -476,7 +477,74 @@ impl<'a> Ck<'a> {
         }
     }
 
+    /// The function of this module a word names, by its name or its alias: a property names none
+    /// (DESIGN 38.2), as it is never called.
+    fn own_fn(&self, w: &str) -> Option<usize> {
+        let m = self.dc.module;
+        (0..self.decls.fns.len()).find(|&i| self.decls.fns[i].name.is(w) && m.fns.get(i).is_none_or(|f| f.property.is_none()))
+    }
+
+    /// What E101 adds where the word a call names is a property of `m` (DESIGN 38.2).
+    fn property_note(m: &Module, w: &str) -> Option<Text> {
+        m.properties.iter().any(|p| p.name.is(w)).then(|| {
+            tr!(
+                "`{w}` は性質です。性質は呼べません。`check` が引数のベクタで確かめ、`--lean` が隣の証明を Lean で確かめます。",
+                "`{w}` is a property, and a property is never called: `check` tries it on the vectors of its parameters, and `--lean` checks the proof beside it in Lean."
+            )
+        })
+    }
+
+    /// A property, read as the function `i` it is lowered to (DESIGN 38.2): its parameters (E605 for
+    /// one of a function type), each `when` line and the last line `bool`, and the expressions the
+    /// lowering made `bool` too.
+    fn property(&mut self, i: usize, k: usize) {
+        let info = self.decls.fns[i].clone();
+        let m = self.dc.module;
+        let p = &m.properties[k];
+        self.scopes = vec![Vec::new()];
+        self.tparams.clear();
+        self.dc.scope.clear();
+        self.ret = Ty::Bool;
+        self.try_ok = false;
+        for prm in &info.params {
+            let n = prm.name.text.clone();
+            if let Ty::Fn(..) = prm.slot.ty {
+                let pn = &p.name.text;
+                self.err("E605", prm.name.span, tr!("性質 `{pn}` の引数 `{n}` は関数の型です", "The parameter `{n}` of the property `{pn}` is of a function type")).notes.push(tr!(
+                    "性質はベクタで確かめます。ベクタは関数の値を作れないので、性質の引数に関数の型は書けません。確かめたい関数は、性質の本体で名前を書いて呼んでください。",
+                    "A property is tried on vectors, which cannot make a function value: its parameters take no function type. Call the function the property is about by its name in the body."
+                ));
+            }
+            self.bind(&n, prm.slot.ty.clone(), prm.name.span, false);
+            if self.dc.uses.contains_key(&n) {
+                self.err("E006", prm.name.span, tr!("`{n}` は `use` で読んだものの名前です", "`{n}` is the name of what a `use` reads")).notes.push(tr!(
+                    "`{n}(…)` や `{n}.…` がどちらを指すのか、読む人に分からなくなります。別の名前を付けてください。",
+                    "A reader of `{n}(…)` or `{n}.…` could not tell which one it means: choose another name."
+                ));
+            }
+        }
+        for w in &p.when {
+            self.answer_ok = false;
+            let t = self.expr(w, Some(&Ty::Bool));
+            self.condition(&t, w.span, &tr!("`when` の行", "a `when` line"));
+        }
+        self.answer_ok = false;
+        self.block(&p.body, Some(&Ty::Bool));
+        let name = &p.name.text;
+        self.fits_at(&p.body.answer, &Ty::Bool, &tr!("性質 `{name}` の最後の行", "the last line of the property `{name}`"));
+        for id in &p.made {
+            if let Some(t) = self.types.get_mut(*id) {
+                *t = Ty::Bool;
+            }
+        }
+        self.scopes.clear();
+        self.ret = Ty::Error;
+    }
+
     fn function(&mut self, i: usize, f: &FnDecl) {
+        if let Some(k) = f.property {
+            return self.property(i, k);
+        }
         let info = self.decls.fns[i].clone();
         self.scopes = vec![Vec::new()];
         // the type parameters are in scope for the types written in the body (DESIGN 26.1)
@@ -514,7 +582,7 @@ impl<'a> Ck<'a> {
         if !matches!(t, Ty::Fn(..)) {
             return;
         }
-        let what = if self.decls.fns.iter().any(|f| f.name.is(n)) {
+        let what = if self.own_fn(n).is_some() {
             tr!("このモジュールの関数", "a function of the module")
         } else if crate::kw::is_builtin(n) {
             tr!("組み込みの関数", "a builtin function")
@@ -557,7 +625,7 @@ impl<'a> Ck<'a> {
         self.try_ok = false;
         let ExprKind::Call(callee, args) = &x.call.kind else { return };
         let found = callee.path().and_then(|p| match p.as_slice() {
-            [(w, _)] => self.decls.fns.iter().position(|f| f.name.is(w)),
+            [(w, _)] => self.own_fn(w),
             _ => None,
         });
         let Some(fi) = found else {
@@ -1323,7 +1391,7 @@ impl<'a> Ck<'a> {
                     return Ty::Error;
                 }
                 // a function of the module, written as a value (DESIGN 27.1)
-                if let Some(f) = self.decls.fns.iter().find(|f| f.name.is(w)).cloned() {
+                if let Some(f) = self.own_fn(w).map(|i| self.decls.fns[i].clone()) {
                     return self.named_value(e, self.dc.canon.to_path_buf(), &f, want);
                 }
                 if crate::kw::is_builtin(w) {
@@ -1340,7 +1408,9 @@ impl<'a> Ck<'a> {
                 }
                 // a value of an enum where no type says which: `tier.gold`
                 let owner = self.decls.enums.iter().find(|en| en.values.iter().any(|v| v.is(w))).map(|en| en.name.text.clone());
+                let note = Self::property_note(self.dc.module, w);
                 let d = self.err("E101", e.span, tr!("`{w}` という名前はありません", "There is no `{w}`"));
+                d.notes.extend(note);
                 if let Some(o) = owner {
                     d.notes.push(tr!(
                         "列挙 `{o}` の値なら、型が決まらないところでは `{o}.{w}` と書いてください。",
@@ -2601,7 +2671,7 @@ impl<'a> Ck<'a> {
         let words: Vec<&str> = path.iter().map(|(w, _)| w.as_str()).collect();
         // a local that is no function value is never called, so a call names a function, a rule or a
         // builtin even where a local has the same name (`let count = count(lines)`)
-        let callable = words.len() > 1 || self.decls.fns.iter().any(|f| f.name.is(words[0])) || self.dc.uses.contains_key(words[0]) || crate::kw::is_builtin(words[0]);
+        let callable = words.len() > 1 || self.own_fn(words[0]).is_some() || self.dc.uses.contains_key(words[0]) || crate::kw::is_builtin(words[0]);
         if !callable && self.lookup(words[0]).is_some() {
             let w = words[0];
             self.err("E105", callee.span, tr!("`{w}` は値なので、呼び出せません", "`{w}` is a value, which is not called"));
@@ -2614,7 +2684,7 @@ impl<'a> Ck<'a> {
         }
         match words.as_slice() {
             [w] => {
-                if let Some(fi) = self.decls.fns.iter().position(|f| f.name.is(w)) {
+                if let Some(fi) = self.own_fn(w) {
                     let info = self.decls.fns[fi].clone();
                     self.refer(callee, Ref::Fn(self.dc.canon.to_path_buf(), info.name.text.clone()));
                     if !info.tparams.is_empty() {
@@ -2652,7 +2722,9 @@ impl<'a> Ck<'a> {
                     self.refer(callee, Ref::Builtin(b));
                     return self.builtin(e, b, None, args, want);
                 }
+                let note = Self::property_note(self.dc.module, w);
                 let d = self.err("E101", callee.span, tr!("`{w}` という関数はありません", "There is no function `{w}`"));
+                d.notes.extend(note);
                 // a builtin written only after a value, written as a function (DESIGN 21.4)
                 if crate::kw::is_method(w) {
                     d.notes.push(tr!(
@@ -2679,7 +2751,7 @@ impl<'a> Ck<'a> {
                 }
                 Some(Target::Module(c)) => {
                     let Some(info) = c.decls.fns.iter().find(|f| f.name.is(d)).cloned() else {
-                        self.err("E101", path[1].1, tr!("モジュール `{u}` に、関数 `{d}` はありません", "The module `{u}` has no function `{d}`"));
+                        self.err("E101", path[1].1, tr!("モジュール `{u}` に、関数 `{d}` はありません", "The module `{u}` has no function `{d}`")).notes.extend(Self::property_note(&c.module, d));
                         return Ty::Error;
                     };
                     // a `private` function of another module (DESIGN 28.2)

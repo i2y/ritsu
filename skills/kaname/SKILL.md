@@ -1,6 +1,6 @@
 ---
 name: kaname
-description: Write, check and fix kaname modules (`.kn`), a small general-purpose language for the functional core of a program — the part with no input or output that only computes and decides, such as a state moved by events, input checked and normalized, counts compared in dicts and sets, a tree reshaped, and the code around business rules that calls rulec's rules, koyomi's dates and chobo's books — in ritsu's types (records, enums with fields, lists, dicts, sets, strings, generics, `result`, function values), held to the rules of units, rounding, ranges and int64, with each function's effect (total, the places checked when it runs, or may not stop) in its type, and generated as TypeScript, Python, Go and Rust by `ritsu gen` for a host to call. Use when such a core has to be written, checked or called from a host; when a kaname diagnostic (E001-E602, W301-W501, W901) or ritsu's E201-W205 across the languages has to be fixed; or when a person has to be shown which functions are total and which decisions are in tables.
+description: Write, check and fix kaname modules (`.kn`), a small general-purpose language for the functional core of a program — the part with no input or output that only computes and decides, such as a state moved by events, input checked and normalized, counts compared in dicts and sets, a tree reshaped, and the code around business rules that calls rulec's rules, koyomi's dates and chobo's books — in ritsu's types, held to the rules of units, rounding, ranges and int64, each function's effect (total, checked when it runs, or may not stop) in its type, and generated as TypeScript, Python, Go and Rust by `ritsu gen` for a host to call. Use when such a core has to be written, checked or called from a host; when a kaname diagnostic (E001-E605, W301-W605, W901) or ritsu's E201-W205 across the languages has to be fixed; when a claim about every input of a function is to be written as a `property` and proved in Lean; or when a person has to be shown which functions are total and which decisions are in tables.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run kaname as `ritsu kaname <command>`, or as `kaname <command>` through a link to ritsu named for it. A module has no input or output of its own; the host reads and writes, keeps state, and makes the transfers a function returns.
 license: MIT OR Apache-2.0
 ---
@@ -59,6 +59,8 @@ its code with `ritsu gen`. Three things stay with people:
    language, or the `target` line of ritsu.mod), call it from the host, and have CI run the same
    `ritsu gen` with `--check`.
 5. Write the page with `ritsu kaname doc`, and show it to the people who approve the decisions.
+6. For a claim about every input of a function, write a `property` and, if it is to be shown, a proof in
+   Lean (section 5).
 
 ```console
 $ ritsu kaname check examples/order_flow/order_flow.kn
@@ -218,6 +220,8 @@ fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <
   (E301): the rule is a person's.
 - Which way a rounding goes, when the documents do not say.
 - What the host does with each reason a transfer can be refused with.
+- What a property says, and which is wrong when it has a counterexample (E603), the function or the
+  property: the claim is a promise, and whether to loosen it is a person's.
 
 ## 4. From a diagnostic to a fix
 
@@ -249,6 +253,12 @@ reproduction. The usual ones:
 | E303, W303 | a divisor can be 0 | branch on it before dividing |
 | E401 | a function does more than the effect written on it | make its places shown, or write the wider effect after asking |
 | E402 | a function given does more than the effect its parameter's type writes | narrow the values with an `if` in the lambda, or widen the effect on the type after asking |
+| E603 | a property that is false for an input the check found (it names the input and the `let` values) | find why the function breaks it; ask whether the function or the property is wrong |
+| E604 | `--lean` did not take the proof of a property | read the reason (the build, a missing theorem, a statement that differs, an axiom, a thing a proof file cannot hold) and fix the proof, never the statement |
+| E605 | a parameter of a property that is a function | give the property the values the function would be made from |
+| W603 | a property that holds on its vectors and is not shown | write the proof, or run `--lean`; for a rule's answers, a proof may use only what the port says |
+| W604 | a property that uses what is not written for Lean yet | leave it to its vectors, or write it with what is written |
+| W605 | the `when` lines of a property hold on none of its vectors | look at the `when` lines and the ranges again |
 | W501 | a decision written in code | move it into a rule, after asking |
 | E601, E602 | an example that does not hold, or is not a call | fix the function or the example; ask which is right |
 | W901 | a key written in the `.kn` | take it out and keep it where the code runs; tell the person to revoke it if it is real (the history keeps it) |
@@ -265,7 +275,73 @@ reproduction. The usual ones:
 
 Fix the first diagnostic first: an error of words, names or types stops the checks after it.
 
-## 5. What it generates, and the page
+## 5. Properties and proofs
+
+A `property` is a claim about every input of a function, which `examples` cannot be: the shares
+of a refund come to the refund, no line gets a negative share. It is written like a function, with
+`description`, `when` lines and a last line that must be `true`:
+
+```kn
+property shares_add_up(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "The shares come to the refund"
+  sum(split(lines: lines, refund: refund), s => s.share) = refund
+```
+
+**Writing one.**
+
+- The parameters' ranges and counts are what the claim speaks of, and what a proof may assume: write
+  them as tight as the host promises, and no tighter.
+- A `when` line narrows the inputs (`when refund <= sum(lines, l => l.left)`). Check that some
+  input makes it true: W605 says that none of the vectors does, and a property that holds for no input
+  can be proved whatever it says. Take W605 as a fault in the property.
+- A property is total: if the body can fail (E401), narrow it with `when` or an `if`. It cannot be called,
+  cannot be `private`, and a parameter cannot be a function (E605).
+- A Japanese name needs an ASCII alias (E005); the alias is its name in Lean.
+- `ritsu kaname check` tries the property on its vectors. E603 names an input that breaks it: either
+  the function or the property is wrong, which is a person's to say. Do not narrow a `when` line to
+  make a counterexample go away.
+
+**Proving one.** `check` never says a property is shown; only Lean does. A property is proved in a
+file beside the `.kn`, `<module alias>.lean`, which is the work of whoever writes the proof:
+
+1. Run `ritsu gen --target lean`. It writes `generated/lean/Kaname/<alias>.lean` (the definitions,
+   and one `abbrev <property> : Prop` for the statement of each property) and
+   `generated/lean/samples/<alias>.lean`, a draft with a `sorry` for each proof.
+2. Copy the draft beside the `.kn` as `<alias>.lean`, without its first three comment lines, and
+   write a proof in place of each `sorry`. A theorem is named `Proofs.<alias>.<property>` and its
+   type is the statement itself (`Kaname.<alias>.<property>`); write the type as the draft does, never
+   as an opened `∀ …`, which is "states something else". A lemma may precede it in the same file.
+3. `intro` the parameters and the range hypotheses the statement lists in order, `unfold` the
+   function (the definitions are in `Kaname/<alias>.lean`), and finish with `omega`, `simp`,
+   `decide` or `grind`; Lean's own, since no Mathlib is used. For rounding, `allocate` and
+   `running_totals`, `Kaname/Prelude.lean` has lemmas (`allocate_self`, `allocate_zero`,
+   `allocate_mono`, `allocate_sub_le`, `runningTotals_telescope`, `runningTotals_length`,
+   `runningTotals_items`): read it before proving them again.
+4. To try as you go, run `lake build` in `generated/lean/`; its lakefile reads the proof file where it
+   is (run `ritsu gen --target lean` again after adding the file or changing a property).
+5. At the end, run `ritsu check --lean`. Only that says a property is shown; E604 says why a proof was
+   not taken.
+6. Never edit `generated/lean/`: `--lean` writes it again from the `.kn` and does not read it.
+   A proof that cannot be found is news: say what is stuck, and try a counterexample (change the
+   ranges, the `when` lines) before assuming the property is true.
+
+**What a proof file cannot hold** (it is read as text before Lean builds it, so that nothing it says
+runs in the build): an import from outside `Kaname.`; `#eval` and every `#` command but `#check`,
+`#print`, `#reduce` and `#guard_msgs`; `macro`, `syntax`, `elab`, `run_cmd` and the other commands
+that add syntax or run code; `native_decide` and `decide +native`; an attribute other than `simp`,
+`grind`, `reducible`, `irreducible` and `instance`; a `set_option` other than `maxHeartbeats`,
+`maxRecDepth`, `synthInstance.*`, `linter.*`, `pp.*` and `trace.*`. `sorry` and an axiom of your own
+are E604.
+
+**What cannot be a property yet** (W604, which is still tried on the vectors): a dict or a set, a
+builtin of strings other than `=` and `!=`, `sort_by`, `distinct`, `max_by`, `min_by`, `to_dict`,
+`group_by`, a type parameter held to keys. A property that rests on what a rule or a dates file
+answers is W603 "rests on the answers of the rule": a proof knows only the facts the port tells.
+
+`--lean` needs Lean: [elan](https://github.com/leanprover/elan) and, on the first run, a download of
+the toolchain (about 2.7 GB). Without `lake` it stops with exit code 2.
+
+## 6. What it generates, and the page
 
 `ritsu gen` writes each module under `glue/` in the package of each of TypeScript, Python, Go and Rust,
 beside the code of the rules, dates and books it calls, with a helper module and no dependency.
@@ -293,6 +369,6 @@ each file it leaves out), and `--library` does not write it. With modules of kan
 
 `ritsu kaname doc` writes the page for people: the rules and dates files called, with the pages
 their languages draw, and the transfers built; the functions, total, checked when they run (each
-place and why), or that may not stop; the decisions in code; and the examples' answers. The
+place and why), or that may not stop; its properties and whether a proof is beside the .kn; the decisions in code; and the examples' answers. The
 Markdown is for a pull request; the HTML is one file that reads nothing from outside. Change the
 module, not the page.

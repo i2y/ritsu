@@ -110,7 +110,8 @@ fn the_total_of_the_running_totals_is_the_sum_of_the_same_list() {
 /// The share discount_split takes from its rule is what the rule's `result` comes to (DESIGN 32,
 /// rulec's §15.268): two shares of the discount at running totals in order, never below zero and
 /// never above the discount. A field that writes that range takes the share, where the analysis used
-/// to find no bound on it; a narrower one is still shown a value outside it.
+/// to find no bound on it; a narrower one is still shown a value outside it. Beside no proof file,
+/// the two properties of the example say they rest on the rule's answers (DESIGN 38.3).
 #[test]
 fn the_share_of_the_rule_has_the_range_its_result_comes_to() {
     let src = std::fs::read_to_string("examples/discount_split/discount_split.kn")
@@ -121,9 +122,11 @@ fn the_share_of_the_rule_has_the_range_its_result_comes_to() {
         src.replace("  share : money[USDc]\n", &format!("  share : money[USDc]  {range}\n"))
     };
     let o = common::check_text("t.kn", &with("range >=0USDc <=10_000_000USDc"));
-    assert_eq!(common::codes(&o), Vec::<&str>::new(), "{}", common::shown(&o, ritsu_base::text::Lang::En));
+    assert_eq!(common::codes(&o), ["W603", "W603"], "{}", common::shown(&o, ritsu_base::text::Lang::En));
+    assert!(o.diags.iter().all(|d| d.render(ritsu_base::text::Lang::En).contains("it rests on the answers of the rule `discount_share`")));
+    // `split` can fail then, and so can the two properties that call it
     let o = common::check_text("t.kn", &with("range >=0USDc <=9_999_999USDc"));
-    assert_eq!(common::codes(&o), ["E401", "E301"], "{}", common::shown(&o, ritsu_base::text::Lang::En));
+    assert_eq!(common::codes(&o), ["E401", "E301", "E401", "E401"], "{}", common::shown(&o, ritsu_base::text::Lang::En));
 }
 
 #[test]

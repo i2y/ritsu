@@ -23,7 +23,7 @@ time, add this to the project's settings:
 
 | File | What is in it |
 |---|---|
-| `SKILL.md` | when the skill applies, the loop, the language on one page, what to ask a person, from a diagnostic to a fix (kaname's and ritsu's across the languages), what it generates and the page |
+| `SKILL.md` | when the skill applies, the loop, the language on one page, what to ask a person, from a diagnostic to a fix (kaname's and ritsu's across the languages), properties and the Lean proofs of them, what it generates and the page |
 | `reference.md` | the whole language, what `check` says, what `gen` writes, the commands, the exit codes and the JSON |
 | `codes.md` | every diagnostic code |
 

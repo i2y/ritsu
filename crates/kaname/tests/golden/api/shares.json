@@ -1,0 +1,179 @@
+{
+  "kaname": "<version>",
+  "file": "shares.kn",
+  "module": {
+    "name": "shares",
+    "alias": "shares",
+    "version": "v1",
+    "description": "Spreads a refund over the lines of an order in proportion to what is left on them, with a property that does not hold",
+    "sha256": "1d91b31bfe1695979a936b9e8bf59a643e1678f22dedf646846416593b9330fc"
+  },
+  "generated": {
+    "typescript": "glue/shares.ts",
+    "python": "glue/shares.py",
+    "go": "glue/shares/shares.go",
+    "rust": "glue/shares.rs"
+  },
+  "wasm": {
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "input": {
+      "keys": [
+        "module",
+        "function",
+        "in"
+      ],
+      "module": "shares"
+    },
+    "functions": [
+      "split"
+    ],
+    "answers": [
+      {
+        "kind": "answer",
+        "keys": [
+          "function",
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "failure",
+        "keys": [
+          "function",
+          "in",
+          "fails"
+        ],
+        "fails": [
+          "kind",
+          "module",
+          "line",
+          "message"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input"
+        ]
+      }
+    ]
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "Line",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5
+        },
+        {
+          "name": "left",
+          "alias": "left",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000000USDc",
+          "count": null,
+          "line": 6
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line",
+        "rust": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "split",
+      "alias": "split",
+      "line": 8,
+      "description": "Each line gets the refund up to its end less the refund before it",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "refund",
+          "alias": "refund",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[money[USDc]]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "split",
+        "python": "split",
+        "go": "Split",
+        "rust": "split"
+      },
+      "check": {
+        "go": "CheckSplit",
+        "rust": "check_split"
+      }
+    }
+  ],
+  "properties": [
+    {
+      "name": "every_line_gets_a_share",
+      "alias": "every_line_gets_a_share",
+      "line": 12,
+      "description": "A refund of more than nothing gives every line something",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "refund",
+          "alias": "refund",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "when": 1
+    }
+  ],
+  "transfers": []
+}

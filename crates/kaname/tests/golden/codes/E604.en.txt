@@ -1,0 +1,4 @@
+error[E604]: example.lean:3:1: A proof file may not hold `#eval`: example.lean is not built, so it does not prove `double_is_even`
+     3 | #eval IO.println "run in the build"
+  = It runs code while the file is built, or adds syntax that changes how the rest of the file is read; a proof needs neither.
+  = `--lean` builds the proofs against the Lean written again from example.kn, and takes for each property a theorem `Proofs.example.<property>` whose type is `Kaname.example.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.

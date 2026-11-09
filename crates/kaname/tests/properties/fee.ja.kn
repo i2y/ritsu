@@ -1,0 +1,12 @@
+module 手数料(fee_ja) v1
+description "規則の答えについての性質。ベクタで、規則そのものを呼んで確かめる。例の payout のカード手数料。fee.kn の日本語の版"
+
+use rule カード手数料 from "../../examples/payout/rules/カード手数料.rule"
+
+property 手数料は支払いを超えない(the_fee_is_no_more_than_the_payment)(金額(amount): money[USDc] range >=1USDc <=100_000_000USDc, 海外(international): bool)
+  description "決済の事業者は、支払いより多くは取らない"
+  カード手数料(金額: 金額, 海外: 海外).手数料 <= 金額
+
+property 手数料には決まった分がある(the_fee_has_its_fixed_part)(金額(amount): money[USDc] range >=1USDc <=100_000_000USDc, 海外(international): bool)
+  description "どの支払いも、手数料の決まった分を払う"
+  カード手数料(金額: 金額, 海外: 海外).手数料 >= 49USDc

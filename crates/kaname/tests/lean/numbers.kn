@@ -1,0 +1,95 @@
+module numbers v1
+description "The ways the Lean that kaname writes holds numbers, each reached for its comparison with the reference interpreter: values on a finer step than their unit's and quotients by a value, each rounded the five ways, allocate, mod and isqrt, running totals, negative numbers and the ends of ranges"
+
+record Line
+  label  : string
+  amount : money[USDc]  range >=-50_000USDc <=50_000USDc
+
+record Step
+  label : string
+  upto  : money[USDc]
+  total : money[USDc]
+
+# a rate of an amount, on a finer step than a cent, rounded each of the five ways
+fn rate_up(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  up(a * r, 1USDc)
+
+fn rate_down(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  down(a * r, 1USDc)
+
+fn rate_half_up(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  half_up(a * r, 1USDc)
+
+fn rate_half_down(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  half_down(a * r, 1USDc)
+
+fn rate_half_even(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  half_even(a * r, 1USDc)
+
+# a share of an amount by a count, a quotient by a value, rounded each of the five ways
+fn share_up(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, n: number range >=-7 <=-1) -> money[USDc]
+  up(a / n, 1USDc)
+
+fn share_down(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, n: number range >=1 <=7) -> money[USDc]
+  down(a / n, 1USDc)
+
+fn share_half_up(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, n: number range >=1 <=7) -> money[USDc]
+  half_up(a / n, 1USDc)
+
+fn share_half_down(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, n: number range >=1 <=7) -> money[USDc]
+  half_down(a / n, 1USDc)
+
+fn share_half_even(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, n: number range >=-7 <=-1) -> money[USDc]
+  half_even(a / n, 1USDc)
+
+# a quotient rounded to a step coarser than the unit's
+fn share_in_dollars(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, n: number range >=1 <=7) -> money[USDc]
+  half_even(a / n, 100USDc)
+
+# a sum of values on two steps, compared with an amount
+fn over(a: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=-100% <=100%, b: money[USD] range >=-10_000USD <=10_000USD) -> bool
+  a * r + (b in USDc) > a
+
+# the smaller of two quotients, and of a quotient and an amount
+fn least(a: money[USDc] range >=-100_000USDc <=100_000USDc, n: number range >=1 <=9, m: number range >=1 <=9) -> money[USDc]
+  down(min(a / n, a / m), 1USDc)
+
+fn most(a: money[USDc] range >=-100_000USDc <=100_000USDc, n: number range >=1 <=9) -> money[USDc]
+  up(max(a / n, -5USDc), 1USDc)
+
+# allocate of amounts, of an amount on a finer step, and of a quotient
+fn part(total: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, a: money[USDc] range >=0USDc <=100_000USDc, b: money[USDc] range >=1USDc <=100_000USDc) -> money[USDc]
+  allocate(total, a, a + b)
+
+fn part_of_rate(total: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, r: rate[step 0.01%] range >=0% <=100%) -> money[USDc]
+  allocate(total, r, 100%)
+
+fn part_of_share(total: money[USDc] range >=-1_000_000USDc <=1_000_000USDc, a: money[USDc] range >=0USDc <=100_000USDc, n: number range >=1 <=7, b: money[USDc] range >=100_000USDc <=200_000USDc) -> money[USDc]
+  allocate(total, a / n, b)
+
+# a remainder of negative numbers and by a negative divisor, of a quotient, and a root of a large number
+fn turn(day: number range >=-1_000_000 <=1_000_000, players: number range >=-9 <=-1) -> number
+  mod(day, players)
+
+fn turn_of_share(x: number range >=-1_000 <=1_000, n: number range >=1 <=7) -> number
+  mod(down(x / n, 1), 7)
+
+fn root(n: number range >=0 <=8_999_999_999_999_999_999) -> number
+  isqrt(n)
+
+fn root_of_share(x: number range >=0 <=1_000_000, n: number range >=1 <=7) -> number
+  isqrt(x / n)
+
+# running totals of weights that may be below zero
+fn steps(lines: list[Line] count >=0 <=4) -> list[Step]
+  map(running_totals(lines, l => l.amount), r => Step { label: r.item.label, upto: r.upto, total: r.total })
+
+fn gaps(lines: list[Line] count >=0 <=4) -> list[money[USDc]]
+  map(running_totals(lines, l => l.amount), r => r.upto - r.before)
+
+# an amount in dollars read in cents and back, and a number of a temperature's steps
+fn cents(d: money[USD] range >=-10_000USD <=10_000USD) -> money[USDc]
+  d in USDc
+
+fn dollars(c: money[USDc] range >=-1_000_000USDc <=1_000_000USDc) -> money[USD]
+  half_up(c in USD, 1USD)

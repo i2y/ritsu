@@ -222,6 +222,14 @@ pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
                     continue;
                 }
                 assert!(!cmd.contains(['|', ';', '>', '<', '`', '$', '"', '\'']), "{}:{}: `$ {cmd}` is more than a command to run", p.name, block.at);
+                // `--lean` runs Lean (kaname's DESIGN 38), which not every runner has: it is run where
+                // the level lets the tests run `lake` and it is there, and a SKIP line says so where not.
+                if cmd.split_whitespace().any(|w| w == "--lean") {
+                    let there = kaname::lean::find_lake().is_some();
+                    if !ritsu_testkit::ready(ritsu_testkit::Need::Lean, || there, "lake is not found, so the `--lean` the pages of kaname show is not run") {
+                        continue;
+                    }
+                }
                 // `ritsu check` in the root would check every file of the repository, and run the
                 // claims of every `.geas` there: it is run on the files the blocks above it show.
                 if cwd == root() && first == "ritsu" && cmd.split_whitespace().nth(1) == Some("check") {

@@ -1,0 +1,7 @@
+module narrows v1
+description "A property whose `when` line keeps the value it divides by away from 0"
+
+property no_part_is_more_than_the_whole(total: number range >=0 <=1000, parts: number range >=0 <=10)
+  description "Cut into one part or more, no part is more than the whole"
+  when parts > 0
+  down(total / parts, 1) <= total

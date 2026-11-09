@@ -70,7 +70,8 @@ fn none() -> Vec<&'static str> {
 fn the_examples_pass_with_every_language_joined() {
     for f in common::EXAMPLES {
         let o = common::check(f);
-        assert!(o.diags.is_empty(), "{f}: {}", text(&o));
+        // a property is shown only by `--lean` (DESIGN 38.3): W603 is all they say
+        assert!(o.diags.iter().all(|d| d.code == "W603"), "{f}: {}", text(&o));
         assert!(o.checked.is_some(), "{f}");
     }
 }

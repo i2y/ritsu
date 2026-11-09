@@ -69,9 +69,13 @@ It finds that the lines a cart holds stay within the 50 its state declares, sinc
 
 ```console
 $ ritsu check examples/order_flow --root examples/order_flow
+warning[kaname W603]: examples/order_flow/order_flow.ja.kn:92:1: The property `閉じた注文はイベントを受け付けない` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow_ja.lean is checked with `--lean`
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok examples/order_flow/order_flow.ja.kn: 5 functions, total
+warning[kaname W603]: examples/order_flow/order_flow.kn:92:1: The property `a_closed_order_takes_no_event` held on all 170 of its 782 vectors on which its `when` lines are true, but it is not shown: the proof in order_flow.lean is checked with `--lean`
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok examples/order_flow/order_flow.kn: 5 functions, total
-ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+ritsu check: 2 files (kaname 2): all pass (2 warnings); borders between the languages: 0 checked, 0 undecided
 ```
 
 The host keeps the order, takes the events, and calls the code `ritsu gen` writes of the module.
@@ -169,9 +173,13 @@ ok examples/late_payment/rules/late_payment_charges.rule
 ok examples/late_payment/rules/遅延の請求額.rule
 examples/late_payment/dates/payment_terms.cal: ok — every date computes on all 730 days of invoiced (2026-01-01..2027-12-31); 2 examples match
 examples/late_payment/dates/支払期限.cal: ok — every date computes on all 730 days of 請求日 (2026-01-01..2027-12-31); 2 examples match
+warning[kaname W603]: examples/late_payment/late_payment.ja.kn:28:1: The property `期日までに払えば請求は無い` held on all 10 of its 19 vectors on which its `when` lines are true, but it is not shown: the proof in late_payment_ja.lean is checked with `--lean`
+    28 | property 期日までに払えば請求は無い(nothing_is_claimed_when_paid_on_time)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%)
 ok examples/late_payment/late_payment.ja.kn: 1 function, total
+warning[kaname W603]: examples/late_payment/late_payment.kn:28:1: The property `nothing_is_claimed_when_paid_on_time` held on all 10 of its 19 vectors on which its `when` lines are true, but it is not shown: the proof in late_payment.lean is checked with `--lean`
+    28 | property nothing_is_claimed_when_paid_on_time(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%)
 ok examples/late_payment/late_payment.kn: 1 function, total
-ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass; borders between the languages: 2 checked, 0 undecided
+ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass (2 warnings); borders between the languages: 2 checked, 0 undecided
 ```
 
 kaname finds that `paid_on - due` is −758 to 1,431 days, and 1 to 1,431 in the branch of `late >= 1`, inside the rule's 1 to 1,500; the debt and the rate it gives the rule are inside theirs; and ritsu finds that the day it gives koyomi is inside koyomi's range.
@@ -263,6 +271,194 @@ warning[W501]: tests/doc/decisions.kn:25:3: This `if` chooses a constant of the 
 ok tests/doc/decisions.kn: 3 functions: 2 total; 1 fails rule
 ```
 
+## Properties and proofs
+
+A function can have a property: a claim about every input, not about the ones `examples` name. `property` is written like a function, with a `description`, `when` lines that narrow the inputs it speaks of, and a last line that must be `true` ([examples/refund_split](examples/refund_split) spreads a refund over the lines of an order):
+
+```kn
+property shares_add_up(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "The shares come to the refund"
+  sum(split(lines: lines, refund: refund), s => s.share) = refund
+
+property no_share_is_more_than_its_left(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "A refund no larger than what is left in all gives no line more than what is left on it"
+  when refund <= sum(lines, l => l.left)
+  all(split(lines: lines, refund: refund), s => s.share <= s.left)
+```
+
+Read it as: for every input in the ranges the parameters declare, and on which every `when` line holds, the last line is `true`.
+`ritsu check` always tries a property on the vectors of its parameters, the inputs `kaname vectors` chooses.
+One that fails is an error that names the input:
+
+```console
+$ ritsu kaname check tests/properties/shares.kn
+error[E603]: tests/properties/shares.kn:12:1: The property `every_line_gets_a_share` is false for lines: [Line { sku: "a", left: 500000USDc }, Line { sku: "a", left: 500000USDc }], refund: 1USDc
+    12 | property every_line_gets_a_share(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  = Line 15: `shares` is [0USDc, 1USDc]
+  = `check` runs a property in the reference interpreter on the vectors of its parameters: on this one the `when` lines hold and the last line is false.
+  = Correct the function, narrow the property with `when` or the ranges of its parameters, or correct the property.
+```
+
+A property that holds on every vector is still not shown: the vectors are a sample, not every input.
+`check` says so with W603, and says what is missing (the first of the three for `refund_split` before its proofs were written, shortened):
+
+```text
+warning[W603]: examples/refund_split/refund_split.kn:18:1: The property `shares_add_up` held on all 12 vectors, but it is not shown: there is no proof of it (refund_split.lean holds no theorem of it)
+    18 | property shares_add_up(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  = `ritsu gen --target lean` writes `samples/refund_split.lean`, the theorems' names with `sorry` for their proofs: put it beside the .kn as refund_split.lean, and write the proofs in place of `sorry`.
+…
+ok examples/refund_split/refund_split.kn: 1 function, total
+```
+
+The only way to show a property is a proof, and a proof is written outside kaname.
+`ritsu gen --target lean` writes each function as a definition in Lean 4 and each property as the statement of a theorem, with a draft of the proofs in which every proof is `sorry`:
+
+```console
+$ ritsu gen --target lean
+```
+
+```text
+generated: generated/lean/lean-toolchain
+generated: generated/lean/lakefile.toml
+generated: generated/lean/.gitignore
+generated: generated/lean/Kaname/Prelude.lean
+generated: generated/lean/Kaname/refund_split.lean
+generated: generated/lean/samples/refund_split.lean
+```
+
+`Kaname/refund_split.lean` holds the definitions and one statement for each property, for instance:
+
+```lean
+abbrev shares_add_up : Prop :=
+  ∀ (lines : List Line) (refund : Int),
+    1 ≤ lines.length → lines.length ≤ 10 → (∀ e₁ ∈ lines, e₁.Within) →
+    0 ≤ refund → refund ≤ 10000000 →
+    ((List.map (fun (s : Share) => s.share) (split lines refund)).sum) = refund
+```
+
+You, or an agent, write the proofs in a file beside the `.kn`, `refund_split.lean`: start from `samples/refund_split.lean` and put a proof in place of each `sorry`.
+Each theorem is `Proofs.<module>.<property>`, and its type is the statement `ritsu gen` wrote:
+
+```lean
+import Kaname.refund_split
+
+namespace Proofs.refund_split
+
+open Kaname Kaname.refund_split
+
+/-- What is left on one line or more, each of a cent or more, comes to more than nothing. -/
+theorem lefts_pos : ∀ ls : List Line, 1 ≤ ls.length → (∀ l ∈ ls, l.Within) →
+    0 < (ls.map fun l => l.left).sum
+  | [], h, _ => by simp at h
+  | l :: ls, _, h => by
+    simp only [List.map_cons, List.sum_cons]
+    have hl := (h l (List.mem_cons_self ..)).1
+    have hs : 0 ≤ (ls.map fun l => l.left).sum := by
+      match ls with
+      | [] => simp
+      | m :: ms => exact Int.le_of_lt (lefts_pos (m :: ms) (by simp) (fun x hx => h x (List.mem_cons_of_mem _ hx)))
+    omega
+
+/-- The shares, each the refund up to its line's end less the refund before it, telescope to the
+refund of the whole. -/
+theorem shares_add_up : Kaname.refund_split.shares_add_up := by
+  intro lines refund hlen _ hwithin _ _
+  have hT := lefts_pos lines hlen hwithin
+  have key : (split lines refund).map (fun s => s.share)
+      = (runningTotals lines (fun l => l.left)).map
+          (fun r => allocate refund r.upto (lines.map fun l => l.left).sum - allocate refund r.before (lines.map fun l => l.left).sum) := by
+    unfold split
+    rw [List.map_map]
+    apply List.map_congr_left
+    intro r hr
+    simp only [Function.comp, runningTotals_total _ _ r hr]
+  rw [key, runningTotals_telescope lines (fun l => l.left) (fun x => allocate refund x (lines.map fun l => l.left).sum)]
+  rw [allocate_self refund hT, allocate_zero]
+  omega
+
+/-- A share is the refund up to its line's end less the refund before it, and `allocate` does not go
+down as its share grows. -/
+theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+  intro lines refund hlen _ hwithin hr0 _ s hs
+  have hT := lefts_pos lines hlen hwithin
+  unfold split at hs
+  rw [List.mem_map] at hs
+  obtain ⟨r, hr, rfl⟩ := hs
+  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
+    have := (hwithin l hl).1
+    show 0 ≤ l.left
+    omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by
+    have hitem : r.item ∈ lines := by
+      have := List.mem_map_of_mem (f := (·.item)) hr
+      rwa [runningTotals_items] at this
+    have := (hwithin r.item hitem).1
+    omega)
+  show allocate refund r.upto r.total - allocate refund r.before r.total ≥ 0
+  omega
+
+/-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
+theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_than_its_left := by
+  intro lines refund hlen _ hwithin hr0 _ hle s hs
+  have hT := lefts_pos lines hlen hwithin
+  unfold split at hs
+  rw [List.mem_map] at hs
+  obtain ⟨r, hr, rfl⟩ := hs
+  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
+    have := (hwithin l hl).1
+    show 0 ≤ l.left
+    omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have := (hwithin r.item hitem).1
+  have hsub := allocate_sub_le (t := refund) hr0 (htot ▸ hle) (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  show allocate refund r.upto r.total - allocate refund r.before r.total ≤ r.item.left
+  omega
+
+end Proofs.refund_split
+```
+
+`allocate_self`, `allocate_mono`, `runningTotals_telescope` and the other lemmas it uses are in `Kaname/Prelude.lean`, which `ritsu gen` writes with their proofs.
+
+`ritsu check` does not search for a proof, and without `--lean` it does not read one.
+`ritsu check --lean` has Lean build the package again from the `.kn`, takes the proof file beside it, and checks that each theorem has the type of the statement and rests on no axiom but Lean's three (`propext`, `Classical.choice`, `Quot.sound`): a proof with `sorry`, an axiom of its own or `native_decide` is E604.
+A property is **shown** only when Lean takes its proof.
+The proof file is read as text before Lean builds it, so that nothing it says runs in the build: a file that imports from outside `Kaname`, runs code, or adds syntax of its own is refused first.
+
+Once the proof file is in place, `check` without `--lean` still gives W603, now with the reason that the proof in `refund_split.lean` is checked with `--lean`.
+With `--lean`, when Lean takes every proof, the W603 are gone:
+
+```console
+$ ritsu check --lean examples/refund_split
+ok examples/refund_split/refund_split.ja.kn: 1 function, total
+ok examples/refund_split/refund_split.kn: 1 function, total
+ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+A proof left as `sorry`, here that of `no_share_is_negative`, is E604:
+
+```text
+error[kaname E604]: examples/refund_split/refund_split.lean:39:1: The proof of `no_share_is_negative` rests on `sorryAx`, besides `propext`, `Classical.choice` and `Quot.sound`
+    39 | theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
+  = Write the proof in place of `sorry`.
+  = `--lean` builds the proofs against the Lean written again from refund_split.kn, and takes for each property a theorem `Proofs.refund_split.<property>` whose type is `Kaname.refund_split.<property>` and which rests on no axiom but `propext`, `Classical.choice` and `Quot.sound`.
+```
+
+The first `--lean` needs Lean.
+Install [elan](https://github.com/leanprover/elan), Lean's version manager; the first `lake` it runs downloads the toolchain the proofs use (`leanprover/lean4:v4.34.0`, about 2.7 GB with its library) once.
+Without `lake`, `--lean` stops with exit code 2 and says so.
+Nothing else needs Lean: `ritsu check` without `--lean` and `ritsu gen` for the other languages never run it.
+
+What is not written for Lean yet is W604, the property still tried on its vectors: dicts, sets, the builtins of strings other than `=`, `sort_by`, `distinct`, `max_by`, `min_by`, `to_dict` and `group_by`, and a type parameter held to keys (`K: key`).
+A property that depends on what a rule or a dates file answers is not shown either: a proof may use only what the port says of them (W603 says so).
+A function that may not stop is not written, and a property of a function that can fail is not allowed (E401).
+W605 says that no vector makes the `when` lines true, which is a property that can be proved whatever it says.
+
 ## The language
 
 - **Values**: numbers, money and quantities in their units, rates with their steps, dates, bools, strings (sequences of code points), records, enums and enums whose values have fields of their own, lists, dicts and sets, values that may be none, and `result[T, E]` for a failure the business answers with.
@@ -289,7 +485,7 @@ With modules of kaname, the head of its `Cargo.toml` has the line that builds it
 
 ## The page for people
 
-`ritsu kaname doc` writes a page for the person who approves the decisions and the engineer who reads how far each function was checked: the rules and the dates files it calls, with the pages rulec and koyomi draw of them, and the transfers it builds; its functions, total, checked when they run (each place, and why), or that may not stop; the decisions written in its code; and what its examples answer.
+`ritsu kaname doc` writes a page for the person who approves the decisions and the engineer who reads how far each function was checked: the rules and the dates files it calls, with the pages rulec and koyomi draw of them, and the transfers it builds; its functions, total, checked when they run (each place, and why), or that may not stop; its properties, with whether a proof is beside the `.kn`; the decisions written in its code; and what its examples answer.
 The Markdown is for a pull request; the HTML is one file that reads nothing from outside.
 [The page of the late payment](../ritsu/tests/golden/kaname-doc/late_payment.md) is the example's, with the pages of the rule and the dates file left out.
 
@@ -319,6 +515,7 @@ $ ritsu kaname vectors examples/order_flow/order_flow.kn --function next
 $ ritsu kaname doc examples/late_payment/late_payment.kn --root examples/late_payment --format html
 $ ritsu kaname api examples/late_payment/late_payment.kn --root examples/late_payment
 $ ritsu kaname explain E301
+$ ritsu check --lean examples/refund_split
 ```
 
 `run` runs a function in the reference interpreter on an input of JSON, and `vectors` prints the inputs it chooses for each function with their answers.
@@ -329,12 +526,13 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 ## Examples
 
 Each is in English, and in Japanese beside it as `<name>.ja.kn`.
-The first four are functional cores that read no other language, each with a host in TypeScript, Python and Go under `host/`; [examples/order_bill](examples/order_bill), the ninth, is one too, with no host, and names where its values come from with `fed by`:
+The first four are functional cores that read no other language, each with a host in TypeScript, Python and Go under `host/`; [examples/order_bill](examples/order_bill), the ninth, is one too, with no host, and names where its values come from with `fed by`; [examples/refund_split](examples/refund_split), the tenth, is one with no host, and writes properties of its function:
 
 - [examples/order_flow](examples/order_flow): an order moved from state to state by events, its states the values of an enum with fields, and the next state or why an event is refused a `result`.
 - [examples/stock_diff](examples/stock_diff): two counts of a stockroom, dicts from a code to how many are on the shelf, compared code by code; the moves of a day netted for each code and laid on a count; the codes to reorder, a set.
 - [examples/handles](examples/handles): a handle a person types made the one a service keeps (white space, case), held to what a handle is, every reason it is not said; and a tag read from text with `try`.
 - [examples/catalog](examples/catalog): a tree of categories, a record that holds itself: the path of every item, the tree with its empty categories taken out, its names made by a function the caller gives, and what a generic function picks from every category.
+- [examples/refund_split](examples/refund_split): a refund spread over the lines of an order by what is still unpaid on each, with three properties of the function: the shares come to the refund, none is negative, and none is more than what is left on its line. The proofs of them are in Lean, beside the module.
 
 The other four call rules, dates and books, which read the Japanese versions of their files; the rules cite the documents they transcribe, from copies beside them that they pin:
 

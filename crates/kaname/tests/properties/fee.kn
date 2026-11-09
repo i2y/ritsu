@@ -1,0 +1,12 @@
+module fee v1
+description "Properties of what a rule answers, tried on their vectors with the rule itself: the card fee of the example payout"
+
+use rule card_fee from "../../examples/payout/rules/card_fee.rule"
+
+property the_fee_is_no_more_than_the_payment(amount: money[USDc] range >=1USDc <=100_000_000USDc, international: bool)
+  description "The processor never takes more than the payment"
+  card_fee(amount: amount, international: international).fee <= amount
+
+property the_fee_has_its_fixed_part(amount: money[USDc] range >=1USDc <=100_000_000USDc, international: bool)
+  description "Every payment pays the fixed part of the fee"
+  card_fee(amount: amount, international: international).fee >= 49USDc

@@ -1,9 +1,9 @@
-<!-- kaname <version> が media_mail.ja.kn（sha256:d3b180f38dff698d）から生成したページです。読むためのもので、もとになるのは .kn のほうです。ここを編集しても .kn には戻せません。 -->
+<!-- kaname <version> が media_mail.ja.kn（sha256:8151b944a482028b）から生成したページです。読むためのもので、もとになるのは .kn のほうです。ここを編集しても .kn には戻せません。 -->
 # メディアメールの見積もり（media_mail_ja）
 
 カートの Media Mail の料金を見積もる。品物の重さを数量の分だけ足した重さと、どの品物もメディアかを規則に渡す。media_mail.kn の日本語の版
 
-- ファイル：`media_mail.ja.kn`（module メディアメールの見積もり v1、sha256:d3b180f38dff698d）
+- ファイル：`media_mail.ja.kn`（module メディアメールの見積もり v1、sha256:8151b944a482028b）
 - 読むファイル：規則 `メディアメール`（`rules/メディアメール.rule`）
 - kaname：<version>
 
@@ -65,6 +65,25 @@ fn 見積もる(quote)(明細(lines): list[明細] count >=1 <=30) -> money[USDc
 ### 止まらないかもしれない関数
 
 ありません。
+
+## 性質
+
+性質は、引数が宣言した範囲に入り、`when` の行がどれも成り立つ入力なら、最後の式が `true` になるという主張です。`kaname check` は性質をベクタで確かめ、反例があれば E603 にします。示したと言えるのは、`--lean` が証明を受け付けたときだけです。このページは性質の中身を載せ、答えは載せません。
+
+### `十五ポンドより重いカートは見積もらない`（`nothing_heavier_than_15lb_is_quoted`）
+
+15 ポンドより重いカートには、規則が何を答えても見積もりが無い。
+
+```kn
+property 十五ポンドより重いカートは見積もらない(nothing_heavier_than_15lb_is_quoted)(明細(lines): list[明細] count >=1 <=30)
+  description "15 ポンドより重いカートには、規則が何を答えても見積もりが無い"
+  when 重さの合計(明細: 明細) > 15lb
+  見積もる(明細: 明細) = none
+```
+
+`when` の行は 1 本です。最後の式は `見積もる(明細: 明細) = none` です。
+
+証明のファイル `media_mail_ja.lean` が .kn の隣にあります。`ritsu check --lean` が確かめます。
 
 ## コードにある判断
 

@@ -346,10 +346,18 @@ fn next(order: Order, event: Event) -> result[Order, string]
 ```console
 $ cd crates/kaname/examples/order_flow
 $ ritsu check --lang ja
+警告[kaname W603]: order_flow.ja.kn:92:1: 性質 `閉じた注文はイベントを受け付けない` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow_ja.lean の証明は `--lean` で確かめます
+    92 | property 閉じた注文はイベントを受け付けない(a_closed_order_takes_no_event)(注文(order): 注文, イベント(event): イベント)
 ok order_flow.ja.kn: 関数 5 個、total
+警告[kaname W603]: order_flow.kn:92:1: 性質 `a_closed_order_takes_no_event` は、`when` の行が成り立つ 170 個のベクタ（782 個のうち）のすべてで成り立ちましたが、示されていません。order_flow.lean の証明は `--lean` で確かめます
+    92 | property a_closed_order_takes_no_event(order: Order, event: Event)
 ok order_flow.kn: 関数 5 個、total
-ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所
 ```
+
+警告は、性質についてのものです。性質は、どの入力でも成り立つと言う主張で、モジュールに `property` として書きます。
+`ritsu check` は性質を自分の選んだ入力で試し、`ritsu gen --target lean` は Lean の定理の文として書き出し、`ritsu check --lean` は .kn の隣に書いた証明を Lean に確かめさせます（[性質と証明](crates/kaname/README.ja.md#性質と証明)）。
+Lean が証明を受け付けるまでは、性質は示されておらず、W603 がそう言います。
 
 注文を持ち、イベントが来るたびに `ritsu gen` がモジュールから書いたコードを呼ぶのは、ホストです。TypeScript のホスト（`crates/kaname/examples/order_flow/host/main.ts`。横にある Python と Go のホストも同じものを出力します）は、合計 700 セントの注文に 650 セントの支払いを含む七つのイベントを、生成したコードに順に渡します。
 
@@ -413,7 +421,7 @@ $ cd crates/kaname/examples/late_payment
 $ ritsu check --lang ja
 …
 ok late_payment.kn: 関数 1 個、total
-ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
+ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
 
 モジュールの書き方、ホストと一緒の Functional Core の四つの例、検査が保証することは、[サイトのページ](https://i2y.github.io/ritsu/ja/kaname/)で順に見られます。そのほかは [kaname の README](crates/kaname/README.ja.md) にあります。

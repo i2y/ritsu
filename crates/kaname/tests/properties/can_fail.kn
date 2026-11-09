@@ -1,0 +1,6 @@
+module can_fail v1
+description "A property that divides by a value that can be 0, as narrows.kn does with no `when` line"
+
+property no_part_is_more_than_the_whole(total: number range >=0 <=1000, parts: number range >=0 <=10)
+  description "No part is more than the whole"
+  down(total / parts, 1) <= total

@@ -6,7 +6,7 @@
     "alias": "order_bill_ja",
     "version": "v1",
     "description": "注文の明細がいくらになるかを出す。明細と単価は、手書きのコードがスキーマの言う注文から運ぶ。`fed by` は値の出どころを言う。`ritsu check` は値の範囲を確かめ、運ぶコードは確かめない",
-    "sha256": "4b4f7239da16b54c2ed82224176fa277da1e79eba35d247d4adc05d7cef78887"
+    "sha256": "0996f8e35f3d90beb0ae6177319af9c8a5b98de74cbd8dda6045eaba27011864"
   },
   "generated": {
     "typescript": "glue/order_bill_ja.ts",
@@ -151,6 +151,31 @@
         "go": "CheckBill",
         "rust": "check_bill"
       }
+    }
+  ],
+  "properties": [
+    {
+      "name": "請求額は単価と数量の合計の積",
+      "alias": "bill_is_the_price_times_the_quantities",
+      "line": 15,
+      "description": "請求額は、単価に数量の合計を掛けたものになる",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=30"
+        },
+        {
+          "name": "単価",
+          "alias": "price",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000USDc",
+          "count": null
+        }
+      ],
+      "when": 0
     }
   ],
   "transfers": []

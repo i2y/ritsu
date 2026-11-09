@@ -14,6 +14,10 @@ DESIGN.md を仕様として、kaname を八つの段階（B、C1、C2、C3、D�
 | E | `doc` のページ、例、README、スキル、台帳の文書、九つ目の言語にすること | 11.2、11.3、13、17 |
 | F | Lean、範囲の解析の六か所をモデルと同じ形に直すこと、W901 | 5、12、15 |
 | G | main の 0.31.0 への乗せ直し、規則が順序のある列挙の入力に書いた範囲を口から読んで確かめること | 5.3、6.1、10.4、15 |
+| 12 章の B | `property` の構文と確かめ、ベクタ、Lean の書き出し、`--lean`、例の証明、CI | 38、2.3、3.3、9、10、15、36 |
+| 12 章の C | `doc` と `api`、README、サイト、スキル | 38、11.2、13、17 |
+
+関数の性質と Lean の証明（DESIGN 38 章）は、12 章の二つの段階（kaname-lean の B と C）で作る。
 
 ## 0. 全部の段階に共通の決まり
 
@@ -450,3 +454,121 @@ sekisho を足したときのコミット（言語を足したもの、八つ目
 - **CI**：`.github/workflows/proofs.yml` の `paths`（push と pull request の二か所）に、kaname の `src`・`examples`・`tests/modules`・`tests/rules` を足し、見出しのコメントに `KanameCore` を書いた。根の DESIGN 10.5 も合わせた。
 - **ブラウザで試すページ**：`ritsu.wasm` を作り直した（15,370,730 バイト。根の DESIGN 8.7）。
 - **テスト**（ログは `reports/kaname-G-logs/`）：`proofs/` で `lake build`（155 のジョブ。組み直した KanameCore のファイルに警告は無い）。`cargo test -p ritsu-model`（`tools` の段）は 15 件が通り、SKIP は 0。kaname の突き合わせは 30 のモジュール、723 の評価、216 の場所（そのうち答えを受けた場所 27）、903 の式、見た値 12,799 で違いが無く（`lift` と `lift.ja` は 4 つの関数と 10 の場所ずつ）、六つのライブラリの 14,431 の宣言（そのうち定理 6,850）が三つの公理のほかに立たない。`cargo xtask test --level tools -p kaname` は 147 件が通り、SKIP は 0。範囲の解析のテストは、361 の式の 489,656 の値、19,054 回の評価（失敗 1,450）で外れが 0、三つの出力先の突き合わせは、英語と日本語で 996 件（22 のモジュールのベクタ 686 件と宣言の外の入力 310 件）のすべてが一致した。そのあと直した文書を読む `docs`・`skill`・`design`・`ranges`・`codes` を回し直し、19 件が通った。ritsu は npm のパッケージを組んでから `tools` の段で全部を回し、172 件が通った（npm の 7 件と playground を含む）。SKIP は機械に MySQL が無い `the_checkout_records_the_sale` の 1 行だけで、xtask はそのため 1 で終わった。ritsu-ports・ritsu-cross・ritsu-project・yuen・sakai は `tools` の段で 494 件、dandori と sekisho は速い段で 237 件（SKIP の 49 行は段が求めたもの。文書と台帳とスキルのコピーを読むテストは走った）、rulec の `tests/ports.rs` は `tools` の段で 18 件が通った。`cargo xtask deps`（21 のクレート）、`ritsu check ritsu.ctx`、`cargo check --locked -p ritsu-wasm --target wasm32-unknown-unknown` が通り、`cargo clippy -p kaname -p ritsu-model --all-targets` は kaname に警告が無い（ritsu-model の三つと、ほかのクレートの警告は、前からのもの）。kaname の例の 20 のファイルは、ritsu 0.31.0 の `ritsu check` を通る。
+
+## 12. 関数の性質と Lean の証明（DESIGN 38 章）
+
+`property` の宣言と、`--lean` で Lean の証明を確かめる仕組みを、二つの段階で作る。kaname-lean の段階 B（12.2）がコード、例の証明、CI で、段階 C（12.3）が文書である。設計は DESIGN 38 章で、ここには作る順番、触るファイル、足す型と関数、確かめるテストを書く。
+
+### 12.1 共通の決まり
+
+- 0 章の決まりに従う。依存は足さない（Lean のプロセスの時間の上限は `std::process::Child::try_wait` を回して `kill` で書き、一時のディレクトリは `std::env::temp_dir()` の下に作って消す。JSON は ritsu-base のもの）。ワークスペース全体のテストは回さない。ログは `reports/kaname-lean-<段階>-logs/` に残す。
+- 主に読む DESIGN の章：38（全部）、2.3、3.3（丸め）、3.6 と 32（`running_totals`）、5 と 6（範囲の解析と口）、9（ベクタ）、10（エフェクト）、11（例）、15 と 16（Lean のモデル）、35 と 36（確かめの語と JSON）、17.12（例の一覧）。根の DESIGN の P5、P7、11 章。
+- Lean は入っている `leanprover/lean4:v4.34.0` だけを使い、Mathlib を入れない。Lean の要るテストは、名前を `lean_` で始め、`tests/lean.rs` に置く。
+
+### 12.2 kaname-lean の段階 B：言語、ベクタ、Lean の書き出し、`--lean`、例の証明、CI
+
+#### 12.2.1 最初に確かめること
+
+`lake` が、`srcDir` に `..` を含む相対パスを書いた `lean_lib` を読むこと（DESIGN 38.5）。一時のディレクトリに、ライブラリ `Kaname` と、外のディレクトリを `srcDir` にして `roots = ["<別名>"]` と書いたライブラリの二つを持つ lakefile を置き、`lake build` を通す。通らなければ、形を変える前に報告する。
+
+#### 12.2.2 構文と名前
+
+- `src/ast.rs`：`Property { name, params, description, when: Vec<Expr>, body: Block, span }`（`name` と `params` は関数と同じ型）と、`Module::properties`（書いた順）。
+- `src/parse.rs`：宣言の頭の `property` と、本体の頭の `when` の行（`description` のあと、`let` の前）。形が違えば今の構文の診断を使う。`private property` は構文の誤り。
+- `src/names.rs`：性質を関数と同じ名前の空間に入れる（同じ名前は今の重複の診断）。性質の名前と引数にも E005。性質を呼ぶと、今の「関数が無い」診断に「性質は呼べない」という注を付ける。
+- DESIGN 38 章の `text` のブロック二つ（英語の `refund_split` と日本語の性質）を `kn` に戻す。`tests/design.rs` が読む。
+- テスト：`tests/parse.rs` の `a_property_reads_with_its_when_lines`（英日）、`a_property_without_a_last_line_is_an_error`。`tests/names.rs` の `a_japanese_property_needs_an_alias`、`a_property_cannot_be_called`、`a_property_and_a_function_cannot_share_a_name`。
+
+#### 12.2.3 型、範囲、エフェクト
+
+- `src/check.rs`：`CheckedProperty { decl, lowered, facts }` と `Checked::properties`。`lowered` は DESIGN 38.2 の `if … then … else true` の関数で、`Checked` の関数の並びには入れない。生成器、`doc`、`api`、`run` が関数を回すところに混ざらないためである。`facts` は `lowered` の `ranges::FnFacts`。
+- 型（`src/types.rs`）：`when` と最後の式は `bool`（今の型の診断）。引数が関数の型なら E605。
+- エフェクト（`src/effects.rs`）：`lowered` が total でなければ E401 にし、文は「性質は total」と言う。台帳の E401 の説明にも性質を足す。
+- 範囲の解析は `lowered` をそのまま解析すれば、`when` が `if` の条件と同じく狭める。
+- テスト：新しい `tests/properties.rs` と材料 `tests/properties/`（英日）。`when_narrows_the_places_in_the_body`（`when d > 0` のあとの `d` で割る式に `zero` が出ない）、`a_property_that_can_fail_is_e401`、`a_function_parameter_is_e605`。材料は `tests/modules/` に入れない（出力先と Lean のモデルの突き合わせの数が変わるため。10 章）。
+
+#### 12.2.4 ベクタと反例
+
+- `src/interp.rs`：`property(&self, p: &CheckedProperty, args) -> Result<PropertyRun, Stop>`、`enum PropertyRun { Vacuous, Holds, False { lets } }`。規則と日付は `examples` の行と同じ口を通る。
+- `src/vectors.rs`：`lowered` のベクタ（9 章の上限のまま）。`when` の比べ方は `facts` の境目として候補になる。
+- 新しい `src/properties.rs`：`run(…) -> Vec<PropertyReport>`、`PropertyReport { property, vectors, held, outcome }`（`held` は `when` が成り立ったベクタの数）、`enum Outcome { Shown, Example { input, lets }, Undecided(Undecided) }`、`enum Undecided { NoProof, LeanNotRun, Inner { rules, dates }, NotInLean(Obstacle), Rejected(Rejection) }`。E603（ベクタの並びで最初の `False`）、W605（`held` が 0）、W603（理由）、W604（12.2.5）、E604（`Rejected`。12.2.7）を出す。一つの性質に出すのは E603・E604・W603・W604 のどれか一つで、W605 は並ぶ。
+- テスト（`tests/properties.rs`、英日）：`a_false_property_is_found_on_the_vectors`（`every_line_gets_a_share` の E603 と入力。段のある値の境目の隣で偽になる性質）、`the_when_comparisons_become_vectors`、`a_when_that_never_holds_is_w605`、`a_property_on_a_rule_is_checked_with_the_rule`（`payout` の手数料が送る額を超えない、という性質が、本物の規則で 1 セントの支払いに E603）、`w603_says_why`（証明が無い、証明はあるが `--lean` が無い、規則の答えに頼る）。
+
+#### 12.2.5 Lean に書けるか（W604）
+
+- 新しい `src/gen/lean.rs`：`obstacle(checked, p) -> Option<Obstacle>`、`Obstacle { what, span }`。性質の本体と、そこから呼ぶ関数をたどり、DESIGN 38.4 の書かないもの（辞書・集合・文字列の組み込み、鍵の順序を使う組み込み、`K: key` の総称の関数）の最初の一つを返す。`--lean` が無くても、毎回の `check` で走らせる。
+- テスト：`w604_says_what_cannot_be_written`。`keys`、集合の組み込み、`trim`、`sort_by`、`largest[K: key]` を一つずつ使い、名前と行を言い、ベクタも走ったこと。
+
+#### 12.2.6 Lean の書き出しと `ritsu gen --target lean`
+
+- `src/gen/lean.rs`：`pub const TOOLCHAIN: &str = "leanprover/lean4:v4.34.0"`。`enum Layout { InPlace { out, proofs }, Temp }`。`InPlace` は証明のファイルごとに `lean_lib`（`name = "proofs_<別名>"`、`srcDir` に相対パス、`roots = ["<別名>"]`）を書き、`Temp` は `Proofs` を `globs = ["Proofs.+"]` で書く。`package(modules, layout) -> (Vec<(PathBuf, String)>, LeanStats)`、`LeanStats { scaled, fractions }`（刻みで掛けた `Int` を通る式と、`Kaname.Frac` を通る式の数）。
+- DESIGN 38.4 のとおりに書く：名前、型、数、関数（total で書けるもの。書けないものは理由を一行のコメントにして飛ばす）、総称の関数、関数の値、`Inner` と `Inner.Ok`（規則の入力と答えの範囲、日付の口の事実）、振替、`abbrev` の文、`samples/<別名>.lean`、`.gitignore`。
+- 前置き `src/gen/runtime/lean/Prelude.lean`（`include_str!`）：3.3 の丸めの全部、`allocate`、`isqrt`、`Frac` とその演算、`Running` と `runningTotals`。補題（B が証明し、三つの公理のほかに頼らない）：`allocate_self`（`0 < s → allocate t s s = t`）、`allocate_zero`（`allocate t 0 s = 0`）、`allocate_mono`（`0 ≤ t → 0 < s → c ≤ c' → allocate t c s ≤ allocate t c' s`）、`allocate_sub_le`（`0 ≤ t → t ≤ s → 0 < s → c ≤ c' → allocate t c' s - allocate t c s ≤ c' - c`）、`runningTotals_telescope`（`f r.upto - f r.before` を足すと `f 合計 - f 0`）、`runningTotals_length`、`runningTotals_items`、`mem_runningTotals`（重みが負でなければ、`r.upto - r.before = w r.item`、`0 ≤ r.before`、`r.upto ≤ r.total`）。
+- ritsu：`crates/ritsu/src/package.rs` の出力先に `lean` を足す（`ritsu.mod` の `target` の行と `--help` も）。書くのは kaname のモジュールだけで、ほかの言語は `lean` に何も書かない。先に、ほかの言語がすでに `lean` を出力先に持たないかを確かめ、持つなら同じパッケージに入れる形を報告で相談する。`--check` は `.lake/` と `lake-manifest.json` を見ない。
+- テスト（Lean なし）：`tests/properties.rs` の `the_lean_toolchain_is_the_one_proofs_use`（`../../proofs/lean-toolchain` と比べる）、`the_lean_module_of_an_example_is_its_golden`（`tests/golden/lean/refund_split.lean` と `refund_split_ja.lean`）。ritsu の `tests/gen.rs` の `gen_lean_writes_the_package`、`gen_lean_check_finds_an_edit_and_ignores_lake`。
+- テスト（Lean。`tests/lean.rs`）：`lean_definitions_agree_with_the_interpreter`。`tests/common/targets.rs` の `MODULES` と例の、書ける total な関数を、`cases` と同じ入力で Lean で計算し、参照インタプリタの答えと比べる。規則と日付の答えは、参照インタプリタが呼んだ記録から Lean の表にして `Inner` に入れる。値を JSON の文字列にする関数は、突き合わせのためのファイルに生成器が書く（`import Lean` を使ってよいのは処理系のファイルだけ）。走らせ方は `lake env lean --run`。モジュール、関数、評価の数と `LeanStats` を出し、`scaled` と `fractions` がどちらも 1 以上であることを確かめる（DESIGN 38.9）。`lean_the_prelude_rests_on_the_three_axioms`、`lean_the_generated_package_builds_the_proofs_in_place`（`InPlace` で書き、例の .kn の隣の証明を `lake build` で通す）。
+
+#### 12.2.7 `--lean`
+
+- 新しい `src/lean.rs`：`find_lake() -> Option<PathBuf>`（`PATH`、次に `$HOME/.elan/bin/lake`。`crates/ritsu-model/tests/proofs.rs` と同じ）。`scan(text) -> Vec<Breach>`、`Breach { line, col, kind }`、`enum BreachKind { Import, Command, Native, Attribute, Option }`。コメント（`--` と入れ子の `/- -/`）と文字列・文字を除いてから、DESIGN 38.5 の書けないものを探す。`«»` で囲んだものは名前として読む。`LeanOptions { timeout /* 600 秒 */, scan /* テストだけが false にする。#[doc(hidden)] */ }`。`check(modules, opts) -> Result<Vec<(PropertyId, Verdict)>, LeanError>`、`enum LeanError { Missing, Io(..) }`。
+- 手順は DESIGN 38.6 の 1〜6。`lake build` のエラーの行（`<path>:<line>:<col>: error:`）は、一時のパスを証明のファイルのパスに直す。`leanchecker` は、ビルドが通った証明のモジュールごとに走らせる。`Check.lean`（`src/gen/runtime/lean/Check.lean`。設計の段階の試し（`reports/kaname-lean-A-trial/` の `Check.lean`、証明の九つの形、`run.sh`）を元に、引数を JSON のファイルで受け、性質ごとに `{"property", "verdict", "axioms", "type"}` の JSON を一行ずつ出す形にする）は一回だけ走らせる（`import Lean` の読み込みに 5 秒かかる）。
+- `enum Rejection { Build(String), Missing, Elsewhere, StatesOtherwise(String), RestsOn(Vec<String>), Kernel(String), Breach(Breach), Timeout }` を E604 の文にする（`._native.native_decide.` を含む公理の名前は `native_decide` と言う）。
+- CLI：`src/cli.rs` の `kaname check --lean`、`crates/ritsu/src/check.rs` と `cli.rs` の `ritsu check --lean`。`LeanError::Missing` は DESIGN 38.3 の文と終了コード 2。`check --format json`（36 章）に、モジュールごとの `properties`：`{name, line, outcome: "shown" | "example" | "undecided", reason: "no-proof" | "lean-not-run" | "inner" | "not-in-lean" | "proof-rejected", code, vectors, input}`。
+- テスト（Lean なし）：`tests/properties.rs` の `the_scan_finds_each_form`（38.5 の形ごとの表と、コメントや文字列の中は見ないこと、許した形は通ること）。ritsu の `tests/check.rs` の `check_lean_without_lean_exits_2`（`lake` の無い `PATH` と、一時のディレクトリの `HOME`）、`check_json_gives_each_property_its_outcome`。
+- テスト（Lean。`tests/lean.rs`）。破る形を一つずつ確かめる。文字で止める形は、`scan: false` でも後ろの段（環境かカーネル）が止めることを、後ろの段があるものについて確かめる。コードを走らせる形は、`scan: false` では走らせない。
+  - `lean_takes_a_proof_that_proves_the_property`（示した）
+  - `lean_turns_away_a_changed_statement`、`lean_turns_away_the_opened_statement`（型を開いた `∀ …` で書く）
+  - `lean_turns_away_sorry`、`lean_turns_away_an_axiom_of_its_own`
+  - `lean_turns_away_native_decide`（文字。`scan: false` なら公理で `native_decide` と言う）
+  - `lean_turns_away_a_theorem_added_past_the_kernel`（`import Lean` を文字で。`scan: false` なら `leanchecker`）
+  - `lean_turns_away_a_statement_defined_again`
+  - `lean_turns_away_macro_rules`（文字。`scan: false` なら公理で `sorryAx`）
+  - `lean_turns_away_eval`、`lean_turns_away_run_cmd`、`lean_turns_away_initialize`（文字。ファイルを書くコードを置き、そのファイルができていないこと）
+  - `lean_turns_away_an_import_outside_kaname`、`lean_turns_away_an_attribute`（`@[implemented_by …]` と `@[macro …]`）、`lean_turns_away_an_option`（`set_option debug.skipKernelTC true`）、`lean_turns_away_reduce_bool`（`Lean.ofReduceBool`）
+  - `lean_turns_away_a_theorem_in_another_namespace`、`lean_turns_away_a_def`
+  - `lean_stops_a_build_past_the_time_limit`（`timeout` を 1 秒にして重い証明）
+  - `lean_ignores_edits_to_the_generated_package`（`generated/lean/` の文を `True` に書き換えても、`True` の証明は通らない）
+  - `lean_maps_build_errors_to_the_proof_file`（E604 のパスと行が証明のファイルのもの）
+
+#### 12.2.8 例と証明
+
+- 新しい例 `examples/refund_split/`：`refund_split.kn`、`refund_split.ja.kn`、証明 `refund_split.lean`、`refund_split_ja.lean`（DESIGN 38.1 の関数、三つの性質、例の行）。三つとも証明する。`no_share_is_more_than_its_left` が終わらなければ、定理を置かずに残し（W603）、報告で言う。
+- `order_bill`（英日）：`bill_is_the_price_times_the_quantities` を足し、DESIGN 38.5 の証明を置く。
+- `media_mail`（英日）：15 ポンドより重いカートには見積もりが無い（`when weight_of(lines: lines) > 15lb` で `quote(lines: lines) = none`）。規則を呼ぶが答えに頼らないので、`Inner` を仮定にしたまま証明できる見本。
+- `discount_split`（英日）：証明できる性質を一つ（明細の数や項目を保つ、など。kaname にある組み込みで書けるものを選ぶ）と、配った分の合計が値引きになる性質を、証明を置かない「規則の答えに頼る」（W603）の見本として置く。
+- `late_payment` と `order_flow`：関数が total なら一つずつ（期日までに払えば遅延の料金が無い、を日付の関数を外から与えたまま。直和型の場合分け）。total でなければ置かない。
+- DESIGN 17.12 の例の一覧（十）、`tests/examples.rs` の期待（`--lean` が無ければ、性質ごとに W603）。例を `tests/common/targets.rs` の `MODULES` や Lean のモデルの突き合わせに入れたら、10 章の一覧の数（kaname の README、DESIGN 15.3・16.1・16.4、PLAN F.10、根の DESIGN 11.3）が変わる。B は新しい数を報告に書き、C が文書に入れる。
+- テスト（Lean）：`lean_proves_the_properties_of_the_examples`。どの例も `--lean` で確かめ、性質ごとの答えと理由を golden（`tests/golden/lean/examples.txt`）と比べる。
+
+#### 12.2.9 診断の台帳
+
+- `src/codes.rs`：E603、E604、E605、W603、W604、W605（英日の見出し、いつ出るか、直し方）。E401 と E005 の説明に性質を足す。
+- golden `tests/golden/codes/{E603,E604,E605,W603,W604,W605}.{en,ja}.txt`（`KANAME_BLESS=1`）。E604 の再現は `scan` の道で作り、`tests/codes.rs` に Lean を要らなくする。
+- `explain --all` で `docs/codes.md` と `docs/codes.ja.md` を書き直す。ritsu の `tests/codes.rs` が全部の言語の番号を見ていれば合わせる。
+
+#### 12.2.10 CI
+
+- `.github/workflows/proofs.yml`：「The languages and the checks across them agree with their models…」の段のあとに、`cargo test -p kaname --test lean` と `cargo test -p ritsu --test lean` を、SKIP の行で落とす同じ確かめと一緒に足す。`paths` に `crates/kaname/tests/lean.rs` と材料（`tests/properties/`）が入っているかを見る。
+- `ci/skips/tools.txt`：tools の「ほか」の組は Lean を入れないので、`tests/lean.rs`（kaname と ritsu）が出す SKIP の行を足し、proofs.yml が走らせると注を書く。
+- `cargo check -p kaname --target wasm32-unknown-unknown` が通ること（`src/lean.rs` は `std::process` を使う）。`ritsu.wasm` は作り直さない。
+
+#### 12.2.11 順番
+
+12.2.1 → 12.2.2 → 12.2.3 → 12.2.4 → 12.2.5 → 12.2.6（書き出し、次に突き合わせが一致するまで直す）→ 12.2.7（検査、次に破る形のテスト）→ 12.2.8 → 12.2.9 → 12.2.10 → 報告。
+
+#### 12.2.12 完了の条件
+
+- `cargo test -p kaname`（`tests/lean.rs` を含み、SKIP は 0）と、ritsu の `--test check --test gen --test kaname --test lean --test codes` が通る。`cargo xtask test --level tools -p kaname` の SKIP が 0。`tests/design.rs` が 38 章の `kn` のブロックを読む。`cargo clippy -p kaname --all-targets` に新しい警告が無い。
+- 報告に書くもの：作ったもの、ベクタの数（性質ごと）、突き合わせのモジュール・関数・評価の数と `LeanStats`、例の `--lean` にかかった時間、使ったディスク、終わらなかった証明、DESIGN と違えたことと理由。
+
+### 12.3 kaname-lean の段階 C：`doc`、`api`、文書、サイト、スキル
+
+- **`doc`**：モジュールのページで、関数のあとに性質を並べる（名前、説明、`when`、最後の式、.kn の隣に証明のファイルがあるか）。答えは載せない（答えは `check` のもの）。golden は `KANAME_BLESS=1`。
+- **`api`**：性質（名前、別名、引数、行）を足す。`tests/api.rs` の golden。
+- **README**：kaname の `README.md` と `README.ja.md` に節「Properties and proofs」（英語が先）。`refund_split`、`ritsu check` の W603 と E603（B の材料の実物）、`ritsu gen --target lean` の木、証明のファイル、`ritsu check --lean` の実物、書けないものの短い一覧、elan のダウンロードの注。例の一覧を十にする。
+- **`docs/reference.md`**（日本語の版があれば両方）：`property`、`when`、`--lean`、`--target lean`。
+- **数**：B が 10 章の一覧の数を変えていれば、文書に入れる。
+- **サイト**：`website/docs/kaname/` に「Properties and proofs」のページ（英日）を足し、ナビゲーションに並べる。ブラウザで試すページでは性質が Lean なしで走り、W603 になることを書く。
+- **スキル**：kaname の `SKILL.md`（とコピー。E.4）に、性質の書き方（範囲、`when`、W605）と、LLM が証明を書く手順（`samples/` から始める、定理の名前と型、書けないもの、`omega`・`simp`・`decide`・`grind` と前置きの補題、`generated/lean/` で `lake build`、最後に `ritsu check --lean`、生成したファイルを直さない）。
+- **根の文書**：根の DESIGN 11 章に置く段落（利用者の証明の確かめ）と、根の README の kaname の節の一行を案として報告に書く。根の PLAN 7.108 は取りまとめ役が書く。
+- **完了の条件**：kaname の `tests/doc.rs`、`tests/api.rs`、`tests/docs.rs`、`tests/skill.rs`、ritsu の `tests/website.rs`、`tests/readme.rs`、`tests/skill.rs` が通り、サイトが組める。貼った出力は実物である。

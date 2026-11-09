@@ -295,3 +295,43 @@ fn what_is_private_is_its_modules_alone() {
         assert!(text(&o).contains("`private`"), "{}", text(&o));
     }
 }
+
+/// The names of a property and of its parameters are those of the Lean it is written as (DESIGN
+/// 38.2): one that is not ASCII takes an alias (E005), as a function's does.
+#[test]
+fn a_japanese_property_needs_an_alias() {
+    let t = TempDir::new("kaname-property-alias");
+    let o = check_in(&t, "module 例(example) v1\n\nproperty 正の数(x: number range >=0 <=9)\n  x >= 0\n", common::joined());
+    assert_eq!(codes(&o), ["E005"]);
+    assert!(text(&o).contains("main.kn:3:10: The property `正の数` has no ASCII alias"), "{}", text(&o));
+    let o = check_in(&t, "module 例(example) v1\n\nproperty 正の数(positive)(値: number range >=0 <=9)\n  値 >= 0\n", common::joined());
+    assert_eq!(codes(&o), ["E005"]);
+    let o = check_in(&t, "module 例(example) v1\n\nproperty 正の数(positive)(値(x): number range >=0 <=9)\n  値 >= 0\n", common::joined());
+    assert_eq!(common::codes_before_analysis(&o), ["W603"], "{}", text(&o));
+}
+
+/// A property is never called (DESIGN 38.2): its name names no function, and E101 says why.
+#[test]
+fn a_property_cannot_be_called() {
+    let t = TempDir::new("kaname-property-call");
+    let o = check_in(
+        &t,
+        "module m v1\n\nfn twice(x: number range >=0 <=9) -> number\n  x * 2\n\nproperty twice_grows(x: number range >=0 <=9)\n  twice(x: x) >= x\n\nfn grows(x: number range >=0 <=9) -> bool\n  twice_grows(x: x)\n",
+        common::joined(),
+    );
+    assert_eq!(codes(&o), ["E101"]);
+    let said = text(&o);
+    assert!(
+        said.contains("main.kn:10:3: There is no function `twice_grows`") && said.contains("`twice_grows` is a property, and a property is never called: `check` tries it on the vectors of its parameters, and `--lean` checks the proof beside it in Lean."),
+        "{said}"
+    );
+}
+
+/// A property and a function share one space of names (DESIGN 38.2): the same name is E006.
+#[test]
+fn a_property_and_a_function_cannot_share_a_name() {
+    let t = TempDir::new("kaname-property-name");
+    let o = check_in(&t, "module m v1\n\nfn twice(x: number range >=0 <=9) -> number\n  x * 2\n\nproperty twice(x: number range >=0 <=9)\n  twice(x: x) >= x\n", common::joined());
+    assert_eq!(codes(&o), ["E006"]);
+    assert!(text(&o).contains("main.kn:6:10: `twice` is given twice (the function on line 3, and this property)"), "{}", text(&o));
+}

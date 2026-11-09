@@ -1,0 +1,33 @@
+module refund_split v1
+description "Spreads a refund over the lines of an order in proportion to what is still unpaid on them, so that the shares come to the refund"
+
+record Line
+  sku  : string
+  left : money[USDc]  range >=1USDc <=1_000_000USDc
+
+record Share
+  sku   : string
+  left  : money[USDc]
+  share : money[USDc]
+
+fn split(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc) -> list[Share] total
+  description "Each line gets the refund up to its end less the refund before it"
+  map(running_totals(lines, l => l.left), r =>
+    Share { sku: r.item.sku, left: r.item.left, share: allocate(refund, r.upto, r.total) - allocate(refund, r.before, r.total) })
+
+property shares_add_up(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "The shares come to the refund"
+  sum(split(lines: lines, refund: refund), s => s.share) = refund
+
+property no_share_is_negative(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "No line gets less than nothing"
+  all(split(lines: lines, refund: refund), s => s.share >= 0USDc)
+
+property no_share_is_more_than_its_left(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "A refund no larger than what is left in all gives no line more than what is left on it"
+  when refund <= sum(lines, l => l.left)
+  all(split(lines: lines, refund: refund), s => s.share <= s.left)
+
+examples
+  split(lines: [Line { sku: "book-1", left: 500USDc }, Line { sku: "mug-1", left: 1000USDc }], refund: 100USDc)
+    = [Share { sku: "book-1", left: 500USDc, share: 33USDc }, Share { sku: "mug-1", left: 1000USDc, share: 67USDc }]

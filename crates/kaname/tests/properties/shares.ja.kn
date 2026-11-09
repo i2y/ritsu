@@ -1,0 +1,16 @@
+module 返金の配分(shares_ja) v1
+description "注文の明細に、残りの比で返金を配る。成り立たない性質を持つ。shares.kn の日本語の版"
+
+record 明細(Line)
+  品番(sku)  : string
+  残り(left) : money[USDc]  range >=1USDc <=1_000_000USDc
+
+fn 按分する(split)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc) -> list[money[USDc]] total
+  description "どの明細にも、その明細の終わりまでの返金から、手前までの返金を引いた分を配る"
+  map(running_totals(明細, 一件 => 一件.残り), 途中 => allocate(返金, 途中.upto, 途中.total) - allocate(返金, 途中.before, 途中.total))
+
+property どの明細にも配る(every_line_gets_a_share)(明細(lines): list[明細] count >=1 <=10, 返金(refund): money[USDc] range >=0USDc <=10_000_000USDc)
+  description "返金が 0 より多ければ、どの明細にも何かを配る"
+  when 返金 > 0USDc
+  let 配分 = 按分する(明細: 明細, 返金: 返金)
+  all(配分, 一件 => 一件 > 0USDc)

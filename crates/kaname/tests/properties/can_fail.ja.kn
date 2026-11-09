@@ -1,0 +1,6 @@
+module 失敗しうる性質(can_fail_ja) v1
+description "0 になりうる値で割る性質。narrows.ja.kn から `when` の行を除いたもの。can_fail.kn の日本語の版"
+
+property 一つ分は全体を超えない(no_part_is_more_than_the_whole)(全体(total): number range >=0 <=1000, 個数(parts): number range >=0 <=10)
+  description "一つ分は全体を超えない"
+  down(全体 / 個数, 1) <= 全体

@@ -226,7 +226,12 @@ pub fn written_holds(c: &Checked, facts: &[FnFacts], rings: &[(Vec<usize>, bool)
         let fun = &c.decls.fns[f].name.text;
         let shown = written(&allowed, w.diverges);
         let ks = kinds_text(&extra);
+        let property = decl.property.is_some();
         let msg = match (extra.is_empty(), loops) {
+            // a property is total, whatever is written (DESIGN 38.2)
+            (false, false) if property => tr!("性質 `{fun}` は、{} で失敗することがあります。性質は total です", "The property `{fun}` can fail with {}, and a property is total", ks.ja; ks.en),
+            (true, true) if property => tr!("性質 `{fun}` は、止まらないことがあります。性質は total です", "The property `{fun}` may not stop, and a property is total"),
+            _ if property => tr!("性質 `{fun}` は、{} で失敗することがあり、止まらないこともあります。性質は total です", "The property `{fun}` can fail with {} and may not stop, and a property is total", ks.ja; ks.en),
             (false, false) => tr!("関数 `{fun}` には `{shown}` と書いてありますが、{} で失敗することがあります", "`{fun}` is written `{shown}`, but it can fail with {}", ks.ja; ks.en),
             (true, true) => tr!("関数 `{fun}` には `{shown}` と書いてありますが、止まらないことがあります", "`{fun}` is written `{shown}`, but it may not stop"),
             _ => tr!("関数 `{fun}` には `{shown}` と書いてありますが、{} で失敗することがあり、止まらないこともあります", "`{fun}` is written `{shown}`, but it can fail with {} and may not stop", ks.ja; ks.en),
@@ -305,7 +310,12 @@ pub fn written_holds(c: &Checked, facts: &[FnFacts], rings: &[(Vec<usize>, bool)
                 ));
             }
         }
-        if !extra.is_empty() {
+        if property {
+            d = d.note(tr!(
+                "失敗しうる性質は、失敗した入力で成り立たないのか当てはまらないのかが決まりません。失敗しうる場所に届く値を、`when` の行か引数の範囲で狭めてください。",
+                "Of a property that can fail, an input it fails on would say neither that it holds nor that it does not: narrow the values that reach those places with `when` lines or the ranges of the parameters."
+            ));
+        } else if !extra.is_empty() {
             d = d.note(tr!(
                 "書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。",
                 "Make the places shown (narrow the values with an `if` before they go there), or write a wider effect."

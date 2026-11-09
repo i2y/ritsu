@@ -315,3 +315,51 @@ fn function_types_lambdas_and_private() {
     // `private` before what is neither a function nor a type
     assert_eq!(said("module m v1\nprivate use module p from \"p.kn\"\n").first().map(|x| x.0), Some("E003"));
 }
+
+/// A property (DESIGN 38.1): its parameters as a function's, its description, its `when` lines and
+/// its `let` lines and last line; read as a function after the module's own that answers `true`
+/// where a `when` line does not hold. English and Japanese.
+#[test]
+fn a_property_reads_with_its_when_lines() {
+    let m = module(
+        "module m v1\n\nfn half(x: number range >=0 <=100) -> number\n  down(x / 2, 1)\n\nproperty no_more_than_the_whole(total: number range >=0 <=100, parts: number range >=1 <=9)\n  description \"No part is more than the whole\"\n  when parts > 1\n  when total > 0\n  let part = down(total / parts, 1)\n  part <= total\n",
+    );
+    assert_eq!(m.fns.len(), 1, "a property is not a function of the module");
+    let p = &m.properties[0];
+    assert_eq!(p.name.text, "no_more_than_the_whole");
+    assert_eq!(p.params.iter().map(|x| x.name.text.as_str()).collect::<Vec<_>>(), ["total", "parts"]);
+    assert_eq!(p.description.as_ref().map(|(d, _)| d.as_str()), Some("No part is more than the whole"));
+    assert_eq!(p.when.len(), 2);
+    assert_eq!(p.body.lets.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["part"]);
+    assert_eq!((p.line, p.last), (6, 11));
+    // the function it is read as: `if parts > 1 and total > 0 then … else true`
+    assert_eq!(p.lowered.property, Some(0));
+    let ExprKind::If(c, _, f) = &p.lowered.body.answer.kind else { panic!("{:?}", p.lowered.body.answer.kind) };
+    assert!(matches!(&c.kind, ExprKind::Bin(_, BinOp::And, _)), "{:?}", c.kind);
+    assert!(matches!(&f.answer.kind, ExprKind::Bool(true)), "{:?}", f.answer.kind);
+    // with no `when` line, the body alone
+    let m = module("module m v1\n\nproperty p(x: number range >=0 <=9)\n  x >= 0\n");
+    assert!(m.properties[0].when.is_empty() && !matches!(m.properties[0].lowered.body.answer.kind, ExprKind::If(..)));
+    let m = module(
+        "module 例(example) v1\n\nproperty 全体を超えない(no_more_than_the_whole)(全体(total): number range >=0 <=100, 個数(parts): number range >=1 <=9)\n  description \"一つ分は全体を超えない\"\n  when 個数 > 1\n  let 一つ分 = down(全体 / 個数, 1)\n  一つ分 <= 全体\n",
+    );
+    let p = &m.properties[0];
+    assert_eq!((p.name.text.as_str(), p.name.ascii()), ("全体を超えない", "no_more_than_the_whole"));
+    assert_eq!(p.params.iter().map(|x| x.name.ascii()).collect::<Vec<_>>(), ["total", "parts"]);
+    assert_eq!((p.when.len(), p.body.lets.len()), (1, 1));
+}
+
+/// A property ends with its last line (E111): not with a `when` line or a `let` line, and not with
+/// no body at all.
+#[test]
+fn a_property_without_a_last_line_is_an_error() {
+    let head = "module m v1\n\nproperty p(x: number range >=0 <=9)\n";
+    assert_eq!(said(&format!("{head}  when x > 1\n")), [("E111", 4, 8)]);
+    assert_eq!(said(&format!("{head}  let y = x\n")), [("E111", 4, 7)]);
+    assert_eq!(said(head), [("E111", 3, 1)]);
+    let p = parse("t.kn", &format!("{head}  when x > 1\n"));
+    let said = p.diags[0].render(Lang::En);
+    assert!(said.contains("The property has no last line: end it with what has to hold, an expression that is `true` or `false`"), "{said}");
+    let p = parse("t.kn", &format!("{head}  when x > 1\n"));
+    assert!(p.diags[0].render(Lang::Ja).contains("性質に最後の行がありません"), "{}", p.diags[0].render(Lang::Ja));
+}

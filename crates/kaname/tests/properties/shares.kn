@@ -1,0 +1,16 @@
+module shares v1
+description "Spreads a refund over the lines of an order in proportion to what is left on them, with a property that does not hold"
+
+record Line
+  sku  : string
+  left : money[USDc]  range >=1USDc <=1_000_000USDc
+
+fn split(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc) -> list[money[USDc]] total
+  description "Each line gets the refund up to its end less the refund before it"
+  map(running_totals(lines, l => l.left), r => allocate(refund, r.upto, r.total) - allocate(refund, r.before, r.total))
+
+property every_line_gets_a_share(lines: list[Line] count >=1 <=10, refund: money[USDc] range >=0USDc <=10_000_000USDc)
+  description "A refund of more than nothing gives every line something"
+  when refund > 0USDc
+  let shares = split(lines: lines, refund: refund)
+  all(shares, s => s > 0USDc)

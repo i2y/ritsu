@@ -54,9 +54,13 @@ ok rules/late_payment_charges.rule
 ok rules/遅延の請求額.rule
 dates/payment_terms.cal: ok — every date computes on all 730 days of invoiced (2026-01-01..2027-12-31); 2 examples match
 dates/支払期限.cal: ok — every date computes on all 730 days of 請求日 (2026-01-01..2027-12-31); 2 examples match
+warning[kaname W603]: late_payment.ja.kn:28:1: The property `期日までに払えば請求は無い` held on all 10 of its 19 vectors on which its `when` lines are true, but it is not shown: the proof in late_payment_ja.lean is checked with `--lean`
+    28 | property 期日までに払えば請求は無い(nothing_is_claimed_when_paid_on_time)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%)
 ok late_payment.ja.kn: 1 function, total
+warning[kaname W603]: late_payment.kn:28:1: The property `nothing_is_claimed_when_paid_on_time` held on all 10 of its 19 vectors on which its `when` lines are true, but it is not shown: the proof in late_payment.lean is checked with `--lean`
+    28 | property nothing_is_claimed_when_paid_on_time(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%)
 ok late_payment.kn: 1 function, total
-ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass; borders between the languages: 2 checked, 0 undecided
+ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass (2 warnings); borders between the languages: 2 checked, 0 undecided
 ```
 
 kaname finds that `paid_on - due` is −758 to 1,431 days, and 1 to 1,431 in the branch of
@@ -148,8 +152,10 @@ everything, and `ritsu check` asks the other file what it can come to
 ```console
 $ cd crates/kaname/examples/order_bill
 $ ritsu check order_bill.kn
+warning[kaname W603]: order_bill.kn:15:1: The property `bill_is_the_price_times_the_quantities` held on all 12 vectors, but it is not shown: the proof in order_bill.lean is checked with `--lean`
+    15 | property bill_is_the_price_times_the_quantities(lines: list[Line] count >=1 <=30, price: money[USDc] range >=1USDc <=1000USDc)
 ok order_bill.kn: 1 function, total
-ritsu check: 1 file (kaname 1): all pass; borders between the languages: 3 checked, 0 undecided
+ritsu check: 1 file (kaname 1): all pass (1 warning); borders between the languages: 3 checked, 0 undecided
 ```
 
 Raise the schema's `maximum` for `qty` to 21 and it stops with E207: the field takes number >=1 <=20,

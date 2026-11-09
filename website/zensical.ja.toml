@@ -30,6 +30,7 @@ nav = [
     { "Functional Core の四つの例" = "kaname/examples.md" },
     { "検査が保証すること" = "kaname/checks.md" },
     { "規則・日付・帳簿を呼ぶ" = "kaname/together.md" },
+    { "性質と証明" = "kaname/properties.md" },
   ] },
   { "Node で使う" = "node.md" },
   { "モジュール" = "modules.md" },

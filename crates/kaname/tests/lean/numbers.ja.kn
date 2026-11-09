@@ -1,0 +1,95 @@
+module 数の持ち方(numbers_ja) v1
+description "kaname が書く Lean の数の持ち方を、参照インタプリタとの突き合わせのために一つずつ通る。単位より細かい刻みの値と値で割った値を、それぞれ五通りに丸める。allocate、mod、isqrt、累計、負の数、範囲の端も通る。numbers.kn の日本語の版"
+
+record 明細(Line)
+  名前(label) : string
+  金額(amount) : money[USDc]  range >=-50_000USDc <=50_000USDc
+
+record 途中(Step)
+  名前(label)  : string
+  ここまで(upto) : money[USDc]
+  合計(total)  : money[USDc]
+
+# 金額に率を掛けた、1 セントより細かい刻みの値を、五通りに丸める
+fn 率で切り上げ(rate_up)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  up(額 * 率, 1USDc)
+
+fn 率で切り捨て(rate_down)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  down(額 * 率, 1USDc)
+
+fn 率で四捨五入(rate_half_up)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  half_up(額 * 率, 1USDc)
+
+fn 率で五捨六入(rate_half_down)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  half_down(額 * 率, 1USDc)
+
+fn 率で偶数丸め(rate_half_even)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=-100% <=100%) -> money[USDc]
+  half_even(額 * 率, 1USDc)
+
+# 金額を数で割った値（値で割った値）を、五通りに丸める
+fn 割って切り上げ(share_up)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 数(n): number range >=-7 <=-1) -> money[USDc]
+  up(額 / 数, 1USDc)
+
+fn 割って切り捨て(share_down)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 数(n): number range >=1 <=7) -> money[USDc]
+  down(額 / 数, 1USDc)
+
+fn 割って四捨五入(share_half_up)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 数(n): number range >=1 <=7) -> money[USDc]
+  half_up(額 / 数, 1USDc)
+
+fn 割って五捨六入(share_half_down)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 数(n): number range >=1 <=7) -> money[USDc]
+  half_down(額 / 数, 1USDc)
+
+fn 割って偶数丸め(share_half_even)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 数(n): number range >=-7 <=-1) -> money[USDc]
+  half_even(額 / 数, 1USDc)
+
+# 単位より粗い刻みに丸める
+fn ドル単位で割る(share_in_dollars)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 数(n): number range >=1 <=7) -> money[USDc]
+  half_even(額 / 数, 100USDc)
+
+# 刻みの違う二つの値の和を、金額と比べる
+fn 超える(over)(額(a): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=-100% <=100%, ドル(b): money[USD] range >=-10_000USD <=10_000USD) -> bool
+  額 * 率 + (ドル in USDc) > 額
+
+# 二つの商の小さい方と、商と金額の大きい方
+fn 小さい方(least)(額(a): money[USDc] range >=-100_000USDc <=100_000USDc, 数(n): number range >=1 <=9, 別の数(m): number range >=1 <=9) -> money[USDc]
+  down(min(額 / 数, 額 / 別の数), 1USDc)
+
+fn 大きい方(most)(額(a): money[USDc] range >=-100_000USDc <=100_000USDc, 数(n): number range >=1 <=9) -> money[USDc]
+  up(max(額 / 数, -5USDc), 1USDc)
+
+# 金額、細かい刻みの値、商の allocate
+fn 配分(part)(全体(total): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 一方(a): money[USDc] range >=0USDc <=100_000USDc, 他方(b): money[USDc] range >=1USDc <=100_000USDc) -> money[USDc]
+  allocate(全体, 一方, 一方 + 他方)
+
+fn 率で配分(part_of_rate)(全体(total): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 率(r): rate[step 0.01%] range >=0% <=100%) -> money[USDc]
+  allocate(全体, 率, 100%)
+
+fn 商で配分(part_of_share)(全体(total): money[USDc] range >=-1_000_000USDc <=1_000_000USDc, 一方(a): money[USDc] range >=0USDc <=100_000USDc, 数(n): number range >=1 <=7, 他方(b): money[USDc] range >=100_000USDc <=200_000USDc) -> money[USDc]
+  allocate(全体, 一方 / 数, 他方)
+
+# 負の数の余り、負の数で割った余り、商の余り、大きな数の平方根
+fn 順番(turn)(日(day): number range >=-1_000_000 <=1_000_000, 人数(players): number range >=-9 <=-1) -> number
+  mod(日, 人数)
+
+fn 商の順番(turn_of_share)(値(x): number range >=-1_000 <=1_000, 数(n): number range >=1 <=7) -> number
+  mod(down(値 / 数, 1), 7)
+
+fn 平方根(root)(数(n): number range >=0 <=8_999_999_999_999_999_999) -> number
+  isqrt(数)
+
+fn 商の平方根(root_of_share)(値(x): number range >=0 <=1_000_000, 数(n): number range >=1 <=7) -> number
+  isqrt(値 / 数)
+
+# 負になりうる重みの累計
+fn 累計(steps)(明細(lines): list[明細] count >=0 <=4) -> list[途中]
+  map(running_totals(明細, 一件 => 一件.金額), 途中 => 途中 { 名前: 途中.item.名前, ここまで: 途中.upto, 合計: 途中.total })
+
+fn 差(gaps)(明細(lines): list[明細] count >=0 <=4) -> list[money[USDc]]
+  map(running_totals(明細, 一件 => 一件.金額), 途中 => 途中.upto - 途中.before)
+
+# ドルをセントで読み、セントをドルに戻す
+fn セント(cents)(ドル(d): money[USD] range >=-10_000USD <=10_000USD) -> money[USDc]
+  ドル in USDc
+
+fn ドル(dollars)(セント(c): money[USDc] range >=-1_000_000USDc <=1_000_000USDc) -> money[USD]
+  half_up(セント in USD, 1USD)

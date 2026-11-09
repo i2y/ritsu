@@ -1610,7 +1610,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 ```
 ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--no-claims] [--lang ja|en]
 ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <target>] [--format json]
-ritsu gen [<パス>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
+ritsu gen [<パス>...] [--target typescript|python|go|rust|cedar|lean]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
 ritsu gen --library [--embed <名前>]... [--target typescript|python|go|cedar]... [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
 ritsu mod <コマンド> <引数>...  モジュールの依存、送り出し、版のあいだの差、報告、一覧のサイト（17.19）
@@ -2062,7 +2062,7 @@ generated/rust/
 
 ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、`--target cedar`（か `target` の行の `cedar`）のとき、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6、9.6）。
 
-`ritsu gen [<path>...] [--target typescript|python|go|rust|cedar]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。書くのは `--target`（何度でも書ける）の出力先で、無ければ `ritsu.mod` の `target` の行（17.3）の出力先である。どちらも無ければ、何も書かずに exit 2 で止まる（9.6）。書く順は、フラグの順に依らず、TypeScript、Python、Go、Rust、Cedar である。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
+`ritsu gen [<path>...] [--target typescript|python|go|rust|cedar|lean]... [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。書くのは `--target`（何度でも書ける）の出力先で、無ければ `ritsu.mod` の `target` の行（17.3）の出力先である。どちらも無ければ、何も書かずに exit 2 で止まる（9.6）。書く順は、フラグの順に依らず、TypeScript、Python、Go、Rust、Cedar である。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
 
 `glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「Functional Core（kaname のモジュール）」（英語では the functional cores (kaname's modules)）を言う。kaname は規則と日付と帳簿をつなぐコードに限らない汎用の言語なので、そう呼ぶ。置き場の名前は `glue/` のままである。ホストのコードはこのパスでモジュールを読むので、名前を変えるとホストのビルドが壊れる。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
 
@@ -2163,7 +2163,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 
 ```
 $ ritsu gen
-error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar`, or make it a module (`ritsu mod init`) and write them on the `target` line of its ritsu.mod (`target typescript python go`)
+error: `ritsu gen` writes only the targets it is given: give one or more `--target typescript|python|go|rust|cedar|lean`, or make it a module (`ritsu mod init`) and write them on the `target` line of its ritsu.mod (`target typescript python go`)
 note: up to 0.40.0, `ritsu gen` with no `--target` wrote the packages of TypeScript, Python and Go, and the gates' Cedar; this writes the same files:
   ritsu gen --target typescript --target python --target go --target cedar
 ```

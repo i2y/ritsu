@@ -38,6 +38,59 @@ pub struct Checked {
     /// Every lambda of its functions, by its id, with the function it is written in: what a function
     /// value is called with (DESIGN 27.3), made the first time one is looked up.
     pub lambdas: std::cell::OnceCell<BTreeMap<usize, (usize, crate::ast::Expr)>>,
+    /// The same module with its properties read as functions after its own (DESIGN 38.2): what a
+    /// property's vectors run in and what is written for Lean. None for a module with no properties,
+    /// and for that module itself.
+    pub lowered: Option<Rc<Checked>>,
+    /// Its properties, in the order written (empty in [`Checked::lowered`]).
+    pub properties: Vec<CheckedProperty>,
+}
+
+/// A property of a module (DESIGN 38): as written, the function it is read as in
+/// [`Checked::lowered`], and what the analysis of ranges found of that function.
+#[derive(Clone, Debug)]
+pub struct CheckedProperty {
+    pub decl: crate::ast::Property,
+    /// The function in [`Checked::lowered`].
+    pub lowered: usize,
+    pub facts: crate::ranges::FnFacts,
+}
+
+/// The module the stages after the check read (DESIGN 38.2): `full`, checked with its properties
+/// read as functions after its `n` own, with them left out of its functions, its declarations and
+/// its analysis, and kept beside.
+fn without_properties(full: Rc<Checked>, n: usize) -> Rc<Checked> {
+    if full.module.properties.is_empty() {
+        return full;
+    }
+    let mut module = full.module.clone();
+    module.fns.truncate(n);
+    let mut decls = full.decls.clone();
+    decls.fns.truncate(n);
+    let analysis = std::cell::OnceCell::new();
+    let mut properties = Vec::new();
+    if let Some(a) = full.analysis.get() {
+        for (k, p) in full.module.properties.iter().enumerate() {
+            properties.push(CheckedProperty { decl: p.clone(), lowered: n + k, facts: a.fns.get(n + k).cloned().unwrap_or_default() });
+        }
+        let mut own = a.clone();
+        own.fns.truncate(n);
+        let _ = analysis.set(own);
+    }
+    Rc::new(Checked {
+        path: full.path.clone(),
+        canon: full.canon.clone(),
+        src: full.src.clone(),
+        module,
+        uses: full.uses.clone(),
+        world: full.world.clone(),
+        decls,
+        typed: full.typed.clone(),
+        analysis,
+        lambdas: std::cell::OnceCell::new(),
+        lowered: Some(full),
+        properties,
+    })
 }
 
 impl Checked {
@@ -71,6 +124,9 @@ pub struct Outcome {
     /// examples find: what shows where a module can fail, and what a test runs a module the
     /// analysis finds wrong with.
     pub analysed: Option<Rc<Checked>>,
+    /// What the vectors (and `--lean`) said of each property of [`Outcome::analysed`] (DESIGN 38.3):
+    /// none when something else is wrong with the module, as the properties run last.
+    pub properties: Vec<crate::properties::PropertyReport>,
 }
 
 impl Outcome {
@@ -138,13 +194,13 @@ impl Run {
             let mut diags = parsed.diags;
             diags.extend(keys);
             diag::sort(&mut diags);
-            return Outcome { path: path.to_string(), diags, checked: None, analysed: None };
+            return Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
         };
         if let Some(d) = self.unjoined(&module, path, src) {
             let mut diags = vec![d];
             diags.extend(keys);
             diag::sort(&mut diags);
-            return Outcome { path: path.to_string(), diags, checked: None, analysed: None };
+            return Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
         }
         let canon = canonical(Path::new(path));
         self.reading.borrow_mut().push(canon.clone());
@@ -155,9 +211,15 @@ impl Run {
             diags.retain(|d| d.code == "E202");
             diags.extend(keys);
             diag::sort(&mut diags);
-            return Outcome { path: path.to_string(), diags, checked: None, analysed: None };
+            return Outcome { path: path.to_string(), diags, checked: None, analysed: None, properties: Vec::new() };
         }
         let read_all = uses.iter().all(Option::is_some);
+        // while the module is checked, its properties are functions after its own (DESIGN 38.2): the
+        // names, the types, the analysis and the effects read them as they read a function
+        let own = module.fns.len();
+        let mut module = module;
+        let lowered: Vec<crate::ast::FnDecl> = module.properties.iter().map(|p| p.lowered.clone()).collect();
+        module.fns.extend(lowered);
         let mut world = World::default();
         let mut by_name: BTreeMap<String, (usize, Target)> = BTreeMap::new();
         for (i, (u, t)) in module.uses.iter().zip(&uses).enumerate() {
@@ -200,6 +262,8 @@ impl Run {
                 typed,
                 analysis: std::cell::OnceCell::new(),
                 lambdas: std::cell::OnceCell::new(),
+                lowered: None,
+                properties: Vec::new(),
             }))
         };
         // the analysis of ranges, the effects and the decisions written in code, once the types hold
@@ -221,9 +285,22 @@ impl Run {
                 checked = None;
             }
         }
+        // the module the stages after the check read: its properties out of its functions
+        let analysed = analysed.map(|c| without_properties(c, own));
+        let mut checked = if checked.is_some() { analysed.clone() } else { None };
+        // the properties, on their vectors, last (DESIGN 38.3)
+        let mut properties = Vec::new();
+        if let Some(c) = &checked {
+            properties = crate::properties::run(c, &self.suite);
+            let found = crate::properties::diags(c, &properties);
+            if diag::has_errors(&found) {
+                checked = None;
+            }
+            diags.extend(found);
+        }
         diags.extend(keys);
         diag::sort(&mut diags);
-        Outcome { path: path.to_string(), diags, checked, analysed }
+        Outcome { path: path.to_string(), diags, checked, analysed, properties }
     }
 
     /// E202 at the first line that reads a language this run does not join.
@@ -404,6 +481,45 @@ impl Run {
     }
 }
 
+/// The codes the properties are said with (DESIGN 38.3), which `--lean` says again of a module.
+const OF_PROPERTIES: [&str; 5] = ["E603", "E604", "W603", "W604", "W605"];
+
+/// `--lean` (DESIGN 38.6) on the outcomes of the files given: each module with a proof beside it sent
+/// to Lean once, in one run, and its properties said again with what Lean said of them. A module
+/// whose proof Lean does not take fails, as one with a counterexample does. Err when Lean is needed
+/// and cannot be run (exit 2).
+pub fn with_lean(outcomes: &[Rc<Outcome>], opts: &crate::lean::LeanOptions) -> Result<Vec<Rc<Outcome>>, crate::lean::LeanError> {
+    let mut sent: Vec<(usize, Rc<Checked>)> = Vec::new();
+    for (i, o) in outcomes.iter().enumerate() {
+        let Some(c) = &o.analysed else { continue };
+        if o.properties.is_empty() || !ritsu_base::fs::is_file(crate::properties::proof_path(c)) || sent.iter().any(|(_, s)| s.canon == c.canon) {
+            continue;
+        }
+        sent.push((i, c.clone()));
+    }
+    if sent.is_empty() {
+        return Ok(outcomes.to_vec());
+    }
+    let modules: Vec<Rc<Checked>> = sent.iter().map(|(_, c)| c.clone()).collect();
+    let verdicts = crate::lean::check(&modules, opts)?;
+    let mut out = outcomes.to_vec();
+    for (m, c) in modules.iter().enumerate() {
+        let mine: Vec<(usize, crate::lean::Verdict)> = verdicts.iter().filter(|((n, _), _)| *n == m).map(|((_, k), v)| (*k, v.clone())).collect();
+        // the same module given twice is answered alike
+        for (i, o) in outcomes.iter().enumerate().filter(|(_, o)| o.analysed.as_ref().is_some_and(|a| a.canon == c.canon)) {
+            let properties = crate::properties::with_verdicts(c, &o.properties, &mine);
+            let mut diags: Vec<Diag> = o.diags.iter().filter(|d| !(OF_PROPERTIES.contains(&d.code) && d.file == c.path)).cloned().collect();
+            let said = crate::properties::diags(c, &properties);
+            let failed = diag::has_errors(&said);
+            diags.extend(said);
+            diag::sort(&mut diags);
+            let checked = if failed { None } else { o.checked.clone() };
+            out[i] = Rc::new(Outcome { path: o.path.clone(), diags, checked, analysed: o.analysed.clone(), properties });
+        }
+    }
+    Ok(out)
+}
+
 /// The root of a run (ritsu's DESIGN 6.2, item 3; 17.6): `--root`, else the nearest directory above
 /// the first path given that holds `.git` or `ritsu.mod`, else the directory of that file.
 pub fn root_of(root: Option<&Path>, first: &str) -> PathBuf {
@@ -438,8 +554,9 @@ fn rooted(o: &Outcome, root: &Path) -> Vec<Diag> {
         .collect()
 }
 
-/// The `--format json` of one file: `kaname`, `file`, `ok`, `summary`, `functions`, `diagnostics`,
-/// in that order. `functions` is each function with its effect (DESIGN 4.5), when the analysis ran.
+/// The `--format json` of one file: `kaname`, `file`, `ok`, `summary`, `functions`, `properties`,
+/// `diagnostics`, in that order. `functions` is each function with its effect (DESIGN 4.5), when the
+/// analysis ran; `properties` each property with its answer (DESIGN 38.3), when they ran.
 pub fn to_json(o: &Outcome, root: &Path, lang: Lang) -> Json {
     let file = ritsu_base::paths::from_root(root, Path::new(&o.path)).unwrap_or_else(|| o.path.clone());
     Json::obj([
@@ -448,6 +565,7 @@ pub fn to_json(o: &Outcome, root: &Path, lang: Lang) -> Json {
         ("ok", Json::from(!o.has_errors())),
         ("summary", Json::opt_str(o.summary().map(|t| t.get(lang).to_string()))),
         ("functions", o.analysed.as_ref().map(|c| crate::effects::to_json(c)).unwrap_or(Json::Null)),
+        ("properties", o.analysed.as_ref().map(|c| crate::properties::to_json(c, &o.properties)).unwrap_or(Json::Null)),
         ("diagnostics", Json::arr(rooted(o, root).iter().map(|d| d.to_json(lang)))),
     ])
 }

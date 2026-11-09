@@ -1,0 +1,18 @@
+examples/order_flow/order_flow.kn: a_closed_order_takes_no_event: shown
+examples/order_flow/order_flow.ja.kn: 閉じた注文はイベントを受け付けない: shown
+examples/late_payment/late_payment.kn: nothing_is_claimed_when_paid_on_time: shown
+examples/late_payment/late_payment.ja.kn: 期日までに払えば請求は無い: shown
+examples/media_mail/media_mail.kn: nothing_heavier_than_15lb_is_quoted: shown
+examples/media_mail/media_mail.ja.kn: 十五ポンドより重いカートは見積もらない: shown
+examples/discount_split/discount_split.kn: every_line_keeps_its_label: shown
+examples/discount_split/discount_split.kn: shares_add_up: undecided (inner, W603)
+examples/discount_split/discount_split.ja.kn: どの明細も項目を保つ: shown
+examples/discount_split/discount_split.ja.kn: 配分の合計は値引き額: undecided (inner, W603)
+examples/order_bill/order_bill.kn: bill_is_the_price_times_the_quantities: shown
+examples/order_bill/order_bill.ja.kn: 請求額は単価と数量の合計の積: shown
+examples/refund_split/refund_split.kn: shares_add_up: shown
+examples/refund_split/refund_split.kn: no_share_is_negative: shown
+examples/refund_split/refund_split.kn: no_share_is_more_than_its_left: shown
+examples/refund_split/refund_split.ja.kn: 配分の合計は返金額: shown
+examples/refund_split/refund_split.ja.kn: 負の配分は無い: shown
+examples/refund_split/refund_split.ja.kn: 残りより多くは配らない: shown

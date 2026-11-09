@@ -1,0 +1,6 @@
+module 関数の引数(function_parameter_ja) v1
+description "関数を受け取る性質。ベクタは関数を作れない。function_parameter.kn の日本語の版"
+
+property 二度でも下がらない(twice_is_no_less)(一歩(step): (number) -> number, 値(x): number range >=0 <=10)
+  description "二度進んでも、元より下がらない"
+  一歩(一歩(値)) >= 値

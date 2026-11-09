@@ -20,6 +20,11 @@ fn 見積もる(quote)(明細(lines): list[明細] count >=1 <=30) -> money[USDc
   else
     none
 
+property 十五ポンドより重いカートは見積もらない(nothing_heavier_than_15lb_is_quoted)(明細(lines): list[明細] count >=1 <=30)
+  description "15 ポンドより重いカートには、規則が何を答えても見積もりが無い"
+  when 重さの合計(明細: 明細) > 15lb
+  見積もる(明細: 明細) = none
+
 examples
   見積もる(明細: [明細 { 品番: "book-1", 数量: 2, 重さ: 22oz, メディア: true }]) = 586USDc
   見積もる(明細: [明細 { 品番: "book-1", 数量: 2, 重さ: 22oz, メディア: true }, 明細 { 品番: "mug-1", 数量: 1, 重さ: 12oz, メディア: false }]) = none

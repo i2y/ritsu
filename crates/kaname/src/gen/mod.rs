@@ -20,6 +20,7 @@ pub mod books;
 pub mod door;
 pub mod ex;
 pub mod harness;
+pub mod lean;
 pub mod module;
 pub mod plan;
 pub mod wasm;

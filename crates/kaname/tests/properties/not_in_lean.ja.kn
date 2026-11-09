@@ -1,0 +1,31 @@
+module Leanに書かないもの(not_in_lean_ja) v1
+description "まだ Lean に書き出さないものを一つずつ使う性質。ベクタはそれでも走る。not_in_lean.kn の日本語の版"
+
+record 作業(Task)
+  名前(name)       : string
+  優先度(priority) : number  range >=1 <=5
+
+fn 最大(largest)[K: key](値の一覧(xs): list[K]) -> K?
+  値の一覧.sort().last()
+
+property 項目ごとに鍵がある(a_key_for_each_entry)(価格表(prices): dict[string, number])
+  description "辞書の鍵の数は、項目の数と同じ"
+  価格表.keys().count() = 価格表.count()
+
+property 集合は名前より多くない(no_more_members_than_names)(名前の一覧(names): list[string] count >=0 <=3)
+  description "名前の集合は、名前の数より多くを持たない"
+  名前の一覧.to_set().count() <= 名前の一覧.count()
+
+property 二度刈り込んでも同じ(trimming_twice_is_trimming_once)(名前(name): string)
+  description "刈り込んだ名前をもう一度刈り込んでも変わらない"
+  名前.trim().trim() = 名前.trim()
+
+property 並べ替えても数は同じ(sorting_keeps_the_tasks)(作業の一覧(tasks): list[作業] count >=0 <=3)
+  description "優先度で並べ替えても、作業の数は変わらない"
+  作業の一覧.sort_by(一件 => 一件.優先度).count() = 作業の一覧.count()
+
+property 最大は一覧の中にある(the_largest_is_one_of_them)(値の一覧(xs): list[number] count >=1 <=3)
+  description "一覧の最大は、一覧の数のどれか"
+  match 最大(値の一覧: 値の一覧)
+    none => false
+    some 値 => 値の一覧.any(一つ => 一つ = 値)

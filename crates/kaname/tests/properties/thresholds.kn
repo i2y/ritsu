@@ -1,0 +1,12 @@
+module thresholds v1
+description "Properties whose `when` lines compare with a threshold: one that holds past it, and one past the end of the range"
+
+property past_the_threshold(x: number range >=0 <=100)
+  description "Past 37 is 38 or more"
+  when x > 37
+  x >= 38
+
+property past_the_end(x: number range >=0 <=100)
+  description "Nothing in the range is past 200"
+  when x > 200
+  x >= 0

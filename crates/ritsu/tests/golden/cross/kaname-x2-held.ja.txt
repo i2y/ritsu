@@ -1,3 +1,7 @@
 ok rules/discount_share.rule
+警告[kaname W603]: discount_split.kn:19:1: 性質 `every_line_keeps_its_label` は、12 個のベクタのすべてで成り立ちましたが、示されていません。規則 `discount_share` の答えに頼っていて、証明が使えるのは、口がその答えについて教えることだけです
+    19 | property every_line_keeps_its_label(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc)
+警告[kaname W603]: discount_split.kn:23:1: 性質 `shares_add_up` は、12 個のベクタのすべてで成り立ちましたが、示されていません。規則 `discount_share` の答えに頼っていて、証明が使えるのは、口がその答えについて教えることだけです
+    23 | property shares_add_up(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc)
 ok discount_split.kn: 関数 1 個、total
-ritsu check: ファイル 2 個（rulec 1、kaname 1）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
+ritsu check: ファイル 2 個（rulec 1、kaname 1）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所
