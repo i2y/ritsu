@@ -89,7 +89,7 @@ Which desk takes an inquiry, and how soon it is first answered, from its kind an
 | 名前 | 型 | 丸め | 注記 |
 |---|---|---|---|
 | desk | desk（3 値） |  |  |
-| within | duration[h] | down(1h) |  |
+| within | duration[h] | down(1h)（1h単位で切り捨て） |  |
 
 ## 型
 
@@ -109,12 +109,14 @@ Which desk takes an inquiry, and how soon it is first answered, from its kind an
 
 | # | kind | member | → desk（desk） | → within（duration[h] / down(1h)） |
 |---|---|---|---|---|
-| 1 | returns | true | logistics | 24h |
-| 2 | returns | false | logistics | 48h |
+| 1 | returns | true（はい） | logistics | 24h |
+| 2 | returns | false（いいえ） | logistics | 48h |
 | 3 | delivery | - | logistics | 24h |
 | 4 | billing | - | accounting | 48h |
-| 5 | other | true | general | 48h |
-| 6 | other | false | general | 72h |
+| 5 | other | true（はい） | general | 48h |
+| 6 | other | false（いいえ） | general | 72h |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

@@ -92,9 +92,11 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | member | amount | → urgent (bool) | → carrier (carrier) |
 |---|---|---|---|---|
-| 1 | true | - | true | next_day |
-| 2 | false | >=30000JPY | true | next_day |
-| 3 | false | <30000JPY | false | standard |
+| 1 | true (yes) | - | true | next_day |
+| 2 | false (no) | >=30000JPY (30000JPY or more) | true | next_day |
+| 3 | false (no) | <30000JPY (less than 30000JPY) | false | standard |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 
@@ -133,7 +135,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| amount | money[JPY, incl_tax] | down(1JPY) |  |
+| amount | money[JPY, incl_tax] | down(1JPY) (rounded down to 1JPY) |  |
 | handling | handling (2 values) |  |  |
 
 ## Types
@@ -179,8 +181,8 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | # | nights | → handling (handling) |
 |---|---|---|
-| 1 | <=14 | auto |
-| 2 | >=15 | review |
+| 1 | <=14 (14 or less) | auto |
+| 2 | >=15 (15 or more) | review |
 
 **What `rulec check` verified**
 
@@ -287,9 +289,11 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 急ぎ | 返金 | → 記録 (bool) |
 |---|---|---|---|
-| 1 | true | - | true |
-| 2 | false | >=1JPY | true |
-| 3 | false | 0JPY | false |
+| 1 | true (yes) | - | true |
+| 2 | false (no) | >=1JPY (1JPY or more) | true |
+| 3 | false (no) | 0JPY | false |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 
@@ -330,7 +334,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
 | next_state | state (5 values) |  |  |
-| refund | money[JPY, incl_tax] | down(1JPY) |  |
+| refund | money[JPY, incl_tax] | down(1JPY) (rounded down to 1JPY) |  |
 | accepted | bool |  |  |
 
 ## Types
@@ -362,6 +366,8 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 | 8 | shipped | pay, ship, cancel | state | 0JPY | false | a cancel after the shipment goes through a return |
 | 9 | delivered | - | state | 0JPY | false |  |
 | 10 | cancelled | - | state | 0JPY | false | a payment that comes after a cancel does not bring the order back |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

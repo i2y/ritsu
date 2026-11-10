@@ -95,9 +95,11 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 会員 | 金額 | → 急ぎ (bool) | → 便 (便) |
 |---|---|---|---|---|
-| 1 | true | - | true | 翌日便 |
-| 2 | false | >=30000円 | true | 翌日便 |
-| 3 | false | <30000円 | false | 通常便 |
+| 1 | true (yes) | - | true | 翌日便 |
+| 2 | false (no) | >=30000円 (30000円 or more) | true | 翌日便 |
+| 3 | false (no) | <30000円 (less than 30000円) | false | 通常便 |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 
@@ -156,9 +158,11 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 会員 | 金額 | → 急ぎ (bool) | → 便 (便) |
 |---|---|---|---|---|
-| 1 | true | - | true | 翌日便 |
-| 2 | false | >=30000円 | true | 翌日便 |
-| 3 | false | <30000円 | false | 通常便 |
+| 1 | true (yes) | - | true | 翌日便 |
+| 2 | false (no) | >=30000円 (30000円 or more) | true | 翌日便 |
+| 3 | false (no) | <30000円 (less than 30000円) | false | 通常便 |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

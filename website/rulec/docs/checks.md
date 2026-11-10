@@ -692,6 +692,11 @@ text does not show**: that a group of six values and its complement of
 41 really do cover all 47, which rows shadow which, where a rounding was
 assumed rather than sourced.
 
+Each cell, condition and expression stays as the rule writes it, and what the notation leaves
+to the reader follows it in words: `always (in every case)`,
+`>=2025-04-01 <=2026-03-31 (from 2025-04-01 to 2026-03-31)`, `true (yes)`. A table with a `-`
+in it says once, under it, that `-` means any value.
+
 This is what `rulec doc` writes (excerpt; `--lang ja` asks for Japanese).
 
 ```markdown

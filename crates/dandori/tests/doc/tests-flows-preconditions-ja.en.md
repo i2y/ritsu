@@ -118,8 +118,8 @@ Relations between inputs that the caller guarantees. **The checks believed them 
 
 | # | 求める額 | → 扱い (扱い) |
 |---|---|---|
-| 1 | <=100 | すぐ払う |
-| 2 | >100 | 確かめる |
+| 1 | <=100 (100 or less) | すぐ払う |
+| 2 | >100 (more than 100) | 確かめる |
 
 **What `rulec check` verified**
 
@@ -173,9 +173,9 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 支払日 | → 精算の回 (回) |
 |---|---|---|
-| 1 | <=2026-06-30 | 前半 |
-| 2 | >=2026-07-10 <=2026-12-10 | 後半 |
-| 3 | >=2027-01-01 | 年末 |
+| 1 | <=2026-06-30 (on or before 2026-06-30) | 前半 |
+| 2 | >=2026-07-10 <=2026-12-10 (from 2026-07-10 to 2026-12-10) | 後半 |
+| 3 | >=2027-01-01 (on or after 2027-01-01) | 年末 |
 
 **What `rulec check` verified**
 

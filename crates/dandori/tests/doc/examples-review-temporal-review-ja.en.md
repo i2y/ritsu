@@ -103,11 +103,13 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 判断 | 確信度 | → 決定 (決定) |
 |---|---|---|---|
-| 1 | 承認 | >=90% | 承認 |
-| 2 | 承認 | <90% | 人に回す |
-| 3 | 却下 | >=80% | 却下 |
-| 4 | 却下 | <80% | 人に回す |
+| 1 | 承認 | >=90% (90% or more) | 承認 |
+| 2 | 承認 | <90% (less than 90%) | 人に回す |
+| 3 | 却下 | >=80% (80% or more) | 却下 |
+| 4 | 却下 | <80% (less than 80%) | 人に回す |
 | 5 | 保留 | - | 人に回す |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

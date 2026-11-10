@@ -76,7 +76,7 @@ Shipping by membership tier: gold and above ship free, and a campaign lifts a me
 
 | 名前 | 型 | 丸め | 注記 |
 |---|---|---|---|
-| shipping | money[USD] | down(1USD) |  |
+| shipping | money[USD] | down(1USD)（1USD単位で切り捨て） |  |
 | effective | tier（4 値） |  |  |
 | lifted | bool |  |  |
 
@@ -93,8 +93,8 @@ Shipping by membership tier: gold and above ship free, and a campaign lifts a me
 
 | 名前 | 種類 | 式 | 範囲 | 注記 |
 |---|---|---|---|---|
-| effective | 定義 | `max(member, campaign)` |  |  |
-| lifted | 定義 | `campaign > member` |  |  |
+| effective | 定義 | `max(member, campaign)`（member と campaign の大きい方） |  |  |
+| lifted | 定義 | `campaign > member`（campaign が memberより大きい） |  |  |
 
 ## 表 shipping_fee（policy unique）
 
@@ -106,11 +106,13 @@ Shipping by membership tier: gold and above ship free, and a campaign lifts a me
 
 | # | effective | subtotal | → shipping（money[USD] / down(1USD)） |
 |---|---|---|---|
-| 1 | >=gold | - | 0USD |
-| 2 | silver | >=50USD | 0USD |
-| 3 | silver | <50USD | 5USD |
-| 4 | basic | >=100USD | 0USD |
-| 5 | basic | <100USD | 8USD |
+| 1 | >=gold（gold、platinumのどれか） | - | 0USD |
+| 2 | silver | >=50USD（50USD以上） | 0USD |
+| 3 | silver | <50USD（50USD未満） | 5USD |
+| 4 | basic | >=100USD（100USD以上） | 0USD |
+| 5 | basic | <100USD（100USD未満） | 8USD |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

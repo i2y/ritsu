@@ -93,8 +93,8 @@ Relations between inputs that the caller guarantees. **The checks believed them 
 
 | # | requested | → route (path) |
 |---|---|---|
-| 1 | <=100 | at_once |
-| 2 | >100 | review |
+| 1 | <=100 (100 or less) | at_once |
+| 2 | >100 (more than 100) | review |
 
 **What `rulec check` verified**
 

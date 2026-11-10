@@ -89,7 +89,7 @@ The rules this workflow calls, each as the page for people that `rulec doc` rend
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
 | 窓口 | 窓口 (3 values) |  |  |
-| 期限 | duration[h] | down(1h) |  |
+| 期限 | duration[h] | down(1h) (rounded down to 1h) |  |
 
 ## Types
 
@@ -109,12 +109,14 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 種類 | 会員 | → 窓口 (窓口) | → 期限 (duration[h] / down(1h)) |
 |---|---|---|---|---|
-| 1 | 返品 | true | 物流 | 24h |
-| 2 | 返品 | false | 物流 | 48h |
+| 1 | 返品 | true (yes) | 物流 | 24h |
+| 2 | 返品 | false (no) | 物流 | 48h |
 | 3 | 配送 | - | 物流 | 24h |
 | 4 | 請求 | - | 経理 | 48h |
-| 5 | その他 | true | 総合 | 48h |
-| 6 | その他 | false | 総合 | 72h |
+| 5 | その他 | true (yes) | 総合 | 48h |
+| 6 | その他 | false (no) | 総合 | 72h |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

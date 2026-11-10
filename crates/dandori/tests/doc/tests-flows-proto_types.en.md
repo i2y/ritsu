@@ -105,7 +105,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
 | next_state | state (5 values) |  |  |
-| refund | money[JPY, incl_tax] | down(1JPY) |  |
+| refund | money[JPY, incl_tax] | down(1JPY) (rounded down to 1JPY) |  |
 | accepted | bool |  |  |
 
 ## Types
@@ -137,6 +137,8 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 | 8 | shipped | pay, ship, cancel | state | 0JPY | false | a cancel after the shipment goes through a return |
 | 9 | delivered | - | state | 0JPY | false |  |
 | 10 | cancelled | - | state | 0JPY | false | a payment that comes after a cancel does not bring the order back |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

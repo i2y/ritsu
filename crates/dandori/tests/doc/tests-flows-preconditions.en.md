@@ -118,8 +118,8 @@ Relations between inputs that the caller guarantees. **The checks believed them 
 
 | # | asked | → route (path) |
 |---|---|---|
-| 1 | <=100 | at_once |
-| 2 | >100 | review |
+| 1 | <=100 (100 or less) | at_once |
+| 2 | >100 (more than 100) | review |
 
 **What `rulec check` verified**
 
@@ -173,9 +173,9 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | pay_day | → batch (run) |
 |---|---|---|
-| 1 | <=2026-06-30 | first_half |
-| 2 | >=2026-07-10 <=2026-12-10 | second_half |
-| 3 | >=2027-01-01 | year_end |
+| 1 | <=2026-06-30 (on or before 2026-06-30) | first_half |
+| 2 | >=2026-07-10 <=2026-12-10 (from 2026-07-10 to 2026-12-10) | second_half |
+| 3 | >=2027-01-01 (on or after 2027-01-01) | year_end |
 
 **What `rulec check` verified**
 

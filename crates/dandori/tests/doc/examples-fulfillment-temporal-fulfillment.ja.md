@@ -150,9 +150,11 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 
 | # | member | amount | → urgent（bool） | → carrier（carrier） |
 |---|---|---|---|---|
-| 1 | true | - | true | next_day |
-| 2 | false | >=30000JPY | true | next_day |
-| 3 | false | <30000JPY | false | standard |
+| 1 | true（はい） | - | true | next_day |
+| 2 | false（いいえ） | >=30000JPY（30000JPY以上） | true | next_day |
+| 3 | false（いいえ） | <30000JPY（30000JPY未満） | false | standard |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

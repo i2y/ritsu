@@ -106,10 +106,12 @@ Whether an order's tools go out at once or are looked at first. The caller keeps
 
 | # | has_tool | tier | tools | → route（path） |
 |---|---|---|---|---|
-| 1 | true | basic | <=2 | at_once |
-| 2 | true | basic | >=3 | review |
-| 3 | true | gold | - | at_once |
-| 4 | false | - | - | at_once |
+| 1 | true（はい） | basic | <=2（2以下） | at_once |
+| 2 | true（はい） | basic | >=3（3以上） | review |
+| 3 | true（はい） | gold | - | at_once |
+| 4 | false（いいえ） | - | - | at_once |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

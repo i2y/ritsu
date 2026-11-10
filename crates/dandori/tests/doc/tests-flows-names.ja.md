@@ -92,9 +92,11 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 
 | # | member | amount | → urgent（bool） | → carrier（carrier） |
 |---|---|---|---|---|
-| 1 | true | - | true | next_day |
-| 2 | false | >=30000JPY | true | next_day |
-| 3 | false | <30000JPY | false | standard |
+| 1 | true（はい） | - | true | next_day |
+| 2 | false（いいえ） | >=30000JPY（30000JPY以上） | true | next_day |
+| 3 | false（いいえ） | <30000JPY（30000JPY未満） | false | standard |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 
@@ -133,7 +135,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 
 | 名前 | 型 | 丸め | 注記 |
 |---|---|---|---|
-| amount | money[JPY, incl_tax] | down(1JPY) |  |
+| amount | money[JPY, incl_tax] | down(1JPY)（1JPY単位で切り捨て） |  |
 | handling | handling（2 値） |  |  |
 
 ## 型
@@ -179,8 +181,8 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 
 | # | nights | → handling（handling） |
 |---|---|---|
-| 1 | <=14 | auto |
-| 2 | >=15 | review |
+| 1 | <=14（14以下） | auto |
+| 2 | >=15（15以上） | review |
 
 **`rulec check` が確かめたこと**
 
@@ -287,9 +289,11 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 
 | # | 急ぎ | 返金 | → 記録（bool） |
 |---|---|---|---|
-| 1 | true | - | true |
-| 2 | false | >=1JPY | true |
-| 3 | false | 0JPY | false |
+| 1 | true（はい） | - | true |
+| 2 | false（いいえ） | >=1JPY（1JPY以上） | true |
+| 3 | false（いいえ） | 0JPY | false |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 
@@ -330,7 +334,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 | 名前 | 型 | 丸め | 注記 |
 |---|---|---|---|
 | next_state | state（5 値） |  |  |
-| refund | money[JPY, incl_tax] | down(1JPY) |  |
+| refund | money[JPY, incl_tax] | down(1JPY)（1JPY単位で切り捨て） |  |
 | accepted | bool |  |  |
 
 ## 型
@@ -362,6 +366,8 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 | 8 | shipped | pay, ship, cancel | state | 0JPY | false | a cancel after the shipment goes through a return |
 | 9 | delivered | - | state | 0JPY | false |  |
 | 10 | cancelled | - | state | 0JPY | false | a payment that comes after a cancel does not bring the order back |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

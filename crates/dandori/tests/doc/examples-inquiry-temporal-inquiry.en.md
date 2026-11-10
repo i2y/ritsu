@@ -89,7 +89,7 @@ Which desk takes an inquiry, and how soon it is first answered, from its kind an
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
 | desk | desk (3 values) |  |  |
-| within | duration[h] | down(1h) |  |
+| within | duration[h] | down(1h) (rounded down to 1h) |  |
 
 ## Types
 
@@ -109,12 +109,14 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | kind | member | → desk (desk) | → within (duration[h] / down(1h)) |
 |---|---|---|---|---|
-| 1 | returns | true | logistics | 24h |
-| 2 | returns | false | logistics | 48h |
+| 1 | returns | true (yes) | logistics | 24h |
+| 2 | returns | false (no) | logistics | 48h |
 | 3 | delivery | - | logistics | 24h |
 | 4 | billing | - | accounting | 48h |
-| 5 | other | true | general | 48h |
-| 6 | other | false | general | 72h |
+| 5 | other | true (yes) | general | 48h |
+| 6 | other | false (no) | general | 72h |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

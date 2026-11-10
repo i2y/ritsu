@@ -76,7 +76,7 @@ Shipping by membership tier: gold and above ship free, and a campaign lifts a me
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| shipping | money[USD] | down(1USD) |  |
+| shipping | money[USD] | down(1USD) (rounded down to 1USD) |  |
 | effective | tier (4 values) |  |  |
 | lifted | bool |  |  |
 
@@ -93,8 +93,8 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | Name | Kind | Expression | Range | Notes |
 |---|---|---|---|---|
-| effective | Definition | `max(member, campaign)` |  |  |
-| lifted | Definition | `campaign > member` |  |  |
+| effective | Definition | `max(member, campaign)` (the larger of member and campaign) |  |  |
+| lifted | Definition | `campaign > member` (campaign is more than member) |  |  |
 
 ## Table shipping_fee (policy unique)
 
@@ -106,11 +106,13 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | # | effective | subtotal | → shipping (money[USD] / down(1USD)) |
 |---|---|---|---|
-| 1 | >=gold | - | 0USD |
-| 2 | silver | >=50USD | 0USD |
-| 3 | silver | <50USD | 5USD |
-| 4 | basic | >=100USD | 0USD |
-| 5 | basic | <100USD | 8USD |
+| 1 | >=gold (one of gold, platinum) | - | 0USD |
+| 2 | silver | >=50USD (50USD or more) | 0USD |
+| 3 | silver | <50USD (less than 50USD) | 5USD |
+| 4 | basic | >=100USD (100USD or more) | 0USD |
+| 5 | basic | <100USD (less than 100USD) | 8USD |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

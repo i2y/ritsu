@@ -128,9 +128,11 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 会員 | 金額 | → 急ぎ (bool) | → 便 (便) |
 |---|---|---|---|---|
-| 1 | true | - | true | 翌日便 |
-| 2 | false | >=30000円 | true | 翌日便 |
-| 3 | false | <30000円 | false | 通常便 |
+| 1 | true (yes) | - | true | 翌日便 |
+| 2 | false (no) | >=30000円 (30000円 or more) | true | 翌日便 |
+| 3 | false (no) | <30000円 (less than 30000円) | false | 通常便 |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 
@@ -169,7 +171,7 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| 与信額 | money[円, incl_tax] | down(1円) |  |
+| 与信額 | money[円, incl_tax] | down(1円) (rounded down to 1円) |  |
 | 扱い | 扱い (2 values) |  |  |
 
 ## Types
@@ -215,8 +217,8 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | # | 泊数 | → 扱い (扱い) |
 |---|---|---|
-| 1 | <=14 | 自動 |
-| 2 | >=15 | 確認 |
+| 1 | <=14 (14 or less) | 自動 |
+| 2 | >=15 (15 or more) | 確認 |
 
 **What `rulec check` verified**
 
@@ -273,11 +275,13 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | 判断 | 確信度 | → 決定 (決定) |
 |---|---|---|---|
-| 1 | 承認 | >=90% | 承認 |
-| 2 | 承認 | <90% | 人に回す |
-| 3 | 却下 | >=80% | 却下 |
-| 4 | 却下 | <80% | 人に回す |
+| 1 | 承認 | >=90% (90% or more) | 承認 |
+| 2 | 承認 | <90% (less than 90%) | 人に回す |
+| 3 | 却下 | >=80% (80% or more) | 却下 |
+| 4 | 却下 | <80% (less than 80%) | 人に回す |
 | 5 | 保留 | - | 人に回す |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

@@ -1345,6 +1345,17 @@ and check what the code is to carry out — and markdown is that shape; `--forma
 same document as one page with a form on it, where the generated JavaScript runs the case a
 reader types in.
 
+The page keeps each cell, condition and expression as the rule writes it, and after it, in
+parentheses, says in words what the notation leaves to the reader (§15.300): the ends of a
+range (`>=2025-04-01 <=2026-03-31 (from 2025-04-01 to 2026-03-31)`), `not:`, `starts_with`,
+`none`, a flag's `true` and `false`, a comparison on an ordered enum, a clause's condition
+(`always (in every case)`), the rounding of an output (`down(1JPY) (rounded down to 1JPY)`), and
+a definition that rounds, takes the smaller or the larger of two values, a remainder or a
+square root, or compares. A value, a list of values, a name and arithmetic read as they are
+written and get no words. Under a table with `-` in an input column, one line says that `-`
+means any value. Numbers stay as the rule writes them, so that a range on the page can be
+pasted back into a rule (§15.180).
+
 The HTML page is laid out as a board. The left pane holds the form, the inputs, the
 outputs and the types; the middle is a canvas that scrolls both ways, with one card per
 **decider** — a table, a `derive`, a `define` — placed left to right by how far it is from
@@ -1360,8 +1371,9 @@ not an order of events — everything is decided in one call — so nothing in t
 "next" or "then". Without JavaScript the page is the document it always was.
 
 `--audience customer` renders the same rule as the article a help centre publishes: the
-inputs in plain words, the tables with `-` as "any" and `not:` as "other than", the rounding
-as a sentence, and **the cases on either side of every threshold** — the boundary-pair
+inputs in plain words, the cells and the clauses' conditions in the words above alone (`-` as
+"any"), a flag as yes or no, numbers with their digits grouped by commas, the rounding as a
+sentence, and **the cases on either side of every threshold** — the boundary-pair
 vectors of `rulec vectors`, one line per pair. Aliases, declared ranges, diagnostic codes and
 the list of what `rulec check` verified are left out: they belong on the page for people (the
 default, `--audience approver`). It is markdown only (`--format html` cannot be combined with

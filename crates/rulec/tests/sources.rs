@@ -147,7 +147,10 @@ fn ページは引用箇所の本文を載せる() {
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("出典: 措置法 第91条（法令 332AC0000000026、2026-04-01 時点。2026-04-01 施行、令和8年法律第12号による改正後）"), "{out}");
     assert!(out.contains("> 第九十一条"), "the article's title is quoted");
-    assert!(out.contains("| 軽減期間 | 定義 | `作成日 <= 2027-03-31` |  | 出典: 措置法 第91条 |"), "the define's citation is a note, not part of its expression");
+    assert!(
+        out.contains("| 軽減期間 | 定義 | `作成日 <= 2027-03-31`（作成日 が 2027-03-31 以前） |  | 出典: 措置法 第91条 |"),
+        "the define's citation is a note, not part of its expression, and the words follow the expression (§15.300)"
+    );
 }
 
 /// A file beside the rule is cited whole (`@郵便`); a law is copied an article at a time, so a

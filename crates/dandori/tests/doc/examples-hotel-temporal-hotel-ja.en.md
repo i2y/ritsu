@@ -186,7 +186,7 @@ The rules this workflow calls, each as the page for people that `rulec doc` rend
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| 与信額 | money[円, incl_tax] | down(1円) |  |
+| 与信額 | money[円, incl_tax] | down(1円) (rounded down to 1円) |  |
 | 扱い | 扱い (2 values) |  |  |
 
 ## Types
@@ -232,8 +232,8 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | # | 泊数 | → 扱い (扱い) |
 |---|---|---|
-| 1 | <=14 | 自動 |
-| 2 | >=15 | 確認 |
+| 1 | <=14 (14 or less) | 自動 |
+| 2 | >=15 (15 or more) | 確認 |
 
 **What `rulec check` verified**
 
@@ -320,33 +320,35 @@ lifecycle, status, and the API reference for each call
 | # | status | event | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | → next_status (status) | → funds (funds) | → refused (bool) | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | unconfirmed | attach | - | - | - | - | - | - | requires_confirmation | untouched | false | lifecycle; from requires_confirmation, assumed the same |
-| 2 | unconfirmed | confirm | true | - | - | - | - | - | canceled | untouched | false | confirm |
-| 3 | unconfirmed | confirm | false | true | - | - | - | - | requires_action | untouched | false | confirm |
-| 4 | unconfirmed | confirm | false | false | false | - | - | - | requires_payment_method | untouched | false | confirm |
-| 5 | unconfirmed | confirm | false | false | true | - | manual | - | requires_capture | held | false | confirm |
-| 6 | unconfirmed | confirm | false | false | true | true | automatic, automatic_async | - | processing | untouched | false | lifecycle |
-| 7 | unconfirmed | confirm | false | false | true | false | automatic, automatic_async | - | succeeded | captured | false | confirm |
+| 2 | unconfirmed | confirm | true (yes) | - | - | - | - | - | canceled | untouched | false | confirm |
+| 3 | unconfirmed | confirm | false (no) | true (yes) | - | - | - | - | requires_action | untouched | false | confirm |
+| 4 | unconfirmed | confirm | false (no) | false (no) | false (no) | - | - | - | requires_payment_method | untouched | false | confirm |
+| 5 | unconfirmed | confirm | false (no) | false (no) | true (yes) | - | manual | - | requires_capture | held | false | confirm |
+| 6 | unconfirmed | confirm | false (no) | false (no) | true (yes) | true (yes) | automatic, automatic_async | - | processing | untouched | false | lifecycle |
+| 7 | unconfirmed | confirm | false (no) | false (no) | true (yes) | false (no) | automatic, automatic_async | - | succeeded | captured | false | confirm |
 | 8 | unconfirmed | cancel | - | - | - | - | - | - | canceled | untouched | false | cancel |
 | 9 | unconfirmed | authenticate, settle, capture, expire | - | - | - | - | - | - | status | untouched | true | capture, errors |
-| 10 | requires_action | authenticate | - | - | false | - | - | - | requires_payment_method | untouched | false | 3ds |
-| 11 | requires_action | authenticate | - | - | true | - | - | manual | requires_confirmation | untouched | false | confirm |
-| 12 | requires_action | authenticate | - | - | true | - | manual | automatic | requires_capture | held | false | 3ds |
-| 13 | requires_action | authenticate | - | - | true | true | automatic, automatic_async | automatic | processing | untouched | false | lifecycle |
-| 14 | requires_action | authenticate | - | - | true | false | automatic, automatic_async | automatic | succeeded | captured | false | 3ds, lifecycle |
+| 10 | requires_action | authenticate | - | - | false (no) | - | - | - | requires_payment_method | untouched | false | 3ds |
+| 11 | requires_action | authenticate | - | - | true (yes) | - | - | manual | requires_confirmation | untouched | false | confirm |
+| 12 | requires_action | authenticate | - | - | true (yes) | - | manual | automatic | requires_capture | held | false | 3ds |
+| 13 | requires_action | authenticate | - | - | true (yes) | true (yes) | automatic, automatic_async | automatic | processing | untouched | false | lifecycle |
+| 14 | requires_action | authenticate | - | - | true (yes) | false (no) | automatic, automatic_async | automatic | succeeded | captured | false | 3ds, lifecycle |
 | 15 | requires_action | cancel | - | - | - | - | - | - | canceled | untouched | false | cancel |
 | 16 | requires_action | attach, confirm, settle, capture, expire | - | - | - | - | - | - | status | untouched | true | errors; for attach and confirm the pages say nothing, assumed refused |
-| 17 | processing | settle | - | - | true | - | - | - | succeeded | captured | false | lifecycle, status |
-| 18 | processing | settle | - | - | false | - | - | - | requires_payment_method | untouched | false | lifecycle |
-| 19 | processing | cancel | - | - | true | - | - | - | canceled | untouched | false | lifecycle: ACH, ACSS, AU BECS, BACS, NZ BECS and SEPA, inside a window |
-| 20 | processing | cancel | - | - | false | - | - | - | status | untouched | true | lifecycle; cancel says "in rare cases" |
+| 17 | processing | settle | - | - | true (yes) | - | - | - | succeeded | captured | false | lifecycle, status |
+| 18 | processing | settle | - | - | false (no) | - | - | - | requires_payment_method | untouched | false | lifecycle |
+| 19 | processing | cancel | - | - | true (yes) | - | - | - | canceled | untouched | false | lifecycle: ACH, ACSS, AU BECS, BACS, NZ BECS and SEPA, inside a window |
+| 20 | processing | cancel | - | - | false (no) | - | - | - | status | untouched | true | lifecycle; cancel says "in rare cases" |
 | 21 | processing | attach, confirm, authenticate, capture, expire | - | - | - | - | - | - | status | untouched | true | errors |
-| 22 | requires_capture | capture | - | - | - | false | - | - | succeeded | captured | false | capture, lifecycle |
-| 23 | requires_capture | capture | - | - | - | true | - | - | processing | untouched | false | lifecycle names no method; hold says bank debits cannot be held |
+| 22 | requires_capture | capture | - | - | - | false (no) | - | - | succeeded | captured | false | capture, lifecycle |
+| 23 | requires_capture | capture | - | - | - | true (yes) | - | - | processing | untouched | false | lifecycle names no method; hold says bank debits cannot be held |
 | 24 | requires_capture | cancel | - | - | - | - | - | - | canceled | released | false | cancel |
 | 25 | requires_capture | expire | - | - | - | - | - | - | canceled | released | false | hold, capture |
 | 26 | requires_capture | attach, confirm, authenticate, settle | - | - | - | - | - | - | status | untouched | true | errors |
 | 27 | succeeded | - | - | - | - | - | - | - | status | untouched | true | lifecycle, status: refunds go through the Refunds API |
 | 28 | canceled | - | - | - | - | - | - | - | status | untouched | true | cancel, lifecycle |
+
+A `-` means the column may be any value.
 
 Groups appearing in the cells of this table: **unconfirmed** (2 values). Their members are in the "Groups" section.
 

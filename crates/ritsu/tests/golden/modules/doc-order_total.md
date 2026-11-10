@@ -15,7 +15,7 @@ The total of an order: its subtotal, the VAT of its category at the rate of the 
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| total | money[GBPc] | half_up(1GBPc) |  |
+| total | money[GBPc] | half_up(1GBPc) (rounded half up to 1GBPc) |  |
 
 ## Types
 

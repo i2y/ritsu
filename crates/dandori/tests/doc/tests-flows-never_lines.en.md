@@ -106,10 +106,12 @@ No table has a row for these combinations.
 
 | # | has_tool | tier | tools | → route (path) |
 |---|---|---|---|---|
-| 1 | true | basic | <=2 | at_once |
-| 2 | true | basic | >=3 | review |
-| 3 | true | gold | - | at_once |
-| 4 | false | - | - | at_once |
+| 1 | true (yes) | basic | <=2 (2 or less) | at_once |
+| 2 | true (yes) | basic | >=3 (3 or more) | review |
+| 3 | true (yes) | gold | - | at_once |
+| 4 | false (no) | - | - | at_once |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

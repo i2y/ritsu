@@ -98,12 +98,13 @@ fn 式で決まる値は_その式を持つ() {
         // the callee's file — which `graph` never opens, so it carries no expression for a
         // value an `apply` brought in (§15.121).
         let md = md.split("\n## 準用 ").next().unwrap_or("").to_string();
-        // `| 名前 | 導出 | `式` | …` in the definitions table, and the one line of `## 結果`.
+        // `| 名前 | 導出 | `式` | …` in the definitions table, the code span at the head of the
+        // cell (words may follow it, §15.300), and the one line of `## 結果`.
         let mut want: Vec<(String, String)> = Vec::new();
         for line in md.lines() {
             let cells: Vec<&str> = line.split('|').map(str::trim).collect();
             if cells.len() >= 5 && (cells[2] == "導出" || cells[2] == "定義") {
-                if let Some(e) = cells[3].strip_prefix('`').and_then(|x| x.strip_suffix('`')) {
+                if let Some((e, _)) = cells[3].strip_prefix('`').and_then(|x| x.split_once('`')) {
                     want.push((cells[1].to_string(), e.to_string()));
                 }
             }

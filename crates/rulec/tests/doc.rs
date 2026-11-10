@@ -305,10 +305,21 @@ fn 表のセルはもとの規則までたどれる() {
                     checked += 1;
                     continue;
                 }
+                // A cell with its words after it (§15.300): the cell is the source's, and the
+                // words are built from it and the page's own fixed words.
+                let (raw, words) = match raw.strip_suffix('）').and_then(|r| r.rsplit_once('（')) {
+                    Some((n, w)) if !src.contains(&raw) => (n.to_string(), Some(w.to_string())),
+                    _ => (raw.clone(), None),
+                };
                 assert!(
                     src.contains(&raw),
                     "{rel}: もとの規則に無い字が表に出ている: `{raw}`\n行: {l}"
                 );
+                if let Some(w) = words {
+                    if let Err(bad) = words_trace(&w, &src) {
+                        panic!("{rel}: セルの言葉に、もとの規則にも決まった語にも無いものがある: `{bad}`（言葉: {w}）\n行: {l}");
+                    }
+                }
                 checked += 1;
             }
         }
@@ -317,6 +328,31 @@ fn 表のセルはもとの規則までたどれる() {
         let tables = src.lines().any(|l| l.starts_with("table ") || l.starts_with("clause "));
         assert!(!tables || checked > 5, "{rel}: セルを一つも検査していない");
     }
+}
+
+/// The words a cell is given after it (§15.300) are the page's fixed words around values the
+/// source writes, as it writes them (§15.180): take the fixed words off, and each piece left is
+/// in the source, the spaces and the separators between digits aside.
+fn words_trace(words: &str, src: &str) -> Result<(), String> {
+    const WHOLE: &[&str] = &["どれでも", "はい", "いいえ", "値なし"];
+    const ENDS: &[&str] =
+        &["以上", "以下", "未満", "より大きい", "より大きく", "以外", "で始まる", "のどれか", "から", "まで", "より前", "より後"];
+    let bare = |s: &str| -> String { s.chars().filter(|c| *c != ',' && *c != '_' && !c.is_whitespace()).collect() };
+    let src = bare(src);
+    let text = words.replace("」か「", "、").replace(['「', '」'], "");
+    for tok in text.split(|c: char| c.is_whitespace() || c == '、') {
+        if tok.is_empty() || WHOLE.contains(&tok) {
+            continue;
+        }
+        let mut t = tok.to_string();
+        while let Some(s) = ENDS.iter().find_map(|e| t.strip_suffix(e)) {
+            t = s.to_string();
+        }
+        if !t.is_empty() && !src.contains(&bare(&t)) {
+            return Err(t);
+        }
+    }
+    Ok(())
 }
 
 /// §1.6: a pretty rendering of a broken rule is a lie. If it fails the check, do not render.
@@ -411,15 +447,17 @@ fn 承認者が知るべきことが載る() {
 }
 
 /// A cell with two bounds reads lower bound first, upper bound last, the way the statute says
-/// it; it used to come out as 「10万円 <=50万円より大きい」 (§15.71).
+/// it; it used to come out as 「10万円 <=50万円より大きい」 (§15.71). A flag reads yes or no, a
+/// number takes its commas, and a clause's condition is said in words (§15.300).
 #[test]
 fn お客向けの二つの境界は下限から上限へ読む() {
     let (c, d, _) = run(&["doc", "tests/corpus/印紙税の本則と軽減.rule", "--audience", "customer"]);
     assert_eq!(c, 0);
-    assert!(d.contains("| r3 | true | 1万円以上 10万円以下 | 200円 |"), "{d}");
-    assert!(d.contains("| r4 | true | 10万円より大きく 50万円以下 | 400円 |"), "{d}");
-    assert!(d.contains("| r13 | true | 50億円より大きい | 600000円 |"), "{d}");
-    assert!(d.contains("| 1 | 金額の記載あり true and 契約金額 <1万円 | 0円 |"), "節の条件はそのまま: {d}");
+    assert!(d.contains("| r3 | はい | 1万円以上 10万円以下 | 200円 |"), "{d}");
+    assert!(d.contains("| r4 | はい | 10万円より大きく 50万円以下 | 400円 |"), "{d}");
+    assert!(d.contains("| r13 | はい | 50億円より大きい | 600,000円 |"), "{d}");
+    // The clause's condition in words too, its parts joined as all of them hold (§15.300).
+    assert!(d.contains("| 1 | 金額の記載あり が はいで、契約金額 が 1万円未満 | 0円 |"), "節の条件を言葉で: {d}");
 }
 
 /// Where a table came from is written as a comment at the end of the `table` line, and a row
@@ -468,11 +506,13 @@ fn html版は表の行に名前と番号を持ち_生成したjavascriptを積�
     // Every cell of every data table is on the page, as in the markdown.
     let (_, md, _) = run(&["doc", "tests/corpus/送料.rule"]);
     let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    // A code span or bold in a cell becomes markup around the same text, and words may follow
+    // the code (§15.300): the text is what is compared.
+    let flat = html.replace("<code>", "").replace("</code>", "").replace("<strong>", "").replace("</strong>", "");
     for l in md.lines().filter(|l| l.starts_with("| ") && !l.contains("→")) {
         for cell in l.trim_matches('|').split('|').map(|c| c.trim()).filter(|c| !c.is_empty()) {
-            // A code span or bold in a cell becomes markup around the same text.
             let plain = cell.replace("\\|", "|").replace('`', "").replace("**", "");
-            assert!(html.contains(&esc(&plain)), "セル `{cell}` が HTML に無い");
+            assert!(flat.contains(&esc(&plain)), "セル `{cell}` が HTML に無い");
         }
     }
     // The module inside the page is what node runs: a syntax error here is a broken page.

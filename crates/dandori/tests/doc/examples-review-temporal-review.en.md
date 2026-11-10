@@ -103,11 +103,13 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | verdict | sure | → decision (decision) |
 |---|---|---|---|
-| 1 | approve | >=90% | approve |
-| 2 | approve | <90% | ask |
-| 3 | reject | >=80% | reject |
-| 4 | reject | <80% | ask |
+| 1 | approve | >=90% (90% or more) | approve |
+| 2 | approve | <90% (less than 90%) | ask |
+| 3 | reject | >=80% (80% or more) | reject |
+| 4 | reject | <80% (less than 80%) | ask |
 | 5 | hold | - | ask |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

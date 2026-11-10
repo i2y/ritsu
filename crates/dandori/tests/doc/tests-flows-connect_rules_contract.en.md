@@ -69,7 +69,7 @@ The rules this workflow calls, each as the page for people that `rulec doc` rend
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| 手数料 | money[円] | down(10円) |  |
+| 手数料 | money[円] | down(10円) (rounded down to 10円) |  |
 | 次の状態 | 口座の状態 (2 values) |  |  |
 
 ## Types
@@ -92,9 +92,11 @@ For an imported enum, a value that appears in no row and carries no `default` is
 
 | # | 状態 | 残高 | → 手数料 (money[円] / down(10円)) | → 次の状態 (口座の状態) |
 |---|---|---|---|---|
-| 1 | 有効 | >=10000円 | 0円 | 有効 |
-| 2 | 有効 | <10000円 | 110円 | 有効 |
+| 1 | 有効 | >=10000円 (10000円 or more) | 0円 | 有効 |
+| 2 | 有効 | <10000円 (less than 10000円) | 110円 | 有効 |
 | 3 | 解約 | - | 0円 | 解約 |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

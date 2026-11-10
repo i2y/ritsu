@@ -31,6 +31,9 @@ mod prereq;
 /// The random inputs and the `chances` sections on the pages (§15.224).
 mod chances;
 
+/// What a cell, a condition, an expression and a rounding say in words (§15.300).
+mod words;
+
 /// Split one source line into its body and its trailing comment. The comment starts at the
 /// first `#` outside a string literal, which is where the parser starts it too, so the two
 /// never disagree about where the body ends.
@@ -642,7 +645,11 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
     ));
     for od in &f.outputs {
         let n = &od.name.text;
-        let r = od.rounding.as_ref().map(|r| format!("{}({})", r.mode, r.grid.raw)).unwrap_or_default();
+        let r = od
+            .rounding
+            .as_ref()
+            .map(|r| words::beside(&format!("{}({})", r.mode, r.grid.raw), Some(words::rounding(&r.mode, &r.grid.raw))))
+            .unwrap_or_default();
         // The origin of a provisional rounding reaches a reader's eyes only here
         // (§7.2, §16 item three).
         // A range written on the output's line, checked to hold what it comes to (§15.268), is
@@ -2115,10 +2122,10 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
         for d in &derived {
             let e = expr_src(&lines, d.name.span.line);
             o.push_str(&tr!(
-                "| {} | 導出 | `{}` | {} | {} |\n",
-                "| {} | Derived value | `{}` | {} | {} |\n",
+                "| {} | 導出 | {} | {} | {} |\n",
+                "| {} | Derived value | {} | {} | {} |\n",
                 md_esc(&d.name.text),
-                md_esc(&e),
+                expr_cell(&e, &d.expr),
                 md_esc(&range_text(c, &d.name.text)),
                 md_esc(&with_checked(note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)), &arith_facts(c, &d.expr)))
             ));
@@ -2126,10 +2133,10 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
         for d in &defines {
             let e = expr_src(&lines, d.name.span.line);
             o.push_str(&tr!(
-                "| {} | 定義 | `{}` |  | {} |\n",
-                "| {} | Definition | `{}` |  | {} |\n",
+                "| {} | 定義 | {} |  | {} |\n",
+                "| {} | Definition | {} |  | {} |\n",
                 md_esc(&d.name.text),
-                md_esc(&e),
+                expr_cell(&e, &d.expr),
                 md_esc(&with_checked(note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)), &arith_facts(c, &d.expr)))
             ));
         }
@@ -2141,6 +2148,16 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
         }
     }
     o
+}
+
+/// An expression in the table of definitions: as the source writes it, in code, and after it
+/// what it does in words where it calls an operation or compares (§15.300).
+fn expr_cell(src: &str, e: &Expr) -> String {
+    let code = format!("`{}`", md_esc(src));
+    match words::expr(e) {
+        Some(w) => tr!("{code}（{}）", "{code} ({})", md_esc(&w)),
+        None => code,
+    }
 }
 
 /// What the check showed of the divisions and the square roots in an expression (§15.213,
@@ -2386,7 +2403,7 @@ fn clause_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], _path: &
     };
     o.push_str(&format!("| → {} | {} |\n", md_esc(&out), md_esc(&dest)));
     let Some(row) = t.rows.first() else { return o };
-    let when = clause_text(lines, row.span.line, crate::kw::WHEN);
+    let when = words::beside(&clause_text(lines, row.span.line, crate::kw::WHEN), words::condition(c, t));
     let then = clause_text(lines, row.out_spans.first().map(|s| s.line).unwrap_or(row.span.line), crate::kw::THEN);
     let head = vec![tr!("条件", "Condition"), folded_out_header(f, c, &out)];
     o.push('\n');
@@ -2492,11 +2509,23 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
         };
     }
     let mut rows: Vec<Vec<String>> = t.rows.iter().map(|r| source_cells(lines, r.span.line)).collect();
+    // Each cell of an input column as written, and what it says where the notation does not
+    // say it plainly (§15.300). The output cells are values or names, and read as they are.
+    for (r, cells) in t.rows.iter().zip(rows.iter_mut()) {
+        for ((col, _), (x, s)) in t.inputs.iter().zip(r.cells.iter().zip(cells.iter_mut())) {
+            *s = words::beside(s, words::cell(c.ty_of(col).as_ref(), x));
+        }
+    }
     let row_lines: Vec<usize> = t.rows.iter().map(|r| r.span.line).collect();
     let cites: Vec<String> = t.rows.iter().map(|r| r.cite.as_ref().map(cite_text).unwrap_or_default()).collect();
     with_notes_cites(&mut head, &mut rows, lines, &row_lines, &cites);
     o.push('\n');
     o.push_str(&md_table_nums(&head, &rows, Some(&row_nums(t))));
+    // A `-` is said once, under the table, not in each cell (§15.300): a wide table of states
+    // carries it in most of its cells.
+    if t.rows.iter().any(|r| r.cells.iter().take(t.inputs.len()).any(|x| matches!(x, Cell::DontCare))) {
+        o.push_str(&tr!("\n`-` は、その列がどの値でもよいことを表します。\n", "\nA `-` means the column may be any value.\n"));
+    }
 
     // The default row. Under `上から` (`first`), a last all-`-` row means "everything else gets
     // this".
@@ -2922,11 +2951,30 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             }
             let head: Vec<String> =
                 source_cells(&lines, h).into_iter().map(|c| strip_alias(&c.replacen("->", "→", 1))).collect();
-            let rows: Vec<Vec<String>> = ex.rows.iter().map(|r| source_cells(&lines, r.span.line)).collect();
+            let rows: Vec<Vec<String>> = ex
+                .rows
+                .iter()
+                .map(|r| {
+                    let cells = source_cells(&lines, r.span.line);
+                    cells.iter().enumerate().map(|(ci, x)| customer_example_cell(c, head.get(ci), x)).collect()
+                })
+                .collect();
             o.push_str(&md_table(&head, &rows, false));
         }
     }
     o
+}
+
+/// A value of a worked example for the customer (§15.300): a flag as yes or no, a number with
+/// its commas, anything else as it is written.
+fn customer_example_cell(c: &Checked, head: Option<&String>, x: &str) -> String {
+    let col = head.map(|h| h.trim_start_matches("→ ").trim().to_string());
+    let flag = col.and_then(|n| c.ty_of(&n)).is_some_and(|t| matches!(t.present(), Ty::Bool));
+    match x {
+        _ if flag && x == crate::kw::TRUE => tr!("はい", "yes"),
+        _ if flag && x == crate::kw::FALSE => tr!("いいえ", "no"),
+        _ => words::number(x),
+    }
 }
 
 /// One table, for the customer: the source cells in plainer words, the column headings without
@@ -2985,8 +3033,9 @@ fn customer_clause(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> Stri
         o.push_str(&format!("{}\n\n", md_esc(&cm)));
     }
     let Some(row) = t.rows.first() else { return o };
-    let when = clause_text(lines, row.span.line, crate::kw::WHEN);
-    let then = clause_text(lines, row.out_spans.first().map(|s| s.line).unwrap_or(row.span.line), crate::kw::THEN);
+    // The condition in words alone, and the value as a reader writes it (§15.300).
+    let when = words::number(&words::condition(c, t).unwrap_or_else(|| clause_text(lines, row.span.line, crate::kw::WHEN)));
+    let then = words::number(&clause_text(lines, row.out_spans.first().map(|s| s.line).unwrap_or(row.span.line), crate::kw::THEN));
     let mut bits: Vec<String> = Vec::new();
     if let Some(Ty::Money { tax: Some(tx), .. }) = c.ty_of(&out) {
         bits.push(tax_words(&tx));
@@ -3043,14 +3092,19 @@ fn customer_table(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> Strin
                 .enumerate()
                 .map(|(ci, x)| {
                     // A cell of an enum column, in the words the enum gives its values (§15.210,
-                    // §15.211); any other cell as it is written.
-                    let en = t.inputs.get(ci).and_then(|(col, _)| c.ty_of(col)).and_then(|ty| match ty.present() {
+                    // §15.211); any other cell of an input column in the words of §15.300; a
+                    // value as a reader writes it.
+                    let ty = t.inputs.get(ci).and_then(|(col, _)| c.ty_of(col));
+                    let en = ty.as_ref().and_then(|ty| match ty.present() {
                         Ty::Enum(e) => Some(e.clone()),
                         _ => None,
                     });
-                    match (en, r.cells.get(ci)) {
-                        (Some(en), Some(cell)) => customer_enum_cell(c, &en, cell).unwrap_or_else(|| customer_cell(x)),
-                        _ => customer_cell(x),
+                    match (ty.is_some(), r.cells.get(ci)) {
+                        (true, Some(cell)) => en
+                            .and_then(|en| customer_enum_cell(c, &en, cell))
+                            .or_else(|| words::cell(ty.as_ref(), cell).map(|w| words::number(&w)))
+                            .unwrap_or_else(|| words::number(&customer_cell(x))),
+                        _ => words::number(&customer_cell(x)),
                     }
                 })
                 .collect()
@@ -3202,46 +3256,30 @@ fn tax_words(tax: &str) -> String {
 }
 
 fn rounding_words(r: &Rounding) -> String {
-    let g = &r.grid.raw;
-    match r.mode.as_str() {
-        m if m == crate::kw::UP => tr!("{g}単位で切り上げ", "rounded up to {g}"),
-        m if m == crate::kw::DOWN => tr!("{g}単位で切り捨て", "rounded down to {g}"),
-        m if m == crate::kw::HALF_UP => tr!("{g}単位で四捨五入", "rounded half up to {g}"),
-        m if m == crate::kw::HALF_EVEN => tr!("{g}単位で偶数への丸め", "rounded half to even at {g}"),
-        m => format!("{m}({g})"),
-    }
+    words::number(&words::rounding(&r.mode, &r.grid.raw))
 }
 
 /// The same rounding as a sentence's verb: 「10円単位で切り上げます」.
 fn rounding_verb(r: &Rounding) -> String {
-    let g = &r.grid.raw;
+    let g = &words::number(&r.grid.raw);
     match r.mode.as_str() {
         m if m == crate::kw::UP => tr!("{g}単位で切り上げます", "rounded up to {g}"),
         m if m == crate::kw::DOWN => tr!("{g}単位で切り捨てます", "rounded down to {g}"),
         m if m == crate::kw::HALF_UP => tr!("{g}単位で四捨五入します", "rounded half up to {g}"),
+        m if m == crate::kw::HALF_DOWN => tr!("{g}単位で丸め、ちょうど半分は切り捨てます", "rounded half down to {g}"),
         m if m == crate::kw::HALF_EVEN => tr!("{g}単位で偶数側に丸めます", "rounded half to even at {g}"),
         m => format!("{m}({g})"),
     }
 }
 
-/// An expression that is one of the operations §15.213–§15.215 added, said in words for a
-/// customer after the formula: a remainder, a whole square root, a rounded quotient. Anything
-/// else is left as the formula alone.
+/// An expression said in words for a customer after the formula (§15.300): the operation it
+/// calls (a rounding, `min` and `max`, a remainder, a whole square root, a rounded quotient) or
+/// the comparison it makes. Arithmetic is left as the formula alone.
 fn customer_reading(e: &Expr) -> String {
-    let Expr::Call(name, args, _) = e else { return String::new() };
-    let text = crate::region::expr_text;
-    let words = if let Some((n, d)) = crate::types::var_division(name, args) {
-        let Some(Expr::Lit(Lit::Num(g), sp)) = args.get(1) else { return String::new() };
-        let r = Rounding { mode: name.clone(), grid: g.clone(), span: sp.clone() };
-        tr!("{} を {} で割って、{}", "{} divided by {}, {}", text(n), text(d), rounding_words(&r))
-    } else if let (crate::kw::MOD, [x, k]) = (name.as_str(), args.as_slice()) {
-        tr!("{} を {} で割った余り", "the remainder of {} divided by {}", text(x), text(k))
-    } else if let (crate::kw::ISQRT, [x]) = (name.as_str(), args.as_slice()) {
-        tr!("{} の平方根の整数の部分", "the whole part of the square root of {}", text(x))
-    } else {
-        return String::new();
-    };
-    tr!("（{}）", " ({})", md_esc(&words))
+    match words::expr(e) {
+        Some(w) => tr!("（{}）", " ({})", md_esc(&words::number(&w))),
+        None => String::new(),
+    }
 }
 
 /// What an input can be, for the customer: the values of a small enum, the name of a large
@@ -3257,7 +3295,7 @@ fn customer_input(c: &Checked, name: &str) -> String {
                 _ => tr!("{} 〜 {}", "{} to {}", s(lo), s(hi)),
             }
         }
-        _ => range_text(c, name),
+        _ => words::number(&range_text(c, name)),
     };
     let present = |ty: Option<Ty>| -> String {
         match ty {

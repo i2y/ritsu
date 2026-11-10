@@ -93,8 +93,8 @@ Whether a request for part of a quota is granted at once or reviewed. What was u
 
 | # | requested | → route（path） |
 |---|---|---|
-| 1 | <=100 | at_once |
-| 2 | >100 | review |
+| 1 | <=100（100以下） | at_once |
+| 2 | >100（100より大きい） | review |
 
 **`rulec check` が確かめたこと**
 

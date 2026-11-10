@@ -76,7 +76,7 @@ The rules this workflow calls, each as the page for people that `rulec doc` rend
 
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
-| 送料 | money[USD] | down(1USD) |  |
+| 送料 | money[USD] | down(1USD) (rounded down to 1USD) |  |
 | 適用段階 | 段階 (4 values) |  |  |
 | 引き上げ | bool |  |  |
 
@@ -93,8 +93,8 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | Name | Kind | Expression | Range | Notes |
 |---|---|---|---|---|
-| 適用段階 | Definition | `max(会員, キャンペーン)` |  |  |
-| 引き上げ | Definition | `キャンペーン > 会員` |  |  |
+| 適用段階 | Definition | `max(会員, キャンペーン)` (the larger of 会員 and キャンペーン) |  |  |
+| 引き上げ | Definition | `キャンペーン > 会員` (キャンペーン is more than 会員) |  |  |
 
 ## Table 送料表 (policy unique)
 
@@ -106,11 +106,13 @@ Intermediate values that can be placed in a table column. The expressions are as
 
 | # | 適用段階 | 小計 | → 送料 (money[USD] / down(1USD)) |
 |---|---|---|---|
-| 1 | >=ゴールド | - | 0USD |
-| 2 | シルバー | >=50USD | 0USD |
-| 3 | シルバー | <50USD | 5USD |
-| 4 | 一般 | >=100USD | 0USD |
-| 5 | 一般 | <100USD | 8USD |
+| 1 | >=ゴールド (one of ゴールド, プラチナ) | - | 0USD |
+| 2 | シルバー | >=50USD (50USD or more) | 0USD |
+| 3 | シルバー | <50USD (less than 50USD) | 5USD |
+| 4 | 一般 | >=100USD (100USD or more) | 0USD |
+| 5 | 一般 | <100USD (less than 100USD) | 8USD |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

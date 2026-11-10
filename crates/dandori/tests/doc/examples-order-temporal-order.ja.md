@@ -165,7 +165,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 | 名前 | 型 | 丸め | 注記 |
 |---|---|---|---|
 | next_state | state（5 値） |  |  |
-| refund | money[JPY, incl_tax] | down(1JPY) |  |
+| refund | money[JPY, incl_tax] | down(1JPY)（1JPY単位で切り捨て） |  |
 | accepted | bool |  |  |
 
 ## 型
@@ -197,6 +197,8 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 | 8 | shipped | pay, ship, cancel | state | 0JPY | false | a cancel after the shipment goes through a return |
 | 9 | delivered | - | state | 0JPY | false |  |
 | 10 | cancelled | - | state | 0JPY | false | a payment that comes after a cancel does not bring the order back |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 
@@ -319,9 +321,11 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 
 | # | member | amount | → urgent（bool） | → carrier（carrier） |
 |---|---|---|---|---|
-| 1 | true | - | true | next_day |
-| 2 | false | >=30000JPY | true | next_day |
-| 3 | false | <30000JPY | false | standard |
+| 1 | true（はい） | - | true | next_day |
+| 2 | false（いいえ） | >=30000JPY（30000JPY以上） | true | next_day |
+| 3 | false（いいえ） | <30000JPY（30000JPY未満） | false | standard |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

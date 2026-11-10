@@ -95,7 +95,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 
 | 名前 | 型 | 丸め | 注記 |
 |---|---|---|---|
-| amount | money[JPY, incl_tax] | down(1JPY) |  |
+| amount | money[JPY, incl_tax] | down(1JPY)（1JPY単位で切り捨て） |  |
 | handling | handling（2 値） |  |  |
 
 ## 型
@@ -141,8 +141,8 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 
 | # | nights | → handling（handling） |
 |---|---|---|
-| 1 | <=14 | auto |
-| 2 | >=15 | review |
+| 1 | <=14（14以下） | auto |
+| 2 | >=15（15以上） | review |
 
 **`rulec check` が確かめたこと**
 
@@ -229,33 +229,35 @@ lifecycle, status, and the API reference for each call
 | # | status | event | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | → next_status（status） | → funds（funds） | → refused（bool） | 注記 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | unconfirmed | attach | - | - | - | - | - | - | requires_confirmation | untouched | false | lifecycle; from requires_confirmation, assumed the same |
-| 2 | unconfirmed | confirm | true | - | - | - | - | - | canceled | untouched | false | confirm |
-| 3 | unconfirmed | confirm | false | true | - | - | - | - | requires_action | untouched | false | confirm |
-| 4 | unconfirmed | confirm | false | false | false | - | - | - | requires_payment_method | untouched | false | confirm |
-| 5 | unconfirmed | confirm | false | false | true | - | manual | - | requires_capture | held | false | confirm |
-| 6 | unconfirmed | confirm | false | false | true | true | automatic, automatic_async | - | processing | untouched | false | lifecycle |
-| 7 | unconfirmed | confirm | false | false | true | false | automatic, automatic_async | - | succeeded | captured | false | confirm |
+| 2 | unconfirmed | confirm | true（はい） | - | - | - | - | - | canceled | untouched | false | confirm |
+| 3 | unconfirmed | confirm | false（いいえ） | true（はい） | - | - | - | - | requires_action | untouched | false | confirm |
+| 4 | unconfirmed | confirm | false（いいえ） | false（いいえ） | false（いいえ） | - | - | - | requires_payment_method | untouched | false | confirm |
+| 5 | unconfirmed | confirm | false（いいえ） | false（いいえ） | true（はい） | - | manual | - | requires_capture | held | false | confirm |
+| 6 | unconfirmed | confirm | false（いいえ） | false（いいえ） | true（はい） | true（はい） | automatic, automatic_async | - | processing | untouched | false | lifecycle |
+| 7 | unconfirmed | confirm | false（いいえ） | false（いいえ） | true（はい） | false（いいえ） | automatic, automatic_async | - | succeeded | captured | false | confirm |
 | 8 | unconfirmed | cancel | - | - | - | - | - | - | canceled | untouched | false | cancel |
 | 9 | unconfirmed | authenticate, settle, capture, expire | - | - | - | - | - | - | status | untouched | true | capture, errors |
-| 10 | requires_action | authenticate | - | - | false | - | - | - | requires_payment_method | untouched | false | 3ds |
-| 11 | requires_action | authenticate | - | - | true | - | - | manual | requires_confirmation | untouched | false | confirm |
-| 12 | requires_action | authenticate | - | - | true | - | manual | automatic | requires_capture | held | false | 3ds |
-| 13 | requires_action | authenticate | - | - | true | true | automatic, automatic_async | automatic | processing | untouched | false | lifecycle |
-| 14 | requires_action | authenticate | - | - | true | false | automatic, automatic_async | automatic | succeeded | captured | false | 3ds, lifecycle |
+| 10 | requires_action | authenticate | - | - | false（いいえ） | - | - | - | requires_payment_method | untouched | false | 3ds |
+| 11 | requires_action | authenticate | - | - | true（はい） | - | - | manual | requires_confirmation | untouched | false | confirm |
+| 12 | requires_action | authenticate | - | - | true（はい） | - | manual | automatic | requires_capture | held | false | 3ds |
+| 13 | requires_action | authenticate | - | - | true（はい） | true（はい） | automatic, automatic_async | automatic | processing | untouched | false | lifecycle |
+| 14 | requires_action | authenticate | - | - | true（はい） | false（いいえ） | automatic, automatic_async | automatic | succeeded | captured | false | 3ds, lifecycle |
 | 15 | requires_action | cancel | - | - | - | - | - | - | canceled | untouched | false | cancel |
 | 16 | requires_action | attach, confirm, settle, capture, expire | - | - | - | - | - | - | status | untouched | true | errors; for attach and confirm the pages say nothing, assumed refused |
-| 17 | processing | settle | - | - | true | - | - | - | succeeded | captured | false | lifecycle, status |
-| 18 | processing | settle | - | - | false | - | - | - | requires_payment_method | untouched | false | lifecycle |
-| 19 | processing | cancel | - | - | true | - | - | - | canceled | untouched | false | lifecycle: ACH, ACSS, AU BECS, BACS, NZ BECS and SEPA, inside a window |
-| 20 | processing | cancel | - | - | false | - | - | - | status | untouched | true | lifecycle; cancel says "in rare cases" |
+| 17 | processing | settle | - | - | true（はい） | - | - | - | succeeded | captured | false | lifecycle, status |
+| 18 | processing | settle | - | - | false（いいえ） | - | - | - | requires_payment_method | untouched | false | lifecycle |
+| 19 | processing | cancel | - | - | true（はい） | - | - | - | canceled | untouched | false | lifecycle: ACH, ACSS, AU BECS, BACS, NZ BECS and SEPA, inside a window |
+| 20 | processing | cancel | - | - | false（いいえ） | - | - | - | status | untouched | true | lifecycle; cancel says "in rare cases" |
 | 21 | processing | attach, confirm, authenticate, capture, expire | - | - | - | - | - | - | status | untouched | true | errors |
-| 22 | requires_capture | capture | - | - | - | false | - | - | succeeded | captured | false | capture, lifecycle |
-| 23 | requires_capture | capture | - | - | - | true | - | - | processing | untouched | false | lifecycle names no method; hold says bank debits cannot be held |
+| 22 | requires_capture | capture | - | - | - | false（いいえ） | - | - | succeeded | captured | false | capture, lifecycle |
+| 23 | requires_capture | capture | - | - | - | true（はい） | - | - | processing | untouched | false | lifecycle names no method; hold says bank debits cannot be held |
 | 24 | requires_capture | cancel | - | - | - | - | - | - | canceled | released | false | cancel |
 | 25 | requires_capture | expire | - | - | - | - | - | - | canceled | released | false | hold, capture |
 | 26 | requires_capture | attach, confirm, authenticate, settle | - | - | - | - | - | - | status | untouched | true | errors |
 | 27 | succeeded | - | - | - | - | - | - | - | status | untouched | true | lifecycle, status: refunds go through the Refunds API |
 | 28 | canceled | - | - | - | - | - | - | - | status | untouched | true | cancel, lifecycle |
+
+`-` は、その列がどの値でもよいことを表します。
 
 この表のセルに現れるグループ: **unconfirmed**（2 値）。中身は「グループ」の節にあります。
 

@@ -150,9 +150,11 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 
 | # | member | amount | → urgent (bool) | → carrier (carrier) |
 |---|---|---|---|---|
-| 1 | true | - | true | next_day |
-| 2 | false | >=30000JPY | true | next_day |
-| 3 | false | <30000JPY | false | standard |
+| 1 | true (yes) | - | true | next_day |
+| 2 | false (no) | >=30000JPY (30000JPY or more) | true | next_day |
+| 3 | false (no) | <30000JPY (less than 30000JPY) | false | standard |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

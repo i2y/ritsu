@@ -106,10 +106,12 @@ No table has a row for these combinations.
 
 | # | 工具あり | 区分 | 工具数 | → 行き先 (経路) |
 |---|---|---|---|---|
-| 1 | true | 通常 | <=2 | すぐ |
-| 2 | true | 通常 | >=3 | 確認 |
-| 3 | true | 上位 | - | すぐ |
-| 4 | false | - | - | すぐ |
+| 1 | true (yes) | 通常 | <=2 (2 or less) | すぐ |
+| 2 | true (yes) | 通常 | >=3 (3 or more) | 確認 |
+| 3 | true (yes) | 上位 | - | すぐ |
+| 4 | false (no) | - | - | すぐ |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 

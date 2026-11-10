@@ -118,8 +118,8 @@ Whether a refund is paid back at once or reviewed. A refund never asks for more 
 
 | # | asked | → route（path） |
 |---|---|---|
-| 1 | <=100 | at_once |
-| 2 | >100 | review |
+| 1 | <=100（100以下） | at_once |
+| 2 | >100（100より大きい） | review |
 
 **`rulec check` が確かめたこと**
 
@@ -173,9 +173,9 @@ The settlement run a payment day falls in. The days are the ones payment_terms.c
 
 | # | pay_day | → batch（run） |
 |---|---|---|
-| 1 | <=2026-06-30 | first_half |
-| 2 | >=2026-07-10 <=2026-12-10 | second_half |
-| 3 | >=2027-01-01 | year_end |
+| 1 | <=2026-06-30（2026-06-30 まで） | first_half |
+| 2 | >=2026-07-10 <=2026-12-10（2026-07-10 から 2026-12-10 まで） | second_half |
+| 3 | >=2027-01-01（2027-01-01 から） | year_end |
 
 **`rulec check` が確かめたこと**
 

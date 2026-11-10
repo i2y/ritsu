@@ -103,11 +103,13 @@ Whether the scoring's verdict on an application is acted on at once or goes to a
 
 | # | verdict | sure | → decision（decision） |
 |---|---|---|---|
-| 1 | approve | >=90% | approve |
-| 2 | approve | <90% | ask |
-| 3 | reject | >=80% | reject |
-| 4 | reject | <80% | ask |
+| 1 | approve | >=90%（90%以上） | approve |
+| 2 | approve | <90%（90%未満） | ask |
+| 3 | reject | >=80%（80%以上） | reject |
+| 4 | reject | <80%（80%未満） | ask |
 | 5 | hold | - | ask |
+
+`-` は、その列がどの値でもよいことを表します。
 
 **`rulec check` が確かめたこと**
 

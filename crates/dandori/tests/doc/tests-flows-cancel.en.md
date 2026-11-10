@@ -130,7 +130,7 @@ The rules this workflow calls, each as the page for people that `rulec doc` rend
 | Name | Type | Rounding | Notes |
 |---|---|---|---|
 | 次の状態 | 状態 (5 values) |  |  |
-| 返金額 | money[円, incl_tax] | down(1円) |  |
+| 返金額 | money[円, incl_tax] | down(1円) (rounded down to 1円) |  |
 | 受理 | bool |  |  |
 
 ## Types
@@ -162,6 +162,8 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 | 8 | 出荷済 | 入金, 出荷, 取消依頼 | 状態 | 0円 | false | 出荷のあとの取消は、返品の手続きで受ける |
 | 9 | 配達済 | - | 状態 | 0円 | false |  |
 | 10 | 取消 | - | 状態 | 0円 | false | 取消のあとに届いた入金の通知では、注文を戻さない |
+
+A `-` means the column may be any value.
 
 **What `rulec check` verified**
 
