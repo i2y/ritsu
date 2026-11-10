@@ -1619,8 +1619,10 @@ lower end alone — `if int64(in.Amount) < -9223372036854775807 {` in Go, which 
 nothing else — and a range with one end, on that side alone (`if int64(in.Amount) < 0 {`).
 NumPy tests the ends before it makes the column int64, which would have wrapped 2^63 into
 −2^63. A number past 2^63−1 never reaches an int64 language's door: its type cannot hold one.
-The runners of Go, Rust, Java, PHP, Swift and Wasm refuse it as they read the JSON, saying it is
-not an integer; SQL's stop where SQLite or PostgreSQL cannot hold it (§15.297).
+The runners of Go, Rust, Java, PHP, Swift and Wasm refuse it as they read the JSON, the runners
+of the query and of the function before they hand it to SQLite or PostgreSQL, and the Connect
+runner before it builds the request; each says it is out of range, as every door does, and the
+vectors carry 2^63 where a range writes no upper end (§15.298).
 
 The sentence and the value travel apart. The error carries both — `what` is the sentence,
 `value` the number that was refused — and puts them together only when it is printed, so
@@ -1679,10 +1681,9 @@ Node 21 and later hand the function `JSON.parse` calls for each value — and wr
 as its digits with `JSON.rawJSON`. Node 20 and older hand no digits and have no `JSON.rawJSON`,
 so there such a number goes as a float64 both ways, as it went before. Swift's runner reads the
 `NSDecimalNumber` that Foundation on Linux gives for a negative integer of 19 digits from its
-digits rather than through `doubleValue`, and refuses a UInt64 past Int64 as no integer, as the
-runners of Go, Rust, Java, PHP and Wasm refuse a number past 64 bits. Before, TypeScript read
-9007199254740993 as 9007199254740992 and answered with the row below it, and Swift answered for
-18446744073709551615 as −1 (§15.297).
+digits rather than through `doubleValue`, and refuses a UInt64 past Int64 as out of range, as it
+refuses any number past 64 bits. Before, TypeScript read 9007199254740993 as 9007199254740992 and
+answered with the row below it, and Swift answered for 18446744073709551615 as −1 (§15.297).
 
 A truth value is JSON's `true` or `false` and nothing else, at every door that reads one: the
 module's entry guard where a caller can pass any value, and every reader of the wire — the

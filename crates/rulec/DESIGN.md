@@ -6828,7 +6828,7 @@ panic: unreachable: completeness was statically checked by rulec [recovered, rep
 2. **言語ごとの書き方**（`door::ends`）。整数に端の無い言語（Python、NumPy、TypeScript、JavaScript、Ruby）は両側を見る。int64 で持つ言語（Go、Rust、Java、PHP、Swift、SQL、Wasm）は下の端だけを見る。範囲が下の端を書かなければ `v < -9223372036854775807` で、断るのは -2^63 だけである。上の端 2^63−1 は int64 の最大なので、見る式が要らない。片側だけ書いた範囲は、書いた側を見る。
 3. **NumPy は int64 にする前に見る。** 列は Python の整数で届き、`astype(np.int64)` は 2^63 を -2^63 に折り返す。runtime（`rulec_np.py`）は、型を変える前に端を見る。int64 でない列（float、uint64、object）は Python の比べ方で一つずつ比べる。numpy は float の列と整数を float64 で比べ、2^63−1 を 2^63 と読むからである。
 4. **日付には足さない。** どの言語の入口も、日付を `YYYY-MM-DD` で、年 0001〜9999 の暦にある日だけ読む（§15.279）。型の端は、読むところで守られている。rulec の規則は日付で計算しないので（E048）、int64 の主張が日付の端を読むことも無い。
-5. **ベクタ。** 範囲が下の端を書かない数の入力と、下の端に型の端そのものを書いた入力に、断るケース「型の持てる値の下端の一つ下」（-9223372036854775808）を足した。どの言語にも渡せる値で、どの言語も「範囲の外」で断る。上の端の一つ上（2^63）は足さない。int64 で持つ言語のライブラリは int64 を受け取るので、その値は入口まで届かない。runner は JSON を読むところで断るが、文がそろわない。Go、Rust、Java、PHP、Wasm は「整数でない」、Connect は protobuf の読み手の文で断り、SQLite の runner は値を表に入れられない。
+5. **ベクタ。** 範囲が下の端を書かない数の入力と、下の端に型の端そのものを書いた入力に、断るケース「型の持てる値の下端の一つ下」（-9223372036854775808）を足した。どの言語にも渡せる値で、どの言語も「範囲の外」で断る。上の端の一つ上（2^63）は足さない。int64 で持つ言語のライブラリは int64 を受け取るので、その値は入口まで届かない。runner は JSON を読むところで断るが、文がそろわない。Go、Rust、Java、PHP、Wasm は「整数でない」、Connect は protobuf の読み手の文で断り、SQLite の runner は値を表に入れられない。§15.298 で、どの読み手も「範囲の外」で断るようにして、2^63 も足した。
 6. **説明に片側の端を書く。** Go の構造体のコメント（`// amount range 0..`）、SQL のファイルの頭の列の説明（`amount: bigint, in JPY, 0..`）、`.proto` のフィールドの説明（`0 or more`、「0 以上」）、`doc` のページで値を入れて試すフォーム（`min` だけ）。JSON Schema は前から片側ずつ書いていた。どれも書いた端だけを書き、型の端は書かない。ポートと `ranges` も書いた端だけである（kaname の DESIGN 32）。
 
 **ついでに直したもの**：
@@ -7073,7 +7073,50 @@ Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` 
 
 PHP の −2^63−1 が一致するのは、PHP が int に入らない整数を float で読み、−2^63−1 に最も近い double が −2^63 で、値が整数なので −2^63 として入口に届き、入口が「範囲の外」で断るからである。文は合うが、読んだ値は丸まっている。
 
-直すなら、int64 で持つ言語の runner は、符号と数字だけで書いた数が 64 ビットに入らないとき、整数ではあるので「整数でない」でなく「範囲の外」で断る。SQLite の runner は表に入れる前に、PostgreSQL の関数の runner は引数を作る前に、同じ文で断る。Connect は、protobuf の読み手の文を入口の文に置き換える。そろえば、ベクタに型の上の端の一つ上（2^63）を足せる（§15.295 の決めたことの 5）。ベクタは今 2^63 以上の値を持たないので、ふだんの試験には出ない。
+直すなら、int64 で持つ言語の runner は、符号と数字だけで書いた数が 64 ビットに入らないとき、整数ではあるので「整数でない」でなく「範囲の外」で断る。SQLite の runner は表に入れる前に、PostgreSQL の関数の runner は引数を作る前に、同じ文で断る。Connect は、protobuf の読み手の文を入口の文に置き換える。そろえば、ベクタに型の上の端の一つ上（2^63）を足せる（§15.295 の決めたことの 5）。ベクタは今 2^63 以上の値を持たないので、ふだんの試験には出ない。§15.298 で直した。
+
+### 15.298 64 ビットを越える整数は、どの読み手も「範囲の外」で断る（2026-11-10）
+
+**きっかけ**：§15.297 に残した、64 ビットを越える整数を断る文のずれ。基準の評価器と、整数に端の無い言語の入口は「範囲の外」で断るのに、int64 で持つ言語の runner は「整数でない」で断り、Python の Connect の runner は protobuf のライブラリの文で断り、SQLite の runner と PostgreSQL の関数の runner は止まっていた。2026-11-10 に、§15.297 に書いた直し方で直すと決めた。
+
+直す前に、§15.297 の四つの規則と、範囲の無い同じ規則を四つの名前で作って、名前ごとに 2^63、2^64−1、2^64、−2^63−1 の一つを断るケースとして渡したもの（`nr1`〜`nr4`）を、§15.297 と同じ 24 通りの読むところに通した。四つの規則の 96 件は一致し、後ろの 96 件のうち 51 件が合わなかった。合わなかったところは §15.297 の表のとおりである。
+
+```text
+{"rule":"nr1","lang":"rust","via":"runner","vectors":3,"refused":1,"calls":0,"ok":false,"ran":true,"first_diff":{"line":1,"generated":"{\"refused\":\"input\",\"error\":\"amount is not an integer\"}","expected":"{\"refused\":\"input\",\"error\":\"amount is out of range\"}"},"error":null}
+{"rule":"nr1","lang":"python","via":"connect-wsgi","vectors":3,"refused":1,"calls":0,"ok":false,"ran":true,"first_diff":{"line":1,"generated":"{\"refused\":\"input\",\"error\":\"value 9223372036854775808 out of range for int64\"}","expected":"{\"refused\":\"input\",\"error\":\"amount is out of range\"}"},"error":null}
+{"rule":"nr1","lang":"sql","via":"function","vectors":3,"refused":1,"calls":0,"ok":false,"ran":false,"first_diff":null,"error":"failed:\nERROR:  bigint out of range\nCONTEXT:  SQL statement \"SELECT row_to_json(t)::text FROM (SELECT * FROM \"nr1\"(\"amount\" => (9223372036854775808)::bigint)) AS t\"\nPL/pgSQL function pg_temp_44._case(text) line 4 at EXECUTE"}
+```
+
+**決めたこと**：
+
+1. **int64 で持つ言語の読み手は、整数かどうかを先に見て、次に大きさを見る。** 整数で int64 に入らない数は「範囲の外」で断る。基準の評価器（`door::one`）が、整数でない数を「整数でない」で、絶対値が 2^63−1 を越える整数を「範囲の外」で断るのと同じ分け方である。点や指数を書いた数も同じで、`12345678901234567890.0` と `1e19` は「範囲の外」、`1e-3` は「整数でない」になる。
+   - Rust の `whole`（runner、WASI、Wasm の入口が使う）は、int64 の値、int64 に入らない整数、整数でない数、の三つを分けて返す。前は、桁を読みながら溢れたところで「整数でない」にしていたので、`12345678901234567890.0` のような整数も「整数でない」になっていた。
+   - Go の `wholeNumber` は、値と、整数かどうかと、int64 に入るかを返す。
+   - Java は `BigDecimal` で読み、末尾の 0 を除いても小数の桁が残れば「整数でない」、`longValueExact` が溢れれば「範囲の外」とする。指数が int を越えて `BigDecimal` が読めない数は、指数の符号で分ける。
+   - PHP は、`json_decode` が float で返す数のうち、整数で int64 の外のもの（無限大も）を「範囲の外」で断る。
+   - Swift は、数字が Int64 に入らない NSDecimalNumber、Int64 を越える UInt64（型を表す文字が `Q`）、int64 の外の整数の double を「範囲の外」で断る。§15.297 の決めたことの 2 で「整数でない」にしたものを改めた。
+2. **SQL の二つの runner は、渡す前に断る。** SQLite も PostgreSQL も int64 を越える整数を持てないので、その値は問い合わせの `_input_error` まで届かない。行を読むところ（`_read`）で、int64 の外の整数を「範囲の外」で断る。−2^63 は渡し、問い合わせが「範囲の外」で断る（§15.295 の決めたことの 2）。
+3. **Connect の runner は、リクエストを作る前に断る。** リクエストの数は int64 なので、64 ビットを越える整数は送れない。前は、protobuf のライブラリが符号化するところで `OverflowError` を出し、クライアントがそれを Connect の誤りにして返していた。runner は、型の違う値を送る前に断るのと同じく（§15.204）、int64 に入らない整数をリクエストを作る前に「範囲の外」で断る。−2^63 は送り、サービスが「範囲の外」で断る。
+4. **ベクタに 2^63 を足す。** §15.295 の決めたことの 5 で足さなかった「型の持てる値の上端の一つ上」（9223372036854775808）を、範囲が上の端を書かない数の入力と、上の端に型の端そのものを書いた入力に足す。どの読み手も「範囲の外」で断るようになったので、どの言語にも渡せる。
+5. **試験。** `tests/door_ends.rs` で、ベクタが 2^63 を持つことと、全部の読み手（12 の言語の runner、Rust の WASI、Python・TypeScript・JavaScript の MCP のサーバ、Python の Connect、PostgreSQL の関数）が、2^63、2^64−1、2^64、−2^63−1 を「範囲の外」で断ることを見る。`tests/exact_ints.rs` の、int64 の六つの言語が「整数でない」で断ることを見る試験は、この試験に移した。
+
+**変わること**：
+
+- 生成する Rust（runner と WASI）・Go・Java・PHP・Swift の runner、Wasm の入口、SQL の二つの runner、Python の Connect の runner が、64 ビットを越える整数を「範囲の外」で断る。前は「整数でない」で断るか、ライブラリの文で断るか、止まっていた。モジュール（入口と表）は変わらない。
+- 範囲が上の端を書かない数の入力と、上の端に型の端そのものを書いた入力の、受け付けない入力のファイルに一行増える。
+
+**確かめたこと**：
+
+- 直した後、上の 192 件が一致した。範囲の無い規則の受け付けない入力のファイルは、生成したままで 2^63 の行を持ち、24 通りのどれもそれを「範囲の外」で断った。
+- Rust・Go・Java・PHP・Swift の新しい読み手を生成したコードから取り出し、点や指数を書いた数を含めて言語ごとに 21〜38 の数を読ませ、int64 の値、int64 に入らない整数、整数でない数に分かれることを確かめた。Swift は macOS の Foundation が返す数（`Q` の UInt64、NSDecimalNumber、double）で読んだ。
+- `tests/door_ends.rs` の新しい試験で、範囲の無い規則と下の端だけを書いた規則の、24 通りの読むところの 48 件が、四つの数をどれも「範囲の外」で断った。rulec の試験の全部 1,470 件（SKIP なし。`tests/exact_ints.rs` の試験を一つ移したので、§15.297 より一つ少ない）と、ritsu の website・playground・skill の試験が通った。ブラウザで試すページの `ritsu.wasm` は、`gen --target wasm` の答え（`<名前>_wasm.rs` が Rust の読み手を持つ）が変わるので作り直した。
+
+**見つけて、直していないもの**：Connect のサービスに JSON で直に送られた 64 ビットを越える整数は、型の違う値（§15.204 の「見つけて直していないもの」）と同じく、サービスの入口より前に protobuf の JSON の読み手が、その読み手の文で拒む。生成したコードの外の文なので、そろえていない。−2^63 は読み手を通り、入口が「範囲の外」で断る。範囲の無い規則のサービスに直に送った答えである。
+
+```text
+{"amount":"9223372036854775808"} 400 {"code": "invalid_argument", "message": "Failed to decode request body: value 9223372036854775808 out of range for int64 for field rulec.no_range.v1.DecideRequest.amount"}
+{"amount":"-9223372036854775808"} 400 {"code": "invalid_argument", "message": "amount is out of range: -9223372036854775808"}
+```
 
 ## 16. この設計で最も危うい点
 
