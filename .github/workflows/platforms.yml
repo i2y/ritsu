@@ -3,7 +3,7 @@ name: platforms
 # The tests of the platforms level (DESIGN 10.2, 10.5, 10.6): the workflows dandori writes,
 # run on the platforms themselves (Temporal's dev server, Argo Workflows on a kind cluster,
 # Step Functions on LocalStack) and compared with its reference interpreter; the books of chobo
-# on a TiDB cluster (TiUP's playground) and on Vitess, as on MySQL; ritsu's modules pushed to,
+# on a TiDB cluster (in containers) and on Vitess, as on MySQL; ritsu's modules pushed to,
 # fetched from and signed at the reference implementation of the OCI distribution; and the tests
 # that ask a server outside: e-Gov and the eCFR for the base layer, koyomi and yuen, and the Buf
 # Schema Registry for rulec. Nightly, by hand, and on a pull request that changes dandori.
@@ -154,13 +154,13 @@ jobs:
           docker pull -q localstack/localstack:4.14.0
           docker pull -q public.ecr.aws/lambda/nodejs:22
 
-      # --- chobo: the MySQL family on TiDB (chobo's DESIGN 4.5). TiUP v1.17.1, held to its
-      # release's checksum, with the root.json the mirror's install script puts beside it (version
-      # 2, held to the checksum taken when this was written; TiUP checks the roots that follow it,
-      # and the components against them), runs the playground of TiDB 8.5.8: one TiDB, TiKV and PD.
-      # MySQL 8.4's client loads the tables there, and its server is the one the same tests start
-      # for MySQL. The Rust runner's crates are fetched at its Cargo.lock's versions.
-      - name: "chobo: the runners, MySQL 8.4 and TiDB 8.5.8 on TiUP's playground"
+      # --- chobo: the MySQL family on TiDB (chobo's DESIGN 4.5). TiDB 8.5.8 as one PD, one TiKV and
+      # one TiDB (no TiFlash), from the pingcap/pd, pingcap/tikv and pingcap/tidb images on Docker
+      # Hub, each held to the digest taken when this was written, on a network of their own. TiKV
+      # reserves no disk space and opens at most 256 files in each RocksDB. MySQL 8.4's client loads
+      # the tables there, and its server is the one the same tests start for MySQL. The Rust
+      # runner's crates are fetched at its Cargo.lock's versions.
+      - name: "chobo: the runners, MySQL 8.4, and TiDB 8.5.8 from its images"
         run: |
           set -eu
           npm ci --prefix crates/chobo/tools/runner
@@ -171,20 +171,29 @@ jobs:
           [ -e /usr/lib/x86_64-linux-gnu/libaio.so.1 ] || sudo ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
           sh crates/chobo/tools/mysql/fetch.sh
           echo "RITSU_MYSQL_BIN=$GITHUB_WORKSPACE/crates/chobo/tools/mysql/mysql/bin" >> "$GITHUB_ENV"
-          export TIUP_HOME="$RUNNER_TEMP/tiup"
-          mkdir -p "$TIUP_HOME/bin"
-          curl -fsSL -o "$RUNNER_TEMP/tiup.tar.gz" https://tiup-mirrors.pingcap.com/tiup-v1.17.1-linux-amd64.tar.gz
-          echo "1dda2543e8d8ef98f69f76981982ff1176e09276d7df26bcd63a198287d6a945  $RUNNER_TEMP/tiup.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/tiup.tar.gz" -C "$TIUP_HOME/bin"
-          curl -fsSL -o "$TIUP_HOME/bin/root.json" https://tiup-mirrors.pingcap.com/root.json
-          echo "032201888f247db943a3ab5b84ecb5e6dbd1d77c6b9adc9657b01175cdb534bf  $TIUP_HOME/bin/root.json" | sha256sum -c -
-          nohup "$TIUP_HOME/bin/tiup" playground v8.5.8 --tag chobo --tiflash 0 --without-monitor --host 127.0.0.1 --db.port 4000 > "$RUNNER_TEMP/tidb.log" 2>&1 &
+          printf '[rocksdb]\nmax-open-files = 256\n[raftdb]\nmax-open-files = 256\n[storage]\nreserve-space = "0MB"\nreserve-raft-space = "0MB"\n' > "$RUNNER_TEMP/tikv.toml"
+          docker network create tidb
+          docker run -d --name pd --network tidb -p 127.0.0.1:2379:2379 \
+            pingcap/pd:v8.5.8@sha256:424e896800e42e1b7eb585b604c8daa3454110d0f0df5ab41f7c5f49164d3aef \
+            --name=pd --data-dir=/data/pd --client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://pd:2379 \
+            --peer-urls=http://0.0.0.0:2380 --advertise-peer-urls=http://pd:2380 --initial-cluster=pd=http://pd:2380
+          docker run -d --name tikv --network tidb --ulimit nofile=1048576:1048576 -v "$RUNNER_TEMP/tikv.toml:/tikv.toml:ro" \
+            pingcap/tikv:v8.5.8@sha256:ab84580b6795868940231aa778a34b082d19e4417e6d66f755c609bebdbbfd69 \
+            --addr=0.0.0.0:20160 --advertise-addr=tikv:20160 --status-addr=0.0.0.0:20180 --advertise-status-addr=tikv:20180 \
+            --data-dir=/data/tikv --pd=pd:2379 --config=/tikv.toml
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:2379/pd/api/v1/stores 2>/dev/null | grep -Eq '"state_name" *: *"Up"'; then break; fi
+            sleep 2
+          done
+          docker run -d --name tidb --network tidb -p 127.0.0.1:4000:4000 \
+            pingcap/tidb:v8.5.8@sha256:df168c764bf2dfdb166dc37a5c3b0e210d29d5f3ab2d33317fd0fdf7b32037f5 \
+            --store=tikv --path=pd:2379 --advertise-address=tidb
           mysql="crates/chobo/tools/mysql/mysql/bin/mysql --no-defaults -h 127.0.0.1 -P 4000 -u root"
           for i in $(seq 1 150); do
             if $mysql -e 'select 1' > /dev/null 2>&1; then break; fi
             sleep 2
           done
-          $mysql -e 'select tidb_version()\G' || { cat "$RUNNER_TEMP/tidb.log"; exit 1; }
+          $mysql -e 'select tidb_version()\G' || { for c in pd tikv tidb; do docker logs --tail 60 "$c" 2>&1; done; exit 1; }
           echo "RITSU_TIDB=127.0.0.1:4000" >> "$GITHUB_ENV"
 
       # --- chobo: the MySQL family on Vitess (chobo's DESIGN 4.5). vttestserver, vtcombo and
