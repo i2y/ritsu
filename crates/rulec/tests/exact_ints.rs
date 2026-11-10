@@ -3,8 +3,7 @@
 //! every integer only up to 2^53, so their runners, their MCP servers and Wasm's runner read an
 //! integer past it from the digits written and write a bigint back as its digits. Swift's runner
 //! reads the `NSDecimalNumber` that Foundation on Linux gives for a negative integer of 19 digits
-//! from its digits, and holds a UInt64 past Int64 to be no integer, as the other languages that
-//! hold an int64 do, where it kept the low 64 bits.
+//! from its digits. What every door says of a number past 64 bits is held in `tests/door_ends.rs`.
 
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::Path;
@@ -82,17 +81,6 @@ machine seller over step
   never   fresh after dispute, grace, probation, good, trusted
   always  days_left >=1 <=9007199254740995 when grace, probation
 ";
-
-/// No range: a number past 64 bits is the one the readers of the int64 languages meet.
-const NO_RANGE: &str = "rule no_range v1\n\
-     description \"A fee from an amount with no range\"\n\n\
-     inputs\n  amount : money[JPY]\n\n\
-     outputs\n  fee : money[JPY]  round down(1JPY)\n\n\
-     table fees\npolicy unique\n\
-     | amount    | -> fee : money[JPY] |\n\
-     | <1000JPY  | 100JPY              |\n\
-     | >=1000JPY | 0JPY                |\n\n\
-     examples\n| amount  | -> fee |\n| 5JPY    | 100JPY |\n| 1000JPY | 0JPY   |\n";
 
 fn rulec(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").current_dir(dir).args(args).output().expect("cannot start rulec");
@@ -183,28 +171,6 @@ fn every_runner_and_server_hands_the_door_the_integer_a_line_writes() {
         assert!(ran.iter().any(|x| x == run), "{run} did not run: {ran:?}");
     }
     println!("exact integers: {} runs agreed: {}", ran.len(), ran.join(", "));
-}
-
-/// A number past 64 bits is no integer to the languages that hold an int64 — Rust, Go, Swift, Java,
-/// PHP and Wasm — and each refuses it with that sentence. Swift's runner kept the low 64 bits of a
-/// UInt64 and answered for 2^64−1 as −1.
-#[test]
-fn the_int64_languages_refuse_a_number_past_64_bits_as_no_integer() {
-    if !ready(Need::Rustc, || Command::new("rustc").arg("--version").output().is_ok_and(|o| o.status.success()), "rustc is not here") {
-        return;
-    }
-    let t = TempDir::new("exact-ints-wide");
-    let out = t.path().join("out");
-    generate(t.path(), &out, &[("no_range", NO_RANGE)], &["rust", "go", "swift", "java", "php", "wasm"], &["runner", "vectors"]);
-    let past = [
-        r#"{"in":{"amount":9223372036854775808},"refused":"input","error":"amount is not an integer","why":"2^63"}"#,
-        r#"{"in":{"amount":18446744073709551615},"refused":"input","error":"amount is not an integer","why":"2^64-1, the most a UInt64 holds"}"#,
-        r#"{"in":{"amount":18446744073709551616},"refused":"input","error":"amount is not an integer","why":"2^64"}"#,
-    ];
-    std::fs::write(out.join("vectors/no_range.refused.jsonl"), past.join("\n") + "\n").unwrap();
-    let ran = agree(&out);
-    assert!(ran.iter().any(|x| x.starts_with("no_range ")), "nothing ran: {ran:?}");
-    println!("past 64 bits: {} runs agreed: {}", ran.len(), ran.join(", "));
 }
 
 /// Node 20 and older have no `JSON.rawJSON`: there the JavaScript runner of a machine that carries a

@@ -5415,8 +5415,8 @@ impl<'a> Gen<'a> {
                     Ty::Str => format!("text({v}, {:?})", crate::door::not_string(jp)),
                     // A number is a plain int64, not a type the package declares, so it must
                     // not be qualified with the package name.
-                    Ty::Number => format!("integer({v}, {:?})", crate::door::not_integer(jp)),
-                    other => format!("r.{}(integer({v}, {:?}))", self.go_ty(other), crate::door::not_integer(jp)),
+                    Ty::Number => format!("integer({v}, {:?}, {:?})", crate::door::not_integer(jp), crate::door::out_of_range(jp)),
+                    other => format!("r.{}(integer({v}, {:?}, {:?}))", self.go_ty(other), crate::door::not_integer(jp), crate::door::out_of_range(jp)),
                 }
             };
             if optional {
@@ -8593,9 +8593,9 @@ impl<'a> Gen<'a> {
                 }
                 Ty::Bool => format!("boolean({v}, {:?})?", crate::door::not_bool(name)),
                 Ty::Date => format!("date({v}, {:?})?", crate::door::not_date(name)),
-                Ty::Number => format!("int({v}, {:?})?", crate::door::not_integer(name)),
+                Ty::Number => format!("int({v}, {:?}, {:?})?", crate::door::not_integer(name), crate::door::out_of_range(name)),
                 Ty::Str => format!("text({v}, {:?})?", crate::door::not_string(name)),
-                other => format!("r::{}(int({v}, {:?})?)", self.rs_ty(other), crate::door::not_integer(name)),
+                other => format!("r::{}(int({v}, {:?}, {:?})?)", self.rs_ty(other), crate::door::not_integer(name), crate::door::out_of_range(name)),
             }
         };
         if optional {
@@ -9120,23 +9120,27 @@ func take(d map[string]any, k string, missing string, optional bool) any {
 	return v
 }
 
-func integer(v any, what string) int64 {
+func integer(v any, what, past string) int64 {
 	n, ok := v.(json.Number)
 	if !ok {
 		panic(&r.RuleInputError{What: what})
 	}
-	i, ok := wholeNumber(string(n))
-	if !ok {
+	i, whole, fits := wholeNumber(string(n))
+	if !whole {
 		panic(&r.RuleInputError{What: what})
+	}
+	if !fits {
+		panic(&r.RuleInputError{What: past})
 	}
 	return i
 }
 
 // wholeNumber reads a JSON number whose value is a whole number as that integer: 1000, and
-// 1000.0, 1e3 or -0.0 too (§15.205). A fraction is none, and neither is a value past 64 bits.
-func wholeNumber(s string) (int64, bool) {
+// 1000.0, 1e3 or -0.0 too (§15.205). It says whether the value is whole, and then whether an
+// int64 holds it: a whole number past 64 bits is out of range (§15.298).
+func wholeNumber(s string) (int64, bool, bool) {
 	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return i, true
+		return i, true, true
 	}
 	sign := ""
 	if strings.HasPrefix(s, "-") {
@@ -9146,13 +9150,14 @@ func wholeNumber(s string) (int64, bool) {
 	if k := strings.IndexAny(s, "eE"); k >= 0 {
 		e, err := strconv.Atoi(strings.TrimPrefix(s[k+1:], "+"))
 		if ne, ok := err.(*strconv.NumError); ok && ne.Err == strconv.ErrRange {
-			// An exponent past an int: zero is still zero, and anything else does not fit.
+			// An exponent past an int: zero is still zero, a value with one far below zero has a
+			// fraction, and one far above zero is past 64 bits.
 			e = 1 << 40
 			if strings.HasPrefix(s[k+1:], "-") {
 				e = -e
 			}
 		} else if err != nil {
-			return 0, false
+			return 0, false, false
 		}
 		exp, s = e, s[:k]
 	}
@@ -9166,13 +9171,16 @@ func wholeNumber(s string) (int64, bool) {
 		digits, exp = digits[:len(digits)-1], exp+1
 	}
 	if digits == "" {
-		return 0, true
+		return 0, true, true
 	}
-	if exp < 0 || len(digits)+exp > 19 {
-		return 0, false
+	if exp < 0 {
+		return 0, false, false
+	}
+	if len(digits)+exp > 19 {
+		return 0, true, false
 	}
 	i, err := strconv.ParseInt(sign+digits+strings.Repeat("0", exp), 10, 64)
-	return i, err == nil
+	return i, true, err == nil
 }
 
 func boolean(v any, what string) bool {
@@ -9269,33 +9277,42 @@ const SWIFT_WIRE: &str = r#"    static func _take(_ d: Any?, _ k: String, _ miss
         return v
     }
 
-    static func _int(_ v: Any, _ what: String) throws -> Int64 {
+    static func _int(_ v: Any, _ what: String, _ past: String) throws -> Int64 {
         guard let n = v as? NSNumber else {
             throw RuleError.input(what: what, value: nil)
         }
         // Foundation on Linux gives a negative integer of 19 digits as an NSDecimalNumber, which
-        // holds it exact where its `doubleValue` would round it: it is read from its digits, which
-        // are one Int64 or none (§15.297).
+        // holds it exact where its `doubleValue` would round it: it is read from its digits
+        // (§15.297). Digits that are no Int64 are a whole number past 64 bits, out of range as the
+        // reference evaluator says of it (§15.298).
         if let dec = n as? NSDecimalNumber {
-            guard let i = Int64(dec.stringValue) else {
+            let s = dec.stringValue
+            if let i = Int64(s) {
+                return i
+            }
+            let digits = s.hasPrefix("-") ? s.dropFirst() : Substring(s)
+            guard !digits.isEmpty, digits.allSatisfy({ $0 >= "0" && $0 <= "9" }) else {
                 throw RuleError.input(what: what, value: nil)
             }
-            return i
+            throw RuleError.input(what: past, value: nil)
         }
         let t = String(cString: n.objCType)
-        // A UInt64 past Int64 is none, as a value past 64 bits is in every language that holds an
-        // Int64: `int64Value` would keep its low 64 bits, and 2^64−1 would be −1 (§15.297).
+        // A UInt64 past Int64 is out of range: `int64Value` would keep its low 64 bits, and 2^64−1
+        // would be −1 (§15.297).
         if t == "Q" && n.uint64Value > UInt64(Int64.max) {
-            throw RuleError.input(what: what, value: nil)
+            throw RuleError.input(what: past, value: nil)
         }
         if ["i", "s", "l", "q", "I", "S", "L", "Q"].contains(t) {
             return n.int64Value
         }
-        // A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer, as
-        // long as it is an Int64 at all (§15.205).
+        // A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer
+        // (§15.205), and one no Int64 holds is out of range.
         let d = n.doubleValue
-        guard t == "d" || t == "f", d.rounded() == d, d >= -9223372036854775808.0, d < 9223372036854775808.0 else {
+        guard t == "d" || t == "f", d.rounded() == d else {
             throw RuleError.input(what: what, value: nil)
+        }
+        guard d >= -9223372036854775808.0, d < 9223372036854775808.0 else {
+            throw RuleError.input(what: past, value: nil)
         }
         return Int64(d)
     }
@@ -9547,13 +9564,25 @@ fn refused(what: &'static str) -> r::RuleError {
 
 /// A JSON number whose value is a whole number, as that integer: digits with a minus before them
 /// at most, or the same value written with a point or an exponent — `1000.0`, `1e3`, `-0.0`
-/// (§15.205). A string keeps its quote, so `"12"` is not one, and neither is `1.5` or a value past
-/// 64 bits.
-fn int(v: &str, what: &'static str) -> Result<i64, r::RuleError> {
-    whole(v).ok_or_else(|| refused(what))
+/// (§15.205). A string keeps its quote, so `"12"` is not one, and neither is `1.5`. A whole number
+/// past 64 bits is out of range, as the reference evaluator says of it (§15.298).
+fn int(v: &str, what: &'static str, past: &'static str) -> Result<i64, r::RuleError> {
+    match whole(v) {
+        Whole::Int(n) => Ok(n),
+        Whole::Past => Err(refused(past)),
+        Whole::No => Err(refused(what)),
+    }
 }
 
-fn whole(v: &str) -> Option<i64> {
+/// What a JSON number is as a whole number: the i64 it is, a whole number past what an i64 holds,
+/// or no whole number.
+enum Whole {
+    Int(i64),
+    Past,
+    No,
+}
+
+fn whole(v: &str) -> Whole {
     let b = v.as_bytes();
     let (neg, b) = match b.first() {
         Some(b'-') => (true, &b[1..]),
@@ -9561,7 +9590,7 @@ fn whole(v: &str) -> Option<i64> {
     };
     let e = b.iter().position(|&c| c == b'e' || c == b'E').unwrap_or(b.len());
     let (mant, ex) = b.split_at(e);
-    // The exponent, held below 2^40: a nonzero value past 10^19 does not fit anyway.
+    // The exponent, held below 2^40: a whole value that is not zero is past 64 bits from 10^19 on.
     let mut shift: i64 = 0;
     if let Some((_, ex)) = ex.split_first() {
         let (down, digits) = match ex.first() {
@@ -9570,7 +9599,7 @@ fn whole(v: &str) -> Option<i64> {
             _ => (false, ex),
         };
         if digits.is_empty() || !digits.iter().all(u8::is_ascii_digit) {
-            return None;
+            return Whole::No;
         }
         for &d in digits {
             shift = (shift * 10 + i64::from(d - b'0')).min(1 << 40);
@@ -9585,34 +9614,34 @@ fn whole(v: &str) -> Option<i64> {
         None => (mant, &mant[mant.len()..]),
     };
     if int.is_empty() || (point.is_some() && frac.is_empty()) || !int.iter().chain(frac).all(u8::is_ascii_digit) {
-        return None;
+        return Whole::No;
     }
-    shift -= frac.len() as i64;
-    // The digits as a negative number, so that -2^63 fits, with the zeros at the end held back:
-    // a point before them takes them away first.
-    let (mut n, mut zeros) = (0i64, 0i64);
-    for &d in int.iter().chain(frac) {
-        if d == b'0' {
-            zeros += 1;
-            continue;
-        }
-        for _ in 0..zeros {
-            n = n.checked_mul(10)?;
-        }
-        zeros = 0;
-        n = n.checked_mul(10)?.checked_sub(i64::from(d - b'0'))?;
+    // The digits from the first that is not zero to the last, and the power of ten they are
+    // multiplied by: the zeros after them add to it, and each digit after the point takes one
+    // away. Whether the value is whole is known before its size is looked at.
+    let digits = || int.iter().chain(frac).copied();
+    let Some(first) = digits().position(|d| d != b'0') else { return Whole::Int(0) };
+    let zeros = digits().rev().position(|d| d != b'0').unwrap_or(0);
+    let shown = int.len() + frac.len() - zeros - first;
+    let shift = shift - frac.len() as i64 + zeros as i64;
+    if shift < 0 {
+        return Whole::No;
     }
-    shift += zeros;
-    if n == 0 {
-        return Some(0);
+    if shown as i64 + shift > 19 {
+        return Whole::Past;
     }
-    if !(0..=19).contains(&shift) {
-        return None;
+    // The digits as a negative number, so that -2^63 fits.
+    let mut n: i64 = 0;
+    for d in digits().skip(first).take(shown) {
+        let Some(m) = n.checked_mul(10).and_then(|x| x.checked_sub(i64::from(d - b'0'))) else { return Whole::Past };
+        n = m;
     }
     for _ in 0..shift {
-        n = n.checked_mul(10)?;
+        let Some(m) = n.checked_mul(10) else { return Whole::Past };
+        n = m;
     }
-    if neg { Some(n) } else { n.checked_neg() }
+    let n = if neg { Some(n) } else { n.checked_neg() };
+    n.map_or(Whole::Past, Whole::Int)
 }
 
 /// JSON's `true` or `false` and nothing else (§15.203).
@@ -13996,8 +14025,8 @@ impl<'a> Gen<'a> {
                     Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
                     Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
                     Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
-                    Ty::Number => format!("_int({v}, {:?})", crate::door::not_integer(name)),
-                    other => format!("{}(_int({v}, {:?}))", self.sw_ty(other), crate::door::not_integer(name)),
+                    Ty::Number => format!("_int({v}, {:?}, {:?})", crate::door::not_integer(name), crate::door::out_of_range(name)),
+                    other => format!("{}(_int({v}, {:?}, {:?}))", self.sw_ty(other), crate::door::not_integer(name), crate::door::out_of_range(name)),
                 }
             };
             if optional {

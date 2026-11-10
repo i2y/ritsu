@@ -1348,7 +1348,8 @@ impl<'a> Gen<'a> {
             // `bool("false")` is true; a truth value is JSON's and nothing else (§15.203).
             Ty::Bool => format!("_bool({src}, {:?})", not_bool(name)),
             Ty::Date | Ty::Str => format!("str({src})"),
-            _ => format!("int({src})"),
+            // Every number goes as an int64, which holds nothing past 64 bits (§15.298).
+            _ => format!("_int64(int({src}), {:?})", crate::door::out_of_range(name)),
         }
     }
 
@@ -1550,6 +1551,13 @@ impl<'a> Gen<'a> {
             .replace("@MLINE@", &mline)
             .replace("@MTAIL@", &mtail)
             .replace("@D_REQUEST@", &tr!("ベクタ一行を、リクエストのメッセージにする。", "One line of the vectors as the request message."))
+            .replace(
+                "@D_INT64@",
+                &tr!(
+                    "数はリクエストに int64 で入るので、64 ビットを越える整数は送れない。送る前に、隣の runner と同じ文で断る。",
+                    "A number goes in the request as an int64, so an integer past 64 bits cannot be sent: it is refused\n    before it would be, with the sentence the runner beside this one says of it."
+                ),
+            )
             .replace("@D_SERVE@", &tr!("WSGI の側を、標準ライブラリのサーバで、この同じプロセスの空いている番号に立てる。", "The WSGI side, on a free port in this same process, served by the standard library."))
             .replace("@D_ASGI@", &tr!("ASGI の側を uvicorn で立てる。ソケットはこちらで作って渡すので、どの番号になったかが分かる。\n    プロトコルに IPPROTO_TCP を書いて作るのは、asyncio が Nagle アルゴリズムを切るのが、そう作ったソケットだけだからである。", "The ASGI side, under uvicorn. The socket is bound here and handed over, so which port it took is known;\n    it is made with IPPROTO_TCP written in, as asyncio turns Nagle's algorithm off only on such a socket."))
     }
@@ -1582,6 +1590,13 @@ def _request(d: dict[str, Any]) -> @MSG_REQ@:
     kw: dict[str, Any] = {}
 @KW@
     return @MSG_REQ@(**kw)
+
+
+def _int64(v: int, past: str) -> int:
+    """@D_INT64@"""
+    if not -9223372036854775808 <= v <= 9223372036854775807:
+        raise m.RuleInputError(past, repr(v))
+    return v
 
 
 def _serve_asgi() -> str:

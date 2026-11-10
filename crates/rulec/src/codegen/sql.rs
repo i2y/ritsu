@@ -1247,7 +1247,7 @@ impl<'a> Gen<'a> {
                     _ => crate::door::not_integer(name),
                 };
                 let optional = if matches!(ty, Ty::Opt(_)) { "True" } else { "False" };
-                format!("{}: ({}, {}, {optional})", py(name), py(&crate::door::missing(name)), py(&wrong))
+                format!("{}: ({}, {}, {optional}, {})", py(name), py(&crate::door::missing(name)), py(&wrong), py(&crate::door::out_of_range(name)))
             })
             .collect::<Vec<_>>()
             .join(", ")
@@ -1343,7 +1343,8 @@ MACHINE = @MACHINE@
 CARRY = @CARRY@@MORE_DECL@
 INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
-# What the door says of each input: missing, of another kind, and whether it takes null.
+# What the door says of each input: missing, of another kind, whether it takes null, and past
+# what SQLite and PostgreSQL hold.
 SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
@@ -1382,11 +1383,11 @@ def _is_date(v: object) -> bool:
 
 def _read(d: object):
     """One case's inputs as the query takes them, or the sentence its door refuses it with: an
-    input not there, or of another kind (§15.204). What lies outside a range, a constraint and
-    the days is the query's own `_input_error` to say."""
+    input not there, of another kind (§15.204), or a number past int64 (§15.298). What lies
+    outside a range, a constraint and the days is the query's own `_input_error` to say."""
     vals = []
     for jp, _, k in INPUTS:
-        missing, wrong, optional = SAY[jp]
+        missing, wrong, optional, past = SAY[jp]
         if not isinstance(d, dict) or jp not in d or (d[jp] is None and not optional):
             return None, missing
         v = d[jp]
@@ -1399,6 +1400,10 @@ def _read(d: object):
                 v = d[jp] = int(v)
             if not isinstance(v, int) or isinstance(v, bool):
                 return None, wrong
+            # SQLite and PostgreSQL hold no integer past int64, so the query's own test never
+            # sees one: it is out of range here, as the reference evaluator says of it.
+            if not -9223372036854775808 <= v <= 9223372036854775807:
+                return None, past
             vals.append(v)
         elif k == "bool":
             if not isinstance(v, bool):
@@ -1526,7 +1531,8 @@ CARRY = @CARRY@@MORE_DECL@
 FN = "@ALIAS@"
 ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
 INPUTS = [@INPUTS@]
-# What the door says of each input: missing, of another kind, and whether it takes null.
+# What the door says of each input: missing, of another kind, whether it takes null, and past
+# what SQLite and PostgreSQL hold.
 SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
@@ -1576,11 +1582,11 @@ def _is_date(v: object) -> bool:
 
 def _read(d: object):
     """One case's inputs as the query takes them, or the sentence its door refuses it with: an
-    input not there, or of another kind (§15.204). What lies outside a range, a constraint and
-    the days is the query's own `_input_error` to say."""
+    input not there, of another kind (§15.204), or a number past int64 (§15.298). What lies
+    outside a range, a constraint and the days is the query's own `_input_error` to say."""
     vals = []
     for jp, _, k in INPUTS:
-        missing, wrong, optional = SAY[jp]
+        missing, wrong, optional, past = SAY[jp]
         if not isinstance(d, dict) or jp not in d or (d[jp] is None and not optional):
             return None, missing
         v = d[jp]
@@ -1593,6 +1599,10 @@ def _read(d: object):
                 v = d[jp] = int(v)
             if not isinstance(v, int) or isinstance(v, bool):
                 return None, wrong
+            # SQLite and PostgreSQL hold no integer past int64, so the query's own test never
+            # sees one: it is out of range here, as the reference evaluator says of it.
+            if not -9223372036854775808 <= v <= 9223372036854775807:
+                return None, past
             vals.append(v)
         elif k == "bool":
             if not isinstance(v, bool):

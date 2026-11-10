@@ -1,10 +1,11 @@
 //! The ends a door holds a number to (§15.295): each end its range writes, and on a side it writes
 //! none, the end of what its type holds, ±(2^63−1). The reference evaluator and the door of every
 //! generated language refuse the same values with the same sentence, held by `rulec test`; the
-//! vectors carry the one below a written lower end, the one above a written upper end, and for a
-//! number whose range writes no lower end, the least int64. A value past 2^63−1 reaches the door only
-//! in the languages whose integers have no end, and they refuse it too. A date is held to the day its
-//! range writes, and its reader holds it to the years 0001 to 9999.
+//! vectors carry the one below a written lower end, the one above a written upper end, and on a side
+//! the range writes no end, the one past what the type holds: the least int64 below, and 2^63 above.
+//! Every reader refuses a number past 64 bits as out of range, those of the languages that hold an
+//! int64 too (§15.298). A date is held to the day its range writes, and its reader holds it to the
+//! years 0001 to 9999.
 
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::Path;
@@ -100,7 +101,7 @@ const WALK_NONE: &str = "rule walk_none v1\n\
      sequence two\n| amount  |\n| 3000JPY |\n| 2500JPY |\n\n\
      sequence one\n| amount   |\n| -1200JPY |\n";
 
-/// Both ends written at the ends of the type: the one above 2^63−1 is no case, as no int64 holds it.
+/// Both ends written at the ends of the type: the cases past them are those past what the type holds.
 const AT_THE_ENDS: &str = "rule at_the_ends v1\n\
      description \"A fee whose amount is written to the ends of its type\"\n\n\
      inputs\n  amount : money[JPY]  range >=-9223372036854775807JPY <=9223372036854775807JPY\n\n\
@@ -146,9 +147,15 @@ fn rulec(dir: &Path, lang: &str, args: &[&str]) -> (i32, String, String) {
 }
 
 fn generate(dir: &Path, out: &Path, targets: &[&str], extras: &[&str]) {
+    let every: Vec<&str> = RULES.iter().map(|(alias, _)| *alias).collect();
+    generate_these(dir, out, &every, targets, extras);
+}
+
+/// `rulec gen` of the rules named, of those `write_rules` writes.
+fn generate_these(dir: &Path, out: &Path, aliases: &[&str], targets: &[&str], extras: &[&str]) {
     let o = out.to_string_lossy().into_owned();
     let mut args: Vec<String> = vec!["gen".into()];
-    args.extend(RULES.iter().map(|(alias, _)| format!("{alias}.rule")));
+    args.extend(aliases.iter().map(|alias| format!("{alias}.rule")));
     args.extend(["--out".into(), o]);
     for t in targets {
         args.extend(["--target".into(), t.to_string()]);
@@ -228,9 +235,9 @@ fn the_reference_door_holds_a_number_to_its_written_end_and_the_end_of_its_type(
 }
 
 /// The vectors carry the one past each end the door holds: below a written lower end, above a
-/// written upper end, and the least int64 below a number whose range writes no lower end, at an
-/// input and at a field of an element. No case goes past 2^63−1, which no int64 holds. A date has
-/// the day before the one its range writes, and no case at the end of a type.
+/// written upper end, and where the range writes no end or the end of the type, the least int64
+/// below and 2^63 above, at an input and at a field of an element. A date has the day before the
+/// one its range writes, and no case at the end of a type.
 #[test]
 fn the_vectors_carry_the_one_past_each_end_the_door_holds() {
     let t = TempDir::new("door-ends-vectors");
@@ -239,21 +246,23 @@ fn the_vectors_carry_the_one_past_each_end_the_door_holds() {
     generate(t.path(), &out, &["python"], &["vectors"]);
     let refused = |alias: &str| std::fs::read_to_string(out.join("vectors").join(format!("{alias}.refused.jsonl"))).unwrap();
     let least = r#"{"in":{"amount":-9223372036854775808},"refused":"input","error":"amount is out of range","why":"amount one below what its type holds"}"#;
+    let most = r#"{"in":{"amount":9223372036854775808},"refused":"input","error":"amount is out of range","why":"amount one above what its type holds"}"#;
 
     let r = refused("half_low");
     assert!(r.contains(r#"{"in":{"amount":-1},"refused":"input","error":"amount is out of range","why":"amount one below its range"}"#), "{r}");
-    assert!(!r.contains("what its type holds"), "{r}");
+    assert!(r.contains(most) && !r.contains("below what its type holds"), "{r}");
 
     let r = refused("half_high");
     assert!(r.contains(least), "{r}");
     assert!(r.contains(r#"{"in":{"amount":100001},"refused":"input","error":"amount is out of range","why":"amount one above its range"}"#), "{r}");
+    assert!(!r.contains("above what its type holds"), "{r}");
 
     let r = refused("no_range");
-    assert!(r.contains(least), "{r}");
-    assert!(!r.contains(":9223372036854775808"), "{r}");
+    assert!(r.contains(least) && r.contains(most), "{r}");
 
     let r = refused("opt_none");
     assert!(r.contains(r#"{"in":{"bonus":-9223372036854775808},"refused":"input","error":"bonus is out of range","why":"bonus one below what its type holds"}"#), "{r}");
+    assert!(r.contains(r#"{"in":{"bonus":9223372036854775808},"refused":"input","error":"bonus is out of range","why":"bonus one above what its type holds"}"#), "{r}");
 
     let r = refused("rate_half");
     assert!(r.contains(r#"{"in":{"r":-1},"refused":"input","error":"r is out of range","why":"r one below its range"}"#), "{r}");
@@ -262,12 +271,12 @@ fn the_vectors_carry_the_one_past_each_end_the_door_holds() {
     assert!(r.contains(r#""error":"amount is out of range","why":"amount one below its range, in an element of lines""#), "{r}");
     let r = refused("walk_none");
     assert!(r.contains(r#"{"in":{"lines":[{"amount":-9223372036854775808}]},"refused":"input","error":"amount is out of range","why":"amount one below what its type holds, in an element of lines"}"#), "{r}");
+    assert!(r.contains(r#"{"in":{"lines":[{"amount":9223372036854775808}]},"refused":"input","error":"amount is out of range","why":"amount one above what its type holds, in an element of lines"}"#), "{r}");
 
-    // Written at the ends of the type: the one below is the least int64, and the one above 2^63−1,
-    // which the vectors once carried as 2^63, is no case.
+    // Written at the ends of the type: the cases past them are those past what the type holds.
     let r = refused("at_the_ends");
-    assert!(r.contains(least), "{r}");
-    assert!(!r.contains(":9223372036854775808") && !r.contains("one above its range"), "{r}");
+    assert!(r.contains(least) && r.contains(most), "{r}");
+    assert!(!r.contains("one below its range") && !r.contains("one above its range"), "{r}");
     // The number that is not whole stays nearer zero than 2^52, where a float64 still holds the half.
     assert!(r.contains(r#"{"in":{"amount":-4503599627370495.5},"refused":"input","error":"amount is not an integer","why":"amount not a whole number"}"#), "{r}");
 
@@ -335,8 +344,8 @@ fn each_language_writes_the_ends_its_integers_need() {
 }
 
 /// Every language refuses what the reference evaluator refuses past each end — the vectors' one
-/// below a written lower end, one above a written upper end, and the least int64 where no lower end
-/// is written — with its sentence, held by `rulec test`, PostgreSQL's function among them when a
+/// below a written lower end, one above a written upper end, and the least int64 and 2^63 where no
+/// end is written — with its sentence, held by `rulec test`, PostgreSQL's function among them when a
 /// server answers. SQL and NumPy do not walk a sequence and are not generated for the two rules
 /// with elements.
 #[test]
@@ -360,21 +369,32 @@ fn every_language_refuses_past_each_end_as_the_reference_door_does() {
     println!("door ends: {} runs agreed: {}", ran.len(), ran.join(", "));
 }
 
-/// A number past 2^63−1, or below −(2^63−1) by more than one, reaches the door only where integers
-/// have no end — Python, NumPy, TypeScript, JavaScript and Ruby — and each refuses it as out of
-/// range, as the reference evaluator does. NumPy tests it before the cast to int64, which would
-/// have wrapped 2^63 to the least int64 and answered for it.
+/// A number past 64 bits — 2^63, 2^64−1, the most a UInt64 holds, 2^64, and the one below the least
+/// int64 — is out of range at every door, as the reference evaluator says of it (§15.298). The
+/// languages whose integers have no end hold it to the end of the type; the readers of the languages
+/// that hold an int64, which no such number fits, refuse it as they read it, and the runners of the
+/// query and of the function before they hand it on; the Connect runner refuses it before it builds
+/// a request, whose int64 cannot hold it. NumPy tests it before the cast to int64, which would have
+/// wrapped 2^63 to the least int64 and answered for it, and Swift's runner kept the low 64 bits of a
+/// UInt64 and answered for 2^64−1 as −1.
 #[test]
-fn the_languages_whose_integers_have_no_end_refuse_a_number_past_its_type() {
+fn every_door_refuses_a_number_past_64_bits_as_out_of_range() {
     if !ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not here") {
         return;
     }
     let t = TempDir::new("door-ends-wide");
     write_rules(t.path());
     let out = t.path().join("out");
-    generate(t.path(), &out, &["python", "numpy", "typescript", "javascript", "ruby"], &["runner", "vectors"]);
+    generate_these(
+        t.path(),
+        &out,
+        &["no_range", "half_low"],
+        &["python", "numpy", "typescript", "javascript", "rust", "ruby", "php", "go", "swift", "java", "sql", "wasm", "proto"],
+        &["runner", "mcp", "connect", "vectors"],
+    );
     let past = [
         r#"{"in":{"amount":9223372036854775808},"refused":"input","error":"amount is out of range","why":"2^63"}"#,
+        r#"{"in":{"amount":18446744073709551615},"refused":"input","error":"amount is out of range","why":"2^64-1, the most a UInt64 holds"}"#,
         r#"{"in":{"amount":18446744073709551616},"refused":"input","error":"amount is out of range","why":"2^64"}"#,
         r#"{"in":{"amount":-9223372036854775809},"refused":"input","error":"amount is out of range","why":"one below the least int64"}"#,
     ];
@@ -385,5 +405,5 @@ fn the_languages_whose_integers_have_no_end_refuse_a_number_past_its_type() {
     }
     let ran = agree(&out);
     assert!(ran.iter().any(|x| x.starts_with("no_range python/")), "Python did not run: {ran:?}");
-    println!("past the type: {} runs agreed: {}", ran.len(), ran.join(", "));
+    println!("past 64 bits: {} runs agreed: {}", ran.len(), ran.join(", "));
 }

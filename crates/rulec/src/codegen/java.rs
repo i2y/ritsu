@@ -1491,7 +1491,7 @@ impl<'a> Gen<'a> {
                     Ty::Bool => format!("b({v}, {})", java_str(&crate::door::not_bool(name))),
                     Ty::Date => format!("date({v}, {})", java_str(&crate::door::not_date(name))),
                     Ty::Str => format!("text({v}, {})", java_str(&crate::door::not_string(name))),
-                    _ => format!("integer({v}, {})", java_str(&crate::door::not_integer(name))),
+                    _ => format!("integer({v}, {}, {})", java_str(&crate::door::not_integer(name)), java_str(&crate::door::out_of_range(name))),
                 }
             };
             if optional {
@@ -1724,21 +1724,31 @@ const JAVA_WIRE: &str = r##"
     }
 
     // A JSON number whose value is a whole number, as that integer: `1000`, and `1000.0`, `1e3` or
-    // `-0.0` too (§15.205). A string keeps its quote, so `"12"` is not one, and neither is `1.5`
-    // or a value past 64 bits.
-    private static long integer(String v, String what) {
+    // `-0.0` too (§15.205). A string keeps its quote, so `"12"` is not one, and neither is `1.5`.
+    // A whole number past 64 bits is out of range, as the reference evaluator says of it (§15.298).
+    private static long integer(String v, String what, String past) {
         String digits = v.startsWith("-") ? v.substring(1) : v;
         if (digits.isEmpty() || digits.charAt(0) < '0' || digits.charAt(0) > '9') {
             throw new @CLS@.RuleInputError(what);
         }
+        java.math.BigDecimal d;
         try {
-            return new java.math.BigDecimal(v).longValueExact();
-        } catch (NumberFormatException | ArithmeticException e) {
-            // An exponent past an int: zero is still zero, and anything else does not fit.
+            d = new java.math.BigDecimal(v);
+        } catch (NumberFormatException e) {
+            // An exponent past an int: zero is still zero, a value with one far below zero has a
+            // fraction, and one far above zero is past 64 bits.
             if (v.matches("-?0+(\\.0+)?[eE][-+]?[0-9]+")) {
                 return 0;
             }
+            throw new @CLS@.RuleInputError(v.matches("-?[0-9]+(\\.[0-9]+)?[eE]\\+?[0-9]+") ? past : what);
+        }
+        if (d.scale() > 0 && d.signum() != 0 && d.stripTrailingZeros().scale() > 0) {
             throw new @CLS@.RuleInputError(what);
+        }
+        try {
+            return d.longValueExact();
+        } catch (ArithmeticException e) {
+            throw new @CLS@.RuleInputError(past);
         }
     }
 

@@ -1320,7 +1320,7 @@ impl<'a> Gen<'a> {
                     Ty::Bool => format!("_bool({v}, {})", php_str(&crate::door::not_bool(name))),
                     Ty::Date => format!("_date({v}, {})", php_str(&crate::door::not_date(name))),
                     Ty::Str => format!("_str({v}, {})", php_str(&crate::door::not_string(name))),
-                    _ => format!("_int({v}, {})", php_str(&crate::door::not_integer(name))),
+                    _ => format!("_int({v}, {}, {})", php_str(&crate::door::not_integer(name)), php_str(&crate::door::out_of_range(name))),
                 }
             };
             if optional {
@@ -1865,11 +1865,18 @@ function _take(mixed $d, string $k, string $missing, bool $optional = false): mi
     return $d[$k];
 }
 
-function _int(mixed $v, string $what): int
+function _int(mixed $v, string $what, string $past): int
 {
-    // A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer: as
-    // long as it is an int at all (§15.205). 2 ** 63 and past are not.
-    if (is_float($v) && is_finite($v) && floor($v) == $v && $v >= -9.2233720368547758E18 && $v < 9.2233720368547758E18) {
+    // A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer
+    // (§15.205). json_decode gives a whole number past 64 bits as a float, and that one is out
+    // of range, as the reference evaluator says of it (§15.298).
+    if (is_float($v)) {
+        if (is_finite($v) && floor($v) != $v) {
+            throw new \@NS@\RuleInputError($what);
+        }
+        if (!is_finite($v) || $v < -9.2233720368547758E18 || $v >= 9.2233720368547758E18) {
+            throw new \@NS@\RuleInputError($past);
+        }
         return (int) $v;
     }
     if (!is_int($v)) {

@@ -2476,16 +2476,17 @@ fn wrong_values(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Vec<(Jso
             let why = if *present == Ty::Rate { tr!("{name} を刻みに載らない値に", "{name} off its step") } else { tr!("{name} を整数でない数に", "{name} not a whole number") };
             out.push((Json::Frac(half), why));
             // The door holds the value to the end its range writes, and to the end of its type,
-            // ±(2^63−1), where the range writes none or one past it (§15.295). The one below the
-            // lower end is at least the least int64, so every language can be handed it; the one
-            // above 2^63−1 no int64 holds, and is left out.
+            // ±(2^63−1), where the range writes none or one past it (§15.295). The one past each
+            // end is a case: the least int64 below, and 2^63 above, which no int64 holds and every
+            // reader refuses as out of range (§15.298).
             let max = crate::door::WIRE_MAX;
             match lo_w {
                 Some(l) if l > -max => out.push((Json::Int(l - 1), tr!("{name} を範囲の下端の一つ下に", "{name} one below its range"))),
                 _ => out.push((Json::Int(-max - 1), tr!("{name} を型の持てる値の下端の一つ下に", "{name} one below what its type holds"))),
             }
-            if let Some(h) = hi_w.filter(|h| *h < max) {
-                out.push((Json::Int(h + 1), tr!("{name} を範囲の上端の一つ上に", "{name} one above its range")));
+            match hi_w {
+                Some(h) if h < max => out.push((Json::Int(h + 1), tr!("{name} を範囲の上端の一つ上に", "{name} one above its range"))),
+                _ => out.push((Json::Int(max + 1), tr!("{name} を型の持てる値の上端の一つ上に", "{name} one above what its type holds"))),
             }
         }
         Ty::Date => {
