@@ -487,6 +487,10 @@ pub struct Checked {
     /// The names E108 has stopped, so that what the code holds once one is worked out (`held`,
     /// §15.296) is not said of it a second time.
     pub(crate) overflowed: HashSet<String>,
+    /// E140 for an output whose range does not hold what it comes to, where that reads an end at
+    /// the end of its type and passes int64 (§15.299): E108 says it alone, and these are said only
+    /// for an output E108 has not stopped once every value is held to int64.
+    pub(crate) wait_e140: Vec<(String, crate::diag::Diag)>,
     /// The output `result` decides, with the range of what it comes to, when its line writes no
     /// range (§15.268): what the `result` reaches under the inputs' ranges and the constraints,
     /// put out to the grid of its rounding. The certificate's `ranges` and the port the other
@@ -1383,6 +1387,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         written: HashMap::new(),
         later: Vec::new(),
         overflowed: HashSet::new(),
+        wait_e140: Vec::new(),
         result_range: None,
         written_outputs: HashSet::new(),
         reaches: HashMap::new(),
@@ -2959,6 +2964,13 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // What the code holds once a value is worked out: a column at its scale, an output at the scale
     // it is rounded at (§15.296). Once the steps of the outputs are known.
     c.overflow_held(f, path);
+    // An output's range that does not hold what it comes to, past int64 from an end read at the end
+    // of its type, is E108's to say (§15.299); said here only where E108 has not stopped it.
+    for (name, d) in std::mem::take(&mut c.wait_e140) {
+        if !c.overflowed.contains(&name) {
+            c.diags.push(d);
+        }
+    }
     // A name of the rule's that its generated code writes as one it gives itself, or that a
     // language cannot take (§15.265): what the generated code reads is worked out from the types
     // and the tables, which are all there now.
@@ -3512,47 +3524,79 @@ impl Checked {
                         }
                         let arg = &args[0];
                         let text = crate::region::expr_text(arg);
-                        let found = self.interval(arg, &t);
+                        // An end a range does not write is read as the end of what the type holds, as
+                        // E108 reads it (§15.294, §15.299): the entry of the generated code holds every
+                        // input to those ends, so `isqrt(max(x, 0))` passes where `x` has no range.
+                        let found = self.reach(arg, &t);
                         let below = match found {
                             Some((lo, _)) => lo.num < 0,
                             None => true,
                         };
+                        let open = self.open_of(arg, &t);
                         if below && t != Ty::Unknown {
                             let mark = match found {
                                 Some((lo, hi)) => tr!("とりうる値は {} から {} で、負の値を含みます", "it ranges from {} to {}, below zero included", fmt_val(lo, &t), fmt_val(hi, &t)),
                                 None => tr!("範囲の決まらない値を読んでいます", "it reads a value with no range"),
                             };
+                            let mut d = Diag::error("E139", tr!("`isqrt` の引数 {text} が負になりえます", "The argument {text} of `isqrt` can be below zero"))
+                                .at(format!("{path}:{}", sp.line))
+                                .mark(arg.span().clone(), mark);
+                            if let (Some(_), Some(o)) = (found, &open) {
+                                d = d.note(o.read());
+                            }
+                            // An argument already raised to zero by a `max` is not raised a second time
+                            // (§15.299): what stops it is a value with no interval, not the floor.
+                            let hint = match floored(arg, &t, |v| v.num >= 0, "0") {
+                                Some(f) => tr!(
+                                    "ヒント: 引数の範囲を 0 以上に狭めるか、`{f}` のように 0 以上にしてから渡してください。",
+                                    "Hint: narrow the ranges so that the argument stays at zero or more, or pass `{f}`."
+                                ),
+                                None => tr!("ヒント: 引数の範囲を 0 以上に狭めてください。", "Hint: narrow the ranges so that the argument stays at zero or more."),
+                            };
                             self.diags.push(
-                                Diag::error("E139", tr!("`isqrt` の引数 {text} が負になりえます", "The argument {text} of `isqrt` can be below zero"))
-                                    .at(format!("{path}:{}", sp.line))
-                                    .mark(arg.span().clone(), mark)
-                                    .note(tr!(
-                                        "負の数に平方根はありません。生成コードは、その呼び出しで答えを持ちません。rulec は、引数が 0 以上だと範囲から示せた `isqrt` だけを通します。",
-                                        "A number below zero has no square root, and the generated code would have no answer on that call. rulec passes an `isqrt` only where the ranges show its argument is zero or more."
-                                    ))
-                                    .note(tr!(
-                                        "ヒント: 引数の範囲を 0 以上に狭めるか、`max({text}, 0)` のように 0 以上にしてから渡してください。",
-                                        "Hint: narrow the ranges so that the argument stays at zero or more, or pass `max({text}, 0)`."
-                                    )),
+                                d.note(tr!(
+                                    "負の数に平方根はありません。生成コードは、その呼び出しで答えを持ちません。rulec は、引数が 0 以上だと範囲から示せた `isqrt` だけを通します。",
+                                    "A number below zero has no square root, and the generated code would have no answer on that call. rulec passes an `isqrt` only where the ranges show its argument is zero or more."
+                                ))
+                                .note(hint),
                             );
                             self.arith_witness.push(Witnessed { code: "E139", span: arg.span().clone(), expr: arg.clone() });
                         }
                         if let (Some((lo, hi)), Some(sc)) = (found, self.scale(arg)) {
-                            let mag = magnitude_of(lo, hi).mul(Rat::int(sc));
-                            let stored = mag.num / mag.den;
-                            if stored > i64::MAX as i128 {
-                                self.diags.push(
-                                    Diag::error("E108", tr!("`isqrt` の引数が int64 に収まることを証明できません", "Cannot prove that the argument of `isqrt` fits in int64"))
-                                        .at(format!("{path}:{}", sp.line))
-                                        .mark(arg.span().clone(), "")
-                                        .note(tr!(
-                                            "とりうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。冪は掛け算で書くので、`n * n * n` のような積は速く大きくなります。",
-                                            "It ranges from {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}. A power is written as a product, and a product such as `n * n * n` grows fast.",
-                                            fmt_val(lo, &t),
-                                            fmt_val(hi, &t)
+                            let stored = stored_at(magnitude_of(lo, hi), sc);
+                            if stored.is_none_or(|s| s > i64::MAX as i128) {
+                                let mut d = Diag::error("E108", tr!("`isqrt` の引数が int64 に収まることを証明できません", "Cannot prove that the argument of `isqrt` fits in int64"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(arg.span().clone(), "");
+                                d = match open {
+                                    Some(o) => {
+                                        let (list, has) = (&o.list, o.has);
+                                        d.note(tr!(
+                                            "{list} の範囲に上限か下限がありません。書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、引数を刻み 1/{sc} で持つ整数は int64 を越えることがあります。",
+                                            "{list} {has} no upper or no lower bound. An end that is not written is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), and from there the argument, held on the step of 1/{sc}, can pass int64."
                                         ))
-                                        .note(tr!("ヒント: 入力の範囲を狭めてください。", "Hint: narrow the input ranges.")),
-                                );
+                                        .note(o.hint())
+                                    }
+                                    None => {
+                                        let reach = if cmp_exact(magnitude_of(lo, hi), Rat::int(FAR)).is_ge() {
+                                            tr!("とりうる値は ±2^80 を越え、どの刻みで数えても int64 に収まりません。", "It passes ±2^80, which fits int64 on no step.")
+                                        } else {
+                                            tr!(
+                                                "とりうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {} になります。",
+                                                "It ranges from {} to {} and the step is 1/{sc}, so the stored integer reaches {}.",
+                                                fmt_val(lo, &t),
+                                                fmt_val(hi, &t),
+                                                fmt_stored(stored)
+                                            )
+                                        };
+                                        d.note(tr!(
+                                            "{reach}冪は掛け算で書くので、`n * n * n` のような積は速く大きくなります。",
+                                            "{reach} A power is written as a product, and a product such as `n * n * n` grows fast."
+                                        ))
+                                        .note(tr!("ヒント: 入力の範囲を狭めてください。", "Hint: narrow the input ranges."))
+                                    }
+                                };
+                                self.diags.push(d);
                             }
                         }
                         Ty::Number
@@ -3766,27 +3810,45 @@ impl Checked {
         if dt == Ty::Unknown {
             return answer;
         }
-        // E132: the divisor stays off zero over every value its ranges allow.
+        // E132: the divisor stays off zero over every value its ranges allow. An end a range does
+        // not write is read as the end of what the type holds, as E108 reads it (§15.294, §15.299):
+        // the entry of the generated code holds every input to those ends, so `max(units, 1)`
+        // passes where `units` writes no upper end.
         let text = crate::region::expr_text(d);
-        let reach = self.interval(d, &dt);
+        let reach = self.reach(d, &dt);
         let mark = match reach {
             Some((lo, hi)) if (lo.num > 0 && hi.num > 0) || (lo.num < 0 && hi.num < 0) => None,
             Some((lo, hi)) => Some(tr!("とりうる値は {} から {} で、0 を含みます", "it ranges from {} to {}, zero included", fmt_val(lo, &dt), fmt_val(hi, &dt))),
             None => Some(tr!("範囲の決まらない値を読んでいます", "it reads a value with no range")),
         };
         if let Some(mark) = mark {
+            let mut e = Diag::error("E132", tr!("割る数 {text} が 0 になりえます", "The divisor {text} can be zero"))
+                .at(format!("{path}:{}", sp.line))
+                .mark(d.span().clone(), mark);
+            if let (Some(_), Some(o)) = (reach, self.open_of(d, &dt)) {
+                e = e.note(o.read());
+            }
+            // A divisor that a `max` already keeps above zero is not wrapped in a second one
+            // (§15.299): what stops it is a value with no interval, not the floor. The floor is
+            // written in the divisor's own unit, for `max(price, 1)` is E103 where `price` is an
+            // amount.
+            let one = unit_one(&dt);
+            let hint = match floored(d, &dt, |v| v.num > 0, &one) {
+                Some(f) => tr!(
+                    "ヒント: 割る数の範囲を 0 を含まないように狭めるか、`{f}` のように {one} 以上にしてから割るか、0 のときに別の値を選ぶ表を置いて、その表の出力で割ってください。",
+                    "Hint: narrow the ranges so that the divisor cannot be zero, divide by `{f}`, or put a table that picks another value when it is zero and divide by that table's output."
+                ),
+                None => tr!(
+                    "ヒント: 割る数の範囲を 0 を含まないように狭めるか、0 のときに別の値を選ぶ表を置いて、その表の出力で割ってください。",
+                    "Hint: narrow the ranges so that the divisor cannot be zero, or put a table that picks another value when it is zero and divide by that table's output."
+                ),
+            };
             self.diags.push(
-                Diag::error("E132", tr!("割る数 {text} が 0 になりえます", "The divisor {text} can be zero"))
-                    .at(format!("{path}:{}", sp.line))
-                    .mark(d.span().clone(), mark)
-                    .note(tr!(
-                        "0 で割った答えは決まっていません。生成コードはその呼び出しで止まります。rulec は、割る数が 0 にならないと範囲から示せた割り算だけを通します。",
-                        "Dividing by zero has no answer, and the generated code would stop on that call. rulec passes a division only where the ranges show its divisor is never zero."
-                    ))
-                    .note(tr!(
-                        "ヒント: 割る数の範囲を 0 を含まないように狭めるか、`max({text}, 1)` のように 1 以上にしてから割るか、0 のときに別の値を選ぶ表を置いて、その表の出力で割ってください。",
-                        "Hint: narrow the ranges so that the divisor cannot be zero, divide by `max({text}, 1)`, or put a table that picks another value when it is zero and divide by that table's output."
-                    )),
+                e.note(tr!(
+                    "0 で割った答えは決まっていません。生成コードはその呼び出しで止まります。rulec は、割る数が 0 にならないと範囲から示せた割り算だけを通します。",
+                    "Dividing by zero has no answer, and the generated code would stop on that call. rulec passes a division only where the ranges show its divisor is never zero."
+                ))
+                .note(hint),
             );
             self.arith_witness.push(Witnessed { code: "E132", span: d.span().clone(), expr: d.clone() });
             return answer;
@@ -3800,22 +3862,42 @@ impl Checked {
                 (tr!("割られる数", "the dividend"), nl, nh, sn, ka, n, &nt),
                 (tr!("割る数", "the divisor"), dl, dh, sd, kb, d, &dt),
             ] {
-                let stored = magnitude_of(lo, hi).mul(Rat::int(s)).mul(Rat::int(k));
-                let stored = stored.num / stored.den;
-                if stored > i64::MAX as i128 {
-                    self.diags.push(
-                        Diag::error("E108", tr!("`{name}` の{what}が int64 に収まることを証明できません", "Cannot prove that {what} in `{name}` fits in int64"))
-                            .at(format!("{path}:{}", sp.line))
-                            .mark(e.span().clone(), "")
-                            .note(tr!(
-                                "とりうる値は {} から {} で、刻みをそろえて割るので、格納される整数は最大 {stored} になります。",
-                                "It ranges from {} to {}, and the two are brought to one step before the division, so the stored integer reaches {stored}.",
-                                fmt_val(lo, t),
-                                fmt_val(hi, t)
-                            ))
-                            .note(tr!("ヒント: 入力の範囲を狭めるか、丸めの刻みを粗くしてください。", "Hint: narrow the input ranges, or round to a coarser grid.")),
-                    );
+                // Past 128 bits is past int64 too: an end held at ±2^80 brought to a fine step
+                // wrapped the product and could come out small (§15.299).
+                let stored = s.checked_mul(k).and_then(|sk| stored_at(magnitude_of(lo, hi), sk));
+                if stored.is_some_and(|v| v <= i64::MAX as i128) {
+                    continue;
                 }
+                let mut diag = Diag::error("E108", tr!("`{name}` の{what}が int64 に収まることを証明できません", "Cannot prove that {what} in `{name}` fits in int64"))
+                    .at(format!("{path}:{}", sp.line))
+                    .mark(e.span().clone(), "");
+                // A side that reads a name whose range leaves an end unwritten names it, as E108
+                // does for a value (§15.294), rather than the ends of int64 no one wrote.
+                diag = match self.open_of(e, t) {
+                    Some(o) => {
+                        let (list, has) = (&o.list, o.has);
+                        diag.note(tr!(
+                            "{list} の範囲に上限か下限がありません。書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、{what}を、割る前に刻みをそろえて持つ整数は int64 を越えることがあります。",
+                            "{list} {has} no upper or no lower bound. An end that is not written is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), and from there {what}, brought to one step with the other before the division, can pass int64."
+                        ))
+                        .note(o.hint())
+                    }
+                    None => {
+                        let reach = if cmp_exact(magnitude_of(lo, hi), Rat::int(FAR)).is_ge() {
+                            tr!("とりうる値は ±2^80 を越え、どの刻みで数えても int64 に収まりません。", "It passes ±2^80, which fits int64 on no step.")
+                        } else {
+                            tr!(
+                                "とりうる値は {} から {} で、刻みをそろえて割るので、格納される整数は最大 {} になります。",
+                                "It ranges from {} to {}, and the two are brought to one step before the division, so the stored integer reaches {}.",
+                                fmt_val(lo, t),
+                                fmt_val(hi, t),
+                                fmt_stored(stored)
+                            )
+                        };
+                        diag.note(reach).note(tr!("ヒント: 入力の範囲を狭めるか、丸めの刻みを粗くしてください。", "Hint: narrow the input ranges, or round to a coarser grid."))
+                    }
+                };
+                self.diags.push(diag);
             }
         }
         answer
@@ -4896,35 +4978,49 @@ impl Checked {
         // the fold answers with, so the hull of theirs, as a declared range bounds a `sum`.
         // Without it a `define` over the answer had no interval, and its int64 claim was never
         // made. Only an answer something reads gets one, so a rule whose fold answers its first
-        // output and nothing more keeps the certificate it had.
+        // output and nothing more keeps the certificate it had — and an output whose line writes a
+        // range, which E140 holds to what decides it (§15.299): 0.50.0 had nothing to hold it to,
+        // and stopped every such range as one it could not check.
         if let Some(name) = fold.answer_name(f) {
             let read = f.items.iter().any(|it| item_reads(it).iter().any(|n| n == name))
                 || f.result.as_ref().is_some_and(|r| {
                     let mut ns = Vec::new();
                     collect_names(&r.expr, &mut ns);
                     ns.iter().any(|n| n == name)
-                });
+                })
+                || f.outputs.iter().any(|o| o.name.text == name && o.range.is_some());
             let ty = self.syms.get(name).map(|s| s.ty.present().clone()).unwrap_or(Ty::Unknown);
             if read && (ty.is_numeric() || ty == Ty::Date) {
-                let mut hull: Option<(Rat, Rat)> = None;
-                let mut known = true;
-                for e in fold.answer_values() {
-                    let iv = match e {
-                        Expr::Lit(Lit::Date(y, m, d), _) => Some((date_ord(*y, *m, *d), date_ord(*y, *m, *d))),
-                        _ => self.interval(e, &ty),
-                    };
-                    match iv {
-                        Some((lo, hi)) => {
-                            hull = Some(match hull {
-                                None => (lo, hi),
-                                Some((a, b)) => (crate::grid::min_rat(a, lo), crate::grid::max_rat(b, hi)),
-                            });
-                        }
-                        None => known = false,
+                // The hull of what the fold answers with, each value read as `read` reads it.
+                let hull_of = |s: &Self, read: &dyn Fn(&Self, &Expr) -> Option<(Rat, Rat)>| {
+                    let mut hull: Option<(Rat, Rat)> = None;
+                    for e in fold.answer_values() {
+                        let (lo, hi) = match e {
+                            Expr::Lit(Lit::Date(y, m, d), _) => (date_ord(*y, *m, *d), date_ord(*y, *m, *d)),
+                            _ => read(s, e)?,
+                        };
+                        hull = Some(match hull {
+                            None => (lo, hi),
+                            Some((a, b)) => (crate::grid::min_rat(a, lo), crate::grid::max_rat(b, hi)),
+                        });
                     }
-                }
-                if let (true, Some((lo, hi))) = (known, hull) {
+                    hull
+                };
+                if let Some((lo, hi)) = hull_of(self, &|s, e| s.interval(e, &ty)) {
                     self.ranges.insert(name.to_string(), (Some(lo), Some(hi)));
+                } else if let Some(w) = hull_of(self, &|s, e| s.reach(e, &ty)) {
+                    // A value it answers with reads an end no range writes (§15.299): the hull with
+                    // that end read as the end of the type, as a column a table writes numbers into
+                    // is read. Its range stays unwritten; the int64 claim, the divisors and the
+                    // ranges of what reads it read the hull, and the hint of E108 follows the names
+                    // its values read.
+                    self.wide.insert(name.to_string(), w);
+                    let mut names = Vec::new();
+                    for e in fold.answer_values() {
+                        collect_names(e, &mut names);
+                    }
+                    names.retain(|n| n != crate::kw::HELD);
+                    self.written.insert(name.to_string(), names);
                 }
             }
         }
@@ -7244,27 +7340,48 @@ impl Checked {
             // checks cut its axis on the declared step, every value a contribution may bring.
             self.grids.insert(name.clone(), Rat::new(1, dsc.max(1)));
         }
-        if let (Some((lo, hi)), (Some(dl), Some(dh))) = (self.interval(e, ty), declared) {
-            if lo.cmp_to(dl) == std::cmp::Ordering::Less || hi.cmp_to(dh) == std::cmp::Ordering::Greater {
+        // A term whose range leaves an end unwritten is read with that end at the end of its type,
+        // as E108 reads it (§15.299). 0.50.0 held such a value to nothing, and the tables below and
+        // what reads the value read it inside the range it declares, which a `max` of a term with
+        // no upper bound leaves.
+        // An end the value's own range does not write is the end of its type, which E108 holds it
+        // to; the ends it writes are held here. 0.50.0 held only a range with both ends, and a
+        // `combine min` with a term below zero passed `range >=0USD`.
+        let reach = self.reach(e, ty);
+        let (dl, dh) = declared;
+        if let Some((lo, hi)) = reach {
+            if dl.is_some_and(|dl| lo.cmp_to(dl) == std::cmp::Ordering::Less) || dh.is_some_and(|dh| hi.cmp_to(dh) == std::cmp::Ordering::Greater) {
                 let show = |r: Rat| fmt_val(r, ty);
+                let far = type_ends(ty, self.scale(e).unwrap_or(1));
+                let end = |v: Option<Rat>, at: fn((Rat, Rat)) -> Rat| v.or(far.map(at)).map(show).unwrap_or_default();
+                let open = self.open_of(e, ty);
                 let mut d = Diag::error("E131", tr!("開いた値 {name} が、宣言した範囲を出ることがあります", "The open value {name} can leave the range it declares"))
                     .at(at(&o.span))
-                    .mark(o.span.clone(), tr!("範囲: {} 〜 {}", "range: {} .. {}", show(dl), show(dh)))
+                    .mark(o.span.clone(), tr!("範囲: {} 〜 {}", "range: {} .. {}", end(dl, |f| f.0), end(dh, |f| f.1)))
                     .note(tr!("項を合わせた値は {} 〜 {} になりえます。", "Its terms together come to {} .. {}.", show(lo), show(hi)));
                 for t in &o.terms {
-                    let Some((tl, th)) = self.ranges.get(&t.name.text).and_then(|(a, b)| a.zip(*b)) else { continue };
+                    let term = Expr::Name(t.name.text.clone(), t.name.span.clone());
+                    let Some((tl, th)) = self.reach(&term, ty) else { continue };
                     let whose = match &t.from {
                         Some((c, file)) => tr!("寄与 {c}（{file}）", "contribution {c} ({file})"),
                         None => tr!("この規則", "this rule"),
                     };
                     d = d.note(tr!("  {}: {} 〜 {}（{whose}）", "  {}: {} .. {} ({whose})", t.name.text, show(tl), show(th)));
                 }
-                self.diags.push(
-                    d.note(tr!(
-                        "範囲は、どの寄与を合わせても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されています。範囲を広げるか（下の表がその範囲で検査し直されます）、寄与が足す項を狭めてください。どちらにするかは業務の判断です。",
-                        "The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision."
-                    )),
-                );
+                let own = (dl.is_none() || dh.is_none()).then(|| {
+                    tr!(
+                        "{name} の範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。",
+                        "The end the range of {name} does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way)."
+                    )
+                });
+                d = d.maybe_note(own).maybe_note(open.as_ref().map(Open::read)).note(tr!(
+                    "範囲は、どの寄与を合わせても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されています。範囲を広げるか（下の表がその範囲で検査し直されます）、寄与が足す項を狭めてください。どちらにするかは業務の判断です。",
+                    "The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision."
+                ));
+                if let Some(o) = &open {
+                    d = d.note(o.hint());
+                }
+                self.diags.push(d);
                 self.arith_witness.push(Witnessed { code: "E131", span: o.span.clone(), expr: e.clone() });
             }
         }
@@ -7286,7 +7403,10 @@ impl Checked {
         let show = |r: Rat| fmt_val(r, ty);
         let name = &o.name.text;
         for t in &o.terms {
-            let Some((lo, hi)) = self.interval(&Expr::Name(t.name.text.clone(), t.name.span.clone()), ty) else { continue };
+            // An end the term's range does not write is read as the end of its type (§15.299): a
+            // term written `<=10USD` under a `max` from 50USD changes nothing, whatever its lower end.
+            let term = Expr::Name(t.name.text.clone(), t.name.span.clone());
+            let Some((lo, hi)) = self.reach(&term, ty) else { continue };
             let one = Rat::int(1);
             let zero = Rat::int(0);
             let label = match (how, empty) {
@@ -7410,9 +7530,12 @@ impl Checked {
     /// under the inputs' ranges and the constraints — put out to the grid of its rounding, as a
     /// rounded value's interval is, whichever way the mode rounds. A range written on the output's
     /// line has to hold that, and is then the output's range, its ends where it writes them and
-    /// that interval's where it does not, as a written range of a `max` is (§15.219). Where nothing
-    /// says what the output comes to, the range cannot be checked, and is not taken on trust. The
-    /// output `result` decides keeps the interval as its range when its line writes none.
+    /// that interval's where it does not, as a written range of a `max` is (§15.219). What decides
+    /// it is read with an end no range writes read as the end of the type, as E108 reads it
+    /// (§15.299); the end the output's range takes from that interval is then left unwritten too.
+    /// Where nothing says what the output comes to, the range cannot be checked, and is not taken
+    /// on trust. The output `result` decides keeps the interval as its range when its line writes
+    /// none.
     fn output_ranges(&mut self, f: &RuleFile, path: &str) {
         for o in &f.outputs {
             let name = o.name.text.clone();
@@ -7426,13 +7549,36 @@ impl Checked {
                     _ => None,
                 },
             };
-            let reach = decided.map(|(lo, hi)| match self.roundings.get(&name) {
+            // The same, an end no range writes read as the end of the type: what the written range
+            // is held to. The names whose ends it reads so, for the message.
+            // Only where such an end is why the arithmetic has no interval ([`Checked::reach`]): an
+            // output that reads a value another error stopped is that error's to say.
+            let (wide, open) = match (decided, by_result) {
+                (Some(d), _) => (Some(d), None),
+                (None, Some(r)) => (self.reach(&r.expr, &inner), self.open_of(&r.expr, &inner)),
+                (None, None) => {
+                    // The hull of what the rows, the `define` or the fold that decide it write; or
+                    // the range a walk declares, an end it does not write at the end of the type.
+                    let open = self.open_of(&Expr::Name(name.clone(), o.name.span.clone()), &inner);
+                    let w = open.as_ref().and_then(|_| {
+                        self.wide.get(&name).copied().or_else(|| {
+                            let (lo, hi) = *self.ranges.get(&name)?;
+                            let (first, last) = type_ends(&inner, *self.scales.get(&name).unwrap_or(&1))?;
+                            Some((lo.unwrap_or(first), hi.unwrap_or(last)))
+                        })
+                    });
+                    (w, open)
+                }
+            };
+            let out_to_grid = |(lo, hi): (Rat, Rat)| match self.roundings.get(&name) {
                 Some((_, g)) if g.num > 0 => match round_out((Some(lo), Some(hi)), *g) {
                     (Some(l), Some(h)) => (l, h),
                     _ => (lo, hi),
                 },
                 _ => (lo, hi),
-            });
+            };
+            let reach = decided.map(out_to_grid);
+            let wide = wide.map(out_to_grid);
             let numeric = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number);
             if let Some(r) = reach.filter(|_| numeric) {
                 self.reaches.insert(name.clone(), r);
@@ -7457,21 +7603,23 @@ impl Checked {
             if !bad.is_empty() || empty_range(rg, &inner, String::new(), true).is_some() {
                 continue;
             }
-            let Some((lo, hi)) = reach.filter(|_| numeric) else {
+            let Some((lo, hi)) = wide.filter(|_| numeric) else {
                 // Another error can be why what the output comes to is not known (an `allocate`
                 // E117 turns away has no interval): that one is to be fixed first, and this one
                 // would only repeat it.
                 if numeric && self.diags.iter().any(|d| matches!(d.severity, crate::diag::Severity::Error)) {
                     continue;
                 }
+                // An input with no range is read at the ends of its type (§15.299), so what is left
+                // unknown is a value the arithmetic has no interval for.
                 let (why, fix) = if numeric {
                     let what = if by_result.is_some() { tr!("`result` の式", "its `result`") } else { tr!("それを決める表の行", "the rows that decide it") };
                     (
                         tr!(
-                            "rulec は、{what}から {name} のとる値の範囲を求められませんでした。範囲の無い入力か、範囲の分からない値を読んでいます。",
-                            "rulec cannot work out what {name} takes from {what}: it reads an input with no range, or a value whose range is not known."
+                            "rulec は、{what}から {name} のとる値の範囲を求められませんでした。範囲の分からない値を読んでいます。",
+                            "rulec cannot work out what {name} takes from {what}: it reads a value whose range is not known."
                         ),
-                        tr!("読む入力に範囲を書くか、この範囲を外してください。", "Give the inputs it reads a range, or take this range off."),
+                        tr!("この範囲を外してください。", "Take this range off."),
                     )
                 } else {
                     (
@@ -7509,7 +7657,11 @@ impl Checked {
             });
             if holds {
                 self.written_outputs.insert(name.clone());
-                self.ranges.insert(name, (dl.or(Some(lo)), dh.or(Some(hi))));
+                // An end the range does not write is the interval's where the ranges it reads write
+                // theirs, and stays unwritten where one of them is read at the end of the type
+                // (§15.299), as the range of a value keeps the ends the rule writes (§15.294).
+                let (rl, rh) = reach.map_or((None, None), |(a, b)| (Some(a), Some(b)));
+                self.ranges.insert(name, (dl.or(rl), dh.or(rh)));
                 continue;
             }
             let how = if by_result.is_some() {
@@ -7523,25 +7675,46 @@ impl Checked {
                     "{name} takes the values of what decides it — the cells of a table's rows, a `define` of its name, a line that walks a sequence — put out to the grid of its rounding."
                 )
             };
-            self.diags.push(
-                Diag::error("E140", tr!("出力 {name} の範囲が、とりうる値を含んでいません", "The range of the output {name} does not hold the values it can take"))
-                    .at(at)
-                    .fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(lo, &inner), fmt_val_fixed(hi, &inner)))
-                    .mark(rg.span.clone(), tr!("とりうる値は >={} <={} です", "it can take >={} <={}", fmt_val(lo, &inner), fmt_val(hi, &inner)))
-                    .note(how)
-                    .note(tr!(
-                        "出力の範囲は、ほかの言語が規則の答えを読む範囲です。狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
-                        "An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns."
-                    )),
-            );
+            let mut d = Diag::error("E140", tr!("出力 {name} の範囲が、とりうる値を含んでいません", "The range of the output {name} does not hold the values it can take")).at(at);
+            // An interval with an end read at the end of the type is not one to widen the range
+            // to: the names it reads say where it comes from (§15.299).
+            if open.is_none() {
+                d = d.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(lo, &inner), fmt_val_fixed(hi, &inner)));
+            }
+            d = d
+                .mark(rg.span.clone(), tr!("とりうる値は >={} <={} です", "it can take >={} <={}", fmt_val(lo, &inner), fmt_val(hi, &inner)))
+                .note(how)
+                .maybe_note(open.as_ref().map(Open::read))
+                .note(tr!(
+                    "出力の範囲は、ほかの言語が規則の答えを読む範囲です。狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
+                    "An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns."
+                ));
+            if let Some(o) = &open {
+                d = d.note(o.widen_hint());
+                // What passes int64 from there is E108's to say, once every value is held to it.
+                let sc = match by_result {
+                    Some(r) => self.scale(&r.expr),
+                    None => self.scales.get(&name).copied(),
+                };
+                if !sc.and_then(|sc| stored_at(magnitude_of(lo, hi), sc)).is_some_and(|s| s <= i64::MAX as i128) {
+                    self.wait_e140.push((name, d));
+                    continue;
+                }
+            }
+            self.diags.push(d);
         }
     }
 
     /// E112: the declared range must contain the reachable interval obtained by interval
     /// arithmetic over the input ranges. Otherwise the completeness check answers "complete"
     /// without ever seeing the values that actually occur.
+    /// An end an input's range does not write is read as the end of its type, as E108 reads it
+    /// (§15.299): 0.50.0 held a `derive` that reads one to nothing, and the tables over it were
+    /// checked inside the range it declares. One that passes int64 that way is E108's to say.
     fn derived_range(&mut self, d: &DerivedDecl, ty: &Ty, path: &str) {
-        let Some((rl, rh)) = self.interval(&d.expr, ty) else { return };
+        let narrow = self.interval(&d.expr, ty);
+        let Some((rl, rh)) = self.reach(&d.expr, ty) else { return };
+        let open = if narrow.is_none() { self.open_of(&d.expr, ty) } else { None };
         let Some(rg) = &d.range else { return };
         let ((dl, dh), bad) = bounds_of(rg, ty);
         for n in bad {
@@ -7552,25 +7725,33 @@ impl Checked {
                     .maybe_note(unit_note(&n)),
             );
         }
+        let fits = || self.scale(&d.expr).and_then(|sc| stored_at(magnitude_of(rl, rh), sc)).is_some_and(|s| s <= i64::MAX as i128);
+        if narrow.is_none() && !fits() {
+            return;
+        }
         let too_low = matches!((dl, Some(rl)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Less);
         let too_high = matches!((dh, Some(rh)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Greater);
         if too_low || too_high {
-            self.diags.push(
-                Diag::error("E112", tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of the derived value does not contain the values it can actually reach"))
-                    .at(tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", rg.span.line, d.name.text))
-                    .fix(
-                        crate::diag::FixKind::WidenRange,
-                        format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(rl, ty), fmt_val_fixed(rh, ty)),
-                    )
-                    .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
-                    .note(tr!("範囲が狭いと、完全性の検査は、実際に起きる値を見ないまま「完全」と判定します。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
-                    .note(tr!(
-                        "ヒント: 範囲 >={} <={} に広げてください。起こりえない値まで広げても、検査はその分を除いて調べるので、害はありません。",
-                        "Hint: widen the range to >={} <={}. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
-                        fmt_val(rl, ty),
-                        fmt_val(rh, ty)
-                    )),
-            );
+            let mut e = Diag::error("E112", tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of the derived value does not contain the values it can actually reach"))
+                .at(tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", rg.span.line, d.name.text));
+            // An interval with an end read at the end of the type is not one to widen the range to.
+            if open.is_none() {
+                e = e.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(rl, ty), fmt_val_fixed(rh, ty)));
+            }
+            e = e
+                .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
+                .maybe_note(open.as_ref().map(Open::read))
+                .note(tr!("範囲が狭いと、完全性の検査は、実際に起きる値を見ないまま「完全」と判定します。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."));
+            e = match &open {
+                Some(o) => e.note(o.widen_hint()),
+                None => e.note(tr!(
+                    "ヒント: 範囲 >={} <={} に広げてください。起こりえない値まで広げても、検査はその分を除いて調べるので、害はありません。",
+                    "Hint: widen the range to >={} <={}. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
+                    fmt_val(rl, ty),
+                    fmt_val(rh, ty)
+                )),
+            };
+            self.diags.push(e);
         }
     }
 
@@ -7631,12 +7812,6 @@ impl Checked {
             return Some((lo, hi));
         }
         let sym = self.syms.get(n)?;
-        // An output read above the line that decides it (a second walk reads what the first
-        // answers, §15.219): what decides it is not checked yet, so nothing is read into it, as
-        // `interval` reads nothing.
-        if sym.kind == SymKind::Output {
-            return None;
-        }
         let ty = sym.ty.present().clone();
         let (first, last) = type_ends(&ty, *self.scales.get(n).unwrap_or(&1))?;
         // A value E108 has stopped is read at the ends of its type, as one that passed would be, so
@@ -7647,6 +7822,13 @@ impl Checked {
                 crate::grid::min_rat(h, last),
             ))
         };
+        // An output read above the line that decides it (a second walk reads what the first
+        // answers, §15.219): what decides it is not checked yet, so nothing is read into it, as
+        // `interval` reads nothing. Below its fold, the answer of a fold is the hull of what it
+        // answers with, an end no range writes read as the end of the type (§15.299).
+        if sym.kind == SymKind::Output {
+            return clamp(*self.wide.get(n)?);
+        }
         if self.defs.contains_key(n) {
             // One with no interval at all has had another error say why (E115, E117, E132):
             // nothing is read into it.
@@ -7668,8 +7850,11 @@ impl Checked {
 
     /// The interval the int64 claim holds a value to (§15.294): the same arithmetic, with each name
     /// read in [`Checked::wide_range`], so an end of a range that is not written stands for the end
-    /// of what the type holds. Only E108 and the certificate's `values` read it: the range of a
-    /// value, the ports, the schema and the pages keep the ends the rule writes.
+    /// of what the type holds. Every check that holds a value to something reads it where
+    /// [`Checked::interval`] has none (§15.299): E108, the divisors (E132), `isqrt` (E139), the range
+    /// of an output (E140), of an open value (E131, W132) and of a `derive` (E112), the weights
+    /// (E073), and what a `define` reaches in a table. The range of a value, the ports, the schema
+    /// and the pages keep the ends the rule writes.
     pub(crate) fn int64_interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
         self.interval_in(e, ty, true)
     }
@@ -8372,6 +8557,48 @@ impl Checked {
         );
     }
 
+    /// What a check holds a value to (§15.299): its interval where the ends the rule writes bound
+    /// it, and otherwise, where an end no range writes is why it has none, the interval with that end
+    /// read as the end of its type, as E108 reads it. A value with no interval for another reason —
+    /// an `allocate` E117 turns away, a `define` E115 stops — has none here either: that error is the
+    /// one to say, and a check that read it at the ends of its type would only add to it.
+    pub(crate) fn reach(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
+        if let Some(iv) = self.interval(e, ty) {
+            return Some(iv);
+        }
+        let mut names = Vec::new();
+        self.open_names(e, &mut names);
+        if names.is_empty() { None } else { self.int64_interval(e, ty) }
+    }
+
+    /// [`Checked::reach`] of a value by its name, as [`Checked::wide_range`] reads it.
+    pub(crate) fn reach_of(&self, n: &str) -> Option<(Rat, Rat)> {
+        let mut names = Vec::new();
+        self.open_names_of(vec![n.to_string()], &mut names, &mut HashSet::new());
+        if names.is_empty() { None } else { self.wide_range(n) }
+    }
+
+    /// The range a table's check reads a column in (§15.299): [`Checked::ranges`] where it has the
+    /// name — an input's range as written, the interval of a value the rule computes — and for a
+    /// computed value whose interval an end no range writes left open, [`Checked::reach_of`]. A
+    /// table over `min(a, 100)`, `a` written `>=0` alone, is asked for no row above 100.
+    pub(crate) fn reach_range(&self, n: &str) -> Option<(Option<Rat>, Option<Rat>)> {
+        self.ranges.get(n).copied().or_else(|| self.reach_of(n).map(|(lo, hi)| (Some(lo), Some(hi))))
+    }
+
+    /// The names under `e` whose ranges leave an end unwritten, where those ends reach what a check
+    /// says of `e` (§15.299): `None` where the ends the rule writes bound it. A check that reads the
+    /// ends no one wrote as the ends of the type says where the numbers it gives come from.
+    fn open_of(&self, e: &Expr, ty: &Ty) -> Option<Open> {
+        if self.interval(e, ty).is_some() {
+            return None;
+        }
+        let mut names = Vec::new();
+        self.open_names(e, &mut names);
+        let (list, them) = open_list(&names)?;
+        Some(Open { list, has: if names.len() > 1 { "have" } else { "has" }, them })
+    }
+
     /// The names under `e` whose range does not write both its ends, followed through the values
     /// the rule computes down to the names that declare a range (§15.294).
     fn open_names(&self, e: &Expr, out: &mut Vec<String>) {
@@ -8874,6 +9101,65 @@ fn open_list(open: &[String]) -> Option<(String, &'static str)> {
         None => return None,
     };
     Some((list, if open.len() > 1 { "the ends their ranges do not write" } else { "the end its range does not write" }))
+}
+
+/// The names a check reads whose ranges leave an end unwritten ([`Checked::open_of`]), with the
+/// English verb and the words for the ends that agree with how many there are.
+struct Open {
+    list: String,
+    has: &'static str,
+    them: &'static str,
+}
+
+impl Open {
+    /// Where the ends a message gives come from: each check reads an end no range writes at the
+    /// end of the type (§15.299), and the interval a mark or a note shows has it.
+    fn read(&self) -> String {
+        let (list, has) = (&self.list, self.has);
+        tr!(
+            "{list} の範囲に上限か下限がありません。書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。",
+            "{list} {has} no upper or no lower bound. An end that is not written is read as the end of what the type holds (for a number, 2^63 − 1 steps either way)."
+        )
+    }
+
+    fn hint(&self) -> String {
+        let (list, them) = (&self.list, self.them);
+        tr!("ヒント: {list} の範囲に、書いていない側の端（`>=` か `<=`）を書いてください。", "Hint: give {list} {them}, `>=` or `<=`.")
+    }
+
+    /// The hint of a range written on a value that does not hold what the value reaches (E112,
+    /// E140): the interval has an end read at the end of a type, so it is no range to widen to.
+    fn widen_hint(&self) -> String {
+        let (list, them) = (&self.list, self.them);
+        tr!(
+            "ヒント: 範囲を広げるか、{list} の範囲に、書いていない側の端（`>=` か `<=`）を書いてください。",
+            "Hint: widen the range, or give {list} {them}, `>=` or `<=`."
+        )
+    }
+}
+
+/// The expression E132 or E139 suggests in place of `e`, taken to `one` at the least (§15.299):
+/// `max(e, one)`, or a `max` that already takes a floor with that floor raised to `one` rather than
+/// a second `max` around it. `None` where the floor of a `max` already passes `enough`, for then
+/// the floor is not what stops it: 0.50.0 suggested `max(max(units, 1), 1)`, which stopped on the
+/// same line and suggested one more.
+fn floored(e: &Expr, ty: &Ty, enough: impl Fn(Rat) -> bool, one: &str) -> Option<String> {
+    if let Expr::Call(f, args, _) = e
+        && f == crate::kw::MAX
+        && let [x, y] = args.as_slice()
+    {
+        let lit = |a: &Expr| match a {
+            Expr::Lit(Lit::Num(n), _) => lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n))),
+            _ => None,
+        };
+        match (lit(x), lit(y)) {
+            (Some(a), _) | (_, Some(a)) if enough(a) => return None,
+            (Some(_), None) => return Some(format!("{}({}, {one})", crate::kw::MAX, crate::region::expr_text(y))),
+            (None, Some(_)) => return Some(format!("{}({}, {one})", crate::kw::MAX, crate::region::expr_text(x))),
+            _ => {}
+        }
+    }
+    Some(format!("{}({}, {one})", crate::kw::MAX, crate::region::expr_text(e)))
 }
 
 impl Checked {

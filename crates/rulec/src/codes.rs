@@ -1343,6 +1343,33 @@ policy unique
 | temple  | 1           |
 | library | 2           |
 "##;
+// E149 (§15.299): a `range` left with no end, which used to read as no range at all.
+const X_E149: &str = r##"rule 平均単価(average_price) v1
+
+inputs
+  合計(total) : money[円]  range >=0円 <=10000円
+  件数(units) : number  range
+
+outputs
+  平均(average) : money[円]  round half_up(1円)
+
+define 単価(per_unit) : money[円] = half_up(合計 / max(件数, 1), 1円)
+
+result 平均 = 単価
+"##;
+const X_E149_EN: &str = r##"rule average_price v1
+
+inputs
+  total : money[JPY]  range >=0JPY <=10000JPY
+  units : number  range
+
+outputs
+  average : money[JPY]  round half_up(1JPY)
+
+define per_unit : money[JPY] = half_up(total / max(units, 1), 1JPY)
+
+result average = per_unit
+"##;
 const X_W135: &str = r##"rule t(t) v1
 
 inputs
@@ -2580,8 +2607,9 @@ const X_E139_EN: &str = "rule root_of_gap v1\n\n\
                       outputs\n  root : number  round down(1)\n\n\
                       define whole_root : number = isqrt(gap)\n\n\
                       result root = whole_root\n";
-// E140 (§15.268): a range written on an output's line that leaves out what the output comes to,
-// and one that cannot be checked, the output reading an input with no range.
+// E140 (§15.268): a range written on an output's line that leaves out what the output comes to;
+// one over an input whose range writes no end, read at the end of its type (§15.299); and one that
+// cannot be checked, on an output that is no number.
 const X_E140: &str = r##"rule 手数料(fee) v1
 
 inputs
@@ -2602,7 +2630,7 @@ outputs
 
 result fee = amount × 10%
 "##;
-const X_E140_UNKNOWN: &str = r##"rule 手数料(fee) v1
+const X_E140_OPEN: &str = r##"rule 手数料(fee) v1
 
 inputs
   金額(amount) : money[円]
@@ -2615,7 +2643,7 @@ policy unique
 | -> 手数料 |
 | 金額      |
 "##;
-const X_E140_UNKNOWN_EN: &str = r##"rule fee v1
+const X_E140_OPEN_EN: &str = r##"rule fee v1
 
 inputs
   amount : money[USDc]
@@ -2627,6 +2655,32 @@ table fees
 policy unique
 | -> fee |
 | amount |
+"##;
+const X_E140_UNKNOWN: &str = r##"rule 期日(due) v1
+
+inputs
+  受付日(received) : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  期日(due) : date  range >=2026-01-01
+
+table 期日表(dues)
+policy unique
+| -> 期日 |
+| 受付日  |
+"##;
+const X_E140_UNKNOWN_EN: &str = r##"rule due v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  due : date  range >=2026-01-01
+
+table dues
+policy unique
+| -> due   |
+| received |
 "##;
 
 const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
@@ -3996,7 +4050,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`. An input's range and marks go before its `from`; a derived value is rounded inside its expression, as `down(<expression>, 1JPY)`."
             ),
             X_E047,
-            &["E011", "E103", "E104"],
+            &["E011", "E103", "E104", "E149"],
         )
         .english(X_E047_EN),
         err(
@@ -4198,7 +4252,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Correct the end that was mistyped (`range >=0JPY <=10JPY`)."
             ),
             X_E061,
-            &["E112", "E103", "E060"],
+            &["E112", "E103", "E060", "E149"],
         )
         .english(X_E061_EN),
         err(
@@ -4494,12 +4548,12 @@ pub fn ledger() -> Vec<Entry> {
             "E108",
             tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
             tr!(
-                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、そこから越えうる値もこれです。生成コードの入口は、書いていない端の入力をその端まで受け取ります。入力か要素のフィールドの範囲に、型が持てる値の端を越える端を書いたときもこれです。入口はその外を断るので、どの呼び出しも渡せない値を約束することになります。値そのものが収まっても、生成コードが途中で持つ整数（足し算・比べる式・`min`・`max` の二つの辺を共通の刻みにそろえた値、丸める前に丸めの刻みにそろえた値、その中の掛け算）や、表の列の刻みにそろえた値、出力を送る刻みと丸めの刻みにそろえた値が int64 を越えるときもこれです。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。",
-                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a value that fits while an integer the generated code holds on the way to it does not (the two sides of a sum, a comparison, a `min` or a `max` brought to the step they share, a value brought to the step of its rounding grid before it is rounded, a product inside any of them), or a value brought to the step of a column, or to the step an output travels at and its rounding grid share. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64."
+                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読むので、そこから越えうる値もこれです。生成コードの入口は、書いていない端の入力をその端まで受け取ります。入力か要素のフィールドの範囲に、型が持てる値の端を越える端を書いたときもこれです。入口はその外を断るので、どの呼び出しも渡せない値を約束することになります。値そのものが収まっても、生成コードが途中で持つ整数（足し算・比べる式・`min`・`max` の二つの辺を共通の刻みにそろえた値、丸める前に丸めの刻みにそろえた値、その中の掛け算）や、表の列の刻みにそろえた値、出力を送る刻みと丸めの刻みにそろえた値が int64 を越えるときもこれです。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。重みで選ぶ畳み込みで、二つの要素の重みの合計が int64 を越えうるときもこれです。重みの合計は、どの言語でも int64 で足していきます。",
+                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a value that fits while an integer the generated code holds on the way to it does not (the two sides of a sum, a comparison, a `min` or a `max` brought to the step they share, a value brought to the step of its rounding grid before it is rounded, a product inside any of them), or a value brought to the step of a column, or to the step an output travels at and its rounding grid share. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64. So is a pick by weight where the weights of two elements together can pass int64: every language adds the weights up in an int64."
             ),
             tr!(
-                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。範囲に端を書いていない入力が原因なら、その端を書いてください。型が持てる値を越える端は、その内側に書いてください。乱数の入力の点が多すぎるなら、その範囲を狭めてください。",
-                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges."
+                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。範囲に端を書いていない入力が原因なら、その端を書いてください。型が持てる値を越える端は、その内側に書いてください。乱数の入力の点が多すぎるなら、その範囲を狭めてください。重みが大きすぎるなら、重みが読む値の範囲を狭めてください。",
+                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges. Where a weight is too large, narrow the ranges of the values it reads."
             ),
             X_E108,
             &["E112", "E103"],
@@ -4556,12 +4610,12 @@ pub fn ledger() -> Vec<Entry> {
             "E112",
             tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of a derived value does not contain the values it can reach"),
             tr!(
-                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。`max`・`min` に書いた `range` が、列の範囲と `empty` の値を含まないときも、これです。答えはそのどちらかの値だからです。",
-                "The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those."
+                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。入力の範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます（そこから int64 を越えうるなら E108 だけです）。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。`max`・`min` に書いた `range` が、列の範囲と `empty` の値を含まないときも、これです。答えはそのどちらかの値だからです。",
+                "The interval computed from the input ranges falls outside the `range` declared on the derived value. An end an input's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way; one that can pass int64 from there is E108 alone). With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those."
             ),
             tr!(
-                "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。",
-                "Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out."
+                "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。取りうる値の端が、書いていない端を型の端として読んだものなら、注がその入力を挙げます。範囲を広げるか、その入力の範囲に書いていない端を書いてください。",
+                "Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out. Where an end of that interval comes from an end an input's range does not write, a note names the input: widen the range, or write that end on the input's range."
             ),
             X_E112,
             &["E108", "E101"],
@@ -4890,12 +4944,12 @@ pub fn ledger() -> Vec<Entry> {
             "E132",
             tr!("割る数が 0 になりえます", "The divisor can be zero"),
             tr!(
-                "丸めの関数の引数が値で割る割り算（`half_up(合計 / 件数, 1円)`）で、割る数のとりうる範囲が 0 を含むとき。範囲は、入力の範囲、導出と `define` の範囲、上の表が書く値から区間で求めます。行が自分の表の列をそのまま書くときは、その行のセルがその列に通す値だけを数えます（`| >=1 | 件数 |` は 1 以上の件数だけを書きます）。`constraint` は読みません。範囲の決まらない値を読む割る数も、0 にならないとは言えないので、これに当たります。注には、割る数を 0 にする入力が見つかればそれが出ます。",
-                "A rounding function's argument divides by a value (`half_up(total / units, 1JPY)`), and the range of the divisor includes zero. The range is worked out by interval arithmetic from the inputs' ranges, the ranges of the derives and the `define`s, and what the tables above write — where a row writes one of its own table's columns, only the values its cell there lets through (`| >=1 | units |` writes units of one or more). A `constraint` is not read. A divisor that reads a value with no range cannot be shown never to be zero either, and is this too. Where an input that makes the divisor zero is found, the notes name it."
+                "丸めの関数の引数が値で割る割り算（`half_up(合計 / 件数, 1円)`）で、割る数のとりうる範囲が 0 を含むとき。範囲は、入力の範囲、導出と `define` の範囲、上の表が書く値から区間で求めます。行が自分の表の列をそのまま書くときは、その行のセルがその列に通す値だけを数えます（`| >=1 | 件数 |` は 1 以上の件数だけを書きます）。`constraint` は読みません。範囲に書いていない端は、E108 と同じく、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。生成コードの入口が、どの入力もその端の内に収めるからです。そのため `max(件数, 1)` は、`件数` の上の端が書かれていなくても通ります。区間の決まらない値（ほかの誤りで止まった `define` など）を読む割る数も、0 にならないとは言えないので、これに当たります。注には、割る数を 0 にする入力が見つかればそれが出ます。",
+                "A rounding function's argument divides by a value (`half_up(total / units, 1JPY)`), and the range of the divisor includes zero. The range is worked out by interval arithmetic from the inputs' ranges, the ranges of the derives and the `define`s, and what the tables above write — where a row writes one of its own table's columns, only the values its cell there lets through (`| >=1 | units |` writes units of one or more). A `constraint` is not read. An end a range does not write is read, as E108 reads it, as the end of what the type holds (for a number, 2^63 − 1 steps either way), for the entry of the generated code holds every input inside those ends; so `max(units, 1)` passes where `units` writes no upper end. A divisor that reads a value with no interval at all (a `define` another error has stopped, say) cannot be shown never to be zero either, and is this too. Where an input that makes the divisor zero is found, the notes name it."
             ),
             tr!(
-                "割る数の範囲を 0 を含まないように狭めるか（`range >=1`）、`max(件数, 1)` のように 1 以上にしてから割るか、0 のときに別の値を選ぶ表（`| 0 | 1 |` と `| >=1 | 件数 |` の二行）を置いて、その表の出力で割ってください。`constraint a < b` のもとで `b - a` で割るときも、`max(b - a, 1)` と書きます（その制約のもとでは同じ値です）。0 のときに何を答えるかは業務の決めなので、rulec は決めません。",
-                "Narrow the divisor's range so that it leaves zero out (`range >=1`), divide by `max(units, 1)`, or put a table that picks another value when it is zero (the two rows `| 0 | 1 |` and `| >=1 | units |`) and divide by that table's output. Dividing by `b - a` under `constraint a < b`, write `max(b - a, 1)` too: under the constraint it is the same value. What to answer when it is zero is a business decision, and rulec does not make it."
+                "割る数の範囲を 0 を含まないように狭めるか（`range >=1`）、`max(件数, 1)` のように 1 以上にしてから割るか、0 のときに別の値を選ぶ表（`| 0 | 1 |` と `| >=1 | 件数 |` の二行）を置いて、その表の出力で割ってください。金額や数量で割るなら、下限はその単位で書きます（`max(単価, 1円)`）。`constraint a < b` のもとで `b - a` で割るときも、`max(b - a, 1)` と書きます（その制約のもとでは同じ値です）。0 のときに何を答えるかは業務の決めなので、rulec は決めません。",
+                "Narrow the divisor's range so that it leaves zero out (`range >=1`), divide by `max(units, 1)`, or put a table that picks another value when it is zero (the two rows `| 0 | 1 |` and `| >=1 | units |`) and divide by that table's output. An amount or a quantity takes its floor in its own unit (`max(price, 1JPY)`). Dividing by `b - a` under `constraint a < b`, write `max(b - a, 1)` too: under the constraint it is the same value. What to answer when it is zero is a business decision, and rulec does not make it."
             ),
             X_E132,
             &["E115", "E108", "E019"],
@@ -4905,8 +4959,8 @@ pub fn ledger() -> Vec<Entry> {
             "E139",
             tr!("`isqrt` の引数が負になりえます", "The argument of `isqrt` can be below zero"),
             tr!(
-                "`isqrt(x)` の x のとりうる範囲が負の値を含むとき。範囲は E132 と同じく区間で求め、範囲の決まらない値を読む引数もこれに当たります。負の数に平方根は無く、生成コードはその呼び出しで答えを持ちません。注には、引数を負にする入力が見つかればそれが出ます。",
-                "The range of x in `isqrt(x)` includes values below zero. The range is worked out by intervals as for E132, and an argument that reads a value with no range is this too. A number below zero has no square root, and the generated code would have no answer on that call. Where an input that makes the argument negative is found, the notes name it."
+                "`isqrt(x)` の x のとりうる範囲が負の値を含むとき。範囲は E132 と同じく区間で求め、書いていない端は型が持てる値の端として読みます（`isqrt(max(x, 0))` は x に範囲が無くても通ります）。区間の決まらない値を読む引数もこれに当たります。負の数に平方根は無く、生成コードはその呼び出しで答えを持ちません。注には、引数を負にする入力が見つかればそれが出ます。",
+                "The range of x in `isqrt(x)` includes values below zero. The range is worked out by intervals as for E132, an end a range does not write read as the end of what the type holds (`isqrt(max(x, 0))` passes where x has no range), and an argument that reads a value with no interval is this too. A number below zero has no square root, and the generated code would have no answer on that call. Where an input that makes the argument negative is found, the notes name it."
             ),
             tr!(
                 "引数の範囲が 0 以上になるように入力の範囲を狭めるか、`isqrt(max(x, 0))` のように 0 以上にしてから渡してください。冪の切り捨ては掛け算で書きます（`isqrt(n * n * n)` が n の 1.5 乗の切り捨て）。",
@@ -4920,17 +4974,18 @@ pub fn ledger() -> Vec<Entry> {
             "E140",
             tr!("出力の範囲が、出力のとる値を含んでいません", "An output's range does not hold the values it takes"),
             tr!(
-                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式）が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。rulec がその値を求められないとき（範囲の無い入力を読む、数でない出力）も、書いた範囲を確かめられないので、これです。ただし、端の無い入力から計算する式が int64 を越えうるときは、先に E108 になります。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
-                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 first. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
+                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式、並びをたどる行）が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。数でない出力に書いた範囲は確かめられないので、これです。ただし、端の無い入力から計算する式が int64 を越えうるときは、E108 だけになります。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
+                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result`, a line that walks a sequence — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). A range written on an output that is no number cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 alone. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
             ),
             tr!(
-                "範囲を、文面の示すとりうる値まで広げてください（`fix.text` に `range >=0円 <=1000円` の形で入っています）。確かめられないときは、出力が読む入力に範囲を書くか、出力の範囲を外してください。範囲を書かない出力にも、rulec が求めた範囲が付き、ほかの言語はそれを読みます。",
-                "Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where it cannot be checked, give the inputs the output reads a range, or take the output's range off: an output with none written has the range rulec works out, and the other languages read that."
+                "範囲を、文面の示すとりうる値まで広げてください（`fix.text` に `range >=0円 <=1000円` の形で入っています）。とりうる値の端が、書いていない端を型の端として読んだものなら、`fix.text` は無く、注がその名前を挙げます。範囲を広げるか、その名前の範囲に書いていない端を書いてください。数でない出力なら、範囲を外してください。範囲を書かない出力にも、rulec が求めた範囲が付き、ほかの言語はそれを読みます。",
+                "Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where an end of those values comes from an end no range writes, read at the end of its type, there is no `fix.text`, and a note names whose: widen the range, or write that end on the name's range. On an output that is no number, take the range off. An output with none written has the range rulec works out, and the other languages read that."
             ),
             X_E140,
             &["E112", "E061", "E103"],
         )
         .english(X_E140_EN)
+        .also(tr!("範囲に書いていない端", "An end a range does not write"), X_E140_OPEN, X_E140_OPEN_EN)
         .also(tr!("確かめられない範囲", "A range that cannot be checked"), X_E140_UNKNOWN, X_E140_UNKNOWN_EN),
         err(
             "E134",
@@ -5289,8 +5344,8 @@ pub fn ledger() -> Vec<Entry> {
             "E073",
             tr!("重みで選ぶ畳み込みの形が違います", "A pick by weight is not shaped right"),
             tr!(
-                "`take_weighted` に `by` が無いとき、`draw` の行が二つあるとき、`take_weighted` の無い畳み込みに `draw` の行があるとき。重みで選ぶ畳み込みが一つの規則に二つあるとき、その腕に `next` と `take_weighted` のほかの腕があるとき、重みが number でないか負になりうるとき、`draw` の行が無いとき、`draw` が指す値が、`random` を付けて範囲が 0 から始まる number の入力でないとき。",
-                "A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative; there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0."
+                "`take_weighted` に `by` が無いとき、`draw` の行が二つあるとき、`take_weighted` の無い畳み込みに `draw` の行があるとき。重みで選ぶ畳み込みが一つの規則に二つあるとき、その腕に `next` と `take_weighted` のほかの腕があるとき、重みが number でないか負になりうるとき（重みが読む範囲に書いていない端は、型が持てる値の端として読みます）、`draw` の行が無いとき、`draw` が指す値が、`random` を付けて範囲が 0 から始まる number の入力でないとき。",
+                "A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative (an end a range the weight reads does not write is read as the end of what the type holds); there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0."
             ),
             tr!(
                 "腕 `take_weighted <値> by <重み>` と、行 `draw -> <乱数の入力>` を一行書き、指す入力は `range >=0 <=<上限>` の `random` な number にしてください。重みは 0 以上の整数です。選ぶのが二回要るなら、規則を二つに分けます。",
@@ -5374,12 +5429,12 @@ pub fn ledger() -> Vec<Entry> {
             "E131",
             tr!("合わせた値が、宣言した範囲を出ます", "A value put together leaves the range it declares"),
             tr!(
-                "開いた値の項（規則の項と、寄与が足した項）を合わせ方どおりに合わせた値の区間が、`open` の行の範囲を出るとき。注に、項ごとの区間と、どの寄与の項かと、範囲の外にする入力の例が出ます。範囲は、どの寄与が来ても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されているので、範囲を出た値には、検査されていない答えが返ります。",
-                "The interval of an open value's terms — the rule's and those contributions add — put together as its `combine` says, leaves the range on the `open` line. The notes give each term's interval, the contribution each comes from, and an input that takes the value out of the range. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it; a value outside it would get an answer nothing checked."
+                "開いた値の項（規則の項と、寄与が足した項）を合わせ方どおりに合わせた値の区間が、`open` の行の範囲を出るとき。項の範囲に書いていない端は、型が持てる値の端（数なら刻みで ±(2^63 − 1)）として読みます。`open` の行の範囲が片側だけなら、書いた端を確かめます（書いていない端は型の端で、そこに収まることは E108 が確かめます）。注に、項ごとの区間と、どの寄与の項かと、範囲の外にする入力の例が出ます。範囲は、どの寄与が来ても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されているので、範囲を出た値には、検査されていない答えが返ります。",
+                "The interval of an open value's terms — the rule's and those contributions add — put together as its `combine` says, leaves the range on the `open` line. An end a term's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). Where the range on the `open` line writes one end, that end is the one checked: the other is the end of the type, which E108 holds the value to. The notes give each term's interval, the contribution each comes from, and an input that takes the value out of the range. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it; a value outside it would get an answer nothing checked."
             ),
             tr!(
-                "範囲を広げるか（下の表は、広げた範囲で検査し直されます）、寄与が足す項を狭めてください。どちらにするかは業務の判断なので、`fix.text` はありません。",
-                "Widen the range (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision, so there is no `fix.text`."
+                "範囲を広げるか（下の表は、広げた範囲で検査し直されます）、寄与が足す項を狭めてください。どちらにするかは業務の判断なので、`fix.text` はありません。項の範囲に書いていない端があるなら、その端を書くのも、項を狭める書き方です。",
+                "Widen the range (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision, so there is no `fix.text`. Where a term's range does not write an end, writing it is one way to narrow the term."
             ),
             X_E131,
             &["E068", "E112", "E067"],
@@ -5389,8 +5444,8 @@ pub fn ledger() -> Vec<Entry> {
             "W132",
             tr!("開いた値の項が、合わせた値を変えません", "A term of an open value changes nothing"),
             tr!(
-                "開いた値の項が、どの値を取っても合わせた値を変えられないとき。`max` で項の値が全部 `empty` の値以下のとき、`min` で全部 `empty` の値以上のとき、`sum` でいつも 0 のとき、`product` でいつも 1 のとき。`max` と `min` の `empty` は、項が無いときだけの値ではなく、いつも合わせに加わる出発の値なので、上限を `max` で書くと、項は黙って効かなくなります。寄与が足した項でも、この規則の項でも言います。",
-                "A term of an open value cannot move the value whatever it takes: in a `max`, every value of the term is at or below the `empty` value; in a `min`, at or above it; in a `sum`, it is always 0; in a `product`, always 1. The `empty` value of `max` and `min` is the value the terms start from, and it always takes part, not only when there is no term, so a cap written as a `max` leaves its terms with nothing to do, in silence. It is said of a term a contribution adds and of a term of the rule alike."
+                "開いた値の項が、どの値を取っても合わせた値を変えられないとき。`max` で項の値が全部 `empty` の値以下のとき、`min` で全部 `empty` の値以上のとき、`sum` でいつも 0 のとき、`product` でいつも 1 のとき。`max` と `min` の `empty` は、項が無いときだけの値ではなく、いつも合わせに加わる出発の値なので、上限を `max` で書くと、項は黙って効かなくなります。寄与が足した項でも、この規則の項でも言います。項の範囲に書いていない端は、型が持てる値の端として読みます。",
+                "A term of an open value cannot move the value whatever it takes: in a `max`, every value of the term is at or below the `empty` value; in a `min`, at or above it; in a `sum`, it is always 0; in a `product`, always 1. The `empty` value of `max` and `min` is the value the terms start from, and it always takes part, not only when there is no term, so a cap written as a `max` leaves its terms with nothing to do, in silence. It is said of a term a contribution adds and of a term of the rule alike. An end a term's range does not write is read as the end of what the type holds."
             ),
             tr!(
                 "`max` の項が上限を決めるなら、合わせ方を `min` にしてください（`min` の項が下限を決めるなら `max` に）。`empty` を越える（`min` なら下回る）ことがある項なら、その値を書いてください。要らない項なら外してください。",
@@ -5566,6 +5621,21 @@ pub fn ledger() -> Vec<Entry> {
             &["E147", "E070"],
         )
         .english(X_E148_EN),
+        err(
+            "E149",
+            tr!("`range` に端が書かれていません", "`range` writes no end"),
+            tr!(
+                "宣言の行の `range` の後に端（`>=`・`<=`・`>`・`<` と値の対）が一つも無く、行がそこで終わるか、その行が読むほかの語（`contract_only`・`random`・`unique`・`round` など）か引用が続くとき。入力、`elements` のフィールド、出力、`derive`、`count`・`sum`・`max`・`min`、`open` のどの行でも同じです。端の無い `range` は何も決めないので、範囲を書いていない行と同じに読まれ、書きかけの行が黙って通っていました。範囲の後ろに置いた端の無い `range`（`range >=0 <=5 range`）は、前に書いた範囲を消していました。`range` の後に端でない語が続くとき（`range 10`、`range >=` で値が無い）は E047 です。",
+                "A `range` on a declaration line is followed by no end, no pair of `>=`, `<=`, `>` or `<` and a value, and the line ends there or goes on with another word the line reads (`contract_only`, `random`, `unique`, `round` and the like) or a citation. It is the same on the line of an input, a field of `elements`, an output, a `derive`, a `count`, `sum`, `max` or `min`, and an `open`. A `range` with no end decides nothing, so it was read as a line with no range, and a line left half written passed in silence. One with no end written after a range, as in `range >=0 <=5 range`, threw away the range written before it. Where a word that is not an end follows `range` (`range 10`, or `range >=` with no value), it is E047."
+            ),
+            tr!(
+                "`range` の後に端を書いてください（`range >=1`、`range >=0 <=100`）。端は一つでもかまいません。書かない側の端は、範囲を読むどの検査も、型が持てる値の端として読みます。範囲を決めない値なら、`range` を消してください。",
+                "Write an end after `range` (`range >=1`, `range >=0 <=100`); one end is enough. An end left unwritten is read as the end of what the type holds, by every check that reads the range. Where the value has no range, take `range` off."
+            ),
+            X_E149,
+            &["E047", "E061", "E132"],
+        )
+        .english(X_E149_EN),
     ]
 }
 

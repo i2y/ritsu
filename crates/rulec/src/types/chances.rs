@@ -217,19 +217,58 @@ impl Checked {
                 );
                 continue;
             }
-            match self.interval(weight, &Ty::Number) {
-                Some((lo, _)) if lo.num >= 0 => {}
+            // An end a range does not write is read as the end of the type, as E108 reads it
+            // (§15.299): `max(capacity, 0)` over `capacity` written `<=100` alone is never below
+            // zero, and a weight with no upper bound is as large as a number can be.
+            let narrow = self.interval(weight, &Ty::Number);
+            let open = if narrow.is_none() { self.open_of(weight, &Ty::Number) } else { None };
+            match self.reach(weight, &Ty::Number) {
+                Some((lo, hi)) if lo.num >= 0 => {
+                    // The walk adds the weights up in an int64 in every language: two elements at
+                    // the largest weight have to fit, whatever the length of the sequence.
+                    let sc = self.scale(weight).unwrap_or(1);
+                    let twice = super::stored_at(hi, sc).and_then(|s| s.checked_mul(2));
+                    if twice.is_some_and(|t| t <= i64::MAX as i128) {
+                        continue;
+                    }
+                    let shown = super::fmt_val(hi, &Ty::Number);
+                    let mut d = Diag::error("E108", tr!("重みの合計が int64 に収まることを証明できません", "Cannot prove that the total of the weights fits in int64"))
+                        .at(at.to_string())
+                        .mark(weight.span().clone(), tr!("重みは {shown} まで大きくなりえます", "a weight can be as large as {shown}"))
+                        .note(tr!(
+                            "`take_weighted` は、この腕に来た要素の重みを int64 で足していきます。この大きさの重みが二つあれば、合計は int64 を越えます。",
+                            "`take_weighted` adds up the weights of the elements in an int64, and two weights this large together pass it."
+                        ));
+                    d = match &open {
+                        Some(o) => d.note(o.read()).note(o.hint()),
+                        None => d.note(tr!("ヒント: 重みが読む値の範囲を狭めてください。", "Hint: narrow the ranges of the values the weight reads.")),
+                    };
+                    self.diags.push(d);
+                }
                 iv => {
-                    let shown = iv.map(|(lo, hi)| format!("{lo}..{hi}")).unwrap_or_else(|| tr!("決まりません", "unknown"));
-                    e073(
-                        self,
-                        tr!("重みが負になりえます", "A weight can be negative"),
-                        weight.span(),
-                        tr!("重みの範囲は {shown} です", "the weight's range is {shown}"),
-                        tr!(
+                    let mark = match iv {
+                        Some((lo, hi)) => tr!("重みの範囲は {lo}..{hi} です", "the weight's range is {lo}..{hi}"),
+                        None => tr!("重みの範囲が分かりません", "the weight's range is not known"),
+                    };
+                    // A weight that a `max` already keeps at zero or more is not wrapped in a second
+                    // one: what stops it is a value with no interval (§15.299).
+                    let fix = match super::floored(weight, &Ty::Number, |v| v.num >= 0, "0") {
+                        Some(_) => tr!(
                             "負の重みには見込みがありません。重みが読む値の範囲を 0 以上にするか、`max(重み, 0)` で書いてください。",
                             "A negative weight has no chance to stand for. Make the values the weight reads 0 or more, or write `max(weight, 0)`."
                         ),
+                        None => tr!(
+                            "負の重みには見込みがありません。重みは、範囲の分からない値を読んでいます。",
+                            "A negative weight has no chance to stand for, and the weight reads a value whose range is not known."
+                        ),
+                    };
+                    // An end read at the end of its type says where the range shown comes from.
+                    self.diags.push(
+                        Diag::error("E073", tr!("重みが負になりえます", "A weight can be negative"))
+                            .at(at.to_string())
+                            .mark(weight.span().clone(), mark)
+                            .maybe_note(open.as_ref().map(super::Open::read))
+                            .note(fix),
                     );
                 }
             }

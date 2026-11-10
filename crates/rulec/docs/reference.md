@@ -1081,10 +1081,18 @@ One declaration does three jobs.
    instead of silently computing something.
 
 The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY`, `range >=1g`.
+`range` with no bound after it is E149: it decides nothing, and a line left half written could not
+be told from it. A value with no range leaves `range` off.
 A bound the range does not write is the end of what the type holds: ±(2^63−1) in the integer the
 value travels as. The entry guard holds an input to each bound it
 writes and, on a side it writes none, to that end, in every language and in `rulec run`
-(§15.295). A date's ends are the first and last days a door reads, 0001-01-01 and 9999-12-31.
+(§15.295). Every check reads the bound there (§15.299): the int64 claim (E108), a divisor and the
+argument of an `isqrt` (E132, E139), the range of a `derive` (E112) and of an output (E140), the
+terms of an open value (E131, W132), a weight (E073), what a fold answers, and a table over a
+`define`. So `max(units, 1)` divides where `units` writes no upper end, `isqrt(max(x, 0))` takes an
+`x` with no range, and `min(a, 100)` stays inside `range >=0 <=100` where `a` writes no upper end.
+A message that reads a bound there names the value whose range does not write it. A date's ends
+are the first and last days a door reads, 0001-01-01 and 9999-12-31.
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
 message states the interval to widen to. An input of an ordered enum (§3) may declare a range
 over its values, `range >=basic <=gold`: the bounds are values of the enum, and the three jobs
@@ -1258,11 +1266,14 @@ outputs
 ```
 
 It is held to what the output comes to: the cells of the rows that decide it, a `define` of its
-name, or what the `result` reaches under the inputs' ranges and the `constraint` lines, put out to
-the grid of its rounding. A range that leaves out a value the output can come to is E140, and the
-message states the range to widen to (`fix.text` holds it). A range that cannot be checked is
-E140 too: the output reads an input with no range, or is no number. A range with one end written
-takes the other end from what the output comes to.
+name, a line that walks a sequence, or what the `result` reaches under the inputs' ranges and the
+`constraint` lines, put out to the grid of its rounding. A bound a range it reads does not write is
+the end of what the type holds, as every check reads it (above). A range that leaves out a value
+the output can come to is E140, and the message states the range to widen to (`fix.text` holds
+it); where that value comes from such a bound, the message names the value whose range does not
+write it instead, and there is no fix. A range that cannot be checked is E140 too: the output is
+no number. A range with one end written takes the other end from what the output comes to,
+unless that end comes from a bound no range writes: then it stays unwritten.
 
 The range written is then the output's range wherever an input's or a derive's is said: the
 certificate's `ranges` and `output_ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the comments
@@ -2412,7 +2423,8 @@ The drawn value has to be below the total of the weights: the generated code che
 walk is over and refuses the call otherwise, as it refuses an input out of its range, and the
 draw is uniform over the values below the total. When the weights add up to 0 the walk answers
 `exhausted`, with `held` the `empty` answer. A rule picks by weight once, the arms of that fold are
-`next` and `take_weighted` alone, and a weight is a `number` that cannot be negative (E073).
+`next` and `take_weighted` alone, and a weight is a `number` that cannot be negative (E073). The
+walk adds the weights up in an int64, so twice the largest weight has to fit it (E108).
 
 ### What chances generate
 
@@ -2515,8 +2527,9 @@ value, a string or an optional type — and a term is on the value's step or a c
 asked to cover the whole declared range, not just what the terms written today reach, since a
 contribution may move the value anywhere inside it: that is what keeps the rule's own check true
 whatever is added later. Whether the terms, put together, stay inside the range is checked on the
-merged rule (E131), by interval arithmetic over each term's range, with the term that takes it out,
-the file that term came from, and an input that does it:
+merged rule (E131), by interval arithmetic over each term's range — a bound the range does not
+write at the end of its type — with the term that takes it out, the file that term came from, and an
+input that does it:
 
 ```console
 error[E131]: The open value stackable can leave the range it declares
@@ -2532,6 +2545,9 @@ error[E131]: The open value stackable can leave the range it declares
    regional_campaign:campaign_off: 0USD .. 95USD (contribution regional_campaign (tests/mutants/m_e131.rule))
  The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision.
 ```
+
+A range on the `open` line that writes one end is held to that end; the end it does not write is
+the end of the type, which the int64 claim (E108) holds the value to.
 
 The value is generated as an ordinary definition at the place its line is written, and the page
 lists its terms with the file each came from.
@@ -3038,14 +3054,17 @@ to its own division. One division to a rounding, and it has to be the outermost 
   (E103).
 - **The divisor is never zero** (E132). Its interval comes from what it reads — the inputs'
   ranges, the derives and defines, what a table above writes — and has to stay above zero or
-  below it. The message names an input that makes it zero. The ways out: narrow a range, divide
-  by `max(units, 1)`, or put a table that picks another divisor where it would be zero and
+  below it. An end a range does not write is read as the end of what the type holds, as E108
+  reads it, so `max(units, 1)` stays above zero where `units` writes no upper end, or no range at
+  all (§15.299). The message names an input that makes it zero. The ways out: narrow a range, divide
+  by `max(units, 1)` (an amount or a quantity takes its floor in its own unit, `max(price, 1JPY)`),
+  or put a table that picks another divisor where it would be zero and
   divide by that table's output. A row that writes one of its own table's columns writes only
   what its cell there lets through, so `| >=1 | units |` beside `| 0 | 1 |` makes a column that
   is never zero (`tests/corpus/average_unit_price_split.rule`). A `constraint` is not read for
   this: under `constraint a < b`, divide by `max(b - a, 1)`, which is the same value there.
 - **The two integers the generated code divides** — the dividend and the divisor, brought to one
-  step — have to fit int64 (E108).
+  step — have to fit int64 (E108, which names an input whose range leaves an end unwritten).
 - **What the answer can come to** is the quotient's interval (the four corners of the two
   intervals) pushed out to the grid, and a table can use it as a column.
 
@@ -3072,7 +3091,8 @@ define quantity : number = isqrt(down(2 * yearly_demand * order_cost / holding_c
 
 `isqrt(x)` is the largest whole number whose square does not pass `x`. `x` is a `number` — not an
 amount, a quantity, a rate or a date (E103); of a fraction it is the root of the whole part — and
-cannot go below zero (E139, with an input that takes it there; `max(x, 0)` is a way out). What it
+cannot go below zero (E139, with an input that takes it there; `max(x, 0)` is a way out, also
+where `x` has no range). What it
 can come to is the roots of the ends of `x`'s range. There is no `sqrt` that
 answers a fraction and no `pow`: a power is a product, `floor(n^1.5)` is `isqrt(n * n * n)`, and a
 root to two places is `isqrt(x * 10000)`, which counts hundredths.

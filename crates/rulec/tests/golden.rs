@@ -199,6 +199,8 @@ golden!(e144_出どころと_from_count, "E144", "tests/mutants/m_e144ja.rule", 
 // `unique` on an input.
 golden!(e147_一つずつでも届く合計, "E147", "tests/mutants/m_e147ja.rule", "E147");
 golden!(e148_入力の_unique, "E148", "tests/mutants/m_e148ja.rule", "E148");
+// §15.299: a `range` with no end.
+golden!(e149_端の無い_range, "E149", "tests/mutants/m_e149ja.rule", "E149");
 
 // The service a rule implements (§15.274): a value the contract does not have, and a service the
 // contract does not declare.

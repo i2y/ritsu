@@ -471,11 +471,20 @@ fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked)
                         }
                     }
                 }
+                // A number whose range writes no lower end reaches down to the end of its type, as
+                // E132 and E139 read it (§15.299). It waits at zero here, or at its upper end where
+                // that is below zero: a value its door takes, and not one so far out that the
+                // evaluator's arithmetic would pass what it holds.
                 let base: BTreeMap<String, Val> = inputs
                     .iter()
                     .filter_map(|i| {
-                        let (lo, _) = t.ranges.get(&i.name.text).copied()?;
-                        Some((i.name.text.clone(), Val::Num(lo?)))
+                        let (lo, hi) = t.ranges.get(&i.name.text).copied().unwrap_or((None, None));
+                        let at = match lo {
+                            Some(lo) => lo,
+                            None if t.ty_of(&i.name.text).is_some_and(|ty| ty.is_numeric()) => hi.filter(|h| h.num < 0).unwrap_or_else(Rat::zero),
+                            None => return None,
+                        };
+                        Some((i.name.text.clone(), Val::Num(at)))
                     })
                     .collect();
                 let points = |n: &String| -> Vec<Rat> {
@@ -483,6 +492,23 @@ fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked)
                     let mut ps: Vec<Rat> = lo.into_iter().chain(hi).collect();
                     if lo.is_none_or(|l| l.num <= 0) && hi.is_none_or(|h| h.num >= 0) {
                         ps.push(Rat::zero());
+                    }
+                    // Where no lower end is written, one below zero too, for an `isqrt` (§15.299).
+                    if lo.is_none() && hi.is_none_or(|h| h.cmp_to(Rat::int(-1)).is_ge()) {
+                        ps.push(Rat::int(-1));
+                    }
+                    // An open value read with a term's end at the end of its type (§15.299): one
+                    // step of the input past the end the value declares, on the side its range
+                    // does not write.
+                    if w.code == "E131" {
+                        let step = Rat::new(1, (*t.scales.get(n).unwrap_or(&1)).max(1));
+                        let (ol, oh) = open_range.unwrap_or((None, None));
+                        if let (None, Some(h)) = (hi, oh) {
+                            ps.push(h.add(step));
+                        }
+                        if let (None, Some(l)) = (lo, ol) {
+                            ps.push(l.sub(step));
+                        }
                     }
                     ps
                 };

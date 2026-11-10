@@ -478,6 +478,274 @@ fn isqrt_of_what_can_go_below_zero_is_e139() {
     assert_eq!(codes(money), ["E103"]);
 }
 
+// ── The ends a divisor and an `isqrt` read (§15.299) ─────────────────────────────────────────
+
+/// An average over the units, the range of the units written as `range` and the divisor as
+/// `divisor`.
+fn averaged(range: &str, divisor: &str) -> String {
+    format!(
+        "rule average_price v1\n\ninputs\n  total : money[USD]  range >=0USD <=1_000_000USD\n  units : number{range}\n\noutputs\n  average : money[USD]  round half_up(1USD)\n\ndefine avg : money[USD] = half_up(total / {divisor}, 1USD)\n\nresult average = avg\n"
+    )
+}
+
+/// A divisor reads an end its range does not write as the end of what the type holds, as E108
+/// does (§15.294): the entry of the generated code holds every input inside it. `max(units, 1)`
+/// passes with an end of the units unwritten, or both, where 0.50.0 said it read a value with no
+/// range and suggested `max(max(units, 1), 1)`, which stopped on the same line. `units` alone is
+/// still E132, and the message says where the end it gives comes from and names an input that
+/// makes the divisor zero, as it does where both ends are written.
+#[test]
+fn a_divisor_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
+    for range in ["  range >=0", "  range <=1000", ""] {
+        let kept = averaged(range, "max(units, 1)");
+        assert!(codes(&kept).is_empty(), "{range}: {:?}", codes(&kept));
+        let src = averaged(range, "units");
+        assert_eq!(codes(&src), ["E132"], "{range}");
+        let text = said(&src, "E132");
+        assert!(text.contains("An input that makes the divisor zero: units = 0"), "{text}");
+        assert!(text.contains("zero included"), "{text}");
+        assert!(text.contains("9223372036854775807"), "{text}");
+        assert!(text.contains("`units` has no upper or no lower bound"), "{text}");
+        assert!(text.contains("divide by `max(units, 1)`"), "{text}");
+    }
+    // Above zero with no upper end: the range from one is enough.
+    assert!(codes(&averaged("  range >=1", "units")).is_empty());
+}
+
+/// The hint does not wrap a divisor in a second `max`. A floor below one is raised; a `max` that
+/// already keeps the divisor above zero is stopped by something else, a value with no interval,
+/// and the hint names no `max`. The floor is written in the unit of the divisor, for
+/// `max(price, 1)` is E103 where `price` is an amount, and `max(r, 1)` where `r` is a rate.
+#[test]
+fn the_hint_of_e132_raises_a_floor_rather_than_wrapping_it() {
+    let text = said(&averaged("  range >=0 <=1000", "max(units, 0)"), "E132");
+    assert!(text.contains("divide by `max(units, 1)`"), "{text}");
+    // A `define` another error has stopped has no interval, and a `max` of it with one is never zero.
+    let stopped = "rule cascade v1\n\ninputs\n  total : money[USD]  range >=0USD <=1_000_000USD\n  a : number  range >=0 <=100\n  b : number  range >=1 <=100\n\noutputs\n  r : money[USD]  round half_up(1USD)\n\ndefine x : number = a / b + 1\n\ndefine q : money[USD] = half_up(total / max(x, 1), 1USD)\n\nresult r = q\n";
+    assert_eq!(codes(stopped), ["E115", "E132"]);
+    let text = said(stopped, "E132");
+    assert!(text.contains("it reads a value with no range"), "{text}");
+    assert!(!text.contains("divide by `max("), "{text}");
+    let amount = "rule per_price v1\n\ninputs\n  total : money[USD]  range >=0USD <=1_000_000USD\n  price : money[USD]  range >=0USD <=10_000USD\n\noutputs\n  n : number  round down(1)\n\ndefine q : number = half_up(total / price, 1)\n\nresult n = q\n";
+    assert!(said(amount, "E132").contains("divide by `max(price, 1USD)`"));
+    assert!(said(&amount.replace("total / price", "total / max(price, 0USD)"), "E132").contains("divide by `max(price, 1USD)`"));
+    assert!(codes(&amount.replace("total / price", "total / max(price, 1USD)")).is_empty());
+    let rate = "rule base_of v1\n\ninputs\n  amount : money[USD]  range >=0USD <=1_000_000USD\n  r : rate[step 1%]  range >=0% <=100%\n\noutputs\n  base : money[USD]  round down(1USD)\n\ndefine b : money[USD] = half_up(amount / r, 1USD)\n\nresult base = b\n";
+    assert!(said(rate, "E132").contains("divide by `max(r, 1%)`"));
+    assert!(codes(&rate.replace("amount / r", "amount / max(r, 1%)")).is_empty());
+}
+
+/// `isqrt` reads the ends the same way: `isqrt(max(x, 0))` passes where `x` has no range, and an
+/// argument that an unwritten end takes below zero is E139, which says where that end comes from
+/// and names an input below zero. The hint raises a floor below zero rather than wrapping it.
+#[test]
+fn an_isqrt_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
+    let root = |range: &str, arg: &str| {
+        format!("rule root v1\n\ninputs\n  x : number{range}\n\noutputs\n  r : number  round down(1)\n\ndefine s : number = isqrt({arg})\n\nresult r = s\n")
+    };
+    for range in ["", "  range <=100"] {
+        assert!(codes(&root(range, "max(x, 0)")).is_empty(), "{range}");
+        let src = root(range, "x");
+        assert_eq!(codes(&src), ["E139"], "{range}");
+        let text = said(&src, "E139");
+        assert!(text.contains("An input that makes the argument negative: x = -1"), "{text}");
+        assert!(text.contains("below zero included"), "{text}");
+        assert!(text.contains("`x` has no upper or no lower bound"), "{text}");
+        assert!(text.contains("pass `max(x, 0)`"), "{text}");
+    }
+    assert!(codes(&root("  range >=0", "x")).is_empty());
+    assert!(said(&root("  range <=100", "max(x, -5)"), "E139").contains("pass `max(x, 0)`"));
+}
+
+/// The E108 of a division by a value and of an `isqrt` names an input whose range leaves an end
+/// unwritten, as the E108 of a value does, rather than the ends of int64 no one wrote. Past ±2^80
+/// it says so, rather than give an interval held there.
+#[test]
+fn the_e108_of_a_division_and_an_isqrt_names_the_input_with_no_end() {
+    // The dividend, brought to the step of a grid of 0.01%.
+    let dividend = "rule rate_of v1\n\ninputs\n  a : number  range >=0\n  b : number  range >=1 <=10\n\noutputs\n  r : rate  round half_up(0.01%)\n\ndefine q : rate = half_up(a / b, 0.01%)\n\nresult r = q\n";
+    let text = said(dividend, "E108");
+    assert!(text.contains("Cannot prove that the dividend in `half_up` fits in int64"), "{text}");
+    assert!(text.contains("`a` has no upper or no lower bound"), "{text}");
+    assert!(text.contains("brought to one step with the other before the division, can pass int64"), "{text}");
+    assert!(text.contains("give `a` the end its range does not write"), "{text}");
+    // The divisor, brought to the finer step of the dividend: a hundred times a count with no upper
+    // end passes int64.
+    let divisor = "rule share_of v1\n\ninputs\n  a : rate[step 0.01%]  range >=0% <=100%\n  n : number  range >=1\n\noutputs\n  r : rate  round half_up(1%)\n\ndefine q : rate = half_up(a / n, 1%)\n\nresult r = q\n";
+    let text = said(divisor, "E108");
+    assert!(text.contains("Cannot prove that the divisor in `half_up` fits in int64"), "{text}");
+    assert!(text.contains("give `n` the end its range does not write"), "{text}");
+    assert!(codes(&divisor.replace("range >=1\n", "range >=1 <=1000\n")).is_empty());
+    let root = |range: &str, arg: &str| {
+        format!("rule root v1\n\ninputs\n  x : number{range}\n\noutputs\n  r : number  round down(1)\n\ndefine s : number = isqrt({arg})\n\nresult r = s\n")
+    };
+    let square = root("  range >=0", "x * x");
+    assert_eq!(codes(&square), ["E108"]);
+    let text = said(&square, "E108");
+    assert!(text.contains("Cannot prove that the argument of `isqrt` fits in int64"), "{text}");
+    assert!(text.contains("give `x` the end its range does not write"), "{text}");
+    let text = said(&root("  range >=0 <=1_000_000_000_000_000", "x * x * x"), "E108");
+    assert!(text.contains("It passes ±2^80, which fits int64 on no step."), "{text}");
+}
+
+// ── Every check reads an end a range does not write as E108 does (§15.299) ───────────────────
+
+/// An open value over `a`, whose range is `range`, and `b`, from 0 to 10, combined by `combine` from
+/// `empty`; `x` reads it at a size that passes int64 if the value leaves the range it declares.
+fn opened(range: &str, combine: &str, empty: &str) -> String {
+    format!(
+        "rule best_offer v1\n\ninputs\n  a : money[USD]{range}\n  b : money[USD]  range >=0USD <=10USD\n\noutputs\n  r : money[USD]  round down(1USD)\n\nopen best : money[USD]  combine {combine}  empty {empty}  range >=0USD <=100USD\n  a\n  b\n\ndefine x : money[USD] = best * 90000000000000000\n\nresult r = x\n"
+    )
+}
+
+/// The terms of an open value read an end their ranges do not write as the end of the type: `a`
+/// from 0 with no upper end takes `best` past 100USD, E131, with an input one step past the end the
+/// value declares. 0.50.0 passed it, and `x`, read inside 0USD..100USD, passed int64 while the code
+/// could multiply any amount `a` carries. A term with no lower end under a `max` from 50USD changes
+/// nothing, W132.
+#[test]
+fn an_open_value_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
+    let src = opened("  range >=0USD", "max", "0USD");
+    assert_eq!(codes(&src), ["E131"]);
+    let text = said(&src, "E131");
+    assert!(text.contains("An input that takes it out of the range: a = 101"), "{text}");
+    assert!(text.contains("a: 0USD .. 9_223_372_036_854_775_807USD (this rule)"), "{text}");
+    assert!(text.contains("`a` has no upper or no lower bound"), "{text}");
+    assert!(text.contains("Hint: give `a` the end its range does not write"), "{text}");
+    assert!(codes(&opened("  range >=0USD <=100USD", "max", "0USD")).is_empty());
+    let low = opened("  range <=10USD", "min", "50USD");
+    assert_eq!(codes(&low), ["E131"]);
+    assert!(said(&low, "E131").contains("An input that takes it out of the range: a = -1"), "{}", said(&low, "E131"));
+    let idle = opened("  range <=10USD", "max", "50USD");
+    assert_eq!(codes(&idle), ["W132", "W132"]);
+    let text = said(&idle, "W132");
+    assert!(text.contains("The term a of the open value best changes nothing"), "{text}");
+    assert!(text.contains("The term takes -9_223_372_036_854_775_807USD .. 10USD."), "{text}");
+}
+
+/// An open value whose own range writes one end is held to that end, the other being the end of the
+/// type, which E108 holds it to: a `combine min` with a term down to −100USD leaves `range >=0USD`,
+/// E131, where 0.50.0 checked only a range with both ends and passed it. A `combine max` of terms
+/// from 0USD to 10USD stays inside, and both re-checkers hold the end its certificate states and
+/// refuse a forged one; they refused the certificate of 0.50.0, which states no upper end.
+#[test]
+fn an_open_value_is_held_to_the_end_its_range_writes() {
+    let one = |range: &str, combine: &str, empty: &str| opened(range, combine, empty).replacen("range >=0USD <=100USD", "range >=0USD", 1).replacen(" * 90000000000000000", "", 1);
+    let src = one("  range >=-100USD <=0USD", "min", "5USD");
+    assert_eq!(codes(&src), ["E131"]);
+    let text = said(&src, "E131");
+    assert!(text.contains("range: 0USD .. 9_223_372_036_854_775_807USD"), "{text}");
+    assert!(text.contains("The end the range of best does not write is read as the end of what the type holds"), "{text}");
+    assert!(text.contains("An input that takes it out of the range: a = -"), "{text}");
+    let held = one("  range >=0USD <=10USD", "max", "0USD");
+    assert!(codes(&held).is_empty(), "{:?}", codes(&held));
+    if !have_python() {
+        return;
+    }
+    let file = std::env::temp_dir().join(format!("rulec-open-end-{}.rule", std::process::id()));
+    std::fs::write(&file, &held).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let stated = r#""best":["0",null]"#;
+    assert!(cert.contains(stated), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("open values: 1 hold"), "{out}");
+    let lean_bin = checker();
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+    }
+    let forged = cert.replacen(stated, r#""best":["5",null]"#, 1);
+    let (code, out) = recheck(&forged);
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("outside the range [5, 10] it declares"), "{out}");
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+        assert_ne!(code, 0, "{out}");
+    }
+    std::fs::remove_file(&file).ok();
+}
+
+/// A `derive` that reads `a`, from 0 with no upper end, through `expr`, with the range `range`; a
+/// table over it picks a band.
+fn derived(expr: &str, range: &str) -> String {
+    format!(
+        "rule fee_band v1\n\nenum band = low | high\n\ninputs\n  a : number  range >=0\n\noutputs\n  b : band\n\nderive m : number = {expr}  {range}\n\ntable bands\npolicy unique\n| m    | -> b |\n| <=50 | low  |\n| >50  | high |\n"
+    )
+}
+
+/// The range of a `derive` is held to what it reaches with the end of the type in it: `min(a, 1000)`
+/// reaches 1000, which `range >=0 <=100` leaves out. 0.50.0 held the range to nothing. The message
+/// names `a`, and a value that passes int64 from there is E108's alone.
+#[test]
+fn a_derived_range_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
+    let src = derived("min(a, 1000)", "range >=0 <=100");
+    assert_eq!(codes(&src), ["E112"]);
+    let text = said(&src, "E112");
+    assert!(text.contains("the reachable interval is >=0 <=1000"), "{text}");
+    assert!(text.contains("`a` has no upper or no lower bound"), "{text}");
+    assert!(text.contains("Hint: widen the range, or give `a` the end its range does not write"), "{text}");
+    assert!(codes(&derived("min(a, 100)", "range >=0 <=100")).is_empty());
+    assert_eq!(codes(&derived("a + 1", "range >=0 <=100")), ["E108"]);
+}
+
+/// A table over a `define` reads it in what it reaches: `min(a, 100)` is never above 100, and a
+/// truth that is never false needs no row for false. 0.50.0 read `m` and `ok` over the whole of
+/// what their types hold, and asked for rows no input reaches (E101).
+#[test]
+fn a_table_reads_a_define_in_what_it_reaches_with_the_end_of_the_type() {
+    let band = "rule band_of v1\n\nenum band = low | high\n\ninputs\n  a : number  range >=0\n\noutputs\n  b : band\n\ndefine m : number = min(a, 100)\n\ntable bands\npolicy unique\n| m         | -> b |\n| <=50      | low  |\n| >50 <=100 | high |\n";
+    assert!(codes(band).is_empty(), "{:?}", codes(band));
+    let truth = "rule always_true v1\n\ninputs\n  a : number  range >=0\n\noutputs\n  n : number  round down(1)\n\ndefine ok : bool = a >= 0\n\ntable t\npolicy unique\n| ok   | -> n |\n| true | 1    |\n";
+    assert!(codes(truth).is_empty(), "{:?}", codes(truth));
+}
+
+/// Lines over a quantity from 0 with no upper end; the first heavy line's quantity is the answer of
+/// a fold into `r`, and `tail` is written after it.
+fn heavy(tail: &str) -> String {
+    format!(
+        "rule first_heavy v1\n\nenum line_pick = heavy | light\n\nelements lines\n  q : number  range >=0\n\noutputs\n  r : number  round down(1)  range >=0\n\ntable pick_line\npolicy unique\n| q    | -> pick : line_pick |\n| >=10 | heavy               |\n| <10  | light               |\n\nfold pick over lines -> r\n  heavy     -> take_first q\n  light     -> next\n  empty     -> 0\n  exhausted -> held\n{tail}"
+    )
+}
+
+/// The answer of a fold is the hull of what its arms answer, an end no range writes read as the end
+/// of the type: a range from 0 on `r` holds, the certificate lists it, and both re-checkers work it
+/// out and hold it. A range that leaves out what the arms answer is refused by both. Twice the
+/// answer passes int64, E108, where 0.50.0 passed it and both re-checkers refused its certificate.
+#[test]
+fn the_answer_of_a_fold_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
+    assert!(codes(&heavy("")).is_empty(), "{:?}", codes(&heavy("")));
+    let twice = heavy("").replace("  r : number  round down(1)  range >=0\n", "  r : number  round down(1)\n  s : number  round down(1)\n") + "\ndefine s : number = r * 2\n";
+    assert_eq!(codes(&twice), ["E108"]);
+    if !have_python() {
+        return;
+    }
+    let file = std::env::temp_dir().join(format!("rulec-fold-ends-{}.rule", std::process::id()));
+    std::fs::write(&file, heavy("")).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let stated = r#""ranges":{"q":["0",null],"r":["0",null]}"#;
+    assert!(cert.contains(stated), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("1 of them with an end read at the end of its type"), "{out}");
+    let lean_bin = checker();
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+    }
+    let forged = cert.replacen(stated, r#""ranges":{"q":["0",null],"r":["0","100"]}"#, 1);
+    assert_ne!(forged, cert);
+    let (code, out) = recheck(&forged);
+    assert_ne!(code, 0, "{out}");
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+        assert_ne!(code, 0, "{out}");
+    }
+    std::fs::remove_file(&file).ok();
+}
+
 // ── A constraint with a sum on one side (§15.216) ────────────────────────────────────────────
 
 const QUOTA: &str = "rule quota v1\n\nenum headroom = used_up | low | ample\n\ninputs\n  used      : number  range >=0 <=1000\n  requested : number  range >=1 <=1000\n  quota     : number  range >=1 <=1000\n\nconstraint used + requested <= quota\n\noutputs\n  status : headroom\n\nderive left : number = quota - used - requested  range >=-1999 <=999\n\ntable remaining\npolicy unique\n| left     | -> status : headroom |\n| 0        | used_up              |\n| >=1 <=99 | low                  |\n| >=100    | ample                |\n";

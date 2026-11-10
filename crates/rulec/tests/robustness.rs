@@ -182,6 +182,39 @@ fn 見つかった壊れ方は_それぞれのコードで止まる() {
     assert!(codes_of(share).contains(&"E061"), "allocate の全体の範囲が逆さのまま通る");
 }
 
+/// A `range` cut short after its word, which the cutting above makes of every range in the corpus
+/// (§15.299). It read as no range at all, so the line passed, and one written after a range on the
+/// same line threw that range away. It is E149 on every kind of line that takes a range, said once
+/// on an `open` line too, which reads each of its ranges on its own. A word after `range` that is
+/// not an end is E047, which says what a range looks like.
+#[test]
+fn 端の無い_range_は_e149で止まる() {
+    let only = |what: &str, src: &str| {
+        let got = codes_of(src);
+        assert_eq!(got, ["E149"], "{what}: E149 だけのはず\n{src}");
+    };
+    let input = |tail: &str| format!("rule t(t) v1\n\ninputs\n  x(x) : number  range >=0 <=100\n  n(n) : number{tail}\n\noutputs\n  y(y) : number  round down(1)\n\nresult y = x + n\n");
+    for tail in ["  range", "  range random", "  range contract_only", "  range @gov table1", "  range range >=0 <=5", "  range >=0 <=5 range"] {
+        only(tail, &input(tail));
+    }
+    for tail in ["  range 5", "  range >=", "  range foo"] {
+        assert_eq!(codes_of(&input(tail)), ["E047"], "{tail}");
+    }
+    let head = "rule t(t) v1\n\ninputs\n  x(x) : number  range >=0 <=100\n\noutputs\n";
+    only("出力の行の途中", &format!("{head}  y(y) : number  range round down(1)\n\nresult y = x\n"));
+    only("出力の行の終わり", &format!("{head}  y(y) : number  round down(1)  range\n\nresult y = x\n"));
+    let out = format!("{head}  y(y) : number  round down(1)\n\n");
+    only("derive の行", &format!("{out}derive z(z) : number = x + 1  range\n\nresult y = z\n"));
+    only("derive の次の行", &format!("{out}derive z(z) : number = x + 1\n  range\n\nresult y = z\n"));
+    let lines = "rule t(t) v1\n\nelements lines(lines)\n  q(q) : number  range >=1 <=99\n  heavy(heavy) : bool\n\noutputs\n  n(n) : number  round down(1)\n\n";
+    only("count の行", &format!("{lines}count heavies(heavies) over lines where heavy  range\n\nresult n = heavies\n"));
+    only("要素のフィールド", &format!("{}sum total(total) over lines of q  range >=0 <=9900\n\nresult n = total\n", lines.replace("  heavy(heavy) : bool\n", "  code(code) : number  range unique\n")));
+    let open = |tail: &str| format!("rule t(t) v1\n\ninputs\n  s(s) : money[円]  range >=0円 <=5000円\n\noutputs\n  d(d) : money[円]  round down(1円)\n\nopen cap(cap) : money[円]  {tail}\n\ndefine v(v) : money[円] = min(cap, s)\n\nresult d = v\n");
+    only("open の行の終わり", &open("combine min  empty 50円  range"));
+    only("open の行の途中", &open("range combine min  empty 50円"));
+    only("open の二つめの range", &open("combine min  empty 50円  range >=0円 <=50円 range"));
+}
+
 /// Rules that passed the check and whose generated code then failed: found by generating code
 /// for cut-up rules that still passed, and running it against their own vectors.
 #[test]

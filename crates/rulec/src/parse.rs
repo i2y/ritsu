@@ -1962,6 +1962,32 @@ impl P {
                         bounds.push((op, l));
                         k += 2;
                     }
+                    // A `range` with no end decides nothing, and read as no range at all, a line
+                    // left half written passed in silence (§15.299). E149 is for a `range` the line
+                    // ends after, or that another word of the tail or a citation follows; anything
+                    // else after it is E047's to say, and that one says what a range looks like.
+                    let ends_here = ts.get(start + 1).is_none_or(|t| {
+                        t.is(&Kind::At)
+                            || t.ident().is_some_and(|w| {
+                                [crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND, crate::kw::UNIQUE, crate::kw::EMPTY, crate::kw::COMBINE].contains(&w)
+                            })
+                    });
+                    if bounds.is_empty() && ends_here {
+                        let at = self.at(ts[start].span.line);
+                        self.err(
+                            Diag::error("E149", tr!("`range` に端が書かれていません", "`range` writes no end"))
+                                .at(at)
+                                .mark(ts[start].span.clone(), tr!("この後に `>=` も `<=` もありません", "no `>=` or `<=` follows it"))
+                                .note(tr!(
+                                    "範囲は `range >=<値> <=<値>` の形で、端を少なくとも一つ書きます。端の無い `range` は何も決めず、書きかけの行と見分けがつきません。",
+                                    "A range is `range >=<value> <=<value>`, with at least one end. A `range` with no end decides nothing, and cannot be told from a line left half written."
+                                ))
+                                .note(tr!(
+                                    "ヒント: `range` の後に端（`>=` か `<=`）を書いてください。範囲を決めないなら、`range` を消してください。",
+                                    "Hint: write an end after `range`, `>=` or `<=`. Where the value has no range, take `range` off."
+                                )),
+                        );
+                    }
                     range = Some(Range { bounds, days: None, span: span_of(&ts[start..k.min(ts.len())]) });
                 }
                 Some(crate::kw::CONTRACT_ONLY) => {

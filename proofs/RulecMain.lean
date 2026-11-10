@@ -175,11 +175,14 @@ def expandShares (defs : String → Option RulecCert.Expr) : RulecCert.Expr → 
 
 /-- What `checkValues` works out: each value's interval, the hull of each column a table writes
     numbers into, and what bounds a name — the one of those that applies, and otherwise the range
-    the rule declares, never the stated range of a column a table writes. -/
+    the rule declares, never the stated range of a column a table writes. `wideOf` is what bounds a
+    name with an end no range writes read as the end of its type (rulec's §15.294, §15.299): the
+    claims that hold a value to something read it where `rangesOf` has nothing. -/
 structure Worked where
   reachOf : String → Option Span2
   writtenOf : String → Option Span2
   rangesOf : String → Option Span2
+  wideOf : String → Option Span2
   within : RulecCert.Expr → RulecCert.Expr → Bool
 
 /-- The ends of what a number of a type, stored at a scale, can be (rulec's §15.294): 2^63 − 1
@@ -190,6 +193,12 @@ def typeEnds (t : String) (scale : Rat) : Option Span2 :=
   match tyOfString t with
   | some τ => if τ.numeric then some (-(I64_MAX / scale), I64_MAX / scale) else none
   | none => none
+
+/-- The ends of what a number of the type the certificate gives a name can be, at the scale it gives
+    it (rulec's §15.294). -/
+def endsOfName (cert : Json) (n : String) : Option Span2 :=
+  let scale := (((objPairs ((field cert "scales").getD Json.null)).find? (fun p => p.1 == n)).bind (fun p => optRat p.2)).getD 1
+  ((objPairs ((field cert "types").getD Json.null)).find? (fun p => p.1 == n)).bind (fun p => str p.2 >>= fun t => typeEnds t scale)
 
 /-- The node of an expression's tree at `pos`, the places of the operands from the top (rulec's
     §15.296): 0 and 1 the two sides of an operator, the place of an argument of a call. -/
@@ -378,8 +387,10 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   -- The interval the int64 claim holds a value to where its own has an end no range writes
   -- (rulec's §15.294): the same arithmetic, an end a range does not write read as the end of what
   -- its type holds. The entry of the generated code holds every input to those ends, and this claim
-  -- every value computed from them, so `eval_mem_interval` holds with these as the ranges. Only the
-  -- int64 claim reads them.
+  -- every value computed from them, so `eval_mem_interval` holds with these as the ranges. Every
+  -- claim that holds a value to something reads them where `rangesF` has nothing (rulec's
+  -- §15.299): the int64 claim, the ranges of the outputs, of the open values and of what a fold
+  -- answers, and what a `define` reaches in a table (`Worked.wideOf`).
   let scalesJson := (field cert "scales").getD Json.null
   let scaleOf : String → Rat := fun n =>
     (((objPairs scalesJson).find? (fun p => p.1 == n)).bind (fun p => optRat p.2)).getD 1
@@ -391,6 +402,15 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       | some a => ((a[0]? >>= optRat), (a[1]? >>= optRat))
       | none => (none, none)
     | none => (none, none)
+  -- The answer of a fold whose range `ranges` does not state with both ends is the hull of the
+  -- values it answers with, each read the same way (rulec's §15.299): worked out below, with the
+  -- columns.
+  let folds : List (String × List Writes) := (fieldArr cert "fold_answers").toList.filterMap (fun fa =>
+    let n := fieldStr fa "name"
+    if (declared n).isSome || (endsOf n).isNone then none
+    else ((fieldArr fa "answers").toList.mapM (fun j => exprOfJson j (dates := true))).map
+      (fun es => (n, es.map (fun e => ({ expr := e } : Writes)))))
+  let isFold : String → Bool := fun n => folds.any (fun p => p.1 == n)
   let wideAt : List (String × Span2) → List (String × Span2) → String → Option Span2 := fun gotW wroteW n =>
     -- What follows reads it no wider than its type: one that is wider fails below already.
     let clamp : Span2 → Span2 := fun I => match endsOf n with
@@ -406,17 +426,17 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
           | some I => some (clamp I)
           | none => match endsOf n with
             | some E =>
-              -- A column is worked out from what its rows write, below; a value with no interval
-              -- at all has nothing read into it.
-              if isOut n || vals.any (fun v => fieldStr v "name" == n) then none
+              -- A column is worked out from what its rows write, below, and the answer of a fold
+              -- from what it answers with; a value with no interval at all has nothing read into it.
+              if isOut n || isFold n || vals.any (fun v => fieldStr v "name" == n) then none
               else let w := writtenEnds n; some (w.1.getD E.1, w.2.getD E.2)
             | none => if isOut n then none else declared n
   let mut wideGot : List (String × Span2) := []
   let mut wideWrote : List (String × Span2) := []
-  -- Worked out together, as above: a value over a table's column, a table writing a value. A
-  -- column whose rows are never all worked out is read at the ends of its type, as `check` reads
-  -- it, and what reads it is worked out from there.
-  for _ in [0 : vals.size + 2 * outs.length + 2] do
+  -- Worked out together, as above: a value over a table's column, a table writing a value, a fold
+  -- answering with a value. A column whose rows are never all worked out is read at the ends of
+  -- its type, as `check` reads it, and what reads it is worked out from there.
+  for _ in [0 : vals.size + 2 * (outs.length + folds.length) + 2] do
     let mut moved := false
     for v in vals do
       let name := fieldStr v "name"
@@ -431,11 +451,16 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       match hullOf (wideAt wideGot wideWrote) within es with
       | some H => wideWrote := wideWrote ++ [(col, H)]; moved := true
       | none => pure ()
+    for (n, ws) in folds do
+      if wideWrote.any (fun p => p.1 == n) then continue
+      match hullOf (wideAt wideGot wideWrote) within ws with
+      | some H => wideWrote := wideWrote ++ [(n, H)]; moved := true
+      | none => pure ()
     if !moved then
       let ww := wideWrote
-      let rest := outs.filterMap (fun o =>
-        if wroteF.any (fun p => p.1 == o.1) || ww.any (fun p => p.1 == o.1) then none
-        else (endsOf o.1).map (fun E => (o.1, E)))
+      let rest := (outs.map (·.1) ++ folds.map (·.1)).filterMap (fun o =>
+        if wroteF.any (fun p => p.1 == o) || ww.any (fun p => p.1 == o) then none
+        else (endsOf o).map (fun E => (o, E)))
       if rest.isEmpty then break
       wideWrote := wideWrote ++ rest
   let wideF := wideGot
@@ -680,7 +705,7 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
     r := r.say s!"  fold values: {fheld} fit int64, and {fsteps} integers on the way to them"
   let reachOf : String → Option Span2 := fun n => (gotF.find? (fun p => p.1 == n)).map (·.2)
   let writtenOf : String → Option Span2 := fun n => (wroteF.find? (fun p => p.1 == n)).map (·.2)
-  return (r, { reachOf := reachOf, writtenOf := writtenOf, rangesOf := rangesF, within := within })
+  return (r, { reachOf := reachOf, writtenOf := writtenOf, rangesOf := rangesF, wideOf := wideEnv, within := within })
 
 /-- What kind of column each name makes (rulec's §15.196): a `derive` is `derived`, a `define` of
     any type `define`, an input `input`, what a walk leaves behind `walk`; anything else — a column
@@ -717,7 +742,8 @@ def truthOfValue (cert : Json) (w : Worked) (n : String) : Option (Cmp × Span2 
       some (d, d)
     else do
       let ex ← exprOfJson x
-      interval w.rangesOf w.within ex
+      -- An end no range writes is read as the end of its type, as `check` reads it (§15.299).
+      interval (fun n => (w.rangesOf n).orElse (fun _ => w.wideOf n)) w.within ex
   let L ← field e "l" >>= side
   let R ← field e "r" >>= side
   some (op, L, R)
@@ -2573,13 +2599,20 @@ def checkExtremes (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
       match field rangesJ name with
       | none => held := held + 1  -- no range is claimed for the answer, so nothing reads it with one
       | some sj =>
-        match ratPair sj with
+        -- An end the range does not write is read as the end of the type, and so is an end the
+        -- column's range does not write (rulec's §15.299): what reads the answer reads it so.
+        let S? : Option Span2 := match ratPair sj, arr sj, endsOfName cert name with
+          | some S, _, _ => some S
+          | none, some a, some E => some ((a[0]? >>= optRat).getD E.1, (a[1]? >>= optRat).getD E.2)
+          | _, _, _ => none
+        match S? with
         | none =>
-          -- An end left open: `ranges` gives this program no interval for the name, so nothing here
-          -- reads the answer with it; that it holds is the certificate's word.
+          -- An end left open with no end of a type to read it as: `ranges` gives this program no
+          -- interval for the name, so nothing here reads the answer with it; that it holds is the
+          -- certificate's word.
           r := r.state s!"the range of {name}, the {kind} of {col}: an end of it is open"
         | some S =>
-          match w.rangesOf col, field e "empty" >>= optRat with
+          match (w.rangesOf col).orElse (fun _ => w.wideOf col), field e "empty" >>= optRat with
           | none, _ =>
             r := r.fail s!"{name}: the certificate states a range for it, and this program cannot work out the range of {col}"
           | _, none =>
@@ -2605,12 +2638,14 @@ def answerExprOfJson (j : Json) : Option RulecCert.Expr := exprOfJson j (dates :
 def checkFoldAnswers (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
   let mut r := r
   let rangesJ := (field cert "ranges").getD Json.null
+  -- A value that reads an end no range writes is read with that end at the end of its type
+  -- (rulec's §15.299): the range then states the ends the output's line writes, or none, and an end
+  -- it does not write is the hull's own, which holds it.
+  let reads : String → Option Span2 := fun n => (w.rangesOf n).orElse (fun _ => w.wideOf n)
   let mut held := 0
+  let mut opened := 0
   for fa in fieldArr cert "fold_answers" do
     let name := fieldStr fa "name"
-    let some S := field rangesJ name >>= ratPair
-      | r := r.fail s!"{name}: the certificate lists the values the fold answers it with, and states no range for it"
-        continue
     let some answers := (fieldArr fa "answers").toList.mapM answerExprOfJson
       | r := r.fail s!"{name}: a value the fold answers with cannot be read"
         continue
@@ -2618,15 +2653,20 @@ def checkFoldAnswers (cert : Json) (w : Worked) (r : Report) : Report := Id.run 
       r := r.fail s!"{name}: the fold answers with no value at all"
       continue
     let ws : List Writes := answers.map (fun e => { expr := e })
-    if writesWithin w.rangesOf w.within S ws then held := held + 1
+    let some H := hullOf reads w.within ws
+      | r := r.fail s!"{name}: one of the values the fold answers with has no interval this program can work out"
+        continue
+    let ends : Option Rat × Option Rat := match field rangesJ name >>= arr with
+      | some a => ((a[0]? >>= optRat), (a[1]? >>= optRat))
+      | none => (none, none)
+    if ends.1.isNone || ends.2.isNone then opened := opened + 1
+    let S : Span2 := (ends.1.getD H.1, ends.2.getD H.2)
+    if writesWithin reads w.within S ws then held := held + 1
     else
-      match hullOf w.rangesOf w.within ws with
-      | some H =>
-        r := r.fail s!"{name}: the fold answers with values from {ratText H.1} to {ratText H.2}, and the certificate states the range [{ratText S.1}, {ratText S.2}]"
-      | none =>
-        r := r.fail s!"{name}: one of the values the fold answers with has no interval this program can work out"
+      r := r.fail s!"{name}: the fold answers with values from {ratText H.1} to {ratText H.2}, and the certificate states the range [{ratText S.1}, {ratText S.2}]"
   if held > 0 then
-    r := r.say s!"  fold answers: {held} ranges hold every value their fold answers with"
+    let note := if opened > 0 then s!", {opened} of them with an end read at the end of its type" else ""
+    r := r.say s!"  fold answers: {held} ranges hold every value their fold answers with{note}"
   return r
 
 /-- **What an open value comes to, held to the range it declares** (rulec's §15.227). The value is its
@@ -2635,7 +2675,9 @@ def checkFoldAnswers (cert : Json) (w : Worked) (r : Report) : Report := Id.run 
     out for it as for every name (`Worked.rangesOf`: from its expression, from what the rows that write it
     write, or the range declared for it). The range the rule declares has to hold that interval
     (`openOk`), and `openValue_mem_stated` is what a pass settles: whatever the terms are at a call, the
-    value is inside the range the tables below were checked over. -/
+    value is inside the range the tables below were checked over. An end the range does not write is
+    the end of the type, which the int64 claim holds the value to, and only the ends it writes are held
+    here (rulec's §15.299). -/
 def checkOpens (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
   let mut r := r
   let rangesJ := (field cert "ranges").getD Json.null
@@ -2649,9 +2691,14 @@ def checkOpens (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
         else if how == "max" then some Combine.max else if how == "min" then some Combine.min else none)
       | r := r.fail s!"{name}: `combine {how}` is not one of sum, product, max and min"
         continue
-    let some S := field rangesJ name >>= ratPair
-      | r := r.fail s!"{name}: an open value declares its range, and the certificate states none with two ends"
-        continue
+    -- An end the range does not write is the end of the type, which the int64 claim holds the value
+    -- to; the ends it writes are held here (rulec's §15.299).
+    let ends : Option Rat × Option Rat := match field rangesJ name >>= arr with
+      | some a => ((a[0]? >>= optRat), (a[1]? >>= optRat))
+      | none => (none, none)
+    if ends.1.isNone && ends.2.isNone then
+      r := r.fail s!"{name}: an open value declares its range, and the certificate states none"
+      continue
     let start : Option Rat := match field o "empty" >>= optRat with
       | some z => some z
       | none => match c with
@@ -2664,13 +2711,17 @@ def checkOpens (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
     let ts := (fieldArr o "terms").toList
     terms := terms + ts.length
     by_ := by_ + (ts.filter (fun t => (field t "from").isSome)).length
-    let some Is := ts.mapM (fun t => w.rangesOf (fieldStr t "name"))
-      | let missing := (ts.filter (fun t => (w.rangesOf (fieldStr t "name")).isNone)).map (fun t => fieldStr t "name")
+    -- A term whose range leaves an end unwritten is read with that end at the end of its type, as
+    -- `check` reads it (rulec's §15.299).
+    let termOf : String → Option Span2 := fun n => (w.rangesOf n).orElse (fun _ => w.wideOf n)
+    let some Is := ts.mapM (fun t => termOf (fieldStr t "name"))
+      | let missing := (ts.filter (fun t => (termOf (fieldStr t "name")).isNone)).map (fun t => fieldStr t "name")
         r := r.fail s!"{name}: this program cannot work out the range of its term {", ".intercalate missing}"
         continue
+    let I := openIval c z Is
+    let S : Span2 := (ends.1.getD I.1, ends.2.getD I.2)
     if openOk c z Is S then held := held + 1
     else
-      let I := openIval c z Is
       r := r.fail s!"{name}: its terms together come to [{ratText I.1}, {ratText I.2}], outside the range [{ratText S.1}, {ratText S.2}] it declares"
   if held > 0 then
     let from_ := if by_ > 0 then s!", {by_} of the terms from contributions" else ""
@@ -2715,26 +2766,40 @@ def checkRounds (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
     if g ≤ 0 then
       r := r.fail s!"{name}: the grid it rounds to, {ratText g}, is not above zero"
       continue
-    let some S := ratPair sj
-      | r := r.state s!"what {name} answers once rounded: an end of the range the certificate states for it is open"
-        continue
-    -- What decides the output: worked out here, or for a walk or an open value the range the
-    -- certificate declares for it (`none` where an end of that is open), with which of the two it is.
-    let J? : Option (Option Span2 × Bool) := match w.reachOf name, w.writtenOf name with
-      | some I, _ => some (some I, false)
-      | none, some H => some (some H, false)
+    let ends : Option Rat × Option Rat := match arr sj with
+      | some a => ((a[0]? >>= optRat), (a[1]? >>= optRat))
+      | none => (none, none)
+    if ends.1.isNone && ends.2.isNone then
+      r := r.state s!"what {name} answers once rounded: the range the certificate states for it has no end"
+      continue
+    -- What decides the output: worked out here; for a walk or an open value the range the
+    -- certificate declares for it, with the ends it writes; otherwise worked out with an end no
+    -- range writes read as the end of its type, as `check` reads it (rulec's §15.299), and so is an
+    -- end the range of a walk does not write.
+    let J? : Option (Option Span2 × Option (Option Rat × Option Rat)) := match w.reachOf name, w.writtenOf name with
+      | some I, _ => some (some I, none)
+      | none, some H => some (some H, none)
       | none, none =>
         if walks.contains name || opens.contains name then
-          (field rangesJ name).map (fun dj => (ratPair dj, true))
-        else none
+          (field rangesJ name >>= arr).map (fun a =>
+            let own : Option Rat × Option Rat := ((a[0]? >>= optRat), (a[1]? >>= optRat))
+            let J : Option Span2 := match own, endsOfName cert name with
+              | (some lo, some hi), _ => some (lo, hi)
+              | (lo, hi), some E => some (lo.getD E.1, hi.getD E.2)
+              | _, none => none
+            (J, some own))
+        else (w.wideOf name).map (fun I => (some I, none))
     match J? with
     | none =>
       r := r.state s!"what {name} answers once rounded: this program does not work out what decides it"
     | some (none, _) =>
       r := r.state s!"what {name} answers once rounded: an end of the range it declares is open"
     | some (some J, own) =>
+      -- An end the output's range does not write is held to nothing, as `check` holds it to
+      -- nothing: it is the end of `J` rounded out, which holds it.
+      let S : Span2 := (ends.1.getD (floorTo g J.1), ends.2.getD (ceilTo g J.2))
       if roundedWithin g S J then held := held + 1
-      else if own && J == S then
+      else if own == some ends then
         r := r.state s!"what {name} answers once rounded: the range it declares, [{ratText S.1}, {ratText S.2}], does not sit on the grid it rounds to, {ratText g}"
       else
         r := r.fail s!"{name}: what decides it runs from {ratText J.1} to {ratText J.2}; rounded to {ratText g}, it answers from {ratText (floorTo g J.1)} to {ratText (ceilTo g J.2)}, and the certificate states the range [{ratText S.1}, {ratText S.2}] for it"
@@ -3558,7 +3623,11 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
           else none
         | none => none
       | none => none
-    let reachOf := worked.reachOf
+    -- A value whose own interval reads an end no range writes reaches what it comes to with that
+    -- end read as the end of its type, as `check` reads it (rulec's §15.299).
+    let computed := (fieldArr cert "values").toList.map (fieldStr · "name")
+    let reachOf : String → Option Span2 := fun n =>
+      (worked.reachOf n).orElse (fun _ => if computed.contains n then worked.wideOf n else none)
     r := r'
     let declaredRange : String → Option Span2 := fun n =>
       match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with

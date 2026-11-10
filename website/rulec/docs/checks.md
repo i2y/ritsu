@@ -374,7 +374,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 246 deliberately broken
+   and that implementation has not been proved correct. The evidence is 248 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -663,7 +663,9 @@ The checker holds it to what the output can come to: the cells of the
 rows that decide it, or what its `result` reaches over the inputs'
 ranges and the `constraint` lines. A range that leaves out an answer
 the rule can give is E140, and the message gives the range to widen it
-to. A range on an output that reads an input with no range cannot be
+to. An end an input's range does not write is read as the end of what
+its type holds, so `min(a, 100)` stays inside `range >=0 <=100` however
+large `a` can be. A range on an output that is no number cannot be
 checked, and is E140 too. A share taken as the difference of two
 `allocate` calls, at running totals the constraints put in order, is
 read as never below zero and never above the amount handed out

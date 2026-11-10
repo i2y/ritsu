@@ -169,13 +169,16 @@ fn a_value_read_out_of_the_callers_object_is_not_drawn() {
     assert!(!codes_of(t.path(), "field.rule", &field).is_empty(), "a mark after a field's path is stepped over");
 }
 
+/// A small rule that picks by weight, and passes as it is.
+const PICK: &str = "rule t v1\n\nenum v = skip | pick\n\nelements os\n  ix : number  range >=1 <=9\n  ok : bool\n  w  : number  range >=0 <=10\n\ninputs\n  roll : number  range >=0 <=99  random\n  cap  : number  range >=0 <=5\n\noutputs\n  p : number  round down(1)\n\n\
+                table j\npolicy unique\n| ok    | cap | -> v : v |\n| true  | -   | pick     |\n| false | -   | skip     |\n\nfold v over os\n  skip      -> next\n  pick      -> take_weighted ix by w\n  draw      -> roll\n  empty     -> 0\n  exhausted -> held\n";
+
 /// A pick by weight that is not shaped right stops the check with E073: each form on a small rule
 /// that passes as it is.
 #[test]
 fn a_misshapen_pick_by_weight_is_e073() {
     let t = TempDir::new("chances-e073");
-    let base = "rule t v1\n\nenum v = skip | pick\n\nelements os\n  ix : number  range >=1 <=9\n  ok : bool\n  w  : number  range >=0 <=10\n\ninputs\n  roll : number  range >=0 <=99  random\n  cap  : number  range >=0 <=5\n\noutputs\n  p : number  round down(1)\n\n\
-                table j\npolicy unique\n| ok    | cap | -> v : v |\n| true  | -   | pick     |\n| false | -   | skip     |\n\nfold v over os\n  skip      -> next\n  pick      -> take_weighted ix by w\n  draw      -> roll\n  empty     -> 0\n  exhausted -> held\n";
+    let base = PICK;
     assert!(codes_of(t.path(), "base.rule", base).is_empty());
     let forms: &[(&str, &str, &str)] = &[
         ("no `by`", "  pick      -> take_weighted ix by w", "  pick      -> take_weighted ix"),
@@ -233,6 +236,29 @@ fn a_claim_past_its_budget_is_w129_until_the_budget_takes_it() {
     assert_eq!(w.len(), 1, "{ds:?}");
     assert!(rulec::json::unparse(w[0]).contains("the 100 combinations of the inputs that are not random, times the 100 points of the random inputs, go past the budget (5000 points)"), "{:?}", w[0]);
     assert!(diags_of(t.path(), "t.rule", src, &[]).is_empty(), "the default budget does not decide it");
+}
+
+/// A weight reads an end its range does not write as the end of what its type holds, as E108 does
+/// (rulec's §15.299). One from 0 with no upper end is never negative, and two of them already pass
+/// int64, which the walk adds them up in: E108, which names the weight's range. One with no lower
+/// end can be negative, E073, which says where the end it shows comes from, and `max(w, 0)` keeps
+/// it at zero or more. 0.50.0 said E073 of every one of them, `max(w, 0)` too.
+#[test]
+fn a_weight_reads_an_end_it_does_not_write_as_the_end_of_its_type() {
+    let t = TempDir::new("chances-ends");
+    let with = |range: &str, by: &str| PICK.replacen("  w  : number  range >=0 <=10", &format!("  w  : number{range}"), 1).replacen("take_weighted ix by w", &format!("take_weighted ix by {by}"), 1);
+    // What `check` prints for the rule, once `codes_of` has written it.
+    let shown = |name: &str| run_in(t.path(), &["check", name]).1;
+    assert_eq!(codes_of(t.path(), "up.rule", &with("  range >=0", "w")), ["E108"]);
+    let text = shown("up.rule");
+    assert!(text.contains("Cannot prove that the total of the weights fits in int64"), "{text}");
+    assert!(text.contains("a weight can be as large as 9223372036854775807"), "{text}");
+    assert!(text.contains("`w` has no upper or no lower bound"), "{text}");
+    assert_eq!(codes_of(t.path(), "low.rule", &with("  range <=10", "w")), ["E073"]);
+    let text = shown("low.rule");
+    assert!(text.contains("the weight's range is -9223372036854775807..10") && text.contains("`w` has no upper or no lower bound"), "{text}");
+    assert!(codes_of(t.path(), "floor.rule", &with("  range <=10", "max(w, 0)")).is_empty());
+    assert_eq!(codes_of(t.path(), "none.rule", &with("", "max(w, 0)")), ["E108"]);
 }
 
 /// W131 counts the points the function runs on every call, and a pick by weight whose drawn value

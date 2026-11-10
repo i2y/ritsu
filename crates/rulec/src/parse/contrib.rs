@@ -128,7 +128,10 @@ impl P {
                     k += 2;
                 }
                 Some(crate::kw::RANGE) => {
-                    let (r, _) = self.tail_range(line, k);
+                    // Only this `range` is read here. A later one on the line is read when the
+                    // loop comes to it, and reading it twice would say twice what is wrong with it.
+                    let next = line[k + 1..].iter().position(|t| t.ident() == Some(crate::kw::RANGE)).map_or(line.len(), |p| k + 1 + p);
+                    let (r, _) = self.tail_range(&line[..next], k);
                     range = r;
                     // `tail_range` reads the pairs it can; what is left after them is not read.
                     let mut j = k + 1;

@@ -203,28 +203,52 @@ fn a_range_on_an_output_holds_what_the_output_comes_to() {
     assert!(said(&ship("  range >=0JPY <=1_000JPY")).0.is_empty());
 }
 
+/// An end a range does not write is read as the end of what its type holds (rulec's §15.299), as
+/// E108 reads it: a tenth of an amount with no range comes to a tenth of ±(2^63 − 1) yen, and a
+/// range to 500JPY does not hold that. The message names the input rather than offer a range out
+/// to the end of the type, and E140 carries no fix. 0.50.0 said the range could not be checked. A
+/// fee that `min` keeps under 500JPY passes, and so do a fold and a walk over a field with no upper
+/// end whose ranges keep only the end that holds. A value that passes int64 from there is E108's
+/// alone.
 #[test]
-fn a_range_that_cannot_be_checked_is_e140_too() {
-    // an input with no range: nothing says what the fee comes to. A tenth of it rather than 10% of
-    // it, which can pass int64 at the end of the type and is E108 first (rulec's §15.294).
-    let opened = |range: &str| {
-        fee(range).replace("amount : money[JPY]  range >=0JPY <=10_000JPY", "amount : money[JPY]").replace("result fee = amount * 10%", "result fee = amount ÷ 10")
+fn a_range_reads_an_end_no_range_writes_as_the_end_of_its_type() {
+    // A tenth of it rather than 10% of it, which can pass int64 at the end of the type.
+    let opened = |range: &str, result: &str| {
+        fee(range).replace("amount : money[JPY]  range >=0JPY <=10_000JPY", "amount : money[JPY]").replace("result fee = amount * 10%", result)
     };
-    let open = opened("  range >=0JPY <=500JPY");
+    let open = opened("  range >=0JPY <=500JPY", "result fee = amount ÷ 10");
     let (codes, en, ja) = said(&open);
     assert_eq!(codes, ["E140"], "{en}");
-    assert!(en.contains("The range of the output fee cannot be checked") && en.contains("rulec cannot work out what fee takes from its `result`"), "{en}");
-    assert!(en.contains("Give the inputs it reads a range, or take this range off."), "{en}");
-    assert!(ja.contains("出力 fee の範囲を確かめられません") && ja.contains("`result` の式から fee のとる値の範囲を求められませんでした"), "{ja}");
+    assert!(en.contains("The range of the output fee does not hold the values it can take"), "{en}");
+    assert!(en.contains("it can take >=-922_337_203_685_477_581JPY <=922_337_203_685_477_581JPY"), "{en}");
+    assert!(en.contains("`amount` has no upper or no lower bound"), "{en}");
+    assert!(en.contains("Hint: widen the range, or give `amount` the end its range does not write"), "{en}");
+    assert!(ja.contains("出力 fee の範囲が、とりうる値を含んでいません") && ja.contains("`amount` の範囲に上限か下限がありません"), "{ja}");
     assert_eq!(fix(&open), None);
-    // with no range written, the output with no range to take is no finding, as before
-    assert!(said(&opened("")).0.is_empty());
-    // an output that is no number: the range is not taken on trust
+    assert!(said(&opened("  range >=0JPY <=500JPY", "result fee = min(max(amount, 0JPY), 5_000JPY) ÷ 10")).0.is_empty());
+    // with no range written, the output takes what it comes to, as before
+    assert!(said(&opened("", "result fee = amount ÷ 10")).0.is_empty());
+    let (codes, en, _) = said(&opened("  range >=0JPY <=500JPY", "result fee = amount + 1JPY"));
+    assert_eq!(codes, ["E108"], "{en}");
+    // A fold and a walk over a quantity from 0 with no upper end.
+    let lines = "rule first_heavy v1\n\nenum line_pick = heavy | light\n\nelements lines\n  q : number  range >=0\n\noutputs\n  r : number  round down(1)  range >=0\n\n";
+    let fold = format!("{lines}table pick_line\npolicy unique\n| q    | -> pick : line_pick |\n| >=10 | heavy               |\n| <10  | light               |\n\nfold pick over lines -> r\n  heavy     -> take_first q\n  light     -> next\n  empty     -> 0\n  exhausted -> held\n");
+    assert!(said(&fold).0.is_empty(), "{}", said(&fold).1);
+    let (codes, en, _) = said(&fold.replace("range >=0\n\ntable", "range >=0 <=100\n\ntable"));
+    assert_eq!(codes, ["E140"], "{en}");
+    assert!(en.contains("it can take >=0 <=9223372036854775807") && en.contains("`q` has no upper or no lower bound"), "{en}");
+    let walk = "rule top_line v1\n\nelements lines\n  q : number  range >=0\n\noutputs\n  r : number  round down(1)  range >=0\n\nmax r over lines of q empty 0  range >=0\n";
+    assert!(said(walk).0.is_empty(), "{}", said(walk).1);
+}
+
+/// A range on an output that is no number cannot be checked: the range is not taken on trust.
+#[test]
+fn a_range_that_cannot_be_checked_is_e140_too() {
     let tier = "rule tier v1\n\nenum level = basic < silver < gold\n\ninputs\n  spent : money[JPY]  range >=0JPY <=100_000JPY\n\noutputs\n  tier : level  range >=basic <=silver\n\ntable by_spent\npolicy unique\n| spent                   | -> tier |\n| <10_000JPY              | basic   |\n| >=10_000JPY <50_000JPY  | silver  |\n| >=50_000JPY             | gold    |\n\nexamples\n| spent | -> tier |\n| 0JPY  | basic   |\n";
     let (codes, en, ja) = said(tier);
     assert_eq!(codes, ["E140"], "{en}");
+    assert!(en.contains("The range of the output tier cannot be checked"), "{en}");
     assert!(en.contains("Only an output of numbers, money, quantities or rates has its range checked, and tier is level.") && en.contains("Take this range off."), "{en}");
-    assert!(!en.contains("Give the inputs it reads a range"), "{en}");
     assert!(ja.contains("範囲を確かめられるのは、数、お金、量、率の出力だけです。tier は level です。"), "{ja}");
 }
 

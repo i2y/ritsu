@@ -637,8 +637,10 @@ def wide_values(cert, known):
     """The interval the int64 claim holds a value to where its own interval has an end no range
     writes (rulec's §15.294): the same arithmetic, an end a range does not write read as the end of
     what its type holds. The entry of the generated code holds every input to those ends, and this
-    claim every value computed from them. Only `check_values` reads these: a value's range
-    everywhere else keeps the ends the rule writes."""
+    claim every value computed from them. Every claim that holds a value to something reads these
+    where the ends the rule writes leave its own interval open (rulec's §15.299): the int64 claim,
+    the ranges of the outputs, of the open values and of what a fold answers, and what a `define`
+    reaches in a table. A value's range everywhere else keeps the ends the rule writes."""
     types, scales = cert.get("types", {}), cert.get("scales", {})
     stated = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
     outs, _ = numeric_outputs(cert)
@@ -649,13 +651,19 @@ def wide_values(cert, known):
             ends[n] = e
     values = cert.get("values", [])
     computed = {v["name"] for v in values}
+    # The answer of a fold whose range `ranges` does not state with both ends is the hull of the
+    # values it answers with, each read the same way (rulec's §15.299): worked out below.
+    folds = {fa.get("name"): fa.get("answers", []) for fa in cert.get("fold_answers", [])
+             if fa.get("name") in ends and fa.get("name") not in known
+             and None in stated.get(fa.get("name"), (None, None))}
     env = {}
     for n, (a, b) in ends.items():
         if n in known:
             env[n] = known[n]
-        elif n in computed or n in outs:
-            # Worked out below: a value from its expression, a column from what its rows write.
-            # A value with no interval at all has nothing read into it.
+        elif n in computed or n in outs or n in folds:
+            # Worked out below: a value from its expression, a column from what its rows write,
+            # the answer of a fold from what it answers with. A value with no interval at all has
+            # nothing read into it.
             continue
         else:
             lo, hi = stated.get(n, (None, None))
@@ -694,6 +702,14 @@ def wide_values(cert, known):
             if all(i is not None for i in ivs):
                 env[col] = held(col, (min(i[0] for i in ivs), max(i[1] for i in ivs)))
                 moved = True
+        for n, answers in folds.items():
+            if n in env or not answers:
+                continue
+            e = strs()
+            ivs = [answer_interval(x, e, le) for x in answers]
+            if all(i is not None for i in ivs):
+                env[n] = held(n, (min(i[0] for i in ivs), max(i[1] for i in ivs)))
+                moved = True
         if not moved:
             rest = [c for c in outs if c not in env and c in ends]
             if not rest:
@@ -701,6 +717,15 @@ def wide_values(cert, known):
             for c in rest:
                 env[c] = ends[c]
     return wide, env
+
+
+def answer_interval(e, ranges, le=frozenset()):
+    """The interval of one of the values a fold answers with: a date literal its day number, any
+    other value worked out from its expression."""
+    if e.get("type") == "date" and "lit" in e:
+        v = num(e.get("value"))
+        return None if v is None else (v, v)
+    return interval(e, ranges, le)
 
 
 def claim_reads(cert, env):
@@ -1056,13 +1081,18 @@ def check_opens(cert, known):
     worked out here, or declared for an input, and the combination is held to the stated range.
     Returns (open values held, terms, terms from contributions)."""
     stated = cert.get("ranges", {})
+    # A term whose range leaves an end unwritten is read with that end at the end of its type,
+    # as `check` reads it (rulec's §15.299).
+    _, wide = wide_values(cert, known)
     held = terms = by = 0
     for o in cert.get("opens", []):
         name, how = o.get("name"), o.get("combine")
         if how not in ("sum", "product", "max", "min"):
             raise Bad(f"{name}: `combine {how}` is not one of sum, product, max and min")
+        # An end the range does not write is the end of the type, which the int64 claim holds the
+        # value to; the ends it writes are held here (rulec's §15.299).
         s = stated.get(name)
-        if s is None or num(s[0]) is None or num(s[1]) is None:
+        if s is None or (num(s[0]) is None and num(s[1]) is None):
             raise Bad(f"{name}: an open value declares its range, and the certificate states none")
         ivs = []
         if o.get("empty") is not None:
@@ -1083,6 +1113,8 @@ def check_opens(cert, known):
                 ivs.append(known[n])
             elif n in stated and num(stated[n][0]) is not None and num(stated[n][1]) is not None:
                 ivs.append((num(stated[n][0]), num(stated[n][1])))
+            elif n in wide:
+                ivs.append(wide[n])
             else:
                 raise Bad(f"{name}: this program cannot work out the range of its term {n}")
         lo, hi = ivs[0]
@@ -1097,8 +1129,10 @@ def check_opens(cert, known):
             else:
                 lo, hi = min(lo, a), min(hi, b)
         a, b = num(s[0]), num(s[1])
-        if lo < a or hi > b:
-            raise Bad(f"{name}: its terms together come to [{lo}, {hi}], outside the range [{s[0]}, {s[1]}] it declares")
+        if (a is not None and lo < a) or (b is not None and hi > b):
+            # An end it does not write is said as the interval's own, as the Lean program says it.
+            sa, sb = s[0] if a is not None else lo, s[1] if b is not None else hi
+            raise Bad(f"{name}: its terms together come to [{lo}, {hi}], outside the range [{sa}, {sb}] it declares")
         held += 1
     for t in cert.get("tables", []):
         for ax in t.get("axes", []):
@@ -1153,6 +1187,11 @@ def check_rounds(cert, known):
     declared = cert.get("ranges", {})
     walks = set(cert.get("walks", []))
     opens = {o.get("name") for o in cert.get("opens", [])}
+    types, scales = cert.get("types", {}), cert.get("scales", {})
+    # What decides an output where the ends the rule writes leave its interval open: the same
+    # arithmetic, an end no range writes read as the end of its type (rulec's §15.299). An end the
+    # output's range does not write is held to nothing here, as `check` holds it to nothing.
+    _, wide = wide_values(cert, known)
 
     def read(x):
         # A number the certificate writes, or None where it writes none this program can read.
@@ -1174,23 +1213,28 @@ def check_rounds(cert, known):
         if g <= 0:
             raise Bad(f"{name}: the grid it rounds to, {g}, is not above zero")
         a, b = ends(s)
-        if a is None or b is None:
-            left.append(f"what {name} answers once rounded: an end of the range the certificate states for it is open")
+        if a is None and b is None:
+            left.append(f"what {name} answers once rounded: the range the certificate states for it has no end")
             continue
         own = None
         if name in known:
             lo, hi = known[name]
         elif (name in walks or name in opens) and name in declared:
-            lo, hi = ends(declared[name])
-            if lo is None or hi is None:
+            own = ends(declared[name])
+            lo, hi = own
+            te = type_ends(types.get(name), Fraction(scales.get(name, 1)))
+            if (lo is None or hi is None) and te is None:
                 left.append(f"what {name} answers once rounded: an end of the range it declares is open")
                 continue
-            own = (lo, hi)
+            lo = te[0] if lo is None else lo
+            hi = te[1] if hi is None else hi
+        elif name in wide:
+            lo, hi = wide[name]
         else:
             left.append(f"what {name} answers once rounded: this program does not work out what decides it")
             continue
         flo, chi = floor_to(g, lo), ceil_to(g, hi)
-        if a > flo or b < chi:
+        if (a is not None and a > flo) or (b is not None and b < chi):
             if own == (a, b):
                 left.append(f"what {name} answers once rounded: the range it declares, [{s[0]}, {s[1]}], does not sit on the grid it rounds to, {g}")
                 continue
@@ -1205,34 +1249,34 @@ def check_fold_answers(cert, known):
     (§15.219): `empty`, `exhausted` unless it is `held`, a `stop with`, what an arm takes or
     keeps — `held` is one of those. The range `ranges` states for it is worked out from them,
     and what reads the answer is bounded by it, so it has to hold the interval of every one,
-    worked out here from its expression. Returns how many were held."""
+    worked out here from its expression. A value that reads an end no range writes is read with
+    that end at the end of its type (rulec's §15.299); the range then states the ends written on
+    the output's line, or none, and the hull is what reads the answer reads it in
+    (`wide_values`). Returns how many ranges were held, and how many answers read so."""
     stated = cert.get("ranges", {})
-    env = {k: (v[0], v[1]) for k, v in stated.items()}
-    env.update({k: (str(a), str(b)) for k, (a, b) in known.items()})
-    n = 0
+    _, wide = wide_values(cert, known)
+    env = claim_reads(cert, wide)
+    n = opened = 0
     for fa in cert.get("fold_answers", []):
         name = fa.get("name")
         s = stated.get(name)
-        if s is None:
-            raise Bad(f"{name}: the certificate lists the values the fold answers it with, and states no range for it")
         lo = hi = None
         for e in fa.get("answers", []):
-            if e.get("type") == "date" and "lit" in e:
-                v = num(e.get("value"))
-                iv = None if v is None else (v, v)
-            else:
-                iv = interval(e, env, guarantees(cert))
+            iv = answer_interval(e, env, guarantees(cert))
             if iv is None:
                 raise Bad(f"{name}: one of the values the fold answers with has no interval this program can work out")
             lo = iv[0] if lo is None else min(lo, iv[0])
             hi = iv[1] if hi is None else max(hi, iv[1])
         if lo is None:
             raise Bad(f"{name}: the fold answers with no value at all")
-        a, b = num(s[0]), num(s[1])
-        if a is None or b is None or a > lo or b < hi:
+        a, b = (num(s[0]), num(s[1])) if s is not None else (None, None)
+        if a is None or b is None:
+            # Only the ends written on the output's line are stated; E140 holds them to the hull.
+            opened += 1
+        if (a is not None and a > lo) or (b is not None and b < hi):
             raise Bad(f"{name}: the fold answers with values from {lo} to {hi}, and the certificate states the range [{s[0]}, {s[1]}]")
         n += 1
-    return n
+    return n, opened
 
 
 def column_kinds(cert):
@@ -5169,8 +5213,9 @@ def check(cert):
             ok = False
     if cert.get("fold_answers"):
         try:
-            held = check_fold_answers(cert, known)
-            out.append(f"  fold answers: {held} ranges hold every value their fold answers with")
+            held, opened = check_fold_answers(cert, known)
+            out.append(f"  fold answers: {held} ranges hold every value their fold answers with"
+                       + (f", {opened} of them with an end read at the end of its type" if opened else ""))
         except Bad as e:
             out.append(f"  FAILED fold answers: {e}")
             ok = False
@@ -5199,12 +5244,15 @@ def check(cert):
     # The reach of a derived value is the interval its own expression is forced into — the
     # cover's "out of reach" leaves are held to that, recomputed here.
     computed = {v["name"] for v in cert.get("values", [])}
+    # A value whose own interval reads an end no range writes reaches what it comes to with that end
+    # read as the end of its type, as `check` reads it (rulec's §15.299).
+    _, wide = wide_values(cert, known)
     reach = {k: iv for k, iv in known.items() if k in computed}
+    reach.update({k: iv for k, iv in wide.items() if k in computed and k not in reach})
     written = {k: iv for k, iv in known.items() if k in outs}
     # The truth value a boolean `define` of one comparison always takes, where it takes one
-    # (§15.196), over the intervals worked out here.
-    env = {k: (None if a is None else a, None if b is None else b) for k, (a, b) in ranges.items() if k not in outs}
-    env.update({k: (str(a), str(b)) for k, (a, b) in known.items()})
+    # (§15.196), over the intervals worked out here, read the same way.
+    env = claim_reads(cert, wide)
     truth = {}
     for v in cert.get("values", []):
         if v.get("type") == "bool" and v.get("of", "define") == "define":

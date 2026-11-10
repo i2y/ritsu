@@ -2161,7 +2161,9 @@ fn arith_facts(c: &Checked, e: &Expr) -> Vec<String> {
                 if let Some((_, d)) = crate::types::var_division(name, args) {
                     let ty = ty_in(d);
                     let text = crate::region::expr_text(d);
-                    match c.interval(d, &ty) {
+                    // Read as E132 reads it, an end a range does not write at the end of the type
+                    // (§15.299).
+                    match c.reach(d, &ty) {
                         Some((lo, _)) if lo.num > 0 => out.push(tr!(
                             "割る数 {text} は {} 以上で、0 になりません",
                             "the divisor {text} is {} or more, and never zero",
@@ -2178,7 +2180,7 @@ fn arith_facts(c: &Checked, e: &Expr) -> Vec<String> {
                 if name == crate::kw::ISQRT {
                     if let Some(x) = args.first() {
                         let ty = ty_in(x);
-                        if c.interval(x, &ty).is_some_and(|(lo, _)| lo.num >= 0) {
+                        if c.reach(x, &ty).is_some_and(|(lo, _)| lo.num >= 0) {
                             let text = crate::region::expr_text(x);
                             out.push(tr!("isqrt の引数 {text} は 0 以上です", "the argument {text} of isqrt is zero or more"));
                         }

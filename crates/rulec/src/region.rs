@@ -1289,8 +1289,9 @@ fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool
 /// of 2026 is always true, and `a_due <= b_due` with both dates held to one day each is true or
 /// false whatever else the input is. The sides are read as `Checked::interval` reads any value —
 /// the inputs' ranges, what the derives and other defines come to, the values a table above
-/// writes — and a date literal as its day number. `None` when the comparison can go either way,
-/// or a side has no interval.
+/// writes — and a date literal as its day number. An end a range does not write is read as the end
+/// of the type, as E108 reads it (§15.299): `a >= 0` over `a` written `>=0` alone is always true.
+/// `None` when the comparison can go either way, or a side has no interval.
 pub(crate) fn truth_of_expr(e: &Expr, chk: &Checked) -> Option<bool> {
     let Expr::Bin(l, op, r, _) = e else { return None };
     let ty = |e: &Expr| match e {
@@ -1304,7 +1305,7 @@ pub(crate) fn truth_of_expr(e: &Expr, chk: &Checked) -> Option<bool> {
                 let v = crate::types::date_ord(*y, *m, *d);
                 Some((v, v))
             }
-            _ => chk.interval(e, &want),
+            _ => chk.reach(e, &want),
         }
     };
     let ((al, ah), (bl, bh)) = (side(l)?, side(r)?);
@@ -1530,9 +1531,16 @@ impl TableRegion {
         // Build these **after** reordering the axes. Built before, their indices would not
         // line up with the masks.
         let is_define: Vec<bool> = col_names.iter().map(|n| c.define_deps.contains_key(n)).collect();
+        // What a derived value reaches, an end an input's range does not write read as the end of
+        // its type, as E108 and E112 read it (§15.299): `min(a, 100)` over `a` written `>=0` alone
+        // reaches 0 to 100, and 0.50.0 asked a table over it for a row at 101.
         let derived: Vec<Option<((Option<Rat>, Option<Rat>), Vec<String>)>> = col_names
             .iter()
-            .map(|n| c.derived_deps.get(n).map(|deps| (c.ranges.get(n).copied().unwrap_or((None, None)), deps.clone())))
+            .map(|n| {
+                c.derived_deps.get(n).map(|deps| {
+                    (c.reach_range(n).unwrap_or((None, None)), deps.clone())
+                })
+            })
             .collect();
         let define_reach: Vec<Option<Ival>> = col_names
             .iter()
@@ -1544,7 +1552,13 @@ impl TableRegion {
                 if !numeric || !a_define {
                     return None;
                 }
-                c.ranges.get(n).copied().filter(|(lo, hi)| lo.is_some() && hi.is_some())
+                // An end an input's range does not write is read as the end of its type, as E108
+                // reads it (§15.299): `min(a, 100)` over `a` written `>=0` alone reaches 0 to 100.
+                c.ranges
+                    .get(n)
+                    .copied()
+                    .filter(|(lo, hi)| lo.is_some() && hi.is_some())
+                    .or_else(|| c.reach_of(n).map(|(lo, hi)| (Some(lo), Some(hi))))
             })
             .collect();
         let define_truth: Vec<Option<bool>> = col_names
@@ -4089,7 +4103,7 @@ impl TableRegion {
         use std::cmp::Ordering::*;
         for (ai, &ci) in path.iter().enumerate() {
             let Axis::Num { coords, .. } = &self.axes[ai] else { continue };
-            let Some(&(rl, rh)) = chk.ranges.get(&self.col_names[ai]) else { continue };
+            let Some((rl, rh)) = chk.reach_range(&self.col_names[ai]) else { continue };
             let outside = match coords.get(ci) {
                 Some(Coord::Point(v)) => rl.is_some_and(|l| v.cmp_to(l) == Less) || rh.is_some_and(|h| v.cmp_to(h) == Greater),
                 Some(Coord::Open(a, b)) => matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less),
@@ -4391,7 +4405,7 @@ impl TableRegion {
     #[allow(clippy::type_complexity)]
     fn reach_interval(&self, name: &str, c: &Checked) -> Option<(Ival, Vec<usize>)> {
         use crate::fourier::Origin;
-        let plain = c.ranges.get(name).copied()?;
+        let plain = c.reach_range(name)?;
         let Some(g) = self.model.iter().find(|g| g.vars.iter().any(|v| v == name)) else { return Some((plain, Vec::new())) };
         let grid = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
         let inward = |b: Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)>| -> Option<Ival> {

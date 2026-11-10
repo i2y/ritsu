@@ -314,7 +314,8 @@ impl<'a> Grid<'a> {
                     None => ok = false,
                 }
             }
-            let Some((Some(lo), Some(hi))) = c.ranges.get(d.name.text.as_str()).copied() else { continue };
+            // What it reaches, an end an input's range does not write at the end of its type (§15.299).
+            let Some((Some(lo), Some(hi))) = c.reach_range(d.name.text.as_str()) else { continue };
             if !ok || step.num == 0 {
                 continue;
             }

@@ -1,0 +1,8 @@
+error[E149]: `range` writes no end
+  --> tests/mutants/m_e149.rule:6
+  |
+6 |   units : number      range
+  |                       ^^^^^ no `>=` or `<=` follows it
+  |
+ A range is `range >=<value> <=<value>`, with at least one end. A `range` with no end decides nothing, and cannot be told from a line left half written.
+ Hint: write an end after `range`, `>=` or `<=`. Where the value has no range, take `range` off.

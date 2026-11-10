@@ -173,7 +173,8 @@ fn 台帳の別の形の再現はその形を出す() {
         ("E011", None, [(Lang::En, "A public name has no ASCII alias"), (Lang::Ja, "公開される名前に ASCII の別名がありません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
         ("E123", None, [(Lang::En, "The contract lets `order.lines` through with values that break `constraint non_parts <= tools`"), (Lang::Ja, "契約は `order.lines` について、`constraint non_parts <= tools` を破る値も通します")]),
-        ("E140", None, [(Lang::En, "The range of the output fee cannot be checked"), (Lang::Ja, "出力 手数料 の範囲を確かめられません")]),
+        ("E140", Some(0), [(Lang::En, "The range of the output fee does not hold the values it can take"), (Lang::Ja, "出力 手数料 の範囲が、とりうる値を含んでいません")]),
+        ("E140", None, [(Lang::En, "The range of the output due cannot be checked"), (Lang::Ja, "出力 期日 の範囲を確かめられません")]),
         ("E076", Some(0), [(Lang::En, "The contract's `QuoteRequest` has `express`, which the rule does not"), (Lang::Ja, "契約の `QuoteRequest` の `express` が、規則にありません")]),
         ("E076", Some(1), [(Lang::En, "`subtotal` has another type in the contract"), (Lang::Ja, "`subtotal` の型が、契約と違います")]),
         ("E076", Some(2), [(Lang::En, "Whether `subtotal` is `optional` does not agree with the contract"), (Lang::Ja, "`subtotal` の `optional` が、契約と合っていません")]),
@@ -232,8 +233,8 @@ fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
     // W128 came with their twins (§15.208, §15.209), and so did E066 and E069 (§15.210, §15.212) and
     // E132 and E139 (§15.213, §15.215), and E074 (§15.223), and E140 (§15.268), and W133 (§15.281),
     // and E141, E142 and E143 (§15.282), and E144 (§15.285), and W134 (§15.286), and E145, E146 and
-    // W135 (§15.287), and E147 and E148 (§15.290).
-    assert_eq!(twins, 76, "英語の再現を持つ項目の数が変わった: {twins}");
+    // W135 (§15.287), and E147 and E148 (§15.290), and E149 (§15.299).
+    assert_eq!(twins, 77, "英語の再現を持つ項目の数が変わった: {twins}");
 }
 
 /// Japanese is left in a reproduction shown in English only where being Japanese is the point of
@@ -283,8 +284,8 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // E073, E133, W129 and W131 (§15.224–§15.226) 133, E067, E068, E131 and W132 (§15.227)
     // 137, E140 (§15.268) 138, E076 (§15.274) 139, W133 (§15.281) 140, and E141, E142 and E143
     // (§15.282) 143, E144 (§15.285) 144, W134 (§15.287) 145, E145, E146 and W135 (§15.287) 148,
-    // and E147 and E148 (§15.290) 150.
-    assert_eq!(all.len(), 150, "台帳の件数が変わった: {}", all.len());
+    // and E147 and E148 (§15.290) 150, and E149 (§15.299) 151.
+    assert_eq!(all.len(), 151, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

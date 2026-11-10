@@ -156,6 +156,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E144](#e144) | error | `fed by` does not read, or stands where it cannot |
 | [E147](#e147) | error | With each value of a `unique` field once, a `sum` can pass the top of its range |
 | [E148](#e148) | error | Only a field of `elements` that is always there can be `unique` |
+| [E149](#e149) | error | `range` writes no end |
 
 ## E001
 
@@ -1926,7 +1927,7 @@ policy unique
 | - | true |
 ```
 
-Related codes: [E011](#e011), [E103](#e103), [E104](#e104)
+Related codes: [E011](#e011), [E103](#e103), [E104](#e104), [E149](#e149)
 
 ## E049
 
@@ -2397,7 +2398,7 @@ outputs
 result o = a
 ```
 
-Related codes: [E112](#e112), [E103](#e103), [E060](#e060)
+Related codes: [E112](#e112), [E103](#e103), [E060](#e060), [E149](#e149)
 
 ## E062
 
@@ -3469,9 +3470,9 @@ Related codes: [E111](#e111), [E105](#e105)
 
 `error` — **Cannot prove an intermediate value fits in int64**
 
-**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a value that fits while an integer the generated code holds on the way to it does not (the two sides of a sum, a comparison, a `min` or a `max` brought to the step they share, a value brought to the step of its rounding grid before it is rounded, a product inside any of them), or a value brought to the step of a column, or to the step an output travels at and its rounding grid share. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64.
+**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way), so a value that can pass int64 from there is this too: the entry of the generated code takes an input up to the end that is not written. So is the range of an input or of a field of an element that writes an end past what the type holds: the entry refuses anything past it, so the range promises values no call can pass. So is a value that fits while an integer the generated code holds on the way to it does not (the two sides of a sum, a comparison, a `min` or a `max` brought to the step they share, a value brought to the step of its rounding grid before it is rounded, a product inside any of them), or a value brought to the step of a column, or to the step an output travels at and its rounding grid share. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64. So is a pick by weight where the weights of two elements together can pass int64: every language adds the weights up in an int64.
 
-**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges.
+**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where an input whose range does not write an end is the cause, write that end. Write an end past what the type holds inside it. Where the random inputs have too many points, narrow their ranges. Where a weight is too large, narrow the ranges of the values it reads.
 
 **Smallest reproduction**:
 
@@ -3638,9 +3639,9 @@ Related codes: [E107](#e107)
 
 `error` — **The range of a derived value does not contain the values it can reach**
 
-**When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those.
+**When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. An end an input's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way; one that can pass int64 from there is E108 alone). With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those.
 
-**Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out.
+**Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out. Where an end of that interval comes from an end an input's range does not write, a note names the input: widen the range, or write that end on the input's range.
 
 **Smallest reproduction**:
 
@@ -4524,9 +4525,9 @@ Related codes: [E065](#e065), [E129](#e129)
 
 `error` — **The divisor can be zero**
 
-**When.** A rounding function's argument divides by a value (`half_up(total / units, 1JPY)`), and the range of the divisor includes zero. The range is worked out by interval arithmetic from the inputs' ranges, the ranges of the derives and the `define`s, and what the tables above write — where a row writes one of its own table's columns, only the values its cell there lets through (`| >=1 | units |` writes units of one or more). A `constraint` is not read. A divisor that reads a value with no range cannot be shown never to be zero either, and is this too. Where an input that makes the divisor zero is found, the notes name it.
+**When.** A rounding function's argument divides by a value (`half_up(total / units, 1JPY)`), and the range of the divisor includes zero. The range is worked out by interval arithmetic from the inputs' ranges, the ranges of the derives and the `define`s, and what the tables above write — where a row writes one of its own table's columns, only the values its cell there lets through (`| >=1 | units |` writes units of one or more). A `constraint` is not read. An end a range does not write is read, as E108 reads it, as the end of what the type holds (for a number, 2^63 − 1 steps either way), for the entry of the generated code holds every input inside those ends; so `max(units, 1)` passes where `units` writes no upper end. A divisor that reads a value with no interval at all (a `define` another error has stopped, say) cannot be shown never to be zero either, and is this too. Where an input that makes the divisor zero is found, the notes name it.
 
-**Fix.** Narrow the divisor's range so that it leaves zero out (`range >=1`), divide by `max(units, 1)`, or put a table that picks another value when it is zero (the two rows `| 0 | 1 |` and `| >=1 | units |`) and divide by that table's output. Dividing by `b - a` under `constraint a < b`, write `max(b - a, 1)` too: under the constraint it is the same value. What to answer when it is zero is a business decision, and rulec does not make it.
+**Fix.** Narrow the divisor's range so that it leaves zero out (`range >=1`), divide by `max(units, 1)`, or put a table that picks another value when it is zero (the two rows `| 0 | 1 |` and `| >=1 | units |`) and divide by that table's output. An amount or a quantity takes its floor in its own unit (`max(price, 1JPY)`). Dividing by `b - a` under `constraint a < b`, write `max(b - a, 1)` too: under the constraint it is the same value. What to answer when it is zero is a business decision, and rulec does not make it.
 
 **Smallest reproduction**:
 
@@ -4551,7 +4552,7 @@ Related codes: [E115](#e115), [E108](#e108), [E019](#e019)
 
 `error` — **The argument of `isqrt` can be below zero**
 
-**When.** The range of x in `isqrt(x)` includes values below zero. The range is worked out by intervals as for E132, and an argument that reads a value with no range is this too. A number below zero has no square root, and the generated code would have no answer on that call. Where an input that makes the argument negative is found, the notes name it.
+**When.** The range of x in `isqrt(x)` includes values below zero. The range is worked out by intervals as for E132, an end a range does not write read as the end of what the type holds (`isqrt(max(x, 0))` passes where x has no range), and an argument that reads a value with no interval is this too. A number below zero has no square root, and the generated code would have no answer on that call. Where an input that makes the argument negative is found, the notes name it.
 
 **Fix.** Narrow the inputs' ranges so that the argument stays at zero or more, or pass `isqrt(max(x, 0))`. A power is written as a product: `isqrt(n * n * n)` is n to the power 1.5, rounded down.
 
@@ -4577,9 +4578,9 @@ Related codes: [E108](#e108), [E103](#e103)
 
 `error` — **An output's range does not hold the values it takes**
 
-**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 first. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
+**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result`, a line that walks a sequence — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. An end a range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). A range written on an output that is no number cannot be checked, and is this too. An expression that can pass int64 from an input with an open end is E108 alone. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
 
-**Fix.** Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where it cannot be checked, give the inputs the output reads a range, or take the output's range off: an output with none written has the range rulec works out, and the other languages read that.
+**Fix.** Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where an end of those values comes from an end no range writes, read at the end of its type, there is no `fix.text`, and a note names whose: widen the range, or write that end on the name's range. On an output that is no number, take the range off. An output with none written has the range rulec works out, and the other languages read that.
 
 **Smallest reproduction**:
 
@@ -4595,7 +4596,7 @@ outputs
 result fee = amount × 10%
 ```
 
-**A range that cannot be checked**:
+**An end a range does not write**:
 
 ```rule
 rule fee v1
@@ -4610,6 +4611,23 @@ table fees
 policy unique
 | -> fee |
 | amount |
+```
+
+**A range that cannot be checked**:
+
+```rule
+rule due v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  due : date  range >=2026-01-01
+
+table dues
+policy unique
+| -> due   |
+| received |
 ```
 
 Related codes: [E112](#e112), [E061](#e061), [E103](#e103)
@@ -5601,7 +5619,7 @@ Related codes: [E073](#e073), [E133](#e133), [E108](#e108)
 
 `error` — **A pick by weight is not shaped right**
 
-**When.** A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative; there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0.
+**When.** A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative (an end a range the weight reads does not write is read as the end of what the type holds); there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0.
 
 **Fix.** Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more. Split the rule in two if it needs two picks.
 
@@ -5808,9 +5826,9 @@ Related codes: [E067](#e067), [E131](#e131)
 
 `error` — **A value put together leaves the range it declares**
 
-**When.** The interval of an open value's terms — the rule's and those contributions add — put together as its `combine` says, leaves the range on the `open` line. The notes give each term's interval, the contribution each comes from, and an input that takes the value out of the range. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it; a value outside it would get an answer nothing checked.
+**When.** The interval of an open value's terms — the rule's and those contributions add — put together as its `combine` says, leaves the range on the `open` line. An end a term's range does not write is read as the end of what the type holds (for a number, 2^63 − 1 steps either way). Where the range on the `open` line writes one end, that end is the one checked: the other is the end of the type, which E108 holds the value to. The notes give each term's interval, the contribution each comes from, and an input that takes the value out of the range. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it; a value outside it would get an answer nothing checked.
 
-**Fix.** Widen the range (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision, so there is no `fix.text`.
+**Fix.** Widen the range (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision, so there is no `fix.text`. Where a term's range does not write an end, writing it is one way to narrow the term.
 
 **Smallest reproduction**:
 
@@ -5858,7 +5876,7 @@ Related codes: [E068](#e068), [E112](#e112), [E067](#e067)
 
 `warning` — **A term of an open value changes nothing**
 
-**When.** A term of an open value cannot move the value whatever it takes: in a `max`, every value of the term is at or below the `empty` value; in a `min`, at or above it; in a `sum`, it is always 0; in a `product`, always 1. The `empty` value of `max` and `min` is the value the terms start from, and it always takes part, not only when there is no term, so a cap written as a `max` leaves its terms with nothing to do, in silence. It is said of a term a contribution adds and of a term of the rule alike.
+**When.** A term of an open value cannot move the value whatever it takes: in a `max`, every value of the term is at or below the `empty` value; in a `min`, at or above it; in a `sum`, it is always 0; in a `product`, always 1. The `empty` value of `max` and `min` is the value the terms start from, and it always takes part, not only when there is no term, so a cap written as a `max` leaves its terms with nothing to do, in silence. It is said of a term a contribution adds and of a term of the rule alike. An end a term's range does not write is read as the end of what the type holds.
 
 **Fix.** If a term of a `max` sets a cap, put the value together with `min` (and with `max` if a term of a `min` sets a floor). If the term can pass the `empty` value — above it for a `max`, below it for a `min` — write the values that do. If it is not needed, take it out.
 
@@ -6262,3 +6280,30 @@ policy unique
 ```
 
 Related codes: [E147](#e147), [E070](#e070)
+
+## E149
+
+`error` — **`range` writes no end**
+
+**When.** A `range` on a declaration line is followed by no end, no pair of `>=`, `<=`, `>` or `<` and a value, and the line ends there or goes on with another word the line reads (`contract_only`, `random`, `unique`, `round` and the like) or a citation. It is the same on the line of an input, a field of `elements`, an output, a `derive`, a `count`, `sum`, `max` or `min`, and an `open`. A `range` with no end decides nothing, so it was read as a line with no range, and a line left half written passed in silence. One with no end written after a range, as in `range >=0 <=5 range`, threw away the range written before it. Where a word that is not an end follows `range` (`range 10`, or `range >=` with no value), it is E047.
+
+**Fix.** Write an end after `range` (`range >=1`, `range >=0 <=100`); one end is enough. An end left unwritten is read as the end of what the type holds, by every check that reads the range. Where the value has no range, take `range` off.
+
+**Smallest reproduction**:
+
+```rule
+rule average_price v1
+
+inputs
+  total : money[JPY]  range >=0JPY <=10000JPY
+  units : number  range
+
+outputs
+  average : money[JPY]  round half_up(1JPY)
+
+define per_unit : money[JPY] = half_up(total / max(units, 1), 1JPY)
+
+result average = per_unit
+```
+
+Related codes: [E047](#e047), [E061](#e061), [E132](#e132)

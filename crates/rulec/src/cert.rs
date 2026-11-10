@@ -653,13 +653,17 @@ pub fn walked_names(f: &RuleFile, c: &Checked) -> Vec<String> {
 /// walks, and the values it can answer with, as expressions — `empty`, `exhausted` unless it is
 /// `held`, a `stop with`, and what an arm takes or keeps. The answer is one of them, so the range
 /// stated for it has to hold every one; a re-checker works their intervals out from the
-/// expressions. None for a rule with no such fold.
+/// expressions. A fold one of whose values reads an end no range writes is listed too, with no
+/// range or the ends its output's line writes: what reads the answer reads their hull with that end
+/// at the end of its type (§15.299). None for a rule with no such fold.
 fn fold_answers_json(f: &RuleFile, c: &Checked) -> Option<String> {
     let items: Vec<String> = f
         .folds()
         .filter_map(|fold| {
             let name = fold.answer_name(f)?;
-            c.ranges.get(name)?;
+            if !c.ranges.contains_key(name) && !c.wide.contains_key(name) {
+                return None;
+            }
             let ty = c.ty_of(name).unwrap_or(crate::types::Ty::Unknown);
             let answers: Vec<String> = fold.answer_values().into_iter().map(|e| expr_json(e, ty.present())).collect();
             Some(Obj::new().str("name", name).str("over", &fold.over).raw("answers", arr(&answers)).finish())

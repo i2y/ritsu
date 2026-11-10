@@ -396,6 +396,10 @@ awk '{ sub(/ \| 取消\(cancelled\)$/, " | 取消(cancelled) | 保留(on_hold)")
 # A divisor whose range reaches zero: the average over the units, with `max(units, 1)` taken away.
 awk '{ sub(/max\(units, 1\)/, "units"); print }'      "$C/average_unit_price.rule" > "$M/m_e132.rule"
 awk '{ sub(/max\(個数, 1\)/, "個数"); print }'         "$C/平均単価.rule"           > "$M/m_e132ja.rule"
+# A `range` left with no end (§15.299): the ends of the units taken off and the word left behind.
+# It read as no range at all, and the divisor that reads it was said to reach zero.
+awk '{ sub(/range >=0 <=1000$/, "range"); print }'    "$C/average_unit_price.rule" > "$M/m_e149.rule"
+awk '{ sub(/range >=0 <=1000$/, "range"); print }'    "$C/平均単価.rule"           > "$M/m_e149ja.rule"
 # The argument of `isqrt` let go below zero: the yearly demand taken off what is under the root.
 awk '{ sub(/isqrt\(quantity_squared\)/, "isqrt(quantity_squared - yearly_demand)"); print }' "$C/economic_order_quantity.rule" > "$M/m_e139.rule"
 awk '{ sub(/isqrt\(発注量の二乗\)/, "isqrt(発注量の二乗 - 年間の需要)"); print }'          "$C/経済的発注量.rule"            > "$M/m_e139ja.rule"
