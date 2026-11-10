@@ -2910,8 +2910,21 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             "\n## 境目の例\n\n条件の境目をまたぐと、答えがどう変わるかの例です。\n\n",
             "\n## At the thresholds\n\nHow the answer changes on either side of a threshold.\n\n"
         ));
-        for (a, b) in pairs {
-            let Some(col) = a.input.keys().find(|k| a.input.get(*k) != b.input.get(*k)) else { continue };
+        // A pair whose two answers are the same shows nothing of its threshold (§15.302). The
+        // criterion holds the other inputs where it found them, often at the bottom of their
+        // ranges, and a share at a rate of wages held at 0 yen is 0 yen on both sides. Such a
+        // pair takes its other inputs from the rule's examples first — the cases a person chose —
+        // and then from the rest of the suite.
+        let others: Vec<BTreeMap<String, crate::eval::Val>> =
+            crate::vectors::example_inputs(f, c).into_iter().chain(vs.iter().map(|v| v.input.clone())).collect();
+        let mut said: Vec<String> = Vec::new();
+        for (a0, b0) in pairs {
+            let Some(col) = a0.input.keys().find(|k| a0.input.get(*k) != b0.input.get(*k)) else { continue };
+            let told = if a0.outputs == b0.outputs { telling_pair(f, c, a0, b0, col, &others) } else { None };
+            let (a, b) = match &told {
+                Some((x, y)) => (x, y),
+                None => (a0, b0),
+            };
             let fixed: Vec<String> = a
                 .input
                 .iter()
@@ -2929,7 +2942,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
                     .join(if crate::i18n::ja() { "・" } else { ", " })
             };
             let held = if fixed.is_empty() { String::new() } else { tr!("（{}）", " ({})", fixed.join(sep())) };
-            o.push_str(&tr!(
+            let line = tr!(
                 "- {col}が {} のとき {}、{} のとき {}{}\n",
                 "- {col} {} → {}; {} → {}{}\n",
                 customer_val(c, col, &a.input[col]),
@@ -2937,7 +2950,11 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
                 customer_val(c, col, &b.input[col]),
                 outs(b),
                 held
-            ));
+            );
+            if !said.contains(&line) {
+                o.push_str(&line);
+                said.push(line);
+            }
         }
     }
 
@@ -2963,6 +2980,55 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         }
     }
     o
+}
+
+/// The most cases a pair whose answers are the same tries for its other inputs, in each of the
+/// two passes of [`telling_pair`] (§15.302): the examples and the first of the suite, so a rule
+/// with a large suite does not run it whole for every such pair.
+const TELLING_TRIES: usize = 64;
+
+/// The boundary pair `a`, `b` with its other inputs taken from `others` (§15.302), in two passes.
+/// The first takes the first set under which each side, run through the reference evaluator,
+/// fires the rows it fired and the two answers differ: the pair stays on the rows it was built
+/// for, so the pairs over the rows of two enum values do not come back as one. The second, when
+/// the first finds none, asks only that the answers differ: the criterion may have held an input
+/// at a value under which no row on the threshold decides (a shipping fee held to the tier that
+/// ships free), and then no set keeps the rows and tells anything.
+fn telling_pair(
+    f: &RuleFile,
+    c: &Checked,
+    a: &crate::vectors::Vector,
+    b: &crate::vectors::Vector,
+    col: &str,
+    others: &[BTreeMap<String, crate::eval::Val>],
+) -> Option<(crate::vectors::Vector, crate::vectors::Vector)> {
+    let (Some(av), Some(bv)) = (a.input.get(col), b.input.get(col)) else { return None };
+    for keep_rows in [true, false] {
+        let mut tried: Vec<BTreeMap<String, crate::eval::Val>> = Vec::new();
+        for o in others {
+            if tried.len() >= TELLING_TRIES {
+                break;
+            }
+            let mut ai = o.clone();
+            ai.insert(col.to_string(), av.clone());
+            if ai == a.input || tried.contains(&ai) {
+                continue;
+            }
+            let mut bi = ai.clone();
+            bi.insert(col.to_string(), bv.clone());
+            tried.push(ai.clone());
+            let Some(x) = crate::vectors::answer(f, c, &ai, &a.why) else { continue };
+            if keep_rows && x.fired != a.fired {
+                continue;
+            }
+            let Some(y) = crate::vectors::answer(f, c, &bi, &b.why) else { continue };
+            if (keep_rows && y.fired != b.fired) || x.outputs == y.outputs {
+                continue;
+            }
+            return Some((x, y));
+        }
+    }
+    None
 }
 
 /// A value of a worked example for the customer (§15.300): a flag as yes or no, a number with
@@ -3408,13 +3474,15 @@ fn customer_val(c: &Checked, name: &str, v: &crate::eval::Val) -> String {
             }
         }
         // A value of an optional output is a value of the type it wraps (§15.249).
+        // An amount in the digits the rest of the page groups (§15.300), not in the 万 and `_`
+        // a rule is written in: the examples above it say `300,000円`, and so does this.
         (Val::Num(r), Some(t)) if matches!(t.present(), Ty::Money { .. }) => {
             let Ty::Money { cur, .. } = t.present() else { unreachable!() };
-            format!("{}{cur}", crate::types::fmt_big_pub(*r))
+            words::number(&format!("{r}{cur}"))
         }
         (Val::Num(r), Some(t)) if matches!(t.present(), Ty::Qty { .. }) => {
             let Ty::Qty { unit, .. } = t.present() else { unreachable!() };
-            qty_words(*r, unit)
+            words::number(&qty_words(*r, unit))
         }
         (Val::Enum(w), Some(Ty::Opt(_))) if w == crate::kw::NONE => tr!("無し", "none"),
         _ => crate::vectors::show_named(c, name, v),

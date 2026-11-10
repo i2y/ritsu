@@ -1971,7 +1971,7 @@ pub fn show_named(c: &Checked, name: &str, v: &Val) -> String {
 /// A row becomes a vector only when it names **every** input. The section is not required to
 /// (E111 demands the outputs, not the inputs), and a vector missing one would hand the runner a
 /// key that is not there.
-fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
+pub fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
     let mut out = Vec::new();
     for (ex, row) in f.examples.iter().flat_map(|ex| ex.rows.iter().map(move |r| (ex, r))) {
         let a: BTreeMap<String, Val> = eval::example_env(f, c, ex, row).into_iter().collect();
@@ -1983,6 +1983,26 @@ fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
         }
     }
     out
+}
+
+/// One case run through the reference evaluator as the suite runs it, or `None` where the suite
+/// would not keep it as a case with an answer: a combination the door refuses (a `constraint`, a
+/// day koyomi does not give), two elements both taking under `take_unique`, a sum past the top of
+/// its range, a drawn value not below the total of the weights. The customer page asks it for the
+/// other side of a threshold (§15.302).
+pub fn answer(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>, why: &str) -> Option<Vector> {
+    if !allowed(f, c, a) || !days_ok(c, a) {
+        return None;
+    }
+    let env = || a.clone().into_iter().collect();
+    if (f.walks() && eval::contradiction(f, c, env()).is_some())
+        || eval::sum_past_range(f, c, env()).is_some()
+        || eval::drawn_past(f, c, env()).is_some()
+    {
+        return None;
+    }
+    let (outputs, trace, fired, _) = eval::run_all_traced(f, c, env());
+    Some(Vector { input: a.clone(), outputs, trace, fired, why: why.to_string() })
 }
 
 /// Whether every date input of koyomi's days takes one of them (§15.174): the generated code

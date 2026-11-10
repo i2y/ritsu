@@ -788,9 +788,12 @@ decide what `<=60cm` means for 61cm.
 
 How the answer changes on either side of a threshold.
 
-- girth 60cm → fee 1410JPY; 61cm → fee 1710JPY (dest Hokkaido, weight 1g)
-- girth 80cm → fee 1710JPY; 81cm → fee 2020JPY (dest Hokkaido, weight 1g)
-…
+- girth 60cm → fee 1,410JPY; 61cm → fee 1,710JPY (dest Hokkaido, weight 1g)
+- girth 80cm → fee 1,710JPY; 81cm → fee 2,020JPY (dest Hokkaido, weight 1g)
+- girth 100cm → fee 2,020JPY; 101cm → fee 2,340JPY (dest Hokkaido, weight 1g)
+- girth 120cm → fee 2,340JPY; 121cm → fee 2,680JPY (dest Hokkaido, weight 1g)
+- girth 140cm → fee 2,680JPY; 141cm → fee 3,010JPY (dest Hokkaido, weight 1g)
+- girth 160cm → fee 3,010JPY; 161cm → fee 4,140JPY (dest Hokkaido, weight 1g)
 ```
 
 ---

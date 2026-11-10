@@ -460,6 +460,67 @@ fn お客向けの二つの境界は下限から上限へ読む() {
     assert!(d.contains("| 1 | 金額の記載あり が はいで、契約金額 が 1万円未満 | 0円 |"), "節の条件を言葉で: {d}");
 }
 
+/// A boundary pair on the customer page is the one the boundary-pair criterion built, unless its
+/// two answers are the same: then its other inputs come from the rule's examples first, so the
+/// line shows what the threshold does (§15.302). The employment insurance premium held the wages
+/// at 0 yen, and the share was 0 yen on both sides of the new fiscal year. The amounts take their
+/// commas, as the rest of the page (§15.300). The English rule, and its Japanese version beside it.
+#[test]
+fn お客向けの境目の例は答えが変わる組を選ぶ() {
+    let en = "rule employment_insurance v1\n\n\
+              enum business_kind = general | agriculture_sake | construction\n\n\
+              inputs\n  wages : money[JPY]  range >=0JPY <=10_000_000JPY\n  closes_on : date  range >=2025-04-01 <=2027-03-31\n  kind : business_kind\n\n\
+              outputs\n  employee_share : money[JPY]  round half_down(1JPY)\n\n\
+              table employee_rates\npolicy unique\n\
+              | closes_on | kind | -> employee_rate : rate[step 0.05%] |\n\
+              | >=2025-04-01 <=2026-03-31 | general | 0.55% |\n\
+              | >=2025-04-01 <=2026-03-31 | agriculture_sake, construction | 0.65% |\n\
+              | >=2026-04-01 <=2027-03-31 | general | 0.5% |\n\
+              | >=2026-04-01 <=2027-03-31 | agriculture_sake, construction | 0.6% |\n\n\
+              define employee_share : money[JPY] = wages * employee_rate\n\n\
+              examples\n\
+              | wages | closes_on | kind | -> employee_share |\n\
+              | 300_000JPY | 2026-03-31 | general | 1650JPY |\n\
+              | 250_100JPY | 2026-04-25 | construction | 1501JPY |\n";
+    let ja = "rule 雇用保険料(employment_insurance) v1\n\n\
+              enum 事業の種類(business_kind) = 一般(general) | 農林水産清酒製造(agriculture_sake) | 建設(construction)\n\n\
+              inputs\n  賃金(wages) : money[円]  range >=0円 <=1000万円\n  締切日(closes_on) : date  range >=2025-04-01 <=2027-03-31\n  事業の種類(kind) : 事業の種類\n\n\
+              outputs\n  労働者負担額(employee_share) : money[円]  round half_down(1円)\n\n\
+              table 労働者料率表(employee_rates)\npolicy unique\n\
+              | 締切日 | 事業の種類 | -> 労働者料率(employee_rate) : rate[step 0.05%] |\n\
+              | >=2025-04-01 <=2026-03-31 | 一般 | 0.55% |\n\
+              | >=2025-04-01 <=2026-03-31 | 農林水産清酒製造, 建設 | 0.65% |\n\
+              | >=2026-04-01 <=2027-03-31 | 一般 | 0.5% |\n\
+              | >=2026-04-01 <=2027-03-31 | 農林水産清酒製造, 建設 | 0.6% |\n\n\
+              define 労働者負担額(employee_share) : money[円] = 賃金 × 労働者料率\n\n\
+              examples\n\
+              | 賃金 | 締切日 | 事業の種類 | -> 労働者負担額 |\n\
+              | 300000円 | 2026-03-31 | 一般 | 1650円 |\n\
+              | 250100円 | 2026-04-25 | 建設 | 1501円 |\n";
+    let tmp = TempDir::new("doc-customer-thresholds");
+    let (pe, pj) = (tmp.path().join("employment_insurance.rule"), tmp.path().join("雇用保険料.rule"));
+    std::fs::write(&pe, en).unwrap();
+    std::fs::write(&pj, ja).unwrap();
+    let (c, out, e) = run(&["doc", pe.to_str().unwrap(), "--lang", "en", "--audience", "customer"]);
+    assert_eq!(c, 0, "{out}{e}");
+    for want in [
+        "- closes_on 2026-03-31 → employee_share 1,650JPY; 2026-04-01 → employee_share 1,500JPY (kind general, wages 300,000JPY)\n",
+        "- closes_on 2026-03-31 → employee_share 1,626JPY; 2026-04-01 → employee_share 1,501JPY (kind construction, wages 250,100JPY)\n",
+    ] {
+        assert!(out.contains(want), "{want}\n{out}");
+    }
+    assert!(!out.contains("employee_share 0JPY"), "{out}");
+    let (c, out, e) = run(&["doc", pj.to_str().unwrap(), "--audience", "customer"]);
+    assert_eq!(c, 0, "{out}{e}");
+    for want in [
+        "- 締切日が 2026-03-31 のとき 労働者負担額 1,650円、2026-04-01 のとき 労働者負担額 1,500円（事業の種類: 一般、賃金: 300,000円）\n",
+        "- 締切日が 2026-03-31 のとき 労働者負担額 1,626円、2026-04-01 のとき 労働者負担額 1,501円（事業の種類: 建設、賃金: 250,100円）\n",
+    ] {
+        assert!(out.contains(want), "{want}\n{out}");
+    }
+    assert!(!out.contains("労働者負担額 0円"), "{out}");
+}
+
 /// Where a table came from is written as a comment at the end of the `table` line, and a row
 /// taken from somewhere else carries its own (§15.32). Both are source text, so the rendering
 /// may show them — and the reader is who they are for.
