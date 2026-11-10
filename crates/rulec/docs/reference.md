@@ -672,6 +672,87 @@ itself, beside the rows transcribed from it. Every generated file names the sour
 (`Cites: measures_act = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
 them under `sources`, a file source carrying its `url` in both.
 
+### Effective dates, delegated orders and provisos
+
+A law says more than its tables do: from when and until when a provision applies, what it leaves
+to a cabinet order, which provision it applies again, and what a proviso takes out. None of these
+is a word of the language. Each is one of the forms above, and the checks that hold the form hold
+the law to it.
+
+| The law | The rule | What holds it |
+|---|---|---|
+| a day a provision applies from or until: its enforcement (施行), or a period the article sets itself ("made by 31 March 2027") | a `date` input for the day the law decides by (the day a contract is made, wages close, a payment is due), and rows or a `define` on it | a day no row takes is E101, a day two rows take is E105 under `policy unique`, a day outside the input's `range` is refused |
+| a transitional measure (経過措置): the old provision for a case begun before that day | the old rows kept beside the new ones, split by the same date, cited to the supplementary provision that keeps them | the same |
+| a rate or a table a ministry announces, a notice (告示) | a `file` source for each notice, cited on the rows it gives: whole (`@fy2025`), or by table once an extractor has taken its tables out | the pins (E037–E039); a cited table also holds the rows to its amounts (E116, W120, E119) |
+| an amendment made after the copy was taken | nothing in the rule: `rulec source outdated` asks whether an amendment enforced after `asof` changes a cited fragment | `outdated`, the one question asked online |
+| a matter left to a cabinet or ministerial order (政令で定める, 省令で定める) | the order transcribed as a rule of its own, with its own `source`; this rule applies it (`apply`), or takes its answer as an input `fed by rulec "<order>.rule" output <name>` | `apply`: E040–E044 in `rulec check`; `fed by`: the file and the name (E208) and the values (E207) in `ritsu check` |
+| the same, while the order is not transcribed | an input the caller answers, its comment naming the order | nothing, until the order is written down |
+| a provision applied with other words (準用) | `apply`, its inputs bound as the provision reads them | E041–E043 |
+| a proviso, or "notwithstanding the preceding paragraph" (ただし書, 前項の規定にかかわらず) | a second table or a `clause`, its `overrides` naming what it excepts | an overlap no `overrides` orders is E105; an `overrides` that takes nothing is W117 |
+| the supplementary provisions (附則) | a citation: `@measures_act 附則第3条`, or an amending law's | E037–E039 |
+
+The employee's rate of an insurance premium, announced for each fiscal year, is one table over the
+day the wages close, each row citing the notice it comes from:
+
+```rule
+source fy2025 = file "sources/mhlw/fy2025.pdf" sha256:eda8a16a77c76224
+source fy2026 = file "sources/mhlw/fy2026.pdf" sha256:69ca914736d051ff
+
+inputs
+  wages     : money[JPY]  range >=0JPY <=10_000_000JPY
+  closes_on : date  range >=2025-04-01 <=2027-03-31  # the two fiscal years whose rates are known
+  kind      : business
+
+table employee_rates
+policy unique
+| closes_on                 | kind                           | -> employee_rate : rate[step 0.05%] |
+| >=2025-04-01 <=2026-03-31 | general                        | 0.55%                               |  @fy2025
+| >=2025-04-01 <=2026-03-31 | agriculture_sake, construction | 0.65%                               |  @fy2025
+| >=2026-04-01 <=2027-03-31 | general                        | 0.5%                                |  @fy2026
+| >=2026-04-01 <=2027-03-31 | agriculture_sake, construction | 0.6%                                |  @fy2026
+```
+
+Start the second year's `general` row a day late, and the check names the day:
+
+```text
+error[E101]: Completeness gap: some input matches no row
+  --> employment_insurance.rule:17 table employee_rates
+   |
+17 | table employee_rates
+   |       ^^^^^^^^^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: closes_on = 2026-04-01, kind = general
+```
+
+Close the last year's rows on both ends, as above. Then widening `closes_on` to the next fiscal year
+before its notice is transcribed is E101 at 2027-04-01; with `>=2026-04-01` alone, the next year would
+take this year's rate without a word. Until the range is widened, a day after 31 March 2027 is
+refused at the door. A period the article sets itself is a `define` on the date, as the reduced
+stamp duty writes it: `define reduced : bool = made <= 2027-03-31  @measures_act 第91条`.
+
+A matter the law leaves to an order is the order's rule. Paragraph 2 of Article 118 of the Act on
+General Rules for National Taxes cuts the fraction under one yen, instead of under a thousand, for
+the national taxes a cabinet order designates, and the rule for the article takes that answer:
+
+```rule
+inputs
+  amount   : money[JPY]  range >=0JPY <=999_999_999_999JPY
+  by_order : bool  fed by rulec "cabinet_order.rule" output named  # a tax the cabinet order names (paragraph 2)
+```
+
+`rulec check` passes the line, since the other file is not its to read; `ritsu check` stops while
+the order's rule is not there:
+
+```text
+error[ritsu E208]: tax_base.rule:10:1: The source rulec "cabinet_order.rule" output named of `input by_order` is not there
+    10 |   by_order : bool  fed by rulec "cabinet_order.rule" output named  # a tax the cabinet order names (paragraph 2)
+  = there is no file cabinet_order.rule
+```
+
+`fed by` holds the values, and not the code that carries them (§4). Where the order decides by
+something the caller has anyway, such as the kind of tax, `apply` it instead: the order's rule is
+expanded into this one, and `rulec check` alone holds the two together (§7, Applying another rule).
+
 ## 3.3 shape and from — where the caller's object holds an input
 
 An input may say where it comes from, and a `shape` says which contract the object it comes

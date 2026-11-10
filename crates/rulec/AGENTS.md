@@ -131,7 +131,9 @@ A few shapes are worth knowing before the first draft:
   runs an extractor as a child process and pins what it produced (`rulec adapter <file.rule>
   --template docling` prints the shape). **The rows are then held to that copy**: an amount the
   copy does not show is E116, a number it states that no row uses is W120, and a boundary it puts
-  on the other side of itself is E119 — the only checks that look outside the rule at all.
+  on the other side of itself is E119 — the only checks that look outside the rule at all. How a
+  law's dates, notices (a PDF is a `file`, cited whole), cabinet orders (政令で定める) and provisos
+  are written is the table in §3.2 of the grammar.
 - **A provision applied mutatis mutandis is an `apply`.** `apply retirement = "retirement_pay.rule"
   meaning:…` uses another rule with every input bound (`years = tenure`, enums mapped with
   `with term_end -> retirement_age`), definitions left out with `except reduction`, and outputs taken under a

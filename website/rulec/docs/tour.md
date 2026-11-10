@@ -822,6 +822,26 @@ languages, a number goes after it. So one rule can be applied twice, and an outp
 like, with nothing to rename. A rule that applies another can be applied in turn, and so can a
 rule that walks a sequence; applies that go round are E044.
 
+## A law's dates, orders and provisos
+
+A statute also says from when a provision applies, what it leaves to a cabinet order, and what
+its proviso takes out. The language has no word for any of these; each is a form above, and the
+checks on the form hold the law to it.
+
+| The law | The rule |
+|---|---|
+| applies from, or until, a day (enforcement, a period the article sets, a transitional measure) | a `date` input for the day the law decides by, and rows or a `define` on it: a day no row takes is E101, a day two rows take is E105 under `policy unique` |
+| a rate a ministry announces for each year, in a notice | a `file` source for each notice, cited whole on the rows it gives (`@fy2025`) |
+| leaves a matter to a cabinet order (政令で定める) | the order as a rule of its own, applied with `apply`, or its answer taken as an input `fed by rulec "<order>.rule" output <name>` (E208 in `ritsu check` while the order's rule is missing) |
+| applies another provision with other words | `apply` |
+| a proviso ("notwithstanding the preceding paragraph") | a second table or a `clause` with `overrides` |
+| the supplementary provisions | a citation, `@act 附則第3条` |
+
+Close each period's rows on both ends, `>=2026-04-01 <=2027-03-31`: then widening the date's range
+into a year whose rows are not written yet is E101 at its first day, and not this year's rate
+carried on without a word. The whole table, with an example of each, is in the
+[grammar](reference.md#effective-dates-delegated-orders-and-provisos).
+
 ## Saying which combinations cannot happen
 
 A relation between two inputs, guaranteed by the caller.
