@@ -1676,11 +1676,12 @@ Swift, SQL and Wasm as an int64. `JSON.parse` makes a number a float64, which ho
 integer only up to 2^53, so the TypeScript and JavaScript runners, their MCP servers and the
 runner that drives the Wasm module read an integer past it from the digits written — the source
 Node 21 and later hand the function `JSON.parse` calls for each value — and write a bigint back
-as its digits with `JSON.rawJSON`. Swift's runner reads the `NSDecimalNumber` that Foundation on
-Linux gives for a negative integer of 19 digits from its digits rather than through
-`doubleValue`, and refuses a UInt64 past Int64 as no integer, as the runners of Go, Rust, Java,
-PHP and Wasm refuse a number past 64 bits. Before, TypeScript read 9007199254740993 as
-9007199254740992 and answered with the row below it, and Swift answered for
+as its digits with `JSON.rawJSON`. Node 20 and older hand no digits and have no `JSON.rawJSON`,
+so there such a number goes as a float64 both ways, as it went before. Swift's runner reads the
+`NSDecimalNumber` that Foundation on Linux gives for a negative integer of 19 digits from its
+digits rather than through `doubleValue`, and refuses a UInt64 past Int64 as no integer, as the
+runners of Go, Rust, Java, PHP and Wasm refuse a number past 64 bits. Before, TypeScript read
+9007199254740993 as 9007199254740992 and answered with the row below it, and Swift answered for
 18446744073709551615 as −1 (§15.297).
 
 A truth value is JSON's `true` or `false` and nothing else, at every door that reads one: the

@@ -7016,7 +7016,7 @@ Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` 
 
 **決めたこと**：
 
-1. **TypeScript と JavaScript は、整数を書いた数字から読み、数字のまま書く。** `JSON.parse` に、値ごとに呼ばれる関数を渡す。Node 21 からは、その関数が三つ目の引数で値の元の文字列（`context.source`）を受け取る。安全な整数（絶対値が 2^53−1 以下）でない数で、元の文字列が符号と数字だけのときは、その文字列から BigInt を作る。点や指数を書いた数は、前のとおり float64 で読む。Python、Ruby、PHP の runner が、点を書いた 2^53 を越える数を最も近い double で読むのと同じ扱いである（§15.205）。入口に渡す前の `_int` は、BigInt をそのまま受け取る。書くときは、BigInt を `JSON.rawJSON` で数字のまま書く。入れたところは、runner（機械の行と、機械の定数を答える行も）、確率を数える runner、MCP のサーバ（標準入出力と HTTP。答えの `structuredContent` も）、Wasm の runner（状態と運ぶ値を次の呼び出しに渡すところ）である。機械の定数を答える行は、運ぶ数の上の端を `Number()` で書いていたので、2^53 を越える端は丸まっていた。BigInt のまま書くようにした。
+1. **TypeScript と JavaScript は、整数を書いた数字から読み、数字のまま書く。** `JSON.parse` に、値ごとに呼ばれる関数を渡す。Node 21 からは、その関数が三つ目の引数で値の元の文字列（`context.source`）を受け取る。安全な整数（絶対値が 2^53−1 以下）でない数で、元の文字列が符号と数字だけのときは、その文字列から BigInt を作る。点や指数を書いた数は、前のとおり float64 で読む。Python、Ruby、PHP の runner が、点を書いた 2^53 を越える数を最も近い double で読むのと同じ扱いである（§15.205）。入口に渡す前の `_int` は、BigInt をそのまま受け取る。書くときは、BigInt を `JSON.rawJSON` で数字のまま書く。Node 20 以前は、元の文字列を渡さず `JSON.rawJSON` も無いので、前のとおり float64 で読み、BigInt は `Number` で書く。入れたところは、runner（機械の行と、機械の定数を答える行も）、確率を数える runner、MCP のサーバ（標準入出力と HTTP。答えの `structuredContent` も）、Wasm の runner（状態と運ぶ値を次の呼び出しに渡すところ）である。機械の定数を答える行は、運ぶ数の初めの値を `Number()` で書いていたので、2^53 を越える初めの値は丸まっていた。BigInt のまま書くようにした。
 2. **Swift の runner は、NSDecimalNumber を数字から読み、Int64 の外の UInt64 を断る。** `_int` は、NSDecimalNumber なら `stringValue` の数字を Int64 として読み、読めなければ「整数でない」で断る。型を表す文字が `Q` で、Int64 の最大を越える数も「整数でない」で断る。文を「範囲の外」にしなかったのは、int64 で持つほかの言語（Go、Rust、Java、PHP、Wasm）が 64 ビットを越える数をこの文で断り、Swift 自身も、double で届く 2^64 をこの文で断るからである。言語のあいだで文がそろわないことは、下に書く。
 3. **試験。** `tests/door_ends.rs` は、§15.295 で外した runner（範囲の端に型の端を書いた規則の TypeScript と JavaScript、Linux の Swift）も比べる。`tests/exact_ints.rs` を足した。`big_edge`、`neg_edge`、`big_standing` を全部の言語の runner と MCP のサーバに通して一致を見る試験と、範囲の無い規則に 2^63、2^64−1、2^64 を渡して、int64 で持つ六つの言語（Rust、Go、Swift、Java、PHP、Wasm）がどれも「整数でない」で断ることを見る試験である。
 
@@ -7057,8 +7057,8 @@ Swift の runner を直すなら、`_int` で NSDecimalNumber を `doubleValue` 
   macos:      NSDecimalNumber objCType=d _int=refused
 ```
 
-- `context.source` と `JSON.rawJSON` は、手元の Node 23.11 と 24.21 で確かめた。CI の tools の段は Node 24 で回る。
-- `tests/exact_ints.rs` の 2 件と `tests/door_ends.rs` の 5 件を含む、rulec の試験の全部 1,470 件（`proofs/` の `lake build` のうえで、SKIP なし）。ritsu の website（サイトの build を含む）、playground、skill の試験。
+- `context.source` と `JSON.rawJSON` は、手元の Node 23.11 と 24.21 で確かめた。CI の tools の段は Node 24 で回る。Node 20 は手元に無いので、`JSON.rawJSON` を消すモジュールを先に読み込ませて写し、運ぶ数を持つ機械の JavaScript の runner が、定数の行を前のとおり float64 で書いて続けることを確かめた（`tests/exact_ints.rs`）。`Number` で書く道を足す前は、この行で `TypeError` になって止まっていた。
+- `tests/exact_ints.rs` の 3 件と `tests/door_ends.rs` の 5 件を含む、rulec の試験の全部 1,471 件（`proofs/` の `lake build` のうえで、SKIP なし）。ritsu の website（サイトの build を含む）、playground、skill の試験。
 
 **見つけて、直していないもの**：64 ビットを越える整数を断る文が、言語でそろわない。基準の評価器は、2^63、2^64−1、2^64、−2^63−1 をどれも「範囲の外」（`amount is out of range`）で断る。直した後に、範囲の無い規則（同じ規則を四つの名前で作った）にこの四つを一つずつ断るケースとして渡すと、24 通りのうち一致したのは、前の三つでは 11 通り、−2^63−1 では 12 通りだった。
 

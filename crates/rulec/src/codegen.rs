@@ -8996,11 +8996,12 @@ pub(crate) const TS_WIRE: &str = r#"function _take(d: unknown, k: string, missin
 }
 
 type JsonSource = { source?: string };
-type JsonRaw = { rawJSON(text: string): unknown };
+type JsonRaw = { rawJSON?(text: string): unknown };
 
 // An integer of the line past 2^53 is read from the digits written, which Node 21 and later hand
 // a reviver, and not from the float64 JSON.parse makes of it, which holds every integer only up to
-// 2^53; and a bigint is written back as its digits (§15.297).
+// 2^53; and a bigint is written back as its digits (§15.297). Node 20 and older hand no digits and
+// have no `JSON.rawJSON`, so there a number goes as a float64 both ways, as it went before.
 function _exact(_k: string, v: unknown, at: JsonSource = {}): unknown {
   if (typeof v === "number" && !Number.isSafeInteger(v) && at.source !== undefined && /^-?[0-9]+$/.test(at.source)) {
     return BigInt(at.source);
@@ -9009,7 +9010,11 @@ function _exact(_k: string, v: unknown, at: JsonSource = {}): unknown {
 }
 
 function _raw(_k: string, v: unknown): unknown {
-  return typeof v === "bigint" ? (JSON as unknown as JsonRaw).rawJSON(String(v)) : v;
+  if (typeof v !== "bigint") {
+    return v;
+  }
+  const json = JSON as unknown as JsonRaw;
+  return json.rawJSON !== undefined ? json.rawJSON(String(v)) : Number(v);
 }
 
 function _int(v: unknown, what: string): bigint {
@@ -9825,10 +9830,11 @@ const CARRY = @CARRY@;
 let state = null;@MORE_DECL@
 
 // An integer past 2^53 is read from the digits written, which Node 21 and later hand a reviver,
-// and written back as its digits, so a trace hands the module what it answered (§15.297).
+// and written back as its digits, so a trace hands the module what it answered (§15.297). Node 20
+// and older hand no digits and have no `JSON.rawJSON`: there a number goes as a float64, as before.
 const exact = (_k, v, at = {}) =>
   typeof v === "number" && !Number.isSafeInteger(v) && at.source !== undefined && /^-?[0-9]+$/.test(at.source) ? BigInt(at.source) : v;
-const raw = (_k, v) => (typeof v === "bigint" ? JSON.rawJSON(String(v)) : v);
+const raw = (_k, v) => (typeof v !== "bigint" ? v : JSON.rawJSON !== undefined ? JSON.rawJSON(String(v)) : Number(v));
 
 for (const line of readFileSync(0, "utf8").split("\n")) {
   if (!line.trim()) continue;

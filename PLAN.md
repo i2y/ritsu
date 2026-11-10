@@ -2540,13 +2540,13 @@ rulec の DESIGN §15.294 に残した穴を塞いだ（§15.296）。E108 は�
 
 7.112 に残した、runner とサーバが整数を読むところの二つを直した（rulec の DESIGN §15.297）。
 
-- **TypeScript と JavaScript**：runner、確率を数える runner、MCP のサーバ、Wasm の runner は、`JSON.parse` に渡す関数が受け取る元の文字列（Node 21 から）から、2^53 を越える整数を BigInt として読み、書くときは `JSON.rawJSON` で数字のまま書く。前は、境目の 2^53+1 を 2^53 と読んで一つ下の行で答え、MCP のサーバは上の端 10^16 の一つ上を答え、Wasm の runner はトレースで 2^53+3 を 2^53+4 として次の呼び出しに渡していた。
+- **TypeScript と JavaScript**：runner、確率を数える runner、MCP のサーバ、Wasm の runner は、`JSON.parse` に渡す関数が受け取る元の文字列（Node 21 から）から、2^53 を越える整数を BigInt として読み、書くときは `JSON.rawJSON` で数字のまま書く。Node 20 以前は、前のとおり float64 で読み書きする。前は、境目の 2^53+1 を 2^53 と読んで一つ下の行で答え、MCP のサーバは上の端 10^16 の一つ上を答え、Wasm の runner はトレースで 2^53+3 を 2^53+4 として次の呼び出しに渡していた。
 - **Swift**：runner の `_int` は、Linux の Foundation が 19 桁の負の整数に返す NSDecimalNumber を数字から読み、Int64 を越える UInt64 を「整数でない」で断る。前は −(10^18+1) を −10^18 と読み、2^64−1 を −1 として答えていた。文は、int64 で持つほかの言語が 64 ビットを越える数に言う文に合わせた。
 - **試験**：`door_ends` は全部の runner を比べる。`tests/exact_ints.rs` を足した。
 
 残したもの：64 ビットを越える整数を断る文が、言語でそろわない。基準の評価器と、整数に端の無い言語は「範囲の外」、Rust・Go・Swift・Java・PHP・Wasm の runner は「整数でない」（PHP は −2^63−1 だけ「範囲の外」）で断り、Python の Connect は protobuf の文で断り、SQLite の runner と PostgreSQL の関数の runner は止まる。ベクタはその値を持たないので、ふだんの試験には出ない（§15.297）。
 
-確かめたこと：2^53 を越える境目と端、19 桁の負の端と境目、2^53 を越える数を運ぶ機械、範囲の無い入力の四つの規則を 24 通りの読むところに通して、96 件が一致した（直す前は、丸めの補助関数の試験を含む 108 件のうち 32 件が合わなかった）。Linux の Foundation の数を読む関数を写したもので、Swift の `_int` を確かめた。rulec の試験の全部 1,470 件（SKIP なし）と、ritsu の website・playground・skill の試験。
+確かめたこと：2^53 を越える境目と端、19 桁の負の端と境目、2^53 を越える数を運ぶ機械、範囲の無い入力の四つの規則を 24 通りの読むところに通して、96 件が一致した（直す前は、丸めの補助関数の試験を含む 108 件のうち 32 件が合わなかった）。Linux の Foundation の数を読む関数を写したもので、Swift の `_int` を確かめた。rulec の試験の全部 1,471 件（SKIP なし）と、ritsu の website・playground・skill の試験。
 
 ## 8. モジュール（2026-10-28）
 

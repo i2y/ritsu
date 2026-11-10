@@ -206,3 +206,36 @@ fn the_int64_languages_refuse_a_number_past_64_bits_as_no_integer() {
     assert!(ran.iter().any(|x| x.starts_with("no_range ")), "nothing ran: {ran:?}");
     println!("past 64 bits: {} runs agreed: {}", ran.len(), ran.join(", "));
 }
+
+/// Node 20 and older have no `JSON.rawJSON`: there the JavaScript runner of a machine that carries a
+/// number writes the machine's constants as a float64, as it did before §15.297, and goes on. A
+/// module loaded first takes `JSON.rawJSON` away, as Node 20 has none; with it, the runner writes the
+/// constant 2^53+1 as its digits.
+#[test]
+fn a_runner_writes_a_constant_where_node_has_no_raw_json() {
+    if !ready(Need::Node, || Command::new("node").arg("--version").output().is_ok_and(|o| o.status.success()), "node is not here") {
+        return;
+    }
+    let t = TempDir::new("exact-ints-old-node");
+    let out = t.path().join("out");
+    generate(t.path(), &out, &[("big_standing", BIG_STANDING)], &["javascript"], &["runner"]);
+    std::fs::write(t.path().join("no-raw-json.mjs"), "delete JSON.rawJSON;\n").unwrap();
+    let constants = |first: &[&str]| -> String {
+        use std::io::Write;
+        let mut p = Command::new("node")
+            .current_dir(t.path())
+            .args(first)
+            .arg(out.join("javascript/big_standing_runner.mjs"))
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("cannot start node");
+        p.stdin.take().unwrap().write_all(b"{\"machine\":true}\n").unwrap();
+        let o = p.wait_with_output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    };
+    assert_eq!(constants(&[]), r#"{"initial":"fresh","final":[],"carried":{"days_left":9007199254740993}}"#);
+    assert_eq!(constants(&["--import", "./no-raw-json.mjs"]), r#"{"initial":"fresh","final":[],"carried":{"days_left":9007199254740992}}"#);
+}
