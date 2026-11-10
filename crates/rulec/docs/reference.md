@@ -714,7 +714,8 @@ policy unique
 
 Start the second year's `general` row a day late, and the check names the day:
 
-```text
+```console
+$ rulec check employment_insurance.rule
 error[E101]: Completeness gap: some input matches no row
   --> employment_insurance.rule:17 table employee_rates
    |
@@ -722,6 +723,8 @@ error[E101]: Completeness gap: some input matches no row
    |       ^^^^^^^^^^^^^^ the input space is not fully covered
    |
  An input that matches no row: closes_on = 2026-04-01, kind = general
+ hint: add a row that matches this input.
+ The shape of the row to add: `| 2026-04-01 | general | 0.55% |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
 
 Close the last year's rows on both ends, as above. Then widening `closes_on` to the next fiscal year
@@ -743,10 +746,14 @@ inputs
 `rulec check` passes the line, since the other file is not its to read; `ritsu check` stops while
 the order's rule is not there:
 
-```text
+```console
+$ ritsu check tax_base.rule
+ok tax_base.rule
 error[ritsu E208]: tax_base.rule:10:1: The source rulec "cabinet_order.rule" output named of `input by_order` is not there
     10 |   by_order : bool  fed by rulec "cabinet_order.rule" output named  # a tax the cabinet order names (paragraph 2)
   = there is no file cabinet_order.rule
+  = A path goes from the directory of the file it is written in. Put the name right, or add what it names.
+ritsu check: 1 file (rulec 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
 ```
 
 `fed by` holds the values, and not the code that carries them (§4). Where the order decides by
