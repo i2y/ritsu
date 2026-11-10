@@ -370,21 +370,16 @@ theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
   have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
   have htot := runningTotals_total _ _ r hr
-  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by
-    have hitem : r.item ∈ lines := by
-      have := List.mem_map_of_mem (f := (·.item)) hr
-      rwa [runningTotals_items] at this
-    have := (hwithin r.item hitem).1
-    omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≥ 0
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  simp only
   omega
 
 /-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
@@ -392,26 +387,23 @@ theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_th
   intro lines refund hlen _ hwithin hr0 _ hle s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
-  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
-  have htot := runningTotals_total _ _ r hr
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
   have hitem : r.item ∈ lines := by
     have := List.mem_map_of_mem (f := (·.item)) hr
     rwa [runningTotals_items] at this
-  have := (hwithin r.item hitem).1
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
   have hsub := allocate_sub_le (t := refund) hr0 (htot ▸ hle) (htot ▸ hT) (show r.before ≤ r.upto by omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≤ r.item.left
+  simp only
   omega
 
 end Proofs.refund_split
 ```
 
 `sum_pos`、`allocate_self`、`runningTotals_telescope` などの補題は、`ritsu gen` が証明と一緒に書く `Kaname/Prelude.lean` にあります。
+二つ目と三つ目の証明は、配分を一つ取り出して示します。`List.mem_map.mp` で、その配分のもとになった `running_totals` の要素を取り出し、`runningTotals_items` でその要素の明細が `lines` にあることを示すと、明細の範囲が `Within` から分かります。
 証明は Lean の core だけで書き、Mathlib は使いません。`linarith` の代わりは `omega` で、`set` のように和に名前を付けるには `obtain ⟨S, hS⟩ : ∃ S, S = … := ⟨_, rfl⟩` と書きます。
 補題の一覧と、Mathlib のほかの tactic の代わりは [docs/reference.md](docs/reference.md#what-a-proof-is-made-of)（英語）にあります。
 書きながら試すには、`generated/lean/` で `lake build` を走らせます。kaname が書く Lean はビルドしても警告を出さないので、出た警告は証明のものです。

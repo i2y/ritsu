@@ -149,6 +149,14 @@ theorem sum_pos {α : Type} {xs : List α} {w : α → Int} (hn : 0 < xs.length)
     have h2 := sum_nonneg (w := w) (fun y hy => Int.le_of_lt (hw y (List.mem_cons_of_mem _ hy)))
     omega
 
+/-- A number every term is multiplied by comes out of the sum. kaname writes
+`sum(xs, x => c * …)` as `(List.map (fun x => c * …) xs).sum`, the left side. -/
+theorem sum_mul_left {α : Type} (c : Int) (xs : List α) (w : α → Int) :
+    (xs.map fun x => c * w x).sum = c * (xs.map w).sum := by
+  induction xs with
+  | nil => simp
+  | cons x xs ih => simp only [List.map_cons, List.sum_cons, ih, Int.mul_add]
+
 theorem allocate_self (t : Int) {s : Int} (h : 0 < s) : allocate t s s = t :=
   Int.mul_tdiv_cancel t (Int.ne_of_gt h)
 

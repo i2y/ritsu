@@ -27,21 +27,16 @@ theorem no_share_is_negative : Kaname.refund_split_ja.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
   have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
   have htot := runningTotals_total _ _ r hr
-  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by
-    have hitem : r.item ∈ lines := by
-      have := List.mem_map_of_mem (f := (·.item)) hr
-      rwa [runningTotals_items] at this
-    have := (hwithin r.item hitem).1
-    omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≥ 0
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  simp only
   omega
 
 /-- 返金が全体を超えなければ、一つの明細が受け取る額は、全体のうちのその明細の幅を超えない。 -/
@@ -49,20 +44,16 @@ theorem no_share_is_more_than_its_left : Kaname.refund_split_ja.no_share_is_more
   intro lines refund hlen _ hwithin hr0 _ hle s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
-  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
-  have htot := runningTotals_total _ _ r hr
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
   have hitem : r.item ∈ lines := by
     have := List.mem_map_of_mem (f := (·.item)) hr
     rwa [runningTotals_items] at this
-  have := (hwithin r.item hitem).1
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
   have hsub := allocate_sub_le (t := refund) hr0 (htot ▸ hle) (htot ▸ hT) (show r.before ≤ r.upto by omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≤ r.item.left
+  simp only
   omega
 
 end Proofs.refund_split_ja

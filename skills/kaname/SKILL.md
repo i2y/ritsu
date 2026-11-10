@@ -331,12 +331,13 @@ file beside the `.kn`, `<module alias>.lean`, which is the work of whoever write
 takes. They are in `namespace Kaname`, which the draft opens with the module
 (`open Kaname Kaname.<alias>`); a name the module shares with the prelude (`Frac`, `Running`) is
 then "Ambiguous term", and is written in full (`Kaname.<alias>.Frac`). kaname writes
-`sum(xs, x => …)` as `(List.map (fun x => …) xs).sum`, the form of the first two.
+`sum(xs, x => …)` as `(List.map (fun x => …) xs).sum`, the form of the first three.
 
 | Lemma | Says |
 |---|---|
 | `sum_nonneg (hw : ∀ x ∈ xs, 0 ≤ w x)` | `0 ≤ (xs.map w).sum` |
 | `sum_pos (hn : 0 < xs.length) (hw : ∀ x ∈ xs, 0 < w x)` | `0 < (xs.map w).sum`; the `1 ≤ xs.length` of a `count >=1` is `hn` as it is |
+| `sum_mul_left c xs w` | `(xs.map fun x => c * w x).sum = c * (xs.map w).sum` |
 | `allocate_self t (h : 0 < s)` | `allocate t s s = t` |
 | `allocate_zero t s` | `allocate t 0 s = 0` |
 | `allocate_mono (ht : 0 ≤ t) (hs : 0 < s) (hc : c ≤ c')` | `allocate t c s ≤ allocate t c' s` |
@@ -346,6 +347,12 @@ then "Ambiguous term", and is written in full (`Kaname.<alias>.Frac`). kaname wr
 | `runningTotals_total xs w` | `∀ r ∈ runningTotals xs w, r.total = (xs.map w).sum` |
 | `runningTotals_telescope xs w f` | `((runningTotals xs w).map fun r => f r.upto - f r.before).sum = f (xs.map w).sum - f 0` |
 | `mem_runningTotals (hw : ∀ x ∈ xs, 0 ≤ w x)` | `∀ r ∈ runningTotals xs w, r.upto - r.before = w r.item ∧ 0 ≤ r.before ∧ r.upto ≤ r.total` |
+
+Write a hypothesis as the goal reads, with the function applied: for
+`runningTotals lines (fun l => l.left)`, `mem_runningTotals` takes `hw : ∀ l ∈ lines, 0 ≤ l.left`,
+finds `w` from it, and answers `r.upto - r.before = r.item.left`. Written with `w` put in by hand,
+`0 ≤ (fun l => l.left) l`, the hypothesis holds a value `omega` does not take for `l.left`, and its
+proof needs `show 0 ≤ l.left` before `omega`.
 
 **Without Mathlib.** Lean 4.34.0's core has no `set`, `ring`, `linarith`, `nlinarith`, `norm_num`,
 `positivity`, `push_neg` or `use`: each is "unknown tactic". What to write instead, each tried on
@@ -390,6 +397,69 @@ The sum is named `S` first, so that `rw` and `omega` see one value. `unfold spli
 makes the shares, `List.map_map` joins it to the map of the property, and `List.map_congr_left`
 leaves one element `r` with `hr : r ∈ runningTotals …`. There `runningTotals_total _ _ r hr` puts the
 whole sum for `r.total`, and the map is now the one `runningTotals_telescope` speaks of.
+
+**An element of what such a function answers.** A property of every element,
+`∀ s ∈ split lines refund, …`, is shown of the element of `running_totals` that `s` was made from.
+From the proof of `no_share_is_negative` (`refund_split`), whole but for its first line:
+
+```lean
+  intro lines refund hlen _ hwithin hr0 _ s hs
+  have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
+  unfold split at hs
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  simp only
+  omega
+```
+
+- `unfold split at hs` shows `s ∈ List.map (fun r => …) (runningTotals …)`. `List.mem_map.mp hs` gives
+  an element `r` with `hr : r ∈ runningTotals …` and the record the map makes of it, and
+  `obtain ⟨r, hr, rfl⟩` puts that record for `s`. The goal is then a field of the record
+  (`{ sku := …, left := …, share := … }.share ≥ 0`), and `simp only` puts the field's value in its
+  place.
+- What is known of `r` comes from its item. `List.mem_map_of_mem` with `(·.item)` and
+  `runningTotals_items` give `r.item ∈ lines`, and `hwithin r.item hitem` the ranges of its fields:
+  `Within` joins them with `∧` in the order of the fields, so `.1` is `1 ≤ r.item.left` here, and
+  `simp only [Line.Within] at h` hands `omega` all of them. `mem_runningTotals` says how wide `r` is
+  (`hwide : r.upto - r.before = r.item.left`), not that the width is above zero: without the item's
+  range, `omega` fails, and the constraints it prints put `r.item.left` below zero.
+- `no_share_is_more_than_its_left` goes the same way, with `allocate_sub_le` for `allocate_mono`.
+
+**A number times each term.** `sum(lines, l => price * l.qty)` is
+`(List.map (fun l => price * l.qty) lines).sum`, and `sum_mul_left` takes the number out of the sum.
+The proof of `bill_is_the_price_times_the_quantities` (`order_bill`), whole but for its first line:
+
+```lean
+  intro lines price _ _ _ _ _
+  unfold bill
+  exact sum_mul_left price lines _
+```
+
+Lean finds the weight, `fun l => l.qty`, for the `_`; `rw [sum_mul_left]` does the same. With the
+number on the right of each term (`l.qty * price`), `simp only [Int.mul_comm _ price]` turns the terms
+round first.
+
+**A case for each value of an enum.** A property of a value of an enum, with fields or without, is
+shown value by value: `cases` makes a goal for each value, and `simp_all` with the functions the
+goal calls, named, closes it. The proof of `a_closed_order_takes_no_event` (`order_flow`), whole but
+for its first line:
+
+```lean
+  intro order event _ _ closed
+  cases order <;> simp_all [«open», next]
+```
+
+On an open state, `«open»` answers `true`, and the hypothesis of the `when` line,
+`closed : ¬(«open» order) = true`, is false; on a closed one, `next` answers the error whatever the
+event. A name that is a word of Lean, such as `open`, is written in `«»`, as the generated module
+writes it.
 
 **What a proof file cannot hold** (it is read as text before Lean builds it, so that nothing it says
 runs in the build): an import from outside `Kaname.`; `#eval` and every `#` command but `#check`,

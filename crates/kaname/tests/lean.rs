@@ -166,9 +166,10 @@ fn lean_definitions_agree_with_the_interpreter() {
 }
 
 /// The lemmas of the prelude a proof leans on (PLAN 12.2.6, DESIGN 38.4).
-const LEMMAS: [&str; 11] = [
+const LEMMAS: [&str; 12] = [
     "sum_nonneg",
     "sum_pos",
+    "sum_mul_left",
     "allocate_self",
     "allocate_zero",
     "allocate_mono",

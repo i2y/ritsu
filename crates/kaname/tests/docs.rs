@@ -340,7 +340,7 @@ fn the_lemmas_on_the_pages_are_the_preludes() {
         }
         rest = &after[name.len()..];
     }
-    assert!(theorems.len() >= 11, "{} lemmas of the prelude: was it changed?", theorems.len());
+    assert!(theorems.len() >= 12, "{} lemmas of the prelude: was it changed?", theorems.len());
     let every: BTreeSet<&str> = theorems.iter().map(|(n, _)| n.as_str()).collect();
     for page in ["docs/reference.md", "../../skills/kaname/SKILL.md"] {
         let text = read(Path::new(page));

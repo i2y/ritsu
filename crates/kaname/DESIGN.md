@@ -5321,9 +5321,9 @@ end Kaname.refund_split
 - 置き場所は、.kn と同じディレクトリの `<モジュールの別名>.lean` である（`refund_split.lean`、日本語の版は `refund_split_ja.lean`）。処理系はこのファイルに何も書かない。
 - 性質ごとに、`theorem Proofs.<モジュールの別名>.<性質の別名> : Kaname.<モジュールの別名>.<性質の別名>` を置く。型は文の定数そのものに書く。開いた `∀ …` を書くと、「違うことを述べている」になる。補題は同じファイルに置いてよい。
 - 書き始めるときは、`samples/<別名>.lean` を .kn の隣に写し（頭の三行を除く）、`sorry` を証明に置き換える。下書きは、モジュールと、前置きの補題がある `Kaname` を開く（`open Kaname Kaname.<別名>`。例の証明と同じ形）。書きながら確かめるには、`generated/lean/` で `lake build` を回す。`--lean` の前にこのビルドは要らない（38.6 の 2 で、.kn から一時の場所に作り直す）。生成した `lakefile.toml` は、.kn の隣にある証明のファイルを、その場所のまま読むライブラリを持つ（`name = "proofs_<別名>"`、`srcDir` に `generated/lean/` から .kn のディレクトリへの相対パス、`roots = ["<別名>"]`）。相対パスは、リンクをたどった実際の場所どうしから求める。ライブラリは証明のファイルがあるときだけ書く（無いファイルを読むライブラリは、`lake build` を止める）。だから、証明のファイルを置いたときと性質を変えたときは、`ritsu gen --target lean` を回し直す。
-- **証明に使えるもの**：Lean の core と前置きの補題である。Mathlib は使わないので、`set`・`ring`・`linarith`・`nlinarith`・`norm_num`・`positivity`・`push_neg`・`use` は無い（4.34.0 で「unknown tactic」）。前置きの補題は十一ある。和について `sum_nonneg`（どの項も 0 以上なら和も 0 以上）と `sum_pos`（空でなく、どの項も正なら和も正）、`allocate` について `allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le`、`running_totals` について `runningTotals_length`・`runningTotals_items`・`runningTotals_total`・`runningTotals_telescope`・`mem_runningTotals` である。和の補題は、kaname が `sum(xs, x => …)` を書く形 `(List.map (fun x => …) xs).sum` で述べ、`sum_pos` の長さの仮定は `0 < xs.length` にする（`count >=1` の仮定 `1 ≤ xs.length` がそのまま渡る）。Mathlib の tactic の代わりの書き方と `grind` が示せること、`split` のような関数を開く手順は、スキルとリファレンスに書く。そこに書くのは、4.34.0 で通った形だけである。二つに載せる補題の表（名前、仮定、文）が前置きのとおりで、補題を一つも落としていないことは、`tests/docs.rs` の `the_lemmas_on_the_pages_are_the_preludes` が見る（`runningTotals` を書くための `runningFrom` の補題は、表に載せない）。
+- **証明に使えるもの**：Lean の core と前置きの補題である。Mathlib は使わないので、`set`・`ring`・`linarith`・`nlinarith`・`norm_num`・`positivity`・`push_neg`・`use` は無い（4.34.0 で「unknown tactic」）。前置きの補題は十二ある。和について `sum_nonneg`（どの項も 0 以上なら和も 0 以上）、`sum_pos`（空でなく、どの項も正なら和も正）、`sum_mul_left`（どの項にも掛かる数は和の外に出せる）、`allocate` について `allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le`、`running_totals` について `runningTotals_length`・`runningTotals_items`・`runningTotals_total`・`runningTotals_telescope`・`mem_runningTotals` である。和の補題は、kaname が `sum(xs, x => …)` を書く形 `(List.map (fun x => …) xs).sum` で述べ、`sum_pos` の長さの仮定は `0 < xs.length` にする（`count >=1` の仮定 `1 ≤ xs.length` がそのまま渡る）。`mem_runningTotals` の仮定 `hw : ∀ x ∈ xs, 0 ≤ w x` は、目標に現れる形（`∀ l ∈ lines, 0 ≤ l.left`）で書いて渡す。Lean はその形から `w` を見つけ、答えも同じ形（`r.upto - r.before = r.item.left`）で返すので、補題の文は `w x` のままにする。`w` の位置に関数をそのまま書いた形（`0 ≤ (fun l => l.left) l`）は、`omega` が `l.left` と別の値として読むので、`show` が要る。スキルとリファレンスには、Mathlib の tactic の代わりの書き方と `grind` が示せることを書き、例の証明から四つの手順を引く。`split` のような関数を開く手順、`map` で作ったリストの要素を一つ取り出してもとの明細の範囲を得る手順、どの項にも掛かる数を和の外に出す手順、列挙の値ごとに場合を分ける手順である。そこに書くのは 4.34.0 で通った形だけである。二つに載せる補題の表（名前、仮定、文）が前置きのとおりで、補題を一つも落としていないことは、`tests/docs.rs` の `the_lemmas_on_the_pages_are_the_preludes` が見る（`runningTotals` を書くための `runningFrom` の補題は、表に載せない）。
 
-例の証明は、Lean の core（`omega`、`simp`、`decide`、帰納法）と前置きの補題だけで書いた（Mathlib は使わない）。性質を持つ例は六つで、英語と日本語の版は同じ証明である（日本語の版で違うのは、モジュールの別名、`late_payment` の `Inner` のフィールドの名前、説明のコメントだけ）。時間は、デバッグのビルドの `ritsu kaname check <file> --lean` が、ベクタから `Check.lean` までにかけたもの（モジュール一つ）である。
+例の証明は、Lean の core（`omega`、`simp`、`cases`）と前置きの補題だけで書いた（Mathlib は使わない）。性質を持つ例は六つで、英語と日本語の版は同じ証明である（日本語の版で違うのは、モジュールの別名、`late_payment` の `Inner` のフィールドの名前、説明のコメントだけ）。時間は、デバッグのビルドの `ritsu kaname check <file> --lean` が、ベクタから `Check.lean` までにかけたもの（モジュール一つ）である。
 
 | 例 | 性質 | 証明 | `--lean` |
 |---|---|---|---|
@@ -5332,7 +5332,7 @@ end Kaname.refund_split
 | `media_mail`（17.8） | `nothing_heavier_than_15lb_is_quoted`：15 ポンドより重いカートには見積もりが無い | 重さが 240 オンスを超えることを `omega` で出し、`simp [quote, …]`。規則の答えは使わない | 2.4 秒 |
 | `discount_split`（17.9） | `every_line_keeps_its_label`：どの明細も項目を保つ | `runningTotals_items` で明細の列に戻し、`simp [split, List.map_map, …]` | 2.4 秒 |
 | 〃 | `shares_add_up`：配った分の合計は値引き額 | 置かない（規則の答えに頼る。W603） | |
-| `order_bill`（17.12） | `bill_is_the_price_times_the_quantities`：請求額は単価と数量の合計の積 | 明細についての帰納法（下に貼る） | 2.2 秒 |
+| `order_bill`（17.12） | `bill_is_the_price_times_the_quantities`：請求額は単価と数量の合計の積 | 前置きの `sum_mul_left`（下に貼る） | 2.2 秒 |
 | `refund_split`（17.13） | 38.1 の三つ | 前置きの `sum_pos`・`runningTotals_telescope`・`runningTotals_total`・`runningTotals_items`・`mem_runningTotals`・`allocate_self`・`allocate_zero`・`allocate_mono`・`allocate_sub_le` と `omega` | 2.4 秒 |
 
 `order_bill` の証明（`examples/order_bill/order_bill.lean`）。性質は `property bill_is_the_price_times_the_quantities(lines: list[Line] count >=1 <=30, price: money[USDc] range >=1USDc <=1000USDc)` の本体が `bill(lines: lines, price: price) = price * sum(lines, l => l.qty)` のものである。
@@ -5344,16 +5344,11 @@ namespace Proofs.order_bill
 
 open Kaname Kaname.order_bill
 
-/-- The price taken out of the sum: by induction on the lines. -/
+/-- The price taken out of the sum, by the prelude's `sum_mul_left`. -/
 theorem bill_is_the_price_times_the_quantities : Kaname.order_bill.bill_is_the_price_times_the_quantities := by
   intro lines price _ _ _ _ _
   unfold bill
-  have key : ∀ ls : List Line, (ls.map (fun l => price * l.qty)).sum = price * (ls.map (fun l => l.qty)).sum := by
-    intro ls
-    induction ls with
-    | nil => simp
-    | cons l ls ih => simp [List.sum_cons, ih, Int.mul_add]
-  exact key lines
+  exact sum_mul_left price lines _
 
 end Proofs.order_bill
 ```
@@ -5447,7 +5442,7 @@ Lean: 7768 of 7768 evaluations agree with the reference interpreter, of 388 func
 同じテストは、58 のモジュールの `lake build Kaname` が警告を一つも出さないことも見る（38.4）。読まない名前を `_` で書く前は、58 のモジュールで 40 の警告が出ていた（`Within` の枝の変数、使わない `let`、`fun` の引数、`match` の枝の変数、関数の引数）。性質を持つ六つの例の英日を、証明のファイルと一緒に `ritsu gen --target lean` で書き出して `lake build` したときは 12 で、どれも `order_flow` の `Within` の枝だった。証明のファイルからは、直す前も後も警告が出ない。
 
 - `srcDir` に `..` を含む相対パスを書いた `lean_lib` を `lake` が読み、.kn の隣の証明をその場所のままビルドする（`lean_the_generated_package_builds_the_proofs_in_place`）。
-- 前置きの補題十一（`sum_nonneg`、`sum_pos`、`allocate_self`、`allocate_zero`、`allocate_mono`、`allocate_sub_le`、`runningTotals_telescope`、`runningTotals_length`、`runningTotals_items`、`runningTotals_total`、`mem_runningTotals`）は、`propext`・`Classical.choice`・`Quot.sound` のほかに頼らない（`lean_the_prelude_rests_on_the_three_axioms`）。
+- 前置きの補題十二（`sum_nonneg`、`sum_pos`、`sum_mul_left`、`allocate_self`、`allocate_zero`、`allocate_mono`、`allocate_sub_le`、`runningTotals_telescope`、`runningTotals_length`、`runningTotals_items`、`runningTotals_total`、`mem_runningTotals`）は、`propext`・`Classical.choice`・`Quot.sound` のほかに頼らない（`lean_the_prelude_rests_on_the_three_axioms`）。
 - 例の性質は、規則の答えに頼る `discount_split` の `shares_add_up`（英日）のほかは、どれも `--lean` で示せる（`lean_proves_the_properties_of_the_examples`。答えは `tests/golden/lean/examples.txt`）。
 - `--lean` の時間：例のモジュール一つで 2.2〜2.7 秒（38.5 の表）。例の 20 のモジュールを一度に回して 15〜17 秒、`tests/lean.rs` の 25 のテストで 26 秒（どちらもデバッグのビルド）。一時のディレクトリを毎回作り直すので、前の回のビルドは使わない。その日の最初の一回は Lean の .olean を読み込むので遅く、`refund_split` の二つのモジュールで 15 秒、二回目からは 3.3 秒だった。
 - 時間切れ：上限を 1 秒にし、重い `decide`（`Fin 64` の三つ組についての主張）の証明を置くと、30 秒以内に時間切れの E604 が返り、一時のディレクトリの名前を含むプロセスは残らず、ディレクトリも消えていた（`lean_stops_a_build_past_the_time_limit`）。`lake` のプロセスだけを止めると、`lake` が起こした `lean` が残りうるので、プロセスグループごと止めて、消えるのを待つ。

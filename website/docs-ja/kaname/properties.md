@@ -102,7 +102,7 @@ abbrev shares_add_up : Prop :=
 
 ## 証明を書く
 
-証明は、`.kn` の隣の `refund_split.lean` に書きます。下書きを最初の三行を除いて写し、`sorry` を証明に置き換えます。定理の名前は `Proofs.refund_split.<性質>` で、型は `ritsu gen` が書いた文そのものです。使うのは、Lean 自身の `omega`、`simp`、`decide`、`grind` と、和・`allocate`・`running_totals` についての `Kaname/Prelude.lean` の補題です。Mathlib は使わないので、`ring`、`linarith`、`set` はありません。`linarith` の代わりは `omega` で、下の一つ目の証明は、`set` の代わりに `obtain` で和に名前を付けています。書きながら試すには、`generated/lean/` で `lake build` を走らせます。kaname が書く Lean はビルドしても警告を出さないので、出た警告は証明のものです。`--lean` は .kn からパッケージを作り直すので、その前にこのビルドは要りません。
+証明は、`.kn` の隣の `refund_split.lean` に書きます。下書きを最初の三行を除いて写し、`sorry` を証明に置き換えます。定理の名前は `Proofs.refund_split.<性質>` で、型は `ritsu gen` が書いた文そのものです。使うのは、Lean 自身の `omega`、`simp`、`decide`、`grind` と、和・`allocate`・`running_totals` についての `Kaname/Prelude.lean` の補題です。Mathlib は使わないので、`ring`、`linarith`、`set` はありません。`linarith` の代わりは `omega` で、下の一つ目の証明は、`set` の代わりに `obtain` で和に名前を付けています。残りの二つは、配分を一つ取り出して示します。`List.mem_map.mp` で、その配分のもとになった `running_totals` の要素を取り出し、`runningTotals_items` でその要素の明細が `lines` にあることを示すと、明細の範囲が `Within` から分かります。書きながら試すには、`generated/lean/` で `lake build` を走らせます。kaname が書く Lean はビルドしても警告を出さないので、出た警告は証明のものです。`--lean` は .kn からパッケージを作り直すので、その前にこのビルドは要りません。
 
 例の証明のファイルの全体です。
 
@@ -136,21 +136,16 @@ theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
   have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
   have htot := runningTotals_total _ _ r hr
-  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by
-    have hitem : r.item ∈ lines := by
-      have := List.mem_map_of_mem (f := (·.item)) hr
-      rwa [runningTotals_items] at this
-    have := (hwithin r.item hitem).1
-    omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≥ 0
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  simp only
   omega
 
 /-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
@@ -158,20 +153,16 @@ theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_th
   intro lines refund hlen _ hwithin hr0 _ hle s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
-  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
-  have htot := runningTotals_total _ _ r hr
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
   have hitem : r.item ∈ lines := by
     have := List.mem_map_of_mem (f := (·.item)) hr
     rwa [runningTotals_items] at this
-  have := (hwithin r.item hitem).1
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
   have hsub := allocate_sub_le (t := refund) hr0 (htot ▸ hle) (htot ▸ hT) (show r.before ≤ r.upto by omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≤ r.item.left
+  simp only
   omega
 
 end Proofs.refund_split

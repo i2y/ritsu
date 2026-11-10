@@ -744,12 +744,13 @@ The first `--lean` downloads the Lean toolchain (`leanprover/lean4:v4.34.0`, abo
 
 ### What a proof is made of
 
-No Mathlib is used. A proof is made of Lean's core (`intro`, `unfold`, `rw`, `simp`, `omega`, `decide`, `grind`, `induction`) and the lemmas of `Kaname/Prelude.lean`, which rest on the three axioms `--lean` takes. They are in `namespace Kaname`, which the draft opens with the module (`open Kaname Kaname.<alias>`); a name the module shares with the prelude (`Frac`, `Running`) is then "Ambiguous term", and is written in full (`Kaname.<alias>.Frac`). kaname writes `sum(xs, x => …)` as `(List.map (fun x => …) xs).sum`, the form of the first two.
+No Mathlib is used. A proof is made of Lean's core (`intro`, `unfold`, `rw`, `simp`, `omega`, `decide`, `grind`, `cases`, `induction`) and the lemmas of `Kaname/Prelude.lean`, which rest on the three axioms `--lean` takes. They are in `namespace Kaname`, which the draft opens with the module (`open Kaname Kaname.<alias>`); a name the module shares with the prelude (`Frac`, `Running`) is then "Ambiguous term", and is written in full (`Kaname.<alias>.Frac`). kaname writes `sum(xs, x => …)` as `(List.map (fun x => …) xs).sum`, the form of the first three.
 
 | Lemma | Says |
 |---|---|
 | `sum_nonneg (hw : ∀ x ∈ xs, 0 ≤ w x)` | `0 ≤ (xs.map w).sum` |
 | `sum_pos (hn : 0 < xs.length) (hw : ∀ x ∈ xs, 0 < w x)` | `0 < (xs.map w).sum`; the `1 ≤ xs.length` of a `count >=1` is `hn` as it is |
+| `sum_mul_left c xs w` | `(xs.map fun x => c * w x).sum = c * (xs.map w).sum` |
 | `allocate_self t (h : 0 < s)` | `allocate t s s = t` |
 | `allocate_zero t s` | `allocate t 0 s = 0` |
 | `allocate_mono (ht : 0 ≤ t) (hs : 0 < s) (hc : c ≤ c')` | `allocate t c s ≤ allocate t c' s` |
@@ -759,6 +760,8 @@ No Mathlib is used. A proof is made of Lean's core (`intro`, `unfold`, `rw`, `si
 | `runningTotals_total xs w` | `∀ r ∈ runningTotals xs w, r.total = (xs.map w).sum` |
 | `runningTotals_telescope xs w f` | `((runningTotals xs w).map fun r => f r.upto - f r.before).sum = f (xs.map w).sum - f 0` |
 | `mem_runningTotals (hw : ∀ x ∈ xs, 0 ≤ w x)` | `∀ r ∈ runningTotals xs w, r.upto - r.before = w r.item ∧ 0 ≤ r.before ∧ r.upto ≤ r.total` |
+
+A hypothesis is written as the goal reads, with the function applied: for `runningTotals lines (fun l => l.left)`, `mem_runningTotals` takes `hw : ∀ l ∈ lines, 0 ≤ l.left`, finds `w` from it, and answers `r.upto - r.before = r.item.left`. Written with `w` put in by hand, `0 ≤ (fun l => l.left) l`, the hypothesis holds a value `omega` does not take for `l.left`.
 
 The tactics of Mathlib (`set`, `ring`, `linarith`, `nlinarith`, `norm_num`, `positivity`, `push_neg`, `use`) are "unknown tactic". What stands in for them, each tried on 4.34.0:
 
@@ -776,6 +779,12 @@ The tactics of Mathlib (`set`, `ring`, `linarith`, `nlinarith`, `norm_num`, `pos
 `grind` proves linear facts, an identity of polynomials (`(a + b) * (a + b) = a * a + 2 * a * b + b * b`), `b * a < 4` from `a * b ≤ 3`, membership in `xs.map f`, `0 < (x :: xs).sum` from `1 ≤ x` and `0 ≤ xs.sum`, and a definition by cases named to it (`grind [step]`). It does no induction, and does not get the sign of a product or a quotient from the signs of its parts: `0 ≤ xs.sum` from its terms is `sum_nonneg`, `0 ≤ a * b` is `Int.mul_nonneg`, and `0 ≤ allocate t c s` is `allocate_mono` with `rw [allocate_zero]`. What it proves rests on `propext`, `Classical.choice` and `Quot.sound`.
 
 A function that maps `running_totals`, as `split` does, is opened with `unfold`. `List.map_map` joins its map to the map of the property, `List.map_congr_left` leaves one element `r` with `r ∈ runningTotals …`, and `runningTotals_total` puts the whole weight for `r.total`: the map is then the one `runningTotals_telescope` speaks of. The proof of `shares_add_up` in `examples/refund_split/refund_split.lean` goes this way.
+
+A property of every element of what such a function answers (`∀ s ∈ split lines refund, …`) is shown of one element. After `unfold split at hs`, `obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs` gives the element `r` of `runningTotals` that `s` was made from and puts the record made of it for `s`; `simp only` then puts the record's field in the goal. What is known of `r` comes from its item: `List.mem_map_of_mem` with `(·.item)` and `runningTotals_items` give `r.item ∈ lines`, and the `Within` of the item gives the ranges of its fields, joined with `∧` in their order (`simp only [Line.Within] at h` hands them all to `omega`). `mem_runningTotals` says how wide `r` is, not that the width is above zero. The proofs of `no_share_is_negative` and `no_share_is_more_than_its_left` go this way.
+
+`sum(lines, l => price * l.qty)` is `(List.map (fun l => price * l.qty) lines).sum`, and `sum_mul_left` takes `price` out of it: the proof of `bill_is_the_price_times_the_quantities` in `examples/order_bill/order_bill.lean` is `exact sum_mul_left price lines _` after `intro` and `unfold bill`. With the number on the right of each term (`l.qty * price`), `simp only [Int.mul_comm _ price]` turns the terms round first.
+
+A property of a value of an enum, with fields or without, is shown value by value: `cases` makes a goal for each value, and `simp_all` with the functions the goal calls, named, closes it. The proof of `a_closed_order_takes_no_event` in `examples/order_flow/order_flow.lean` is `cases order <;> simp_all [«open», next]` after its `intro`. A name that is a word of Lean, such as `open`, is written in `«»`, as the generated module writes it.
 
 ## What `check` says
 

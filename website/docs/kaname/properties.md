@@ -125,10 +125,13 @@ The proofs go in `refund_split.lean`, beside the `.kn`. Copy the draft there wit
 lines, and put a proof in place of each `sorry`. A theorem is named `Proofs.refund_split.<property>`
 and its type is the statement itself. Lean's own `omega`, `simp`, `decide` and `grind` do the work,
 with the lemmas of `Kaname/Prelude.lean` for sums, `allocate` and `running_totals`. Mathlib is not
-used, so `ring`, `linarith` and `set` are not there: `omega` does what `linarith` would, and the first
-proof below names a sum with `obtain` where `set` would. To try a proof as it is written, run
-`lake build` in `generated/lean/`. The Lean kaname writes builds with no warning, so what it warns of
-is in the proof. `--lean` needs no such build: it writes the package again from the `.kn`.
+used, so `ring`, `linarith` and `set` are not there: `omega` does what `linarith` would, and the
+first proof below names a sum with `obtain` where `set` would. The other two look at one share:
+`List.mem_map.mp` gives the element of `running_totals` it was made from, and `runningTotals_items`
+shows that the element's line is one of `lines`, so that `Within` gives the line's range. To try a
+proof as it is written, run `lake build` in `generated/lean/`. The Lean kaname writes builds with no
+warning, so what it warns of is in the proof. `--lean` needs no such build: it writes the package
+again from the `.kn`.
 
 The proof file of the example, whole:
 
@@ -162,21 +165,16 @@ theorem no_share_is_negative : Kaname.refund_split.no_share_is_negative := by
   intro lines refund hlen _ hwithin hr0 _ s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
+  have hitem : r.item ∈ lines := by
+    have := List.mem_map_of_mem (f := (·.item)) hr
+    rwa [runningTotals_items] at this
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
   have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
   have htot := runningTotals_total _ _ r hr
-  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by
-    have hitem : r.item ∈ lines := by
-      have := List.mem_map_of_mem (f := (·.item)) hr
-      rwa [runningTotals_items] at this
-    have := (hwithin r.item hitem).1
-    omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≥ 0
+  have hmono := allocate_mono (t := refund) hr0 (htot ▸ hT) (show r.before ≤ r.upto by omega)
+  simp only
   omega
 
 /-- What one line gets is at most its width of the whole, when the refund is no more than the whole. -/
@@ -184,20 +182,16 @@ theorem no_share_is_more_than_its_left : Kaname.refund_split.no_share_is_more_th
   intro lines refund hlen _ hwithin hr0 _ hle s hs
   have hT : 0 < (lines.map fun l => l.left).sum := sum_pos hlen fun l hl => (hwithin l hl).1
   unfold split at hs
-  rw [List.mem_map] at hs
-  obtain ⟨r, hr, rfl⟩ := hs
-  have hw : ∀ l ∈ lines, 0 ≤ (fun (l : Line) => l.left) l := fun l hl => by
-    have := (hwithin l hl).1
-    show 0 ≤ l.left
-    omega
-  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
-  have htot := runningTotals_total _ _ r hr
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hs
   have hitem : r.item ∈ lines := by
     have := List.mem_map_of_mem (f := (·.item)) hr
     rwa [runningTotals_items] at this
-  have := (hwithin r.item hitem).1
+  have hleft := (hwithin r.item hitem).1
+  have hw : ∀ l ∈ lines, 0 ≤ l.left := fun l hl => by have := (hwithin l hl).1; omega
+  have ⟨hwide, _, _⟩ := mem_runningTotals hw r hr
+  have htot := runningTotals_total _ _ r hr
   have hsub := allocate_sub_le (t := refund) hr0 (htot ▸ hle) (htot ▸ hT) (show r.before ≤ r.upto by omega)
-  show allocate refund r.upto r.total - allocate refund r.before r.total ≤ r.item.left
+  simp only
   omega
 
 end Proofs.refund_split
