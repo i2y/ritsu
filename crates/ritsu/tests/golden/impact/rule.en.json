@@ -77,7 +77,7 @@
       "file": "office.cal",
       "tool": "koyomi",
       "result": {
-        "koyomi": "0.50.0",
+        "koyomi": "0.51.0",
         "kind": "calendar",
         "old": {
           "file": "base/office.cal",
@@ -190,7 +190,7 @@
       "file": "refund_terms.cal",
       "tool": "koyomi",
       "result": {
-        "koyomi": "0.50.0",
+        "koyomi": "0.51.0",
         "kind": "dates",
         "old": {
           "file": "base/refund_terms.cal",
@@ -243,7 +243,7 @@
       "file": "refunds.gate",
       "tool": "sekisho",
       "result": {
-        "sekisho": "0.50.0",
+        "sekisho": "0.51.0",
         "old": {
           "file": "base/refunds.gate",
           "name": "refunds",

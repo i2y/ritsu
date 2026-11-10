@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.50.0",
+  "ritsu": "0.51.0",
   "old": {
     "path": "old",
     "module": "example.com/acme/fines",

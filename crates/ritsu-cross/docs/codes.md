@@ -1403,7 +1403,7 @@ require tax oci "example.com/acme/tax" 1.2.0
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.50.0
+ritsu 0.51.0
 oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1
 ```
 
@@ -1452,7 +1452,7 @@ require tax oci "example.com/acme/tax" 1.0.0
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.50.0
+ritsu 0.51.0
 oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1
 ```
 
@@ -1675,7 +1675,7 @@ require tax oci "example.com/acme/tax" 1.0.0
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.50.0
+ritsu 0.51.0
 oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:a744d0c29acba47340ec3ca4332ad67719ddb5996c3ec96672573273b8036a85
 ```
 
@@ -1754,7 +1754,7 @@ signature "example.com/acme/" key "cosign.pub"
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.50.0
+ritsu 0.51.0
 git example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1 commit 9fceb02d0ae598e95dc970b74767f19372d61af8 "https://example.com/acme/tax"
 ```
 
@@ -1968,7 +1968,7 @@ module shop
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.50.0
+ritsu 0.51.0
 path tax "tax"
 ```
 

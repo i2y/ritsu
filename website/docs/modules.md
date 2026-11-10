@@ -387,7 +387,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/ritsu@v0.50.0
+      - uses: i2y/ritsu@v0.51.0
         with:
           cosign: true
       - run: ritsu mod site modules.list --out site
@@ -523,7 +523,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: i2y/ritsu@v0.50.0
+      - uses: i2y/ritsu@v0.51.0
       - name: Report what raising the dependencies changes
         env:
           GH_TOKEN: ${{ github.token }}

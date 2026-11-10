@@ -342,7 +342,7 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v6
-      - uses: i2y/ritsu@v0.50.0
+      - uses: i2y/ritsu@v0.51.0
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -388,7 +388,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: i2y/ritsu@v0.50.0
+      - uses: i2y/ritsu@v0.51.0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
