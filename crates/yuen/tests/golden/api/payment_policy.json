@@ -1,5 +1,5 @@
 {
-  "yuen": "0.51.0",
+  "yuen": "0.52.0",
   "root": "tests/fixtures/payment_policy",
   "files": [
     {
