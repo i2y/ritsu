@@ -117,7 +117,8 @@ every example is held to it. Three more things are settled too:
   April, closing on the 30th in February: the operation says what then (`else end_of_month`,
   `else start_of_next_month`, or `else reject`, which the check holds to never happening), or
   the check stops (E201). There is no default; which one a contract means is not koyomi's to
-  decide.
+  decide. Where a law decides, the reference writes it out: a period of months under the Japanese
+  Civil Code is `else start_of_next_month` and then `- 1 day`, from the day after the event.
 - **A calendar knows a span of days, and no more.** A computation that asks whether a day past
   the table is a holiday stops, in the check (E203, with the range that would avoid it) and in
   the generated code (an error of kind `data`).

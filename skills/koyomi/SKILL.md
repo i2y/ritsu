@@ -154,7 +154,10 @@ Ask instead of guessing:
   rather than widening the table.
 - **What a day the month does not have means.** The 31st in a month of 30, the 29th of February:
   the end of the month, the first of the next, or never. It is in the contract, or it is not, and
-  then a person decides. A law can decide it too (the Japanese Civil Code, Article 143).
+  then a person decides. A law can decide it too: under the Japanese Civil Code a period of months
+  is `+ 1 day` from the event (Article 140), then `+ n months else start_of_next_month` and
+  `- 1 day` (Article 143). `else end_of_month` there, or counting from the event's own day, ends it
+  early; "The periods of the Civil Code" in [reference.md](reference.md) has the articles and the age.
 - **How a law is read.** koyomi writes what a person reads the law as, and cites the article; it
   does not read the law. When an article can be read two ways (the "next day" of Article 142: the
   day after, or the next business day), write both as dates, claim they are equal, and show the

@@ -1,0 +1,14 @@
+dates age v1
+description "The day an age goes up, under the Act on Calculation of Age and Article 143 of the Civil Code: counted from the day of birth, the first day counted, a year ends on the day before the day that corresponds to the birthday, and on the last day of February for one born on 29 February in a year that has none. The reference's lines for the age"
+
+inputs
+  birth      : date  range >=2000-01-01 <=2010-12-31
+  year_count : int   range >=1 <=20
+
+date first_day = birth                          # counted from the day of birth: the first day counts
+date last_day = first_day
+  + year_count years else start_of_next_month   # the corresponding day; with none, the 1st of the month after
+  - 1 day                                       # the day before it: the age goes up when this day ends
+
+claims
+  last_day_is_monotonic : last_day is monotonic

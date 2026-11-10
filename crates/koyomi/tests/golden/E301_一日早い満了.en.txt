@@ -1,0 +1,28 @@
+error[E301]: tests/mutants/E301_一日早い満了.cal:25:3: The claim 月末に寄せる書き方 fails for 57 of the 4,380 combinations of 起点 and 月数
+    25 |   月末に寄せる書き方       : 満了日 = 月末に寄せた満了日
+  = It fails on 月数 1: 2026-01-28..2026-01-30 (3 days), 2026-03-30, 2026-05-30, 2026-08-30, 2026-10-30; 月数 2: 2026-07-30, and 33 more runs; --format json lists them all
+  = By input: 月数 1 → 7, 月数 2 → 4, 月数 3 → 5, 月数 4 → 6, 月数 5 → 3, 月数 6 → 7, 月数 7 → 3, 月数 8 → 6, 月数 9 → 5, 月数 10 → 4, 月数 11 → 7
+  = The farthest is 起点 2026-01-28, 月数 1, where 満了日 2026-02-28 is 1 day after 月末に寄せた満了日
+  the first input it fails on:
+      起点                2026-01-28 Wed
+                          月数 = 1
+      起算日              2026-01-29 Thu  + 1 day
+      満了日              2026-03-01 Sun  + 月数 months else start_of_next_month (月数 = 1): 2026-02-29 does not exist; the first of the next month
+                          2026-02-28 Sat  - 1 day
+      月末に寄せた満了日  2026-02-28 Sat  + 月数 months else end_of_month (月数 = 1): 2026-02-29 does not exist; the end of that month
+                          2026-02-27 Fri  - 1 day
+                          満了日 is 1 day after 月末に寄せた満了日
+error[E301]: tests/mutants/E301_一日早い満了.cal:26:3: The claim 出来事の日から数える書き方 fails for 4,323 of the 4,380 combinations of 起点 and 月数
+    26 |   出来事の日から数える書き方 : 満了日 = 出来事の日から数えた満了日
+  = It fails on 月数 1: 2026-01-01..2026-01-28 (28 days), 2026-02-01..2026-03-30 (58 days), 2026-04-01..2026-05-30 (60 days), 2026-06-01..2026-08-30 (91 days), 2026-09-01..2026-10-30 (60 days), 2026-11-01..2026-12-31 (61 days), and 40 more runs; --format json lists them all
+  = By input: 月数 1 → 358, 月数 2 → 361, 月数 3 → 360, 月数 4 → 359, 月数 5 → 362, 月数 6 → 358, 月数 7 → 362, 月数 8 → 359, 月数 9 → 360, 月数 10 → 361, 月数 11 → 358, 月数 12 → 365
+  = The farthest is 起点 2026-02-28, 月数 1, where 満了日 2026-03-31 is 4 days after 出来事の日から数えた満了日
+  the first input it fails on:
+      起点                        2026-01-01 Thu
+                                  月数 = 1
+      起算日                      2026-01-02 Fri  + 1 day
+      満了日                      2026-02-02 Mon  + 月数 months else start_of_next_month (月数 = 1)
+                                  2026-02-01 Sun  - 1 day
+      出来事の日から数えた満了日  2026-02-01 Sun  + 月数 months else start_of_next_month (月数 = 1)
+                                  2026-01-31 Sat  - 1 day
+                                  満了日 is 1 day after 出来事の日から数えた満了日

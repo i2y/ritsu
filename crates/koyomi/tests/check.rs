@@ -423,6 +423,30 @@ fn two_readings_of_the_civil_code_in_english() {
     assert_eq!(t.dates[date_ix(m, "months_added")].unwrap().to_string(), "2026-03-28");
 }
 
+/// The reference's "The periods of the Civil Code" (DESIGN 19): the age, counted from the day of
+/// birth, and the two ways of writing Article 143 that end a day early.
+#[test]
+fn the_periods_of_the_civil_code_the_reference_shows() {
+    for (path, last) in [("tests/fixtures/age.cal", "last_day"), ("tests/fixtures/年齢.cal", "満了日")] {
+        let (m, r, _) = passing(path);
+        assert_eq!(r.combinations, 80_360, "{path}");
+        let ix = date_ix(&m, last);
+        for (born, want) in [("2008-02-29", "2026-02-28"), ("2008-04-01", "2026-03-31"), ("2008-04-02", "2026-04-01")] {
+            let t = koyomi::interp::trace(&m, &[d(born).0 as i64, 18], &[ix], false);
+            assert_eq!(t.dates[ix], Some(d(want)), "{path}: born on {born}");
+        }
+    }
+    for path in ["tests/mutants/E301_a_day_early.cal", "tests/mutants/E301_一日早い満了.cal"] {
+        let o = check(path).unwrap();
+        let es: Vec<&Diag> = o.diags.iter().filter(|x| x.is_error()).collect();
+        assert_eq!(es.iter().map(|x| x.code).collect::<Vec<_>>(), ["E301", "E301"], "{path}");
+        let Some(Checked::Dates(_, r)) = &o.checked else { panic!() };
+        assert_eq!((r.claims[0].fails, r.claims[1].fails), (57, 4323), "{path}");
+        let first = r.claims[0].first.clone().unwrap();
+        assert_eq!((Day(first[0] as i32).to_string(), first[1]), ("2026-01-28".to_string(), 1), "{path}");
+    }
+}
+
 #[test]
 fn closing_and_payment_days_as_inputs_in_english() {
     let path = "examples/closing_and_payment_days_as_inputs.cal";

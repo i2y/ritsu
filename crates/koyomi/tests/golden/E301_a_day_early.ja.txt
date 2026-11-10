@@ -1,0 +1,28 @@
+エラー[E301]: tests/mutants/E301_a_day_early.cal:21:3: 条件「rounding_down_first」が、origin と month_count の 4,380 通りのうち 57 通りで成り立ちません
+    21 |   rounding_down_first     : last_day = rounded_down
+  = 成り立たない入力: month_count 1 の 2026-01-28〜2026-01-30（3 日）、2026-03-30、2026-05-30、2026-08-30、2026-10-30、month_count 2 の 2026-07-30、ほか 33 か所。全部は --format json で出ます
+  = 入力の組み合わせごとの数: month_count 1 で 7、month_count 2 で 4、month_count 3 で 5、month_count 4 で 6、month_count 5 で 3、month_count 6 で 7、month_count 7 で 3、month_count 8 で 6、month_count 9 で 5、month_count 10 で 4、month_count 11 で 7
+  = いちばん外れるのは origin 2026-01-28、month_count 1 のときで、last_day 2026-02-28 は rounded_down の 1 日後
+  そうなる例（最初の入力）:
+      origin        2026-01-28（水）
+                    month_count = 1
+      first_day     2026-01-29（木）  翌日
+      last_day      2026-03-01（日）  1 か月後の同じ日（month_count = 1。無ければ次の月の 1 日）: 2026-02-29 は無いので、次の月の 1 日
+                    2026-02-28（土）  前日
+      rounded_down  2026-02-28（土）  1 か月後の同じ日（month_count = 1。無ければ月末）: 2026-02-29 は無いので、その月の末日
+                    2026-02-27（金）  前日
+                    last_day は rounded_down の 1 日後
+エラー[E301]: tests/mutants/E301_a_day_early.cal:22:3: 条件「counting_from_the_event」が、origin と month_count の 4,380 通りのうち 4,323 通りで成り立ちません
+    22 |   counting_from_the_event : last_day = from_the_event
+  = 成り立たない入力: month_count 1 の 2026-01-01〜2026-01-28（28 日）、2026-02-01〜2026-03-30（58 日）、2026-04-01〜2026-05-30（60 日）、2026-06-01〜2026-08-30（91 日）、2026-09-01〜2026-10-30（60 日）、2026-11-01〜2026-12-31（61 日）、ほか 40 か所。全部は --format json で出ます
+  = 入力の組み合わせごとの数: month_count 1 で 358、month_count 2 で 361、month_count 3 で 360、month_count 4 で 359、month_count 5 で 362、month_count 6 で 358、month_count 7 で 362、month_count 8 で 359、month_count 9 で 360、month_count 10 で 361、month_count 11 で 358、month_count 12 で 365
+  = いちばん外れるのは origin 2026-02-28、month_count 1 のときで、last_day 2026-03-31 は from_the_event の 4 日後
+  そうなる例（最初の入力）:
+      origin          2026-01-01（木）
+                      month_count = 1
+      first_day       2026-01-02（金）  翌日
+      last_day        2026-02-02（月）  1 か月後の同じ日（month_count = 1。無ければ次の月の 1 日）
+                      2026-02-01（日）  前日
+      from_the_event  2026-02-01（日）  1 か月後の同じ日（month_count = 1。無ければ次の月の 1 日）
+                      2026-01-31（土）  前日
+                      last_day は from_the_event の 1 日後

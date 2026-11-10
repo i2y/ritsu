@@ -364,6 +364,59 @@ Some things that look true are not. Adding a month twice is not adding two month
 and then a day, and adding a month and taking it away does not always come back. When a rewrite
 should give the same dates, say so with a claim, and the check finds every day it does not.
 
+### The periods of the Civil Code
+
+Unless a law or a contract says otherwise (Article 138), a period in Japan is counted by Articles 140
+to 143 of the Civil Code. Each article is a line or two of the operations above, and no operation is
+named after one: `examples/civil_code_period_end.cal` writes them with the articles cited.
+
+```cal
+date first_day = origin                                       @civil_code 第140条
+  + 1 day                                        # the first day is not counted
+date last_day = first_day                                     @civil_code 第141条, 第143条
+  + month_count months else start_of_next_month  # the corresponding day of the last month; with none, the 1st of the month after
+  - 1 day                                        # the day before it: the last day of the last month when it had no corresponding day
+```
+
+| Article | What it says | The lines |
+|---|---|---|
+| 140 | The day the period starts on is not counted, unless the period starts at midnight. | `+ 1 day` from the day of the event: `first_day`, the day the counting starts from. |
+| 143, paragraph 2 | A period of weeks, months or years ends on the day before the day of the last week, month or year that corresponds to the day the counting starts from. | `+ n months else start_of_next_month` from the first day, then `- 1 day`. |
+| 143, the proviso | When the last month has no such day, the period ends on that month's last day. | The same two lines: the 1st of the month after, and the day before it. |
+| 141 | The period ends when its last day ends. | Nothing more: a date is a whole day. |
+| 142 | When the last day is a Sunday, a national holiday or another day off on which it is customary not to trade, the period ends on the day after. | `if closed + 1 day` or `roll following`, over a calendar of the days off: two readings, which `examples/civil_code_two_readings.cal` sets side by side. |
+| Act on Calculation of Age | An age is counted from the day of birth, the first day counted, and by Article 143. | No `+ 1 day`: `+ n years else start_of_next_month` from the day of birth, then `- 1 day`. |
+
+The age, in `tests/fixtures/age.cal`: born on 29 February 2008, a person's 18 years end on 28 February
+2026; born on 1 April 2008, on 31 March 2026, a day before those of one born on 2 April 2008.
+
+```cal
+date first_day = birth                          # counted from the day of birth: the first day counts
+date last_day = first_day
+  + year_count years else start_of_next_month   # the corresponding day; with none, the 1st of the month after
+  - 1 day                                       # the day before it: the age goes up when this day ends
+```
+
+Two other ways of writing Article 143 look as right, and are not. `else end_of_month` reads like the
+proviso, but the end of the month and then the day before it end the period a day early whenever
+the last month has no corresponding day:
+
+```text
+error[E301]: tests/mutants/E301_a_day_early.cal:21:3: The claim rounding_down_first fails for 57 of the 4,380 combinations of origin and month_count
+    21 |   rounding_down_first     : last_day = rounded_down
+```
+
+And counting the months from the day of the event instead of from `first_day` ends almost every
+period early, by four days at most (from 28 February, one month ends on 27 March instead of 31 March):
+
+```text
+error[E301]: tests/mutants/E301_a_day_early.cal:22:3: The claim counting_from_the_event fails for 4,323 of the 4,380 combinations of origin and month_count
+    22 |   counting_from_the_event : last_day = from_the_event
+```
+
+Neither is an error of its own, since a contract may mean either. Where a law decides, write the
+lines above, and a claim that another writing agrees finds every day it does not.
+
 ### Times
 
 `at 09:00` or `at end of day`, after a date's operations, gives that date's time too: 09:00 of

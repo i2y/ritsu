@@ -1,0 +1,14 @@
+dates 年齢(age) v1
+description "年齢計算ニ関スル法律と民法 143 条で、年をとる日。出生の日から起算し（初日を算入する）、応当する日の前日に満了する。2 月 29 日に生まれた人は、その日の無い年には 2 月の末日に満了する。reference の年齢の行"
+
+inputs
+  生年月日(birth)   : date  range >=2000-01-01 <=2010-12-31
+  年数(year_count)  : int   range >=1 <=20
+
+date 起算日(first_day) = 生年月日                # 出生の日から起算する（初日を算入する）
+date 満了日(last_day) = 起算日
+  + 年数 years else start_of_next_month   # 応当する日。無ければ次の月の 1 日へ
+  - 1 day                                 # その前日。この日が終わるときに年をとる
+
+claims
+  満了日は単調 : 満了日 is monotonic

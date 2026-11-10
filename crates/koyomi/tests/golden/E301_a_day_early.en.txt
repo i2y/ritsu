@@ -1,0 +1,28 @@
+error[E301]: tests/mutants/E301_a_day_early.cal:21:3: The claim rounding_down_first fails for 57 of the 4,380 combinations of origin and month_count
+    21 |   rounding_down_first     : last_day = rounded_down
+  = It fails on month_count 1: 2026-01-28..2026-01-30 (3 days), 2026-03-30, 2026-05-30, 2026-08-30, 2026-10-30; month_count 2: 2026-07-30, and 33 more runs; --format json lists them all
+  = By input: month_count 1 → 7, month_count 2 → 4, month_count 3 → 5, month_count 4 → 6, month_count 5 → 3, month_count 6 → 7, month_count 7 → 3, month_count 8 → 6, month_count 9 → 5, month_count 10 → 4, month_count 11 → 7
+  = The farthest is origin 2026-01-28, month_count 1, where last_day 2026-02-28 is 1 day after rounded_down
+  the first input it fails on:
+      origin        2026-01-28 Wed
+                    month_count = 1
+      first_day     2026-01-29 Thu  + 1 day
+      last_day      2026-03-01 Sun  + month_count months else start_of_next_month (month_count = 1): 2026-02-29 does not exist; the first of the next month
+                    2026-02-28 Sat  - 1 day
+      rounded_down  2026-02-28 Sat  + month_count months else end_of_month (month_count = 1): 2026-02-29 does not exist; the end of that month
+                    2026-02-27 Fri  - 1 day
+                    last_day is 1 day after rounded_down
+error[E301]: tests/mutants/E301_a_day_early.cal:22:3: The claim counting_from_the_event fails for 4,323 of the 4,380 combinations of origin and month_count
+    22 |   counting_from_the_event : last_day = from_the_event
+  = It fails on month_count 1: 2026-01-01..2026-01-28 (28 days), 2026-02-01..2026-03-30 (58 days), 2026-04-01..2026-05-30 (60 days), 2026-06-01..2026-08-30 (91 days), 2026-09-01..2026-10-30 (60 days), 2026-11-01..2026-12-31 (61 days), and 40 more runs; --format json lists them all
+  = By input: month_count 1 → 358, month_count 2 → 361, month_count 3 → 360, month_count 4 → 359, month_count 5 → 362, month_count 6 → 358, month_count 7 → 362, month_count 8 → 359, month_count 9 → 360, month_count 10 → 361, month_count 11 → 358, month_count 12 → 365
+  = The farthest is origin 2026-02-28, month_count 1, where last_day 2026-03-31 is 4 days after from_the_event
+  the first input it fails on:
+      origin          2026-01-01 Thu
+                      month_count = 1
+      first_day       2026-01-02 Fri  + 1 day
+      last_day        2026-02-02 Mon  + month_count months else start_of_next_month (month_count = 1)
+                      2026-02-01 Sun  - 1 day
+      from_the_event  2026-02-01 Sun  + month_count months else start_of_next_month (month_count = 1)
+                      2026-01-31 Sat  - 1 day
+                      last_day is 1 day after from_the_event
