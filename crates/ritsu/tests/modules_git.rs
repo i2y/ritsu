@@ -105,7 +105,9 @@ fn real_git() -> PathBuf {
 }
 
 /// The text with what changes between runs masked: the port of the server, each commit (40 or 64
-/// hexadecimal digits, and the first 12 of one), and each digest (`sha256:` and 64).
+/// hexadecimal digits, and the first 12 of one), and each digest (`sha256:` and 64). A commit is told
+/// from a number by a letter among its digits, or by the word before it where it has none: about one
+/// in 280 of the first 12 has no letter.
 fn masked(text: &str, port: u16) -> String {
     let text = text.replace(&format!("127.0.0.1:{port}"), "127.0.0.1:<port>");
     let mut out = String::new();
@@ -124,7 +126,8 @@ fn masked(text: &str, port: u16) -> String {
         if boundary {
             let n = b[i..].iter().take_while(|c| c.is_ascii_digit() || ('a'..='f').contains(c)).count();
             let after = b.get(i + n).is_none_or(|c| !c.is_ascii_alphanumeric());
-            if after && matches!(n, 12 | 40 | 64) && b[i..i + n].iter().any(|c| c.is_ascii_alphabetic()) {
+            let named = ["commit ", "コミット ", "git ", "\"commit\": \""].iter().any(|w| out.ends_with(w));
+            if after && matches!(n, 12 | 40 | 64) && (named || b[i..i + n].iter().any(|c| c.is_ascii_alphabetic())) {
                 out.push_str(if n == 12 { "<commit12>" } else { "<commit>" });
                 i += n;
                 continue;
@@ -138,6 +141,20 @@ fn masked(text: &str, port: u16) -> String {
 
 fn text_at(b: &[char], i: usize, s: &str) -> bool {
     s.chars().enumerate().all(|(k, c)| b.get(i + k) == Some(&c))
+}
+
+/// A commit whose first 12 are digits alone is masked where a word names it, as one with a letter is
+/// anywhere; a number of 12 digits that no word names stays.
+#[test]
+fn a_commit_of_digits_alone_is_masked() {
+    assert_eq!(
+        masked("fetched 127.0.0.1/acme/pricing 1.1.0 (commit 824900994130, sha256:x)", 1),
+        "fetched 127.0.0.1/acme/pricing 1.1.0 (commit <commit12>, sha256:x)"
+    );
+    assert_eq!(masked("（コミット 824900994130、sha256:x）", 1), "（コミット <commit12>、sha256:x）");
+    assert_eq!(masked("@pricing  127.0.0.1/acme/pricing 1.1.0  git 824900994130, in the store", 1), "@pricing  127.0.0.1/acme/pricing 1.1.0  git <commit12>, in the store");
+    assert_eq!(masked(r#""commit": "8249009941308249009941308249009941308249""#, 1), r#""commit": "<commit>""#);
+    assert_eq!(masked("a fee of 824900994130 JPY, and 82490099413a", 1), "a fee of 824900994130 JPY, and <commit12>");
 }
 
 /// A test's directory (the module at hand, the store, the configuration of git it is run with, and
