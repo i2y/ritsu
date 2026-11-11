@@ -24,6 +24,29 @@ impl Ran {
     }
 }
 
+/// How many times [`spawn`] starts a program that Linux finds busy, at the most.
+pub const BUSY_TRIES: u32 = 10;
+
+/// Start `cmd`, and start it again, a little later each time, while Linux finds the program busy
+/// (ETXTBSY, "Text file busy"). A test that has just written the program it starts (a script, a
+/// stand-in for Chrome) can meet that: while the file was open for writing, another test of the
+/// same binary started a program of its own, and the child it forked holds a copy of the
+/// descriptor until its exec, a moment later. Linux runs no file that is open for writing; macOS
+/// does. The waits come to a little over a second; any other error, or a program still busy on
+/// the last try, is the answer.
+pub fn spawn(cmd: &mut Command) -> std::io::Result<Child> {
+    let mut tried = 1;
+    loop {
+        match cmd.spawn() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && tried < BUSY_TRIES => {
+                std::thread::sleep(Duration::from_millis(25 * u64::from(tried)));
+                tried += 1;
+            }
+            started => return started,
+        }
+    }
+}
+
 /// Wait for a child, killing it after `limit`: whether it succeeded, its code, whether the
 /// limit ended it.
 fn wait_limited(child: Arc<Mutex<Child>>, limit: Duration) -> (bool, Option<i32>, bool) {
@@ -57,12 +80,8 @@ pub fn run(cmd: &mut Command, limit: Duration) -> Ran {
 
 /// The same, with `input` written to its standard input.
 pub fn run_with_input(cmd: &mut Command, input: Option<&[u8]>, limit: Duration) -> Ran {
-    let mut child = cmd
-        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap_or_else(|e| panic!("cannot run {cmd:?}: {e}"));
+    cmd.stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = spawn(cmd).unwrap_or_else(|e| panic!("cannot run {cmd:?}: {e}"));
     if let Some(bytes) = input {
         let mut stdin = child.stdin.take().unwrap();
         let bytes = bytes.to_vec();
@@ -87,7 +106,7 @@ pub fn run_with_input(cmd: &mut Command, input: Option<&[u8]>, limit: Duration) 
 /// held to every input of a range). The standard output is not kept; the last twenty lines of
 /// the standard error are.
 pub fn pipe(cmd: &mut Command, limit: Duration, feed: impl FnOnce(&mut dyn Write) + Send, mut each: impl FnMut(&str)) -> Ran {
-    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap_or_else(|e| panic!("cannot run {cmd:?}: {e}"));
+    let mut child = spawn(cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())).unwrap_or_else(|e| panic!("cannot run {cmd:?}: {e}"));
     let stdin = child.stdin.take().unwrap();
     let stdout = child.stdout.take().unwrap();
     let mut stderr = child.stderr.take().unwrap();

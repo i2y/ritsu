@@ -528,6 +528,37 @@ fn a_dump_that_stops_short_is_asked_for_again() {
     assert_eq!(t.read("always-half.runs").lines().count(), chrome::DUMPS);
 }
 
+/// A program that is still open for writing is started once it is not. Linux refuses to run it
+/// (ETXTBSY), as a test meets when another test forks while it writes the program it starts, and
+/// `run::spawn` tries again a little later; macOS runs it at once.
+#[cfg(unix)]
+#[test]
+fn a_program_busy_being_written_is_started_once_it_is_not() {
+    use std::os::unix::fs::PermissionsExt;
+    let t = TempDir::new("busy");
+    let p = t.path().join("prog");
+    let mut f = std::fs::File::create(&p).unwrap();
+    f.write_all(b"#!/bin/sh\necho started\n").unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if cfg!(target_os = "linux") {
+        match Command::new(&p).stdout(Stdio::null()).spawn() {
+            Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::ExecutableFileBusy, "{e}"),
+            Ok(mut c) => {
+                let _ = c.wait();
+                panic!("Linux ran a program that is open for writing");
+            }
+        }
+    }
+    // the file is closed a little after the first try
+    let close = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        drop(f);
+    });
+    let out = run::spawn(Command::new(&p).stdout(Stdio::piped())).unwrap().wait_with_output().unwrap();
+    close.join().unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "started\n");
+}
+
 #[test]
 fn mermaid_draws_the_charts_of_a_page() {
     let md = "# x\n\n```mermaid\nflowchart LR\n  a --> b\n```\n\ntext\n\n```mermaid\nflowchart LR\n  a -->\n```\n";

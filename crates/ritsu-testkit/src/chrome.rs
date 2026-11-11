@@ -4,6 +4,7 @@
 //! long while to end by itself. Nothing here waits a set time: a page Chrome prints short is
 //! asked for again, and the check that no Chrome is left waits for those just stopped to go.
 
+use crate::run;
 use crate::tmp::TempDir;
 use crate::tools;
 use std::io::Read;
@@ -73,14 +74,13 @@ pub const DUMPS: usize = 3;
 /// the most, and whether it reached `</html>`.
 fn dump_once(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> (Vec<u8>, bool) {
     let profile = TempDir::new("chrome-profile");
-    let mut child = command(chrome, &profile)
-        .arg(format!("--virtual-time-budget={budget_ms}"))
+    let mut cmd = command(chrome, &profile);
+    cmd.arg(format!("--virtual-time-budget={budget_ms}"))
         .args(["--dump-dom", url])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap_or_else(|e| panic!("cannot run {}: {e}", chrome.display()));
+        .stderr(Stdio::null());
+    let mut child = run::spawn(&mut cmd).unwrap_or_else(|e| panic!("cannot run {}: {e}", chrome.display()));
     let mut out = child.stdout.take().unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -111,16 +111,15 @@ fn dump_once(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> (Vec<
 /// file stops growing, or after `limit`; Err says why there is no picture.
 pub fn screenshot(chrome: &Path, url: &str, png: &Path, width: u32, height: u32, limit: Duration) -> Result<(), String> {
     let profile = TempDir::new("chrome-profile");
-    let mut child = command(chrome, &profile)
-        .arg("--hide-scrollbars")
+    let mut cmd = command(chrome, &profile);
+    cmd.arg("--hide-scrollbars")
         .arg(format!("--window-size={width},{height}"))
         .arg(format!("--screenshot={}", png.display()))
         .arg(url)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("cannot run {}: {e}", chrome.display()))?;
+        .stderr(Stdio::null());
+    let mut child = run::spawn(&mut cmd).map_err(|e| format!("cannot run {}: {e}", chrome.display()))?;
     let start = Instant::now();
     let mut last = 0u64;
     let result = loop {

@@ -2378,6 +2378,7 @@ CI を初めて回したときに落ちた四つは、どれも GitHub の環境
 - dandori の `callback_limits_hold_on_localstack`（2026-11-09、手で始めた `platforms` で）：コールバックの試しが 29.838 秒で時間切れになり、タスクの `timeout` の 30 秒から 50 ms までという下限を下回った。回し直しても 29.815 秒だった。LocalStack は試しの時計を、Task の引数を評価して TaskScheduled と TaskStarted を書くより前に動かし、試験は TaskStarted から測っていた。差は空いた機械では数ミリ秒で、混んだランナーでは 0.19 秒になる。LocalStack の二つの上限の試験は、上限より 0.5 秒短いところまでを上限どおりと見るようにした（dandori の DESIGN 5 章）。
 - yuen のスキーマを取る `tools/reqif/fetch.sh`（2026-10-31、`tools` の the others の準備の段で）：OMG のサイトが HTTP 525（Cloudflare が OMG のサーバーと TLS をつなげなかった）を返し、curl が一度で諦めた。curl の `--retry` がやり直すのは、時間切れと 408・429・500・502・503・504 だけである。`--retry-all-errors` を足し、HTTP の誤りのどれでも二度までやり直すようにした。取ったファイルは SHA-256 で確かめるので、やり直しても中身は変わらない。525 を一度だけ返すローカルのサーバーでは、足す前は一度の要求で終わり、足したあとは二度目の要求で取れた。
 - ritsu の `a_module_from_git_is_added_locked_fetched_and_checked`（2026-11-10、`tools` の dandori の組で）：git の依存の出力は、golden と比べる前にコミットの名前（40 か 64 の 16 進の桁と、その頭の 12 桁）を伏せる。pricing のリポジトリは tax を、試験のサーバーのポートを書いた URL で require するので、そのコミットの名前は回ごとに変わる。伏せるのは英字（a〜f）を一つでも含む桁だけだった。12 桁の数を伏せないためである。その回はコミットの頭の 12 桁が数字だけになり、伏せられずに golden と食い違った。数字だけになるのは約 280 回に 1 回である。前の語が `commit `・`コミット `・`git `・`"commit": "` なら、数字だけの桁も伏せるようにした（`crates/ritsu/tests/modules_git.rs` の `masked`。単体の試験 `a_commit_of_digits_alone_is_masked`）。
+- ritsu-testkit の `a_dump_that_stops_short_is_asked_for_again`（2026-11-11、`fast` で）：試験が書いたばかりの Chrome の代わりのスクリプトを起動するところで、`Text file busy (os error 26)` で落ちた。そのファイルを書き込みのために開いているあいだに、同じ試験のバイナリのほかの試験がプログラムを起動すると、fork した子プロセスは、exec するまでのあいだ、そのファイル記述子のコピーを持つ。Linux は、書き込みのために開かれているファイルを実行しない（ETXTBSY）。macOS は実行する。`run::spawn` を足し、起動が ETXTBSY で断られたら、少しずつ間をあけて 10 回まで起動し直す（待つのは合わせて 1.1 秒ほど）。Chrome を起動する `chrome::dump_dom` と `chrome::screenshot`、`run::run`・`run::run_with_input`・`run::pipe` は、これで起動する。試験の `a_program_busy_being_written_is_started_once_it_is_not` は、書き込みのために開いたままのファイルについて、Linux では一度目の起動が ETXTBSY になることを確かめてから、ファイルを 100 ms 後に閉じ、`run::spawn` で起動できることを確かめる。
 
 ### 10.7 golden と取り直し
 
@@ -2385,7 +2386,7 @@ CI を初めて回したときに落ちた四つは、どれも GitHub の環境
 
 ### 10.8 テストの共通部分（`ritsu-testkit`）
 
-1.2 の重なりを一つにする：自分を消す一時ディレクトリ（終わったプロセスの分も消す）、ツールを環境変数と既定の場所と PATH で探す（`RITSU_<ツール>` と、いまの `<クレート>_<ツール>` の名前の両方）、時間を区切って子プロセスを走らせる、試験の中の部分を並べて走らせる（`side_by_side`。機械のコアの数まで同時に、試験の名前を付けたスレッドで走らせ、落ちた部分があれば全部が終わってから、その全部の文で落ちる。10.5 の rulec の二つのジョブ）、golden と取り直し、SKIP、使い捨ての PostgreSQL のクラスタ（ソケットのパスは 103 バイトまで）、TigerBeetle のレプリカ、Chrome を探して時間を区切って走らせる（`--user-data-dir` は一時ディレクトリ）、Mermaid。std だけで書く。dandori の Argo、LocalStack、Temporal のランナーは dandori の `tools/` に残す。
+1.2 の重なりを一つにする：自分を消す一時ディレクトリ（終わったプロセスの分も消す）、ツールを環境変数と既定の場所と PATH で探す（`RITSU_<ツール>` と、いまの `<クレート>_<ツール>` の名前の両方）、時間を区切って子プロセスを走らせる（起動が ETXTBSY で断られたら、少し待って起動し直す。10.6）、試験の中の部分を並べて走らせる（`side_by_side`。機械のコアの数まで同時に、試験の名前を付けたスレッドで走らせ、落ちた部分があれば全部が終わってから、その全部の文で落ちる。10.5 の rulec の二つのジョブ）、golden と取り直し、SKIP、使い捨ての PostgreSQL のクラスタ（ソケットのパスは 103 バイトまで）、TigerBeetle のレプリカ、Chrome を探して時間を区切って走らせる（`--user-data-dir` は一時ディレクトリ）、Mermaid。std だけで書く。dandori の Argo、LocalStack、Temporal のランナーは dandori の `tools/` に残す。
 
 ### 10.9 段階 C で作った形（`ritsu-testkit` と `xtask`）
 
