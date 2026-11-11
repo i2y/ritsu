@@ -87,7 +87,7 @@ pub struct Mismatch {
     /// The rows that fired. They form the cluster key.
     pub fired: Vec<Fired>,
     /// The inputs as `diff` shows them, made when the record was read: (name, as a person
-    /// reads it, as the wire writes it). A record is read the way the old version reads it,
+    /// reads it, as the wire writes it — the JSON of the value, [`wire_json`]). A record is read the way the old version reads it,
     /// and an input the new version counts in another unit, or does not take at all, is
     /// shown the way the record has it (§15.197). Empty for `verify` and `replay`, which show
     /// `input` in the rule's own terms.
@@ -117,10 +117,10 @@ pub struct Out {
     /// brought to the new version's unit, the record's or the adapter's as read. None when it
     /// gave none, or gave something that is no value of the rule's type.
     pub theirs: Option<Val>,
-    /// The counterpart's answer as its own wire writes it, for `--format json`: the old
-    /// version's step and unit for `diff` (as `diff` without records writes `old`), the rule's
-    /// wire unit for a record — a decimal where the record held one — and the adapter's text
-    /// as it came for `verify`.
+    /// The counterpart's answer as its own wire writes it, for `--format json`, as the JSON of
+    /// the value: the old version's step and unit for `diff` (as `diff` without records writes
+    /// `old`), the rule's wire unit for a record — a decimal where the record held one — and the
+    /// adapter's value as it came for `verify`, a string still a string.
     pub theirs_wire: Option<String>,
     /// The same as a person reads it, in the counterpart's own unit.
     pub theirs_shown: Option<String>,
@@ -132,11 +132,13 @@ pub struct Out {
 
 impl Out {
     /// One output of `replay` or `verify`: both answers in the rule's terms. `written` is the
-    /// adapter's text as it came, where there is one.
+    /// adapter's value as it came, where there is one: its JSON. An answer that is no value of
+    /// the rule's type is shown as that JSON, so `"11"` where a number goes reads as the string
+    /// it is, and not as the 11 beside it.
     pub fn against(c: &Checked, name: &str, ours: Option<Val>, theirs: Option<Val>, written: Option<String>) -> Out {
         let same = same_answer(name, ours.as_ref(), c, theirs.as_ref(), c);
         let theirs_shown = theirs.as_ref().map(|v| vectors::show_named(c, name, v)).or_else(|| written.clone());
-        let theirs_wire = written.or_else(|| wire_exact(c, name, theirs.as_ref()));
+        let theirs_wire = written.or_else(|| theirs.as_ref().map(|v| wire_exact_json(c, name, v)));
         let ours_shown = ours.as_ref().map(|v| vectors::show_named(c, name, v));
         Out { name: name.to_string(), ours, theirs, theirs_wire, theirs_shown, ours_shown, same }
     }
@@ -146,7 +148,7 @@ impl Out {
     pub fn between(name: &str, ours: Option<Val>, new: &Checked, was: Option<Val>, old: &Checked) -> Out {
         let same = same_answer(name, was.as_ref(), old, ours.as_ref(), new);
         let theirs = was.as_ref().and_then(|v| bring(name, v, old, new));
-        let theirs_wire = wire_exact(old, name, was.as_ref());
+        let theirs_wire = was.as_ref().map(|v| wire_exact_json(old, name, v));
         let (theirs_shown, ours_shown) = shown_pair(name, was.as_ref(), old, ours.as_ref(), new);
         Out { name: name.to_string(), ours, theirs, theirs_wire, theirs_shown, ours_shown, same }
     }
@@ -194,15 +196,15 @@ impl Mismatch {
         self.outs.iter().filter(|o| !o.same).collect()
     }
 
-    /// The inputs as (name, as a person reads it, as the wire writes it): the ones made when
-    /// the record was read, or `input` in `c`'s terms.
+    /// The inputs as (name, as a person reads it, as the wire writes it — its JSON): the ones
+    /// made when the record was read, or `input` in `c`'s terms.
     fn inputs(&self, c: &Checked) -> Vec<(String, String, String)> {
         if !self.shown.is_empty() {
             return self.shown.clone();
         }
         self.input
             .iter()
-            .map(|(n, v)| (n.clone(), vectors::show_named(c, n, v), wire(c, n, Some(v)).unwrap_or_default()))
+            .map(|(n, v)| (n.clone(), vectors::show_named(c, n, v), wire_json(c, n, v)))
             .collect()
     }
 }
@@ -227,6 +229,40 @@ pub fn wire_exact(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
         Val::Bool(b) => format!("{b}"),
         other => vectors::show(other),
     })
+}
+
+/// A value as the JSON its wire is, by the kind of value it is: a number as the integer [`wire`]
+/// gives, a truth value bare, a sequence as the array of its elements — each an object of the
+/// element's fields, written the same way (§15.56) — and anything else as a string. The kind
+/// decides, never the look of the text: a string input that holds `"123"` stays a string, where
+/// reading the text back as JSON made it the number, and a sequence was the one string a person
+/// reads (`"[amount=1]"`) in the place of the array the wire has.
+pub fn wire_json(c: &Checked, name: &str, v: &Val) -> String {
+    match v {
+        Val::Num(r) => crate::types::wire_int(*r, c.wire_scale(name)).to_string(),
+        Val::Bool(b) => b.to_string(),
+        Val::Seq(xs) => {
+            let one = |e: &BTreeMap<String, Val>| {
+                let mut o = crate::json::Obj::new();
+                for (k, v) in e {
+                    o = o.raw(k, wire_json(c, k, v));
+                }
+                o.finish()
+            };
+            crate::json::arr(&xs.iter().map(one).collect::<Vec<_>>())
+        }
+        other => crate::json::quote(&vectors::show(other)),
+    }
+}
+
+/// [`wire_json`] for an answer, without cutting a value that is not a whole number of the step
+/// ([`wire_exact`]): an integer or a decimal as a JSON number, and the rare value no decimal
+/// writes as the string of the fraction.
+pub fn wire_exact_json(c: &Checked, name: &str, v: &Val) -> String {
+    match v {
+        Val::Num(r) => num_json(r.mul(Rat::int(c.wire_scale(name)))),
+        other => wire_json(c, name, other),
+    }
 }
 
 /// The unit an amount of `name` is counted in, as the rule writes it after a number: `円`,
@@ -263,16 +299,6 @@ pub fn shown_pair(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc
 fn num_json(r: Rat) -> String {
     let t = r.to_string();
     if t.contains('/') { crate::json::quote(&t) } else { t }
-}
-
-/// Whether a wire value goes into the JSON bare: a number (whole or decimal) or a boolean.
-fn json_scalar(v: &str) -> bool {
-    let digits = v.strip_prefix('-').unwrap_or(v);
-    let number = match digits.split_once('.') {
-        Some((i, f)) => !i.is_empty() && !f.is_empty() && i.bytes().all(|b| b.is_ascii_digit()) && f.bytes().all(|b| b.is_ascii_digit()),
-        None => !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()),
-    };
-    number || v == "true" || v == "false"
 }
 
 pub struct Report {
@@ -536,13 +562,17 @@ fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
         let old: Vec<String> = ex.outs.iter().filter_map(|o| Some(format!("{theirs} {}={}", o.name, o.theirs_shown.as_ref()?))).collect();
         return if old.is_empty() { inp.join(", ") } else { format!("{} → {}", inp.join(", "), old.join(", ")) };
     }
-    // Each answer as its own side writes it, unrounded (§15.199): 12% beside 12.3%.
+    // Each answer as its own side writes it, unrounded (§15.199): 12% beside 12.3%. A side that
+    // gave none says so: an adapter whose `out` leaves an output out, an output only one version
+    // has. Leaving the pair out showed a mismatch with nothing that differs.
+    let none = tr!("（答えなし）", "(no answer)");
     let diff: Vec<String> = ex
         .differing()
         .iter()
-        .filter_map(|o| {
-            let (a, b, n) = (o.ours_shown.as_ref()?, o.theirs_shown.as_ref()?, &o.name);
-            Some(tr!("規則 {n}={a} / {theirs} {n}={b}", "rule {n}={a} / {theirs} {n}={b}"))
+        .filter(|o| o.ours_shown.is_some() || o.theirs_shown.is_some())
+        .map(|o| {
+            let (a, b, n) = (o.ours_shown.as_ref().unwrap_or(&none), o.theirs_shown.as_ref().unwrap_or(&none), &o.name);
+            tr!("規則 {n}={a} / {theirs} {n}={b}", "rule {n}={a} / {theirs} {n}={b}")
         })
         .collect();
     if diff.is_empty() {
@@ -976,13 +1006,13 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
 /// `--format json` for `verify`, `replay` and `diff` (docs/formats.md). All three share one
 /// shape, because all three are "the rule against a counterpart".
 pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
+    // Each value is already the JSON its wire is ([`wire_json`]): the canonical integer — or, for
+    // a counterpart that answered finer than the step, a decimal — a boolean, a name as a string,
+    // a sequence as its array; for `verify`, the adapter's value as it came.
     let pairs = |ps: &[(String, String)]| {
         let mut o = crate::json::Obj::new();
         for (n, v) in ps {
-            // A wire value is already the canonical integer — or, for a counterpart that
-            // answered finer than the step, a decimal — a boolean, or a name. Numbers and
-            // booleans go in bare; anything else is a string.
-            o = if json_scalar(v) { o.raw(n, v) } else { o.str(n, v) };
+            o = o.raw(n, v);
         }
         o.finish()
     };
@@ -1013,7 +1043,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
             // Each answer in its own side's step and unit (§15.199): the rule's wire, and the
             // counterpart's as it writes it — `diff`'s `old` and `new` are written the same way.
             let ours: Vec<(String, String)> =
-                ex.differing().iter().filter_map(|o| Some((o.name.clone(), wire(c, &o.name, o.ours.as_ref())?))).collect();
+                ex.differing().iter().filter_map(|o| Some((o.name.clone(), wire_json(c, &o.name, o.ours.as_ref()?)))).collect();
             let theirs: Vec<(String, String)> =
                 ex.differing().iter().filter_map(|o| Some((o.name.clone(), o.theirs_wire.clone()?))).collect();
             let wit = crate::json::Obj::new()

@@ -20,7 +20,9 @@ use std::process::{Command, Stdio};
 /// right came out at 0%. A value fared no better: `"\u5165\u91d1"` was read as `u5165u91d1`
 /// (§15.151).
 fn parse_line(line: &str, what: &str) -> Result<Json, String> {
-    crate::json::parse(line.trim()).map_err(|e| {
+    // A byte order mark before the first line is no part of it: a runtime that writes one at the
+    // head of its standard output answered the handshake with a line that was "not JSON".
+    crate::json::parse(line.trim().trim_start_matches('\u{feff}').trim()).map_err(|e| {
         tr!(
             "アダプタの{what}を JSON として読めません: {e}\n  {}",
             "The adapter's {what} is not JSON: {e}\n  {}",
@@ -29,17 +31,39 @@ fn parse_line(line: &str, what: &str) -> Result<Json, String> {
     })
 }
 
-/// An output's value as the adapter sent it, in the form `report::wire` gives the rule's own:
-/// an integer as its digits, an enum value or a date as its text, and `null` for an optional
-/// output as `none`, which is how the vectors write a missing value.
-fn observed(c: &Checked, name: &str, j: &Json) -> String {
-    match j {
-        Json::Null if matches!(c.ty_of(name), Some(Ty::Opt(_))) => crate::kw::NONE.to_string(),
-        Json::Int(n) => n.to_string(),
-        Json::Frac(s) | Json::Str(s) => s.clone(),
-        Json::Bool(b) => b.to_string(),
-        other => crate::json::show(other),
+/// An output's value as the adapter sent it, as the JSON it came as: a number as its digits, a
+/// string in its quotes — so `"11"` where a number goes is told apart from 11, in the witness
+/// and in `--format json` alike — and `null` as `null`.
+fn observed(j: &Json) -> String {
+    crate::json::unparse(j)
+}
+
+/// What to say of an adapter that closed its output where an answer was due: that it ended,
+/// with its exit status when it has one by now, and where to look. The line that was read is
+/// empty then, and calling it "not JSON" sent the reader to the wrong place: the adapter raised
+/// on its first line — a module it could not import, a path that is not there — and what it
+/// said is on standard error, above.
+fn ended(child: &mut crate::child::Owned, at: &str) -> String {
+    // It closed its output a moment ago; its status follows shortly when it is exiting.
+    let mut status = None;
+    for _ in 0..20 {
+        if let Ok(Some(st)) = child.try_wait() {
+            status = Some(st);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
+    let how = match status {
+        Some(st) => match st.code() {
+            Some(code) => tr!("（終了コード {code}）", " (exit status {code})"),
+            None => tr!("（シグナルで終了）", " (ended by a signal)"),
+        },
+        None => String::new(),
+    };
+    tr!(
+        "アダプタが{at}終わりました{how}。アダプタが標準エラーに書いたものがあれば、この上に出ています",
+        "The adapter ended {at}{how}. Whatever it wrote to standard error is above"
+    )
 }
 
 /// Starts the adapter, streams the vectors through it and compares the answers.
@@ -72,11 +96,16 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         ins.join(","),
         outs.join(",")
     )
-    .map_err(|e| e.to_string())?;
-    si.flush().ok();
+    .and_then(|_| si.flush())
+    .ok();
 
     let mut line = String::new();
-    so.read_line(&mut line).map_err(|e| e.to_string())?;
+    let before = tr!("ハンドシェイクに答える前に", "before answering the handshake");
+    // A handshake that could not be written is an adapter that is gone already, and so is one
+    // whose output ends here.
+    if so.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
+        return Err(ended(&mut child, &before));
+    }
     let hello = parse_line(&line, &tr!("ハンドシェイクの応答", "answer to the handshake"))?;
     if hello.get("ok") != Some(&Json::Bool(true)) {
         return Err(tr!(
@@ -91,17 +120,27 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         Report { impl_id, records: false, ..Report::new(f, if crate::i18n::ja() { "現行" } else { "legacy" }) };
 
     for (id, v) in vs.iter().enumerate() {
-        writeln!(si, "{{\"id\":{id},\"in\":{}}}", vectors::in_object(f, c, v)).map_err(|e| e.to_string())?;
-        si.flush().ok();
+        // A record that cannot be written went to an adapter that has ended; the read below finds
+        // its output closed and says so, where the write's own error was "Broken pipe".
+        let _ = writeln!(si, "{{\"id\":{id},\"in\":{}}}", vectors::in_object(f, c, v)).and_then(|_| si.flush());
 
         let mut line = String::new();
         if so.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-            return Err(tr!("アダプタが {id} 件目に応答しませんでした", "The adapter went silent at record {id}"));
+            return Err(ended(&mut child, &tr!("{id} 件目に答えずに", "without answering record {id}")));
         }
         let ans = parse_line(&line, &tr!("{id} 件目の応答", "answer to record {id}"))?;
         // An answer to another record would compare one case's values with another's.
         if let Some(got) = ans.get("id") {
             if got.as_int() != Some(id as i128) {
+                // `"id":"0"` is no record's number, and reading it as one said "answered record 0
+                // with the answer to record 0".
+                if got.as_int().is_none() {
+                    return Err(tr!(
+                        "アダプタの {id} 件目の応答の id が整数ではありません: {}",
+                        "The `id` of the adapter's answer to record {id} is not an integer: {}",
+                        line.trim()
+                    ));
+                }
                 let got = crate::json::show(got);
                 return Err(tr!(
                     "アダプタが {id} 件目に {got} 件目の応答を返しました",
@@ -117,6 +156,15 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
                 line.trim()
             ));
         }
+        // `out` is the object of the outputs by name. `"out":11` names none of them, and read as
+        // an answer it made every record a mismatch with nothing to show for it.
+        if err.is_none() && !matches!(out, Some(Json::Obj(_))) {
+            return Err(tr!(
+                "アダプタの {id} 件目の応答の out がオブジェクトではありません。出力の名前ごとに値を入れます: {}",
+                "The `out` of the adapter's answer to record {id} is not an object; it holds a value for each output by name: {}",
+                line.trim()
+            ));
+        }
         rep.total += 1;
         // §15.199: each answer is read as the value it is — a decimal included, where the
         // implementation computed finer than the step — and compared exactly; the text it came
@@ -128,7 +176,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
             .map(|(n, val)| {
                 let j = out.and_then(|o| o.get(n));
                 let theirs = j.and_then(|j| c.ty_of(n).and_then(|ty| crate::fixtures::observed_as(j, &ty, c, n, None).ok()));
-                Out::against(c, n, val.clone(), theirs, j.map(|j| observed(c, n, j)))
+                Out::against(c, n, val.clone(), theirs, j.map(observed))
             })
             .collect();
         if let Some(e) = err {
@@ -172,15 +220,34 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
 
 /// §10.1: the adapter template. That it fits in 20 to 30 lines is the crux of this approach.
 pub fn template(lang: &str, f: &RuleFile) -> String {
-    let ins: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
-    let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+    // What `in` holds: the inputs, and each sequence the rule walks with its elements' fields
+    // (`lines[] (quantity, price)`). A rule that only walks used to be told its inputs were none.
+    let ins: Vec<String> = f
+        .inputs
+        .iter()
+        .map(|i| i.name.text.clone())
+        .chain(f.elements.iter().map(|el| {
+            format!("{}[] ({})", el.name.text, el.fields.iter().map(|fd| fd.name.text.clone()).collect::<Vec<_>>().join(", "))
+        }))
+        .collect();
+    // `out` holds every output by name. The template used to write the first one alone, and a
+    // rule with two came out of a filled-in template at 0%, each answer missing the second.
+    let outs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).collect();
+    let out = outs.iter().map(|n| format!("{n:?}: got")).collect::<Vec<_>>().join(", ");
+    let many = if outs.len() > 1 {
+        tr!("出力は {} の全部が要る。", " Every output is required: {}.", outs.join(if crate::i18n::ja() { "、" } else { ", " }))
+    } else {
+        String::new()
+    };
     // An optional output answers that there is no value as `null` (§15.249), and the template says
     // how its language writes that.
+    let optional: Vec<String> = f.outputs.iter().filter(|o| o.ty.optional).map(|o| o.name.text.clone()).collect();
     let absent = |none: &str| -> String {
-        match f.outputs.first() {
-            Some(o) if o.ty.optional => tr!("{out} に値が無いときは {none} を返す。", " When {out} has no value, send {none}."),
-            _ => String::new(),
+        if optional.is_empty() {
+            return many.clone();
         }
+        let names = optional.join(if crate::i18n::ja() { "、" } else { ", " });
+        tr!("{many}{names} に値が無いときは {none} を返す。", "{many} When {names} has no value, send {none}.")
     };
     let (py_none, go_none) = (absent("None"), absent("nil"));
     match lang {
@@ -202,7 +269,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              if err := json.Unmarshal(sc.Bytes(), &req); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\n\t\t\
              // ここでいまの実装を呼ぶ。入力は {}。{go_none}\n\t\t\
              var got any = 0 // TODO: legacy.Compute(req.In)\n\n\t\t\
-             b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{:?}: got}}}})\n\t\t\
+             b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{}}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
             "// rulec adapter template (rule {}).\n\
              // It only exchanges JSON Lines over stdin/stdout. Call the legacy implementation from here.\n\
@@ -218,7 +285,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              if err := json.Unmarshal(sc.Bytes(), &req); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\n\t\t\
              // Call the legacy implementation here. Inputs: {}.{go_none}\n\t\t\
              var got any = 0 // TODO: legacy.Compute(req.In)\n\n\t\t\
-             b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{:?}: got}}}})\n\t\t\
+             b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{}}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
             f.name.text,
             ins.join(", "),
@@ -238,7 +305,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              d = req[\"in\"]  # 入力は {}\n\n    \
              # ここでいまの実装を呼ぶ。{py_none}\n    \
              got = 0  # TODO: legacy.compute(d)\n\n    \
-             print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
+             print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{}}}}}, ensure_ascii=False), flush=True)\n",
             "# rulec adapter template (rule {}).\n\
              # It only exchanges JSON Lines over stdin/stdout. Call the legacy implementation from here.\n\
              import json, sys\n\n\
@@ -252,7 +319,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              d = req[\"in\"]  # inputs: {}\n\n    \
              # Call the legacy implementation here.{py_none}\n    \
              got = 0  # TODO: legacy.compute(d)\n\n    \
-             print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
+             print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{}}}}}, ensure_ascii=False), flush=True)\n",
             f.name.text,
             ins.join(", "),
             out

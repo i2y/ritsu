@@ -1885,7 +1885,7 @@ fn fixtures_arg(a: &Args) -> Result<(String, String), String> {
 
 /// §10.2: only the validation of types and ranges is done here. ETL is the user's job.
 fn fixtures_lint(files: &[&String], a: &Args, json: bool) -> ExitCode {
-    let (Some(jsonl), Some(rule)) = (files.first(), files.get(1)) else {
+    let (Some(jsonl), Some(rule), None) = (files.first(), files.get(1), files.get(2)) else {
         eprintln!("error: `rulec fixtures lint <file.jsonl> <file.rule>`");
         return ExitCode::from(2);
     };
@@ -1942,6 +1942,16 @@ fn read_as(a: &Args, f: &crate::ast::RuleFile) -> Result<Option<crate::types::Ch
 /// §10.3: apply the rule to past records and compare against the values produced at the time.
 fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     let Some(rule) = files.first() else { return refuse(tr!("規則が要ります", "a rule is required")) };
+    // The records are one rule's. A second rule, or a directory that holds several, used to be
+    // dropped without a word, and the records were read against whichever came first.
+    if files.len() > 1 {
+        return refuse(tr!(
+            "`rulec replay` に渡す規則は一つです（{} 個ありました: {}）。記録は一つの規則のものです",
+            "`rulec replay` takes one rule ({} were given: {}); the records are one rule's",
+            files.len(),
+            files.iter().map(|p| p.as_str()).collect::<Vec<_>>().join(", ")
+        ));
+    }
     let terse = a.has("--terse");
     if json && terse {
         return terse_with_json();

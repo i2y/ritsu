@@ -285,6 +285,17 @@ pub enum Shut {
     Constraint { said: String },
     /// A combination a `never` line rules out (§15.282).
     Never { said: String },
+    /// A sequence with more elements than a `count` over it can be (§15.58).
+    Length { name: String, max: i128 },
+    /// Two elements of a sequence with the same value of a field marked `unique` (§15.290).
+    Unique { name: String, field: String },
+    /// A `sum` over a sequence past the top of the range it declares (§15.100): the sum, the
+    /// sequence it adds up, and the top as the rule writes it.
+    Sum { name: String, over: String, hi: String },
+    /// The weights of a pick by weight whose total does not fit in int64 (§15.226), by the sequence.
+    Weights { name: String },
+    /// The drawn value of a pick by weight that is not below the total of the weights (§15.226).
+    Draw { name: String },
 }
 
 impl Shut {
@@ -299,6 +310,11 @@ impl Shut {
             Shut::Day { .. } => "input_day",
             Shut::Constraint { .. } => "constraint",
             Shut::Never { .. } => "never",
+            Shut::Length { .. } => "length",
+            Shut::Unique { .. } => "unique",
+            Shut::Sum { .. } => "sum",
+            Shut::Weights { .. } => "weights",
+            Shut::Draw { .. } => "draw",
         }
     }
 
@@ -310,7 +326,13 @@ impl Shut {
             | Shut::NotOptional { name }
             | Shut::Type { name, .. }
             | Shut::Step { name, .. }
-            | Shut::Day { name, .. } => name,
+            | Shut::Day { name, .. }
+            | Shut::Length { name, .. }
+            | Shut::Unique { name, .. }
+            | Shut::Weights { name }
+            | Shut::Draw { name } => name,
+            // A sum is found by the sequence it adds up, which is what the record holds.
+            Shut::Sum { over, .. } => over,
             Shut::Constraint { .. } | Shut::Never { .. } => "",
         }
     }
@@ -328,6 +350,11 @@ impl Shut {
             Shut::Day { name, from, .. } => tr!("{name} が、新しい版の {from} がとる日ではありません", "{name} is not a day the new version's {from} comes to"),
             Shut::Constraint { said } => tr!("新しい版の制約 `{said}` が成り立ちません", "the new version's constraint `{said}` does not hold"),
             Shut::Never { said } => tr!("新しい版の `{said}` に当たります", "it falls under the new version's `{said}`"),
+            Shut::Length { name, max } => tr!("{name} の要素が、新しい版の上限 {max} 件より多いです", "{name} has more elements than the new version takes (at most {max})"),
+            Shut::Unique { name, field } => tr!("{name} に {field} が同じ要素が二つあり、新しい版は受け付けません", "{name} has two elements with the same {field}, which the new version does not take"),
+            Shut::Sum { name, over, hi } => tr!("{over} の合計 {name} が、新しい版の範囲の上限 {hi} を超えます", "the sum {name} over {over} is past the top of the new version's range, {hi}"),
+            Shut::Weights { name } => tr!("{name} の重みの合計が int64 に収まりません", "the total of the weights of {name} does not fit in int64"),
+            Shut::Draw { name } => tr!("{name} が、新しい版の重みの合計より小さくありません", "{name} is not below the total of the new version's weights"),
         }
     }
 }
@@ -370,21 +397,30 @@ fn holds(k: &crate::ast::Constraint, a: &BTreeMap<String, Val>) -> bool {
 
 /// What the generated code's entry turns away besides one number's type and range, which
 /// [`to_val`] holds a value to as it reads it: a date outside its declared range, a date that
-/// is not one of the days a koyomi date comes to, and a combination a `constraint` rules out
-/// (§15.197). Those need the whole input, or a date's place among the days. `None` when the
-/// entry lets the input through.
+/// is not one of the days a koyomi date comes to, a sequence the entry or the walk refuses, and
+/// a combination a `constraint` rules out (§15.197). Those need the whole input, or a date's
+/// place among the days. `None` when the entry lets the input through.
+///
+/// A sequence is refused for what the door of every generated language refuses it for, in the
+/// order the doors look (`door::read`): more elements than a `count` over it can be, a date of
+/// an element outside its range, two elements with the same value of a `unique` field; and,
+/// once the `constraint` and `never` lines hold, what the walk refuses — weights whose total
+/// passes int64, a `sum` past its range, a drawn value not below the total of the weights.
 pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<Shut> {
+    let date_outside = |name: &str, y: i32, m: u32, d: u32| -> Option<Shut> {
+        let ord = crate::types::date_ord(y, m, d);
+        let (lo, hi) = c.ranges.get(name)?;
+        let below = lo.is_some_and(|l| ord.cmp_to(l) == std::cmp::Ordering::Less);
+        let above = hi.is_some_and(|h| ord.cmp_to(h) == std::cmp::Ordering::Greater);
+        (below || above).then(|| Shut::Range { name: name.to_string(), value: format!("{y:04}-{m:02}-{d:02}"), lo: end(*lo, &Ty::Date), hi: end(*hi, &Ty::Date) })
+    };
     for i in &f.inputs {
         let name = &i.name.text;
         let Some(Val::Date(y, m, d)) = input.get(name) else { continue };
         let ord = crate::types::date_ord(*y, *m, *d);
         let value = format!("{y:04}-{m:02}-{d:02}");
-        if let Some((lo, hi)) = c.ranges.get(name) {
-            let below = lo.is_some_and(|l| ord.cmp_to(l) == std::cmp::Ordering::Less);
-            let above = hi.is_some_and(|h| ord.cmp_to(h) == std::cmp::Ordering::Greater);
-            if below || above {
-                return Some(Shut::Range { name: name.clone(), value, lo: end(*lo, &Ty::Date), hi: end(*hi, &Ty::Date) });
-            }
+        if let Some(s) = date_outside(name, *y, *m, *d) {
+            return Some(s);
         }
         if let Some(days) = c.day_sets.get(name) {
             if days.days.binary_search(&(ord.num as i64)).is_err() {
@@ -393,10 +429,47 @@ pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<
             }
         }
     }
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let Some(Val::Seq(xs)) = input.get(seq) else { continue };
+        if let Some(max) = crate::door::count_cap(f, c, seq).filter(|cap| xs.len() as i128 > *cap) {
+            return Some(Shut::Length { name: seq.clone(), max });
+        }
+        for x in xs {
+            for fd in &el.fields {
+                if let Some(Val::Date(y, m, d)) = x.get(&fd.name.text)
+                    && let Some(Shut::Range { value, lo, hi, .. }) = date_outside(&fd.name.text, *y, *m, *d)
+                {
+                    // An element's field is named with its sequence, as the record holds it.
+                    return Some(Shut::Range { name: format!("{seq}[].{}", fd.name.text), value, lo, hi });
+                }
+            }
+        }
+        if let Some(field) = crate::door::repeated(el, xs) {
+            return Some(Shut::Unique { name: seq.clone(), field: field.to_string() });
+        }
+    }
     if let Some(k) = f.constraints.iter().find(|k| !holds(k, input)) {
         return Some(Shut::Constraint { said: k.said() });
     }
-    f.door_nevers().find(|n| !crate::vectors::never_clear(n, c, &|m| input.get(m))).map(|n| Shut::Never { said: n.said() })
+    if let Some(n) = f.door_nevers().find(|n| !crate::vectors::never_clear(n, c, &|m| input.get(m))) {
+        return Some(Shut::Never { said: n.said() });
+    }
+    if !f.walks() {
+        return None;
+    }
+    // What the walk refuses, in the order the generated code looks (§15.226, §15.100).
+    let all = || -> std::collections::HashMap<String, Val> { input.iter().map(|(k, v)| (k.clone(), v.clone())).collect() };
+    if let Some(name) = crate::eval::weights_past(f, c, all()) {
+        return Some(Shut::Weights { name });
+    }
+    if let Some(name) = crate::eval::sum_past_range(f, c, all()) {
+        let over = f.aggs().find(|d| d.name.text == name).map(|d| d.over.clone()).unwrap_or_default();
+        let ty = c.ty_of(&name).map(|t| t.present().clone()).unwrap_or(Ty::Number);
+        let hi = end(c.ranges.get(&name).and_then(|(_, hi)| *hi), &ty);
+        return Some(Shut::Sum { name, over, hi });
+    }
+    crate::eval::drawn_past(f, c, all()).map(|name| Shut::Draw { name })
 }
 
 /// A value of one version's input, as another version of the rule takes it (§15.197). `diff`
@@ -569,7 +642,7 @@ impl Manifest {
 
     fn load_to(src: &str, read: (&RuleFile, &Checked), new: Option<(&RuleFile, &Checked)>) -> Result<Manifest, String> {
         let f = read.0;
-        let j = crate::json::parse(src.trim()).map_err(|e| tr!("マニフェストが読めません: {e}", "Cannot read the manifest: {e}"))?;
+        let j = crate::json::parse(src.trim_start_matches('\u{feff}').trim()).map_err(|e| tr!("マニフェストが読めません: {e}", "Cannot read the manifest: {e}"))?;
         if let Some(r) = j.get("rule").and_then(|x| x.as_str()) {
             if r != f.name.text {
                 return Err(tr!(
@@ -580,8 +653,14 @@ impl Manifest {
             }
         }
         let mut m = Manifest::default();
+        // A manifest declares defaults and nothing else, so one without `fills` — a key spelled
+        // `fill`, an array where the object goes — declares nothing, and said so by filling no
+        // record: the misspelling read as "no default", and only the counts moved.
         let Some(fills) = crate::json::members_of(&j, "fills") else {
-            return Ok(m);
+            return Err(match j.get("fills") {
+                None => tr!("マニフェストに `fills` がありません。既定値は `\"fills\":{{フィールド:値}}` に書きます", "The manifest has no `fills`; the default values go under `\"fills\":{{field:value}}`"),
+                Some(other) => tr!("マニフェストの `fills` がオブジェクトではなく {} です", "The manifest's `fills` is {}, not an object", crate::json::kind(other)),
+            });
         };
         for (name, v) in fills {
             let Some((c, only_new)) = owner(name, read, new) else {
@@ -619,6 +698,9 @@ pub fn load_inputs(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Opt
 /// `whole` reads `observed` and `trace` as well.
 fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checked>, whole: bool) -> Load {
     let mut out = Load { records: Vec::new(), problems: Vec::new(), dropped: 0, beyond: Vec::new() };
+    // A byte order mark at the head of the file is no part of the first record: an export from a
+    // tool that writes one lost its first line to "not readable as JSON".
+    let src = src.strip_prefix('\u{feff}').unwrap_or(src);
     for (li, raw) in src.lines().enumerate() {
         let line = li + 1;
         if raw.trim().is_empty() {
@@ -638,7 +720,13 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
                 continue;
             }
         };
-        let tag = j.get("tag").and_then(|x| x.as_str()).unwrap_or_default().to_string();
+        // A tag is a label, and an order's number is one as it stands: `"tag":1234567` names the
+        // record as `"tag":"1234567"` does. It used to read as no tag at all, and a machine's
+        // records with numbers for tags came out as no cases.
+        let tag = match j.get("tag") {
+            Some(Json::Int(n)) => n.to_string(),
+            other => other.and_then(|x| x.as_str()).unwrap_or_default().to_string(),
+        };
         let ts = j.get("ts").and_then(|x| x.as_str()).unwrap_or_default().to_string();
         let mut bad = |kind: &'static str, field: &str, what: String, hint: &str| {
             out.problems.push(Problem {
@@ -664,7 +752,7 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
         // A field the rule does not know is reported as an error. Discarding it silently turns
         // a spelling mistake into "filled in with the default value", and only the agreement
         // rate moves.
-        let known: Vec<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
+        let known: Vec<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).chain(f.elements.iter().map(|e| e.name.text.as_str())).collect();
         let mut extra: Vec<&str> = ins.keys().copied().filter(|k| !known.contains(k)).collect();
         extra.sort();
         if !extra.is_empty() {
@@ -714,6 +802,78 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
         if broken {
             continue;
         }
+        // The sequences the rule walks (§15.56), each an array of objects that hold the element's
+        // fields in the same wire: what the vectors write, and the generated code's record
+        // function. A record without one is missing a field no default gives; anything else
+        // that is not the declared shape is a problem of the record.
+        for el in &f.elements {
+            let seq = &el.name.text;
+            let shape = tr!("並びは、要素のフィールドを持つオブジェクトの配列です。", "A sequence is an array of objects, each holding the element's fields.");
+            let items = match ins.get(seq.as_str()) {
+                None => {
+                    broken = true;
+                    out.dropped += 1;
+                    break;
+                }
+                Some(Json::Arr(items)) => items,
+                Some(other) => {
+                    bad("bad_input", seq, tr!("`in.{seq}`: 並び（配列）を期待しましたが {} でした", "`in.{seq}`: expected a sequence (an array), found {}", crate::json::kind(other)), &shape);
+                    broken = true;
+                    break;
+                }
+            };
+            let mut elems: Vec<BTreeMap<String, Val>> = Vec::new();
+            'items: for it in items {
+                let Some(fields) = crate::json::members(it) else {
+                    bad("bad_input", seq, tr!("`in.{seq}`: 要素がオブジェクトではなく {} です", "`in.{seq}`: an element is {}, not an object", crate::json::kind(it)), &shape);
+                    broken = true;
+                    break;
+                };
+                let mut extra: Vec<&str> = fields.keys().copied().filter(|k| !el.fields.iter().any(|fd| fd.name.text == *k)).collect();
+                extra.sort();
+                if !extra.is_empty() {
+                    bad(
+                        "unknown_field",
+                        &format!("{seq}[].{}", extra[0]),
+                        tr!("`in.{seq}` の要素に規則が知らないフィールドがあります: {}", "an element of `in.{seq}` has fields the rule does not know: {}", extra.join(", ")),
+                        &tr!("規則の `elements` のフィールドの名前（別名ではないほう）と綴りを合わせてください。", "Match the spelling of the field names under the rule's `elements`."),
+                    );
+                    broken = true;
+                    break;
+                }
+                let mut e: BTreeMap<String, Val> = BTreeMap::new();
+                for fd in &el.fields {
+                    let name = &fd.name.text;
+                    let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+                    match fields.get(name.as_str()) {
+                        Some(v) => match to_val_as(v, &ty, c, name, then) {
+                            Ok(v) => {
+                                e.insert(name.clone(), v);
+                            }
+                            Err(err) => {
+                                bad("bad_input", &format!("{seq}[].{name}"), format!("`in.{seq}[].{name}`: {err}"), &tr!("型か範囲が宣言と食い違っています。", "The type or range disagrees with the declaration."));
+                                broken = true;
+                                break 'items;
+                            }
+                        },
+                        // No default fills a field of an element: `fills` names inputs.
+                        None => {
+                            bad("bad_input", &format!("{seq}[].{name}"), tr!("`in.{seq}[].{name}` がありません", "`in.{seq}[].{name}` is missing"), &tr!("要素のフィールドは全部要ります。既定値では補えません。", "Every field of an element is required; no default value fills one."));
+                            broken = true;
+                            break 'items;
+                        }
+                    }
+                }
+                elems.push(e);
+            }
+            if broken {
+                break;
+            }
+            input.insert(seq.clone(), Val::Seq(elems));
+        }
+        if broken {
+            continue;
+        }
         // The rest of what the generated code's entry turns away (§15.197). A number outside
         // its range has always been a problem of the record; a date outside its range, a day
         // the koyomi date does not come to and a combination a `constraint` rules out are the
@@ -742,6 +902,26 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
                         "`never` の行は、その組み合わせが起こらないという宣言です。記録の値か、規則の `never` の行を確かめてください。",
                         "A `never` line declares that the combination does not happen; check the record's values, or the rule's `never` line."
                     ),
+                ),
+                Shut::Length { name, max } => (
+                    tr!("`in.{name}`: 要素が多すぎます（上限 {max} 件）", "`in.{name}`: too many elements (at most {max})"),
+                    tr!("並びを数える `count` の範囲の上限が、要素の数の上限です。", "The top of the range of a `count` over the sequence is the most elements it may have."),
+                ),
+                Shut::Unique { name, field } => (
+                    tr!("`in.{name}`: {field} が同じ要素が二つあります", "`in.{name}`: two elements have the same {field}"),
+                    tr!("`unique` のフィールドは、要素どうしで同じ値をとりません。", "A field marked `unique` takes no value twice among the elements."),
+                ),
+                Shut::Sum { name, over, hi } => (
+                    tr!("`in.{over}`: 合計 {name} が宣言した範囲の上限 {hi} を超えます", "`in.{over}`: the sum {name} is past the top of its declared range, {hi}"),
+                    range,
+                ),
+                Shut::Weights { name } => (
+                    tr!("`in.{name}`: 重みの合計が int64 に収まりません", "`in.{name}`: the total of the weights does not fit in int64"),
+                    range,
+                ),
+                Shut::Draw { name } => (
+                    tr!("`in.{name}`: 重みの合計より小さくありません", "`in.{name}`: not below the total of the weights"),
+                    tr!("重みで選ぶときに引く値は、0 以上で重みの合計より小さい数です。", "The value drawn for a pick by weight is at least 0 and below the total of the weights."),
                 ),
                 // `door` says nothing else; the rest is what `carry` says about another version.
                 other => (format!("`in.{}`: {}", other.field(), other.refusal()), range),

@@ -16,7 +16,7 @@
 use crate::ast::RuleFile;
 use crate::eval;
 use crate::fixtures::{Load, Manifest};
-use crate::report::{same_answer, wire, Fired, Mismatch, Out, Refusal, Report};
+use crate::report::{same_answer, wire_json, Fired, Mismatch, Out, Refusal, Report};
 use crate::types::Checked;
 
 /// Run the records through the rule and compare against `observed`.
@@ -244,6 +244,34 @@ fn take(
             },
         }
     }
+    // The sequences the new version walks, each element brought across field by field, as an
+    // input is. A sequence the record does not have, or a field only the new version's element
+    // has, is something no default gives.
+    for el in &new.0.elements {
+        let seq = &el.name.text;
+        let Some(crate::eval::Val::Seq(xs)) = input.get(seq) else {
+            short = true;
+            continue;
+        };
+        let mut ys = Vec::new();
+        for x in xs {
+            let mut y = std::collections::BTreeMap::new();
+            for fd in &el.fields {
+                let name = &fd.name.text;
+                match x.get(name) {
+                    Some(v) => match crate::fixtures::carry(v, name, old, new.1) {
+                        Ok(v) => {
+                            y.insert(name.clone(), v);
+                        }
+                        Err(s) => return Took::Refused(s),
+                    },
+                    None => short = true,
+                }
+            }
+            ys.push(y);
+        }
+        out.insert(seq.clone(), crate::eval::Val::Seq(ys));
+    }
     if short {
         return Took::Short;
     }
@@ -253,7 +281,7 @@ fn take(
     }
 }
 
-/// A record's inputs as a person reads them and as the wire writes them, the way the record
+/// A record's inputs as a person reads them and as the wire writes them (its JSON), the way the record
 /// has them: at the old version's types, and a default only the new version takes at the new
 /// version's. In name order, as the rule's own terms are shown.
 fn shown(
@@ -265,11 +293,11 @@ fn shown(
 ) -> Vec<(String, String, String)> {
     let mut all: Vec<(String, String, String)> = input
         .iter()
-        .map(|(n, v)| (n.clone(), crate::vectors::show_named(old, n, v), wire(old, n, Some(v)).unwrap_or_default()))
+        .map(|(n, v)| (n.clone(), crate::vectors::show_named(old, n, v), wire_json(old, n, v)))
         .collect();
     for n in filled_new {
         if let Some(v) = extra.get(n) {
-            all.push((n.clone(), crate::vectors::show_named(new, n, v), wire(new, n, Some(v)).unwrap_or_default()));
+            all.push((n.clone(), crate::vectors::show_named(new, n, v), wire_json(new, n, v)));
         }
     }
     all.sort_by(|a, b| a.0.cmp(&b.0));

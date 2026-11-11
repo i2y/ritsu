@@ -1905,13 +1905,26 @@ impl<'a> Gen<'a> {
 /// where their answer is. Everything around those — the handshake, the ids, the refusal that
 /// keeps an unanswerable record out of the denominator — is written.
 pub fn template(f: &crate::ast::RuleFile) -> String {
-    let ins: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
-    let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+    // What `in` holds and what `out` must: the inputs and each sequence the rule walks with its
+    // elements' fields, and every output by name. The template named the inputs alone and wrote
+    // the first output, as `verify::template`'s two did (§15.306).
+    let ins: Vec<String> = f
+        .inputs
+        .iter()
+        .map(|i| i.name.text.clone())
+        .chain(f.elements.iter().map(|el| {
+            format!("{}[] ({})", el.name.text, el.fields.iter().map(|fd| fd.name.text.clone()).collect::<Vec<_>>().join(", "))
+        }))
+        .collect();
+    let outs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).collect();
+    let pairs = outs.iter().map(|n| format!("{n:?}: got")).collect::<Vec<_>>().join(", ");
     let sep = if crate::i18n::ja() { "・" } else { ", " };
     // An optional output answers that there is no value as `null` (§15.249).
-    let none = match f.outputs.first() {
-        Some(o) if o.ty.optional => tr!("。値が無いときは None", ". None when it has no value"),
-        _ => String::new(),
+    let optional: Vec<String> = f.outputs.iter().filter(|o| o.ty.optional).map(|o| o.name.text.clone()).collect();
+    let none = match (optional.len(), outs.len()) {
+        (0, _) => String::new(),
+        (1, 1) => tr!("。値が無いときは None", ". None when it has no value"),
+        _ => tr!("。{} に値が無いときは None", ". None when {} has no value", optional.join(sep)),
     };
     tr!(
         "# rulec のアダプタのテンプレート（規則 {}）。いま動いているのが Connect のサービスのとき。\n\
@@ -1945,7 +1958,7 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
                      # 答えられないと言った件は一致率の分母から外れる（docs/formats.md）\n            \
                      print(json.dumps({{\"id\": req[\"id\"], \"err\": str(e)}}, ensure_ascii=False), flush=True)\n            \
                      continue\n\n        \
-                 print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
+                 print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{}}}}}, ensure_ascii=False), flush=True)\n",
         "# rulec adapter template (rule {}), for a legacy implementation that is a Connect service.\n\
          #\n\
          #   rulec verify {}.rule --adapter python3 adapter.py https://pricing.internal\n\
@@ -1977,12 +1990,12 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
                      # A record they say they cannot answer is left out of the match rate (docs/formats.md)\n            \
                      print(json.dumps({{\"id\": req[\"id\"], \"err\": str(e)}}, ensure_ascii=False), flush=True)\n            \
                      continue\n\n        \
-                 print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
+                 print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{}}}}}, ensure_ascii=False), flush=True)\n",
         f.name.text,
         pub_name(&f.name),
         ins.join(sep),
-        out,
-        out
+        outs.join(sep),
+        pairs
     )
 }
 

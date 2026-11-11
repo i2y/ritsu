@@ -336,3 +336,178 @@ fn 文書に載せた実演は_いまの出力と一致する() {
         assert!(doc.contains(piece), "formats.md: JSON の例に無い部分:\n{piece}\n出力:\n{js}");
     }
 }
+
+/// A rule with two outputs and a sequence, for the adapter's side of the protocol.
+const PARCEL: &str = "\
+rule parcel v1
+
+enum zone = near | far
+
+inputs
+  weight : number  range >=1 <=30
+  dest   : zone
+
+elements lines
+  quantity : number  range >=1 <=10
+
+sum units over lines of quantity  range >=0 <=30
+
+outputs
+  fee  : money[JPY]  round down(1JPY)
+  days : number  round down(1)
+
+table fees
+policy first
+| dest | weight | units | -> fee  | -> days |
+| near | <=10   | -     | 500JPY  | 1       |
+| near | -      | -     | 900JPY  | 2       |
+| far  | <=10   | <=5   | 800JPY  | 3       |
+| far  | -      | -     | 1500JPY | 4       |
+";
+
+/// A stand-in for a legacy implementation that needs no generated code: it answers from the
+/// rule's own vectors, so it matches exactly unless `MODE` bends it.
+const STAND_IN: &str = r#"import json, os, subprocess, sys
+
+mode = os.environ.get("MODE", "")
+answers = {}
+for l in subprocess.run([os.environ["RULEC"], "vectors", "parcel.rule"], capture_output=True, text=True).stdout.splitlines():
+    if l.strip():
+        v = json.loads(l)
+        answers[json.dumps(v["in"], sort_keys=True)] = v["out"]
+
+sys.stdin.readline()
+if mode == "ends_at_once":
+    sys.stderr.write("ModuleNotFoundError: No module named 'legacy'\n")
+    sys.exit(3)
+print(json.dumps({"ok": True, "impl": "stand-in"}), flush=True)
+n = 0
+for line in sys.stdin:
+    req = json.loads(line)
+    n += 1
+    out = dict(answers[json.dumps(req["in"], sort_keys=True)])
+    if mode == "ends_at_the_third" and n == 3:
+        sys.exit(1)
+    if mode == "out_is_a_number":
+        print(json.dumps({"id": req["id"], "out": out["fee"]}), flush=True)
+    elif mode == "id_is_a_string":
+        print(json.dumps({"id": str(req["id"]), "out": out}), flush=True)
+    else:
+        if mode == "fee_is_a_string":
+            out["fee"] = str(out["fee"])
+        if mode == "days_is_left_out":
+            del out["days"]
+        print(json.dumps({"id": req["id"], "out": out}), flush=True)
+"#;
+
+/// `rulec verify parcel.rule <flags> --adapter python3 adapter.py` in a directory that holds the
+/// two, with the stand-in bent by `mode`: the exit status, stdout and stderr.
+fn stand_in(tag: &str, mode: &str, flags: &[&str]) -> Option<(i32, String, String)> {
+    if !ready(Need::Python, || have("python3"), "python3 is not here, so the adapter's side of verify was skipped") {
+        return None;
+    }
+    let tmp = TempDir::new(&format!("verify-{tag}"));
+    let dir = tmp.path();
+    std::fs::write(dir.join("parcel.rule"), PARCEL).unwrap();
+    std::fs::write(dir.join("adapter.py"), STAND_IN).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(dir)
+        .env("RULEC_LANG", "en")
+        .env("RULEC", env!("CARGO_BIN_EXE_rulec"))
+        .env("MODE", mode)
+        .args(["verify", "parcel.rule"])
+        .args(flags)
+        .args(["--adapter", "python3", "adapter.py"])
+        .output()
+        .expect("rulec starts");
+    Some((o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned()))
+}
+
+/// The stand-in matches a rule that walks a sequence and has two outputs, record for record.
+#[test]
+fn the_stand_in_matches_exactly() {
+    let Some((code, out, err)) = stand_in("faithful", "", &[]) else { return };
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("matched 15 (100.000%)") && out.contains("Counterpart: stand-in"), "{out}");
+}
+
+/// An adapter that ends where an answer is due is said to have ended, with its exit status and
+/// where its own words are. It read "is not JSON: missing value" at the handshake — the adapter
+/// had raised on its first line, and the reader was sent to look at JSON — and "went silent" or
+/// "Broken pipe" after it (DESIGN §15.306).
+#[test]
+fn an_adapter_that_ends_is_said_to_have_ended() {
+    let Some((code, out, err)) = stand_in("ends-at-once", "ends_at_once", &[]) else { return };
+    assert_eq!(code, 2, "{out}{err}");
+    assert!(err.contains("The adapter ended before answering the handshake (exit status 3)"), "{err}");
+    assert!(err.contains("No module named 'legacy'"), "what the adapter said is passed through: {err}");
+    let Some((code, out, err)) = stand_in("ends-later", "ends_at_the_third", &[]) else { return };
+    assert_eq!(code, 2, "{out}{err}");
+    assert!(err.contains("The adapter ended without answering record 2 (exit status 1)"), "{err}");
+}
+
+/// `out` is the object of the outputs by name. A bare value in its place stops the run and says
+/// so; it was read as an answer that held nothing, and every record came out a mismatch with no
+/// value to show for it. An `id` in quotes is no record's number.
+#[test]
+fn an_answer_of_another_shape_stops_the_run() {
+    let Some((code, out, err)) = stand_in("out-number", "out_is_a_number", &[]) else { return };
+    assert_eq!(code, 2, "{out}{err}");
+    assert!(err.contains("The `out` of the adapter's answer to record 0 is not an object") && err.contains(r#"{"id": 0, "out": 500}"#), "{err}");
+    let Some((code, out, err)) = stand_in("id-string", "id_is_a_string", &[]) else { return };
+    assert_eq!(code, 2, "{out}{err}");
+    assert!(err.contains("The `id` of the adapter's answer to record 0 is not an integer"), "{err}");
+}
+
+/// A value of another type is shown as the JSON it came as. `"500"` where a number goes is a
+/// mismatch, and the witness read `rule fee=500 / legacy fee=500`: nothing told the two apart,
+/// in the text or in `--format json`.
+#[test]
+fn a_string_where_a_number_goes_is_shown_in_its_quotes() {
+    let Some((code, out, err)) = stand_in("fee-string", "fee_is_a_string", &[]) else { return };
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("matched 0 (0.000%)"), "{out}");
+    assert!(out.contains(r#"Example: dest=near, lines=[], weight=1 → rule fee=500 / legacy fee="500""#), "{out}");
+    let Some((code, js, err)) = stand_in("fee-string-json", "fee_is_a_string", &["--format", "json"]) else { return };
+    assert_eq!(code, 1, "{js}{err}");
+    assert!(js.contains(r#""ours":{"fee":500},"theirs":{"fee":"500"}"#), "{js}");
+    // The sequence in the witness is the array the adapter was sent, not a string of it.
+    assert!(js.contains(r#""witness":{"in":{"dest":"near","lines":[{"quantity":1}],"weight":11}"#), "{js}");
+}
+
+/// An output the answer leaves out is a mismatch that says so. The witness used to show the
+/// rule's value beside nothing at all.
+#[test]
+fn an_output_the_answer_leaves_out_is_shown_as_no_answer() {
+    let Some((code, out, err)) = stand_in("days-out", "days_is_left_out", &[]) else { return };
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("rule days=1 / legacy days=(no answer)"), "{out}");
+    let Some((_, js, _)) = stand_in("days-out-json", "days_is_left_out", &["--format", "json"]) else { return };
+    assert!(js.contains(r#""ours":{"days":1},"theirs":{}"#), "{js}");
+}
+
+/// The template answers with every output, and names each sequence with its elements' fields.
+/// It wrote the first output alone — a rule with two came out of a filled-in template at 0% —
+/// and told a rule that only walks a sequence that it had no inputs.
+#[test]
+fn the_template_names_every_output_and_every_sequence() {
+    let tmp = TempDir::new("verify-template");
+    std::fs::write(tmp.path().join("parcel.rule"), PARCEL).unwrap();
+    let run = |lang: &str| -> String {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "en")
+            .current_dir(tmp.path())
+            .args(["adapter", "parcel.rule", "--template", lang])
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{lang}: {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    };
+    let py = run("python");
+    assert!(py.contains("# inputs: weight, dest, lines[] (quantity)"), "{py}");
+    assert!(py.contains("Every output is required: fee, days."), "{py}");
+    assert!(py.contains(r#""out": {"fee": got, "days": got}"#), "{py}");
+    let go = run("go");
+    assert!(go.contains("Inputs: weight, dest, lines[] (quantity). Every output is required: fee, days."), "{go}");
+    assert!(go.contains(r#""out": map[string]any{"fee": got, "days": got}"#), "{go}");
+}
