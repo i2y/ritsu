@@ -34,13 +34,23 @@ table_of() {  # lang -> the table the second picture selects: the tariff of each
     en) echo base_rate ;;
   esac
 }
+top_of() {  # lang -> the window of the front page's picture: wide enough for the card that holds
+  # each rule's second lit table (base, 負担率) to stand whole, and no wider, so the result card
+  # beyond it is what falls off
+  case "$1" in
+    ja) echo 1500,620 ;;
+    en) echo 1420,620 ;;
+  esac
+}
 page() {  # lang
   [ -f "$tmp/$1.html" ] || "$rulec" doc --lang "$1" --format html "$(rule_of "$1")" > "$tmp/$1.html"
 }
 shot() {  # lang query out [width,height]
   page "$1"
   # The board fills the window, so one window is one picture — there is nothing below the
-  # fold to scroll to, and nothing to crop out of a tall render.
+  # fold to scroll to, and nothing to crop out of a tall render. The window is as wide as the
+  # whole board of either rule, the result card on the right included: 1760 since a cell says
+  # its condition in words as well (`<=60in (60in or less)`), which widened the cards.
   #
   # Twice: the page follows the reader's light or dark setting, and so does the site that
   # shows these, so each picture has a twin ending in `-dark`. The scheme is asked for
@@ -51,7 +61,7 @@ shot() {  # lang query out [width,height]
     [ "$scheme" = dark ] && { out="${3%.png}-dark.png"; pref=0; }
     "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
       --blink-settings=preferredColorScheme=$pref \
-      --window-size="${4:-1440,680}" --virtual-time-budget=4000 --screenshot="$out" "file://$tmp/$1.html$2" >/dev/null 2>&1
+      --window-size="${4:-1760,680}" --virtual-time-budget=4000 --screenshot="$out" "file://$tmp/$1.html$2" >/dev/null 2>&1
   done
 }
 # Two pictures per language. The board on a case: the form on the left, one card per
@@ -61,10 +71,12 @@ shot() {  # lang query out [width,height]
 # verified about that table.
 # The front page holds the first one in half a row, where a whole board would be too small to
 # read. A narrower window keeps the form, the lit rows and the answer at a size that reads there;
-# the result card on the right is what falls off, and the form states the answer anyway.
+# the result card on the right is what falls off, and the form states the answer anyway (`top_of`).
+# It is no narrower than 1200 in any case: the side is a third of the window, and a form narrower
+# than 20rem puts each label above its field, which pushes the answer below the picture.
 for lang in $langs; do
   shot "$lang" "?example=2" "docs/images/try-$lang.png"
   shot "$lang" "?example=2#t-$(table_of "$lang")" "docs/images/try-dock-$lang.png"
-  shot "$lang" "?example=2" "docs/images/try-top-$lang.png" 1100,620
+  shot "$lang" "?example=2" "docs/images/try-top-$lang.png" "$(top_of "$lang")"
 done
 ls -la docs/images/try-*.png
