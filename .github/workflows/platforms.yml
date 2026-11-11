@@ -255,6 +255,7 @@ jobs:
             temporal_worker_versioning_keeps_a_run_on_its_build \
             temporal_runs_a_flow_as_its_child \
             argo_runs_as_the_reference_says \
+            argo_runs_on_when_a_failed_calls_outputs_come_late \
             rule_limits_hold_on_temporal \
             rule_limits_hold_on_localstack \
             rule_limits_hold_on_durable \

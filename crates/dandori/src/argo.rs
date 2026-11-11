@@ -1226,18 +1226,23 @@ impl<'a> Gen<'a> {
             outs.push(("value".into(), Some(self.var_global(v)), format!("{pre}ok ? {value} : {}", self.var_raw(v))));
         }
         let after = self.compute(&format!("s{site}-after"), depth, &["status", "code", "answer", "error", "waited"], outs);
-        // what the try left, read so that a value that is not there reads as a default
+        // What the try left, read so that a value that is not there reads as a default, with `?.`
+        // all along: `??` takes a nil at the end of the chain only, and fetching a field of a nil
+        // fails the expression, and with it the step group and the workflow. A step that failed can
+        // have no outputs yet: Argo holds the node of a pod that succeeded until the outputs the pod
+        // reports are in, but not the node of one that failed, which ends with its exit code alone
+        // when the pod's end reaches the controller before its outputs do (DESIGN 26).
         let mut after_args = Gen::pass(depth);
         after_args.push(json!({ "name": "status", "value": "{{steps.try.status}}" }));
         after_args.push(json!({ "name": "code", "value": "{{=steps.try.exitCode ?? \"\"}}" }));
-        after_args.push(json!({ "name": "answer", "value": "{{=steps.try.status == \"Succeeded\" ? (steps.try.outputs.parameters.answer ?? \"null\") : \"null\"}}" }));
+        after_args.push(json!({ "name": "answer", "value": "{{=steps.try.status == \"Succeeded\" ? (steps.try.outputs?.parameters?.answer ?? \"null\") : \"null\"}}" }));
         after_args.push(json!({
             "name": "error",
-            "value": if starts { "null" } else { "{{=steps.try.status == \"Failed\" ? (steps.try.outputs.parameters.error ?? \"null\") : \"null\"}}" },
+            "value": if starts { "null" } else { "{{=steps.try.status == \"Failed\" ? (steps.try.outputs?.parameters?.error ?? \"null\") : \"null\"}}" },
         }));
         after_args.push(json!({
             "name": "waited",
-            "value": if callback { "{{=steps.wait.status == \"Succeeded\" ? (steps.wait.outputs.parameters.answer ?? \"\") : \"\"}}" } else { "" },
+            "value": if callback { "{{=steps.wait.status == \"Succeeded\" ? (steps.wait.outputs?.parameters?.answer ?? \"\") : \"\"}}" } else { "" },
         }));
         group.push(json!([Gen::step("after", &after, after_args, None)]));
         let mut hs: Vec<Value> = Vec::new();

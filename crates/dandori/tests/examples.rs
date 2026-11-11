@@ -4174,6 +4174,12 @@ fn with_argo_slot<T>(f: impl FnOnce() -> T) -> T {
 /// Make a flow ready for Argo (its scenarios, the reference's runs, the build) and run the runner
 /// on it, when a slot is free, to its end; None for a flow that is not for Argo.
 fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
+    ready_on_argo_as(f, false)
+}
+
+/// The same; with `late`, the runner reports the outputs of a played pod that fails after the pod's
+/// end (DANDORI_ARGO_LATE_OUTPUTS, tools/argo/run.mjs), and plays no run again with real pods.
+fn ready_on_argo_as(f: PathBuf, late: bool) -> Option<ArgoFlow> {
     let (_, checked) = check_file(&f).unwrap();
     let m = checked.model.expect("the flows pass check");
     let files = match dandori::argo::build(&m) {
@@ -4215,18 +4221,15 @@ fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
     let results = dir.join("results.json");
     // the rules called at their services are run by the caller as they are generated, and send through the stand-in Transport
     let connect_rules: Vec<String> = m.rules.iter().filter(|r| r.connect.is_some()).map(|r| dandori::render::rule_activity(&r.name)).collect();
-    let spec = json!({ "template": doc, "own": own, "children": children, "connectRules": connect_rules, "http": http, "aws": aws, "runs": runs, "real": [real] });
+    let spec = json!({ "template": doc, "own": own, "children": children, "connectRules": connect_rules, "http": http, "aws": aws, "runs": runs, "real": if late { json!([]) } else { json!([real]) } });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
     let runner = with_argo_slot(|| {
-        Command::new("node")
-            .arg(root().join("tools/argo/run.mjs"))
-            .arg(&dir)
-            .arg(&runs_file)
-            .arg(&results)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .output()
-            .unwrap()
+        let mut c = Command::new("node");
+        c.arg(root().join("tools/argo/run.mjs")).arg(&dir).arg(&runs_file).arg(&results);
+        if late {
+            c.env("DANDORI_ARGO_LATE_OUTPUTS", "1");
+        }
+        c.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).output().unwrap()
     });
     Some(ArgoFlow { f, references, left_out, real, bound: dandori::check::bound(&m, &dandori::check::ARGO_COST), results, runner })
 }
@@ -4286,6 +4289,56 @@ fn argo_runs_as_the_reference_says() {
             flow.bound
         );
     }
+}
+
+/// The outputs of a failed call can reach Argo's controller after the end of the call's pod, and the
+/// controller does not wait for them as it does for a call that succeeded (DESIGN 26): the step
+/// after the call reads them, with `?.`, as not there. Here the runner reports the outputs of every
+/// played pod that fails once the pod's node has ended without them. Each run of the flow the
+/// comparison once failed on so makes the reference's calls and ends as the reference's does; where
+/// the run fails with a call's `failure`, the cause its error.json held is lost, and at least one
+/// run does so.
+#[test]
+fn argo_runs_on_when_a_failed_calls_outputs_come_late() {
+    if !need(Need::Argo) {
+        return;
+    }
+    if let Err(why) = argo_ready() {
+        skip(&why);
+        return;
+    }
+    let f = root().join("tests/flows/agents.flow");
+    let flow = ready_on_argo_as(f.clone(), true).expect("the flow is for Argo");
+    assert!(flow.runner.status.success(), "{}: the Argo runner failed:\n{}", rel(&f), String::from_utf8_lossy(&flow.runner.stderr));
+    let got: Value = serde_json::from_str(&std::fs::read_to_string(&flow.results).unwrap()).unwrap();
+    let mut lost = 0;
+    let runs: Vec<Value> = got["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(&flow.references)
+        .map(|(g, (_, reference))| {
+            let mut g = g.clone();
+            let o = g.as_object_mut().unwrap();
+            for k in ["nodes", "seconds", "nudged", "platform"] {
+                o.remove(k);
+            }
+            // a call's failure whose cause stayed in the outputs that came late: compared with the cause put back
+            let want = &reference["end"]["fail"];
+            if g["end"]["fail"]["error"] == "failure" && want["error"] == "failure" && g["end"]["fail"]["cause"] == "" && want["cause"] != "" {
+                lost += 1;
+                g["end"]["fail"]["cause"] = want["cause"].clone();
+            }
+            g
+        })
+        .collect();
+    compare("the Argo workflow, the outputs of its failed calls late", &f, &flow.references, &runs);
+    assert!(lost > 0, "{}: no run ended with a call's failure whose cause came late", rel(&f));
+    eprintln!(
+        "{}: compared {} run(s) on Argo Workflows, the outputs of the failed calls reported after their pods ended; {lost} ended with a call's `failure`, its cause lost",
+        rel(&f),
+        flow.references.len()
+    );
 }
 
 // The limits of a rule's call, played with the platforms' own times (dandori's DESIGN 16). Every

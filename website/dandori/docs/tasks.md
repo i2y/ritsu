@@ -52,7 +52,10 @@ key for Jev and OpenAI's for its Decisions API, the clients of the books a flow 
 - On Argo Workflows every task runs in a container. The calls dandori writes go into an image built
   from the generated `caller/`; a task with `image` runs your image, which reads the call from
   `DANDORI_CALL`, writes the answer to `/tmp/dandori/answer.json`, and for a declared error writes
-  `{"error", "message"}` to `/tmp/dandori/error.json` and exits with 3.
+  `{"error", "message"}` to `/tmp/dandori/error.json` and exits with 3. Argo does not wait for the
+  outputs of a pod that failed: if the pod's end reaches Argo's controller before the error file
+  does, the call is read as one that wrote none, a `failure` with an empty cause, even where the
+  error was a declared one.
 
 ## How long a call may take
 

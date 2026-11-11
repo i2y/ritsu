@@ -71,6 +71,17 @@
 // pod has, and so the runs in `real` go only with real pods. Each run's result also has `times`:
 // when each call came and when the run ended, in milliseconds from its submission.
 //
+// A played pod reports its outputs as Argo's executor does, as a WorkflowTaskResult, and then ends.
+// The controller holds the node of a pod that succeeded until the outputs the template declares
+// are in, but not the node of a pod that failed: when the pod's end reaches it before the outputs
+// do, which on a busy machine it can, though the report was written first, the node ends with its
+// exit code alone, and the step after the call cannot read the error the call left (dandori's
+// DESIGN 26). The executor reports well before its pod ends; a played pod ends milliseconds after
+// the report. So a played pod that fails ends once its node holds its outputs, OUTPUTS_SECONDS
+// (60) at the most. With DANDORI_ARGO_LATE_OUTPUTS=1, a played pod that fails ends first, and its
+// outputs are reported once its node has ended without them: a run then goes on as one does whose
+// outputs Argo did not wait for.
+//
 // The argo command is DANDORI_ARGO, else `argo` on the PATH. DANDORI_ARGO_KEEP=1 keeps the
 // workflows, to look at them; DANDORI_ARGO_DUMP=<directory> writes, for every run with real pods,
 // what the cluster says of its pods and nodes when it ends, and the logs of the pods that failed.
@@ -100,6 +111,9 @@ const PLAYER = "dandori-played";
 const PLAYED = JSON.stringify({ schedulerName: PLAYER });
 /** The limits as they are generated (see the top). */
 const LIMITS = process.env.DANDORI_LIMITS === "1";
+/** The outputs of a failed pod reported after its end (see the top). */
+const LATE = process.env.DANDORI_ARGO_LATE_OUTPUTS === "1";
+const OUTPUTS_SECONDS = 60;
 
 function kubectlOnce(args, input) {
   if (input === undefined) return run("kubectl", ["--context", context, "-n", ns, ...args], { maxBuffer: 1 << 28 }).then((r) => r.stdout);
@@ -548,16 +562,17 @@ async function playPod(pod, wf, nodeId) {
     return value === undefined ? { ...p } : { ...p, value };
   });
   const owner = (pod.metadata.ownerReferences ?? []).filter((o) => o.kind === "Workflow");
-  await request(`/apis/argoproj.io/v1alpha1/namespaces/${ns}/workflowtaskresults`, {
-    method: "POST",
-    headers: JSON_BODY,
-    body: JSON.stringify({
-      apiVersion: "argoproj.io/v1alpha1",
-      kind: "WorkflowTaskResult",
-      metadata: { name: nodeId, labels: { "workflows.argoproj.io/workflow": wf, "workflows.argoproj.io/report-outputs-completed": "true" }, ownerReferences: owner },
-      outputs: parameters.length > 0 ? { parameters } : {},
-    }),
-  });
+  const report = () =>
+    request(`/apis/argoproj.io/v1alpha1/namespaces/${ns}/workflowtaskresults`, {
+      method: "POST",
+      headers: JSON_BODY,
+      body: JSON.stringify({
+        apiVersion: "argoproj.io/v1alpha1",
+        kind: "WorkflowTaskResult",
+        metadata: { name: nodeId, labels: { "workflows.argoproj.io/workflow": wf, "workflows.argoproj.io/report-outputs-completed": "true" }, ownerReferences: owner },
+        outputs: parameters.length > 0 ? { parameters } : {},
+      }),
+    });
   const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
   const ended = (c, exitCode, message) => ({
     name: c,
@@ -574,12 +589,40 @@ async function playPod(pod, wf, nodeId) {
     containerStatuses: pod.spec.containers.map((c) => (c.name === "main" ? ended("main", result.code, result.message) : ended(c.name, 0))),
   };
   // a pod the controller has taken away since it was listed (the list comes from the API server's cache) has nothing to play
-  await request(`/api/v1/namespaces/${ns}/pods/${pod.metadata.name}/status`, {
-    method: "PATCH",
-    headers: { "content-type": "application/merge-patch+json" },
-    body: JSON.stringify({ status }),
-    missingIsFine: true,
-  });
+  const end = () =>
+    request(`/api/v1/namespaces/${ns}/pods/${pod.metadata.name}/status`, {
+      method: "PATCH",
+      headers: { "content-type": "application/merge-patch+json" },
+      body: JSON.stringify({ status }),
+      missingIsFine: true,
+    });
+  // a pod that fails ends once its node holds its outputs, or, with DANDORI_ARGO_LATE_OUTPUTS, reports
+  // them once its node has ended without them (see the top)
+  const failed = result.code !== 0 && parameters.length > 0;
+  if (failed && LATE) {
+    await end();
+    await nodeComes(wf, nodeId, (n) => ["Failed", "Error"].includes(n.phase));
+    await report();
+    return;
+  }
+  await report();
+  if (failed) await nodeComes(wf, nodeId, (n) => (n.outputs?.parameters ?? []).length > 0);
+  await end();
+}
+
+// Wait until the node `nodeId` of the workflow `wf` is as `ok` says, OUTPUTS_SECONDS at the most,
+// reading the workflow every half a second (a Workflow is large); a workflow that is gone does not
+// come.
+async function nodeComes(wf, nodeId, ok) {
+  const until = Date.now() + OUTPUTS_SECONDS * 1000;
+  while (Date.now() < until) {
+    const w = await request(`${workflows}/${wf}`, { missingIsFine: true });
+    if (w === null) return false;
+    const node = nodesOf(w)[nodeId];
+    if (node && ok(node)) return true;
+    await sleep(500);
+  }
+  return false;
 }
 
 async function answer(p, callbackId, ans) {
