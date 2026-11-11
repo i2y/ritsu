@@ -262,7 +262,7 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `clusters` | mismatches grouped by the rows that matched |
 | `clusters[].records` | **every** record in the cluster, in the order they came in — `line` is the record's line in the fixtures file (for `verify`, the vector's place in the stream) and `tag` is its label, empty when it has none. `witness` shows one of them; this names them all, which is what something that has to act on the records needs. `count` is its length |
 | `moved` | `replay` only: records whose values matched but whose recorded rows differ from the rule's, in the same shape as `clusters` with an empty `delta`. Only a record carrying a `trace` can appear here. They count as matched |
-| `refused` | `diff` only (empty for the other two): records whose input the old version takes and the new one does not, grouped by the reason — `{"kind":…,"field":…,"count":…,"witness":{"in":{…},"theirs":{…}},"records":[{"line":…,"tag":…},…],"what":…}`. They count as compared and never as matched, and the run exits 1 when there are any. `kind` is one of `input_range` (outside the new version's range), `enum_value` (a value its enum does not have), `input_type` (`null` for an input that is not optional, or a type the value does not carry into), `input_step` (no whole number of its step or unit), `input_day` (not a day its koyomi date comes to), `constraint` (a `constraint` that does not hold), `never` (a `never` line it falls under); `field` is the input at fault, absent for those two. `witness.in` is the record's input as the record has it and `theirs` the old version's answer; the new version gives none. `what` is **prose**, without the record's own value except an enum's |
+| `refused` | `diff` only (empty for the other two): records whose input the old version takes and the new one does not, grouped by the reason — `{"kind":…,"field":…,"count":…,"witness":{"in":{…},"theirs":{…}},"records":[{"line":…,"tag":…},…],"what":…}`. They count as compared and never as matched, and the run exits 1 when there are any. `kind` is one of `input_range` (outside the new version's range), `enum_value` (a value its enum does not have), `input_type` (`null` for an input that is not optional, or a type the value does not carry into), `input_step` (no whole number of its step or unit), `input_day` (not a day its koyomi date comes to), `constraint` (a `constraint` that does not hold), `never` (a `never` line it falls under), and for a sequence `length` (more elements than a `count` or a pick of the new version allows), `unique` (two elements with the same value of a `unique` field), `sum` (a `sum` past the top of its range), `weights` (the weights do not total within int64) and `draw` (the drawn value is not below the total of the weights); `field` is the input at fault — the sequence for those five, `lines[].amount` for a field of an element — and absent for `constraint` and `never`. `witness.in` is the record's input as the record has it and `theirs` the old version's answer; the new version gives none. `what` is **prose**, without the record's own value except an enum's |
 | `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format`. `bad_format` is a record whose form is wrong — a type, an enum's value, an input outside its declared range — and never an answer the rule does not give (`out_of_reach`). For `diff`, `bad_format` is a record the **old** version does not read: `diff` reads the records the way the version that wrote them reads them |
 | `out_of_reach` | `verify` and `replay` (empty for `diff`): per output, how many records the counterpart answered with a value outside what the rule can produce — the range its answers lie in, which `api` and ritsu's port give (§15.271) — `{"fee":3}`. They are compared and count as mismatches — the counterpart and the rule disagree there — and are never excluded. For records, the other reading is a record written before a step or a unit changed, which `--read-as` reads ([Fixtures](#fixtures-rulec-fixtures-lint-replay-diff)) |
 | `filled` | `count`, `by_field` (field → how many records were filled), `defaults` (field → the value used). §10.3 requires the report to carry this |
@@ -301,11 +301,17 @@ answered 12.3%, `-0.5` for a recorded `820.5`), and in the rare case no decimal 
 version's 42℉ — the fraction as a string (`"4/9"`). `min`, `max` and `total` are
 written the same way.
 
+`witness.in` is the input as the wire has it: a number is a number, an enum's value or a date a
+string, and a sequence the array of its elements, each an object of its fields. An input the
+record was filled with is there with the value it was given.
+
 `witness.ours` is the rule's answer as its wire writes it. `witness.theirs` is the
 counterpart's as its own side writes it: for `diff` the old version's wire, its step and its
 unit (as `old` in [`diff` with no records](#diff-with-no-records-the-region)); for `replay` the
 recorded value in the rule's wire unit, with its decimals if it has them (`123.4` for 12.34% at
-a step of 0.1%); for `verify` the adapter's answer as it came. The text and Markdown renderings
+a step of 0.1%); for `verify` the adapter's answer as the JSON it came as — `"11"` where it sent a string for a
+number, `null` for an optional output with no value, and no key at all for an output its answer
+left out, which the text renderings write as `(no answer)`. The text and Markdown renderings
 write the two answers as a person reads them, unrounded, and put the unit beside each when the
 two versions count in different units.
 
@@ -457,7 +463,10 @@ One object for the run.
 `kind` is one of `not_json`, `no_in`, `no_observed`, `unknown_field`, `bad_input`,
 `bad_observed`, `missing_observed`, `bad_trace`. `field` is the field of the record at fault, or absent
 when the problem is about the record as a whole — or, for a `bad_input` that is a `constraint`
-not holding or a `never` line it falls under, about several of its inputs. `what` and `hint` are **prose**; `kind`,
+not holding or a `never` line it falls under, about several of its inputs. For a rule that walks
+a sequence it is the sequence (`lines`) when the array as a whole is at fault — not an array, an
+element that is not an object, more elements than the rule takes, a `unique` field twice, a `sum`
+past its range — and `lines[].amount` when one field of an element is. `what` and `hint` are **prose**; `kind`,
 `field`, `count` and `example` are not.
 
 The problems are exactly the records `replay` leaves out for their form: what `lint` passes,
@@ -1336,7 +1345,9 @@ Already machine-readable and take no `--format`.
   the name as the property's `title`, which is the shape an HTTP request body or a form
   wants; the wire itself, and the tool built on it, keep the names.
 - `adapter` prints a Python or Go source template, 20 to 30 lines, to wrap a legacy
-  implementation.
+  implementation. It names what `in` holds — the inputs, and each sequence with its elements'
+  fields, `lines[] (quantity, price)` — and answers with every output, since every output is
+  required.
 
 ## `doc`
 
@@ -1619,9 +1630,9 @@ rulec only validates types and ranges (§10.2).
 
 | field | required | meaning |
 |---|---|---|
-| `in` | yes | the inputs as they were at the time |
+| `in` | yes | the inputs as they were at the time, and each sequence the rule walks as an array of objects, one for each element |
 | `observed` | yes | the values that actually came out. **Every output is required**. `diff` does not read it: it compares two versions' answers to `in` |
-| `tag` | no | a label for the record, shown in witnesses. For a rule that is one step of a state machine, it also says **which case** the record belongs to: the records that share a `tag` are one case's calls, in the order the file has them, and `replay` and `diff` count cases as well as records (`cases` in their JSON) |
+| `tag` | no | a label for the record, shown in witnesses: a string, or a number, which is read as its digits (`1234567` is the tag `"1234567"`). For a rule that is one step of a state machine, it also says **which case** the record belongs to: the records that share a `tag` are one case's calls, in the order the file has them, and `replay` and `diff` count cases as well as records (`cases` in their JSON) |
 | `ts` | no | when it happened |
 | `by` | no | where an input came from, when it was not read as it stood ([below](#where-a-value-came-from-by)). **rulec does not read it** |
 | `trace` | no | the rows that matched when the record was made, `{"table":…,"row":…}` each, in table order, with `"label"` added for a row that carries one; a `clause` is the one row of a table named after it. The generated code's record function writes it ([generated-code.md](generated-code.md#a-record-of-one-call)); `lint` checks that every table exists and every row is one the table has |
@@ -1629,7 +1640,22 @@ rulec only validates types and ranges (§10.2).
 The generated code writes this line itself: every module has a record function that takes
 the inputs, the outputs and the rows that matched and returns the record, so a log of the
 generated code needs no extraction. What still has to be extracted is a log of an
-implementation rulec did not generate.
+implementation rulec did not generate. The expected file beside the vectors
+(`<alias>.expected.jsonl`) is the same line for each vector, so `rulec replay` over it compares
+every record and matches every one, for every rule.
+
+A rule that walks a sequence (`elements`) has the sequence in `in`, under its name, the way the
+vectors and the generated code's wire write it:
+
+```json
+{"in":{"lines":[{"amount":3000},{"amount":2500}],"tier":"regular"},"observed":{"fee":0},
+ "trace":[{"table":"fee_table","row":1}]}
+```
+
+Every field of an element is required, and each is read as an input of its type is; no default
+fills one, and a record without the sequence is a record with a field missing (`[]` is a
+sequence with no elements). A field the element does not have is an error like any other the
+rule does not know.
 
 An input must be an integer in the canonical unit; a decimal is refused, naming the field,
 unless its value is whole: `1000.0` is 1000 (§15.205). An input of an ordered enum with a
@@ -1658,6 +1684,13 @@ An input is held to what the generated code takes at its entry, not to its type 
 alone: a date outside its range, a date that is not one of the days a koyomi date comes to
 (`range from koyomi`), and a combination a `constraint` or a `never` line rules out are problems of
 the record too (`bad_input`; such a line names several inputs, so the problem has no `field`).
+A sequence is held to the same entry: more elements than a `count` or a pick allows, two
+elements with the same value of a `unique` field, a `sum` past the top of its range, weights
+that total past int64 and a drawn value that is not below their total are problems of the
+record, named by the sequence (DESIGN §15.306).
+
+The file is UTF-8. A byte order mark at its head is skipped, as some exporters write one, and
+a blank line is no record.
 
 **Fixtures are not committed to a repository**: they hold order amounts. Pass them to CI as
 an artifact or from protected storage.
@@ -1700,8 +1733,11 @@ One JSON object declaring the default values used to fill a missing field (§10.
 {"rule":"parcel_rate","fills":{"weight":5,"signature":false}}
 ```
 
-`rule` is optional and, when present, must match the rule being replayed. Every key of
-`fills` must be an input of the rule, and its value is in the canonical unit. For `diff`, a
+`rule` is optional and, when present, must match the rule being replayed. `fills` is required
+and is an object, empty when nothing is filled: a manifest without it is refused, because a key
+spelled `fill` would otherwise fill nothing and only the counts would say so. Every key of
+`fills` must be an input of the rule, and its value is in the canonical unit. A sequence is not
+filled: a record without one is excluded. For `diff`, a
 key is an input of the old version, read at its types as the records are, or an input only
 the new version takes: the old version's records do not have it, so its value, read at the
 new version's types, is what every record is answered with, and every such record is a filled
@@ -1733,18 +1769,36 @@ legacy ← {"id":9,"err":"unsupported: signature to overseas"}
 2. The adapter answers `{"ok":true,"impl":"…"}`. `impl` identifies the build being compared
    and is reported as `counterpart`. Anything but `ok: true` aborts the run.
 3. For each vector rulec writes `{"id":…,"in":{…}}` and reads one line back.
-4. The answer is either `{"id":…,"out":{…}}` or `{"id":…,"err":"…"}`. A record the adapter
-   declares it cannot answer is **excluded from the match-rate denominator** and reported as
-   `unanswered`, so an adapter cannot raise the rate by refusing the hard cases.
+4. The answer is either `{"id":…,"out":{…}}` or `{"id":…,"err":"…"}`. `out` is an object
+   holding **every output** by name; one it leaves out is a mismatch, shown as `(no answer)`.
+   A record the adapter declares it cannot answer is **excluded from the match-rate
+   denominator** and reported as `unanswered`, so an adapter cannot raise the rate by refusing
+   the hard cases.
 
-Names and values on the wire are the rule's own names and integers in the canonical unit.
+rulec waits for each answer before it writes the next record, so the adapter has to **flush its
+output after every line** (`flush=True` in Python, a `Flush` of the writer in Go): an answer left
+in a buffer is an answer rulec never reads, and the run waits. Standard error is the adapter's
+own and passes through to the terminal.
+
+Everything after `--adapter` is the adapter's command, so rulec's own flags go before it:
+`rulec verify rule.rule --format json --adapter python3 adapter.py --their-flag`. `--lang` is
+the one exception: rulec reads it wherever it is written and takes it off the line, so it is
+not a flag an adapter can be given.
+
+Names and values on the wire are the rule's own names and integers in the canonical unit; a
+sequence is in `in` under its name, an array of objects with each element's fields.
 Every line is read as JSON, so any encoder's output will do: a key or a value written with
 `\u` escapes, as Python's `json.dumps` and PHP's `json_encode` write them by default, reads
 the same as one written out. An answer is read as the value it is, as a recorded `observed` is:
 `11.0`, as a float is written, is 11, and a decimal finer than the output's step is compared
 exactly and counts as a mismatch. An optional output with no value is `null`, the way the vectors
-write it. A line that is not JSON, an answer carrying another record's `id`, and an answer
-with neither `out` nor `err` stop the run with exit 2, naming the record (§15.151).
+write it. A value of another type — `"11"` for a number — is a mismatch, and the witness shows
+it as the JSON it came as, in its quotes. A line that is not JSON, an answer carrying another
+record's `id` or one that is not an integer, an `out` that is not an object, and an answer
+with neither `out` nor `err` stop the run with exit 2, naming the record (§15.151). So does an
+adapter that ends where an answer is due: the message says where — before the handshake, or at
+which record — and gives its exit status, and what the adapter wrote to standard error is on
+the lines above it (§15.306).
 `rulec schema` prints the JSON Schema of `in` and `out`, and `rulec adapter --template
 python|go` prints a template to fill in.
 

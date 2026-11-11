@@ -45,6 +45,16 @@ A record the adapter says it cannot answer is **excluded from the
 denominator** and reported separately — otherwise refusing the hard
 cases would raise the match rate.
 
+The adapter answers each record with **every output** by name, and
+flushes its output after each line: rulec waits for one answer before
+it sends the next record. An output the answer leaves out is a mismatch
+shown as `(no answer)`, and a value of another type — `"23"` for 23 —
+is shown in its quotes. An adapter that ends where an answer is due —
+an import that fails on its first line — is reported as that, with its
+exit status, and what it wrote to standard error is on the lines above.
+rulec's own flags (`--format`) go before `--adapter`: everything after
+it is the adapter's command.
+
 !!! note "A mismatch is not automatically your bug"
 
     It is one of four things: a defect in the legacy implementation, a
@@ -78,6 +88,11 @@ $ rulec replay rules/parcel_rate.rule --fixtures replay/2025-08.jsonl
 Records written by the generated code carry the rows that matched (the `_record`
 function writes them), and `replay` compares those too: a record whose amount agrees but
 whose row differs from the rule's is reported apart, as a moved row, clustered by the move.
+
+A rule that walks a sequence has it in `in` under its name, an array with one object for
+each element — `"lines":[{"amount":3000},{"amount":2500}]` — and every element is held to
+what the rule takes: its fields' types and ranges, how many there may be, a `unique` field,
+a `sum` within its range. `diff --fixtures` hands the same array to the new version.
 
 What came out is compared as the value it is. An answer the rule cannot
 produce at all — below its lowest fee, above its highest — is not a broken
