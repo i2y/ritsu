@@ -188,7 +188,9 @@ fn deleting_the_row_leaves_no_gap() {
 #[test]
 fn what_takes_the_rest_of_the_row_is_said() {
     let overrides = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n\noutputs\n  out : band\n\nderive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP\n\ntable base\npolicy unique\n| excess  | -> out : band |\n| <=50GBP | small         |\n| >50GBP  | big           |\n\ntable special\noverrides base\npolicy unique\n| excess          | -> out : band |\n| >50GBP <=200GBP | huge          |\n";
-    let unrelated = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  x      : number  range >=0 <=10\n  y      : number  range >=0 <=10\n\nconstraint x <= y\n\noutputs\n  out : band\n\nderive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP\n\ntable t\npolicy first\n| excess   | x  | y   | -> out : band |\n| <=0GBP   | -  | -   | small         |\n| <=100GBP | -  | -   | big           |\n| -        | >5 | <=5 | huge          |\n| -        | -  | -   | huge          |\n";
+    // Row 2 needs all three: row 1 takes it where `y` is 5 or more, the constraint where `y` is
+    // less, and `excess` never passes 100 pounds.
+    let unrelated = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  x      : number  range >=0 <=10\n  y      : number  range >=0 <=10\n\nconstraint x <= y\n\noutputs\n  out : band\n\nderive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP\n\ntable t\npolicy first\n| excess   | x  | y   | -> out : band |\n| <=100GBP | >5 | >=5 | big           |\n| -        | >5 | -   | huge          |\n| -        | -  | -   | small         |\n";
     let notes = |src: &str, lang: Lang| -> String {
         i18n::with(lang, || {
             let ds = rulec::check_source(src, "v.rule");

@@ -701,6 +701,72 @@ fn a_table_reads_a_define_in_what_it_reaches_with_the_end_of_the_type() {
     assert!(codes(truth).is_empty(), "{:?}", codes(truth));
 }
 
+/// A rule whose `derive m` is `expr` with `range` over `a` in `a_range`; a table over `m` with
+/// `rows` picks a band.
+fn banded(a_range: &str, expr: &str, range: &str, rows: &str) -> String {
+    format!(
+        "rule fee_band v1\n\nenum band = low | high\n\ninputs\n  a : number  {a_range}\n\noutputs\n  b : band\n\nderive m : number = {expr}  {range}\n\ntable bands\npolicy unique\n| m         | -> b   |\n{rows}"
+    )
+}
+
+const UP_TO_100: &str = "| <=50      | low    |\n| >50 <=100 | high   |\n";
+
+/// A table over a `derive` reads it in what it reaches, as a table over a `define` does: an interval
+/// coordinate leaves its ends out, so `>100` lies outside what `min(a, 100)` comes to however wide
+/// the derive's range is written, and `<10` outside what `max(a, 10)` comes to. 0.52.0 read the
+/// derive's coordinates with their ends in, and the linear model, which holds the reach of a derive
+/// only beside an equation it reads, left them in: it asked for a row at `m = 101` (E101). A row
+/// that asks only past 100 is E102 and says what `m` comes to, and `min(a, 1000)` still leaves 101
+/// to no row. Both re-checkers hold the certificate, whose leaf past 100 says the derive does not
+/// reach there, and refuse one that says so of a box it reaches.
+#[test]
+fn a_table_reads_a_derive_in_what_it_reaches_with_its_open_ends_left_out() {
+    for a_range in ["range >=0", "range >=0 <=5000"] {
+        for range in ["range >=0 <=100", "range >=0 <=1000"] {
+            let src = banded(a_range, "min(a, 100)", range, UP_TO_100);
+            assert!(codes(&src).is_empty(), "{a_range}, {range}: {:?}", codes(&src));
+        }
+    }
+    let from_10 = banded("range >=0 <=5000", "max(a, 10)", "range >=10 <=5000", "| >=10 <=50 | low    |\n| >50       | high   |\n");
+    assert!(codes(&from_10).is_empty(), "{:?}", codes(&from_10));
+    let past = banded("range >=0", "min(a, 1000)", "range >=0 <=1000", UP_TO_100);
+    assert_eq!(codes(&past), ["E101"]);
+    let text = said(&past, "E101");
+    assert!(text.contains("An input that matches no row: m = 101"), "{text}");
+    let over = banded("range >=0 <=5000", "min(a, 100)", "range >=0 <=1000", &format!("{UP_TO_100}| >100      | over   |\n"))
+        .replace("enum band = low | high\n", "enum band = low | high | over\n");
+    assert_eq!(codes(&over), ["E102"]);
+    let text = said(&over, "E102");
+    assert!(text.contains("Over the ranges of the inputs, `m` can only come to >=0 <=100."), "{text}");
+    if !have_python() {
+        return;
+    }
+    let src = banded("range >=0 <=5000", "min(a, 100)", "range >=0 <=1000", UP_TO_100);
+    let file = std::env::temp_dir().join(format!("rulec-derive-reach-{}.rule", std::process::id()));
+    std::fs::write(&file, &src).unwrap();
+    let (code, cert) = rulec(&["certificate", file.to_str().unwrap()]);
+    assert_eq!(code, 0, "{cert}");
+    let cover = r#""cover":{"split":[{"row":1},{"row":1},{"row":2},{"row":2},{"derived_axis":0}]}"#;
+    assert!(cert.contains(cover), "{cert}");
+    let (code, out) = recheck(&cert);
+    assert_eq!(code, 0, "{out}");
+    let lean_bin = checker();
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &cert, file.to_str().unwrap());
+        assert_eq!(code, 0, "{out}");
+    }
+    // The same leaf on the coordinate between 50 and 100, which the derive reaches.
+    let forged = cert.replacen(cover, r#""cover":{"split":[{"row":1},{"row":1},{"derived_axis":0},{"row":2},{"derived_axis":0}]}"#, 1);
+    let (code, out) = recheck(&forged);
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("m can reach this box, so it is not impossible"), "{out}");
+    if let Some(bin) = &lean_bin {
+        let (code, out) = lean(bin, &forged, file.to_str().unwrap());
+        assert_ne!(code, 0, "{out}");
+    }
+    std::fs::remove_file(&file).ok();
+}
+
 /// Lines over a quantity from 0 with no upper end; the first heavy line's quantity is the answer of
 /// a fold into `r`, and `tail` is written after it.
 fn heavy(tail: &str) -> String {

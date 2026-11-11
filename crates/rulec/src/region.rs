@@ -4096,25 +4096,11 @@ impl TableRegion {
 
     /// Whether a numeric axis of the path takes a coordinate wholly outside the values its column
     /// can come to (`Checked::ranges`: an input's range, a derive's or a define's reach by the
-    /// arithmetic of intervals, the values an upstream table writes). An open coordinate leaves its
-    /// ends out, so `> 0` against a reach that ends at 0 is outside it; the sieve reads the ends in,
-    /// and looks at the derives only.
+    /// arithmetic of intervals, the values an upstream table writes), read as the sieve reads a
+    /// derive's and a `define`'s reach ([`TableRegion::outside_reach`]): an open coordinate leaves
+    /// its ends out, so `> 0` against a reach that ends at 0 is outside it.
     fn beyond_reach(&self, path: &[usize], chk: &Checked) -> bool {
-        use std::cmp::Ordering::*;
-        for (ai, &ci) in path.iter().enumerate() {
-            let Axis::Num { coords, .. } = &self.axes[ai] else { continue };
-            let Some((rl, rh)) = chk.reach_range(&self.col_names[ai]) else { continue };
-            let outside = match coords.get(ci) {
-                Some(Coord::Point(v)) => rl.is_some_and(|l| v.cmp_to(l) == Less) || rh.is_some_and(|h| v.cmp_to(h) == Greater),
-                Some(Coord::Open(a, b)) => matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less),
-                // The absent value is one the input takes, outside any range (§15.201).
-                Some(Coord::Absent) | None => false,
-            };
-            if outside {
-                return true;
-            }
-        }
-        false
+        (0..path.len()).any(|ai| chk.reach_range(&self.col_names[ai]).is_some_and(|reach| self.outside_reach(ai, path, reach)))
     }
 }
 
@@ -4276,7 +4262,6 @@ impl TableRegion {
     /// too. The reach of a derived or `define` column is asked first, since it is what the form
     /// is about, and read as `feasible` reads a derive's.
     fn left_out(&self, path: &[usize], ups: &[Upstream], chk: &Checked, rs: &Reach, leaf: bool, why: &mut OutOfReach) -> bool {
-        use std::cmp::Ordering::{Greater, Less};
         for (ai, &ci) in path.iter().enumerate() {
             if self.truth_never(ai, ci) {
                 why.truth.insert(ai);
@@ -4289,9 +4274,7 @@ impl TableRegion {
                 why.reach.insert(ai);
                 return true;
             }
-            let (Some(((rl, rh), _)), Some((cl, ch))) = (&self.derived[ai], self.coord_span(ai, ci)) else { continue };
-            let apart = matches!((ch, rl), (Some(a), Some(b)) if a.cmp_to(*b) == Less) || matches!((cl, rh), (Some(a), Some(b)) if a.cmp_to(*b) == Greater);
-            if apart {
+            if self.derived_out_of_reach(ai, path) {
                 why.reach.insert(ai);
                 return true;
             }
@@ -5105,8 +5088,9 @@ impl TableRegion {
     }
 
     /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
-    /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
-    /// more constrained derived values share an input, their dependency cannot be examined.
+    /// coordinate's interval intersect, an interval coordinate's ends left out (§15.304). If they
+    /// do not, the point is infeasible. When two or more constrained derived values share an
+    /// input, their dependency cannot be examined.
     pub fn feasible(&self, path: &[usize]) -> Feasible {
         if self.days_rule_out(path).is_some() {
             return Feasible::No;
@@ -5127,12 +5111,10 @@ impl TableRegion {
         }
         let mut constrained: Vec<(usize, Vec<String>)> = Vec::new();
         for (ai, d) in self.derived.iter().enumerate() {
-            let Some(((rl, rh), deps)) = d else { continue };
+            let Some((_, deps)) = d else { continue };
             let Some(&ci) = path.get(ai) else { continue };
             let Some((cl, ch)) = self.coord_span(ai, ci) else { continue };
-            let disjoint = matches!((ch, rl), (Some(a), Some(b)) if a.cmp_to(*b) == std::cmp::Ordering::Less)
-                || matches!((cl, rh), (Some(a), Some(b)) if a.cmp_to(*b) == std::cmp::Ordering::Greater);
-            if disjoint {
+            if self.derived_out_of_reach(ai, path) {
                 return Feasible::No;
             }
             if !(cl.is_none() && ch.is_none()) {
@@ -5182,13 +5164,18 @@ pub struct AboveRows {
 
 impl TableRegion {
     /// Whether the coordinate this path takes on the axis of a `define` lies outside the values the
-    /// define can come to (§15.195). An interval coordinate leaves its ends out, so `>100%` lies
-    /// outside a reach that ends at 100%. A derive's coordinate is read with its ends in, and the
-    /// linear model, which holds the derive's reach as two facts with the coordinate's open ends,
-    /// leaves out the rest; a `define` has no equation in the model, and its reach is read here.
+    /// define can come to (§15.195), read as [`TableRegion::outside_reach`] reads it.
     fn define_out_of_reach(&self, ai: usize, path: &[usize]) -> bool {
+        let Some(reach) = self.define_reach.get(ai).copied().flatten() else { return false };
+        self.outside_reach(ai, path, reach)
+    }
+
+    /// Whether the coordinate this path takes on axis `ai` lies outside `reach`, the values a
+    /// derived or `define` column can come to. An interval coordinate leaves its ends out, so
+    /// `>100%` lies outside a reach that ends at 100% (§15.195), and `>100` lies outside what
+    /// `min(a, 100)` comes to (§15.304).
+    fn outside_reach(&self, ai: usize, path: &[usize], (rl, rh): Ival) -> bool {
         use std::cmp::Ordering::*;
-        let Some((rl, rh)) = self.define_reach.get(ai).copied().flatten() else { return false };
         let Some(&ci) = path.get(ai) else { return false };
         let Axis::Num { coords, .. } = &self.axes[ai] else { return false };
         match coords.get(ci) {
@@ -5196,6 +5183,7 @@ impl TableRegion {
             Some(Coord::Open(a, b)) => {
                 matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less)
             }
+            // The absent value is one the input takes, outside any range (§15.201).
             Some(Coord::Absent) | None => false,
         }
     }
@@ -6483,13 +6471,13 @@ impl TableRegion {
     }
 
     /// Whether the coordinate this path takes on a derived axis lies outside the interval
-    /// the derive can reach — the half of the sieve that looks at one derived value alone.
+    /// the derive can reach — the half of the sieve that looks at one derived value alone. An
+    /// interval coordinate leaves its ends out, as a `define`'s does (§15.304). The linear model
+    /// holds a derive's reach only beside an equation it reads or a `constraint`, so a table over
+    /// `min(a, 100)` with rows up to 100 was asked for a row at 101.
     fn derived_out_of_reach(&self, ai: usize, path: &[usize]) -> bool {
-        let Some(((rl, rh), _)) = &self.derived[ai] else { return false };
-        let Some(&ci) = path.get(ai) else { return false };
-        let Some((cl, ch)) = self.coord_span(ai, ci) else { return false };
-        matches!((ch, rl), (Some(a), Some(b)) if a.cmp_to(*b) == std::cmp::Ordering::Less)
-            || matches!((cl, rh), (Some(a), Some(b)) if a.cmp_to(*b) == std::cmp::Ordering::Greater)
+        let Some(Some((reach, _))) = self.derived.get(ai) else { return false };
+        self.outside_reach(ai, path, *reach)
     }
 
     /// The coordinates of an axis as closed intervals of true values, for the axes where
