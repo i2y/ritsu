@@ -37,7 +37,7 @@ These are all the words that may start a line.
 | `inputs` | the rule's arguments |
 | `elements` | the fields of one element of a sequence the rule walks |
 | `outputs` | its results |
-| `derive` | a linear combination of inputs — **the only intermediate that can sit in a table column while still being a quantity** |
+| `derive` | a value computed from the inputs, with a declared range — **it can sit in a table column while still being a quantity** |
 | `define` | a boolean, or a computed intermediate |
 | `constraint` | a relation between inputs: which combinations **cannot happen** |
 | `never` | a combination that **cannot happen**, written out: `never has_tool = true, all_parts = true` |
@@ -535,14 +535,18 @@ outside it.
 
 | | what it may hold | can it be a column? |
 |---|---|---|
-| `derive` | a linear combination of inputs — `+`, `-`, multiplication by a constant | **yes**, and it stays a quantity |
-| `define` | a boolean (two shapes), or a computed intermediate value | a boolean or an enum one can |
-| `result` | `+ - * /`, parentheses, `min` and `max`, and the five rounding modes as functions | — |
+| `derive` | a computed value, with a declared `range` | **yes**, and it stays a quantity |
+| `define` | a boolean (two shapes), or a computed intermediate value | **yes** |
+| `result` | the first output, put together | — |
+
+The three write the same expressions: `+ - * /`, parentheses, and the functions `min`, `max`,
+`mod`, `isqrt`, `allocate` and the five rounding modes ([the grammar](reference.md#8-result)). A
+divisor is a constant, or a value inside a rounding.
 
 A rate can be multiplied in (`base_fee × pay_rate`); it stays a rate to the end and the
 rounding happens once. **Everything is an integer — no floating point anywhere.**
 
-**A derive** is a linear combination of inputs only, and **can sit in a
+**A derive** is computed from the inputs and the values above it, and **can sit in a
 table column while still being a quantity**.
 
 ```rule

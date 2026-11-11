@@ -103,13 +103,13 @@ EXAMPLES = [
         "可否と金額を一度に",
         "同じ題材を別の形で書いたものです。導出（`derive`）で残額を出し、それを表の列に置いています。",
         [
-            "`derive` は**入力どうしの足し算・引き算だけ**でできた、名前の付いた金額です。数量のまま表の列に置ける唯一の途中の値で、`range` の宣言が要ります。",
+            "`derive` は、入力から計算する、名前の付いた値です。**数量のまま表の列に置け**、`range` の宣言が要ります。",
             "宣言した範囲が、実際に起こりうる値を含んでいないと E112 で止まります。範囲は検査が使う「全体集合」だからです。",
         ],
         "Eligibility and amount together",
         "The same subject in another shape: a `derive` computes what is left, and that becomes a column.",
         [
-            "A `derive` is a named amount built from **additions and subtractions of inputs only**. It is the one intermediate value that can sit in a column as a quantity, and it must declare a `range`.",
+            "A `derive` is a named value computed from the inputs. **It sits in a column as a quantity**, and it must declare a `range`.",
             "If the declared range does not contain the values that can actually occur, E112 stops it — the range is the universe the checks reason over.",
         ],
     ),
@@ -186,14 +186,14 @@ EXAMPLES = [
         "点数を合算して、達成率でランクを付ける",
         "お金がまったく出てこない例です。四つの評価項目を重み付きで足し、満点に対する達成率でランクを決めます。「表で書かれてはいないが、書き出せば表と少しの式で足りる」ルールの典型です。",
         [
-            "`derive` は**入力どうしの足し算・引き算と整数倍**でできた名前です。重み付きの合計はこれで書けます。",
+            "重み付きの合計は、**入力の整数倍を足す** `derive` で書けます。",
             "`define 達成率 : rate = 合計点 ÷ 50` と宣言すると、表のセルに `>=90%` と**割合のまま**書けます。無次元の値を率と呼ぶか数と呼ぶかは、宣言する側が決めます。",
             "**実行時に割り算は起きません。** `>=90%` は生成コードでは `合計点 >= 45` になります。満点が定数なので、境界が定数に畳めるからです。逆に**満点が入力だと書けません** — 変数で割ることになり、E115 で止まります（割合そのものを `rate` の入力で受け取ってください）。",
         ],
         "Scores added up, then ranked by how much of the total they reach",
         "No money anywhere in this one. Four scored criteria are added with weights, and the rank comes from how much of the maximum the total reaches. This is the shape of rule that is *not* written as a table today but becomes one the moment somebody writes it down.",
         [
-            "A `derive` is a name for **additions, subtractions and integer multiples of the inputs**, which is exactly what a weighted total is.",
+            "A weighted total is a `derive` that **adds integer multiples of the inputs**.",
             "Declaring `define ratio : rate = total / 50` lets the cells say `>=90%` — **the threshold stays a proportion on the page**. Whether a dimensionless value is called a rate or a number is the declaration's to say.",
             "**No division happens at runtime.** `>=90%` compiles to `total >= 45`, because a constant maximum folds the boundary into a constant. A maximum that is an *input* cannot be written: that is division by a variable, and E115 stops it — take the proportion itself as a `rate` input instead.",
         ],

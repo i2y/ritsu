@@ -1395,24 +1395,34 @@ not read, anything but `range` and `round`, is E047, as on every declaration lin
 
 ## 5. derive
 
-A linear combination of inputs, which **can be used as a table column while still being a
-quantity**.
+A value computed from the inputs, with a declared range, which **can be used as a table column
+while still being a quantity**.
 
 ```rule
 derive net : money[JPY, incl_tax] = subtotal - discount  range >=0JPY <=1_000_000JPY
 ```
 
-The right-hand side may use inputs, `+`, `-`, and multiplication by a constant. `range` is
-required. What the derive can actually come to is its expression computed over the inputs'
-ranges, the `constraint` lines and the values the tables above write: the `range` has to contain
-it (E112), and a row that asks the derive only for values outside it is E102, however wide the
-`range` is written. So is a row that asks it, beside the value a table above writes into another
-column, only for values it never comes to while the rows that write that value fire: when `low`
-is written only for an amount up to 50 pounds, `low` beside an excess over the limit past 50
-pounds is E102, and E101 asks no row for it. A constant that
-is a fraction puts the values between whole units — `amount * 10%` comes in tenths of a pound —
-and the checks read them on that step: rows `<=1GBP` and `>=2GBP` leave `1.1GBP` to no row, and
-E101 says so with the amount that makes it (`amount = 11`).
+The right-hand side is an expression (§8) over the inputs and what is decided above it: the
+derives and `define`s declared before it, and the outputs of the tables above. It adds,
+subtracts and multiplies, divides by a constant (by a value inside a rounding), and calls `min`,
+`max`, `mod`, `isqrt`, `allocate` and the five roundings. `range` is required. What the derive
+can actually come to is its expression computed over the inputs' ranges, the `constraint` lines
+and the values the tables above write: the `range` has to contain it (E112), and a row that asks
+the derive only for values outside it is E102, however wide the `range` is written. So is a row
+that asks it, beside the value a table above writes into another column, only for values it
+never comes to while the rows that write that value fire: when `low` is written only for an
+amount up to 50 pounds, `low` beside an excess over the limit past 50 pounds is E102, and E101
+asks no row for it. A constant that is a fraction puts the values between whole units —
+`amount * 10%` comes in tenths of a pound — and the checks read them on that step: rows `<=1GBP`
+and `>=2GBP` leave `1.1GBP` to no row, and E101 says so with the amount that makes it
+(`amount = 11`).
+
+A derive whose expression only adds, subtracts and multiplies by constants is an equation as well
+as an interval, as such a `define` is (§6). With `excess = amount - limit`, a row asking for an
+excess past 50 pounds on an amount of at most 60 and a limit of at least 20 is E102, though each
+of the three alone is met by some input, and the message names the equation. A derive of any
+other shape — a product of two inputs, `min`, a rounding — is read for its interval alone: a row
+the interval lets stand and no input reaches is W128 where nothing shows it (§6).
 
 ## 6. define
 
@@ -2522,13 +2532,15 @@ The drawn value has to be below the total of the weights: the generated code che
 walk is over and refuses the call otherwise, as it refuses an input out of its range, and the
 draw is uniform over the values below the total. When the weights add up to 0 the walk answers
 `exhausted`, with `held` the `empty` answer. A rule picks by weight once, the arms of that fold are
-`next` and `take_weighted` alone, and a weight is a `number` that cannot be negative (E073). The
-walk adds the weights up in an int64, so twice the largest weight has to fit it (E108). A longer
-sequence can still take the total past int64, and nothing caps how long it is, so the walk refuses
-the call the moment the total would pass, before it reads another element: an input error like the
-drawn value's, `the total of the weights of reviewers does not fit in int64`, in every language and
-in `rulec run`. An example that names such a sequence, or draws a value not below the total, is
-E019, as an example the door refuses is, with the sentence the code refuses it with; a claim of
+`next` and `take_weighted` alone, and a weight is a whole `number` that cannot be negative (E073):
+one a division leaves between whole numbers, as `capacity / 2`, is rounded first, as in
+`down(capacity / 2, 1)`. The walk adds the weights up in an int64, so twice the largest weight has
+to fit it (E108). A longer sequence can still take the total past int64, and nothing caps how long
+it is, so the walk refuses the call the moment the total would pass, before it reads another
+element: an input error like the drawn value's,
+`the total of the weights of reviewers does not fit in int64`, in every language and in
+`rulec run`. An example that names such a sequence, or draws a value not below the total, is E019,
+as an example the door refuses is, with the sentence the code refuses it with; a claim of
 `chances` that names one is E133.
 
 ### What chances generate

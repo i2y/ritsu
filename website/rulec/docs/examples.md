@@ -334,7 +334,7 @@ examples
 
 **What this one shows**
 
-- A `derive` is a named amount built from **additions and subtractions of inputs only**. It is the one intermediate value that can sit in a column as a quantity, and it must declare a `range`.
+- A `derive` is a named value computed from the inputs. **It sits in a column as a quantity**, and it must declare a `range`.
 - If the declared range does not contain the values that can actually occur, E112 stops it — the range is the universe the checks reason over.
 
 ## When the checker could not decide
@@ -553,7 +553,7 @@ examples
 
 **What this one shows**
 
-- A `derive` is a name for **additions, subtractions and integer multiples of the inputs**, which is exactly what a weighted total is.
+- A weighted total is a `derive` that **adds integer multiples of the inputs**.
 - Declaring `define ratio : rate = total / 50` lets the cells say `>=90%` — **the threshold stays a proportion on the page**. Whether a dimensionless value is called a rate or a number is the declaration's to say.
 - **No division happens at runtime.** `>=90%` compiles to `total >= 45`, because a constant maximum folds the boundary into a constant. A maximum that is an *input* cannot be written: that is division by a variable, and E115 stops it — take the proportion itself as a `rate` input instead.
 
