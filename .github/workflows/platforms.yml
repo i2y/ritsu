@@ -48,7 +48,10 @@ env:
 jobs:
   platforms:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # The runs that passed from 2026-11-08 to 11-11 took 78 to 110 minutes, and a test that fails
+    # once runs once more: at 120 minutes, a run that did so was cut off before its end, with
+    # nothing left to say which tests had passed (DESIGN 10.5).
+    timeout-minutes: 180
 
     # The reference implementation of the OCI distribution, for ritsu's modules (DESIGN 17.25):
     # its image held to the digest of its index. The tests ask it at 127.0.0.1:5000, on the
