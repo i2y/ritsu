@@ -305,16 +305,18 @@ def interval(e, ranges, le=frozenset()):
             if inner[0] < 0:
                 return None
             return (Fraction(math.isqrt(math.floor(inner[0]))), Fraction(math.isqrt(math.floor(inner[1]))))
-        # A rounding lands on the grid: the low end toward zero, the high end away from it,
-        # whichever way the mode itself rounds.
+        # A rounding lands on the grid between its argument's two ends rounded the way its mode
+        # rounds them (rulec's §15.303): every mode puts a larger value on a step no lower, so
+        # nothing inside the argument's interval lands outside. `down(x, 1000)` with x up to
+        # 1999 reaches 1000, not 2000.
         grid = interval(args[1], ranges, le) if len(args) > 1 else None
         if grid is None or grid[0] != grid[1] or grid[0] == 0:
             return None
-        # Down to the grid on the low side and up on the high side — `floor` and `ceil`,
-        # not "toward zero" and "away from zero". Rounding -7 to a grid of 5 can give -10,
-        # which is below the toward-zero reading of -5, so that reading claimed an interval
-        # the value can leave (§15.99).
         g = abs(grid[0])
+        if e["call"] in ROUNDINGS:
+            return (round_by(e["call"], g, inner[0]), round_by(e["call"], g, inner[1]))
+        # A mode this program does not know: down to the grid on the low side and up on the high
+        # side — `floor` and `ceil`, which hold whichever way it rounds (§15.99).
         return (math.floor(inner[0] / g) * g, math.ceil(inner[1] / g) * g)
     return None
 
@@ -1170,11 +1172,14 @@ def round_by(mode, g, v):
 
 def check_rounds(cert, known):
     """What each numeric output answers is what decides it put on the grid its line rounds to
-    (rulec's §7.2, §15.269), whichever way the mode rounds: between that value rounded down to the
-    grid and rounded up. The range `output_ranges` states for the output is the one the other
-    languages read the answer in, so it has to hold what decides the output — worked out here, a
-    `result` or a `define` from its expression, a column a table writes numbers into from what its
-    rows write — rounded out to the grid. What a walk leaves behind and an open value answer inside
+    (rulec's §7.2, §15.269), the way its mode rounds, which `round_modes` gives: every mode puts a
+    larger value on a step no lower, so the answer lies between the two ends of what decides it
+    rounded that way (rulec's §15.303). A certificate that gives no mode for an output is read as
+    any mode: between the low end rounded down to the grid and the high end rounded up. The range
+    `output_ranges` states for the output is the one the other languages read the answer in, so it
+    has to hold what decides the output — worked out here, a `result` or a `define` from its
+    expression, a column a table writes numbers into from what its rows write — with its ends
+    rounded so. What a walk leaves behind and an open value answer inside
     the range `ranges` states for them, which their own checks hold them to, so that range is what
     decides them. Where it is also the range stated for the output (one written on the output's line
     is the walk's), this program has nothing tighter, and an end off the grid is said rather than
@@ -1184,6 +1189,7 @@ def check_rounds(cert, known):
     answer this program cannot hold to a range."""
     stated = cert.get("output_ranges", {})
     grids = cert.get("rounds", {})
+    modes = cert.get("round_modes", {})
     declared = cert.get("ranges", {})
     walks = set(cert.get("walks", []))
     opens = {o.get("name") for o in cert.get("opens", [])}
@@ -1233,7 +1239,13 @@ def check_rounds(cert, known):
         else:
             left.append(f"what {name} answers once rounded: this program does not work out what decides it")
             continue
-        flo, chi = floor_to(g, lo), ceil_to(g, hi)
+        mode = modes.get(name)
+        if mode is not None and mode not in ROUNDINGS:
+            raise Bad(f"{name}: `round_modes` states a mode of rounding this program does not know for it: {mode}")
+        if mode is None:
+            flo, chi = floor_to(g, lo), ceil_to(g, hi)
+        else:
+            flo, chi = round_by(mode, g, lo), round_by(mode, g, hi)
         if (a is not None and a > flo) or (b is not None and b < chi):
             if own == (a, b):
                 left.append(f"what {name} answers once rounded: the range it declares, [{s[0]}, {s[1]}], does not sit on the grid it rounds to, {g}")

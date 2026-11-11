@@ -217,7 +217,9 @@ pub(crate) fn range_text(c: &Checked, name: &str) -> String {
     if let Some((lo, hi)) = c.enum_ranges.get(name).and_then(|vs| Some((vs.first()?, vs.last()?))) {
         return tr!("{lo} 〜 {hi}", "{lo} to {hi}");
     }
-    let Some((lo, hi)) = c.ranges.get(name) else { return String::new() };
+    // An output's range is the one its answer is read in, which can be narrower than the one the
+    // rule reads its name in (§15.303).
+    let Some((lo, hi)) = c.answer_ranges.get(name).or_else(|| c.ranges.get(name)) else { return String::new() };
     // An optional input's range is the range of its values when it has one (§15.201).
     let ty = c.ty_of(name).map(|t| t.present().clone());
     let unit = match ty.clone() {

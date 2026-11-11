@@ -247,9 +247,9 @@ pub fn observed_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Che
 
 /// What the rule can produce for an output, when its value lies outside it: the range as the
 /// rule writes values (§15.199). It is the range the rule's answers lie in, the one the port and
-/// the schema give (§15.271): an end put out to the grid is in reach, and an output a `result`
-/// decides has the range the `result` comes to. It is computed, not declared, so a value outside
-/// it is no fault of the record's form.
+/// the schema give (§15.271): an end rounded the way the output rounds is in reach, and an output a
+/// `result` decides has the range the `result` comes to. It is computed, not declared, so a value
+/// outside it is no fault of the record's form.
 pub fn beyond_reach(c: &Checked, name: &str, v: &Val) -> Option<String> {
     let Val::Num(x) = v else { return None };
     let (lo, hi) = c.output_range(name)?;

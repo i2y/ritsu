@@ -906,7 +906,8 @@ fn a_row_completeness_needs_is_reached_by_the_hole_it_leaves() {
 fn both_rechecks_work_the_new_shapes_out_again() {
     let lies: &[(&str, &str, &str)] = &[
         ("tests/corpus/average_unit_price.rule", r#""interval":["0","1000000"]"#, r#""interval":["0","999999"]"#),
-        ("tests/corpus/daily_proration.rule", r#""interval":["0","1107143"]"#, r#""interval":["0","1000000"]"#),
+        // `down` to the yen: 31,000,000 / 28 is 1,107,142.857…, which it cuts to 1,107,142 (§15.303).
+        ("tests/corpus/daily_proration.rule", r#""interval":["0","1107142"]"#, r#""interval":["0","1000000"]"#),
         ("tests/corpus/duty_rotation.rule", r#""interval":["0","2"]"#, r#""interval":["0","1"]"#),
         ("tests/corpus/economic_order_quantity.rule", r#""interval":["0","447213"]"#, r#""interval":["0","447212"]"#),
     ];

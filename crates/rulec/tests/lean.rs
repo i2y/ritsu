@@ -992,12 +992,15 @@ fn python_at(base: &std::path::Path, cert: &str, rule: &str) -> Option<(i32, Str
 /// What an output answers is what decides it put on the grid its line rounds to (rulec's §15.269):
 /// a fee of the amount itself, 0JPY to 1,005JPY, rounded half up to ten yen answers up to 1,010JPY.
 /// The range the certificate states for the output under `output_ranges` — written on its line, or
-/// what a `result`, a `define` or a table decides put out to the grid — is held to that by both
-/// re-checkers (`output_mem_stated`, `written_output_mem_stated`), while `ranges` keeps what decides
-/// it: one that holds what decides the output and not its rounding, or less, is refused, with the
-/// same words from each. So is a range with no grid — the output's taken out of `rounds`, or `rounds`
-/// taken out whole — since what it bounds is the answer on that grid. A certificate from before both
-/// leaves the claim stated rather than proved.
+/// what a `result`, a `define` or a table decides with both ends rounded the way it rounds — is
+/// held to that by both re-checkers (`output_mem_stated`, `written_output_mem_stated`), while
+/// `ranges` keeps what decides it: one that holds what decides the output and not its rounding, or
+/// less, is refused, with the same words from each. So is a range with no grid — the output's taken
+/// out of `rounds`, or `rounds` taken out whole — since what it bounds is the answer on that grid,
+/// and a mode under `round_modes` neither knows (§15.303). A certificate with no `round_modes`, from
+/// before rulec stated the modes, is held to what decides the output rounded out to the grid, which
+/// holds whichever way it rounds; one from before the grids and the ranges leaves the claim stated
+/// rather than proved.
 #[test]
 fn 出力の範囲は丸めた答えまで二つの再検査で確かめられる() {
     let Some(bin) = checker() else {
@@ -1048,9 +1051,12 @@ fn 出力の範囲は丸めた答えまで二つの再検査で確かめられ�
         // unread.
         let why = "fee: the certificate states a range for it but not the grid it rounds to";
         let narrowed = r#""output_ranges":{"fee":["0","1000"]}"#;
+        let modes = r#""round_modes":{"fee":"half_up"}"#;
+        let grids = format!(r#""rounds":{{"fee":"10"}},{modes},{stated}"#);
+        assert!(cert.contains(&grids), "{what}: 証明書が出力の丸め方を言わない\n{cert}");
         let forms = [
-            ("fee の刻みを外した", cert.replacen(&format!(r#""rounds":{{"fee":"10"}},{stated}"#), &format!(r#""rounds":{{}},{narrowed}"#), 1)),
-            ("rounds を丸ごと外した", cert.replacen(&format!(r#","rounds":{{"fee":"10"}},{stated}"#), &format!(",{narrowed}"), 1)),
+            ("fee の刻みを外した", cert.replacen(&grids, &format!(r#""rounds":{{}},{modes},{narrowed}"#), 1)),
+            ("rounds を丸ごと外した", cert.replacen(&format!(",{grids}"), &format!(",{modes},{narrowed}"), 1)),
         ];
         for (form, forged) in forms {
             assert_ne!(forged, cert, "{what}: {form}");
@@ -1062,9 +1068,31 @@ fn 出力の範囲は丸めた答えまで二つの再検査で確かめられ�
                 assert!(said.contains(why), "{what}: {form}: {said}");
             }
         }
+        // A mode neither knows: refused by both, with the same words.
+        let why = "fee: `round_modes` states a mode of rounding this program does not know for it: ceiling";
+        let unknown = cert.replacen(modes, r#""round_modes":{"fee":"ceiling"}"#, 1);
+        assert_ne!(unknown, cert);
+        let (code, said) = lean(&bin, &unknown, Some(rule));
+        assert_eq!(code, 1, "{what}: 知らない丸め方が Lean で通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+        if let Some((code, said)) = python(&unknown, rule) {
+            assert_eq!(code, 1, "{what}: 知らない丸め方が tools/recheck.py で通ってしまった\n{said}");
+            assert!(said.contains(why), "{what}: {said}");
+        }
+        // Without the modes, as rulec wrote certificates before it stated them, the range is held to
+        // what decides the output rounded out to the grid: 0 to 1,010 here too, and it holds.
+        let unmoded = cert.replacen(&format!(",{modes}"), "", 1);
+        assert_ne!(unmoded, cert);
+        let (code, said) = lean(&bin, &unmoded, Some(rule));
+        assert_eq!(code, 0, "{what}: {said}");
+        assert!(said.contains("outputs: 1 ranges hold what their output answers"), "{what}: {said}");
+        if let Some((code, said)) = python(&unmoded, rule) {
+            assert_eq!(code, 0, "{what}: {said}");
+            assert!(said.contains("outputs: 1 ranges hold what their output answers"), "{what}: {said}");
+        }
         // Without the grids and the ranges they put out, the claim is the certificate's word, and the
         // run says so.
-        let old = cert.replacen(&format!(r#","rounds":{{"fee":"10"}},{stated}"#), "", 1);
+        let old = cert.replacen(&format!(",{grids}"), "", 1);
         assert_ne!(old, cert);
         let (code, said) = lean(&bin, &old, Some(rule));
         assert_eq!(code, 0, "{what}: {said}");
@@ -1078,10 +1106,12 @@ fn 出力の範囲は丸めた答えまで二つの再検査で確かめられ�
 
 /// The range an output answers in is stated beside `ranges`, not in it (rulec's §15.269), because the
 /// other claims read `ranges` as what decides each name. A sum of up to 1,050 cents that the rule
-/// rounds down to a dollar answers up to 1,100 cents, and a table cut on the sum runs to 1,050 cents;
-/// a `define` read by one written above it bounds that one by its own range. Both certificates pass
-/// both re-checkers, with the output's range held. A range written on the line of a walk is the walk's
-/// too, and nothing tighter is stated: off the grid, the run says so rather than refusing it.
+/// rounds down to a dollar answers up to 1,000 cents (§15.303), and a table cut on the sum runs to
+/// 1,050 cents; a `define` read by one written above it bounds that one by its own range. Both
+/// certificates pass both re-checkers, with the output's range held. A range written on the line of
+/// a walk is the walk's too, and nothing tighter is stated: where the mode puts its end off the grid
+/// past it — 1,050 cents half up to a dollar is 1,100 — the run says so rather than refusing it, and
+/// rounded down, it holds.
 #[test]
 fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張は変わらない() {
     let Some(bin) = checker() else {
@@ -1089,14 +1119,14 @@ fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張�
     };
     let tmp = TempDir::new("lean-rounds-apart");
     let dir = tmp.path().to_path_buf();
-    let walk = |total: &str, sum: &str| {
+    let walk = |mode: &str, total: &str, sum: &str| {
         format!(
-            "rule walk_grid v1\n\ninputs\n  cap : money[USDc]  range >=0USDc <=1000USDc  contract_only\n\nelements items\n  w : money[USDc]  range >=0USDc <=150USDc\n\noutputs\n  total : money[USDc]  round down(100USDc){total}\n  big   : bool\n\nsum total over items of w  range >=0USDc <={sum}USDc\n\ntable big_of\npolicy unique\n| total     | -> big : bool |\n| <=500USDc | false         |\n| >500USDc  | true          |\n"
+            "rule walk_grid v1\n\ninputs\n  cap : money[USDc]  range >=0USDc <=1000USDc  contract_only\n\nelements items\n  w : money[USDc]  range >=0USDc <=150USDc\n\noutputs\n  total : money[USDc]  round {mode}(100USDc){total}\n  big   : bool\n\nsum total over items of w  range >=0USDc <={sum}USDc\n\ntable big_of\npolicy unique\n| total     | -> big : bool |\n| <=500USDc | false         |\n| >500USDc  | true          |\n"
         )
     };
     let read_first = "rule order_dep v1\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1000USDc\n\noutputs\n  total : money[USDc]  round half_up(1USDc)\n  fee   : money[USDc]  round half_up(1USDc)\n\ndefine total : money[USDc] = fee + amount\n\ndefine fee : money[USDc] = amount × 3.49% + 49USDc\n";
     let cases = [
-        ("walk", walk("", "1050"), r#""total":["0","1050"]"#, r#""output_ranges":{"total":["0","1100"]}"#),
+        ("walk", walk("down", "", "1050"), r#""total":["0","1050"]"#, r#""output_ranges":{"total":["0","1000"]}"#),
         ("read_first", read_first.to_string(), r#""fee":["490349/10000","839/10"]"#, r#""output_ranges":{"fee":["49","84"]}"#),
     ];
     for (what, src, decided, stated) in cases {
@@ -1115,9 +1145,23 @@ fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張�
         }
     }
     // A range written on the walk's output line, off the grid: `check` holds it to what the sum comes
-    // to (E140), and the certificate has nothing tighter for the re-checkers.
+    // to (E140), and the certificate has nothing tighter for the re-checkers. Rounded down, its end
+    // comes to 1,000 cents, inside it.
+    let p = dir.join("walk_down.rule");
+    std::fs::write(&p, walk("down", "  range >=0USDc <=1050USDc", "1000")).unwrap();
+    let rule = p.to_str().unwrap();
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rule));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("outputs: 1 ranges hold what their output answers") && said.contains("OK: every claim"), "{said}");
+    if let Some((code, said)) = python(&cert, rule) {
+        assert_eq!(code, 0, "{said}");
+        assert!(said.contains("outputs: 1 ranges hold what their output answers"), "{said}");
+    }
+    // Half up, it comes to 1,100 cents, past it.
     let p = dir.join("walk_written.rule");
-    std::fs::write(&p, walk("  range >=0USDc <=1050USDc", "1000")).unwrap();
+    std::fs::write(&p, walk("half_up", "  range >=0USDc <=1050USDc", "1000")).unwrap();
     let rule = p.to_str().unwrap();
     let (c, cert) = rulec(&["certificate", rule]);
     assert_eq!(c, 0, "{cert}");

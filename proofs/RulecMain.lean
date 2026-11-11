@@ -167,8 +167,8 @@ def expandShares (defs : String → Option RulecCert.Expr) : RulecCert.Expr → 
   | .divc a k t => .divc (expandShares defs a) k t
   | .minOf a b => .minOf (expandShares defs a) (expandShares defs b)
   | .maxOf a b => .maxOf (expandShares defs a) (expandShares defs b)
-  | .roundTo a g => .roundTo (expandShares defs a) g
-  | .divRound a b g t => .divRound (expandShares defs a) (expandShares defs b) g t
+  | .roundTo a g mo => .roundTo (expandShares defs a) g mo
+  | .divRound a b g t mo => .divRound (expandShares defs a) (expandShares defs b) g t mo
   | .modc a n => .modc (expandShares defs a) n
   | .isqrt a => .isqrt (expandShares defs a)
   | e => e
@@ -214,23 +214,6 @@ def jsonAt (j : Json) : List Nat → Option Json
 
 /-- The roundings a quotient by a value is put through (rulec's §15.213). -/
 def roundingWords : List String := ["down", "up", "half_up", "half_down", "half_even"]
-
-/-- `x` put on the grid `g`, a grid above zero, the way `mode` rounds it, as the generated code
-    rounds (rulec's §7.2): `down` toward zero, `up` away from it, and the three halves to the nearer
-    step of the grid, a tie away from zero (`half_up`), toward it (`half_down`) or to the even step
-    (`half_even`). -/
-def roundBy (mode : String) (g x : Rat) : Rat :=
-  let a := if x < 0 then -x else x
-  let q : Int := rfloor (a / g)
-  let r := a - (q : Rat) * g
-  let up : Bool := match mode with
-    | "up" => decide (0 < r)
-    | "half_up" => decide (g ≤ 2 * r)
-    | "half_down" => decide (g < 2 * r)
-    | "half_even" => decide (g < 2 * r) || (decide (2 * r = g) && q % 2 == 1)
-    | _ => false
-  let w : Rat := ((if up then q + 1 else q : Int) : Rat) * g
-  if x < 0 then -w else w
 
 /-- Every node of an expression's tree with where it stands, the deepest first (rulec's §15.296).
     The division a rounding by a value divides is no node of its own: the code divides its two
@@ -654,14 +637,14 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
         left := left.erase (name, "output")
         -- `half_up`, `half_down` and `half_even` compare twice the remainder with the grid.
         let mode := fieldStr h "mode"
-        if !(roundingWords.contains mode) then
-          r := r.fail s!"{name}: `held` states no mode of rounding this program knows for it"
-          continue
+        let some m := RoundMode.ofString mode
+          | r := r.fail s!"{name}: `held` states no mode of rounding this program knows for it"
+            continue
         let twice := if ["half_up", "half_down", "half_even"].contains mode then some g else none
         -- The code holds the value on that step before it rounds it, and the rounded value after:
         -- a rounding never turns two values around, so that runs between the two ends rounded.
-        let lo := roundBy mode g I.1
-        let hi := roundBy mode g I.2
+        let lo := roundWith m g I.1
+        let hi := roundWith m g I.2
         match fits name (if lo < I.1 then lo else I.1, if I.2 < hi then hi else I.2) h twice with
         | some why => r := r.fail why
         | none => put := put + 1
@@ -978,7 +961,7 @@ def exprStep (stepOf : String → Option Rat) : RulecCert.Expr → Option Rat
   | .divc a k _ => do
       let x ← exprStep stepOf a
       if k.den == 1 && k > 0 then some (x / k) else none
-  | .roundTo _ g => some (ratAbs g)
+  | .roundTo _ g _ => some (ratAbs g)
   | .alloc _ _ _ => some 1
   | _ => none
 
@@ -2730,20 +2713,24 @@ def checkOpens (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
 
 /-- **What an output answers, held to the range the certificate states for it** (rulec's §15.269).
     Every numeric output rounds to a grid (§7.2, E104), which `rounds` gives, and the rule answers what
-    decides the output put on that grid, whichever way the mode rounds. The range `output_ranges`
-    states for the output is the one the other languages read the answer in, so it has to hold what
-    decides the output — worked out here as every name's is: a `result` or a `define` from its
-    expression (`Worked.reachOf`), a column a table writes numbers into from what its rows write
-    (`Worked.writtenOf`) — rounded out to the grid (`roundedWithin`); `output_mem_stated` and
-    `written_output_mem_stated` are what a pass settles. What a walk leaves behind and an open value
-    answer inside the range `ranges` states for them, which their own checks hold them to
-    (`checkExtremes`, `checkFoldAnswers`, `checkOpens`, and what is declared for a `count` or a
-    `sum`), so that range is what decides them (`rounded_mem_stated`). Where it is also the range
-    stated for the output, there is nothing tighter, and an end off the grid is stated rather than
-    refused. Every output with a range under `output_ranges` is checked, and comes with its grid under
-    `rounds` — rulec writes one for every numeric output (E104) — or is refused: what the range bounds
-    is the answer on that grid, and the theorems take the grid the certificate gives. A certificate
-    with neither, from before it stated them, leaves the claim its word. -/
+    decides the output put on that grid the way its mode rounds, which `round_modes` names (rulec's
+    §15.303). The range `output_ranges` states for the output is the one the other languages read the
+    answer in, so it has to hold what decides the output — worked out here as every name's is: a
+    `result` or a `define` from its expression (`Worked.reachOf`), a column a table writes numbers
+    into from what its rows write (`Worked.writtenOf`) — with its two ends rounded the way the mode
+    rounds them, or out to the grid where the certificate names no mode (`roundedWithin`);
+    `output_mem_stated` and `written_output_mem_stated` are what a pass settles. What a walk leaves
+    behind and an open value answer inside the range `ranges` states for them, which their own
+    checks hold them to (`checkExtremes`, `checkFoldAnswers`, `checkOpens`, and what is declared for
+    a `count` or a `sum`), so that range is what decides them (`rounded_mem_stated`). Where it is
+    also the range stated for the output, there is nothing tighter, and an end off the grid is
+    stated rather than refused. Every output with a range under `output_ranges` is checked, and
+    comes with its grid under `rounds` — rulec writes one for every numeric output (E104) — or is
+    refused: what the range bounds is the answer on that grid, and the theorems take the grid the
+    certificate gives. So is an output `round_modes` gives a mode this program does not know. A
+    certificate with neither grids nor ranges, from before it stated them, leaves the claim its
+    word, and one with no `round_modes`, from before it stated the modes, is read as rounding any
+    way. -/
 def checkRounds (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
   let mut r := r
   let roundsJ? := field cert "rounds"
@@ -2752,6 +2739,7 @@ def checkRounds (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
     return r.state "what each output answers once rounded: the certificate does not say what grid its outputs round to"
   let roundsJ := roundsJ?.getD Json.null
   let statedJ := statedJ?.getD Json.null
+  let modesJ := (field cert "round_modes").getD Json.null
   let rangesJ := (field cert "ranges").getD Json.null
   let walks := (fieldArr cert "walks").toList.filterMap str
   let opens := (fieldArr cert "opens").toList.map (fieldStr · "name")
@@ -2766,6 +2754,15 @@ def checkRounds (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
     if g ≤ 0 then
       r := r.fail s!"{name}: the grid it rounds to, {ratText g}, is not above zero"
       continue
+    -- The mode it rounds by (rulec's §15.303); a certificate that names none, from before it stated
+    -- the modes, is read as rounding any way.
+    let mut mo : Option RoundMode := none
+    if let some mj := field modesJ name then
+      match str mj >>= RoundMode.ofString with
+      | some m => mo := some m
+      | none =>
+        r := r.fail s!"{name}: `round_modes` states a mode of rounding this program does not know for it: {(str mj).getD mj.compress}"
+        continue
     let ends : Option Rat × Option Rat := match arr sj with
       | some a => ((a[0]? >>= optRat), (a[1]? >>= optRat))
       | none => (none, none)
@@ -2796,13 +2793,13 @@ def checkRounds (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
       r := r.state s!"what {name} answers once rounded: an end of the range it declares is open"
     | some (some J, own) =>
       -- An end the output's range does not write is held to nothing, as `check` holds it to
-      -- nothing: it is the end of `J` rounded out, which holds it.
-      let S : Span2 := (ends.1.getD (floorTo g J.1), ends.2.getD (ceilTo g J.2))
-      if roundedWithin g S J then held := held + 1
+      -- nothing: it is the end of `J` put on the grid, which holds it.
+      let S : Span2 := (ends.1.getD (roundLo mo g J.1), ends.2.getD (roundHi mo g J.2))
+      if roundedWithin mo g S J then held := held + 1
       else if own == some ends then
         r := r.state s!"what {name} answers once rounded: the range it declares, [{ratText S.1}, {ratText S.2}], does not sit on the grid it rounds to, {ratText g}"
       else
-        r := r.fail s!"{name}: what decides it runs from {ratText J.1} to {ratText J.2}; rounded to {ratText g}, it answers from {ratText (floorTo g J.1)} to {ratText (ceilTo g J.2)}, and the certificate states the range [{ratText S.1}, {ratText S.2}] for it"
+        r := r.fail s!"{name}: what decides it runs from {ratText J.1} to {ratText J.2}; rounded to {ratText g}, it answers from {ratText (roundLo mo g J.1)} to {ratText (roundHi mo g J.2)}, and the certificate states the range [{ratText S.1}, {ratText S.2}] for it"
   if held > 0 then
     r := r.say s!"  outputs: {held} ranges hold what their output answers, put on the grid it rounds to"
   return r
@@ -2937,8 +2934,8 @@ def exprNames : RulecCert.Expr → List String
   | .name n => [n]
   | .lit _ _ | .typed _ | .unread => []
   | .add a b | .sub a b | .mul a b | .minOf a b | .maxOf a b | .compare _ a b => exprNames a ++ exprNames b
-  | .divc a _ _ | .roundTo a _ | .modc a _ | .isqrt a => exprNames a
-  | .divRound a b _ _ => exprNames a ++ exprNames b
+  | .divc a _ _ | .roundTo a _ _ | .modc a _ | .isqrt a => exprNames a
+  | .divRound a b _ _ _ => exprNames a ++ exprNames b
   | .alloc a b c => exprNames a ++ exprNames b ++ exprNames c
 
 /-- A cell of a claim, as the certificate writes it (`{"any":true}`, `{"words":[…]}`, `{"cmp":[[op, v],

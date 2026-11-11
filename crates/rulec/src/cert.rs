@@ -436,9 +436,10 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         })
         // The grid each numeric output rounds to (§7.2: every one declares it, E104), on the scale
         // of `ranges`, and the range ritsu's port gives the other languages for it (§15.268): what
-        // the rule answers is what decides the output put on that grid, whichever way the mode
-        // rounds, so a re-checker holds that range to what decides it rounded out to the grid
-        // (§15.269). `ranges` keeps what decides it, which the other claims are worked out from.
+        // the rule answers is what decides the output put on that grid, so a re-checker holds that
+        // range to what decides it with the two ends rounded the way `round_modes` says the output
+        // rounds (§15.269, §15.303). `ranges` keeps what decides it before it is rounded, which the
+        // other claims are worked out from.
         .raw("rounds", {
             let mut r = Obj::new();
             for n in &numeric_outputs {
@@ -446,6 +447,20 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
                 let g = if g.num < 0 { Rat::zero().sub(*g) } else { *g };
                 if g.num != 0 {
                     r = r.raw(n, crate::json::quote(&rat(&g)));
+                }
+            }
+            r.finish()
+        })
+        // The way each of those outputs rounds (§15.303): every mode puts a larger value on a step
+        // no lower, so the range is what decides the output with its two ends rounded that way,
+        // which a re-checker works out with the mode. A certificate without it is read as any
+        // mode, the low end rounded down to the grid and the high end up.
+        .raw("round_modes", {
+            let mut r = Obj::new();
+            for n in &numeric_outputs {
+                let Some((m, g)) = c.roundings.get(*n) else { continue };
+                if g.num != 0 {
+                    r = r.raw(n, crate::json::quote(m.name()));
                 }
             }
             r.finish()
@@ -1437,8 +1452,8 @@ fn ceil_to(g: Rat, v: Rat) -> Rat {
 
 /// The interval arithmetic a re-checker does over the certificate's expressions, here over the
 /// rule's: the same shapes, the same answers, so that the set this side lays out is the set the
-/// other side finds closed. A rounding goes out to its grid on both sides whatever its mode; a
-/// name is looked up in `ranges` and nowhere else.
+/// other side finds closed. A rounding takes its argument's two ends rounded the way its mode
+/// rounds them on both sides (§15.303); a name is looked up in `ranges` and nowhere else.
 fn cert_interval(e: &Expr, ty: &crate::types::Ty, ranges: &std::collections::HashMap<String, (Rat, Rat)>) -> Option<(Rat, Rat)> {
     use std::cmp::Ordering;
     match e {
@@ -1478,20 +1493,14 @@ fn cert_interval(e: &Expr, ty: &crate::types::Ty, ranges: &std::collections::Has
                     Some((pick(lo, bl), pick(hi, bh)))
                 }
                 (m, 2) if crate::num::RoundMode::parse(m).is_some() => {
+                    let mode = crate::num::RoundMode::parse(m)?;
                     let (g, g2) = cert_interval(&args[1], ty, ranges)?;
                     if g != g2 || g.num == 0 {
                         return None;
                     }
                     let g = if g.num < 0 { Rat::zero().sub(g) } else { g };
-                    let floor = |v: Rat| {
-                        let q = v.div(g);
-                        g.mul(Rat::int(q.num.div_euclid(q.den)))
-                    };
-                    let ceil = |v: Rat| {
-                        let q = v.div(g);
-                        g.mul(Rat::int(q.num.div_euclid(q.den) + i128::from(q.num.rem_euclid(q.den) != 0)))
-                    };
-                    Some((floor(lo), ceil(hi)))
+                    use crate::num::RoundTo;
+                    Some((lo.round_to(mode, g), hi.round_to(mode, g)))
                 }
                 _ => None,
             }

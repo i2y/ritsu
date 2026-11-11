@@ -562,9 +562,9 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
 /// - The fewest and the most are what decides the output comes to there ([`Checked::reaches`]: the
 ///   rows of its tables, a `define` of its name, what its `result` reaches), met with what the rows
 ///   of the table that decides it which some input there may reach write
-///   ([`crate::region::live_rows`]), both put out to the grid of its rounding. A range written on
-///   the output's line is not read: it is what the rule promises over every input, and says
-///   nothing of part of them.
+///   ([`crate::region::live_rows`]), both with their ends rounded the way the output rounds
+///   (§15.303). A range written on the output's line is not read: it is what the rule promises over
+///   every input, and says nothing of part of them.
 /// - The numbers are those the rows some input there may reach write, when each writes one.
 /// - The examples are taken as `output_values` takes them ([`crate::ports::examples_of`]), from the
 ///   rule's vectors inside the ranges.
@@ -607,8 +607,8 @@ pub fn values_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &st
         let (f2, mut c2) = crate::prepare(src, path).ok()?;
         narrow_upstream(&f2, &mut c2);
         let sc = c2.wire_scale(output);
-        let grid = c2.roundings.get(output).map(|(_, g)| *g).filter(|g| g.num != 0);
-        let round = |(lo, hi): (Rat, Rat)| match grid.map(|g| crate::types::round_out((Some(lo), Some(hi)), g)) {
+        let grid = c2.roundings.get(output).copied().filter(|(_, g)| g.num != 0);
+        let round = |(lo, hi): (Rat, Rat)| match grid.map(|(m, g)| crate::types::round_out((Some(lo), Some(hi)), Some(m), g)) {
             Some((Some(l), Some(h))) => (l, h),
             _ => (lo, hi),
         };

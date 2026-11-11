@@ -1355,7 +1355,9 @@ outputs
 
 It is held to what the output comes to: the cells of the rows that decide it, a `define` of its
 name, a line that walks a sequence, or what the `result` reaches under the inputs' ranges and the
-`constraint` lines, put out to the grid of its rounding. A bound a range it reads does not write is
+`constraint` lines, with both ends rounded the way the output rounds. Every mode puts a larger
+value on a step no lower, so nothing between the ends lands outside: an output rounded
+`down(1000JPY)` over a value up to 1,999JPY comes to 1,000JPY at most. A bound a range it reads does not write is
 the end of what the type holds, as every check reads it (above). A range that leaves out a value
 the output can come to is E140, and the message states the range to widen to (`fix.text` holds
 it); where that value comes from such a bound, the message names the value whose range does not
@@ -1364,22 +1366,30 @@ no number. A range with one end written takes the other end from what the output
 unless that end comes from a bound no range writes: then it stays unwritten.
 
 The range written is then the output's range wherever an input's or a derive's is said: the
-certificate's `ranges` and `output_ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the comments
+certificate's `output_ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the comments
 of the SQL and of the `.proto`, the page for people (beside the output), and ritsu's port, through
 which kaname and the other languages read what a rule answers. `rulec diff` tells a range that
 moved as a change of what the rule answers (`output_range`). The range is checked, so the
 generated code checks nothing more when it runs.
 
+Inside the rule, the output's name — a `define` of it, the column its rows write — is read as the
+value before it is rounded, and the rounding can bring that value back inside the range from past
+it: `down(1999JPY, 1000JPY)` is 1,000JPY. The range the rule reads the name in — the one a table
+over a `define` of the output is checked over, and the certificate's `ranges` — then holds that
+value as well, so `range >=0JPY <=1_000JPY` on that output answers up to 1,000JPY and is read up
+to 1,999JPY: a row for under 1,500JPY leaves 1,500JPY with no row (E101).
+
 Where no range is written, a numeric output still has a range: what decides it — what the rows of
 the tables that decide it write, a `define` of its name, what its `result` reaches, the range a
-walk or an open value declares — put out to the grid of its rounding, since the rule answers that
-rounded. It is said wherever a written range is but beside the output on the page for people: the
+walk or an open value declares — with both ends rounded the way the output rounds, since the rule
+answers that rounded. It is said wherever a written range is but beside the output on the page for people: the
 certificate's `output_ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the
 comments of the SQL and of the `.proto`, the script of the page, `rulec graph`, and the port, each
 as the integers that go on the wire. `rulec diff` compares it as it compares a written one, and
 `replay`, `fixtures` and `verify` count an answer outside it as out of reach. Both re-checkers of
 the certificate hold that range, written or not, to what the output answers. The certificate's
-`ranges` keeps what decides the output, which its other claims are worked out from.
+`ranges` keeps what decides the output before it is rounded, which its other claims are worked out
+from.
 `range from koyomi` (E065) and `random` (E070) are an input's alone. A word an output's line does
 not read, anything but `range` and `round`, is E047, as on every declaration line.
 
@@ -3154,7 +3164,8 @@ to its own division. One division to a rounding, and it has to be the outermost 
 - **The two integers the generated code divides** — the dividend and the divisor, brought to one
   step — have to fit int64 (E108, which names an input whose range leaves an end unwritten).
 - **What the answer can come to** is the quotient's interval (the four corners of the two
-  intervals) pushed out to the grid, and a table can use it as a column.
+  intervals) with its two ends rounded the way the call rounds them, and a table can use it as a
+  column.
 
 Any other division by a value is E115, as it was.
 

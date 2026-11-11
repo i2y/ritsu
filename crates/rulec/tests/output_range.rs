@@ -2,21 +2,22 @@
 //! §15.268, §15.269, §15.271).
 //!
 //! A range on an output's line used to be stepped over in silence. It is now held to what the
-//! output comes to — E140 when it leaves some of that out, or when nothing says what that is —
-//! and is then the output's range wherever an input's or a derive's is said: the certificate's
-//! `ranges`, the port the other languages read a rule through, the page, the schema, and `diff`.
-//! With none written, the output has what decides it put out to the grid of its rounding, and the
-//! output a `result` decides what the `result` comes to; that is the range the certificate's
-//! `output_ranges`, the port, the schema and the MCP tool's `outputSchema`, `api`, the comments of
-//! the generated `.proto` and SQL, the pages, `graph`, `replay` and `diff` all say. Two shares of
-//! one amount taken at running totals in order are read as what they are: the second never below
-//! the first.
+//! output comes to — E140 when it leaves some of that out, or when nothing says what that is — and
+//! is then the output's range wherever an input's or a derive's is said: the certificate's
+//! `output_ranges`, the port the other languages read a rule through, the page, the schema, and
+//! `diff`. With none written, the output has what decides it with both ends rounded the way it
+//! rounds, and the output a `result` decides what the `result` comes to; that is the range the
+//! certificate's `output_ranges`, the port, the schema and the MCP tool's `outputSchema`, `api`,
+//! the comments of the generated `.proto` and SQL, the pages, `graph`, `replay` and `diff` all say.
+//! Two shares of one amount taken at running totals in order are read as what they are: the second
+//! never below the first. A rounding reaches its two ends rounded the way its mode rounds them, and
+//! the rule reads an output's name in a range that holds the value before it is rounded (§15.303).
 
 use ritsu_ports::{ColumnType, Found, Rules};
 use rulec::i18n::Lang;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::TempDir;
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -170,6 +171,36 @@ fn fee_ja(range: &str) -> String {
     )
 }
 
+/// An amount up to 1,999JPY, its output rounded down to the thousand: the rule answers 0JPY or
+/// 1,000JPY, and rounds a value that runs to 1,999JPY.
+fn thousands(range: &str) -> String {
+    format!(
+        "rule thousands v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=1_999JPY\n\noutputs\n  cut : money[JPY]  round down(1000JPY){range}\n\nresult cut = amount\n\nexamples\n| amount  | -> cut   |\n| 1999JPY | 1000JPY |\n"
+    )
+}
+
+/// The same rule in Japanese.
+fn thousands_ja(range: &str) -> String {
+    format!(
+        "rule 千円単位(thousands) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=1_999円\n\noutputs\n  切捨て(cut) : money[円]  round down(1000円){range}\n\nresult 切捨て = 金額\n\nexamples\n| 金額    | -> 切捨て |\n| 1999円 | 1000円    |\n"
+    )
+}
+
+/// The re-checkers this machine has: `tools/recheck.py`, and the Lean program where `lake build`
+/// in ritsu's `proofs/` has made it. A SKIP line says which is not there.
+fn checkers() -> Vec<Vec<String>> {
+    let mut out = Vec::new();
+    let python = || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    if ready(Need::Python, python, "python3 is not there") {
+        out.push(vec!["python3".to_string(), root().join("tools/recheck.py").to_string_lossy().into_owned()]);
+    }
+    let lean = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    if ready(Need::Lean, || lean.exists(), "ritsu's proofs/ is not built (lake build there makes it)") {
+        out.push(vec![lean.to_string_lossy().into_owned()]);
+    }
+    out
+}
+
 /// A fee a table decides: 500JPY up to ten, 900JPY above.
 fn ship(range: &str) -> String {
     format!(
@@ -179,7 +210,7 @@ fn ship(range: &str) -> String {
 
 #[test]
 fn a_range_on_an_output_holds_what_the_output_comes_to() {
-    // what the `result` comes to, put out to the grid of its rounding
+    // what the `result` comes to, with both ends rounded the way the output rounds
     let (codes, en, ja) = said(&fee("  range >=0JPY <=500JPY"));
     assert_eq!(codes, ["E140"], "{en}");
     assert!(en.contains("The range of the output fee does not hold the values it can take") && en.contains("it can take >=0JPY <=1000JPY"), "{en}");
@@ -220,7 +251,8 @@ fn a_range_reads_an_end_no_range_writes_as_the_end_of_its_type() {
     let (codes, en, ja) = said(&open);
     assert_eq!(codes, ["E140"], "{en}");
     assert!(en.contains("The range of the output fee does not hold the values it can take"), "{en}");
-    assert!(en.contains("it can take >=-922_337_203_685_477_581JPY <=922_337_203_685_477_581JPY"), "{en}");
+    // rounded down, toward zero, at both ends (§15.303): 0.52.0 put them out to ±…581
+    assert!(en.contains("it can take >=-922_337_203_685_477_580JPY <=922_337_203_685_477_580JPY"), "{en}");
     assert!(en.contains("`amount` has no upper or no lower bound"), "{en}");
     assert!(en.contains("Hint: widen the range, or give `amount` the end its range does not write"), "{en}");
     assert!(ja.contains("出力 fee の範囲が、とりうる値を含んでいません") && ja.contains("`amount` の範囲に上限か下限がありません"), "{ja}");
@@ -357,14 +389,14 @@ fn the_output_a_result_decides_has_the_range_it_comes_to() {
 }
 
 /// With no range written, an output a `define` of its name or a table decides carries what decides
-/// it put out to the grid of its rounding (§15.269), wherever its range is said outward (§15.271). A
-/// card fee of 3.49% and 49 cents comes to 49.0349 to 83.9 cents, and the rule answers it rounded
-/// half up to the cent: 49 to 84. The certificate's `output_ranges`, the port, the schema and the
-/// MCP tool's `outputSchema`, `api`, the comments of the `.proto` and the SQL, the pages and `graph`
-/// say 49 to 84, which holds every answer — 84 at 1,000 cents, as the example says — where the
-/// certificate stated 49.0349 (49 for the table) to 83.9, and the port carried 49 to 83, as the
-/// schema and `api` did. `ranges` keeps what decides it. `replay` counts an answer of 84 cents as
-/// one the rule can give, and 85 as one it cannot.
+/// it with both ends rounded the way it rounds (§15.269, §15.303), wherever its range is said
+/// outward (§15.271). A card fee of 3.49% and 49 cents comes to 49.0349 to 83.9 cents, and the rule
+/// answers it rounded half up to the cent: 49 to 84. The certificate's `output_ranges`, the port,
+/// the schema and the MCP tool's `outputSchema`, `api`, the comments of the `.proto` and the SQL,
+/// the pages and `graph` say 49 to 84, which holds every answer — 84 at 1,000 cents, as the example
+/// says — where the certificate stated 49.0349 (49 for the table) to 83.9, and the port carried 49
+/// to 83, as the schema and `api` did. `ranges` keeps what decides it. `replay` counts an answer of
+/// 84 cents as one the rule can give, and 85 as one it cannot.
 #[test]
 fn an_output_with_no_range_written_carries_what_decides_it_put_out_to_its_grid() {
     let t = TempDir::new("define-range");
@@ -484,4 +516,92 @@ fn diff_says_an_outputs_range_moved() {
     let (code, out) = rulec(dir, &["diff", "c.rule", "e.rule", "--format", "json"]);
     let j = rulec::json::parse(&out).unwrap_or_else(|_| panic!("{out}"));
     assert_eq!((code, j.get("changes").and_then(|c| c.as_arr()).map(|c| c.len())), (1, Some(0)), "{out}");
+}
+
+/// A rounding reaches its argument's two ends rounded the way its mode rounds them (§15.303): every
+/// mode puts a larger value on a step no lower, so nothing between the ends lands outside. An amount
+/// up to 1,999JPY that the output cuts down to the thousand is answered 1,000JPY at most; 0.52.0 put
+/// the high end up to 2,000JPY, which the rule never answers, and turned away the range that holds
+/// every answer. A rounding a `define` writes as a call reaches its ends the same way, each mode its
+/// own: an amount from 1JPY to 1,500JPY to the thousand is 0JPY to 1,000JPY down and half down,
+/// 1,000JPY to 2,000JPY up, and 0JPY to 2,000JPY half up and half even.
+#[test]
+fn a_rounding_reaches_its_ends_rounded_the_way_its_mode_rounds() {
+    for ok in ["  range >=0JPY <=1_000JPY", ""] {
+        let (codes, en, _) = said(&thousands(ok));
+        assert!(codes.is_empty(), "{ok}: {en}");
+    }
+    let (codes, en, ja) = said(&thousands("  range >=0JPY <=999JPY"));
+    assert_eq!(codes, ["E140"], "{en}");
+    assert!(en.contains("it can take >=0JPY <=1000JPY") && en.contains("with both ends rounded the way the output rounds"), "{en}");
+    assert!(ja.contains("とりうる値は >=0JPY <=1000JPY です") && ja.contains("両端を、出力の丸め方で丸めたあいだです"), "{ja}");
+    assert_eq!(fix(&thousands("  range >=0JPY <=999JPY")).as_deref(), Some("range >=0JPY <=1000JPY"));
+    let (codes, _, ja) = said(&thousands_ja("  range >=0円 <=999円"));
+    assert_eq!(codes, ["E140"], "{ja}");
+    assert!(ja.contains("とりうる値は >=0円 <=1000円 です"), "{ja}");
+    for (mode, lo, hi) in [("down", 0, 1000), ("up", 1000, 2000), ("half_up", 0, 2000), ("half_down", 0, 1000), ("half_even", 0, 2000)] {
+        let calls = |range: &str| {
+            format!(
+                "rule calls v1\n\ninputs\n  amount : money[JPY]  range >=1JPY <=1_500JPY\n\noutputs\n  cut : money[JPY]  round down(1JPY)  range {range}\n\ndefine thousands : money[JPY] = {mode}(amount, 1000JPY)\n\nclause main -> cut\n  when always\n  then thousands\n"
+            )
+        };
+        let (codes, en, _) = said(&calls(&format!(">={lo}JPY <={hi}JPY")));
+        assert!(codes.is_empty(), "{mode}: {en}");
+        let (codes, en, _) = said(&calls(&format!(">={}JPY <={}JPY", lo + 1, hi - 1)));
+        assert_eq!(codes, ["E140"], "{mode}: {en}");
+        assert!(en.contains(&format!("it can take >={lo}JPY <={hi}JPY")), "{mode}: {en}");
+    }
+}
+
+/// The range written on an output's line is the one its answer is read in, and the rule reads the
+/// output's name as the value before it is rounded, which a mode can bring back inside that range
+/// from past it (§15.303). An amount up to 1,999JPY cut down to the thousand answers up to
+/// 1,000JPY: the certificate's `output_ranges`, the port, the schema and the MCP tool's
+/// `outputSchema`, `api`, the comments of the `.proto` and the SQL, the pages, `graph` and the page
+/// `doc` writes say 0JPY to 1,000JPY. The certificate's `ranges` holds 1,999JPY, the value the rule
+/// rounds, and both re-checkers hold the certificate.
+#[test]
+fn an_output_answers_in_its_range_and_is_read_before_it_is_rounded() {
+    let t = TempDir::new("answer-range");
+    let dir = t.path();
+    std::fs::write(dir.join("thousands.rule"), thousands("  range >=0JPY <=1_000JPY")).unwrap();
+    let cert = certificate(dir, "thousands.rule");
+    assert_eq!(ends(cert.get("output_ranges").unwrap(), "cut"), pair("0", "1000"));
+    assert_eq!(ends(cert.get("ranges").unwrap(), "cut"), pair("0", "1999"));
+    said_everywhere(dir, "thousands.rule", "cut", (0, 1000));
+    let (_, page) = rulec(dir, &["doc", "thousands.rule"]);
+    assert!(page.lines().any(|l| l.starts_with("| cut |") && l.contains("range 0JPY to 1000JPY")), "{page}");
+    // with no range written, the same: the answer rounded, the value before it in `ranges`
+    std::fs::write(dir.join("open.rule"), thousands("")).unwrap();
+    let open = certificate(dir, "open.rule");
+    assert_eq!(ends(open.get("output_ranges").unwrap(), "cut"), pair("0", "1000"));
+    assert_eq!(ends(open.get("ranges").unwrap(), "cut"), pair("0", "1999"));
+    for file in ["thousands.rule", "open.rule"] {
+        let (_, json) = rulec(dir, &["certificate", file]);
+        let path = dir.join(format!("{file}.cert.json"));
+        std::fs::write(&path, json).unwrap();
+        for program in checkers() {
+            let o = Command::new(&program[0]).args(&program[1..]).arg(&path).args(["--rule", file]).current_dir(dir).output().expect("cannot start the re-checker");
+            let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+            assert!(o.status.success() && said.contains("outputs: 1 ranges hold what their output answers"), "{file}: {}: {said}", program.join(" "));
+        }
+    }
+}
+
+/// A table that reads a `define` of an output's name reads the value before it is rounded, and the
+/// range it is checked over holds that value (§15.303). An amount up to 1,999JPY that the output
+/// cuts down to the thousand is read up to 1,999JPY, so a row for under 1,500JPY leaves 1,500JPY
+/// with no row (E101); with a row for the rest, the table is complete.
+#[test]
+fn a_table_reads_an_outputs_define_before_it_is_rounded() {
+    let src = |rows: &str| {
+        format!(
+            "rule sizes v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=1_999JPY\n\noutputs\n  cut : money[JPY]  round down(1000JPY)  range >=0JPY <=1_000JPY\n  large : bool\n\ndefine cut : money[JPY] = amount\n\ntable sizes\npolicy unique\n| cut | -> large |\n{rows}"
+        )
+    };
+    let (codes, en, _) = said(&src("| <1_500JPY | false |\n"));
+    assert_eq!(codes, ["E101"], "{en}");
+    assert!(en.contains("An input that matches no row: cut = 1500JPY"), "{en}");
+    let (codes, en, _) = said(&src("| <1_500JPY | false |\n| >=1_500JPY | true |\n"));
+    assert!(codes.is_empty(), "{en}");
 }

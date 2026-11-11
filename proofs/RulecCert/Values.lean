@@ -10,10 +10,10 @@
   Both are proved against one evaluation. `eval` carries a type alongside the number and
   refuses to go on where the units do not meet, so "the derived type is right" and "the
   evaluation does not get stuck" are one statement; and the interval the checker computes
-  is shown to hold that same evaluation's number. Rounding is the one operation left
-  abstract: which way a mode breaks a tie is not the subject here, so it arrives as a
-  function with the only property the bounds need — the result sits on the grid, between
-  rounding down and rounding up.
+  is shown to hold that same evaluation's number. A rounding goes the way its mode does,
+  which the certificate names where it writes the call (`roundWith`, rulec's §15.303); one it
+  names no mode for arrives as a function with the only property the bounds need — the result
+  sits on the grid, between rounding down and rounding up.
 -/
 import RulecCert.Sieve
 
@@ -60,6 +60,62 @@ def unify : Ty → Ty → Option Ty
     else none
   | a, b => if a = b then some a else none
 
+/-! ## The ways a value is rounded
+
+A rounding call and a numeric output put a value on a grid one of five ways (rulec's §7.2), and the
+certificate names the way: in the call it writes (`down(x, 1000)`) and, for an output, under
+`round_modes` (rulec's §15.303). `roundWith` is that rounding as the generated code rounds: the
+magnitude in steps of the grid, the whole part of the steps or one more by the mode, the sign put
+back. -/
+
+/-- The five ways of rounding (rulec's §7.2). -/
+inductive RoundMode where
+  /-- Toward 0. -/
+  | down
+  /-- Away from 0. -/
+  | up
+  /-- To the nearer step, a tie away from 0. -/
+  | halfUp
+  /-- To the nearer step, a tie toward 0. -/
+  | halfDown
+  /-- To the nearer step, a tie to the even one. -/
+  | halfEven
+  deriving DecidableEq, Repr
+
+/-- The mode a certificate writes by its name. -/
+def RoundMode.ofString : String → Option RoundMode
+  | "down" => some .down
+  | "up" => some .up
+  | "half_up" => some .halfUp
+  | "half_down" => some .halfDown
+  | "half_even" => some .halfEven
+  | _ => none
+
+/-- How many steps a magnitude `t`, counted in steps of the grid, rounds to. -/
+def RoundMode.steps (m : RoundMode) (t : Rat) : Int :=
+  let f : Int := t.floor
+  match m with
+  | .down => f
+  | .up => if t = f then f else f + 1
+  | .halfUp => if t - f < 1/2 then f else f + 1
+  | .halfDown => if t - f ≤ 1/2 then f else f + 1
+  | .halfEven =>
+    if t - f < 1/2 then f
+    else if t - f > 1/2 then f + 1
+    else if f % 2 = 0 then f else f + 1
+
+/-- `x` put on the grid `g`, a grid above zero, the way `m` rounds it. -/
+def roundWith (m : RoundMode) (g x : Rat) : Rat :=
+  let k := m.steps ((if x < 0 then -x else x) / g)
+  ((if x < 0 then -k else k : Int) : Rat) * g
+
+/-- The rounding a node of a certificate puts its value through: its mode's where the certificate
+    names one this checker knows, and otherwise `rnd`, which stands for any rounding `RoundsWell`
+    describes. -/
+def rndBy : Option RoundMode → (Rat → Rat → Rat) → Rat → Rat → Rat
+  | some m, _ => roundWith m
+  | none, rnd => rnd
+
 /-! ## Expressions
 
 Exactly the forms a certificate can carry. A divisor is a constant and a rounding grid is a
@@ -76,13 +132,14 @@ inductive Expr where
   | divc : Expr → Rat → Ty → Expr
   | minOf : Expr → Expr → Expr
   | maxOf : Expr → Expr → Expr
-  /-- Rounded to a literal grid. Which way the mode breaks a tie is not modelled. -/
-  | roundTo : Expr → Rat → Expr
+  /-- Rounded to a literal grid, by the mode the certificate names (`rndBy`), or by any rounding
+      where it names none this checker knows. -/
+  | roundTo : Expr → Rat → Option RoundMode → Expr
   /-- **A rounded quotient by a value** (rulec's §15.213): `n ÷ d` put on a literal grid, the
-      grid's type beside it. The divisor is an expression — a constant one is `divc` — and that it
-      never comes to zero is what its interval says (E132): the interval below has none where the
-      divisor's reaches zero. Which way the mode breaks a tie is not modelled, as in `roundTo`. -/
-  | divRound : Expr → Expr → Rat → Ty → Expr
+      grid's type beside it, by its mode as in `roundTo`. The divisor is an expression — a constant
+      one is `divc` — and that it never comes to zero is what its interval says (E132): the interval
+      below has none where the divisor's reaches zero. -/
+  | divRound : Expr → Expr → Rat → Ty → Option RoundMode → Expr
   /-- **A remainder** (rulec's §15.214): of the whole part of a number by a positive whole
       constant, from 0 up to the constant less one. -/
   | modc : Expr → Nat → Expr
@@ -154,8 +211,8 @@ def Expr.unreadable : Expr → Bool
   | .divc a _ _ => a.unreadable
   | .minOf a b => a.unreadable || b.unreadable
   | .maxOf a b => a.unreadable || b.unreadable
-  | .roundTo a _ => a.unreadable
-  | .divRound a b _ _ => a.unreadable || b.unreadable
+  | .roundTo a _ _ => a.unreadable
+  | .divRound a b _ _ _ => a.unreadable || b.unreadable
   | .modc a _ => a.unreadable
   | .isqrt a => a.unreadable
   | .alloc a b c => a.unreadable || b.unreadable || c.unreadable
@@ -232,8 +289,8 @@ def typeOf (types : String → Option Ty) : Expr → Option Ty
   | .maxOf a b => match typeOf types a, typeOf types b with
                   | some x, some y => pickTy x y
                   | _, _ => none
-  | .roundTo a _ => typeOf types a
-  | .divRound a b _ g => match typeOf types a, typeOf types b with
+  | .roundTo a _ _ => typeOf types a
+  | .divRound a b _ g _ => match typeOf types a, typeOf types b with
                          | some x, some y => quotTy x y g
                          | _, _ => none
   | .modc a _ => match typeOf types a with
@@ -282,7 +339,8 @@ def modR (v : Rat) (n : Nat) : Rat := ((v.floor % (n : Int) : Int) : Rat)
     E139 keeps from arriving). -/
 def isqrtR (v : Rat) : Rat := ((Nat.sqrt v.floor.toNat : Nat) : Rat)
 
-/-- Evaluation. `rnd g v` is the rounding: only its bounds matter here, and they arrive as
+/-- Evaluation. A rounding goes the way its mode does (`rndBy`); `rnd g v` is the rounding of a
+    node whose mode the certificate does not name, and only its bounds matter here, which arrive as
     a hypothesis on the theorem that needs them. -/
 def eval (rnd : Rat → Rat → Rat) (env : String → Option UVal) : Expr → Option UVal
   | .name n => env n
@@ -305,12 +363,13 @@ def eval (rnd : Rat → Rat → Rat) (env : String → Option UVal) : Expr → O
   | .maxOf a b => match eval rnd env a, eval rnd env b with
                   | some x, some y => umax x y
                   | _, _ => none
-  | .roundTo a g => match eval rnd env a with
-                    | some x => some (rnd g x.1, x.2)
-                    | none => none
-  | .divRound a b g t => match eval rnd env a, eval rnd env b with
-                         | some x, some y => (quotTy x.2 y.2 t).map (fun ty => (rnd g (x.1 / y.1), ty))
-                         | _, _ => none
+  | .roundTo a g mo => match eval rnd env a with
+                       | some x => some (rndBy mo rnd g x.1, x.2)
+                       | none => none
+  | .divRound a b g t mo => match eval rnd env a, eval rnd env b with
+                            | some x, some y =>
+                              (quotTy x.2 y.2 t).map (fun ty => (rndBy mo rnd g (x.1 / y.1), ty))
+                            | _, _ => none
   | .modc a n => match eval rnd env a with
                  | some x => (numTy x.2).map (fun ty => (modR x.1 n, ty))
                  | none => none
@@ -393,18 +452,18 @@ theorem eval_type_of_typeOf {types : String → Option Ty} {env : String → Opt
       obtain ⟨vb, hvb⟩ := ihb y hy
       exact ⟨if va ≤ vb then vb else va, by simp [eval, hva, hvb, umax, h]⟩
     case _ => exact absurd h (by simp)
-  | roundTo a g iha =>
+  | roundTo a g mo iha =>
     intro τ h
     obtain ⟨va, hva⟩ := iha τ (by simpa [typeOf] using h)
-    exact ⟨rnd g va, by simp [eval, hva]⟩
-  | divRound a b g t iha ihb =>
+    exact ⟨rndBy mo rnd g va, by simp [eval, hva]⟩
+  | divRound a b g t mo iha ihb =>
     intro τ h
     simp only [typeOf] at h
     split at h
     case _ x y hx hy =>
       obtain ⟨va, hva⟩ := iha x hx
       obtain ⟨vb, hvb⟩ := ihb y hy
-      exact ⟨rnd g (va / vb), by simp [eval, hva, hvb, h]⟩
+      exact ⟨rndBy mo rnd g (va / vb), by simp [eval, hva, hvb, h]⟩
     case _ => exact absurd h (by simp)
   | modc a n iha =>
     intro τ h
@@ -524,9 +583,11 @@ theorem add_le_add {a b c d : Rat} (h1 : a ≤ b) (h2 : c ≤ d) : a + c ≤ b +
 
 /-! ### Rounding to a grid
 
-`rnd` is any rounding: the certificate does not say which mode a value uses, and the
-bounds do not depend on it. What they do depend on is that the result sits between
-rounding down to the grid and rounding up to it, and that both of those are monotone. -/
+Every rounding puts its value between the value rounded down to the grid and rounded up to it
+(`RoundsWell`), and both of those are monotone. A node whose mode the certificate names rounds that
+way (`roundWith`), which is monotone too, so its argument's two ends rounded that way hold it
+(rulec's §15.303): `down(x, 1000)` with `x` up to 1999 reaches 1000, not 2000. A node it names no
+mode for is held by the two ends rounded out, the low one down and the high one up. -/
 
 def rfloor (x : Rat) : Int := x.floor
 def rceil (x : Rat) : Int := -((-x).floor)
@@ -568,6 +629,264 @@ theorem floorTo_le {g : Rat} (hg : 0 < g) (v : Rat) : floorTo g v ≤ v := by
 theorem le_ceilTo {g : Rat} (hg : 0 < g) (v : Rat) : v ≤ ceilTo g v := by
   have h := Rat.mul_le_mul_of_nonneg_right (le_rceil (v / g)) (Rat.le_of_lt hg)
   rwa [Rat.div_mul_cancel (Ne.symm (Rat.ne_of_lt hg))] at h
+
+/-! ### The five modes
+
+What a mode rounds to, said of the magnitude in steps of the grid (`RoundMode.steps`): the whole part
+of the steps or one more, and the whole part where the steps are whole (`steps_bounds`), so every
+mode is a rounding `RoundsWell` describes; and a larger magnitude never takes fewer steps
+(`steps_mono`), so every mode is monotone. These are the five ways kaname rounds by, and the proofs
+follow its own (kaname's `Round.lean`). -/
+
+namespace RoundMode
+
+theorem floor_eq_of (a : Rat) (n : Int) (h1 : (n : Rat) ≤ a) (h2 : a < (n : Rat) + 1) : a.floor = n := by
+  apply Int.le_antisymm
+  · have : a < ((n + 1 : Int) : Rat) := by rw [Rat.intCast_add]; exact h2
+    have := Rat.floor_lt_iff.mpr this
+    omega
+  · exact Rat.le_floor_iff.mpr h1
+
+theorem floor_props (a : Rat) : ((a.floor : Int) : Rat) ≤ a ∧ a < ((a.floor : Int) : Rat) + 1 := by
+  refine ⟨Rat.floor_le a, ?_⟩
+  have := Rat.lt_floor_add_one a
+  rw [Rat.intCast_add] at this
+  exact this
+
+/-- `-⌊-t⌋`: the whole part, or one more where `t` is not whole. -/
+theorem neg_floor_neg (t : Rat) :
+    -((-t).floor) = t.floor + (if t = ((t.floor : Int) : Rat) then 0 else 1) := by
+  have ⟨h1, h2⟩ := floor_props t
+  split
+  · rename_i h
+    have : (-t).floor = -t.floor := by
+      apply floor_eq_of
+      · rw [Rat.intCast_neg]; grind
+      · rw [Rat.intCast_neg]; grind
+    omega
+  · rename_i h
+    have hlt : ((t.floor : Int) : Rat) < t := by
+      rcases Rat.le_iff_lt_or_eq.mp h1 with h' | h'
+      · exact h'
+      · exact absurd h'.symm h
+    have : (-t).floor = -t.floor - 1 := by
+      apply floor_eq_of
+      · rw [Rat.intCast_sub, Rat.intCast_neg]; grind
+      · rw [Rat.intCast_sub, Rat.intCast_neg]; grind
+    omega
+
+/-- Every mode takes the whole part of the steps, or one more, and the whole part where the steps
+    are whole. -/
+theorem steps_bounds (m : RoundMode) (t : Rat) :
+    t.floor ≤ m.steps t ∧ m.steps t ≤ -((-t).floor) := by
+  rw [neg_floor_neg]
+  have ⟨h1, h2⟩ := floor_props t
+  unfold steps
+  cases m with
+  | down => simp only; split <;> omega
+  | up => simp only; split <;> constructor <;> omega
+  | halfUp =>
+    simp only
+    split
+    · split
+      · rename_i ht _
+        constructor <;> omega
+      · constructor <;> omega
+    · split
+      · rename_i hh ht
+        exfalso; apply hh; rw [← ht]; grind
+      · constructor <;> omega
+  | halfDown =>
+    simp only
+    split
+    · split <;> constructor <;> omega
+    · split
+      · rename_i hh ht
+        exfalso; apply hh; rw [← ht]; grind
+      · constructor <;> omega
+  | halfEven =>
+    simp only
+    split
+    · split <;> constructor <;> omega
+    · split
+      · split
+        · rename_i _ hh ht
+          exfalso; rw [← ht] at hh; grind
+        · constructor <;> omega
+      · split
+        · split
+          · rename_i _ _ _ ht
+            exfalso
+            rename_i h3 h4 _
+            rw [← ht] at h3
+            grind
+          · constructor <;> omega
+        · split
+          · rename_i _ _ _ ht
+            exfalso
+            rename_i h3 h4 _
+            rw [← ht] at h3
+            grind
+          · constructor <;> omega
+
+theorem int_mul_le_mul {a b : Int} {g : Rat} (h : a ≤ b) (hg : 0 < g) : (a : Rat) * g ≤ (b : Rat) * g :=
+  Rat.mul_le_mul_of_nonneg_right (Rat.intCast_le_intCast.mpr h) (Rat.le_of_lt hg)
+
+theorem steps_up (t : Rat) : RoundMode.up.steps t = -((-t).floor) := by
+  rw [neg_floor_neg]; unfold steps; simp only; split <;> omega
+
+theorem steps_halfUp (t : Rat) : RoundMode.halfUp.steps t = (t + 1 / 2).floor := by
+  have ⟨h1, h2⟩ := floor_props t
+  unfold steps; simp only
+  split
+  · rename_i h
+    exact (floor_eq_of _ _ (by grind) (by grind)).symm
+  · rename_i h
+    exact (floor_eq_of _ (t.floor + 1) (by rw [Rat.intCast_add]; grind) (by rw [Rat.intCast_add]; grind)).symm
+
+theorem steps_halfDown (t : Rat) : RoundMode.halfDown.steps t = -((1 / 2 - t).floor) := by
+  have ⟨h1, h2⟩ := floor_props t
+  unfold steps; simp only
+  split
+  · rename_i h
+    have : (1 / 2 - t).floor = -t.floor := floor_eq_of _ _ (by rw [Rat.intCast_neg]; grind) (by rw [Rat.intCast_neg]; grind)
+    omega
+  · rename_i h
+    have : (1 / 2 - t).floor = -t.floor - 1 :=
+      floor_eq_of _ _ (by rw [Rat.intCast_sub, Rat.intCast_neg]; grind) (by rw [Rat.intCast_sub, Rat.intCast_neg]; grind)
+    omega
+
+/-- Half to the even step lies between half toward 0 and half away from it. -/
+theorem steps_halfEven_between (t : Rat) :
+    -((1 / 2 - t).floor) ≤ RoundMode.halfEven.steps t ∧ RoundMode.halfEven.steps t ≤ (t + 1 / 2).floor := by
+  rw [← steps_halfDown, ← steps_halfUp]
+  unfold steps; simp only
+  by_cases h1 : t - ((t.floor : Int) : Rat) < 1 / 2
+  · have h2 : t - ((t.floor : Int) : Rat) ≤ 1 / 2 := Rat.le_of_lt h1
+    simp only [h1, h2, ite_true]; omega
+  · by_cases h3 : t - ((t.floor : Int) : Rat) > 1 / 2
+    · have h4 : ¬ (t - ((t.floor : Int) : Rat) ≤ 1 / 2) := fun h => absurd h3 (Rat.not_lt.mpr h)
+      simp only [h1, h3, h4, ite_true, ite_false]; omega
+    · have h4 : t - ((t.floor : Int) : Rat) ≤ 1 / 2 := Rat.not_lt.mp h3
+      simp only [h1, h3, h4, ite_true, ite_false]
+      split <;> omega
+
+/-- A larger magnitude never takes fewer steps, whichever the mode. -/
+theorem steps_mono (m : RoundMode) {t1 t2 : Rat} (h : t1 ≤ t2) : m.steps t1 ≤ m.steps t2 := by
+  cases m with
+  | down => exact Rat.floor_monotone h
+  | up =>
+    rw [steps_up, steps_up]
+    have := Rat.floor_monotone (Rat.neg_le_neg h)
+    omega
+  | halfUp =>
+    rw [steps_halfUp, steps_halfUp]
+    exact Rat.floor_monotone (by grind)
+  | halfDown =>
+    rw [steps_halfDown, steps_halfDown]
+    have : (1 / 2 - t2).floor ≤ (1 / 2 - t1).floor := Rat.floor_monotone (by grind)
+    omega
+  | halfEven =>
+    rcases Rat.le_iff_lt_or_eq.mp h with hlt | heq
+    · have ⟨_, a2⟩ := steps_halfEven_between t1
+      have ⟨b1, _⟩ := steps_halfEven_between t2
+      -- ⌊t1 + 1/2⌋ ≤ ⌈t2 - 1/2⌉ where t1 < t2
+      have hn := floor_props (t1 + 1 / 2)
+      have hm := floor_props (1 / 2 - t2)
+      have : (t1 + 1 / 2).floor ≤ -((1 / 2 - t2).floor) := by
+        have : ((t1 + 1 / 2).floor : Rat) + ((1 / 2 - t2).floor : Rat) < 1 := by grind
+        have : (t1 + 1 / 2).floor + (1 / 2 - t2).floor < 1 := by
+          have h' : (((t1 + 1 / 2).floor + (1 / 2 - t2).floor : Int) : Rat) < ((1 : Int) : Rat) := by
+            rw [Rat.intCast_add]; exact this
+          exact Rat.intCast_lt_intCast.mp h'
+        omega
+      omega
+    · rw [heq]; exact Int.le_refl _
+
+theorem steps_nonneg (m : RoundMode) {t : Rat} (h : 0 ≤ t) : 0 ≤ m.steps t := by
+  have h0 : (0 : Int) ≤ t.floor := Rat.le_floor_iff.mpr (by simpa using h)
+  have := (steps_bounds m t).1
+  omega
+
+end RoundMode
+
+/-- **Every mode is a rounding `RoundsWell` describes**: it puts a value between the value rounded
+    down to the grid and rounded up to it. -/
+theorem roundWith_roundsWell (m : RoundMode) : RoundsWell (roundWith m) := by
+  intro g x hg
+  unfold roundWith floorTo ceilTo rfloor rceil
+  dsimp only
+  have e1 : -x / g = -(x / g) := by grind
+  have e2 : -(-(x / g)) = x / g := by grind
+  constructor
+  · by_cases h : x < 0
+    · simp only [h, ite_true]
+      have hb := RoundMode.steps_bounds m (-x / g)
+      generalize m.steps (-x / g) = k at hb ⊢
+      rw [e1, e2] at hb
+      apply RoundMode.int_mul_le_mul _ hg; omega
+    · simp only [h, ite_false]
+      have hb := RoundMode.steps_bounds m (x / g)
+      generalize m.steps (x / g) = k at hb ⊢
+      apply RoundMode.int_mul_le_mul _ hg; omega
+  · by_cases h : x < 0
+    · simp only [h, ite_true]
+      have hb := RoundMode.steps_bounds m (-x / g)
+      generalize m.steps (-x / g) = k at hb ⊢
+      rw [e1] at hb
+      apply RoundMode.int_mul_le_mul _ hg; omega
+    · simp only [h, ite_false]
+      have hb := RoundMode.steps_bounds m (x / g)
+      generalize m.steps (x / g) = k at hb ⊢
+      apply RoundMode.int_mul_le_mul _ hg; omega
+
+/-- **Every mode is monotone**: a larger value rounds to no smaller one. -/
+theorem roundWith_monotone (m : RoundMode) {g x y : Rat} (hg : 0 < g) (h : x ≤ y) :
+    roundWith m g x ≤ roundWith m g y := by
+  unfold roundWith
+  dsimp only
+  have hdiv : ∀ {a b : Rat}, a ≤ b → a / g ≤ b / g := fun hab => div_le_div_right hab hg
+  apply RoundMode.int_mul_le_mul _ hg
+  by_cases hx : x < 0
+  · by_cases hy : y < 0
+    · simp only [hx, hy, ite_true]
+      have := RoundMode.steps_mono m (hdiv (Rat.neg_le_neg h))
+      omega
+    · simp only [hx, hy, ite_true, ite_false]
+      have h1 := RoundMode.steps_nonneg m (t := -x / g) (by have := hdiv (show (0 : Rat) ≤ -x by grind); grind)
+      have h2 := RoundMode.steps_nonneg m (t := y / g) (by have := hdiv (show (0 : Rat) ≤ y by grind); grind)
+      omega
+  · have hy : ¬ y < 0 := by grind
+    simp only [hx, hy, ite_false]
+    exact RoundMode.steps_mono m (hdiv h)
+
+/-- Every node's rounding is one `RoundsWell` describes: its mode's, or `rnd`. -/
+theorem rndBy_roundsWell {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) :
+    ∀ mo : Option RoundMode, RoundsWell (rndBy mo rnd)
+  | some m => roundWith_roundsWell m
+  | none => hrnd
+
+/-- The low end of an interval put on the grid `g` by a node's rounding: rounded the way its mode
+    rounds, or down where the certificate names no mode. -/
+def roundLo : Option RoundMode → Rat → Rat → Rat
+  | some m, g, v => roundWith m g v
+  | none, g, v => floorTo g v
+
+/-- The high end the same way: rounded the way the mode rounds, or up where none is named. -/
+def roundHi : Option RoundMode → Rat → Rat → Rat
+  | some m, g, v => roundWith m g v
+  | none, g, v => ceilTo g v
+
+/-- **A value between two ends rounds to between the two ends put on the grid** (rulec's §15.303):
+    rounded the way its mode rounds, or out to the grid where none is named. -/
+theorem rndBy_between {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) (mo : Option RoundMode)
+    {g lo hi v : Rat} (hg : 0 < g) (h1 : lo ≤ v) (h2 : v ≤ hi) :
+    roundLo mo g lo ≤ rndBy mo rnd g v ∧ rndBy mo rnd g v ≤ roundHi mo g hi := by
+  cases mo with
+  | some m => exact ⟨roundWith_monotone m hg h1, roundWith_monotone m hg h2⟩
+  | none =>
+    obtain ⟨a, b⟩ := hrnd g v hg
+    exact ⟨Rat.le_trans (floorTo_monotone hg h1) a, Rat.le_trans b (ceilTo_monotone hg h2)⟩
 
 /-! ### Values on a grid
 
@@ -783,20 +1102,22 @@ def interval (ranges : String → Option Span2) (within : Expr → Expr → Bool
   | .maxOf a b => match interval ranges within a, interval ranges within b with
                   | some x, some y => some (rmax x.1 y.1, rmax x.2 y.2)
                   | _, _ => none
-  | .roundTo a g => if 0 < g then
+  -- A rounding: the two ends rounded the way its mode rounds them, or out to the grid where the
+  -- certificate names no mode (rulec's §15.303).
+  | .roundTo a g mo => if 0 < g then
       match interval ranges within a with
-      | some x => some (floorTo g x.1, ceilTo g x.2)
+      | some x => some (roundLo mo g x.1, roundHi mo g x.2)
       | none => none
     else none
   -- A rounded quotient by a value (rulec's §15.213): where the divisor's interval stays off
-  -- zero, the four quotients of the ends, put on the grid outward. Where it reaches zero there
-  -- is none — that is E132 — and the claim is not re-checked.
-  | .divRound a b g _ => if 0 < g then
+  -- zero, the four quotients of the ends, put on the grid as `roundTo` puts them. Where it reaches
+  -- zero there is none — that is E132 — and the claim is not re-checked.
+  | .divRound a b g _ mo => if 0 < g then
       match interval ranges within a, interval ranges within b with
       | some x, some y =>
         if 0 < y.1 || y.2 < 0 then
-          some (floorTo g (rmin4 (x.1 * y.2⁻¹) (x.1 * y.1⁻¹) (x.2 * y.2⁻¹) (x.2 * y.1⁻¹)),
-                ceilTo g (rmax4 (x.1 * y.2⁻¹) (x.1 * y.1⁻¹) (x.2 * y.2⁻¹) (x.2 * y.1⁻¹)))
+          some (roundLo mo g (rmin4 (x.1 * y.2⁻¹) (x.1 * y.1⁻¹) (x.2 * y.2⁻¹) (x.2 * y.1⁻¹)),
+                roundHi mo g (rmax4 (x.1 * y.2⁻¹) (x.1 * y.1⁻¹) (x.2 * y.2⁻¹) (x.2 * y.1⁻¹)))
         else none
       | _, _ => none
     else none
@@ -879,7 +1200,8 @@ theorem sharesInOrder_le {ranges : String → Option Span2} {env : String → Op
     case _ => exact absurd hr (by simp)
 
 /-- **E108 rests on this.** Where the checker states an interval, the value really is
-    inside it, whatever the inputs and whichever way each rounding breaks its ties. -/
+    inside it, whatever the inputs, each rounding going the way its mode goes and, where the
+    certificate names no mode, either way. -/
 theorem eval_mem_interval {ranges : String → Option Span2} {env : String → Option UVal}
     {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
     (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
@@ -1073,7 +1395,7 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
   | compare op a b _ _ => intro I v t hI _; exact absurd hI (by simp [interval])
   | typed _ => intro I v t hI _; exact absurd hI (by simp [interval])
   | unread => intro I v t hI _; exact absurd hI (by simp [interval])
-  | roundTo a g iha =>
+  | roundTo a g mo iha =>
     intro I v t hI hv
     simp only [interval] at hI
     split at hI
@@ -1087,13 +1409,11 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
           simp only [Option.some.injEq, Prod.mk.injEq] at hI hv
           subst hI
           rw [← hv.1]
-          obtain ⟨lo, hi⟩ := hrnd g p.1 hg
-          exact ⟨Rat.le_trans (floorTo_monotone hg hp1) lo,
-            Rat.le_trans hi (ceilTo_monotone hg hp2)⟩
+          exact rndBy_between hrnd mo hg hp1 hp2
         case _ => exact absurd hv (by simp)
       case _ => exact absurd hI (by simp)
     case _ => exact absurd hI (by simp)
-  | divRound a b g t iha ihb =>
+  | divRound a b g t mo iha ihb =>
     intro I v ty hI hv
     simp only [interval] at hI
     split at hI
@@ -1116,9 +1436,7 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
               simp only [Bool.or_eq_true, decide_eq_true_eq] at h0
               exact h0
             obtain ⟨dlo, dhi⟩ := div_box hp1 hp2 hq1 hq2 h0'
-            obtain ⟨lo, hi⟩ := hrnd g (p.1 / q.1) hg
-            exact ⟨Rat.le_trans (floorTo_monotone hg dlo) lo,
-              Rat.le_trans hi (ceilTo_monotone hg dhi)⟩
+            exact rndBy_between hrnd mo hg dlo dhi
           case _ => exact absurd hv (by simp)
         case _ => exact absurd hI (by simp)
       case _ => exact absurd hI (by simp)
@@ -1727,12 +2045,12 @@ def evalExact (env : String → Option UVal) : Expr → Option (Option UVal)
       | some x, some y => umax x y
       | _, _ => none)
     | _, _ => none
-  | .roundTo a g =>
+  | .roundTo a g _ =>
     match evalExact env a with
     | some (some x) => if decide (0 < g) && gridB g x.1 then some (some (x.1, x.2)) else none
     | some none => some none
     | none => none
-  | .divRound a b g t =>
+  | .divRound a b g t _ =>
     match evalExact env a, evalExact env b with
     | some (some x), some (some y) =>
       match quotTy x.2 y.2 t with
@@ -1830,7 +2148,7 @@ theorem evalExact_sound {env : String → Option UVal} {rnd : Rat → Rat → Ra
       subst h
       simp only [eval, iha x hx, ihb y hy]
     · exact absurd h (by simp)
-  | roundTo a g iha =>
+  | roundTo a g mo iha =>
     intro r h
     simp only [evalExact] at h
     split at h
@@ -1840,14 +2158,14 @@ theorem evalExact_sound {env : String → Option UVal} {rnd : Rat → Rat → Ra
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
         simp only [Option.some.injEq] at h
         subst h
-        simp only [eval, iha (some x) hx, rounds_onGrid hrnd hc.1 (onGrid_of_gridB hc.2)]
+        simp only [eval, iha (some x) hx, rounds_onGrid (rndBy_roundsWell hrnd mo) hc.1 (onGrid_of_gridB hc.2)]
       · exact absurd h (by simp)
     · rename_i hx
       simp only [Option.some.injEq] at h
       subst h
       simp only [eval, iha none hx]
     · exact absurd h (by simp)
-  | divRound a b g t iha ihb =>
+  | divRound a b g t mo iha ihb =>
     intro r h
     simp only [evalExact] at h
     split at h
@@ -1860,7 +2178,7 @@ theorem evalExact_sound {env : String → Option UVal} {rnd : Rat → Rat → Ra
           simp only [Option.some.injEq] at h
           subst h
           simp only [eval, iha (some x) hx, ihb (some y) hy, hty, Option.map_some,
-            rounds_onGrid hrnd hc.1 (onGrid_of_gridB hc.2)]
+            rounds_onGrid (rndBy_roundsWell hrnd mo) hc.1 (onGrid_of_gridB hc.2)]
         · exact absurd h (by simp)
       · rename_i hty
         simp only [Option.some.injEq] at h

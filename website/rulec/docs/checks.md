@@ -674,7 +674,7 @@ the answer's wherever an input's range is said: the certificate,
 `rulec schema` and `rulec api`, the page for people, and ritsu's port,
 through which the other languages read the answer. With none written,
 the output still has one range, and every one of them but the page
-says it: what decides the output, put out to the grid it rounds to. The
+says it: what decides the output, with both ends rounded the way the output rounds. The
 certificate's two re-checkers hold the range, written or not, to what
 the output answers once rounded, and `rulec diff` lists a range that
 moved among the declarations that changed. See

@@ -10217,10 +10217,10 @@ impl Gen<'_> {
     /// A test holds these two numbers to the text of the generated guard (§8.6). For an output it
     /// is the range the rule's answers lie in, the one the port gives the other languages and the
     /// schema states (§15.271): a range written on the output's line, or what decides the output
-    /// put out to the grid it rounds to, a `result` included. The generated code does not hold its
-    /// own answers to it; a caller that checks them does. An input of an ordered enum held to a
-    /// range has the same keys, with the first and the last value its range lets in, by the names
-    /// that travel: the guard compares the value's place with those two (§15.210, §15.251).
+    /// with both ends rounded the way it rounds, a `result` included. The generated code does not
+    /// hold its own answers to it; a caller that checks them does. An input of an ordered enum held
+    /// to a range has the same keys, with the first and the last value its range lets in, by the
+    /// names that travel: the guard compares the value's place with those two (§15.210, §15.251).
     fn range_json(&self, name: &str) -> Option<String> {
         if let Some(vs) = self.c.enum_ranges.get(name) {
             return Some(crate::json::Obj::new().str("min", vs.first()?).str("max", vs.last()?).finish());

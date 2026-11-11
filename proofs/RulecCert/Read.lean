@@ -157,7 +157,7 @@ partial def exprOfJson (j : Json) (dates : Bool := false) : Option Expr :=
               let gj ← args[1]?
               let g ← field gj "value" >>= optRat
               let gt := (field gj "type" >>= str >>= tyOfString).getD Ty.number
-              some (.divRound n d g gt)
+              some (.divRound n d g gt (RoundMode.ofString c))
             | none => do
             let a ← args[0]? >>= (exprOfJson · dates)
             -- A remainder by a positive whole constant, and a whole square root (rulec's §15.214,
@@ -176,9 +176,11 @@ partial def exprOfJson (j : Json) (dates : Bool := false) : Option Expr :=
               let b ← args[1]? >>= (exprOfJson · dates)
               let w ← args[2]? >>= (exprOfJson · dates)
               some (.alloc a b w)
+            -- A rounding, by the mode its name says (rulec's §15.303); one whose name this checker
+            -- does not know is read as rounding any way.
             else if args.size == 2 then do
               let g ← args[1]? >>= fun x => field x "value" >>= optRat
-              some (.roundTo a g)
+              some (.roundTo a g (RoundMode.ofString c))
             else none
         | none => none
 

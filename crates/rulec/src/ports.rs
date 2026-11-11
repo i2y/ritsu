@@ -872,10 +872,10 @@ impl ritsu_ports::Rules for Engine {
 
     /// The output's range is the one its answers lie in (§15.268, §15.269): a range written on its
     /// line, or what decides it (a table's rows, a `define`'s arithmetic, what its `result` comes
-    /// to) put out to the grid it rounds to. Where every row that decides it writes a number, those
-    /// numbers. The examples (§15.270) are values the output comes to, each with an input from the
-    /// rule's vectors (which take every row, and hold the inputs to their ranges and constraints)
-    /// that comes to it ([`examples_of`]).
+    /// to) with both ends rounded the way it rounds. Where every row that decides it writes a
+    /// number, those numbers. The examples (§15.270) are values the output comes to, each with an
+    /// input from the rule's vectors (which take every row, and hold the inputs to their ranges and
+    /// constraints) that comes to it ([`examples_of`]).
     fn output_values(&self, rule: &Path, output: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
         let (_, _, got) = self.rule(rule)?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;

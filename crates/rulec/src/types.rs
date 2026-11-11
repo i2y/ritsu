@@ -493,16 +493,26 @@ pub struct Checked {
     pub(crate) wait_e140: Vec<(String, crate::diag::Diag)>,
     /// The output `result` decides, with the range of what it comes to, when its line writes no
     /// range (§15.268): what the `result` reaches under the inputs' ranges and the constraints,
-    /// put out to the grid of its rounding. The certificate's `ranges` and the port the other
-    /// languages read an output's range through carry it; `ranges` above does not, so nothing
-    /// the code generators read from it moves.
+    /// and that with its ends rounded the way the output rounds (§15.303) — the value before it is
+    /// rounded, which a mode can leave past the rounded ends, and the answer. The certificate's
+    /// `ranges` carries it, and the port the other languages read an output's range through
+    /// carries it rounded ([`Checked::output_range`]); `ranges` above does not, so nothing the code
+    /// generators read from it moves.
     pub result_range: Option<(String, (Rat, Rat))>,
     /// The outputs whose line writes a range that holds what they come to (§15.268). Every other
     /// output's range is what decides it, and what it answers is that put on the grid of its
-    /// rounding, so [`Checked::output_range`] puts the ends out to the grid (§15.269).
+    /// rounding, so [`Checked::output_range`] rounds the ends the way the output rounds (§15.269,
+    /// §15.303).
     pub written_outputs: HashSet<String>,
+    /// The range an output's line writes, where the range the rule reads the output's name in has
+    /// to be wider (§15.303). A mode can round what decides the output back inside the written range
+    /// from past it — `down(1999, 1000)` is 1000 — while the rule reads the name, a `define` of it or
+    /// the column its rows write, as the value before it is rounded; `ranges` holds that value as
+    /// well, and [`Checked::output_range`] reads the written range here, the one the other languages
+    /// read the answer in.
+    pub answer_ranges: HashMap<String, (Option<Rat>, Option<Rat>)>,
     /// What each numeric output comes to by what decides it (§15.268): the rows of its tables, a
-    /// `define` of its name, what its `result` reaches, put out to the grid of its rounding. A
+    /// `define` of its name, what its `result` reaches, its ends rounded the way it rounds. A
     /// range written on the output's line takes its place in `ranges`, and this is kept as it was:
     /// it is what `output_values_over` reads with some inputs held (§15.273), since the written
     /// range is a promise over every input and says nothing of part of them.
@@ -1390,6 +1400,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         wait_e140: Vec::new(),
         result_range: None,
         written_outputs: HashSet::new(),
+        answer_ranges: HashMap::new(),
         reaches: HashMap::new(),
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
@@ -6945,13 +6956,18 @@ pub fn division_factors(sn: i128, sd: i128, gi: i128, sg: i128) -> (i128, i128) 
     (a / g, b / g)
 }
 
-/// A range put out to a grid (§15.268, §15.269): the lower end rounded down to it and the upper end
-/// up, whichever way the rounding breaks a tie, which is where a value inside the range can land once
-/// rounded to that grid. A missing end stays missing; a grid of zero leaves the range as it is.
-pub fn round_out((lo, hi): (Option<Rat>, Option<Rat>), g: Rat) -> (Option<Rat>, Option<Rat>) {
+/// Where a value inside a range can land once rounded to a grid (§15.268, §15.269, §15.303): with
+/// the mode, the two ends rounded the way it rounds them, since every mode puts a larger value on a
+/// step no lower; without one, the lower end rounded down to the grid and the upper end up, which
+/// holds whichever way a rounding goes. A missing end stays missing; a grid of zero leaves the
+/// range as it is.
+pub fn round_out((lo, hi): (Option<Rat>, Option<Rat>), mode: Option<RoundMode>, g: Rat) -> (Option<Rat>, Option<Rat>) {
     let g = if g.num < 0 { Rat::zero().sub(g) } else { g };
     if g.num == 0 {
         return (lo, hi);
+    }
+    if let Some(m) = mode {
+        return (lo.map(|v| round_far(v, m, g)), hi.map(|v| round_far(v, m, g)));
     }
     let floor = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, g);
     let ceil = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, g);
@@ -7501,13 +7517,18 @@ impl Checked {
 
     /// The range an output carries to the other languages (§15.268), which the certificate states
     /// under `output_ranges`: a range written on its line, as written; otherwise the range of what
-    /// decides it ([`Checked::stated_range`]) with the ends put out to the grid of its rounding
-    /// (§15.269), since the rule answers what decides it rounded, which can pass an end that is off
-    /// the grid. A name that is not an output has its range as `ranges` holds it.
+    /// decides it ([`Checked::stated_range`]) with the ends rounded the way it rounds (§15.269,
+    /// §15.303), since the rule answers what decides it rounded, which can pass an end that is off
+    /// the grid. A range written on the line that `ranges` had to widen to hold the value the rule
+    /// reads the name as is in [`Checked::answer_ranges`] (§15.303). A name that is not an output has
+    /// its range as `ranges` holds it.
     pub fn output_range(&self, name: &str) -> Option<(Option<Rat>, Option<Rat>)> {
+        if let Some(r) = self.answer_ranges.get(name) {
+            return Some(*r);
+        }
         let held = self.stated_range(name)?;
         match self.roundings.get(name) {
-            Some((_, g)) if g.num != 0 && !self.written_outputs.contains(name) => Some(round_out(held, *g)),
+            Some((m, g)) if g.num != 0 && !self.written_outputs.contains(name) => Some(round_out(held, Some(*m), *g)),
             _ => Some(held),
         }
     }
@@ -7527,8 +7548,8 @@ impl Checked {
 
     /// E140 and the ranges of the outputs (§15.268). What an output comes to is what decides it —
     /// the values of the rows of its tables, a `define` of its name, or what its `result` reaches
-    /// under the inputs' ranges and the constraints — put out to the grid of its rounding, as a
-    /// rounded value's interval is, whichever way the mode rounds. A range written on the output's
+    /// under the inputs' ranges and the constraints — with its ends rounded the way the output
+    /// rounds, as a rounded value's interval is (§15.303). A range written on the output's
     /// line has to hold that, and is then the output's range, its ends where it writes them and
     /// that interval's where it does not, as a written range of a `max` is (§15.219). What decides
     /// it is read with an end no range writes read as the end of the type, as E108 reads it
@@ -7571,12 +7592,14 @@ impl Checked {
                 }
             };
             let out_to_grid = |(lo, hi): (Rat, Rat)| match self.roundings.get(&name) {
-                Some((_, g)) if g.num > 0 => match round_out((Some(lo), Some(hi)), *g) {
+                Some((m, g)) if g.num > 0 => match round_out((Some(lo), Some(hi)), Some(*m), *g) {
                     (Some(l), Some(h)) => (l, h),
                     _ => (lo, hi),
                 },
                 _ => (lo, hi),
             };
+            // What decides the output before it is rounded: the value the rule reads its name as.
+            let raw = decided.or(wide);
             let reach = decided.map(out_to_grid);
             let wide = wide.map(out_to_grid);
             let numeric = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number);
@@ -7585,7 +7608,10 @@ impl Checked {
             }
             let Some(rg) = &o.range else {
                 if by_result.is_some() && numeric && !matches!(ty, Ty::Opt(_)) {
-                    self.result_range = reach.map(|r| (name.clone(), r));
+                    // The value before it is rounded and the answer, both (§15.303).
+                    self.result_range = decided.zip(reach).map(|((a, b), (l, h))| {
+                        (name.clone(), (if l.cmp_to(a) == std::cmp::Ordering::Less { l } else { a }, if h.cmp_to(b) == std::cmp::Ordering::Greater { h } else { b }))
+                    });
                 }
                 continue;
             };
@@ -7661,18 +7687,33 @@ impl Checked {
                 // theirs, and stays unwritten where one of them is read at the end of the type
                 // (§15.299), as the range of a value keeps the ends the rule writes (§15.294).
                 let (rl, rh) = reach.map_or((None, None), |(a, b)| (Some(a), Some(b)));
-                self.ranges.insert(name, (dl.or(rl), dh.or(rh)));
+                let answers = (dl.or(rl), dh.or(rh));
+                // The rule reads the output's name — a `define` of it, the column its rows write — as
+                // the value before it is rounded, which a mode can bring back inside the written range
+                // from past it (§15.303): the range it is read in holds that value too, and the
+                // written range stays the one the answer is read in.
+                let read = match raw {
+                    Some((a, b)) => (
+                        answers.0.map(|x| if a.cmp_to(x) == std::cmp::Ordering::Less { a } else { x }),
+                        answers.1.map(|x| if b.cmp_to(x) == std::cmp::Ordering::Greater { b } else { x }),
+                    ),
+                    None => answers,
+                };
+                if read != answers {
+                    self.answer_ranges.insert(name.clone(), answers);
+                }
+                self.ranges.insert(name, read);
                 continue;
             }
             let how = if by_result.is_some() {
                 tr!(
-                    "{name} は `result` が決めます。とる値は、その式が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。",
-                    "{name} is decided by the `result`, and takes what its expression reaches under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding."
+                    "{name} は `result` が決めます。とる値は、その式が入力の範囲と `constraint` のもとでとる値の両端を、出力の丸め方で丸めたあいだです。",
+                    "{name} is decided by the `result`, and takes what its expression reaches under the inputs' ranges and the `constraint` lines, with both ends rounded the way the output rounds."
                 )
             } else {
                 tr!(
-                    "{name} がとる値は、それを決めるもの（表の行のセルの値と式、同じ名前の `define`、並びをたどる行）の値を、丸めの刻みへ外向きに広げたものです。",
-                    "{name} takes the values of what decides it — the cells of a table's rows, a `define` of its name, a line that walks a sequence — put out to the grid of its rounding."
+                    "{name} がとる値は、それを決めるもの（表の行のセルの値と式、同じ名前の `define`、並びをたどる行）の値の両端を、出力の丸め方で丸めたあいだです。",
+                    "{name} takes the values of what decides it — the cells of a table's rows, a `define` of its name, a line that walks a sequence — with both ends rounded the way the output rounds."
                 )
             };
             let mut d = Diag::error("E140", tr!("出力 {name} の範囲が、とりうる値を含んでいません", "The range of the output {name} does not hold the values it can take")).at(at);
@@ -7925,19 +7966,20 @@ impl Checked {
             Expr::Call(name, args, _) => {
                 use crate::num::RoundMode;
                 match (name.as_str(), args.as_slice()) {
-                    // A rounded value stays within its argument's bounds pushed out to the
-                    // grid, whichever way the mode rounds: down toward zero on the side
-                    // nearer zero, up away from it on the other. Without this a callee's
-                    // rounded output had no range, and a definition over it in the applying
-                    // rule had no range and no scale — and came out at the wrong scale in
-                    // every generated language (§15.72).
+                    // A rounded value runs between its argument's two ends rounded the way the
+                    // mode rounds them (§15.303): every mode puts a larger value on a step no
+                    // lower, so nothing inside the argument's interval lands outside. Without a
+                    // range here a callee's rounded output had none, and a definition over it in
+                    // the applying rule had no range and no scale — and came out at the wrong
+                    // scale in every generated language (§15.72). The ends used to be put out to
+                    // the grid whatever the mode, and `down(x, 1000JPY)` with `x` up to 1,999 yen
+                    // was said to reach 2,000 yen.
                     (m, [x, g]) if RoundMode::parse(m).is_some() => {
+                        let mode = RoundMode::parse(m)?;
                         let (lo, hi) = self.interval_in(x, ty, wide)?;
                         let Expr::Lit(Lit::Num(n), _) = g else { return None };
                         let grid = lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?;
-                        let out = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, grid);
-                        let inn = |v: Rat| round_far(v, if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, grid);
-                        Some((out(lo), inn(hi)))
+                        Some((round_far(lo, mode, grid), round_far(hi, mode, grid)))
                     }
                     // `floor(T × C ÷ S)` with all three non-negative and S positive. The
                     // smallest answer is the smallest amount over the largest whole. The
@@ -8843,7 +8885,7 @@ impl Checked {
                         (if cmp_exact(lo, from.0).is_lt() { lo } else { from.0 }, if cmp_exact(hi, from.1).is_gt() { hi } else { from.1 })
                     }
                     (Some(g), None) => {
-                        let (lo, hi) = round_out((Some(from.0), Some(from.1)), g);
+                        let (lo, hi) = round_out((Some(from.0), Some(from.1)), None, g);
                         (lo?, hi?)
                     }
                     (None, _) => from,
