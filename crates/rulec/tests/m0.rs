@@ -140,6 +140,9 @@ fn 変異は決めたコードだけを出す() {
         // and the generated code multiplied by 0. The English rule, and its Japanese version.
         ("m_e103bare.rule", &[("E103", 1)], "定義の率 80% を 0.8 と転記した（単位の無い小数には値が無く、生成コードは 0 を掛けていた）"),
         ("m_e103bareja.rule", &[("E103", 1)], "上と同じ規則の日本語の版"),
+        // §15.307: the same in a fold's arm, which held its literals to no unit.
+        ("m_e103foldbare.rule", &[("E103", 1)], "値引きを 1.5 倍にする腕で、150% を 1.5 と書いた（腕の式の小数は見られず、生成コードは 0 を掛けていた）"),
+        ("m_e103foldbareja.rule", &[("E103", 1)], "上と同じ規則の日本語の版"),
         // §15.247: a heading's type over an output's name went unread against the output's
         // declaration, and took its place. The Japanese rule, and its English twin.
         ("m_e103col.rule", &[("E103", 1)], "出力を税抜にして、表の見出しの税込を直し忘れた（見出しの型が黙って出力の型になっていた）"),
@@ -223,6 +226,9 @@ fn 変異は決めたコードだけを出す() {
         ("m_e070fromja.rule", &[("E070", 1)], "上と同じ規則の日本語の版"),
         ("m_e073.rule", &[("E073", 1), ("W111", 1)], "重みで選ぶ畳み込みから `draw` の行を消した"),
         ("m_e073ja.rule", &[("E073", 1), ("W111", 1)], "上と同じ規則の日本語の版"),
+        // §15.307: a weight whose values step by a half.
+        ("m_e073step.rule", &[("E073", 1)], "重みを半分にして、整数に丸めなかった（生成コードは重みの 2 倍を引いた値と比べていた）"),
+        ("m_e073stepja.rule", &[("E073", 1)], "上と同じ規則の日本語の版"),
         ("m_e133.rule", &[("E133", 1)], "ポスターの三等の確率を、表が出す 5% でなく 6% と書いた"),
         ("m_e133ja.rule", &[("E133", 1)], "上と同じ規則の日本語の版"),
         ("m_w129.rule", &[("W129", 1)], "強さのどの組でも挑む側が点を取りうる、という主張を全部の組について書いた"),

@@ -1,0 +1,13 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/reach/E102_past_a_derives_equation.rule:18 table flag_of
+   |
+18 | | >50GBP | <=60GBP | >=20GBP | alert            |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+13 | derive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP
+   |                              ^^^^^^^^^^^^^^ the reachable interval is >=-99GBP <=100GBP
+   |
+ Over the ranges of the inputs, `excess` can only come to >=-99GBP <=100GBP.
+ `excess = amount - limit` holds for every input, and with it no values meet all of this row's conditions.
+ hint: delete this row. To keep it, rewrite its conditions to values the equations allow together.
+
+note tests/reach/E102_past_a_derives_equation.rule: 1 shadow pairs (1 structural, 0 equivalent, 0 needs review)

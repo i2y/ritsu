@@ -1,9 +1,9 @@
 //! The box algebra's treatment of a **derived** column (§6.2, DESIGN §15.27 and §15.29).
 //!
 //! §6 makes every column an independent axis, which is what leaves completeness and overlap
-//! exactly decidable. A `derive` is not independent — it is a linear combination of inputs — so
-//! the product of the axes contains points no input can reach, and an overlap read off the boxes
-//! alone can be one that cannot happen.
+//! exactly decidable. A `derive` is not independent — it is computed from the inputs, here as a
+//! linear combination of them — so the product of the axes contains points no input can reach,
+//! and an overlap read off the boxes alone can be one that cannot happen.
 //!
 //! Two properties matter here and they pull against each other. An overlap that cannot happen
 //! must not be reported, or a correct rule is rejected. An overlap that **can** happen must

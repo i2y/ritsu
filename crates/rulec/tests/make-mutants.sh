@@ -189,6 +189,11 @@ awk '/^  料率\(rate\)/ { sub(/step 0.1%/, "step 0.1g") } { print }'      "$C/�
 # generated code multiplied by 0 (§15.191). The English rule, and its Japanese version beside it.
 awk '{ sub(/full \* 80%/, "full * 0.8"); print }'                       "$C/retirement_pay.rule" > "$M/m_e103bare.rule"
 awk '{ sub(/満額 × 80%/, "満額 × 0.8"); print }'                         "$C/退職手当.rule" > "$M/m_e103bareja.rule"
+# The same in a fold's arm, whose literals were held to no unit (§15.307): a campaign's one and a
+# half times the discount, `150%` written `1.5`, and the generated code took the discount times 0.
+# The English rule, and its Japanese version beside it.
+awk '{ sub(/take_first top_off$/, "take_first top_off * 1.5"); print }'  "$C/order_settlement.rule" > "$M/m_e103foldbare.rule"
+awk '{ sub(/take_first 値引き額$/, "take_first 値引き額 × 1.5"); print }' "$C/注文の精算.rule" > "$M/m_e103foldbareja.rule"
 # --- A type over a name that already has one (§15.247). The output is declared without tax, and
 # the heading of the table that decides it still says with tax. The heading's type took the
 # output's place in silence, and the generated code returned the fee with tax. The Japanese rule,
@@ -502,6 +507,10 @@ awk '/^  引いた数\(sample_number\) +: number +range >=0 <=99 +random/ { sub(
 # The pick by weight with its `draw` line gone
 awk '!/^  draw +-> roll$/'                                                                                    "$q"  > "$M/m_e073.rule"
 awk '!/^  draw +-> 乱数$/'                                                                                    "$qj" > "$M/m_e073ja.rule"
+# The weight halved, with nothing to round it to a whole number (§15.307): the generated code
+# compared twice the weight with the drawn value, and the reference evaluator the weight itself
+awk '{ sub(/take_weighted reviewer_id by capacity$/, "take_weighted reviewer_id by capacity / 2"); print }'  "$q"  > "$M/m_e073step.rule"
+awk '{ sub(/take_weighted 担当者番号 by 受けられる量$/, "take_weighted 担当者番号 by 受けられる量 ÷ 2"); print }' "$qj" > "$M/m_e073stepja.rule"
 # The poster says 6% for the third prize out of a campaign, and the table gives 5%
 awk '/^\| false +\| third +\| 5% +\|$/ { sub(/5% /, "6% ") } { print }'                                     "$p"  > "$M/m_e133.rule"
 awk '/^\| false +\| 三等 +\| 5% +\|$/ { sub(/5% /, "6% ") } { print }'                                      "$pj" > "$M/m_e133ja.rule"

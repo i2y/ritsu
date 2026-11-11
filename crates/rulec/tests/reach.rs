@@ -12,6 +12,11 @@
 //! so is a `define`, and a derive over a product, a rounding or a table's output, whatever its
 //! expression's interval holds (§15.195). What the form does not read — a row only a `constraint`
 //! rules out, or one only the tables above do — passes as it did before.
+//!
+//! A row whose cell lets in what the derive comes to is not told that it asks past it (§15.307):
+//! where the derive's equation leaves the row out, the note names the equation, as it names a
+//! `define`'s; where a `constraint` does, with a `-` under the derive, the row is told only that,
+//! and the derive's line is not marked (the rules of `PLAIN`).
 
 use rulec::eval::Val;
 use rulec::i18n::{self, Lang};
@@ -34,7 +39,14 @@ const PAIRS: &[(&str, &str, usize)] = &[
     ("E102_past_what_a_table_above_allows", "E102_上の表が許さない行", 2),
     // A row the ranges let stand, which the equations of the `define`s rule out (§15.209).
     ("E102_past_a_defines_equation", "E102_定義の式が許さない行", 4),
+    // The same, with a derive's equation (§15.307): the row's cell meets what the derive comes to.
+    ("E102_past_a_derives_equation", "E102_導出の式が許さない行", 1),
 ];
+
+/// A row with a `-` under a derive, which a `constraint` leaves out (§15.307): the English rule,
+/// its Japanese version, and the row. The reach is asked first, but it is not what leaves the row
+/// out, so the message neither marks the derive's line nor says the row asks past it.
+const PLAIN: &[(&str, &str, usize)] = &[("E102_ruled_out_by_a_constraint", "E102_制約が許さない行", 3)];
 
 /// A row that asks a boolean `define` for the truth value it never takes over the ranges of the
 /// inputs (§15.196): the English rule, its Japanese version, and the row.
@@ -69,9 +81,9 @@ fn found(src: &str, rel: &str) -> Vec<(String, usize)> {
 fn a_row_past_a_derives_reach_is_e102_with_what_the_derive_comes_to() {
     let mut names: Vec<String> = std::fs::read_dir(root().join("tests/reach")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
     names.sort();
-    let mut listed: Vec<String> = PAIRS.iter().chain(TRUTH).flat_map(|(en, ja, _)| [format!("{en}.rule"), format!("{ja}.rule")]).collect();
+    let mut listed: Vec<String> = PAIRS.iter().chain(TRUTH).chain(PLAIN).flat_map(|(en, ja, _)| [format!("{en}.rule"), format!("{ja}.rule")]).collect();
     listed.sort();
-    assert_eq!(names, listed, "every rule of tests/reach is in PAIRS or TRUTH, with its Japanese version");
+    assert_eq!(names, listed, "every rule of tests/reach is in PAIRS, TRUTH or PLAIN, with its Japanese version");
     let mut failures = Vec::new();
     for (en, ja, row) in PAIRS {
         for stem in [en, ja] {
@@ -104,7 +116,7 @@ fn a_row_past_a_derives_reach_is_e102_with_what_the_derive_comes_to() {
 /// The Japanese version is the same rule with other names: the same findings on the same lines.
 #[test]
 fn the_japanese_version_says_the_same_things_in_the_same_places() {
-    for (en, ja, _) in PAIRS {
+    for (en, ja, _) in PAIRS.iter().chain(PLAIN) {
         let (re, se) = source(en);
         let (rj, sj) = source(ja);
         assert_eq!(found(&se, &re), found(&sj, &rj), "{en} and {ja}");
@@ -116,7 +128,7 @@ fn the_japanese_version_says_the_same_things_in_the_same_places() {
 /// around it fire for some.
 #[test]
 fn no_input_reaches_the_row() {
-    for (en, ja, row) in PAIRS {
+    for (en, ja, row) in PAIRS.iter().chain(PLAIN) {
         for stem in [en, ja] {
             let (rel, src) = source(stem);
             let (f, c) = rulec::prepare(&src, &rel).unwrap_or_else(|_| panic!("{rel} does not read"));
@@ -169,7 +181,7 @@ fn no_input_reaches_the_row() {
 /// for, so the two never tell the writer opposite things.
 #[test]
 fn deleting_the_row_leaves_no_gap() {
-    for (en, ja, row) in PAIRS {
+    for (en, ja, row) in PAIRS.iter().chain(PLAIN) {
         for stem in [en, ja] {
             let (rel, src) = source(stem);
             // the row's line: the n-th line of the last table after its header
@@ -206,9 +218,80 @@ fn what_takes_the_rest_of_the_row_is_said() {
     let en = notes(unrelated, Lang::En);
     assert!(en.contains("Over the ranges of the inputs, `excess` can only come to >=-99GBP <=100GBP. Because of `policy first`"), "{en}");
     assert!(en.contains("The combinations of inputs that `constraint x <= y` rules out never come either."), "{en}");
+    // the row lets in what `excess` comes to, and row 1 takes it: moving the row up is the way,
+    // not rewriting it inside what `excess` comes to (§15.307)
+    assert!(en.contains("hint: if this is a new specification, move it up; if it is not needed, delete it."), "{en}");
     let ja = notes(unrelated, Lang::Ja);
     assert!(ja.contains("`excess` が取りうる値は、入力の範囲から計算すると >=-99GBP <=100GBP です。"), "{ja}");
     assert!(ja.contains("`constraint x <= y` が許さない入力の組み合わせも来ません。"), "{ja}");
+    assert!(ja.contains("ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。"), "{ja}");
+}
+
+/// A row whose cell lets in what the derive comes to is not told that it asks past it (§15.307).
+/// Where the derive's equation leaves it out, the note names the equation and the hint is the one
+/// for equations; where a `constraint` does, with a `-` under the derive, the row is told only
+/// that, and the derive's line is not marked. Each is said the same way in both languages.
+#[test]
+fn a_row_that_lets_in_what_the_derive_comes_to_is_told_what_leaves_it_out() {
+    let mut failures = Vec::new();
+    let past = ["None of those values meets this row's conditions.", "この行の条件に当てはまる値は、その中にありません。", "Widening a derive's `range`", "導出の `range` を広げても"];
+    for (en, ja, row, said) in [
+        (
+            "E102_past_a_derives_equation",
+            "E102_導出の式が許さない行",
+            1,
+            [
+                ("`excess = amount - limit` holds for every input, and with it no values meet all of this row's conditions.", "hint: delete this row. To keep it, rewrite its conditions to values the equations allow together."),
+                ("`超過額 = 金額 - 上限` は、どの入力でも成り立つ式です。この式も合わせると、この行の条件をすべて満たす値はありません。", "ヒント: この行は削除してください。残すなら、条件を、式どうしの関係が許す値の組に書き直してください。"),
+            ],
+        ),
+        (
+            PLAIN[0].0,
+            PLAIN[0].1,
+            PLAIN[0].2,
+            [
+                ("No input satisfies all of this row's conditions at once.\n The combinations of inputs that `constraint returned <= ordered` rules out never come.", "hint: rewrite this row's conditions so that some input meets them all, or delete this row."),
+                ("この行の条件を同時に満たす入力がありません。\n `constraint 返品数 <= 注文数` が許さない入力の組み合わせは来ません。", "ヒント: 条件を書き直して、すべてを満たす入力があるようにするか、この行を削除してください。"),
+            ],
+        ),
+    ] {
+        for (stem, (note, hint)) in [(en, said[0]), (ja, said[1])] {
+            let (rel, src) = source(stem);
+            let ds = i18n::with(Lang::En, || rulec::check_source(&src, &rel));
+            let errors: Vec<_> = ds.iter().filter(|d| d.severity == rulec::diag::Severity::Error).collect();
+            if errors.len() != 1 || errors[0].code != "E102" || !errors[0].title.contains(&format!("row {row} ")) {
+                failures.push(format!("{rel}: {:?}, not one E102 on row {row}", errors.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>()));
+                continue;
+            }
+            // the rule's own language, and the other one: what leaves the row out is said in both
+            let lang = if stem == en { Lang::En } else { Lang::Ja };
+            let out = printed(&rel, &src, lang);
+            if !out.contains(note) || !out.contains(hint) {
+                failures.push(format!("{rel} does not say what leaves the row out:\n{out}"));
+            }
+            for wrong in past {
+                if out.contains(wrong) {
+                    failures.push(format!("{rel} says {wrong:?}:\n{out}"));
+                }
+            }
+            let marked = out.contains("the reachable interval is") || out.contains("実際に取りうる値は");
+            if marked != (stem != PLAIN[0].0 && stem != PLAIN[0].1) {
+                failures.push(format!("{rel}: the derive's line is {}marked:\n{out}", if marked { "" } else { "not " }));
+            }
+        }
+    }
+    // and the golden files of the rules in PLAIN, in both languages
+    for (en, ja, _) in PLAIN {
+        for stem in [en, ja] {
+            let (rel, src) = source(stem);
+            for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
+                if let Err(e) = ritsu_testkit::golden::check(&root().join(format!("tests/golden/reach/{stem}.{tag}.txt")), &printed(&rel, &src, lang)) {
+                    failures.push(e);
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// koyomi's days take part too (`range from koyomi`, with koyomi joined as `ritsu rulec` joins it):

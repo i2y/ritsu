@@ -5619,9 +5619,9 @@ Related codes: [E073](#e073), [E133](#e133), [E108](#e108)
 
 `error` — **A pick by weight is not shaped right**
 
-**When.** A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative (an end a range the weight reads does not write is read as the end of what the type holds); there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0.
+**When.** A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, can be negative, or is not a whole number (an end a range the weight reads does not write is read as the end of what the type holds, and `capacity / 2` steps by a half); there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0.
 
-**Fix.** Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more. Split the rule in two if it needs two picks.
+**Fix.** Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more: round one a division makes finer, as in `down(capacity / 2, 1)`. Split the rule in two if it needs two picks.
 
 **Smallest reproduction**:
 

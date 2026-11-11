@@ -1394,11 +1394,13 @@ def statedSpan (j : Json) (like : Span) : Option Span :=
   | some v, .words _ => some (.words (v.toList.filterMap str))
   | none, _ => none
 
-/-- **Every word a row is said to write is a value of its column, and no name of the rule.** rulec
-    reads a word in an answer cell as a name wherever the rule declares one spelled so, and the row
-    then writes whatever the name holds (rulec's §3.2). Without this, a row that passes a name on
-    could be said to write the name as a word — the file does write that word there — and a value
-    it does write could be called one no row writes (rulec's §15.261). -/
+/-- **Every word a row is said to write is a value of its column, and no name a cell of it reads.**
+    rulec reads a word in an answer cell in the column's type (rulec's §15.208): a value of the
+    column's enum is that value, also where a name of another type is spelled the same, and a name of
+    the column's own enum spelled as one of its values is E075, which no rule that passes `check` has
+    (§15.307). Without this, a row that passes a name on could be said to write the name as a word —
+    the file does write that word there — and a value it does write could be called one no row
+    writes (rulec's §15.261). -/
 def checkWords (cert tj : Json) (r : Report) : Report := Id.run do
   let mut r := r
   let typesJ := (field cert "types").getD Json.null
@@ -1420,8 +1422,13 @@ def checkWords (cert tj : Json) (r : Report) : Report := Id.run do
           let vals := if optional then vals ++ ["none"] else vals
           if !vals.contains w then
             r := r.fail s!"{fieldStr tj "table"}: row {(fieldNat row "row").getD 0} is said to write `{w}` into {col}, which is no value of {ty}"
-          else if (field typesJ w).isSome then
-            r := r.fail s!"{fieldStr tj "table"}: row {(fieldNat row "row").getD 0} is said to write the word `{w}` into {col}, and `{w}` is a name of the rule, which a cell reads as what the name holds"
+          else match field typesJ w with
+            | none => pure ()
+            | some twJ =>
+              let tw := (str twJ).getD twJ.compress
+              let twBase := if tw.endsWith "?" then (tw.dropEnd 1).toString else tw
+              if twBase == base || (str twJ).isNone then
+                r := r.fail s!"{fieldStr tj "table"}: row {(fieldNat row "row").getD 0} is said to write the word `{w}` into {col}, and `{w}` is a name of the rule of type {tw}, which a cell of {ty} reads either way (rulec's E075)"
   return r
 
 /-- The axis of the column of its own table a row passes on into its output `oi` (`passes`,

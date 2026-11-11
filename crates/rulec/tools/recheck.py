@@ -1581,11 +1581,13 @@ def never_written(t, u, oi, col, val):
 
 
 def check_words(t):
-    """Every word a row is said to write is a value of the column it is written into, and no name of
-    the rule. rulec reads a word in an answer cell as a name wherever the rule declares one spelled
-    so, and the row then writes whatever the name holds (rulec's §3.2). Without this, a row that
-    passes a name on could be said to write the name as a word — the file does write that word
-    there — and a value it does write could then be called one no row writes (rulec's §15.261)."""
+    """Every word a row is said to write is a value of the column it is written into, and no name a
+    cell of that column reads. rulec reads a word in an answer cell in the column's type (rulec's
+    §15.208): a value of the column's enum is that value, also where a name of another type is
+    spelled the same, and a name of the column's own enum spelled as one of its values is E075, which
+    no rule that passes `check` has (§15.307). Without this, a row that passes a name on could be
+    said to write the name as a word — the file does write that word there — and a value it does
+    write could then be called one no row writes (rulec's §15.261)."""
     cert = t.get("_cert") or {}
     types, enums = cert.get("types", {}), cert.get("enums", {})
     decides = t.get("decides") or []
@@ -1604,8 +1606,10 @@ def check_words(t):
             if w not in values:
                 raise Bad(f"{t['table']}: row {r['row']} is said to write `{w}` into {col}, which is no value of {ty}")
             if w in types:
-                raise Bad(f"{t['table']}: row {r['row']} is said to write the word `{w}` into {col}, and `{w}` is a name "
-                          f"of the rule, which a cell reads as what the name holds")
+                tw = types[w]
+                if not isinstance(tw, str) or (tw[:-1] if tw.endswith("?") else tw) == base:
+                    raise Bad(f"{t['table']}: row {r['row']} is said to write the word `{w}` into {col}, and `{w}` is a name "
+                              f"of the rule of type {tw}, which a cell of {ty} reads either way (rulec's E075)")
 
 
 def decider(tables, column):

@@ -196,6 +196,8 @@ fn a_misshapen_pick_by_weight_is_e073() {
         ("a drawn value that is not random", "  draw      -> roll\n", "  draw      -> cap\n"),
         ("a drawn value from 1", "  roll : number  range >=0 <=99  random", "  roll : number  range >=1 <=99  random"),
         ("a drawn value that is not declared", "  draw      -> roll\n", "  draw      -> dice\n"),
+        // §15.307: the walk adds the weights up as whole numbers
+        ("a weight that steps by a half", "take_weighted ix by w", "take_weighted ix by w / 2"),
     ];
     for (what, from, to) in forms {
         assert!(base.contains(from), "{what}: the base has no {from:?}");
@@ -204,6 +206,34 @@ fn a_misshapen_pick_by_weight_is_e073() {
     }
     let two = format!("{base}\nfold v over os -> q : number\n  skip      -> next\n  pick      -> take_weighted ix by w\n  draw      -> roll\n  empty     -> 0\n  exhausted -> held\n");
     assert!(codes_of(t.path(), "two.rule", &two).contains(&"E073".to_string()), "two picks by weight pass");
+}
+
+/// A weight is a whole number (§15.307). The walk adds the weights up as the integers they are
+/// stored as, so `w / 2` would be compared as twice itself in the generated code while the
+/// reference evaluator compared the half: E073 says the step, and the hint rounds it. Rounded, it
+/// passes. A bare decimal in a weight, or in any other arm, is E103, as in a derive (§15.191): it
+/// has no value, and the generated code took it as 0.
+#[test]
+fn a_weight_is_a_whole_number_and_an_arm_holds_its_literals_to_their_units() {
+    let t = TempDir::new("chances-step");
+    let half = PICK.replacen("take_weighted ix by w", "take_weighted ix by w / 2", 1);
+    assert_eq!(codes_of(t.path(), "half.rule", &half), ["E073"]);
+    let text = run_in(t.path(), &["check", "half.rule"]).1;
+    assert!(text.contains("A weight is not a whole number (the weight of the arm of pick steps by 1/2)"), "{text}");
+    assert!(text.contains("its values step by 1/2"), "{text}");
+    assert!(text.contains("Round a weight whose step is finer than 1 to a whole number, as in `down(w / 2, 1)`."), "{text}");
+    let ja = run_lang(t.path(), "ja", &["check", "half.rule"]).1;
+    assert!(ja.contains("重みが整数になりません（pick の腕の重みは 1/2 刻みです）"), "{ja}");
+    assert!(codes_of(t.path(), "down.rule", &PICK.replacen("take_weighted ix by w", "take_weighted ix by down(w / 2, 1)", 1)).is_empty());
+    // A bare decimal is E103 alone: it has no value, so there is no step and no range to speak of.
+    assert_eq!(codes_of(t.path(), "decimal.rule", &PICK.replacen("take_weighted ix by w", "take_weighted ix by w * 1.5", 1)), ["E103"]);
+    let text = run_in(t.path(), &["check", "decimal.rule"]).1;
+    assert!(text.contains("A bare decimal `1.5` cannot be written"), "{text}");
+    // And in the other arms: an answer, and a key.
+    let first = PICK.replacen("  pick      -> take_weighted ix by w\n", "  pick      -> take_first ix + w * 1.5\n", 1).replacen("  draw      -> roll\n", "", 1);
+    assert_eq!(codes_of(t.path(), "first.rule", &first.replacen("  roll : number  range >=0 <=99  random\n", "", 1)), ["E103"]);
+    let key = PICK.replacen("  pick      -> take_weighted ix by w\n", "  pick      -> keep_max ix by w * 0.5\n", 1).replacen("  draw      -> roll\n", "", 1);
+    assert_eq!(codes_of(t.path(), "key.rule", &key.replacen("  roll : number  range >=0 <=99  random\n", "", 1)), ["E103"]);
 }
 
 /// A claim that does not hold names the combination it fails at, with the chance there, in the

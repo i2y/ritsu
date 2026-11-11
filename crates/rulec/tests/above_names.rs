@@ -18,7 +18,10 @@
 //! the table above decides (`passed_lift_on.rule`), a flag passed on (`passed_flag.rule`), a tier
 //! that may be absent (`passed_optional.rule`), and a name the table above has no column for, which
 //! narrows nothing (`passed_other_name.rule`). The first five passed `check` before, and both
-//! re-checkers refused each certificate.
+//! re-checkers refused each certificate. The last material (`word_of_another_type.rule`, §15.307)
+//! writes a value of its answer column's enum that an input of another type is also named; the cell
+//! reads it as the value (§15.208), and both re-checkers refused the certificate, taking the word for
+//! the input.
 
 use ritsu_testkit::{Need, ready};
 use rulec::json::Json;
@@ -39,6 +42,7 @@ const MATERIALS: &[(&str, &str, &[(&[(i128, i128)], &[(i128, &[Option<i128>])])]
     ("passed_flag", "印を渡す", &[(&[], &[]), (&[], &[(1, &[Some(0)])]), (&[(0, 1)], &[])]),
     ("passed_optional", "値の無いこともある会員を渡す", &[(&[], &[(3, &[Some(0)])]), (&[(0, 0), (0, 1)], &[])]),
     ("passed_other_name", "表の外の名前を渡す", &[(&[], &[]), (&[], &[])]),
+    ("word_of_another_type", "ほかの型の名前と同じ綴りの値", &[(&[], &[])]),
 ];
 
 fn rel(stem: &str) -> String {
@@ -180,7 +184,7 @@ fn a_name_the_table_above_has_no_column_for_narrows_nothing() {
 /// is a row said to pass on a column its answer cell does not name. A row said to write the name it
 /// passes on as a word — the file does write that word there — is refused too, though the facts,
 /// the box and the cover are made to fit: `member` is no value of tier. So is a word a name of the
-/// rule is spelled as, which a cell reads as the name.
+/// column's own type is spelled as, which a cell reads either way (E075).
 #[test]
 fn a_box_narrowed_by_a_value_a_row_above_passes_on_is_refused() {
     let checkers = checkers();

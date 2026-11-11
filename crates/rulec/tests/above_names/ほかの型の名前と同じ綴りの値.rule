@@ -1,0 +1,24 @@
+rule ほかの型の名前と同じ綴りの値(word_of_another_type) v1
+description "罰金の上限と、何ごとに数えるか。答えの列の語は、列の型で読む。下の `違反` は、型の違う入力に同じ名前があっても、数え方の値である"
+
+enum 違反の種類(violation_kind) = 故意(willful) | 重大(serious) | 掲示(posting)
+enum 数え方(counted_by) = 違反(violation) | 日(day)
+
+inputs
+  違反(violation) : 違反の種類
+
+outputs
+  上限(most) : money[USD]  round down(1USD)
+  単位(per)  : 数え方
+
+table 上限額(caps)
+policy unique
+| 違反 | -> 上限   | 単位 |
+| 故意 | 165514USD | 違反 |
+| 重大 | 16550USD  | 違反 |
+| 掲示 | 16550USD  | 日   |
+
+examples
+| 違反 | -> 上限   | 単位 |
+| 故意 | 165514USD | 違反 |
+| 掲示 | 16550USD  | 日   |

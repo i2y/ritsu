@@ -7,6 +7,6 @@ error[E102]: Unreachable row: row 4 never matches
    |                           ^^^^^^^^^^^^^^^^^^^ the reachable interval is >=-50GBP <=500GBP
    |
  Over the ranges of the inputs, `net` can only come to >=-50GBP <=500GBP. Because of `policy first`, the earlier rows take first every one of those values that meets this row's conditions.
- hint: rewrite the condition within the values `net` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.
 
 note tests/reach/E102_earlier_rows_take_the_rest.rule: 6 shadow pairs (6 structural, 0 equivalent, 0 needs review)

@@ -1,0 +1,20 @@
+rule 使いすぎ(overspend) v1
+description "上限を超えた支出に印を付ける。最初の行は、上限が 20 円以上、金額が 60 円以下で、超過額が 50 円を超えることを求めている。どの条件も一つずつなら満たす入力があるが、引き算の結果、三つが同時にそろうことはない"
+
+enum 判定(flag) = 可(ok) | 警告(alert)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100円
+  上限(limit)  : money[円]  range >=0円 <=100円
+
+outputs
+  状態(status) : 判定
+
+derive 超過額(excess) : money[円] = 金額 - 上限  range >=-1000円 <=1000円
+
+table 判定表(flag_of)
+policy first
+| 超過額 | 金額   | 上限   | -> 状態 : 判定 |
+| >50円  | <=60円 | >=20円 | 警告           |
+| >50円  | -      | -      | 警告           |
+| -      | -      | -      | 可             |

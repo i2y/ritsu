@@ -5344,12 +5344,12 @@ pub fn ledger() -> Vec<Entry> {
             "E073",
             tr!("重みで選ぶ畳み込みの形が違います", "A pick by weight is not shaped right"),
             tr!(
-                "`take_weighted` に `by` が無いとき、`draw` の行が二つあるとき、`take_weighted` の無い畳み込みに `draw` の行があるとき。重みで選ぶ畳み込みが一つの規則に二つあるとき、その腕に `next` と `take_weighted` のほかの腕があるとき、重みが number でないか負になりうるとき（重みが読む範囲に書いていない端は、型が持てる値の端として読みます）、`draw` の行が無いとき、`draw` が指す値が、`random` を付けて範囲が 0 から始まる number の入力でないとき。",
-                "A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative (an end a range the weight reads does not write is read as the end of what the type holds); there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0."
+                "`take_weighted` に `by` が無いとき、`draw` の行が二つあるとき、`take_weighted` の無い畳み込みに `draw` の行があるとき。重みで選ぶ畳み込みが一つの規則に二つあるとき、その腕に `next` と `take_weighted` のほかの腕があるとき、重みが number でないか、負になりうるか、整数にならないとき（重みが読む範囲に書いていない端は、型が持てる値の端として読みます。`capacity / 2` は 1/2 刻みです）、`draw` の行が無いとき、`draw` が指す値が、`random` を付けて範囲が 0 から始まる number の入力でないとき。",
+                "A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, can be negative, or is not a whole number (an end a range the weight reads does not write is read as the end of what the type holds, and `capacity / 2` steps by a half); there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0."
             ),
             tr!(
-                "腕 `take_weighted <値> by <重み>` と、行 `draw -> <乱数の入力>` を一行書き、指す入力は `range >=0 <=<上限>` の `random` な number にしてください。重みは 0 以上の整数です。選ぶのが二回要るなら、規則を二つに分けます。",
-                "Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more. Split the rule in two if it needs two picks."
+                "腕 `take_weighted <値> by <重み>` と、行 `draw -> <乱数の入力>` を一行書き、指す入力は `range >=0 <=<上限>` の `random` な number にしてください。重みは 0 以上の整数です。割り算で刻みが細かくなった重みは `down(capacity / 2, 1)` のように丸めます。選ぶのが二回要るなら、規則を二つに分けます。",
+                "Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more: round one a division makes finer, as in `down(capacity / 2, 1)`. Split the rule in two if it needs two picks."
             ),
             X_E073,
             &["E021", "E070"],

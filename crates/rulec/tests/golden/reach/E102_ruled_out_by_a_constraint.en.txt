@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_ruled_out_by_a_constraint.rule:24 table route_of
+   |
+24 | | -              | >5       | <=5     | review             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+   |
+ No input satisfies all of this row's conditions at once.
+ The combinations of inputs that `constraint returned <= ordered` rules out never come.
+ hint: rewrite this row's conditions so that some input meets them all, or delete this row.
+
+note tests/reach/E102_ruled_out_by_a_constraint.rule: 2 shadow pairs (2 structural, 0 equivalent, 0 needs review)

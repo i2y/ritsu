@@ -1,0 +1,13 @@
+エラー[E102]: 行1 はどの入力にも当てはまりません
+  --> tests/reach/E102_past_a_derives_equation.rule:18 表 flag_of
+   |
+18 | | >50GBP | <=60GBP | >=20GBP | alert            |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行1: ここに到達する入力はありません
+13 | derive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP
+   |                              ^^^^^^^^^^^^^^ 実際に取りうる値は >=-99GBP <=100GBP です
+   |
+ `excess` が取りうる値は、入力の範囲から計算すると >=-99GBP <=100GBP です。
+ `excess = amount - limit` は、どの入力でも成り立つ式です。この式も合わせると、この行の条件をすべて満たす値はありません。
+ ヒント: この行は削除してください。残すなら、条件を、式どうしの関係が許す値の組に書き直してください。
+
+note tests/reach/E102_past_a_derives_equation.rule: 隠れ 1 対（階段 1、同じ答え 0、要確認 0）

@@ -7,11 +7,12 @@
 //! such a pair an error — it says so with W114 and the generated code carries a runtime
 //! guard — but a warning that will never fire is still a warning somebody has to read.
 //!
-//! A `derive` is a **linear combination of inputs** (§5), every cell is a unary comparison,
-//! every range is an interval and every `constraint` is a comparison of two inputs. So the
-//! question "can these two rows both match?" is a system of linear inequalities, and over
-//! the rationals that is decidable by eliminating one variable at a time: pair every lower
-//! bound on it with every upper bound, keep what falls out, repeat.
+//! A `derive` that adds, subtracts and multiplies by constants is a **linear form** of what it
+//! reads (§5), every cell is a unary comparison, every range is an interval and every
+//! `constraint` is a comparison of two inputs. So the question "can these two rows both match?"
+//! is a system of linear inequalities, and over the rationals that is decidable by eliminating
+//! one variable at a time: pair every lower bound on it with every upper bound, keep what falls
+//! out, repeat.
 //!
 //! **One direction only.** What this can settle is that no solution exists; when it finds
 //! one, over the rationals, that solution may have no integer point in it, so nothing is
@@ -151,9 +152,10 @@ impl Lin {
 
 /// An expression as a linear form, or `None` for anything that is not one.
 ///
-/// §5 says a derived value is a linear combination of inputs, so this reads exactly that:
-/// names and literals, added and subtracted, and multiplied or divided by a **constant**.
-/// A product of two names is not linear and is refused rather than approximated.
+/// A derive or a `define` that adds, subtracts and scales is one (§5, §6): names and literals,
+/// added and subtracted, and multiplied or divided by a **constant**. Any other shape — a product
+/// of two names, `min`, a rounding — is refused rather than approximated, and the condition that
+/// reads it is dropped.
 pub fn linear(e: &Expr, want: &Ty, c: &Checked) -> Option<Lin> {
     
     match e {

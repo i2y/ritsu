@@ -351,9 +351,9 @@ pub struct TableRegion {
     /// input reaches (§15.196). Read by the whole sieve, `feasible` included, so the completeness
     /// check, the overlap checks and ritsu's port see the same points.
     define_truth: Vec<Option<bool>>,
-    /// Every `derive` in the rule, by name. A derived column is a **linear combination of
-    /// inputs** (§5), so the interval it can actually reach is decidable by arithmetic on the
-    /// intervals of those inputs — which is what the per-axis sieve does not look at.
+    /// Every `derive` in the rule, by name. The interval a derived column can actually reach is
+    /// its expression worked out over the intervals of what it reads (§5) — which is what the
+    /// per-axis sieve does not look at.
     exprs: BTreeMap<String, Expr>,
     /// Every `define` in the rule, by name. A boolean one is a **single comparison** (§6.2),
     /// and where an overlap pins it to one truth value that comparison is a linear condition
@@ -3299,7 +3299,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 .fix_kind(crate::diag::FixKind::RemoveRow)
                 .mark(t.rows[i].span.clone(), tr!("{}: ここに到達する入力はありません", "{}: no input reaches here", rn(i)));
             if let Some(w) = &beyond {
-                out.push(third_form(d, w, &reg, c, f, by_position, &winner_tables));
+                out.push(third_form(d, w, &reg, i, c, f, by_position, &winner_tables));
                 continue;
             }
             out.push(
@@ -3527,9 +3527,10 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
 /// row out, each with the values it can come to — marked on its line and said in the note, over
 /// the ranges of the inputs and the `constraint` lines that narrow it — what a table above writes
 /// a value under, where that left the rest out together with a derived or `define` value, and what
-/// took the rest of the row, the rows that take precedence first.
+/// took the rest of the row, the rows that take precedence first. A row whose cells let in values
+/// those columns come to is left out by something else, and is told that instead (§15.307).
 #[allow(clippy::too_many_arguments)]
-fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleFile, by_position: bool, winner_tables: &[String]) -> Diag {
+fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, row: usize, c: &Checked, f: &RuleFile, by_position: bool, winner_tables: &[String]) -> Diag {
     let ja = crate::i18n::ja();
     // The derived and `define` values that took part, in the order the rule declares them, each
     // with its line, whether it is a derive (a `define` has no `range` to widen), and the
@@ -3631,10 +3632,34 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
     let quoted: Vec<String> = reached.iter().map(|t| format!("`{}`", t.name)).collect();
     let one = reached.len() == 1;
     let from_above = reached.iter().any(|t| reads_a_table(t.name, f, c, 0));
+    // Whether the reach is what the row asks past (§15.307): one value, where the row's cell lets in
+    // none of what it comes to; several, unless each cell lets in all of it (two values may still
+    // never come together). A row whose cells let in what the values come to — a `-` among them —
+    // is left out by something else: the values past the reach it lets in too are ones no input
+    // brings, and the reach left them out only because it is asked first.
+    let against: Vec<Option<(bool, bool)>> = reached.iter().map(|t| reg.col_names.iter().position(|n| n == t.name).and_then(|ai| reg.cell_against_reach(row, ai, t.iv))).collect();
+    let past_the_reach = reached.is_empty() || if one { !matches!(against.first(), Some(Some((true, _)))) } else { !against.iter().all(|a| matches!(a, Some((true, true)))) };
+    // The equations that took part (§15.209, §15.307): those of the `define`s, and those of the
+    // derives where nothing else is said of a row that lets in what they come to — no rows take
+    // part of it first, no table above. The intervals meet the row's cells one column at a time,
+    // and it is the equations that leave no values for all of them.
+    let derive_equations_said = !past_the_reach && !w.covered && w.above.is_empty();
+    let equations: Vec<String> = f
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Define(dv) if w.define_equations.contains(&dv.name.text) => Some(format!("`{} = {}`", dv.name.text, expr_text(&dv.expr))),
+            Item::Derived(dv) if derive_equations_said && w.derive_equations.contains(&dv.name.text) => Some(format!("`{} = {}`", dv.name.text, expr_text(&dv.expr))),
+            _ => None,
+        })
+        .collect();
+    // Where nothing else is said of the values either — no rows take part of them first, no table
+    // above, no equation — the row is told only what does leave it out.
+    let plain = derive_equations_said && equations.is_empty();
     // Each value's line, with what it can come to. One a rule applied is written in the other
     // file, so its line is not marked here.
     for t in &names {
-        if t.name.contains(':') {
+        if t.name.contains(':') || plain {
             continue;
         }
         let iv = ends(t.iv, &ty_of(t.name));
@@ -3658,7 +3683,9 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
     };
     let lead = if by_position { tr!("`{} {}` なので、", "Because of `{} {}`, ", crate::kw::POLICY, crate::kw::FIRST) } else { String::new() };
     let who_en_cap = if by_position { who_en.clone() } else { capital(&who_en) };
-    if !reached.is_empty() {
+    if plain {
+        d = d.note(tr!("この行の条件を同時に満たす入力がありません。", "No input satisfies all of this row's conditions at once."));
+    } else if !reached.is_empty() {
         // What the values come to.
         let reach = if ja {
             let ivs: Vec<String> = reached.iter().map(|t| ends(t.iv, &ty_of(t.name))).collect();
@@ -3693,8 +3720,8 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
                     "{lead}{who_en_cap} take first every combination of those values that meets all of this row's conditions."
                 )
             }
-        } else if !w.define_equations.is_empty() {
-            // The equation of a `define` is what leaves the row out, and the note below says so.
+        } else if !equations.is_empty() {
+            // The equations are what leave the row out, and the note below says so.
             String::new()
         } else if one {
             tr!("この行の条件に当てはまる値は、その中にありません。", "None of those values meets this row's conditions.")
@@ -3703,19 +3730,10 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
         };
         d = d.note(if rest.is_empty() { reach } else { format!("{reach}{}{rest}", if ja { "" } else { " " }) });
     }
-    // The equations of the `define`s that took part (§15.209): the intervals above meet the row's
-    // cells one column at a time, and it is the equations that leave no values for all of them.
-    if !w.define_equations.is_empty() {
-        let eqs: Vec<String> = f
-            .items
-            .iter()
-            .filter_map(|it| match it {
-                Item::Define(dv) if w.define_equations.contains(&dv.name.text) => Some(format!("`{} = {}`", dv.name.text, expr_text(&dv.expr))),
-                _ => None,
-            })
-            .collect();
-        let many = eqs.len() > 1;
-        let eqs = list(&eqs);
+    // The equations that took part.
+    if !equations.is_empty() {
+        let many = equations.len() > 1;
+        let eqs = list(&equations);
         d = d.note(if many {
             tr!(
                 "{eqs} は、どの入力でも成り立つ式です。この式も合わせると、この行の条件をすべて満たす値はありません。",
@@ -3740,19 +3758,33 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
         ));
     }
     // What else left a point out: a `constraint` that does not bear on the values, the tables
-    // above, koyomi's days.
+    // above, koyomi's days. A reason after another is said with "either"; the first one said, where
+    // the row is told only what leaves it out, without — and every `constraint` line that left a
+    // point out is said there, the ones that narrow the values too.
+    let mut also = !plain;
+    let other_lines: Vec<String> = if plain { w.constraints.iter().chain(&w.model_constraints).copied().collect::<BTreeSet<usize>>().iter().filter_map(line_of).collect() } else { other_lines };
     if !other_lines.is_empty() {
         let ls = list(&other_lines);
         let s = if other_lines.len() == 1 { "s" } else { "" };
-        d = d.note(tr!("{ls} が許さない入力の組み合わせも来ません。", "The combinations of inputs that {ls} rule{s} out never come either."));
+        d = d.note(if also {
+            tr!("{ls} が許さない入力の組み合わせも来ません。", "The combinations of inputs that {ls} rule{s} out never come either.")
+        } else {
+            tr!("{ls} が許さない入力の組み合わせは来ません。", "The combinations of inputs that {ls} rule{s} out never come.")
+        });
+        also = true;
     }
     if !w.nevers.is_empty() {
         let lines: Vec<String> = w.nevers.iter().filter_map(|k| f.nevers.get(*k)).map(|n| format!("`{}`", n.said())).collect();
         let ls = list(&lines);
-        d = d.note(tr!("{ls} が外した組み合わせも来ません。", "The combinations {ls} take out never come either."));
+        d = d.note(if also { tr!("{ls} が外した組み合わせも来ません。", "The combinations {ls} take out never come either.") } else { tr!("{ls} が外した組み合わせは来ません。", "The combinations {ls} take out never come.") });
+        also = true;
     }
     if w.upstream {
-        d = d.note(tr!("上流の表が同時には出さない値の組み合わせも来ません。", "The combinations of values the tables above never produce together never come either."));
+        d = d.note(if also {
+            tr!("上流の表が同時には出さない値の組み合わせも来ません。", "The combinations of values the tables above never produce together never come either.")
+        } else {
+            tr!("上流の表が同時には出さない値の組み合わせは来ません。", "The combinations of values the tables above never produce together never come.")
+        });
     }
     for &ai in &w.days {
         let col = &reg.col_names[ai];
@@ -3761,12 +3793,21 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
     }
     let all: Vec<String> = names.iter().map(|t| format!("`{}`", t.name)).collect();
     let who = list(&all);
-    if !w.define_equations.is_empty() {
+    if !equations.is_empty() {
         // Every column may come to the values the row asks of it one at a time: it is the equations
         // that leave the row no values, so rewriting a condition inside an interval does not help.
         d.note(tr!(
             "ヒント: この行は削除してください。残すなら、条件を、式どうしの関係が許す値の組に書き直してください。",
             "hint: delete this row. To keep it, rewrite its conditions to values the equations allow together."
+        ))
+    } else if !past_the_reach && w.covered {
+        // The row asks for values the columns come to, and the rows that take precedence take them:
+        // rewriting it inside what they come to does not help (§15.307).
+        d.note(tr!("ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。", "hint: if this is a new specification, move it up; if it is not needed, delete it."))
+    } else if !past_the_reach {
+        d.note(tr!(
+            "ヒント: 条件を書き直して、すべてを満たす入力があるようにするか、この行を削除してください。",
+            "hint: rewrite this row's conditions so that some input meets them all, or delete this row."
         ))
     } else if names.iter().any(|t| t.derive) {
         d.note(tr!(
@@ -4138,6 +4179,9 @@ pub(crate) struct OutOfReach {
     /// The `define`s whose equations a refutation used (§15.209): what the message names, since
     /// the intervals alone do not show why the row is out.
     define_equations: BTreeSet<String>,
+    /// The derives whose equations a refutation used: what the message names where the row asks for
+    /// values its derives come to, and their reach is not what leaves it out (§15.307).
+    derive_equations: BTreeSet<String>,
     /// The values decided above whose rows, together with a derived or `define` value, leave a
     /// point out (§15.195), the first time each is met, and the derived and `define` values
     /// that took part.
@@ -4309,8 +4353,14 @@ impl TableRegion {
             by.retain(|n| r.used().iter().any(|(q, _)| matches!(&q.origin, crate::fourier::Origin::Derive { name, .. } | crate::fourier::Origin::Define { name, .. } | crate::fourier::Origin::Range { name, .. } if name == n)));
             why.derives.extend(by);
             for (q, _) in r.used() {
-                if let crate::fourier::Origin::Define { name, .. } = &q.origin {
-                    why.define_equations.insert(name.clone());
+                match &q.origin {
+                    crate::fourier::Origin::Define { name, .. } => {
+                        why.define_equations.insert(name.clone());
+                    }
+                    crate::fourier::Origin::Derive { name, .. } => {
+                        why.derive_equations.insert(name.clone());
+                    }
+                    _ => {}
                 }
             }
             return true;
@@ -5174,9 +5224,15 @@ impl TableRegion {
     /// derived or `define` column can come to. An interval coordinate leaves its ends out, so
     /// `>100%` lies outside a reach that ends at 100% (§15.195), and `>100` lies outside what
     /// `min(a, 100)` comes to (§15.304).
-    fn outside_reach(&self, ai: usize, path: &[usize], (rl, rh): Ival) -> bool {
-        use std::cmp::Ordering::*;
+    fn outside_reach(&self, ai: usize, path: &[usize], reach: Ival) -> bool {
         let Some(&ci) = path.get(ai) else { return false };
+        self.coord_outside(ai, ci, reach)
+    }
+
+    /// Whether coordinate `ci` of axis `ai` lies outside `reach`, as [`TableRegion::outside_reach`]
+    /// reads the coordinate a path takes.
+    fn coord_outside(&self, ai: usize, ci: usize, (rl, rh): Ival) -> bool {
+        use std::cmp::Ordering::*;
         let Axis::Num { coords, .. } = &self.axes[ai] else { return false };
         match coords.get(ci) {
             Some(Coord::Point(v)) => rl.is_some_and(|l| v.cmp_to(l) == Less) || rh.is_some_and(|h| v.cmp_to(h) == Greater),
@@ -5186,6 +5242,25 @@ impl TableRegion {
             // The absent value is one the input takes, outside any range (§15.201).
             Some(Coord::Absent) | None => false,
         }
+    }
+
+    /// How row `row`'s cell on the axis of a derived or `define` column stands to `reach`, the values
+    /// the column comes to (§15.307): whether it lets in some coordinate inside the reach, and
+    /// whether it lets in every one. `None` when the axis is no axis of numbers.
+    fn cell_against_reach(&self, row: usize, ai: usize, reach: Ival) -> Option<(bool, bool)> {
+        let Axis::Num { coords, .. } = &self.axes[ai] else { return None };
+        let (mut meets, mut covers) = (false, true);
+        for (ci, co) in coords.iter().enumerate() {
+            if matches!(co, Coord::Absent) || self.coord_outside(ai, ci, reach) {
+                continue;
+            }
+            if self.masks[row][ai][ci] {
+                meets = true;
+            } else {
+                covers = false;
+            }
+        }
+        Some((meets, covers))
     }
 
     /// The first axis of a `define` on which this path takes a coordinate the define never comes to.

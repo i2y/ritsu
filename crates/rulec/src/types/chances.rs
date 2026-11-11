@@ -217,6 +217,28 @@ impl Checked {
                 );
                 continue;
             }
+            // A literal with no value in its unit is E103's (§15.191), and the weight then has no
+            // value to step or to range over.
+            if Self::holds_a_valueless_literal(weight) {
+                continue;
+            }
+            // A weight is a whole number (§15.307). The walk adds the weights up as the integers
+            // they are stored as and compares the total with the drawn whole number, so a weight of
+            // a finer step — `capacity / 2` — would be compared as a multiple of its step in the
+            // generated code, and as its value in the reference evaluator.
+            if let Some(sc) = self.scale(weight).filter(|&s| s != 1) {
+                let w = crate::region::expr_text(weight);
+                e073(
+                    self,
+                    tr!("重みが整数になりません（{} の腕の重みは 1/{sc} 刻みです）", "A weight is not a whole number (the weight of the arm of {} steps by 1/{sc})", n.text),
+                    weight.span(),
+                    tr!("1/{sc} 刻みの値です", "its values step by 1/{sc}"),
+                    tr!(
+                        "`take_weighted` は、重みを整数として足していき、合計を引いた整数と比べます。刻みが 1 より細かい重みは、`down({w}, 1)` のように整数に丸めてください。",
+                        "`take_weighted` adds up the weights as whole numbers and compares the total with the drawn whole number. Round a weight whose step is finer than 1 to a whole number, as in `down({w}, 1)`."
+                    ),
+                );
+            }
             // An end a range does not write is read as the end of the type, as E108 reads it
             // (§15.299): `max(capacity, 0)` over `capacity` written `<=100` alone is never below
             // zero, and a weight with no upper bound is as large as a number can be.

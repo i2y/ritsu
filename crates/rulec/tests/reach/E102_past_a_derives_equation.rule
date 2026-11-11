@@ -1,0 +1,20 @@
+rule overspend v1
+description "Flags spending past a limit. The first row asks for more than 50 pounds over a limit of at least 20 on a bill of at most 60: some input meets each condition, but the subtraction never brings all three together"
+
+enum flag = ok | alert
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  limit  : money[GBP]  range >=0GBP <=100GBP
+
+outputs
+  status : flag
+
+derive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP
+
+table flag_of
+policy first
+| excess | amount  | limit   | -> status : flag |
+| >50GBP | <=60GBP | >=20GBP | alert            |
+| >50GBP | -       | -       | alert            |
+| -      | -       | -       | ok               |

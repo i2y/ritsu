@@ -3099,6 +3099,20 @@ impl Checked {
         }
     }
 
+    /// Whether an expression holds a number literal with no value in the unit it is written in:
+    /// what [`Checked::literal_values`] stops with E103, and the expression has no answer.
+    pub(super) fn holds_a_valueless_literal(e: &Expr) -> bool {
+        match e {
+            Expr::Lit(Lit::Num(n), _) => {
+                let ty = lit_ty(n);
+                ty != Ty::Unknown && lit_value_in(n, &ty).is_none()
+            }
+            Expr::Bin(l, op, r, _) => Self::holds_a_valueless_literal(l) || (!(*op == BinOp::Div && matches!(**r, Expr::Lit(..))) && Self::holds_a_valueless_literal(r)),
+            Expr::Call(_, args, _) => args.iter().any(Self::holds_a_valueless_literal),
+            _ => false,
+        }
+    }
+
     /// The number literals of an expression, each held to the unit it is written in (§15.191).
     /// A literal in an expression is read in its own unit, as the reference evaluator and every
     /// generator read it, and one with no value there came out as no answer from the evaluator
@@ -5788,6 +5802,12 @@ impl Checked {
                 );
                 continue;
             }
+            // Its number literals are held to the units they are written in, as a derive's are
+            // (§15.191, §15.307): `take_first ix * 1.5` passed, and the generated code took `ix * 0`.
+            // A literal written alone as an answer is read in the answer's type above.
+            if place == Place::Key || !matches!(e, Expr::Lit(..)) {
+                self.literal_values(e, path);
+            }
             // What the code works out here, an answer, a key or a weight, is held to int64 like any
             // value the rule computes, with every integer on the way to it (§15.296): `take_first
             // top_off × 10^18` passed, and the generated code multiplied in int64.
@@ -7882,9 +7902,9 @@ impl Checked {
         Some((lo.unwrap_or(first), hi.unwrap_or(last)))
     }
 
-    /// Interval arithmetic from the declared input ranges. The right-hand side of a derived
-    /// value is a linear combination of inputs only, so addition, subtraction, and constant
-    /// multiples are all that is needed (§5.2).
+    /// Interval arithmetic from the declared input ranges: what an expression comes to over the
+    /// intervals of what it reads (§5) — sums, differences, products and quotients, the roundings,
+    /// `allocate`, `min`, `max`, `mod` and `isqrt`.
     pub(crate) fn interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
         self.interval_in(e, ty, false)
     }

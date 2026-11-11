@@ -1,0 +1,24 @@
+rule word_of_another_type v1
+description "The most a penalty can be, and what it is counted by. A word in an answer column is read in the column's type: `violation` below is the value of counted_by, though an input of another type is named violation too"
+
+enum violation_kind = willful | serious | posting
+enum counted_by = violation | day
+
+inputs
+  violation : violation_kind
+
+outputs
+  most : money[USD]  round down(1USD)
+  per  : counted_by
+
+table caps
+policy unique
+| violation | -> most | per       |
+| willful   | 165514USD | violation |
+| serious   | 16550USD  | violation |
+| posting   | 16550USD  | day       |
+
+examples
+| violation | -> most   | per       |
+| willful   | 165514USD | violation |
+| posting   | 16550USD  | day       |
