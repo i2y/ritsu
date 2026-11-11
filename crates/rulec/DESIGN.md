@@ -5653,7 +5653,7 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 
 **決定**：
 
-1. ★ **出力の行の `range` を読み、出力のとる値を含むかを確かめる。含まなければ E140 にする**（`Checked::output_ranges`）。とる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式）が、入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものである。丸めの向きによらず、下の端は刻みへ切り下げ、上の端は切り上げる。丸めた値の区間を求めるときと同じ広げ方である。E140 の文は、広げる先の範囲を言い、`fix.text` にも `range >=0円 <=1000円` の形で入れる（`FixKind::WidenRange`）。
+1. ★ **出力の行の `range` を読み、出力のとる値を含むかを確かめる。含まなければ E140 にする**（`Checked::output_ranges`）。とる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式）が、入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものである。丸めの向きによらず、下の端は刻みへ切り下げ、上の端は切り上げる。丸めた値の区間を求めるときと同じ広げ方である（§15.303 からは、どちらも両端を丸め方で丸める）。E140 の文は、広げる先の範囲を言い、`fix.text` にも `range >=0円 <=1000円` の形で入れる（`FixKind::WidenRange`）。
    E112 にしなかったのは、守るものと勧める直し方が違うからである。E112 は、導出の範囲が狭いと完全性の検査が起きる値を見ないことを言い、起こりえない値まで広げても害は無いと勧める。出力の範囲が狭いと、規則が返す値を見落とすのはほかの言語の範囲の検査で、広げすぎると、ほかの言語が示せることが減る。下の 2 の確かめられない範囲は、E112 には無い場合である。番号は台帳の次の番号にした。
 2. ★ **確かめられない範囲も E140 にする。** 出力が範囲の無い入力を読むとき（rulec がとる値を求められない。§15.299 からは、書いていない端を型の端として読んで確かめる）と、数・お金・量・率でない出力に書いたときである。書いた範囲をそのまま信じて渡すと、規則が返す値の一部を外した範囲を、ほかの言語が読むことがある。文は、読む入力に範囲を書くか、範囲を外すことを勧める。範囲の無い数の出力は、ほかの言語が型の全体として読む（kaname の DESIGN 32 章）。ほかのエラーがあるときは、数の出力の確かめられない範囲を言わない。とる値を求められない理由が、そのエラーのことがあるからである（E117 になる `allocate` には区間が無い）。
 3. **確かめた範囲を、出力の範囲にする**（`Checked::ranges`）。片側だけ書いた範囲は、書かない端を、とる値の端で埋める。`max` と `min` に書いた範囲と同じである（§15.219）。書いていない端を読む出力では埋めない（§15.299）。この範囲は、入力と導出の範囲が出るところの全部に出る。証明書の `ranges`、`rulec schema`（`properties.out` の `minimum` と `maximum`）、`rulec api`（言語ごとの `outputs` の `range`）、MCP のツールの `outputSchema`、`.proto` と SQL の出力のコメント、`doc` と人が読むページの出力の表（注の列の「範囲 0円 〜 100万円」）、ritsu の口の `output_values` である。`check` が示した範囲なので、生成したコードは走るときに確かめない。空の範囲は E061、型の値でない端は E103 で、入力の範囲と同じに言う。E061 の注は、出力のどの値もその範囲に入らないことを言う。入力の範囲の注にある、完全性の証明と入口の話は、出力には当たらないからである。
@@ -5717,7 +5717,7 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 **決定**：
 
 1. ★ **証明書に `rounds` と `output_ranges` を足す。** `rounds` は、数の出力ごとに、丸める刻みを `ranges` と同じ尺度の有理数で書く（`"rounds":{"fee":"10"}`）。数の出力は、どれも丸めを宣言している（§7.2、E104）。`output_ranges` は、数の出力ごとに、ritsu の口がほかの言語へ渡す範囲を書く（`"output_ranges":{"fee":["0","1010"]}`）。
-2. ★ **二つの再検査は、`output_ranges` の範囲のどれについても、その範囲が、出力を決めるものを丸めの刻みへ外向きに広げたもの（下の端は刻みへ切り下げ、上の端は切り上げる）を含むことを確かめる。含まなければ証明書を通さない。** 出力の行に書いた範囲にも、rulec が数えて載せた範囲にも当てる。ほかの言語は、どちらも口の `output_values` で同じに読むからである。出力を決めるものは、再検査がほかの確かめのために数えているとおりに数え、新しい数え方は作らない。`result` と `define` は式の区間（按分の差の `sharesInOrder` を含む `interval`）、表は行が書く値の外包（`hullOf`）である。たどる並びが残す値（`count`、`sum`、`max`、`min`、畳み込みの答え）と開いた値は、値が `ranges` の言う範囲に収まることを、宣言かそれぞれの確かめが言っている（formats の `walks` と `opens`）。そこでその範囲を出力を決めるものとして読む。丸めの向きは見ない。どの向きでも、答えは刻みへ切り下げた値と切り上げた値のあいだにある。E140 も、向きによらず同じに広げる（§15.268 の決定の 1）。
+2. ★ **二つの再検査は、`output_ranges` の範囲のどれについても、その範囲が、出力を決めるものを丸めの刻みへ外向きに広げたもの（下の端は刻みへ切り下げ、上の端は切り上げる）を含むことを確かめる。含まなければ証明書を通さない。** 出力の行に書いた範囲にも、rulec が数えて載せた範囲にも当てる。ほかの言語は、どちらも口の `output_values` で同じに読むからである。出力を決めるものは、再検査がほかの確かめのために数えているとおりに数え、新しい数え方は作らない。`result` と `define` は式の区間（按分の差の `sharesInOrder` を含む `interval`）、表は行が書く値の外包（`hullOf`）である。たどる並びが残す値（`count`、`sum`、`max`、`min`、畳み込みの答え）と開いた値は、値が `ranges` の言う範囲に収まることを、宣言かそれぞれの確かめが言っている（formats の `walks` と `opens`）。そこでその範囲を出力を決めるものとして読む。丸めの向きは見ない。どの向きでも、答えは刻みへ切り下げた値と切り上げた値のあいだにある。E140 も、向きによらず同じに広げる（§15.268 の決定の 1）。§15.303 からは、証明書の `round_modes` が言う丸め方で両端を丸めたものと比べる。
 3. ★ **行に範囲を書かない出力の、`output_ranges` と口の範囲を、丸めの刻みへ外向きに広げる**（`Checked::output_range`、`types::round_out`）。見回しの 7 本は、こうしないと新しい再検査を通らない。**`ranges` は前のまま、出力を決めるものの範囲にする**（`Checked::stated_range`）。証明書のほかの主張が、`ranges` を出力を決めるものの範囲として読むからである。たどる並びと開いた値の軸はその範囲の上を走り、再検査は、まだ数えていない名前を読む式の区間を、その範囲で抑える（捨てたもの）。`Checked::ranges` も変えない。§15.268 の決定の 4 と同じく、生成器、`schema`、`api`、規則の事実はそこを読むので、変わらない。
 4. ★ **たどる並びが残す値か開いた値の出力で、`ranges` の範囲が `output_ranges` の範囲と同じで、その端が刻みの上にないものは、通さないのではなく、確かめられない主張として一行で言う**（`what total answers once rounded: the range it declares, [0, 1050], does not sit on the grid it rounds to, 100`）。出力の行に範囲を書くと、それが並びの範囲にもなる（§15.219）ので、再検査にはそれより狭い範囲が無い。`check` の E140 は、並びの宣言した範囲を刻みへ広げたもので確かめていて、その規則を通している。行に範囲を書かなければ、`output_ranges` は決定の 3 で刻みに載るので、この一行は出ない。
 5. **Lean では、出力の主張と、確かめと、定理を `RulecCert/Outputs.lean` に置く。** 主張は、範囲のある名前がどれも範囲に入り、`constraint` がどれも成り立つところでは、丸めがどの向きでも（`RoundsWell`）、出力を決める式の値を刻みに丸めた答えが、証明書の言う範囲に入ること（`OutputHolds`）である。表が決める出力は、行が書く値のうち、その行のセルが切る値のところのものについて言う（`WrittenOutputHolds`）。確かめは `roundedWithin`（刻みが 0 より大きく、範囲の下の端が区間の下の端を切り下げたもの以下で、上の端が区間の上の端を切り上げたもの以上）で、通れば主張が成り立つ（`output_mem_stated`、`written_output_mem_stated`）。どちらも、区間に入る値を丸めた答えは範囲に入るという `rounded_mem_stated` から出る。たどる並びが残す値と開いた値は、`rounded_mem_stated` に、それぞれの定理（`extreme_mem_stated`、`foldAnswer_mem_stated`、`openValue_mem_stated`）が言う範囲を渡したものになる。`rulec-recheck` の `checkRounds` と `tools/recheck.py` の `check_rounds` が、`output_ranges` に載った出力ごとにこの確かめを走らせる。新しい算術は無い（`floorTo` と `ceilTo` は、丸めた値の区間を求めるところで使っている）。定理は、出力一つと、`rounds` がそれに言う刻みについて言い、`rounds` も `output_ranges` も読まない。どの出力を確かめるかは、二つのプログラムが決める。`output_ranges` のどの出力にも当たる、という形の定理にするには、証明書の JSON のどの名前を回るかを Lean の論理に入れることになる。`RulecMain.lean` のほかの確かめも、回るところはプログラムで、定理は一件ごとである（`checkOpens` と `openValue_mem_stated` など）。そこで定理はこのままにし、回るところを決定の 7 で決めた。
@@ -5728,7 +5728,7 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 **捨てたもの**：
 
 - **範囲を書いた出力だけを確かめること。** 口は、範囲を書いた出力も書かない出力も同じに渡す。書かない出力の範囲が答えを外していても、ほかの言語の検査はそれを見ずに「示した」と言う。見回しの 7 本がそうだった。
-- **丸めの向きごとに答えの端を求めること**（`half_down` の 1,598.5 は 1,598）。範囲が刻み一つ狭くなることがあるだけで、確かめに向きごとの場合分けが要る。Lean の丸めは、向きを決めずに言っている。
+- **丸めの向きごとに答えの端を求めること**（`half_down` の 1,598.5 は 1,598）。範囲が刻み一つ狭くなることがあるだけで、確かめに向きごとの場合分けが要る。Lean の丸めは、向きを決めずに言っている。§15.303 で取った。刻み一つの違いで、E140 が取りえない値を「取りうる」と言っていた。
 - **証明書の範囲はそのままにして、再検査の側で刻みへ広げてから比べること。** 再検査は通るが、口が渡す範囲は、規則の答えを外したまま残る。
 - **`ranges` の出力の範囲を刻みへ広げること**（`output_ranges` を足さずに、`ranges` を口の範囲にする）。初めはこうしたが、`check` を通る規則の証明書を、二つの再検査が通さなくなるところが二つあった（木の規則には無い）。一つは、範囲を書かない出力をたどる並びが決め、並びの範囲の端が刻みの上にないときである。1,050 セントまでの `sum` を `round down(100USDc)` で答える出力で、表の軸は並びの範囲の 1,050 セントまで走るのに、`ranges` は広げた 1,100 セントを言い、軸の確かめが落ちた（`FAILED big_of: total runs from 0 to 1050, and its range is 0 to 1100`）。もう一つは、`define` の出力を、それより上に書いた `define` が読むときである。再検査は、まだ数えていない名前の区間を `ranges` から読むので、読む側の区間が証明書の言う区間より広くなり、int64 の確かめが落ちた（`FAILED int64: total: the interval here is [50, 1084], wider than the stated [500349/10000, 10839/10]`）。どちらも、替える前の rulec の証明書は通っていた。
 - **`Checked::ranges` を刻みへ広げること。** 生成器、`schema`、`api`、規則の事実がそこを読むので、範囲を書かない出力を持つ規則の生成物が変わる。決めることが一つ増えるので、別にした（見つけて直していないもの）。
@@ -7382,6 +7382,123 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 **変わること**：お客向けのページの境目の例だけ。その 602 本で、両側の答えが同じ行は 63 から 25 になり、行の数は 1,145 から 1,135 になった（同じ文になった 10 行を一度だけ書く）。残る 25 行は、合衆国の所得税の区切り（入力が課税所得だけ）、英国の所得税の控除が尽きる所などである。生成コード、試験のベクタ、既定のページは変わらない。
 
 **確かめたこと**：`tests/doc.rs` の試験が、雇用保険料の規則の英日で、二つの組が 1,650円 から 1,500円、1,626円 から 1,501円 になり、0円 が出ないことを見る。602 本のお客向けのページを、変える前と後で数えた（上の数）。
+
+### 15.303 丸めた値がとる範囲は、両端をその丸め方で丸めて求める（2026-11-11）
+
+**きっかけ**：§15.301 の節を入れる前後に、別の担当に国税通則法第118条の規則を書かせて測ったとき、12 回のうち 2 回が E140 に当たり、1 回は出力の範囲を 1 兆円まで広げて通した。千円未満を `down(金額, 1000円)` で切り捨てる規則で、金額が 0 〜 999,999,999,999 円なら、答えは 999,999,999,000 円までである。その範囲を書くと、0.52.0 の公開版は止めた。
+
+```text
+$ rulec check b.rule
+error[E140]: The range of the output amount does not hold the values it can take
+  --> b.rule:7 output amount
+  |
+7 |   amount : money[JPY]  round down(1JPY)  range >=0JPY <=999_999_999_000JPY
+  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ it can take >=0JPY <=1_000_000_000_000JPY
+  |
+ amount takes the values of what decides it — the cells of a table's rows, a `define` of its name, a line that walks a sequence — put out to the grid of its rounding.
+ An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns.
+```
+
+rulec は、丸めた値のとる範囲を、丸め方によらず、下の端を刻みへ切り下げ、上の端を切り上げて求めていた（§15.268 の決定の 1、§15.269 の決定の 2）。どの丸め方でも、答えはそのあいだにある。範囲が広すぎるだけなら誤りではないが、E140 の「とりうる」は誤りで、出力の範囲（ほかの言語が答えを読む約束）を本当より広く書かせていた。
+
+**見回し**：0.52.0 の公開版で、丸めの呼び出しの範囲を丸め方ごとに確かめた。どれも、本当の範囲を出力の行に書くと E140 で止まった。
+
+| 式 | 入力の範囲 | 0.52.0 の「とりうる」 | 本当の範囲 |
+|---|---|---|---|
+| `down(x, 1000JPY)` | 0 〜 1,999 円 | 0 〜 2,000 円 | 0 〜 1,000 円 |
+| `down(x, 1000JPY)` | 1,500 〜 1,999 円 | 1,000 〜 2,000 円 | 1,000 円だけ |
+| `up(x, 1000JPY)` | 1 〜 999 円 | 0 〜 1,000 円 | 1,000 円だけ |
+| `up(x, 1000JPY)` | 1,001 〜 1,999 円 | 1,000 〜 2,000 円 | 2,000 円だけ |
+| `half_up(x, 1000JPY)` | 0 〜 1,499 円 | 0 〜 2,000 円 | 0 〜 1,000 円 |
+
+出力の丸めも同じ広げ方だった（`types::round_out`）。§15.269 の見回しの支援金（1,598.5 円を `half_down(1円)`）は、答えが 1,598 円までなのに、口の範囲は 1,599 円までだった。
+
+**原因**：式の中の丸めの区間（`Checked::interval_in` の `Expr::Call`）と、出力の範囲（`round_out`）が、刻みへの切り下げと切り上げで求めていた。証明書の二つの再検査も、同じ計算に合わせてあった（`tools/recheck.py` の `interval()`、Lean の `interval` の `floorTo`・`ceilTo`）。§15.269 は、丸めの向きごとに答えの端を求めることを、刻み一つの違いのために向きごとの場合分けが要るとして捨てていた。
+
+**決定**：
+
+1. ★ **丸めた値のとる範囲は、両端をその丸め方で丸めたものにする。** 五つの丸め方はどれも、大きい値を低くない刻みに置く（単調である）。そこで、両端のあいだの値は、丸めた両端のあいだに落ちる。式の中の丸めの呼び出し（`down(x, 1000円)`、値で割って丸める呼び出しも）と、出力の丸め（E140、証明書の `output_ranges`、口とスキーマと `api` の範囲）の両方に当てる（`interval_in` の丸めの呼び出しと `round_out` が、`round_far` に丸め方を渡す）。E140 の注は「丸めの刻みへ外向きに広げたもの」を「両端を、出力の丸め方で丸めたあいだ」と言い直した。
+2. ★ **出力の名前は、丸める前の値の範囲で読む**（`Checked::answer_ranges`）。出力の行に書いた範囲は、答えの範囲として、口、スキーマ、`api`、ページ、証明書の `output_ranges` などにそのまま出る。一方、規則の中で出力の名前を読むところ（同じ名前の `define` を読む表、証明書の `ranges`）は、丸める前の値を読む。決定の 1 で、書いた範囲が丸める前の値より狭くても E140 を通るようになった。`round down(1000JPY) range >=0JPY <=1_000JPY` の出力を `define` が 1,999 円まで決めるときである。そのとき、名前を読む範囲は、書いた範囲を丸める前の値の両端まで広げたものにする。書いた範囲は `answer_ranges` に残し、ほかの言語へはそれを渡す。`result` が決める出力の証明書の `ranges` も、丸める前の値と丸めた値の両方を含む範囲にする（`Checked::result_range`）。
+3. **証明書に `round_modes` を足す。** 出力ごとの丸め方である（`{"fee":"half_up"}`）。式の中の丸めは、もとから呼び出しの名前（`down` など）を持っているので、再検査はそれを読む。二つの再検査は、`output_ranges` の範囲を、出力を決めるものの両端をその丸め方で丸めたものと比べ、式の中の丸めも丸め方で丸める。
+4. **知らない丸め方は通さない。** `round_modes` に五つのどれでもない名前があれば、二つの再検査とも同じ文で証明書を通さない（`fee: `round_modes` states a mode of rounding this program does not know for it: …`）。`round_modes` の無い証明書（0.52.0 までの rulec が書いたもの）は、前と同じく刻みの外向きに丸めたもので確かめる。どの丸め方でも成り立つ確かめなので、前の証明書もそのまま通る。式の中の丸めで名前を知らないものも、外向きで読む。
+5. **Lean では、五つの丸め方を `Values.lean` に置く。** `RoundMode` と `roundWith` は、生成コードの丸め（刻みで数えた大きさの整数部分か、丸め方でその一つ上、そのあとに符号）である。KanameCore の `roundQ`（kaname の DESIGN 3.3 の整数の手順と同じ答えになることを、`roundInt_eq_roundQ` が言う）と同じ定義を写した。再検査の int64 の確かめ（`held`）が持っていた同じ手順の写し（`roundBy`）は消し、`roundWith` を使う。`roundWith_roundsWell`（どの丸め方も、刻みへ切り下げた値と切り上げた値のあいだに置く）と `roundWith_monotone`（大きい値は小さくない値に丸まる）を証明し、`rndBy_between` で、両端のあいだの値が丸めた両端のあいだに落ちることを言う。式の `roundTo` と `divRound` は丸め方を持ち（無ければどの丸めでもよい `RoundsWell` のまま）、`interval` は `roundLo`・`roundHi` で両端を丸める。`OutputHolds` と `WrittenOutputHolds` も丸め方を取り、`roundedWithin` はそれで比べる。どの定理も公理は `propext`、`Classical.choice`、`Quot.sound` だけである。
+
+**捨てたもの**：
+
+- **書いた範囲が丸める前の値を含まなければ E140 にすること。** 出力の範囲は答えの約束で、`round down(1000JPY)` の出力に `<=1_000JPY` と書くのは正しい。丸める前の値まで書かせると、直したい誤りがそのまま残る。
+- **名前を読む範囲も、書いた範囲のままにすること。** 決定の 1 だけを入れた rulec は、次の規則に `ok` と言った。表は `amount` を 0 〜 1,000 円で調べ、1,500 円から 1,999 円の `amount` に当たる行が無いことを見落とした。0.52.0 は E140 で止めていた（2,000 円をとりうると言う）ので、決定の 1 だけでは穴を開けることになる。決定の 2 のあとは E101 で止まる。
+
+```text
+$ cat s.rule
+rule s v1
+
+inputs
+  before : money[JPY]  range >=0JPY <=1_999JPY
+
+outputs
+  amount : money[JPY]  round down(1000JPY)  range >=0JPY <=1_000JPY
+  flag : bool
+
+define amount : money[JPY] = before
+
+table t
+policy unique
+| amount     | -> flag |
+| <1_500JPY  | true    |
+```
+
+```text
+$ rulec check s.rule
+error[E101]: Completeness gap: some input matches no row
+  --> s.rule:12 table t
+   |
+12 | table t
+   |       ^ the input space is not fully covered
+   |
+ An input that matches no row: amount = 1500JPY
+ An input producing this example: before = 1500
+ hint: add a row that matches this input.
+ The shape of the row to add: `| 1500JPY | true |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+```
+
+- **持ち越す値の着く先も、丸め方で丸めること。** 状態をまたいで持ち越す値が丸めのあとにどの座標へ着くか（§15.232、`cert.rs` の `land`）は、外向きのままにした。Lean の模倣の定理（`Carried.lean`）がその形で書いてある。着く先を広く見るので、成り立たない主張を通すことはない（成り立つ主張を確かめられないことはありうる）。
+- **RulecCert から kaname の丸め（`KanameCore`）を読むこと。** RulecCert は KanameCore に依らずに組める。二つを結ぶより、丸めの定義と補題（171 行）を写すほうを取った（残したもの）。
+
+**変わること**：
+
+木の `.rule` 813 本（`mutants` を除く）を、替える前（§15.302 まで）と後の rulec にかけて比べた。
+
+- `check` の誤りと警告の文と終了コードは、813 本とも同じ。`vectors`、既定のページ、お客向けのページも同じ。
+- 証明書は、通る 621 本のどれにも `round_modes` が増える（数の出力 588 個。`down` 449、`up` 63、`half_up` 60、`half_down` 14、`half_even` 2）。613 本はそれだけである。
+- ほかが変わるのは次の 8 本で、どれも範囲の端が刻み一つ内側に寄る。`rulec api` と `rulec schema`、生成物も、この 8 本だけが変わり、変わるのは出力の範囲の端だけである。生成物では、MCP のツールの `outputSchema`（Python、TypeScript、JavaScript）とそのページ、`.proto` と SQL（二つのファイル）のコメントで、計算するコードは、どの出力先も一字も変わらない。
+
+| 規則 | 出力（丸め） | 前 | 後 |
+|---|---|---|---|
+| `協会けんぽ健康保険料.rule` | 支援金給与控除額（`half_down`、1 円） | 0 〜 1,599 | 0 〜 1,598 |
+| 同 | 給与控除額（`half_down`、1 円） | 2,670 〜 84,582 | 2,671 〜 84,581 |
+| 同 | 現金納付額（`half_up`、1 円） | 2,670 〜 84,582 | 2,671 〜 84,582 |
+| `daily_proration.rule`、`日割り.rule` | charge、料金（`down`、1 円） | 0 〜 1,107,143 | 0 〜 1,107,142 |
+| `japan_income_tax.rule`、`所得税.rule`（`tests/corpus` と `modules/japan-tax` の 4 本） | surtax、復興特別所得税（`down`、1 円） | −100,715 〜 94,500,000 | −100,714 〜 94,500,000 |
+| `parcel_rate.rule` | fee（`up`、1USD） | 6 〜 72 | 7 〜 72 |
+
+協会けんぽと日割りの規則は、式の中で丸める `define` の区間（証明書の `values`、`held`、`ranges`）も同じに寄る。`parcel_rate.rule` の証明書の `ranges` の fee は、丸める前の値の下の端 6.3 になる（決定の 2）。§15.269 の見回しで外へ広げた三つの端（支援金給与控除額の 1,599 円、surtax と復興特別所得税の −100,715 円）は、規則が答えない値で、その前の値に戻った。
+
+`check` の出力が一本も変わらないので、この誤った E140 に当たっていた規則は、木には無い。測りの 118 条の規則のように、本当の範囲を書いた規則が通るようになる。
+
+**確かめたこと**：
+
+- `tests/output_range.rs` の三つ：五つの丸め方で、1 〜 1,500 円を千円に丸めた答えの範囲（`down` と `half_down` は 0 〜 1,000 円、`up` は 1,000 〜 2,000 円、`half_up` と `half_even` は 0 〜 2,000 円）を E140 が言い、それより一つ狭い範囲を止めること。1,999 円までを千円未満切り捨てにする出力が、口、スキーマ、`api`、ページ、証明書の `output_ranges` で 0 〜 1,000 円と言われ、証明書の `ranges` は 1,999 円まで言い、二つの再検査が通すこと（範囲を書かない形も）。その出力の `define` を読む表が、1,500 円に E101 を言うこと。
+- `tests/lean.rs` の二つ：出力の範囲を狭めた証明書、刻みを外した証明書、知らない丸め方（`ceiling`）を言う証明書を二つの再検査が同じ文で退け、`round_modes` を外した証明書（前の rulec の形）は通すこと。1 ドル単位で丸める並びの出力に、刻みの上に無い 1,050 セントの範囲を書くと、`down` なら証明されて通り、`half_up` なら確かめられない主張として一行で言うこと。`tests/arith.rs` の日割りの区間と、`tests/golden` の E140 の文（英日）を新しい答えに合わせた。
+- 木の 621 本の証明書を、替えた後の rulec と替える前の rulec の両方で書き、二つの再検査にかけた。どちらも同じ 600 本が通り、出力の範囲 584 個が確かめられた。通らない 21 本のうち 20 本は単独では確かめられない寄与のファイルで、残る `modules/osha-penalties/osha_penalty.rule` は別の理由で、0.52.0 でも同じ（残したもの）。
+- rulec の試験の全部 1,492 件。最初の回で落ちた 5 件（上の書き直しと golden）と、PostgreSQL を立てずに SKIP した試験は、PostgreSQL を立てて、その 24 の試験ファイルの 444 件を回し直した（SKIP なし）。
+- ritsu の試験のうち、埋め込んだスキル、サイト、playground、モジュールの 90 件（SKIP なし）。playground の `ritsu.wasm` は作り直した。小包の料金のページが、範囲の端の変わった分だけ変わる。
+- 手でも確かめた：`round_modes` から外した出力のある証明書は、`p.rule` のように丸め方で初めて成り立つ範囲（`down` の 0 〜 1,000 円）なら二つとも退け、`ranges` の出力の範囲を 1,999 円より狭めた証明書は、Lean が退け、Python は int64 の行で退ける。
+
+**残したもの**：
+
+- 持ち越す値の着く先は外向きのまま（捨てたもの）。
+- 丸めの定義と補題は、KanameCore と RulecCert の二か所にある。どちらかがもう一方を読むようにすれば、一つにできる。
+- **見つけて、直していないもの**：`modules/osha-penalties/osha_penalty.rule` の証明書を、二つの再検査がどちらも通さない（0.52.0 の公開版でも同じ）。列挙 `counted_by = violation | day` と、同じ名前の入力 `violation`（違反の種類）がある規則で、出力の列 `per : counted_by` のセル `violation` を、rulec と生成コードは列挙の値として読み（Python なら `CountedBy.VIOLATION`）、再検査は入力の名前として読む（`amounts: row 1 is said to write the word `violation` into per, and `violation` is a name of the rule, which a cell reads as what the name holds`）。
 
 ## 16. この設計で最も危うい点
 
