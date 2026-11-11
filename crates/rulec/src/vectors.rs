@@ -915,6 +915,83 @@ fn weighted_cases(f: &RuleFile, c: &Checked, pool: &[(BTreeMap<String, Val>, Str
     out
 }
 
+/// The most elements at the largest weight `heavy_case` sets side by side to take the total of the
+/// weights past int64.
+const HEAVY_MOST: usize = 8;
+
+/// The case that holds the generated code to refusing weights whose total passes int64 (§15.226):
+/// the sequence of the pick by weight with the fewest copies of one element that take the total
+/// past int64, and every other input as the answered vector it came from has it. The element is the
+/// one of largest weight among the answered vectors' elements, each weighed alone with the drawn
+/// value at the bottom of its range; a field marked `unique` takes a value of its own in each copy
+/// (§15.290). Two copies never pass int64, which E108 holds the rule to, and no case is made where
+/// it takes more than eight: the weights are then small enough that the case would say nothing the
+/// other vectors do not. Nor where the door refuses the copies for something else first — a `count`
+/// over the sequence that holds it to fewer elements, a `sum` past its range.
+fn heavy_case(f: &RuleFile, c: &Checked, answered: &[Vector]) -> Option<(BTreeMap<String, Val>, String)> {
+    let fold = f.folds().find(|d| d.weighted())?;
+    let draw = fold.draw.as_ref()?.text.clone();
+    let lo = c.ranges.get(&draw).and_then(|(lo, _)| *lo)?;
+    let seq = fold.over.clone();
+    let el = f.elements.iter().find(|el| el.name.text == seq)?;
+    // The element of largest weight, weighed alone with the drawn value at the bottom of its range.
+    let mut best: Option<(Rat, &BTreeMap<String, Val>, &BTreeMap<String, Val>)> = None;
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for v in answered {
+        let Some(Val::Seq(xs)) = v.input.get(&seq) else { continue };
+        for e in xs {
+            if !seen.insert(e.iter().map(|(k, x)| format!("{k}={}", show(x))).collect::<Vec<_>>().join(",")) {
+                continue;
+            }
+            let mut a = v.input.clone();
+            a.insert(seq.clone(), Val::Seq(vec![e.clone()]));
+            a.insert(draw.clone(), Val::Num(lo));
+            let Some(cuts) = eval::weighted_cuts(f, c, a.into_iter().collect()) else { continue };
+            let [w] = cuts.as_slice() else { continue };
+            if w.num > 0 && best.is_none_or(|(b, _, _)| w.cmp_to(b) == std::cmp::Ordering::Greater) {
+                best = Some((*w, e, &v.input));
+            }
+        }
+    }
+    let (_, e, base) = best?;
+    let said = crate::door::weights_past(&seq);
+    for k in 2..=HEAVY_MOST {
+        let mut a = base.clone();
+        a.insert(seq.clone(), Val::Seq(apart(c, el, e, k)?));
+        if eval::weights_past(f, c, a.clone().into_iter().collect()).is_none() {
+            continue;
+        }
+        // The door says the weights, and nothing before them.
+        let v = Vector { input: a, outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+        let j = crate::json::parse(&in_object(f, c, &v)).ok()?;
+        if crate::door::refusal(f, c, &j).is_none_or(|r| r.error != said) {
+            return None;
+        }
+        let why = tr!(
+            "{seq} の、重みがいちばん大きい要素 {k} 件（重みの合計が int64 を越える）",
+            "{k} elements of {seq} at the largest weight (the total of the weights passes int64)"
+        );
+        return Some((v.input, why));
+    }
+    None
+}
+
+/// `k` copies of the element `e` of the sequence `el`, each with a value of its own in every field
+/// marked `unique` (§15.290), the element's own first, as `spread` gives them; `None` where a field
+/// does not have that many.
+fn apart(c: &Checked, el: &ElementsDecl, e: &BTreeMap<String, Val>, k: usize) -> Option<Vec<BTreeMap<String, Val>>> {
+    let mut xs = vec![e.clone(); k];
+    for fd in el.fields.iter().filter(|fd| fd.unique.is_some()) {
+        let name = &fd.name.text;
+        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+        let at = e.get(name).and_then(|v| crate::json::parse(&wire_value(c, name, v)).ok());
+        for (x, j) in xs.iter_mut().zip(spread(c, name, &ty, at.as_ref(), k)?) {
+            x.insert(name.clone(), crate::door::value(c, name, &j)?);
+        }
+    }
+    Some(xs)
+}
+
 /// Whether the rule walks the way a rule walked before it could walk more (§15.219): one
 /// sequence, walked once, by one fold alone (`Some(true)`) or by counts and sums alone
 /// (`Some(false)`). Those keep the pools made for them, and so the vectors they always had; any
@@ -1988,8 +2065,8 @@ pub fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
 /// One case run through the reference evaluator as the suite runs it, or `None` where the suite
 /// would not keep it as a case with an answer: a combination the door refuses (a `constraint`, a
 /// day koyomi does not give), two elements both taking under `take_unique`, a sum past the top of
-/// its range, a drawn value not below the total of the weights. The customer page asks it for the
-/// other side of a threshold (§15.302).
+/// its range, a drawn value not below the total of the weights, weights whose total passes int64.
+/// The customer page asks it for the other side of a threshold (§15.302).
 pub fn answer(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>, why: &str) -> Option<Vector> {
     if !allowed(f, c, a) || !days_ok(c, a) {
         return None;
@@ -1998,6 +2075,7 @@ pub fn answer(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>, why: &str) -
     if (f.walks() && eval::contradiction(f, c, env()).is_some())
         || eval::sum_past_range(f, c, env()).is_some()
         || eval::drawn_past(f, c, env()).is_some()
+        || eval::weights_past(f, c, env()).is_some()
     {
         return None;
     }
@@ -2120,6 +2198,16 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             refused.push(Vector { input: a, outputs: outs, trace, fired, why });
             continue;
         }
+        // Weights whose total passes int64 are refused the moment it does (§15.226): one such case
+        // holds the generated code to refusing it.
+        if let Some(n) = crate::eval::weights_past(f, c, a.clone().into_iter().collect()) {
+            let key = format!("weights:{n}");
+            if !past_sums.contains(&key) {
+                past_sums.push(key);
+                refused.push(Vector { input: a, outputs: outs, trace, fired, why });
+            }
+            continue;
+        }
         // A sum past the top of its range is refused where the walk ends (§15.100): one such case
         // per sum holds the generated code to refusing it, and the rest of them say nothing more.
         if let Some(n) = crate::eval::sum_past_range(f, c, a.clone().into_iter().collect()) {
@@ -2140,6 +2228,14 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             continue;
         }
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
+    }
+    // A case of the pool seldom takes the weights of a pick past int64: two elements never do
+    // (E108), and few cases have more of them at the top. Where none did, the case is made.
+    if !past_sums.iter().any(|k| k.starts_with("weights:")) {
+        if let Some((a, why)) = heavy_case(f, c, &evaluated) {
+            let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
+            refused.push(Vector { input: a, outputs: outs, trace, fired, why });
+        }
     }
 
     // The examples take part in the audit like any other vector, and are never dropped from the

@@ -2822,11 +2822,14 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {kept} = {}\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A total past int64 is
+                // refused there, before another element is read: the other languages hold it in an
+                // int64, and every language answers alike.
                 Arm::TakeWeighted { expr, weight } => {
                     let (w, t) = (&names.weight, &names.total);
                     arms.push_str(&format!("        {w} = {}\n", unparen(&py_truths(&self.expr(weight, local).text))));
                     arms.push_str(&format!("        {t} += {w}\n"));
+                    arms.push_str(&format!("        if {t} > 9223372036854775807:\n            raise RuleInputError(\"{}\")\n", crate::door::weights_past(&fold.over)));
                     arms.push_str(&format!("        {}.append({t})\n", names.cuts));
                     arms.push_str(&format!("        if {taken} is None and {draw} < {t}:\n"));
                     arms.push_str(&format!("            {taken} = {}\n", val(expr, local)));
@@ -4165,10 +4168,16 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{kept_one} = true\n\t\t}}\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A weight that would take
+                // the total past int64 is refused before it goes on, and before another element is
+                // read.
                 Arm::TakeWeighted { expr, weight } => {
                     let (w, t, c) = (&names.weight, &names.total, &names.cuts);
                     arms.push_str(&format!("\t\t{w} := int64({})\n", go_expr(&self.expr(weight, local).text)));
+                    arms.push_str(&format!(
+                        "\t\tif {w} > 9223372036854775807-{t} {{\n\t\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\"}}\n\t\t}}\n",
+                        crate::door::weights_past(&fold.over)
+                    ));
                     arms.push_str(&format!("\t\t{t} += {w}\n\t\t{c} = append({c}, {t})\n"));
                     arms.push_str(&format!("\t\tif !{took} && {draw} < {t} {{\n"));
                     arms.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{took} = true\n\t\t}}\n", val(expr, local)));
@@ -6397,11 +6406,18 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("      {kept} = {};\n    }}\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A total past int64 is
+                // refused there, before another element is read: the other languages hold it in an
+                // int64, and every language answers alike.
                 Arm::TakeWeighted { expr, weight } => {
                     let (w, t, c) = (&names.weight, &names.total, &names.cuts);
                     arms.push_str(&format!("    const {w} = {};\n", ts_expr(unparen(&self.expr(weight, local).text))));
-                    arms.push_str(&format!("    {t} += {w};\n    {c}.push({t});\n"));
+                    arms.push_str(&format!("    {t} += {w};\n"));
+                    arms.push_str(&format!(
+                        "    if ({t} > 9223372036854775807n) {{\n      throw new RuleInputError(`{}`);\n    }}\n",
+                        crate::door::weights_past(&fold.over)
+                    ));
+                    arms.push_str(&format!("    {c}.push({t});\n"));
                     arms.push_str(&format!("    if ({taken} === null && {draw} < {t}) {{\n"));
                     arms.push_str(&format!("      {taken} = {};\n    }}\n", val(expr, local)));
                 }
@@ -7767,10 +7783,16 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {kept} = Some({});\n        }}\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A weight that would take
+                // the total past int64 is refused before it goes on, and before another element is
+                // read.
                 Arm::TakeWeighted { expr, weight } => {
                     let (w, t, c) = (&names.weight, &names.total, &names.cuts);
                     arms.push_str(&format!("        let {w}: i64 = {};\n", rs_expr(unparen(&self.expr(weight, local).text))));
+                    arms.push_str(&format!(
+                        "        if {w} > i64::MAX - {t} {{\n            return Err(RuleError::Input {{ what: \"{}\", value: None }});\n        }}\n",
+                        crate::door::weights_past(&fold.over)
+                    ));
                     arms.push_str(&format!("        {t} += {w};\n        {c}.push({t});\n"));
                     arms.push_str(&format!("        if {taken}.is_none() && {draw} < {t} {{\n"));
                     arms.push_str(&format!("            {taken} = Some({});\n        }}\n", val(expr, local)));
@@ -11953,11 +11975,15 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("        {kept} = {}\n      end\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A total past int64 is
+                // refused there, before another element is read: the other languages hold it in an
+                // int64, and every language answers alike.
                 Arm::TakeWeighted { expr, weight } => {
                     let (w, t, c) = (&names.weight, &names.total, &names.cuts);
                     arms.push_str(&format!("      {w} = {}\n", rb_expr(unparen(&self.expr(weight, local).text))));
-                    arms.push_str(&format!("      {t} += {w}\n      {c} << {t}\n"));
+                    arms.push_str(&format!("      {t} += {w}\n"));
+                    arms.push_str(&format!("      raise RuleInputError.new(\"{}\") if {t} > 9223372036854775807\n", crate::door::weights_past(&fold.over)));
+                    arms.push_str(&format!("      {c} << {t}\n"));
                     arms.push_str(&format!("      {taken} = {} if {taken}.nil? && {draw} < {t}\n", val(expr, local)));
                 }
             }
@@ -13548,9 +13574,15 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {kept} = {}\n        }}\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A weight that would take
+                // the total past int64 is refused before it goes on, and before another element is
+                // read.
                 Arm::TakeWeighted { expr, weight: wx } => {
                     arms.push_str(&format!("        let {weight}: Int64 = {}\n", sw_expr(unparen(&self.expr(wx, local).text))));
+                    arms.push_str(&format!(
+                        "        if {weight} > Int64.max - {total} {{\n            throw RuleError.input(what: \"{}\", value: nil)\n        }}\n",
+                        crate::door::weights_past(&fold.over)
+                    ));
                     arms.push_str(&format!("        {total} += {weight}\n        {cuts}.append({total})\n"));
                     arms.push_str(&format!("        if {taken} == nil && {draw} < {total} {{\n"));
                     arms.push_str(&format!("            {taken} = {}\n        }}\n", val(expr, local)));

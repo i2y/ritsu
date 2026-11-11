@@ -113,6 +113,13 @@ pub fn draw_past(name: &str) -> String {
     tr!("{name} が重みの合計より小さくありません", "{name} is not below the total of the weights")
 }
 
+/// The weights of a pick by weight whose total does not fit in int64, by the sequence the pick
+/// walks (§15.226): every language adds the weights up in an int64 and refuses the call the moment
+/// the total would pass it. The sequence is the caller's, and so is how long it is.
+pub fn weights_past(seq: &str) -> String {
+    tr!("{seq} の重みの合計が int64 に収まりません", "the total of the weights of {seq} does not fit in int64")
+}
+
 /// Two elements both taking under `take_unique`: the rule has no answer.
 pub fn fold_contradiction(verdict: &str) -> String {
     tr!("畳み込み {verdict}: take_unique に二件当たりました", "fold {verdict}: two elements matched a take_unique")
@@ -157,6 +164,12 @@ pub fn ends(c: &Checked, name: &str, wide: bool) -> (Option<i128>, Option<i128>)
         }
         _ => (None, None),
     }
+}
+
+/// One value of an input or a field, read off the wire the way its door reads it: `None` where the
+/// door refuses it. What a case built on the wire is read back into the evaluator's values as.
+pub(crate) fn value(c: &Checked, name: &str, j: &Json) -> Option<Val> {
+    one(c, name, &c.ty_of(name)?, Some(j)).ok()
 }
 
 /// The input as one value of its declared type, or the sentence its door refuses it with:
@@ -255,8 +268,10 @@ pub fn civil(s: &str) -> Option<(i32, u32, u32)> {
 /// What the door of every generated language refuses this input for, in the order the doors
 /// look: each input in the order the rule declares it — there at all, of its kind, inside its
 /// range — then the sequence and each of its elements, two elements with the same value of a
-/// `unique` field, then every `constraint`, then the days of a koyomi date; and last the rule's own
-/// contradiction, two elements taking under `take_unique`. `None` when the input is answered.
+/// `unique` field, then every `constraint`, then the days of a koyomi date, then what the walks
+/// refuse (weights whose total passes int64, a sum past its range, a drawn value past the weights);
+/// and last the rule's own contradiction, two elements taking under `take_unique`. `None` when the
+/// input is answered.
 /// `input` is the object a vector's `in` is.
 pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
     read(f, c, input_obj).err()
@@ -355,6 +370,12 @@ pub fn read(f: &RuleFile, c: &Checked, input_obj: &Json) -> Result<BTreeMap<Stri
                 return Err(input(not_a_day(name, &file, &date)));
             }
         }
+    }
+    // Weights of a pick by weight whose total passes int64 (§15.226): the generated walk refuses the
+    // call the moment the total does, before it reads another element, so a walk that stopped there
+    // reaches none of what is looked at below.
+    if let Some(n) = crate::eval::weights_past(f, c, vals.clone().into_iter().collect()) {
+        return Err(input(weights_past(&n)));
     }
     // A sum over what a table decides per element, past the top of its range once the walk is
     // over (§15.100): the generated code refuses it there.

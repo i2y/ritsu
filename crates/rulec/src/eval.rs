@@ -481,6 +481,11 @@ struct Walked {
     /// (§15.226): the generated code refuses the call once the walk is over, and the rule has no
     /// answer either.
     drawn: Option<String>,
+    /// A pick by weight whose running total of the weights passed int64, by the sequence it walks
+    /// (§15.226): the generated code adds the weights up in an int64 and refuses the call the moment
+    /// the total would pass it, without reading the elements after, and the rule has no answer
+    /// either.
+    heavy: Option<String>,
 }
 
 /// A rule that walks sequences (§15.56, §15.58, §15.219), in the stages its items fall into
@@ -522,8 +527,8 @@ fn run_walking(
 /// read what was found after it.
 #[derive(Default)]
 struct Observe {
-    /// Go on past a `stop`, a contradiction and a sum past its range, so that every element is
-    /// seen: what the coverage of a fold's transitions is judged on.
+    /// Go on past a `stop`, a contradiction, a sum past its range and weights whose total passes
+    /// int64, so that every element is seen: what the coverage of a fold's transitions is judged on.
     all: bool,
     /// Collect the case of every element of a walk after the first (`ElementCase`).
     cases: bool,
@@ -535,6 +540,8 @@ struct Observe {
     past: Option<String>,
     /// The drawn value a pick by weight found not below the total of its weights, by its name.
     drawn: Option<String>,
+    /// The pick by weight whose total of the weights passed int64, by the sequence it walks.
+    heavy: Option<String>,
     /// The running totals of a pick by weight, after each element it weighed (§15.226): where the
     /// drawn values that take each element start and end.
     cuts: Option<Vec<Rat>>,
@@ -579,7 +586,8 @@ pub fn sum_past_range(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -
 /// Why the reference evaluator has no answer for an input the checks would otherwise ask about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NoAnswer {
-    /// The door refuses it: a `constraint`, a sum past its range, a drawn value past the weights.
+    /// The door refuses it: a `constraint`, a sum past its range, a drawn value past the weights,
+    /// weights whose total passes int64.
     Refused,
     /// The rule contradicts itself on it: two elements took under `take_unique`.
     Contradiction,
@@ -604,7 +612,7 @@ pub fn answer(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Result
         return Err(NoAnswer::Contradiction);
     }
     // A sequence past the cap a `count` over it declares has no answer either, and no flag says so.
-    if o.past.is_some() || o.drawn.is_some() || (!outs.is_empty() && outs.iter().all(|(_, v)| v.is_none())) {
+    if o.past.is_some() || o.drawn.is_some() || o.heavy.is_some() || (!outs.is_empty() && outs.iter().all(|(_, v)| v.is_none())) {
         return Err(NoAnswer::Refused);
     }
     Ok(outs)
@@ -621,6 +629,136 @@ pub fn drawn_past(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Op
     let mut o = Observe::default();
     let _ = walk_all(f, c, inputs, &mut o);
     o.drawn
+}
+
+/// The pick by weight whose running total of the weights passes int64 on these inputs, by the
+/// sequence it walks (§15.226): every language adds the weights up in an int64 and refuses the call
+/// the moment the total would pass it, so the reference evaluator has no answer for it either. Two
+/// elements at the largest weight fit, which E108 holds the rule to; a longer sequence can pass it.
+/// `None` when the total stays inside, and for a rule that picks by no weight.
+pub fn weights_past(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<String> {
+    if !f.folds().any(|d| d.weighted()) {
+        return None;
+    }
+    let mut o = Observe::default();
+    let _ = walk_all(f, c, inputs, &mut o);
+    o.heavy
+}
+
+/// What the generated code refuses the sequences on these inputs for, in the order its door and its
+/// walk look (§15.226, §15.290, §15.100), in the sentence it refuses them with: more elements than a
+/// `count` over a sequence can be, an element's field outside its range, two elements with the same
+/// value of a `unique` field, and — when `walk` — weights whose total passes int64 and a `sum` past
+/// its range. A claim of `chances` that names such a sequence speaks of a call nobody can make. A
+/// drawn value not below the total of the weights is the draw's and not the sequence's, and is not
+/// looked at. `None` when the code takes the sequences.
+pub fn sequence_refused(f: &RuleFile, c: &Checked, inputs: &HashMap<String, Val>, walk: bool) -> Option<String> {
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let Some(Val::Seq(xs)) = inputs.get(seq) else { continue };
+        if let Some(cap) = crate::door::count_cap(f, c, seq) {
+            if xs.len() as i128 > cap {
+                return Some(crate::door::too_many(seq, cap));
+            }
+        }
+        let one: HashMap<String, Val> = std::iter::once((seq.clone(), Val::Seq(xs.clone()))).collect();
+        if let Some((name, _, _)) = outside_range(f, c, &one) {
+            return Some(crate::door::out_of_range(&name));
+        }
+        if let Some(field) = crate::door::repeated(el, xs) {
+            return Some(crate::door::duplicate(seq, field));
+        }
+    }
+    if !walk || !f.walks() {
+        return None;
+    }
+    let mut o = Observe::default();
+    let _ = walk_all(f, c, inputs.clone(), &mut o);
+    if let Some(seq) = o.heavy {
+        return Some(crate::door::weights_past(&seq));
+    }
+    o.past.map(|name| crate::door::out_of_range(&name))
+}
+
+/// What the generated code refuses an example's input for past the door's look at each value
+/// (§15.226, §15.100), as E019 says it: the heading, the code's own sentence, why the example is
+/// wrong, and what to do. A sequence longer than a `count` over it can be, then what the walk
+/// refuses, in the order the code looks: weights whose total passes int64, a `sum` past its range
+/// once the walk is over, a drawn value not below the total of the weights. `None` when the code
+/// takes the input that far.
+fn refused_on_walk(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Option<(String, String, String, String)> {
+    if !f.walks() {
+        return None;
+    }
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let (Some(Val::Seq(xs)), Some(cap)) = (env.get(seq), crate::door::count_cap(f, c, seq)) else { continue };
+        if xs.len() as i128 > cap {
+            return Some((
+                tr!("例の並びの要素が、`count` の範囲の上限より多いです", "An example's sequence has more elements than a `count` over it can be"),
+                crate::door::too_many(seq, cap),
+                tr!(
+                    "並びを数える `count` の範囲の上限より要素が多い並びは、生成コードが入口で受け付けません。例はその並びに答えがあると言っていることになります。",
+                    "The generated code refuses a sequence with more elements than the top of the range of a `count` over it, at its door. The example claims an answer for one."
+                ),
+                tr!(
+                    "例の並びを直すか、要素がそれだけ本当に来るなら `count` の範囲を広げてください。",
+                    "Correct the example's sequence, or widen the range of the `count` if that many elements really come."
+                ),
+            ));
+        }
+    }
+    let mut o = Observe::default();
+    let _ = walk_all(f, c, env.clone(), &mut o);
+    if let Some(seq) = o.heavy {
+        return Some((
+            tr!("例の並びの重みの合計が int64 に収まりません", "The weights of an example's sequence add up past int64"),
+            crate::door::weights_past(&seq),
+            tr!(
+                "重みで選ぶとき、どの言語も重みの合計を int64 で足していき、越えたところで呼び出しを入力の誤りとして断ります。例はその入力に答えがあると言っていることになります。",
+                "Picking by weight, every language adds the weights up in an int64, and refuses the call as an input error the moment the total passes it. The example claims an answer for an input the generated code refuses."
+            ),
+            tr!(
+                "例の並びを、重みの合計が int64 に収まるように直してください。",
+                "Correct the example's sequence so that its weights add up inside int64."
+            ),
+        ));
+    }
+    if let Some(name) = o.past {
+        return Some((
+            tr!("例の入力で、`sum` が宣言した範囲を越えます", "On an example's inputs, a `sum` passes its declared range"),
+            crate::door::out_of_range(&name),
+            tr!(
+                "`sum` の合計は、歩きが終わったところで宣言した範囲と比べ、越えると生成コードが断ります。例はその入力に答えがあると言っていることになります。",
+                "A `sum` is held to its declared range once the walk is over, and the generated code refuses the call past it. The example claims an answer for an input it refuses."
+            ),
+            tr!(
+                "例の並びを直すか、その合計が本当に来るなら `sum` の範囲を広げてください。",
+                "Correct the example's sequence, or widen the range of the `sum` if that total really comes."
+            ),
+        ));
+    }
+    if let Some(name) = o.drawn {
+        return Some((
+            tr!("例の引いた値が、重みの合計より小さくありません", "An example's drawn value is not below the total of the weights"),
+            crate::door::draw_past(&name),
+            tr!(
+                "重みで選ぶときに引く値は、呼ぶ側が重みの合計より小さい値を引いて渡すものです。そうでない値は生成コードが断ります。例はその入力に答えがあると言っていることになります。",
+                "The value a pick by weight draws is the caller's to draw below the total of the weights, and the generated code refuses one that is not. The example claims an answer for an input it refuses."
+            ),
+            tr!(
+                "例の引いた値を、重みの合計より小さくしてください。",
+                "Make the example's drawn value smaller than the total of the weights."
+            ),
+        ));
+    }
+    None
+}
+
+/// Whether a running total of weights, held on the scale its weights are written on, passes int64:
+/// what the generated code holds the total in.
+fn past_int64(total: Rat, scale: i128) -> bool {
+    crate::types::stored_at(total, scale).is_none_or(|s| s > i64::MAX as i128)
 }
 
 /// The running totals of the rule's pick by weight on these inputs, one after each element it
@@ -724,6 +862,12 @@ fn walk_all(
                 continue;
             }
             let walked = walk_one(f, c, &st, s, level, &seqs[s], &mut env, &mut one, obs);
+            if let Some(n) = walked.heavy {
+                obs.heavy.get_or_insert(n);
+                if !obs.all {
+                    return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+                }
+            }
             if let Some(n) = walked.past {
                 obs.past.get_or_insert(n);
                 if !obs.all {
@@ -801,6 +945,7 @@ fn walk_one(
         })
         .collect();
     let mut broken: Option<usize> = None;
+    let mut heavy: Option<String> = None;
     'elements: for e in seq {
         let mut m = before.clone();
         for (k, v) in e {
@@ -928,6 +1073,15 @@ fn walk_one(
                             if let Some(Val::Num(w)) = eenv.expr(weight) {
                                 *weights = weights.add(w);
                             }
+                            // Every language adds the weights up in an int64, on the scale they
+                            // are written on, and refuses the call the moment the total would pass
+                            // it, before it reads another element (§15.226).
+                            if heavy.is_none() && past_int64(*weights, c.scale(weight).unwrap_or(1)) {
+                                heavy = Some(fold.over.clone());
+                                if !observe {
+                                    break 'elements;
+                                }
+                            }
                             cuts.push(*weights);
                             let drawn = fold.draw.as_ref().and_then(|d| before.get(&d.text));
                             if taken.is_none() {
@@ -948,7 +1102,12 @@ fn walk_one(
         }
     }
     if broken.is_some() {
-        return Walked { broken, past: None, drawn: None };
+        return Walked { broken, past: None, drawn: None, heavy: None };
+    }
+    // The walk stopped where the total of the weights passed int64: nothing after it is read, and
+    // nothing is answered.
+    if heavy.is_some() && !observe {
+        return Walked { broken: None, past: None, drawn: None, heavy };
     }
     let mut past: Option<String> = None;
     let mut drawn: Option<String> = None;
@@ -1008,7 +1167,7 @@ fn walk_one(
             _ => {}
         }
     }
-    Walked { broken: None, past, drawn }
+    Walked { broken: None, past, drawn, heavy }
 }
 
 /// The rule's outputs, read out of an environment that has finished running: the `result`
@@ -1379,6 +1538,20 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                 }
                 continue;
             }
+        }
+        // What the generated code turns away past the looks above (§15.226, §15.100): a sequence
+        // longer than a `count` over it can be, and what its walk refuses. The example claims an
+        // answer for an input the code refuses, the same as the ones above, and comes with the
+        // sentence the code refuses it with, not with E107's account of the tables.
+        if let Some((title, said, why, fix)) = refused_on_walk(f, c, &env) {
+            out.push(
+                Diag::error("E019", title)
+                    .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                    .mark(row.span.clone(), said)
+                    .note(why)
+                    .note(fix),
+            );
+            continue;
         }
         let (got, fired, fired_rows, _) = run_all_traced(f, c, env.clone());
         // The witness of E107 is the example's own row: the inputs as written, and the value

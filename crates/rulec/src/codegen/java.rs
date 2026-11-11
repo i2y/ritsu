@@ -977,9 +977,15 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("                {kept} = {};\n            }}\n", val(expr, local)));
                 }
                 // The weight goes on the running total, and the element is taken where the drawn
-                // value is below the total for the first time (§15.226).
+                // value is below the total for the first time (§15.226). A weight that would take
+                // the total past int64 is refused before it goes on, and before another element is
+                // read.
                 Arm::TakeWeighted { expr, weight: wx } => {
                     arms.push_str(&format!("            long {weight} = {};\n", java_expr(unparen(&self.expr(wx, local).text))));
+                    arms.push_str(&format!(
+                        "            if ({weight} > Long.MAX_VALUE - {total}) {{\n                throw new RuleInputError({});\n            }}\n",
+                        java_str(&crate::door::weights_past(&fold.over))
+                    ));
                     arms.push_str(&format!("            {total} += {weight};\n            {cuts}.add({total});\n"));
                     arms.push_str(&format!("            if ({taken} == null && {draw} < {total}) {{\n"));
                     arms.push_str(&format!("                {taken} = {};\n            }}\n", val(expr, local)));

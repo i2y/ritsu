@@ -443,8 +443,9 @@ compiled into every build since 8.0, and the file uses nothing newer than 8.1. T
 **8.2**, because 8.1 is where security support ended.
 
 **One thing PHP does that the other ten do not**: an integer that overflows becomes a float
-rather than wrapping. E108 proves no intermediate leaves int64, so a rule that passed `check`
-cannot reach it — but it is worth knowing which side of the proof the language sits on.
+rather than wrapping. E108 proves no intermediate leaves int64, and the one running total it does
+not bound, the weights of a pick by weight, is checked before each addition, so a rule that passed
+`check` cannot reach it — but it is worth knowing which side of the proof the language sits on.
 
 ### Go
 
@@ -1210,19 +1211,34 @@ def case_routing_chances(reviewers: list[Element]) -> Chances:
     return Chances(total, ways)
 ```
 
-The walk itself adds each weight to the running total as the element lands on the arm, takes the
-first element the drawn value is below, and refuses the call once the walk is over when the drawn
-value is not below the total:
+The walk itself adds each weight to the running total as the element lands on the arm, refuses the
+call the moment the total passes int64, takes the first element the drawn value is below, and
+refuses the call once the walk is over when the drawn value is not below the total:
 
 ```python
         if presence is Presence.INOFFICE:  # in_office
             weight = elem.capacity
             weights += weight
+            if weights > 9223372036854775807:
+                raise RuleInputError("the total of the weights of reviewers does not fit in int64")
             cuts.append(weights)
             if taken is None and roll < weights:
                 taken = elem.reviewer_id
     if weights > 0 and roll >= weights:
         raise RuleInputError("roll is not below the total of the weights", _repr(roll))
+```
+
+E108 holds two elements at the largest weight inside int64, and nothing caps how many elements a
+call passes, so the generated code checks the total itself, as it goes (NumPy and SQL do not walk
+a sequence). Python, TypeScript, JavaScript and Ruby add and then compare, since their integers do
+not wrap; Rust (and the Wasm build of it), Go, Swift, Java and PHP ask before they add whether the
+weight fits what is left below int64, where the addition would wrap, trap or turn into a float:
+
+```go
+			if weight > 9223372036854775807-weights {
+				return 0, nil, nil, &RuleInputError{What: "the total of the weights of reviewers does not fit in int64"}
+			}
+			weights += weight
 ```
 
 The private function is `_case_routing_walked` in Python, Rust (and the Wasm build of it), Ruby and

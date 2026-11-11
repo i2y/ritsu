@@ -6,8 +6,9 @@
 //! (tests/threeway.rs), their certificates in both re-checkers (tests/cert.rs, tests/lean.rs), the
 //! mutants' codes (tests/m0.rs), the goldens, and the twins' claims (tests/twins.rs) — is not
 //! repeated here. These are the rest: the words read by their place, the shapes E070 and E073 stop, a
-//! claim broken and one past its budget, the counts W131 and E108 read, what `rulec gen` and
-//! `rulec api` say, what the vectors hold the functions to, a certificate that lies, and the pages.
+//! claim broken and one past its budget, the counts W131 and E108 read, a total of the weights past
+//! int64, an example and a claim on a call the code refuses, what `rulec gen` and `rulec api` say,
+//! what the vectors hold the functions to, a certificate that lies, and the pages.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -19,8 +20,12 @@ fn root() -> PathBuf {
 }
 
 fn run_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
+    run_lang(dir, "en", args)
+}
+
+fn run_lang(dir: &Path, lang: &str, args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .env("RULEC_LANG", "en")
+        .env("RULEC_LANG", lang)
         .current_dir(dir)
         .args(args)
         .output()
@@ -283,7 +288,8 @@ fn the_points_are_counted_for_w131_and_e108() {
 
 /// The pick by weight in the reference evaluator: a drawn value past the total of the weights is
 /// refused, as the generated code refuses it once the walk is over, every edge of the shares is a
-/// case, and weights that add up to 0 answer `exhausted`.
+/// case, and weights that add up to 0 answer `exhausted`. Capacities of at most 100 take no sequence
+/// of eight elements past int64, so no case of that is made.
 #[test]
 fn a_pick_by_weight_refuses_a_draw_past_the_weights() {
     let t = TempDir::new("chances-refused");
@@ -294,6 +300,7 @@ fn a_pick_by_weight_refuses_a_draw_past_the_weights() {
         refused.lines().any(|l| l.contains("\"refused\":\"input\"") && l.contains("\"error\":\"roll is not below the total of the weights\"")),
         "no draw past the weights is refused:\n{refused}"
     );
+    assert!(!refused.contains("does not fit in int64"), "{refused}");
     let (c, out, _) = run(&["vectors", ROUTING]);
     assert_eq!(c, 0);
     assert!(out.contains("(an edge of the weights)"), "{out}");
@@ -305,6 +312,228 @@ fn a_pick_by_weight_refuses_a_draw_past_the_weights() {
     });
     let zero = zero.expect("no case of weights that add up to 0");
     assert_eq!(zero.get("out").and_then(|o| o.get("reviewer")).map(rulec::json::unparse).as_deref(), Some("0"));
+}
+
+/// The team of the corpus's case routing whose capacities come to 2^63 − 1 exactly, in English and
+/// in Japanese: the most a call can pass.
+const AT_THE_TOP: &str = "sequence at_the_top
+| reviewer_id | present | capacity            |
+| 1           | true    | 4000000000000000000 |
+| 2           | true    | 4000000000000000000 |
+| 3           | true    | 1223372036854775807 |
+";
+const AT_THE_TOP_JA: &str = "sequence 上限ちょうど(at_the_top)
+| 担当者番号 | 出勤 | 受けられる量        |
+| 1          | true | 4000000000000000000 |
+| 2          | true | 4000000000000000000 |
+| 3          | true | 1223372036854775807 |
+";
+
+/// A rule of the corpus that routes cases by capacity, with capacities up to 4e18, the team above,
+/// and an example that gives it a case.
+fn heavy_routing(path: &str, team: &str, example: &str) -> String {
+    let src = std::fs::read_to_string(root().join(path)).unwrap();
+    assert_eq!(src.matches("range >=0 <=100").count(), 1, "{path}");
+    let src = src.replacen("range >=0 <=100", "range >=0 <=4_000_000_000_000_000_000", 1).replacen("\nchances\n", &format!("\n{team}\nchances\n"), 1);
+    format!("{src}{example}\n")
+}
+
+/// The total of the weights past int64 (§15.226): E108 holds two elements at the largest weight
+/// inside it, and nothing caps how long the sequence is, so a call whose total would pass is
+/// refused the moment it would, in the reference evaluator and in every language. The case routing
+/// of the corpus with capacities up to 4e18, in English and in Japanese: `check` passes it, three
+/// reviewers in at 4e18 are refused, a team whose capacities come to 2^63 − 1 exactly is answered
+/// and one more is refused, and the vectors hold every language to the refusal with one case.
+#[test]
+fn a_total_of_the_weights_past_int64_is_refused_in_every_language() {
+    if !ready(Need::Python, || have("python3"), "no python3, so the generated code was not run") {
+        return;
+    }
+    let t = TempDir::new("chances-heavy");
+    let targets = [
+        "--target", "python", "--target", "typescript", "--target", "javascript", "--target", "rust", "--target", "ruby", "--target", "php", "--target", "go",
+        "--target", "swift", "--target", "java", "--target", "wasm", "--extra", "runner", "--extra", "vectors",
+    ];
+    let english = heavy_routing(ROUTING, AT_THE_TOP, "| 0    | at_the_top    | 1           |");
+    let japanese = heavy_routing("tests/corpus/案件の振り分け.rule", AT_THE_TOP_JA, "| 0    | 上限ちょうど | 1         |");
+    for (lang, file, alias, src, names, said) in [
+        ("en", "heavy.rule", "case_routing", english, ["reviewers", "reviewer_id", "present", "capacity", "roll", "reviewer"], "the total of the weights of reviewers does not fit in int64"),
+        ("ja", "大口.rule", "case_assignment", japanese, ["担当者", "担当者番号", "出勤", "受けられる量", "乱数", "回す先"], "担当者 の重みの合計が int64 に収まりません"),
+    ] {
+        let [seq, id, present, capacity, roll, out] = names;
+        std::fs::write(t.path().join(file), &src).unwrap();
+        let (c, said_check, e) = run_lang(t.path(), lang, &["check", file]);
+        assert_eq!(c, 0, "{file}: {said_check}{e}");
+        assert!(codes_of(t.path(), file, &src).is_empty(), "{file}: {said_check}");
+
+        // The reference evaluator, by `rulec run`: 1.2e19 and 2^63 are refused, 2^63 − 1 is answered.
+        for (third, refused) in [("4000000000000000000", true), ("1223372036854775807", false), ("1223372036854775808", true)] {
+            let team: Vec<String> = [("1", "4000000000000000000"), ("2", "4000000000000000000"), ("3", third)]
+                .iter()
+                .map(|(n, w)| format!(r#"{{"{id}":{n},"{present}":true,"{capacity}":{w}}}"#))
+                .collect();
+            let input = t.path().join("in.json");
+            std::fs::write(&input, format!(r#"{{"{seq}":[{}],"{roll}":0}}"#, team.join(","))).unwrap();
+            let (c, said_run, e) = run_lang(t.path(), lang, &["run", file, "--input", input.to_str().unwrap(), "--format", "json"]);
+            assert_eq!(c, 0, "{file} {third}: {said_run}{e}");
+            let j = json(&said_run);
+            if refused {
+                assert_eq!(j.get("refused").and_then(|x| x.as_str()), Some("input"), "{file} {third}: {said_run}");
+                assert_eq!(j.get("error").and_then(|x| x.as_str()), Some(said), "{file} {third}: {said_run}");
+            } else {
+                assert_eq!(j.get("answer").and_then(|a| a.get(out)).map(rulec::json::unparse).as_deref(), Some("1"), "{file} {third}: {said_run}");
+            }
+        }
+
+        // The vectors: one case refused for the weights, three reviewers at the top, and the team at
+        // 2^63 − 1 among the answered.
+        let gen_out = t.path().join(format!("out-{alias}"));
+        let mut args = vec!["gen", file, "--out", gen_out.to_str().unwrap()];
+        args.extend(targets);
+        let (c, said_gen, e) = run_lang(t.path(), lang, &args);
+        assert_eq!(c, 0, "{file}: {said_gen}{e}");
+        let refused = std::fs::read_to_string(gen_out.join(format!("vectors/{alias}.refused.jsonl"))).unwrap();
+        let heavy: Vec<&str> = refused.lines().filter(|l| l.contains(&format!(r#""error":"{said}""#))).collect();
+        assert_eq!(heavy.len(), 1, "{file}:\n{refused}");
+        let j = json(heavy[0]);
+        assert_eq!(j.get("refused").and_then(|x| x.as_str()), Some("input"), "{}", heavy[0]);
+        let Some(rulec::json::Json::Arr(es)) = j.get("in").and_then(|i| i.get(seq)) else { panic!("{}", heavy[0]) };
+        assert_eq!(es.len(), 3, "{}", heavy[0]);
+        assert!(es.iter().all(|e| e.get(capacity).map(rulec::json::unparse).as_deref() == Some("4000000000000000000")), "{}", heavy[0]);
+        let vectors = std::fs::read_to_string(gen_out.join(format!("vectors/{alias}.jsonl"))).unwrap();
+        assert!(vectors.lines().any(|l| l.contains("1223372036854775807")), "{file}: the team at 2^63 - 1 is not among the vectors:\n{vectors}");
+
+        // Every language at hand answers the team at 2^63 − 1 and refuses the case past it.
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", lang)
+            .env("TMPDIR", tmpdir_in(&gen_out))
+            .args(["test", gen_out.to_str().unwrap(), "--format", "json"])
+            .output()
+            .expect("cannot start rulec test");
+        let said_test = String::from_utf8_lossy(&o.stdout).into_owned();
+        let j = json(said_test.lines().next().unwrap_or_else(|| panic!("no result: {}", String::from_utf8_lossy(&o.stderr))));
+        for why in j.get("skipped").and_then(|v| v.as_arr()).unwrap_or_default() {
+            skip(&format!("rulec test: {}", why.as_str().unwrap_or_default()));
+        }
+        let mut ran = Vec::new();
+        for r in j.get("results").and_then(|v| v.as_arr()).unwrap_or_default() {
+            if r.get("rule").and_then(|v| v.as_str()) != Some(alias) || r.get("ran").and_then(|v| v.as_bool()) != Some(true) {
+                continue;
+            }
+            assert_eq!(r.get("ok").and_then(|v| v.as_bool()), Some(true), "{file}: {r:?}");
+            ran.push(format!("{}/{}", r.get("lang").and_then(|v| v.as_str()).unwrap_or_default(), r.get("via").and_then(|v| v.as_str()).unwrap_or_default()));
+        }
+        assert!(ran.iter().any(|x| x.starts_with("python/")), "{file}: Python did not run: {ran:?}");
+        println!("weights past int64: {alias} held in {}", ran.join(", "));
+    }
+}
+
+/// The labels of the spans and the notes of the diagnostics of `code` among `ds`, in one string each.
+fn said_by(ds: &[rulec::json::Json], code: &str) -> Vec<String> {
+    ds.iter()
+        .filter(|d| d.get("code").and_then(|c| c.as_str()) == Some(code))
+        .map(|d| format!("{} {}", d.get("spans").map(rulec::json::unparse).unwrap_or_default(), d.get("notes").map(rulec::json::unparse).unwrap_or_default()))
+        .collect()
+}
+
+/// A call the generated code refuses is no case to claim an answer or a chance for (§15.226). An
+/// example that names a sequence whose weights pass int64, or draws a value not below the total of
+/// the weights, is E019 with the sentence the code refuses it with, as an example the door refuses
+/// is; so is one past the range of a `sum` and one with more elements than a `count` can be. All of
+/// them were E107 with "No table fired." A claim of `chances` that names such a sequence is E133,
+/// with the combination and that sentence: it used to pass on no point, while a re-checker counting
+/// the weights failed it. So is a claim whose sequence has a field out of its range, which used to be
+/// counted as if the door took it. A claim and an example on the team whose capacities come to
+/// 2^63 − 1 exactly pass, and both re-checkers take the certificate.
+#[test]
+fn a_call_the_code_refuses_is_e019_in_an_example_and_e133_in_a_claim() {
+    let t = TempDir::new("chances-refused-calls");
+    let three = AT_THE_TOP.replacen("sequence at_the_top", "sequence three_at_the_top", 1).replacen("1223372036854775807", "4000000000000000000", 1);
+    let past = "sequence past_the_range\n| reviewer_id | present | capacity            |\n| 1           | true    | 5000000000000000000 |\n";
+    let claim = |src: &str, row: &str| {
+        let after = "| no_reviewers  | 0           | 1      |\n";
+        assert!(src.contains(after));
+        src.replacen(after, &format!("{after}{row}\n"), 1)
+    };
+    let base = heavy_routing(ROUTING, &format!("{AT_THE_TOP}\n{three}\n{past}"), "| 0    | at_the_top    | 1           |");
+
+    // Examples the code refuses: E019, with its own sentence on the row.
+    for (what, row, said) in [
+        ("weights past int64", "| 0    | three_at_the_top | 1        |", "the total of the weights of reviewers does not fit in int64"),
+        ("a draw past the weights", "| 100  | team_of_three | 1           |", "roll is not below the total of the weights"),
+    ] {
+        let src = format!("{base}{row}\n");
+        let ds = diags_of(t.path(), "example.rule", &src, &[]);
+        let e019 = said_by(&ds, "E019");
+        assert!(e019.len() == 1 && e019[0].contains(said), "{what}: {ds:?}");
+        assert!(said_by(&ds, "E107").is_empty(), "{what}: {ds:?}");
+    }
+
+    // Claims on a sequence the code refuses: E133, with the combination and the code's sentence.
+    for (what, row, said) in [
+        ("weights past int64", "| three_at_the_top | 1     | 1/3    |", "With reviewers = three_at_the_top, the generated code refuses the call as an input error: the total of the weights of reviewers does not fit in int64"),
+        // Each draw would take reviewer 1, and the claim says so: the door refuses the team all the same.
+        ("a field past its range", "| past_the_range | 1       | 1      |", "With reviewers = past_the_range, the generated code refuses the call as an input error: capacity is out of range"),
+    ] {
+        let ds = diags_of(t.path(), "claim.rule", &claim(&base, row), &[]);
+        let e133 = said_by(&ds, "E133");
+        assert!(e133.len() == 1 && e133[0].contains(said), "{what}: {ds:?}");
+    }
+
+    // In Japanese, the same sentences as the generated code's.
+    let three_ja = AT_THE_TOP_JA.replacen("sequence 上限ちょうど(at_the_top)", "sequence 三人とも上限(three_at_the_top)", 1).replacen("1223372036854775807", "4000000000000000000", 1);
+    let ja = heavy_routing("tests/corpus/案件の振り分け.rule", &three_ja, "| 0    | 三人とも上限 | 1         |")
+        .replacen("| 担当者なし   | 0         | 1      |\n", "| 担当者なし   | 0         | 1      |\n| 三人とも上限 | 1         | 1/3    |\n", 1);
+    std::fs::write(t.path().join("大口.rule"), &ja).unwrap();
+    let (_, out, _) = run_lang(t.path(), "ja", &["check", "大口.rule", "--format", "json"]);
+    let ds: Vec<rulec::json::Json> = out.lines().filter_map(|l| rulec::json::parse(l).ok()).filter(|j| j.get("code").is_some()).collect();
+    let e019 = said_by(&ds, "E019");
+    assert!(e019.len() == 1 && e019[0].contains("担当者 の重みの合計が int64 に収まりません"), "{ds:?}");
+    let e133 = said_by(&ds, "E133");
+    assert!(e133.len() == 1 && e133[0].contains("担当者 = 三人とも上限 のとき、生成コードは呼び出しを入力の誤りとして断ります: 担当者 の重みの合計が int64 に収まりません"), "{ds:?}");
+
+    // A `sum` past its range and more elements than a `count` can be, in examples.
+    let sums = "rule t v1\n\nelements items\n  urgent : bool\n  w      : number  range >=0 <=100\n\ncount n over items where urgent  range >=0 <=3\nsum total over items of w  range >=0 <=150\n\noutputs\n  big : bool\n\n\
+                table j\npolicy unique\n| n   | total | -> big |\n| <=1 | <=100 | false  |\n| <=1 | >100  | true   |\n| >=2 | -     | true   |\n\n\
+                sequence one\n| urgent | w  |\n| true   | 10 |\n\nsequence over_the_sum\n| urgent | w   |\n| false  | 100 |\n| false  | 100 |\n\n\
+                sequence too_long\n| urgent | w |\n| true   | 1 |\n| true   | 1 |\n| true   | 1 |\n| true   | 1 |\n\n\
+                examples\n| items        | -> big |\n| one          | false  |\n| over_the_sum | true   |\n| too_long     | true   |\n";
+    let ds = diags_of(t.path(), "sums.rule", sums, &[]);
+    let e019 = said_by(&ds, "E019");
+    assert_eq!(e019.len(), 2, "{ds:?}");
+    assert!(e019[0].contains("total is out of range") && e019[1].contains("items has too many elements (at most 3)"), "{ds:?}");
+    assert!(said_by(&ds, "E107").is_empty(), "{ds:?}");
+
+    // The most a call can pass: the claim and the example hold, and both re-checkers take the
+    // certificate. The claim on the team past it is the one above, which no longer passes.
+    if !ready(Need::Python, || have("python3"), "no python3, so the certificate was not re-checked") {
+        return;
+    }
+    let top = claim(&heavy_routing(ROUTING, AT_THE_TOP, "| 0    | at_the_top    | 1           |"), "| at_the_top    | 1           | 1      |");
+    assert!(codes_of(t.path(), "top.rule", &top).is_empty(), "{:?}", diags_of(t.path(), "top.rule", &top, &[]));
+    let (c, cert, e) = run_in(t.path(), &["certificate", "top.rule"]);
+    assert_eq!(c, 0, "{e}");
+    let rule = t.path().join("top.rule");
+    let mut recheckers = vec![("python3".to_string(), vec![root().join("tools/recheck.py").to_string_lossy().into_owned()])];
+    let lean = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    if ready(Need::Lean, || lean.exists(), "ritsu's proofs/ is not built (lake build there makes it)") {
+        recheckers.push((lean.to_string_lossy().into_owned(), Vec::new()));
+    }
+    for (bin, mut args) in recheckers {
+        use std::io::Write;
+        args.extend(["--rule".to_string(), rule.to_string_lossy().into_owned()]);
+        let mut p = Command::new(&bin)
+            .current_dir(root())
+            .args(&args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| panic!("cannot start {bin}: {e}"));
+        p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+        let o = p.wait_with_output().unwrap();
+        assert_eq!(o.status.code(), Some(0), "{bin}: {}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    }
 }
 
 /// `rulec gen` names the targets with no room for the function, writes the cases the functions are

@@ -1600,7 +1600,9 @@ holds that to the second file. From `prize_lottery.rule`:
 A rule that picks by weight (§15.226) has, among its vectors, the drawn value at the first and the
 last value of each element's share and at the total (`"why":"roll = 99 (an edge of the weights)"`),
 and a drawn value past the total in `<alias>.refused.jsonl`, refused with `roll is not below the
-total of the weights`.
+total of the weights`. Where eight elements or fewer at the largest weight take the total of the
+weights past int64, the fewest that do are refused there too, with `the total of the weights of
+reviewers does not fit in int64`.
 
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 

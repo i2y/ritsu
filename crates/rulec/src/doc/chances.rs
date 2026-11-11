@@ -84,7 +84,7 @@ fn verdict_text(cl: &crate::chances::Claim) -> String {
                 _ => tr!("どの組み合わせでも成り立つ", "holds for every combination"),
             }
         }
-        Verdict::Broken { .. } => tr!("成り立たない（E133）", "does not hold (E133)"),
+        Verdict::Broken { .. } | Verdict::Refused { .. } => tr!("成り立たない（E133）", "does not hold (E133)"),
         Verdict::Undecided(_) => tr!("予算の中で決まらない（W129）", "not decided within the budget (W129)"),
     }
 }

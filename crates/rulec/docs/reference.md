@@ -2480,6 +2480,7 @@ are run one by one, up to a million for one claim (one fiftieth of `--budget`'s 
 |---|---|---|
 | shape | a column missing or of the wrong kind, a cell that is not a chance, a table where nothing is drawn | E070 |
 | claim | a combination of the inputs that are not random where the chance is not the one written | E133 |
+| refused | a combination where the generated code refuses the sequence the row names — more elements than a `count` over it can be, a field out of its range, two elements alike in a `unique` field, or, picking by weight, weights whose total passes int64 or a `sum` past its range: a call it refuses has no chance to claim | E133 |
 | budget | a claim whose points to run one by one are past its share of the budget, which is said to be neither holding nor broken | W129 |
 
 A claim that fails names the combination and the chance there:
@@ -2522,7 +2523,13 @@ walk is over and refuses the call otherwise, as it refuses an input out of its r
 draw is uniform over the values below the total. When the weights add up to 0 the walk answers
 `exhausted`, with `held` the `empty` answer. A rule picks by weight once, the arms of that fold are
 `next` and `take_weighted` alone, and a weight is a `number` that cannot be negative (E073). The
-walk adds the weights up in an int64, so twice the largest weight has to fit it (E108).
+walk adds the weights up in an int64, so twice the largest weight has to fit it (E108). A longer
+sequence can still take the total past int64, and nothing caps how long it is, so the walk refuses
+the call the moment the total would pass, before it reads another element: an input error like the
+drawn value's, `the total of the weights of reviewers does not fit in int64`, in every language and
+in `rulec run`. An example that names such a sequence, or draws a value not below the total, is
+E019, as an example the door refuses is, with the sentence the code refuses it with; a claim of
+`chances` that names one is E133.
 
 ### What chances generate
 
@@ -3208,6 +3215,11 @@ root to two places is `isqrt(x * 10000)`, which counts hundredths.
 
 `examples` is an **executable specification**: `rulec check` runs every row through the
 reference evaluator, and a row that does not hold is E107, reported with the rows that fired.
+A row the generated code refuses is E019 instead, since the rule answers nothing there: a value
+outside its range, a combination a `constraint` or a `never` line rules out, a sequence with more
+elements than a `count` over it can be or two elements alike in a `unique` field, and what the
+walk refuses — weights whose total passes int64, a `sum` past its range, a drawn value not below
+the total of the weights.
 
 **Every output must have a column** (E111). With two or more outputs, writing `->` before the
 later output columns is optional; `rulec fmt` folds it to the canonical form.

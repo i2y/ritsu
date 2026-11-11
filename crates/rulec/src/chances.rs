@@ -291,6 +291,9 @@ pub enum Verdict {
     Broken { at: BTreeMap<String, Val>, got: Rat },
     /// Not decided within the budget, and why.
     Undecided(String),
+    /// At this combination, the generated code refuses the sequence the claim names, in this
+    /// sentence of its own: a call nobody can make has no chance to speak of (§15.226).
+    Refused { at: BTreeMap<String, Val>, why: String },
 }
 
 /// A random box of one class, and what its points answer (§15.224): the coordinates of the random
@@ -974,7 +977,15 @@ fn by_points(f: &RuleFile, c: &Checked, ti: usize, ch: &ChancesDecl, row: &Chanc
     }
     let mut spent: u128 = 0;
     let mut seen: Vec<Rat> = Vec::new();
+    let walk = matches!(method(f), Method::Weighted { .. });
     for x in xs {
+        // A combination whose sequence the generated code refuses is a call nobody can make. Its
+        // points are all turned away, and leaving it out would pass the claim on nothing there, where
+        // a re-checker counting the weights would not (§15.226).
+        if let Some(why) = refused_at(f, c, &x, walk) {
+            claim.verdict = Verdict::Refused { at: x, why };
+            return claim;
+        }
         match distribution(f, c, &x, cap.saturating_sub(spent)) {
             Ok(d) => {
                 spent += d.cost.max(1);
@@ -1012,6 +1023,37 @@ fn by_points(f: &RuleFile, c: &Checked, ti: usize, ch: &ChancesDecl, row: &Chanc
         claim.chance = seen.first().copied();
     }
     claim
+}
+
+/// What the generated code refuses the sequences of one combination of a claim for, in its own
+/// sentence (§15.226, §15.290): the random inputs stand at their lowest values, as nothing it looks
+/// at here moves with them. With `walk` — a pick by weight, whose drawn value nothing but the pick
+/// reads — what the walk refuses is looked at too: weights whose total passes int64, a `sum` past
+/// its range. A rule that walks on the points of its random inputs may refuse a `sum` at some points
+/// and not others, and those points stay uncounted, as before.
+fn refused_at(f: &RuleFile, c: &Checked, x: &BTreeMap<String, Val>, walk: bool) -> Option<String> {
+    let mut m: HashMap<String, Val> = x.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    for i in f.random_inputs() {
+        let n = &i.name.text;
+        if m.contains_key(n) {
+            continue;
+        }
+        if let Some(v) = lowest(c, n) {
+            m.insert(n.clone(), v);
+        }
+    }
+    crate::eval::sequence_refused(f, c, &m, walk)
+}
+
+/// The lowest value a random input is drawn from, without listing the others.
+fn lowest(c: &Checked, name: &str) -> Option<Val> {
+    match c.ty_of(name)? {
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
+            let (a, b, scale) = number_span(c, name)?;
+            (a <= b).then(|| Val::Num(Rat::new(a, scale)))
+        }
+        _ => values_of(c, name)?.into_iter().next(),
+    }
 }
 
 /// How the points run one by one came out: `run` of them, with the chances `seen` (each once).
@@ -1102,6 +1144,27 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str, budget: usize) -> Vec<Diag> 
                     .note(tr!(
                         "主張は、行の入力のセルに当てはまるどの組み合わせでも、乱数の入力を一様に引いたときの確率です。表が正しいなら主張を直してください。主張のほうが正しいなら、表の行を直してください。",
                         "A claim speaks of every combination its cells let in, with the random inputs drawn uniformly. If the table is right, correct the claim; if the claim is the business truth, correct the table's rows."
+                    ));
+                for (k, v) in x {
+                    if !matches!(v, Val::Seq(_)) {
+                        d = d.win(k.clone(), crate::eval::wval(c, k, v));
+                    }
+                }
+                out.push(d);
+            }
+            Verdict::Refused { at: x, why } => {
+                let mut d = Diag::error("E133", tr!("確率の主張が成り立ちません（行 {}）", "A claim of `chances` does not hold (row {})", row.index))
+                    .at(at)
+                    .mark(row.span.clone(), tr!("生成コードは、この行の呼び出しを断ります", "the generated code refuses the call this row names"))
+                    .note(tr!(
+                        "{} のとき、生成コードは呼び出しを入力の誤りとして断ります: {}",
+                        "With {}, the generated code refuses the call as an input error: {}",
+                        at_text(f, c, x, ch, row),
+                        why
+                    ))
+                    .note(tr!(
+                        "主張は、生成コードが答える呼び出しの確率です。断られる呼び出しには確率がありません。行の並びを直すか、その行を消してください。",
+                        "A claim speaks of the calls the generated code answers, and a call it refuses has no chance to speak of. Correct the row's sequence, or drop the row."
                     ));
                 for (k, v) in x {
                     if !matches!(v, Val::Seq(_)) {
@@ -1374,7 +1437,9 @@ pub fn certificate_json(f: &RuleFile, c: &Checked, src: &str) -> Option<String> 
             .collect();
         let verdict = match &cl.verdict {
             Verdict::Holds => "holds",
-            Verdict::Broken { .. } => "broken",
+            // A claim on a sequence the code refuses does not hold either (E133), and no certificate
+            // is written past an error.
+            Verdict::Broken { .. } | Verdict::Refused { .. } => "broken",
             Verdict::Undecided(_) => "undecided",
         };
         // Where the claim's cells and its chance stand in the file, and what stands there (§15.243).
