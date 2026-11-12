@@ -429,6 +429,7 @@ fn the_stand_in_matches_exactly() {
     let Some((code, out, err)) = stand_in("faithful", "", &[]) else { return };
     assert_eq!(code, 0, "{out}{err}");
     assert!(out.contains("matched 15 (100.000%)") && out.contains("Counterpart: stand-in"), "{out}");
+    assert!(err.is_empty(), "an adapter that answers in time is said nothing of: {err}");
 }
 
 /// An adapter that ends where an answer is due is said to have ended, with its exit status and
@@ -510,4 +511,111 @@ fn the_template_names_every_output_and_every_sequence() {
     let go = run("go");
     assert!(go.contains("Inputs: weight, dest, lines[] (quantity). Every output is required: fee, days."), "{go}");
     assert!(go.contains(r#""out": map[string]any{"fee": got, "days": got}"#), "{go}");
+}
+
+/// A stand-in that says nothing where it is told to — at the handshake, or at the record of a
+/// number — until the file `said` is there, which is when rulec has spoken of its silence; and
+/// that then takes `slow` seconds more over record 0. It gives up after a minute, so a run that
+/// is never spoken of ends too.
+const SILENT: &str = r#"import json, os, subprocess, sys, time
+
+rulec, rule, said, silent_at, slow = sys.argv[1:6]
+
+def hold():
+    end = time.time() + 60
+    while not os.path.exists(said):
+        if time.time() > end:
+            sys.exit(7)
+        time.sleep(0.05)
+
+answers = {}
+for l in subprocess.run([rulec, "vectors", rule], capture_output=True, text=True).stdout.splitlines():
+    if l.strip():
+        v = json.loads(l)
+        answers[json.dumps(v["in"], sort_keys=True)] = v["out"]
+
+sys.stdin.readline()
+if silent_at == "handshake":
+    hold()
+print(json.dumps({"ok": True, "impl": "stand-in"}), flush=True)
+for line in sys.stdin:
+    req = json.loads(line)
+    if silent_at == str(req["id"]):
+        hold()
+    if req["id"] == 0:
+        time.sleep(float(slow))
+    print(json.dumps({"id": req["id"], "out": answers[json.dumps(req["in"], sort_keys=True)]}), flush=True)
+"#;
+
+/// `verify` on the parcel rule with the silent stand-in, naming a silence after `quiet`: every
+/// sentence that was said of the adapter, and the report the run ended with.
+fn waited_for(tag: &str, lang: rulec::i18n::Lang, quiet: u64, silent_at: &str, slow: &str) -> Option<(Vec<String>, rulec::report::Report)> {
+    if !ready(Need::Python, || have("python3"), "python3 is not here, so the wait for a silent adapter was skipped") {
+        return None;
+    }
+    let tmp = TempDir::new(&format!("verify-{tag}"));
+    let at = |name: &str| tmp.path().join(name).to_string_lossy().into_owned();
+    std::fs::write(at("parcel.rule"), PARCEL).unwrap();
+    std::fs::write(at("adapter.py"), SILENT).unwrap();
+    let adapter: Vec<String> = ["python3", &at("adapter.py"), env!("CARGO_BIN_EXE_rulec"), &at("parcel.rule"), &at("said"), silent_at, slow]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let said = std::sync::Mutex::new(Vec::new());
+    let rep = rulec::i18n::with(lang, || {
+        let Ok((f, c)) = rulec::prepare(PARCEL, &at("parcel.rule")) else { panic!("the parcel rule is read") };
+        let vs = rulec::vectors::generate(&f, &c);
+        rulec::verify::run_saying(&f, &c, &adapter, &vs, std::time::Duration::from_secs(quiet), &|sentence| {
+            said.lock().unwrap().push(sentence.to_string());
+            std::fs::write(at("said"), "").unwrap();
+        })
+    });
+    let rep = rep.unwrap_or_else(|e| panic!("the run goes to its end: {e}"));
+    Some((said.into_inner().unwrap(), rep))
+}
+
+/// An adapter that leaves a line unanswered is spoken of once, and waited for. rulec sets no
+/// limit on an answer, and said nothing either: an adapter that wrote its answers without
+/// flushing them and rulec waited for each other without a word, for as long as they were left
+/// to (DESIGN §15.310). The stand-in is silent at the handshake, then slow over record 0 for
+/// longer than the first silence was: one sentence, and every record compared.
+#[test]
+fn an_adapter_that_says_nothing_is_spoken_of_once_and_waited_for() {
+    let Some((said, rep)) = waited_for("silent-handshake", rulec::i18n::Lang::En, 2, "handshake", "3.5") else { return };
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].starts_with("note: the adapter has not answered the handshake for 2 seconds. rulec goes on waiting, and sets no limit."),
+        "{said:?}"
+    );
+    assert!(said[0].contains("does not flush its output after each line") && said[0].contains("print(..., flush=True)"), "{said:?}");
+    assert_eq!((rep.total, rep.agreed), (15, 15), "the run went on to its end");
+    // The documents show the sentence as rulec says it, after the 30 seconds it waits.
+    assert_eq!(rulec::verify::QUIET.as_secs(), 30);
+    let shown = said[0].replace("for 2 seconds", "for 30 seconds");
+    for page in [root().join("docs/formats.md"), repo().join("website/rulec/docs/compare.md")] {
+        let text = std::fs::read_to_string(&page).unwrap();
+        assert!(text.contains(&shown), "{} does not show the sentence as it is said:\n{shown}", page.display());
+    }
+}
+
+/// The sentence names the record that is unanswered, by the number the adapter was sent.
+#[test]
+fn the_record_an_adapter_is_silent_at_is_named() {
+    let Some((said, rep)) = waited_for("silent-record", rulec::i18n::Lang::En, 8, "1", "0") else { return };
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].starts_with("note: the adapter has not answered record 1 for 8 seconds."), "{said:?}");
+    assert_eq!((rep.total, rep.agreed), (15, 15), "the run went on to its end");
+}
+
+/// The sentence is in the language of the run, though another thread builds it.
+#[test]
+fn the_silence_is_spoken_of_in_japanese_too() {
+    let Some((said, rep)) = waited_for("silent-ja", rulec::i18n::Lang::Ja, 2, "handshake", "0") else { return };
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].starts_with("注記: アダプタがハンドシェイクに 2 秒答えていません。rulec は時間を切らずに待ち続けます。"), "{said:?}");
+    assert!(said[0].contains("一行ごとにフラッシュ"), "{said:?}");
+    assert_eq!((rep.total, rep.agreed), (15, 15));
+    let shown = said[0].replace("に 2 秒答えていません", "に 30 秒答えていません");
+    let page = repo().join("website/rulec/docs-ja/compare.md");
+    assert!(std::fs::read_to_string(&page).unwrap().contains(&shown), "{} does not show the sentence as it is said:\n{shown}", page.display());
 }

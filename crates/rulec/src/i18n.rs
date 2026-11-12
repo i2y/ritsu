@@ -71,8 +71,9 @@ fn code(l: Lang) -> u8 {
 /// The CLI fixes one language for the process with [`set`], and nothing changes for it. A
 /// program that holds rulec as a library — dandori, yuen, a test that renders the English and
 /// the Japanese of the same page side by side — asks for a language per call instead, on as
-/// many threads as it likes (ritsu's DESIGN 4.1). rulec starts no thread of its own, so every
-/// sentence `f` builds is built on this one.
+/// many threads as it likes (ritsu's DESIGN 4.1). A thread rulec starts itself — the workers of
+/// `strength`, the watch `verify` keeps on a silent adapter — is given the language of the thread
+/// that started it, with this same call.
 pub fn with<R>(l: Lang, f: impl FnOnce() -> R) -> R {
     struct Restore(u8);
     impl Drop for Restore {

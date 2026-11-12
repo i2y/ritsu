@@ -11,6 +11,8 @@ use crate::report::{Mismatch, Out, Report};
 use crate::vectors::{self, Vector};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
+use std::sync::{Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 /// One line the adapter wrote, read as the JSON it is.
 ///
@@ -66,8 +68,105 @@ fn ended(child: &mut crate::child::Owned, at: &str) -> String {
     )
 }
 
-/// Starts the adapter, streams the vectors through it and compares the answers.
+/// How long the adapter may leave one line unanswered before rulec says that it is waiting.
+pub const QUIET: Duration = Duration::from_secs(30);
+
+/// What the run is waiting for the adapter to answer, and since when: the handshake (`None`) or
+/// the record of that number. The thread that speaks up when the wait grows long reads it here.
+#[derive(Default)]
+struct Watch {
+    state: Mutex<Waiting>,
+    turn: Condvar,
+}
+
+#[derive(Default)]
+struct Waiting {
+    since: Option<(Instant, Option<usize>)>,
+    over: bool,
+}
+
+impl Watch {
+    fn state(&self) -> std::sync::MutexGuard<'_, Waiting> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// A line went to the adapter, and its answer is due.
+    fn asked(&self, id: Option<usize>) {
+        self.state().since = Some((Instant::now(), id));
+    }
+
+    /// The answer came, or the adapter's output ended.
+    fn answered(&self) {
+        self.state().since = None;
+    }
+
+    /// The run is over, however it went.
+    fn close(&self) {
+        self.state().over = true;
+        self.turn.notify_all();
+    }
+
+    /// Say, once, that the adapter has left a line unanswered for `quiet`, and go on waiting.
+    ///
+    /// rulec reads the adapter's answers a line at a time and sets no limit on any of them: a
+    /// legacy system may take a minute over one record, and a limit that stopped the run would
+    /// be a limit on what can be verified. But the commonest silence is no slow system. It is an
+    /// adapter that writes its answers without flushing them — a runtime buffers what it writes
+    /// to a pipe, where it flushed every line on a terminal — so each answer sits in the
+    /// adapter's buffer while the adapter waits for the next record and rulec for the answer,
+    /// and neither moves or says a word. So the silence is named after a while, with what it
+    /// usually is, and nothing else changes: the wait goes on, and so does the exit status
+    /// (§15.310).
+    fn keep(&self, quiet: Duration, say: &(dyn Fn(&str) + Sync)) {
+        let mut st = self.state();
+        while !st.over {
+            // The wait is looked at again when it could have grown long, and not before: nothing
+            // wakes this thread for an answer that came in time.
+            let left = match st.since {
+                Some((since, id)) => match quiet.checked_sub(since.elapsed()) {
+                    Some(left) if !left.is_zero() => left,
+                    _ => {
+                        drop(st);
+                        say(&waiting(id, quiet));
+                        return;
+                    }
+                },
+                None => quiet,
+            };
+            st = self.turn.wait_timeout(st, left).unwrap_or_else(|e| e.into_inner()).0;
+        }
+    }
+}
+
+/// The sentence for an adapter that has not answered for `quiet`.
+fn waiting(id: Option<usize>, quiet: Duration) -> String {
+    let secs = quiet.as_secs();
+    let (ja, en) = match id {
+        Some(id) => (format!(" {id} 件目"), format!("record {id}")),
+        None => ("ハンドシェイク".to_string(), "the handshake".to_string()),
+    };
+    tr!(
+        "注記: アダプタが{ja}に {secs} 秒答えていません。rulec は時間を切らずに待ち続けます。遅いだけなら、このままで構いません。答えを一行ごとにフラッシュしていないと、答えはアダプタのバッファに残り、rulec には届きません（Python なら `print(..., flush=True)`）",
+        "note: the adapter has not answered {en} for {secs} seconds. rulec goes on waiting, and sets no limit. An adapter that is only slow needs nothing done. One that does not flush its output after each line keeps its answers in its buffer, where rulec cannot read them (in Python, `print(..., flush=True)`)"
+    )
+}
+
+/// Starts the adapter, streams the vectors through it and compares the answers. An adapter that
+/// leaves a line unanswered for [`QUIET`] is told of on standard error, once.
 pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Result<Report, String> {
+    run_saying(f, c, adapter, vs, QUIET, &|said| eprintln!("{said}"))
+}
+
+/// [`run`], with the time after which the adapter's silence is named, and where the sentence
+/// goes: `say` is called at most once, on another thread, while the run waits.
+pub fn run_saying(
+    f: &RuleFile,
+    c: &Checked,
+    adapter: &[String],
+    vs: &[Vector],
+    quiet: Duration,
+    say: &(dyn Fn(&str) + Sync),
+) -> Result<Report, String> {
     let (cmd, args) = adapter
         .split_first()
         .ok_or_else(|| tr!("アダプタのコマンドがありません", "No adapter command was given"))?;
@@ -75,6 +174,20 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     // on after rulec (§15.163).
     let mut child = crate::child::Owned::spawn(Command::new(cmd).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()))
         .map_err(|e| if ritsu_base::wasi::unsupported(&e) { crate::i18n::text(&ritsu_base::wasi::cannot_start(cmd)) } else { tr!("アダプタを起動できません: {e}", "Cannot start the adapter: {e}") })?;
+    let watch = Watch::default();
+    // The sentence is built on the watching thread, in the language this one prints in.
+    let lang = crate::i18n::current();
+    std::thread::scope(|s| {
+        // Where no thread can be started the run goes as it did, without the sentence.
+        let _ = std::thread::Builder::new().spawn_scoped(s, || crate::i18n::with(lang, || watch.keep(quiet, say)));
+        let rep = exchange(f, c, &mut child, vs, &watch);
+        watch.close();
+        rep
+    })
+}
+
+/// The handshake and the records, with an adapter that has started.
+fn exchange(f: &RuleFile, c: &Checked, child: &mut crate::child::Owned, vs: &[Vector], watch: &Watch) -> Result<Report, String> {
     let mut si = child
         .stdin
         .take()
@@ -103,8 +216,11 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let before = tr!("ハンドシェイクに答える前に", "before answering the handshake");
     // A handshake that could not be written is an adapter that is gone already, and so is one
     // whose output ends here.
-    if so.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-        return Err(ended(&mut child, &before));
+    watch.asked(None);
+    let read = so.read_line(&mut line);
+    watch.answered();
+    if read.map_err(|e| e.to_string())? == 0 {
+        return Err(ended(child, &before));
     }
     let hello = parse_line(&line, &tr!("ハンドシェイクの応答", "answer to the handshake"))?;
     if hello.get("ok") != Some(&Json::Bool(true)) {
@@ -125,8 +241,11 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         let _ = writeln!(si, "{{\"id\":{id},\"in\":{}}}", vectors::in_object(f, c, v)).and_then(|_| si.flush());
 
         let mut line = String::new();
-        if so.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-            return Err(ended(&mut child, &tr!("{id} 件目に答えずに", "without answering record {id}")));
+        watch.asked(Some(id));
+        let read = so.read_line(&mut line);
+        watch.answered();
+        if read.map_err(|e| e.to_string())? == 0 {
+            return Err(ended(child, &tr!("{id} 件目に答えずに", "without answering record {id}")));
         }
         let ans = parse_line(&line, &tr!("{id} 件目の応答", "answer to record {id}"))?;
         // An answer to another record would compare one case's values with another's.
@@ -744,4 +863,24 @@ fn fired_of(v: &crate::vectors::Vector) -> Vec<crate::report::Fired> {
         .iter()
         .map(|(t, r)| crate::report::Fired::One { table: t.clone(), row: *r })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::i18n::{Lang, with};
+
+    /// What an adapter has left unanswered is named in both languages: the handshake, or the
+    /// record by its number, set off from the words around it as the other sentences of the run
+    /// set it off.
+    #[test]
+    fn the_wait_names_what_is_unanswered() {
+        let quiet = Duration::from_secs(30);
+        let en = |id| with(Lang::En, || waiting(id, quiet));
+        let ja = |id| with(Lang::Ja, || waiting(id, quiet));
+        assert!(en(None).starts_with("note: the adapter has not answered the handshake for 30 seconds. "), "{}", en(None));
+        assert!(en(Some(3)).starts_with("note: the adapter has not answered record 3 for 30 seconds. "), "{}", en(Some(3)));
+        assert!(ja(None).starts_with("注記: アダプタがハンドシェイクに 30 秒答えていません。"), "{}", ja(None));
+        assert!(ja(Some(3)).starts_with("注記: アダプタが 3 件目に 30 秒答えていません。"), "{}", ja(Some(3)));
+    }
 }

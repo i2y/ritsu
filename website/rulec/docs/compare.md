@@ -47,7 +47,15 @@ cases would raise the match rate.
 
 The adapter answers each record with **every output** by name, and
 flushes its output after each line: rulec waits for one answer before
-it sends the next record. An output the answer leaves out is a mismatch
+it sends the next record. It sets no limit on an answer, and it does
+not wait without a word either: after 30 seconds without one it says
+so on standard error, once, and goes on waiting.
+
+```
+note: the adapter has not answered the handshake for 30 seconds. rulec goes on waiting, and sets no limit. An adapter that is only slow needs nothing done. One that does not flush its output after each line keeps its answers in its buffer, where rulec cannot read them (in Python, `print(..., flush=True)`)
+```
+
+An output the answer leaves out is a mismatch
 shown as `(no answer)`, and a value of another type — `"23"` for 23 —
 is shown in its quotes. An adapter that ends where an answer is due —
 an import that fails on its first line — is reported as that, with its

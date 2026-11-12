@@ -1777,8 +1777,19 @@ legacy ← {"id":9,"err":"unsupported: signature to overseas"}
 
 rulec waits for each answer before it writes the next record, so the adapter has to **flush its
 output after every line** (`flush=True` in Python, a `Flush` of the writer in Go): an answer left
-in a buffer is an answer rulec never reads, and the run waits. Standard error is the adapter's
-own and passes through to the terminal.
+in a buffer is an answer rulec never reads, and the run waits. rulec sets no limit on an answer,
+since a legacy system may take its time over a record, but it does not wait without a word: when
+the handshake or a record has gone unanswered for 30 seconds, it says so on standard error, once
+in a run, and goes on waiting.
+
+```
+note: the adapter has not answered the handshake for 30 seconds. rulec goes on waiting, and sets no limit. An adapter that is only slow needs nothing done. One that does not flush its output after each line keeps its answers in its buffer, where rulec cannot read them (in Python, `print(..., flush=True)`)
+```
+
+Nothing else changes with that line: the report on standard output and the exit status are the
+run's own, whenever it ends. For a record, the line reads `has not answered record 3`, by the
+`id` the adapter was sent. Standard error is otherwise the adapter's own and passes through to
+the terminal.
 
 Everything after `--adapter` is the adapter's command, so rulec's own flags go before it:
 `rulec verify rule.rule --format json --adapter python3 adapter.py --their-flag`. `--lang` is
