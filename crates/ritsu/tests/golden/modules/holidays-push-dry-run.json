@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.54.0",
+  "ritsu": "0.55.0",
   "module": "ghcr.io/i2y/ritsu-holidays",
   "version": "1.1.0",
   "digest": "sha256:6b1809bd0a0a66199bb04eeb92109d97d7c30da86ce696d54cab468eb9333c94",
