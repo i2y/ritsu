@@ -241,6 +241,165 @@ fn 欠けた行はw128の行かどうかを言う() {
     }
 }
 
+/// A row `check` passes and no input reaches — a `constraint` leaves out every input it asks for,
+/// which E102 does not say where no derived value takes part (§15.189) — is told what leaves it out,
+/// as a row a `never` line takes out is (§15.309). It used to be put down to the vectors. Lines that
+/// leave it out together are named together, rows above that take some of it first are said, and a
+/// row with a derived cell inside what the derive comes to is told the same. The boundary and shadow
+/// pairs on such a row point at its row coverage. The English rules in both languages, and a
+/// Japanese one.
+#[test]
+fn a_row_a_constraint_leaves_out_is_told_which_one() {
+    use rulec::i18n::{self, Lang};
+    let returns = |rows: &str| {
+        format!(
+            "\
+rule return_check v1
+
+enum route = decline | approve | review
+
+inputs
+  returned : number  range >=0 <=10
+  ordered  : number  range >=0 <=10
+
+constraint returned <= ordered
+
+outputs
+  outcome : route
+
+table route_of
+policy first
+| returned | ordered | -> outcome : route |
+{rows}| -        | -       | decline            |
+"
+        )
+    };
+    let alone = returns("| >5       | <=5     | review             |\n| -        | >=5     | approve            |\n");
+    let above = returns("| -        | >5      | approve            |\n| >5       | -       | review             |\n");
+    let chain = "\
+rule chain_check v1
+
+enum route = low | high
+
+inputs
+  a : number  range >=0 <=10
+  b : number  range >=0 <=10
+  c : number  range >=0 <=10
+
+constraint a <= b
+constraint b <= c
+
+outputs
+  outcome : route
+
+table route_of
+policy first
+| a   | c   | -> outcome : route |
+| >5  | <=5 | high               |
+| -   | -   | low                |
+";
+    let derived = "\
+rule return_route v1
+
+enum route = decline | approve | review
+
+inputs
+  paid     : money[GBP]  range >=0GBP <=20GBP
+  fee      : money[GBP]  range >=0GBP <=10GBP
+  returned : number  range >=0 <=10
+  ordered  : number  range >=0 <=10
+
+constraint returned <= ordered
+
+outputs
+  outcome : route
+
+derive refund : money[GBP] = paid - fee  range >=-1000GBP <=1000GBP
+
+table route_of
+policy first
+| refund         | returned | ordered | -> outcome : route |
+| <=0GBP         | -        | -       | decline            |
+| >0GBP <=20GBP  | >5       | <=4     | review             |
+| -              | -        | -       | approve            |
+";
+    let japanese = "\
+rule 返品の扱い(return_check) v1
+
+enum 扱い(route) = 断る(decline) | 受ける(approve) | 確かめる(review)
+
+inputs
+  返品の数(returned) : number  range >=0 <=10
+  注文の数(ordered)  : number  range >=0 <=10
+
+constraint 返品の数 <= 注文の数
+
+outputs
+  結果(outcome) : 扱い
+
+table 扱いの表(route_of)
+policy first
+| 返品の数 | 注文の数 | -> 結果(outcome) : 扱い |
+| >5       | <=5      | 確かめる                |
+| -        | >=5      | 受ける                  |
+| -        | -        | 断る                    |
+";
+    let one_en = "No input reaches this row: `constraint returned <= ordered` leaves out every input it asks for. Delete this row, or, if such an input can come, correct the `constraint` line.";
+    let one_ja = "この行に当たる入力はありません。この行が求める入力は、`constraint returned <= ordered` がすべて外しています。この行を削除するか、そういう入力が来るなら `constraint` の行を直してください。";
+    let pointer_en = "No input reaches this row; its row coverage obligation says what leaves it out.";
+    for (tag, src, lang, row, want) in [
+        ("alone.rule", alone.as_str(), Lang::En, "table route_of row 1", one_en),
+        ("alone.rule", alone.as_str(), Lang::Ja, "表 route_of 行1", one_ja),
+        (
+            "above.rule",
+            above.as_str(),
+            Lang::En,
+            "table route_of row 2",
+            "No input reaches this row: `constraint returned <= ordered` leaves out every input it asks for that the earlier rows do not take first. Delete this row, or, if such an input can come, correct the `constraint` line.",
+        ),
+        (
+            "above.rule",
+            above.as_str(),
+            Lang::Ja,
+            "表 route_of 行2",
+            "この行に当たる入力はありません。この行が求める入力のうち、上にある行が先に取らないものは、`constraint returned <= ordered` がすべて外しています。",
+        ),
+        (
+            "chain.rule",
+            chain,
+            Lang::En,
+            "table route_of row 1",
+            "No input reaches this row: `constraint a <= b` and `constraint b <= c` leave out every input it asks for. Delete this row, or, if such an input can come, correct the `constraint` lines.",
+        ),
+        ("derived.rule", derived, Lang::En, "table route_of row 2", one_en),
+        (
+            "japanese.rule",
+            japanese,
+            Lang::Ja,
+            "表 扱いの表 行1",
+            "この行に当たる入力はありません。この行が求める入力は、`constraint 返品の数 <= 注文の数` がすべて外しています。この行を削除するか、そういう入力が来るなら `constraint` の行を直してください。",
+        ),
+    ] {
+        let a = i18n::with(lang, || audit_src(tag, src).0);
+        assert!(!a.ok(), "{tag}: no input reaches the row, and row coverage cannot be met");
+        let rows: Vec<_> = a.missing.iter().filter(|m| m.kind == ROW).collect();
+        assert_eq!(rows.len(), 1, "{tag}: {:?}", rows.iter().map(|m| &m.what).collect::<Vec<_>>());
+        assert_eq!(rows[0].what, row, "{tag}");
+        assert!(rows[0].hint.starts_with(want), "{tag}: {}", rows[0].hint);
+    }
+    // The pairs on such a row point at what its row coverage says.
+    let a = i18n::with(Lang::En, || audit_src("derived.rule", derived).0);
+    let bounds: Vec<_> = a.missing.iter().filter(|m| m.kind == BOUND).collect();
+    assert!(!bounds.is_empty() && bounds.iter().all(|m| m.hint.ends_with(pointer_en)), "{:?}", bounds.iter().map(|m| (&m.what, &m.hint)).collect::<Vec<_>>());
+    let a = i18n::with(Lang::En, || audit_src("above.rule", &above).0);
+    let shadows: Vec<_> = a.missing.iter().filter(|m| m.kind == SHADOW).collect();
+    assert!(
+        !shadows.is_empty() && shadows.iter().all(|m| m.hint.ends_with("No input reaches the row that would win, though; its row coverage obligation says what leaves it out.")),
+        "{:?}",
+        shadows.iter().map(|m| (&m.what, &m.hint)).collect::<Vec<_>>()
+    );
+}
+
 /// Removing the vectors that step on the outside of a boundary leaves both-sides boundary coverage
 /// missing. An auditor that goes green on the inside alone cannot catch a boundary's ±1.
 #[test]

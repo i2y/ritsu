@@ -473,6 +473,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         vs.iter().enumerate().flat_map(|(k, v)| eval::element_cases(f, c, v.input.clone().into_iter().collect()).into_iter().map(move |e| (k, e))).collect()
     };
 
+    // The rows (set, row) the row coverage below says no input reaches, and what leaves them out
+    // (§15.309): the boundary pairs on them point at that.
+    let mut unreached: BTreeSet<(usize, usize)> = BTreeSet::new();
     for (ti, t) in tables.iter().enumerate() {
         let set = &c.sets[ti];
         let chk = checks.get(ti);
@@ -501,33 +504,37 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
             };
             bump(ROW, met, &mut tally);
             if !met {
-                missing.push(Missing {
-                    kind: ROW,
-                    what: tag.clone(),
-                    // A row nothing can reach is named by E102 and left out of this tally. A row
-                    // with a computed column for which neither an input nor a proof that none
-                    // exists was found is named by W128 (§15.209), and is said to be one here; any
-                    // other row is one the vectors did not find an input for. Which of the two is
-                    // said, rather than "usually the generator": a row of A08's kind, which no
-                    // input reaches and nothing showed so, used to be put down to the generator.
-                    hint: if let Some(line) = crate::region::TableRegion::build(t, c, f).and_then(|g| g.never_takes_row(ri)) {
-                        let said = f.nevers[line].said();
-                        tr!(
-                            "この行の組み合わせは `{said}` が表から外しています。この行を削除するか、この組み合わせの答えを表で決めるなら `never` の行を削除してください。",
-                            "`{said}` takes this row's combination out of the tables. Delete this row, or, to decide in the tables what the rule answers for this combination, delete the `never` line."
-                        )
-                    } else if undecided.contains(&ri) {
-                        tr!(
-                            "check が W128 で言った行です。当たる入力が、この行を除いたときに完全性の検査が見つける穴の後ろにも見つからず、当たらないことも示せていません。当たる入力があるなら例に書き、無いならこの行を削除してください（削除して E101 が出るなら、行は残してかまいません）。",
-                            "check named this row with W128: no input was found that reaches it, not even behind the gap the completeness check finds with the row taken out, and none was shown not to. If some input reaches it, write it as an example; if none does, delete the row (if deleting it brings E101, the row can stay)."
-                        )
-                    } else {
-                        tr!(
-                            "この行が勝つ入力を、ベクタが一つも作れていません。check は、この行を届かない行（E102）とも、決められない行（W128）とも言っていません。ベクタを作るときに、当たる入力が見つからなかった行です。",
-                            "No vector produces an input on which this row wins. check named it neither unreachable (E102) nor undecided (W128): the vectors did not find an input for it."
-                        )
-                    },
-                });
+                // A row nothing can reach is named by E102 and left out of this tally. A row with a
+                // computed column for which neither an input nor a proof that none exists was found
+                // is named by W128 (§15.209), and is said to be one here. A row `check` passes that
+                // no input reaches all the same — a `constraint` or a `never` line leaves out every
+                // input it asks for, which E102 does not say where no derived value takes part
+                // (§15.189, §15.282) — is told what leaves it out (§15.309). Any other row is one
+                // the vectors did not find an input for. Which of these is said, rather than
+                // "usually the generator": a row of A08's kind, which no input reaches and nothing
+                // showed so, used to be put down to the generator, and so did a row a `constraint`
+                // leaves out.
+                let hint = if let Some(line) = crate::region::TableRegion::build(t, c, f).and_then(|g| g.never_takes_row(ri)) {
+                    let said = f.nevers[line].said();
+                    tr!(
+                        "この行の組み合わせは `{said}` が表から外しています。この行を削除するか、この組み合わせの答えを表で決めるなら `never` の行を削除してください。",
+                        "`{said}` takes this row's combination out of the tables. Delete this row, or, to decide in the tables what the rule answers for this combination, delete the `never` line."
+                    )
+                } else if undecided.contains(&ri) {
+                    tr!(
+                        "check が W128 で言った行です。当たる入力が、この行を除いたときに完全性の検査が見つける穴の後ろにも見つからず、当たらないことも示せていません。当たる入力があるなら例に書き、無いならこの行を削除してください（削除して E101 が出るなら、行は残してかまいません）。",
+                        "check named this row with W128: no input was found that reaches it, not even behind the gap the completeness check finds with the row taken out, and none was shown not to. If some input reaches it, write it as an example; if none does, delete the row (if deleting it brings E101, the row can stay)."
+                    )
+                } else if let Some(why) = crate::region::no_input_reaches(set, c, f, ri) {
+                    unreached.insert((ti, ri));
+                    why
+                } else {
+                    tr!(
+                        "この行が勝つ入力を、ベクタが一つも作れていません。check は、この行を届かない行（E102）とも、決められない行（W128）とも言っていません。ベクタを作るときに、当たる入力が見つからなかった行です。",
+                        "No vector produces an input on which this row wins. check named it neither unreachable (E102) nor undecided (W128): the vectors did not find an input for it."
+                    )
+                };
+                missing.push(Missing { kind: ROW, what: tag.clone(), hint });
             }
         }
 
@@ -604,7 +611,16 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                                 show_rat(inside, &ty),
                                 show_rat(outside, &ty)
                             ),
-                            hint: tr!("欠けているのは {side} です。", "Missing: {side}."),
+                            // On a row no input reaches, neither point comes: what leaves the row
+                            // out is said once, by its row coverage (§15.309).
+                            hint: if unreached.contains(&(ti, ri)) {
+                                tr!(
+                                    "欠けているのは {side} です。この行に当たる入力はありません。何が外しているかは、この行の行カバーの欠けに書いてあります。",
+                                    "Missing: {side}. No input reaches this row; its row coverage obligation says what leaves it out."
+                                )
+                            } else {
+                                tr!("欠けているのは {side} です。", "Missing: {side}.")
+                            },
                         });
                     }
                 }
@@ -625,6 +641,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
             };
             bump(SHADOW, met, &mut tally);
             if !met {
+                // A row no input reaches wins nowhere: what leaves it out is said by its row
+                // coverage (§15.309).
+                let gone = unreached.contains(&(ti, i));
                 missing.push(Missing {
                     kind: SHADOW,
                     what: {
@@ -636,10 +655,17 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                             tr!("表 {ti} 行{ni} ∩ 表 {tj} 行{nj}（表 {ti} 行{ni} が勝つ点）", "table {ti} row {ni} ∩ table {tj} row {nj} (a point where table {ti} row {ni} wins)")
                         }
                     },
-                    hint: tr!(
-                        "この点が無いと、隣り合う行を入れ替えても期待値が変わりません。",
-                        "Without this point, swapping the adjacent rows changes no expected value."
-                    ),
+                    hint: if gone {
+                        tr!(
+                            "この点が無いと、隣り合う行を入れ替えても期待値が変わりません。ただし、勝つ側の行に当たる入力はありません。何が外しているかは、その行の行カバーの欠けに書いてあります。",
+                            "Without this point, swapping the adjacent rows changes no expected value. No input reaches the row that would win, though; its row coverage obligation says what leaves it out."
+                        )
+                    } else {
+                        tr!(
+                            "この点が無いと、隣り合う行を入れ替えても期待値が変わりません。",
+                            "Without this point, swapping the adjacent rows changes no expected value."
+                        )
+                    },
                 });
             }
         }

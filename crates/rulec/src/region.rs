@@ -4127,6 +4127,103 @@ pub fn live_rows(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, budget:
     Some(out)
 }
 
+/// What `rulec coverage` says of a row that `check` passes and no input reaches (§15.282,
+/// §15.309): the walk of E102's third form over the row's points writes down what leaves each
+/// one out — the rows that take precedence, the `constraint` and `never` lines, koyomi's days,
+/// the tables above — and the message names them, as the third form names them where a derived
+/// value takes part. `None` for a row a derived or `define` value takes part in, which is E102's
+/// to report; for one some point of which is left standing; and for one the walk does not finish
+/// within its budget. Of those the vectors did not find an input for, as far as can be told.
+pub fn no_input_reaches(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, ri: usize) -> Option<String> {
+    let t = &set.table;
+    let reg = TableRegion::build(t, c, f)?;
+    if reg.unanalyzable.is_some() || reg.axes.is_empty() || ri >= t.rows.len() {
+        return None;
+    }
+    let ups = upstreams(t, c, f);
+    let winners: Vec<usize> = set.beats[ri].iter().copied().filter(|&e| reg.intersects(e, ri)).collect();
+    let mut left = DEFAULT_BUDGET;
+    let w = reg.out_of_reach(&winners, ri, &ups, c, &reg.reach_of(), &mut left)?;
+    if w.by_a_derive() {
+        return None;
+    }
+    let ja = crate::i18n::ja();
+    // A list of lines or names: `a`, `a` と `b`, `a`、`b`、`c` — and in English `a`, `a` and `b`,
+    // `a`, `b` and `c`.
+    let list = |xs: &[String]| -> String {
+        match xs {
+            [] => String::new(),
+            [a] => a.clone(),
+            [a, b] => tr!("{a} と {b}", "{a} and {b}"),
+            _ if ja => xs.join("、"),
+            _ => format!("{} and {}", xs[..xs.len() - 1].join(", "), xs[xs.len() - 1]),
+        }
+    };
+    // What leaves the points out, and what to correct where such an input can come after all.
+    let ks: BTreeSet<usize> = w.constraints.iter().chain(&w.model_constraints).copied().collect();
+    let mut what: Vec<String> = ks.iter().filter_map(|k| f.constraints.get(*k)).map(|k| format!("`{} {}`", crate::kw::CONSTRAINT, k.said())).collect();
+    what.extend(w.nevers.iter().filter_map(|k| f.nevers.get(*k)).map(|n| format!("`{}`", n.said())));
+    let mut fix: Vec<String> = Vec::new();
+    if !ks.is_empty() {
+        fix.push(if ks.len() == 1 { tr!("`constraint` の行", "the `constraint` line") } else { tr!("`constraint` の行", "the `constraint` lines") });
+    }
+    if !w.nevers.is_empty() {
+        fix.push(if w.nevers.len() == 1 { tr!("`never` の行", "the `never` line") } else { tr!("`never` の行", "the `never` lines") });
+    }
+    for &ai in &w.days {
+        let col = &reg.col_names[ai];
+        let from = c.day_sets.get(col).and_then(|x| x.from.as_ref()).map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+        what.push(tr!("`{col}` の日（{from}）", "the days of `{col}` ({from})"));
+    }
+    if !w.days.is_empty() {
+        fix.push(tr!("koyomi のファイル", "the koyomi file"));
+    }
+    if w.upstream {
+        what.push(tr!("上流の表", "the tables above"));
+        fix.push(tr!("上流の表", "the tables above"));
+    }
+    if what.is_empty() {
+        return None;
+    }
+    let s = if what.len() == 1 { "s" } else { "" };
+    let what = list(&what);
+    let fix = list(&fix);
+    // In Japanese a line in backquotes is set off from the words beside it, a word is not.
+    let sp = if what.ends_with('`') { " " } else { "" };
+    let fix_sp = if fix.starts_with('`') { " " } else { "" };
+    let rest = if w.covered {
+        // Some of the row's points the rows that take precedence take first, named as the third
+        // form names them.
+        let tn = set.row_table(ri).to_string();
+        let by_position = set.policy_of(ri) == Policy::TopDown && winners.iter().all(|&e| set.same_member(e, ri));
+        let mut tables: Vec<String> = Vec::new();
+        for &e in &winners {
+            let mi = set.member_of[e];
+            let n = format!("{} {}", set.kind_word(mi), set.members[mi]);
+            if set.members[mi] != tn && !tables.contains(&n) {
+                tables.push(n);
+            }
+        }
+        let (who_ja, who_en) = if by_position {
+            ("上にある行".to_string(), "the earlier rows".to_string())
+        } else if !tables.is_empty() {
+            (format!("優先する {} の行", tables.join("、")), format!("the rows of {}, which take precedence,", tables.join(", ")))
+        } else {
+            ("優先する行".to_string(), "the rows that take precedence".to_string())
+        };
+        tr!(
+            "この行が求める入力のうち、{who_ja}が先に取らないものは、{what}{sp}がすべて外しています。",
+            "{what} leave{s} out every input it asks for that {who_en} do not take first."
+        )
+    } else {
+        tr!("この行が求める入力は、{what}{sp}がすべて外しています。", "{what} leave{s} out every input it asks for.")
+    };
+    Some(tr!(
+        "この行に当たる入力はありません。{rest}この行を削除するか、そういう入力が来るなら{fix_sp}{fix}を直してください。",
+        "No input reaches this row: {rest} Delete this row, or, if such an input can come, correct {fix}."
+    ))
+}
+
 impl TableRegion {
     /// A point of row `target`'s region that `rows` do not cover and the sieve leaves standing,
     /// as [`live_rows`] asks for it.
