@@ -2723,7 +2723,7 @@ CI の platforms の段で、Argo の突き合わせがまれに `Argo.Failed` �
 
 残したもの：遅れて届いた宣言したエラーの名前は、ノードのメッセージにはあるが、ステップの引数からは読めない。
 
-確かめたこと：CI の platforms の段（ブランチで一回）。新しい試験は agents.flow の 17 本を遅れた出力で演じ、17 本とも参照と同じ呼び出しで終わり、3 本が理由の空の `failure` になった。`argo_runs_as_the_reference_says` は 47 本のフローの 780 本と本物の Pod の 47 本が通り、回し直しは無かった。直す前と後の `gen --target argo` を木の 429 本の `.flow` で比べ、変わるのは 123 本の YAML の `?.` だけだった。dandori の試験 166 件と、作り直した `ritsu.wasm` での ritsu の `--test playground`・`--test dandori`・`--test enums_files`。
+確かめたこと：CI の platforms の段（ブランチで一回）。新しい試験は agents.flow の 17 本を遅れた出力で演じ、17 本とも参照と同じ呼び出しで終わり、3 本が理由の空の `failure` になった。`argo_runs_as_the_reference_says` は 47 本のフローの 780 本と本物の Pod の 47 本が通り、回し直しは無かった。直す前と後の `gen --target argo` を木の 429 本の `.flow` で比べ（直したあとは版を上げる前のビルドなので、版の行は同じ）、変わるのは 123 本の YAML の `?.` だけだった。公開の 0.53.0 と 0.54.0 で比べても、版の行のほかに変わるのは同じ 123 本の `?.` だけだった。dandori の試験 166 件と、作り直した `ritsu.wasm` での ritsu の `--test playground`・`--test dandori`・`--test enums_files`。
 
 ## 8. モジュール（2026-10-28）
 
