@@ -1,0 +1,12 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_導出が届かず制約も許さない行.rule:24 table 行き先表
+   |
+24 | | >50円        | >5     | <=5    | 確認               |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+17 | derive 返金額(refund) : money[円] = 支払額 - 手数料  range >=-1000円 <=1000円
+   |                                     ^^^^^^^^^^^^^^^ the reachable interval is >=-10円 <=20円
+   |
+ Over the ranges of the inputs, `返金額` can only come to >=-10円 <=20円. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `返金額` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+
+note tests/reach/E102_導出が届かず制約も許さない行.rule: 2 shadow pairs (2 structural, 0 equivalent, 0 needs review)

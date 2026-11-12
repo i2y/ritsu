@@ -1,0 +1,25 @@
+rule return_route v1
+description "Where a return goes. The refund comes to at most 20 pounds, so the third row, written for a refund over 50, is reached by no input. No more items come back than were ordered, which leaves the row out as well, and the walk over its points meets that first: the row is told of the refund's reach all the same"
+
+enum route = decline | approve | review
+
+inputs
+  paid     : money[GBP]  range >=0GBP <=20GBP
+  fee      : money[GBP]  range >=0GBP <=10GBP
+  returned : number  range >=0 <=10
+  ordered  : number  range >=0 <=10
+
+constraint returned <= ordered
+
+outputs
+  outcome : route
+
+derive refund : money[GBP] = paid - fee  range >=-1000GBP <=1000GBP
+
+table route_of
+policy first
+| refund         | returned | ordered | -> outcome : route |
+| <=0GBP         | -        | >=5     | decline            |
+| >0GBP <=200GBP | -        | >=5     | approve            |
+| >50GBP         | >5       | <=5     | review             |
+| -              | -        | -       | approve            |

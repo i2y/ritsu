@@ -1,0 +1,25 @@
+rule 返品の行き先(return_route) v1
+description "返品をどこへ回すか。返金額は 20 円までにしかならないので、50 円を超える返金額に書いた 3 行目には、どの入力も当たらない。返品の数は注文の数を超えないので、この行は制約でも外れ、行の点をたどると制約のほうに先に出会う。それでも、この行には返金額の取りうる値を言う"
+
+enum 行き先(route) = 断る(decline) | 受ける(approve) | 確認(review)
+
+inputs
+  支払額(paid)     : money[円]  range >=0円 <=20円
+  手数料(fee)      : money[円]  range >=0円 <=10円
+  返品数(returned) : number  range >=0 <=10
+  注文数(ordered)  : number  range >=0 <=10
+
+constraint 返品数 <= 注文数
+
+outputs
+  回し先(outcome) : 行き先
+
+derive 返金額(refund) : money[円] = 支払額 - 手数料  range >=-1000円 <=1000円
+
+table 行き先表(route_of)
+policy first
+| 返金額       | 返品数 | 注文数 | -> 回し先 : 行き先 |
+| <=0円        | -      | >=5    | 断る               |
+| >0円 <=200円 | -      | >=5    | 受ける             |
+| >50円        | >5     | <=5    | 確認               |
+| -            | -      | -      | 受ける             |

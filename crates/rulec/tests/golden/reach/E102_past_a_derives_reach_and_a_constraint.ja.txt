@@ -1,0 +1,12 @@
+エラー[E102]: 行3 はどの入力にも当てはまりません
+  --> tests/reach/E102_past_a_derives_reach_and_a_constraint.rule:24 表 route_of
+   |
+24 | | >50GBP         | >5       | <=5     | review             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行3: ここに到達する入力はありません
+17 | derive refund : money[GBP] = paid - fee  range >=-1000GBP <=1000GBP
+   |                              ^^^^^^^^^^ 実際に取りうる値は >=-10GBP <=20GBP です
+   |
+ `refund` が取りうる値は、入力の範囲から計算すると >=-10GBP <=20GBP です。この行の条件に当てはまる値は、その中にありません。
+ ヒント: 条件を `refund` の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。
+
+note tests/reach/E102_past_a_derives_reach_and_a_constraint.rule: 隠れ 2 対（階段 2、同じ答え 0、要確認 0）

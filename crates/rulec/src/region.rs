@@ -2798,6 +2798,10 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     let mut edge_pairs: Vec<(usize, usize, bool)> = Vec::new();
     let mut dead_rows: Vec<usize> = Vec::new();
     let mut undecided: Vec<usize> = Vec::new();
+    // The rows the sieve leaves out with no derived or `define` value taking part: a `constraint`,
+    // a `never`, koyomi's days or the tables above alone (§15.189). They pass, and are not
+    // undecided either (§15.308).
+    let mut out_unsaid: Vec<usize> = Vec::new();
     let empty = TableCheck {
         diags: Vec::new(),
         w114: Vec::new(),
@@ -3227,6 +3231,9 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     let reach = Some(reg.reach_of())
         .filter(|r| r.axes.iter().any(|x| *x) || reg.define_truth.iter().any(|t| t.is_some()) || ups.iter().any(|u| reg.above_can(u)));
     let mut reach_left = budget;
+    // The walks asked again with the derived values first (below) have a budget of their own, so
+    // that they take nothing from the walks of the rows after them.
+    let mut again_left = budget;
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
         let winners = &set.beats[i];
@@ -3265,6 +3272,29 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 let meet: Vec<usize> = winners.iter().copied().filter(|&e| reg.intersects(e, i)).collect();
                 let before = reach_left;
                 let why = reg.out_of_reach(&meet, i, &ups, c, rs, &mut reach_left);
+                // The walk writes down, for each point it leaves out, the first test that holds,
+                // and it takes the axes in the order of their sizes (§6.3): a `constraint` on two
+                // input axes can leave out every point before the walk comes to the axis of a
+                // derive that leaves the row out on its own. Whether a derived or `define` value
+                // takes part is asked again with those values first, so that it does not hang on
+                // the order (§15.308). A row the second walk cannot finish within its budget is
+                // left out all the same, by the first.
+                let why = match why {
+                    Some(w) if !w.by_a_derive() => {
+                        let first = Reach { axes: rs.axes.clone(), derives_first: true };
+                        let again_before = again_left;
+                        let again = reg.out_of_reach(&meet, i, &ups, c, &first, &mut again_left);
+                        nodes += (again_before - again_left).max(0);
+                        match again {
+                            Some(again) if again.by_a_derive() => Some(again),
+                            _ => {
+                                out_unsaid.push(i);
+                                None
+                            }
+                        }
+                    }
+                    why => why,
+                };
                 nodes += (before - reach_left).max(0);
                 why.filter(|w| w.by_a_derive())
             }
@@ -3347,8 +3377,10 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
         .map(|k| crate::types::stages(f).at(k));
     if stage_of_set.is_none_or(|s| s == crate::types::Stage::BEFORE) {
         let computed = |col: &str| f.open_value(col).is_none() && f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
+        // A row the sieve leaves out is decided, though nothing reports it: W128 would say that no
+        // input was shown not to reach it (§15.308).
         let asks: Vec<(usize, Vec<String>)> = (0..t.rows.len())
-            .filter(|i| !dead_rows.contains(i) && set.applied[set.member_of[*i]].is_none())
+            .filter(|i| !dead_rows.contains(i) && !out_unsaid.contains(i) && set.applied[set.member_of[*i]].is_none())
             .filter_map(|i| {
                 let cols: Vec<String> = t
                     .inputs
@@ -4151,6 +4183,10 @@ pub(crate) struct Reach {
     /// intervals of what it reads, which holds every value it takes — a product, a rounding, a
     /// `min` or a value a table above writes as much as a sum.
     axes: Vec<bool>,
+    /// Whether the walk asks the derived and `define` values first: the tests that read none of
+    /// them — koyomi's days, the `constraint` and `never` lines, the tables above — wait for the
+    /// whole point, after the linear model and the rows above (§15.308).
+    derives_first: bool,
 }
 
 /// Why a row the first two forms of E102 let through is reached by no input all the same
@@ -4201,7 +4237,7 @@ impl OutOfReach {
 impl TableRegion {
     /// What the third form of E102 may read here (§15.189, §15.195).
     fn reach_of(&self) -> Reach {
-        Reach { axes: (0..self.axes.len()).map(|ai| self.reach_at(ai).is_some()).collect() }
+        Reach { axes: (0..self.axes.len()).map(|ai| self.reach_at(ai).is_some()).collect(), derives_first: false }
     }
 
     /// Whether the name is computed by a `derive` or by a `define` of a number.
@@ -4304,7 +4340,9 @@ impl TableRegion {
     /// `why`. On a prefix only the tests that read the axes one at a time are asked; at a whole
     /// point (`leaf`), the tables above, the linear model and the rows above together with it
     /// too. The reach of a derived or `define` column is asked first, since it is what the form
-    /// is about, and read as `feasible` reads a derive's.
+    /// is about, and read as `feasible` reads a derive's. With `rs.derives_first`, the tests that
+    /// read no derived or `define` value wait for the whole point, and come after the linear model
+    /// and the rows above (§15.308).
     fn left_out(&self, path: &[usize], ups: &[Upstream], chk: &Checked, rs: &Reach, leaf: bool, why: &mut OutOfReach) -> bool {
         for (ai, &ci) in path.iter().enumerate() {
             if self.truth_never(ai, ci) {
@@ -4323,26 +4361,11 @@ impl TableRegion {
                 return true;
             }
         }
-        if let Some(ai) = self.days_rule_out(path) {
-            why.days.insert(ai);
-            return true;
-        }
-        for (k, con) in self.constraints.iter().enumerate() {
-            if self.constraint_impossible(con, path) {
-                why.constraints.insert(k);
-                return true;
-            }
-        }
-        if let Some(n) = self.never_rules_out(path) {
-            why.nevers.insert(self.nevers[n].line);
+        if !rs.derives_first && self.left_out_by_the_rest(path, ups, chk, leaf, why) {
             return true;
         }
         if !leaf {
             return false;
-        }
-        if self.upstream_dead_at(path, ups, chk) {
-            why.upstream = true;
-            return true;
         }
         if !self.model.is_empty()
             && let Some(r) = self.refute_box(&self.path_box(path))
@@ -4380,6 +4403,30 @@ impl TableRegion {
                     why.above.push(a);
                 }
             }
+            return true;
+        }
+        rs.derives_first && self.left_out_by_the_rest(path, ups, chk, leaf, why)
+    }
+
+    /// The tests of the sieve that read no derived or `define` value, written into `why`: koyomi's
+    /// days, the `constraint` and `never` lines, and at a whole point (`leaf`) the tables above.
+    fn left_out_by_the_rest(&self, path: &[usize], ups: &[Upstream], chk: &Checked, leaf: bool, why: &mut OutOfReach) -> bool {
+        if let Some(ai) = self.days_rule_out(path) {
+            why.days.insert(ai);
+            return true;
+        }
+        for (k, con) in self.constraints.iter().enumerate() {
+            if self.constraint_impossible(con, path) {
+                why.constraints.insert(k);
+                return true;
+            }
+        }
+        if let Some(n) = self.never_rules_out(path) {
+            why.nevers.insert(self.nevers[n].line);
+            return true;
+        }
+        if leaf && self.upstream_dead_at(path, ups, chk) {
+            why.upstream = true;
             return true;
         }
         false

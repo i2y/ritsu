@@ -1,0 +1,12 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_past_a_derives_reach_and_a_constraint.rule:24 table route_of
+   |
+24 | | >50GBP         | >5       | <=5     | review             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+17 | derive refund : money[GBP] = paid - fee  range >=-1000GBP <=1000GBP
+   |                              ^^^^^^^^^^ the reachable interval is >=-10GBP <=20GBP
+   |
+ Over the ranges of the inputs, `refund` can only come to >=-10GBP <=20GBP. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `refund` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+
+note tests/reach/E102_past_a_derives_reach_and_a_constraint.rule: 2 shadow pairs (2 structural, 0 equivalent, 0 needs review)

@@ -17,6 +17,11 @@
 //! where the derive's equation leaves the row out, the note names the equation, as it names a
 //! `define`'s; where a `constraint` does, with a `-` under the derive, the row is told only that,
 //! and the derive's line is not marked (the rules of `PLAIN`).
+//!
+//! What the row is told does not hang on the order the walk takes the axes in (§15.308): a row past
+//! the derive's reach that a `constraint` on two inputs leaves out as well is E102 for the reach,
+//! though the walk meets the constraint first. A row a `constraint` alone leaves out, with a cell
+//! on a derive inside what it comes to, passes, and W128 does not call it undecided.
 
 use rulec::eval::Val;
 use rulec::i18n::{self, Lang};
@@ -41,6 +46,9 @@ const PAIRS: &[(&str, &str, usize)] = &[
     ("E102_past_a_defines_equation", "E102_定義の式が許さない行", 4),
     // The same, with a derive's equation (§15.307): the row's cell meets what the derive comes to.
     ("E102_past_a_derives_equation", "E102_導出の式が許さない行", 1),
+    // A row past the derive's reach that a `constraint` on two inputs leaves out as well, and the
+    // walk meets the constraint first (§15.308): 0.54.0 said W128 of it.
+    ("E102_past_a_derives_reach_and_a_constraint", "E102_導出が届かず制約も許さない行", 3),
 ];
 
 /// A row with a `-` under a derive, which a `constraint` leaves out (§15.307): the English rule,
@@ -360,6 +368,42 @@ fn what_the_third_form_does_not_read_passes_as_before() {
         }
         assert!(!answers.iter().any(|a| a.contains("huge")), "{what}: the last row is reached: {answers:?}");
     }
+}
+
+/// A row with a cell on a derive, inside what the derive comes to, which a `constraint` alone leaves
+/// out: it passes as a row only a `constraint` rules out does, and W128 does not call it undecided,
+/// for the sieve showed that no input reaches it (§15.308). 0.54.0 said W128 of it. It is reached
+/// by no input all the same, and deleting it leaves no gap.
+#[test]
+fn a_row_a_constraint_alone_leaves_out_is_not_undecided() {
+    let src = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  x      : number  range >=0 <=10\n  y      : number  range >=0 <=10\n\nconstraint x <= y\n\noutputs\n  out : band\n\nderive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP\n\ntable t\npolicy first\n| excess            | x  | y   | -> out : band |\n| >50GBP            | -  | -   | big           |\n| >=-99GBP <=100GBP | >5 | <=5 | huge          |\n| -                 | -  | -   | small         |\n";
+    for lang in [Lang::En, Lang::Ja] {
+        let codes: Vec<String> = i18n::with(lang, || rulec::check_source(src, "v.rule").iter().map(|d| d.code.to_string()).collect());
+        assert!(!codes.iter().any(|c| c.starts_with('E') || c == "W128"), "{codes:?}");
+    }
+    let (f, c) = rulec::prepare(src, "v.rule").unwrap();
+    let mut answers = std::collections::BTreeSet::new();
+    for a in (1..=100).step_by(3) {
+        for l in (0..=100).step_by(3) {
+            for x in 0..=10 {
+                for y in 0..=10 {
+                    let input: BTreeMap<String, Val> = [("amount", Val::Num(Rat::int(a))), ("limit", Val::Num(Rat::int(l))), ("x", Val::Num(Rat::int(x))), ("y", Val::Num(Rat::int(y)))].into_iter().map(|(n, v)| (n.to_string(), v)).collect();
+                    if !rulec::vectors::allowed(&f, &c, &input) {
+                        continue;
+                    }
+                    let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());
+                    if let Some((_, Some(v))) = outs.iter().find(|(n, _)| n == "out") {
+                        answers.insert(format!("{v:?}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(!answers.iter().any(|a| a.contains("huge")), "row 2 is reached: {answers:?}");
+    assert!(answers.iter().any(|a| a.contains("big")) && answers.iter().any(|a| a.contains("small")), "{answers:?}");
+    let without = src.replace("| >=-99GBP <=100GBP | >5 | <=5 | huge          |\n", "");
+    let codes: Vec<String> = found(&without, "v.rule").into_iter().map(|(c, _)| c).collect();
+    assert!(!codes.iter().any(|c| c.starts_with('E')), "without row 2: {codes:?}");
 }
 
 /// What the third form reads since §15.195, which passed before though the row in each is reached
