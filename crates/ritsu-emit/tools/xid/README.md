@@ -6,12 +6,15 @@ or `_` first, then letters, numbers (Nd, Nl, No) and `_`. The file holds the let
 numbers of 17.0 (`LETTERS`, `NUMBERS`), and for each kind of name a target takes, the characters
 of those that the target's names do not, first and after the first: Rust's and Python's
 (XID_Start and XID_Continue), TypeScript's (ID_Start and ID_Continue) and Go's (the letters, Lu,
-Ll, Lt, Lm and Lo, and the decimal digits, Nd). The checks read the letters and numbers of the
-file, not those of `char`: the `char` of rustc 1.100 is of Unicode 18.0 and calls letters 12,833
-characters that rustc 1.100's names do not take, nor any target's yet. chobo's E063 stops a
-build on a name with one of the client's language, and its Rust clients read Rust's to write their
-names (chobo's DESIGN.md 14 and 18). kaname writes a name of a function's code as it is where the
-target takes it, and names it `v` where not (kaname's DESIGN.md 36.3).
+Ll, Lt, Lm and Lo, and the decimal digits, Nd). The lexers of ritsu's languages and the checks
+read the letters and numbers of the file (`ident::is_letter`, `ident::is_letter_or_number`), not
+those of `char`: the `char` of rustc 1.100 is of Unicode 18.0 and calls letters 12,833 characters
+that rustc 1.100's names do not take, nor any target's yet. Read from the file, a source has the
+same names whichever Rust built ritsu. chobo's E063 stops a build on a name with one of the
+client's language, and its Rust clients read Rust's to write their names (chobo's DESIGN.md 14 and
+18). kaname writes a name of a function's code as it is where the target takes it, and names it
+`v` where not (kaname's DESIGN.md 36.3). rulec writes a name with no alias that has one with `_`
+for it, in every language alike (rulec's DESIGN.md 15.311).
 
 The files are not kept in this repository. To make the tables again, in `crates/ritsu-emit`:
 
@@ -36,7 +39,8 @@ and each tool takes the names its table lets in and none it keeps out, but for t
 the tool's own Unicode does not have yet. When the identifiers of a new rustc read a newer
 Unicode, rustc takes characters E063 keeps out, the two tests fail, and the tables are made again
 from the newer files. A `char` that reads a newer Unicode alone, as rustc 1.100's does, changes
-nothing: its new letters are in neither table of letters and numbers, and E063 keeps them out.
+nothing: its new letters are in neither table of letters and numbers, and no lexer reads them
+into a name.
 
 The Unicode Character Database is under the Unicode License v3;
 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES) gives it.

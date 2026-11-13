@@ -99,9 +99,9 @@ was transcribed from belongs.
 **Encoding** is UTF-8 without a BOM. Identifiers are normalised to NFC. A cell never contains
 a line break.
 
-**Identifiers** start with a letter or `_` and run to the next delimiter. Kanji, kana and
-Latin letters are all identifier characters; `-` never is (it is always an operator or the
-don't-care cell). Anything else at the start of a name is E002.
+**Identifiers** start with a letter of Unicode 17.0 or `_` and run to the next delimiter. Kanji,
+kana and Latin letters are all identifier characters; `-` never is (it is always an operator or
+the don't-care cell). Anything else at the start of a name is E002.
 
 **ASCII aliases** are written in parentheses after the name: `届け先(dest)`. They become the
 identifiers the generated code uses.
@@ -122,7 +122,10 @@ Everywhere else an alias is **optional**, and writing one changes what the gener
 calls the value: `derive 残余(margin)` becomes `margin`, `group 遠隔地(remote)` becomes
 `_remote` / `isRemote`, and a table output column `-> サイズ(size)` becomes `size`. Leave the
 alias out and the declared name is used as it stands — every target language accepts a
-Japanese identifier for something that does not have to be exported.
+Japanese identifier for something that does not have to be exported. A character some target
+takes in no name — the `²` of `差²`, `㎡`, `%`, a vowel sign Go does not take — is written as `_`
+in every language (`差_`), and W121 says so; the keys of the input JSON and the records keep the
+declared name.
 
 The alias on a **`table`** names no function, since a table is inlined into the one generated
 function rather than becoming a function of its own; it names the column of the SQL query that

@@ -278,7 +278,7 @@ E の最初の部分で、三つの言語がほかの言語を読めないとき
 
 `ritsu-wasm` は `ritsu` のライブラリ（`ritsu check` の本体）、`ritsu-project`、言語のクレート、`ritsu-base`、serde_json に依存する。同じ入口の層どうしの依存で、地図では同じコンテキスト（`Entry`）の中にある。入口の `ritsu` も、`ritsu run` の JSON のために serde_json に依存する（E.6）。
 
-Rust の識別子の字（XID_Start、XID_Continue）は、決まり 4 のとおり `unicode-ident` に頼らず、Unicode Character Database 17.0 から作った表で見る。表は ritsu-emit が持ち（`crates/ritsu-emit/src/xid.rs` と `tools/xid/make_table.py`）、17.0 の文字と数と、Rust と Python、TypeScript、Go の三組がある。名前の字が文字か数かも、`char` ではなく表で見る。rustc 1.100 の `char` は Unicode 18.0 で、18.0 で加わった字を文字と言うが、rustc 1.100 の名前はそれを取らない（PLAN 7.133）。chobo の E063 と Rust のクライアント、kaname の生成物の関数の中の名前が読む。2026-10-24 に chobo が Rust のクライアントのために Rust の分を持って始め、2026-11-01 に、kaname が四つの出力先で読むために ritsu-emit に移した。生成したクライアントが依存するクレート（sqlx、tokio、tigerbeetle）は、使う人のクレートの依存で、ワークスペースの依存ではない。試験のランナー `crates/chobo/tools/runner/rust` と、kaname の `tests/rust.rs` が組むクレートの `crates/kaname/tools/rust`（`Cargo.toml` と `Cargo.lock`。版は chobo のランナーと同じ）は、自分の `[workspace]` を持つワークスペースの外のクレートで、`cargo xtask deps` の外にある。
+Rust の識別子の字（XID_Start、XID_Continue）は、決まり 4 のとおり `unicode-ident` に頼らず、Unicode Character Database 17.0 から作った表で見る。表は ritsu-emit が持ち（`crates/ritsu-emit/src/xid.rs` と `tools/xid/make_table.py`）、17.0 の文字と数と、Rust と Python、TypeScript、Go の三組がある。名前の字が文字か数かも、`char` ではなく表で見る。rustc 1.100 の `char` は Unicode 18.0 で、18.0 で加わった字を文字と言うが、rustc 1.100 の名前はそれを取らない（PLAN 7.133）。chobo の E063 と Rust のクライアント、kaname の生成物の関数の中の名前、rulec の生成コードの識別子（rulec の DESIGN §15.311）が読み、言語の字句（rulec、chobo、dandori、kaname、koyomi、sekisho、yuen、sakai）も、名前の字を表で読む（PLAN 7.134）。そのため、受け付ける名前は ritsu を組んだ Rust の版で変わらない。2026-10-24 に chobo が Rust のクライアントのために Rust の分を持って始め、2026-11-01 に、kaname が四つの出力先で読むために ritsu-emit に移した。生成したクライアントが依存するクレート（sqlx、tokio、tigerbeetle）は、使う人のクレートの依存で、ワークスペースの依存ではない。試験のランナー `crates/chobo/tools/runner/rust` と、kaname の `tests/rust.rs` が組むクレートの `crates/kaname/tools/rust`（`Cargo.toml` と `Cargo.lock`。版は chobo のランナーと同じ）は、自分の `[workspace]` を持つワークスペースの外のクレートで、`cargo xtask deps` の外にある。
 
 ### 3.2 口
 
@@ -1993,7 +1993,7 @@ WASI で組んだ `realpath` は、パスを含むいちばん深い preopen か
 
 - 生成先の言語ごとの予約語（いまは rulec の `src/backend.rs` の 12 言語、koyomi の `src/reserved.rs`、dandori と chobo の表）と、名前がぶつかったときの書き方。
 - 公開する名前に ASCII の別名を使う決まり（rulec の §1.3）と、識別子の作り方。
-- 名前に使える字の表：Unicode 17.0 の文字と数と、そのうち生成先の名前が持てない字（`xid.rs`。Unicode Character Database 17.0 の二つのファイルから `tools/xid/make_table.py` が作る。生成先は Rust と Python、TypeScript、Go の三組）。chobo の E063 と kaname の生成物が読む。
+- 名前に使える字の表：Unicode 17.0 の文字と数と、そのうち生成先の名前が持てない字（`xid.rs`。Unicode Character Database 17.0 の二つのファイルから `tools/xid/make_table.py` が作る。生成先は Rust と Python、TypeScript、Go の三組）。言語の字句（`ident::is_letter`、`ident::is_letter_or_number`）、chobo の E063、kaname の生成物、rulec の生成コードの識別子（`ident::rust_takes` ほか）が読む。
 - 正規化の表：NFC と NFKC（`normal.rs` と `normal_table.rs`。同じデータベースの二つのファイルから `tools/normal/make_table.py` が作る）。Rust は NFC、Python は NFKC で識別子を比べるので、別に書いた二つの名前が一つの識別子になることがある。chobo の W108 が読む。
 - Wasm のモジュール（`wasm.rs`）：組み立てのフラグ（rustc の行と、同じものを cargo で書いた行）、`call: func(input: string) -> string` の canonical ABI の三つの関数、WIT の予約語の表と world と package の名前、component を作る二つのコマンド、JavaScript のホストが `call` を呼ぶ関数。rulec の規則のモジュール、koyomi の日付のモジュール、kaname のパッケージの Wasm が使う。JSON を読む部品と拒否の文は、それぞれの言語のものである。
 - 文字列と数のリテラルの書き方、コメントの書き方。
