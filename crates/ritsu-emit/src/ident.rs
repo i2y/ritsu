@@ -59,11 +59,14 @@ pub fn python_takes(name: &str) -> bool {
     takes(name, crate::xid::NOT_FIRST, crate::xid::NOT_AFTER)
 }
 
-/// Whether TypeScript takes `name`, by its characters: ID_Start or `_` first, then ID_Continue
-/// (ECMA-262, IdentifierName). ID holds XID, and a few more that NFKC makes other characters:
-/// TypeScript takes `ͺ` and the halfwidth `ﾞ`, which Rust and Python do not.
+/// Whether TypeScript takes `name`, by its characters: ID_Start, `_` or `$` first, then
+/// ID_Continue, `$` and the joiners ZWNJ and ZWJ (ECMA-262, IdentifierName). ID holds XID, and a
+/// few more that NFKC makes other characters: TypeScript takes `ͺ` and the halfwidth `ﾞ`, which
+/// Rust and Python do not.
 pub fn typescript_takes(name: &str) -> bool {
-    takes(name, crate::xid::ID_NOT_FIRST, crate::xid::ID_NOT_AFTER)
+    // `$` and the joiners are no letters or numbers, which the tables hold: read as `_`.
+    let read: String = name.chars().enumerate().map(|(i, c)| if c == '$' || (i > 0 && matches!(c, '\u{200C}' | '\u{200D}')) { '_' } else { c }).collect();
+    takes(&read, crate::xid::ID_NOT_FIRST, crate::xid::ID_NOT_AFTER)
 }
 
 /// Whether Go takes `name`, by its characters: a letter (Lu, Ll, Lt, Lm, Lo) or `_` first, then
@@ -76,12 +79,27 @@ pub fn go_takes(name: &str) -> bool {
 
 /// Whether a name begins with `_` or a letter that `not_first` does not hold, and goes on with `_`,
 /// letters and numbers that `not_after` does not: the letters and numbers of the tables' Unicode
-/// ([`crate::xid::LETTERS`], [`crate::xid::NUMBERS`]), not those of `char`, whose Unicode may be
-/// later and have letters no target's names take yet.
+/// ([`is_letter`], [`is_letter_or_number`]), not those of `char`, whose Unicode may be later and
+/// have letters no target's names take yet.
 fn takes(name: &str, not_first: &[(u32, u32)], not_after: &[(u32, u32)]) -> bool {
-    let letter = |c| held(crate::xid::LETTERS, c);
     let mut cs = name.chars();
-    matches!(cs.next(), Some(c) if c == '_' || (letter(c) && !held(not_first, c))) && cs.all(|c| c == '_' || ((letter(c) || held(crate::xid::NUMBERS, c)) && !held(not_after, c)))
+    matches!(cs.next(), Some(c) if c == '_' || (is_letter(c) && !held(not_first, c))) && cs.all(|c| c == '_' || (is_letter_or_number(c) && !held(not_after, c)))
+}
+
+/// Whether `c` is a letter of the tables' Unicode ([`crate::xid::LETTERS`], Alphabetic), as each of
+/// ritsu's languages reads the first character of a name: what `char::is_alphabetic` says where
+/// `char`'s Unicode is the tables' own. The `char` of a later Unicode has more letters (Rust 1.100's,
+/// of Unicode 18.0, 12,833 more), which no target's names take yet; read from the tables, a source
+/// has the same names whichever Rust built ritsu.
+pub fn is_letter(c: char) -> bool {
+    held(crate::xid::LETTERS, c)
+}
+
+/// Whether `c` is a letter or a number of the tables' Unicode ([`crate::xid::LETTERS`],
+/// [`crate::xid::NUMBERS`]), as ritsu's languages read the characters of a name after its first:
+/// what `char::is_alphanumeric` says where `char`'s Unicode is the tables' own ([`is_letter`]).
+pub fn is_letter_or_number(c: char) -> bool {
+    held(crate::xid::LETTERS, c) || held(crate::xid::NUMBERS, c)
 }
 
 /// Whether one of the ranges of `table` holds `c`.

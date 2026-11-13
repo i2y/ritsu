@@ -98,12 +98,14 @@ pub fn combining(c: char) -> bool {
     matches!(c, '\u{300}'..='\u{36f}' | '\u{3099}' | '\u{309a}')
 }
 
+/// A name starts with a letter or `_`, and goes on with letters, numbers and `_`: those of the tables'
+/// Unicode (ritsu-emit's `ident::is_letter`), whichever Rust built chobo.
 fn name_start(c: char) -> bool {
-    !combining(c) && (c.is_alphabetic() || c == '_')
+    !combining(c) && (ritsu_emit::ident::is_letter(c) || c == '_')
 }
 
 fn name_rest(c: char) -> bool {
-    !combining(c) && (c.is_alphanumeric() || c == '_')
+    !combining(c) && (ritsu_emit::ident::is_letter_or_number(c) || c == '_')
 }
 
 /// Split the source into lines of tokens. A line that cannot be read is reported (E001)

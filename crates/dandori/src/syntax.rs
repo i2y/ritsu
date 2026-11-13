@@ -500,12 +500,14 @@ fn quantity(text: &str, mult: i128) -> Option<ritsu_units::Rat> {
     ritsu_units::Rat::checked_new(if neg { -n } else { n }, 10i128.pow(frac.len() as u32))
 }
 
+/// A letter of the tables' Unicode (ritsu-emit's `ident::is_letter`), whichever Rust built dandori,
+/// or `_`.
 fn is_ident_start(c: char) -> bool {
-    c.is_alphabetic() || c == '_'
+    ritsu_emit::ident::is_letter(c) || c == '_'
 }
 
 fn is_ident_continue(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
+    ritsu_emit::ident::is_letter_or_number(c) || c == '_'
 }
 
 /// Whether the characters start with a day, `2026-01-01`, that no letter or digit goes on from.

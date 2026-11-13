@@ -64,8 +64,12 @@ fn the_characters_of_names() {
     assert_eq!(xid::UNICODE, (17, 0, 0));
     let later = (0..=0x10FFFFu32).filter_map(char::from_u32).filter(|&c| c.is_alphanumeric() && !held(xid::LETTERS, c) && !held(xid::NUMBERS, c)).count();
     let alphabetic = (0..=0x10FFFFu32).filter_map(char::from_u32).filter(|&c| c.is_alphabetic() != held(xid::LETTERS, c)).count();
+    // what the languages' lexers read a name's characters with: `char`'s answers where its Unicode
+    // is the tables', and no letter of a later one
+    let differ = (0..=0x10FFFFu32).filter_map(char::from_u32).filter(|&c| ident::is_letter(c) != c.is_alphabetic() || ident::is_letter_or_number(c) != c.is_alphanumeric()).count();
+    assert!(!ident::is_letter('\u{558}') && !ident::is_letter_or_number('\u{558}') && ident::is_letter('在') && ident::is_letter_or_number('²') && !ident::is_letter('²'));
     if char::UNICODE_VERSION == xid::UNICODE {
-        assert_eq!((later, alphabetic), (0, 0), "a `char` of the tables' Unicode has other letters or numbers");
+        assert_eq!((later, alphabetic, differ), (0, 0, 0), "a `char` of the tables' Unicode has other letters or numbers");
     } else {
         // the loop above holds that a later one keeps every letter and number of the tables'
         assert!(char::UNICODE_VERSION > xid::UNICODE, "the `char` of Unicode {:?} is older than the tables'", char::UNICODE_VERSION);
@@ -86,6 +90,10 @@ fn the_characters_of_names() {
         ("℃", [false, false, false, false]),
         ("\u{558}", [false, false, false, false]),  // a letter of Unicode 18.0, which no target's names take yet
         ("a\u{58B}", [false, false, false, false]),
+        ("$a$", [false, false, true, false]),        // ECMAScript's names take `$` wherever `_`
+        ("a\u{200D}b", [false, false, true, false]), // and ZWJ (and ZWNJ) after the first
+        ("\u{200D}a", [false, false, false, false]),
+        ("rate%", [false, false, false, false]),
     ] {
         let got = [ident::rust_takes(n), ident::python_takes(n), ident::typescript_takes(n), ident::go_takes(n)];
         assert_eq!(got, takes, "{n:?} ({})", n.chars().map(|c| format!("U+{:04X}", c as u32)).collect::<Vec<_>>().join(" "));

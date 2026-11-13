@@ -2926,6 +2926,41 @@ policy unique
 | >5  | 2USD   |
 "##;
 
+const X_W121_CHAR: &str = r##"rule 面積の料金(area_fee) v1
+
+inputs
+  幅(width) : number  range >=0 <=100
+  奥行(depth) : number  range >=0 <=100
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+define 面積㎡ : number = 幅 * 奥行
+
+table 面積ごとの料金(fee_by_area)
+policy unique
+| 面積㎡ | -> 料金 |
+| <=50   | 5USD    |
+| >50    | 9USD    |
+"##;
+const X_W121_CHAR_EN: &str = r##"rule area_fee v1
+
+inputs
+  width : number  range >=0 <=100
+  depth : number  range >=0 <=100
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define area_m² : number = width * depth
+
+table fee_by_area
+policy unique
+| area_m² | -> fee |
+| <=50    | 5USD   |
+| >50     | 9USD   |
+"##;
+
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
@@ -5245,12 +5280,12 @@ pub fn ledger() -> Vec<Entry> {
             "W121",
             tr!("生成先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language"),
             tr!(
-                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります。また、規則と、規則が宣言する列挙の型の名前が同じになるとき。Go は規則の関数と列挙の型を一つのパッケージに並べ、Java は列挙を規則のクラスの中に置くので、どちらもコンパイルできません（`enums` のファイルから読む列挙は、そのファイルのパッケージやクラスの名前で書くので、ぶつかりません）。別名の無い名前が予約語のときも出ます。そのときは生成コードがどの言語でも名前の後ろに `_` を付けて書き（`class_`）、それがこの規則のほかの名前の識別子でもあれば、さらに番号を付けます（`class_2`）。書いた二つの名前の識別子（別名、無ければ名前）が違っても、どれかの生成先の綴りで一つになるときにも出ます。綴りは、値を書く lowerCamelCase、構造体のフィールドの PascalCase、`.proto` のフィールドの JSON の名前、列挙の値の大文字、予約語や言語が使う変数の名前に付ける `_`、大文字と小文字を区別しない列の名前（SQLite）、名前の先頭の 63 バイト（PostgreSQL）です。識別子をその生成先が使えないときも出ます。大文字で始まる名前を定数として読む言語、`_` で始まるフィールドを受け付けない `NamedTuple`、63 バイトより長い列の名前を切る PostgreSQL、`_` だけの名前を変数にもフィールドにもできない言語、列の名前に `true` と `false` を付けない SQLite、ASCII でない名前を取らない `.proto` です。書いた名前が、生成したコードが自分で使う名前と同じになるときにも出ます。当てはまった行と答えと要素の型、誤りの型、丸めなどの補助関数、局所変数、組み込みの名前、`.proto` のメッセージとフィールド（`DecideResponse` の `trace`）、列挙の値の `<型>_UNSPECIFIED`、Connect のサービスが読み込む名前、言語のコマンドが取ってあるパッケージの名前、プログラムが始まるファイルの名前です。どの生成先でそうなるかは、警告の注記が言います。どの言語でも一つに綴る二つの名前（二つの列挙の型など）は、E034 で止まります。",
-                "An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034."
+                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります。また、規則と、規則が宣言する列挙の型の名前が同じになるとき。Go は規則の関数と列挙の型を一つのパッケージに並べ、Java は列挙を規則のクラスの中に置くので、どちらもコンパイルできません（`enums` のファイルから読む列挙は、そのファイルのパッケージやクラスの名前で書くので、ぶつかりません）。別名の無い名前が予約語のときも出ます。そのときは生成コードがどの言語でも名前の後ろに `_` を付けて書き（`class_`）、それがこの規則のほかの名前の識別子でもあれば、さらに番号を付けます（`class_2`）。別名の無い名前に、生成先のどれかが名前に取らない字があるときも出ます（`差²` の `²`、`面積㎡` の `㎡`、`rate%` の `%`、Go が取らない母音記号）。そのときは生成コードがどの言語でもその字を `_` にして書き（`差_`）、同じように番号を付けることがあります。グループと `shape` の名前も同じです。公開される名前（入力、出力、並び、要素のフィールド）なら、ASCII の別名が要るので E011 で止まります。書いた二つの名前の識別子（別名、無ければ名前）が違っても、どれかの生成先の綴りで一つになるときにも出ます。綴りは、値を書く lowerCamelCase、構造体のフィールドの PascalCase、`.proto` のフィールドの JSON の名前、列挙の値の大文字、予約語や言語が使う変数の名前に付ける `_`、大文字と小文字を区別しない列の名前（SQLite）、名前の先頭の 63 バイト（PostgreSQL）です。識別子をその生成先が使えないときも出ます。大文字で始まる名前を定数として読む言語、`_` で始まるフィールドを受け付けない `NamedTuple`、63 バイトより長い列の名前を切る PostgreSQL、`_` だけの名前を変数にもフィールドにもできない言語、列の名前に `true` と `false` を付けない SQLite、ASCII でない名前を取らない `.proto` です。書いた名前が、生成したコードが自分で使う名前と同じになるときにも出ます。当てはまった行と答えと要素の型、誤りの型、丸めなどの補助関数、局所変数、組み込みの名前、`.proto` のメッセージとフィールド（`DecideResponse` の `trace`）、列挙の値の `<型>_UNSPECIFIED`、Connect のサービスが読み込む名前、言語のコマンドが取ってあるパッケージの名前、プログラムが始まるファイルの名前です。どの生成先でそうなるかは、警告の注記が言います。どの言語でも一つに綴る二つの名前（二つの列挙の型など）は、E034 で止まります。",
+                "An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). And for a name with no alias that has a character some target takes in no name (the `²` of `差²`, the `㎡` of `面積㎡`, the `%` of `rate%`, a vowel sign Go does not take): the generated code of every language then writes that character as `_` (`差_`), with a number after it in the same way, a group's and a shape's name alike. A public name (an input, an output, a sequence, a field of an element) of the kind takes an ASCII alias, and stops the check with E011. It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034."
             ),
             tr!(
-                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記に出ます。引数やローカル変数の名前は、その本体の外までは隠しません。そのため、引数やローカル変数の名前でこの警告が出るのは、予約語のときだけです。二つの名前がある生成先で一つの識別子になるなら、その生成先を使うときは、どちらかに別名を付けてください。生成先が使えない識別子や、生成したコードが自分で使う名前なら、使える別名を付けてください（大文字で始まらない、`_` で始まらない、63 バイト以下の、生成したコードが使わない別名）。使わない生成先なら、このままで構いません。",
-                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it."
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記に出ます。引数やローカル変数の名前は、その本体の外までは隠しません。そのため、引数やローカル変数の名前でこの警告が出るのは、予約語のときと、生成先が名前に取らない字があるときだけです。二つの名前がある生成先で一つの識別子になるなら、その生成先を使うときは、どちらかに別名を付けてください。生成先が使えない識別子や、生成したコードが自分で使う名前なら、使える別名を付けてください（大文字で始まらない、`_` で始まらない、63 バイト以下の、生成したコードが使わない別名）。使わない生成先なら、このままで構いません。",
+                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword or a character a target takes in no name. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it."
             ),
             X_W121,
             &["E009", "E011", "E034"],
@@ -5261,7 +5296,8 @@ pub fn ledger() -> Vec<Entry> {
         .also(tr!("PostgreSQL が一つの名前に切る二つの長い名前", "Two long names PostgreSQL cuts to one"), X_W121_LONG, X_W121_LONG_EN)
         .also(tr!("Ruby が定数として読む名前", "A name Ruby reads as a constant"), X_W121_RUBY, X_W121_RUBY_EN)
         .also(tr!("生成したコードが自分で使う名前", "A name the generated code uses itself"), X_W121_OWN, X_W121_OWN_EN)
-        .also(tr!("`_` だけの名前", "A name of `_` alone"), X_W121_BLANK, X_W121_BLANK_EN),
+        .also(tr!("`_` だけの名前", "A name of `_` alone"), X_W121_BLANK, X_W121_BLANK_EN)
+        .also(tr!("生成先が名前に取らない字のある名前", "A name with a character a target takes in no name"), X_W121_CHAR, X_W121_CHAR_EN),
         warn(
             "W115",
             tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),

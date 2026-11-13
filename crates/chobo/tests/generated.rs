@@ -263,10 +263,13 @@ fn e063_keeps_out_what_rustc_keeps_out() {
         skip(&format!("{why}; what E063 keeps out is not held to rustc"));
         return;
     }
-    let first = |c: char| !combining(c) && (c.is_alphabetic() || c == '_');
-    let after = |c: char| !combining(c) && (c.is_alphanumeric() || c == '_');
-    let ritsu_first = |c: char| c.is_alphabetic() || c == '_';
-    let ritsu_after = |c: char| c.is_alphanumeric() || c == '_';
+    // the characters chobo's lexer reads into a name: the letters and numbers of the tables'
+    // Unicode, whichever Rust built it (`syntax::name_start`, PLAN 7.134)
+    let (letter, letter_or_number) = (ritsu_emit::ident::is_letter, ritsu_emit::ident::is_letter_or_number);
+    let first = |c: char| !combining(c) && (letter(c) || c == '_');
+    let after = |c: char| !combining(c) && (letter_or_number(c) || c == '_');
+    let ritsu_first = |c: char| letter(c) || c == '_';
+    let ritsu_after = |c: char| letter_or_number(c) || c == '_';
     for (name, table, takes) in [("NOT_FIRST", xid::NOT_FIRST, &ritsu_first as &dyn Fn(char) -> bool), ("NOT_AFTER", xid::NOT_AFTER, &ritsu_after)] {
         for &(lo, hi) in table {
             for u in lo..=hi {

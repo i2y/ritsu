@@ -160,9 +160,9 @@ fn lex(src: &str) -> Result<Vec<Tok>, String> {
             i = j + 1;
             continue;
         }
-        if c.is_alphabetic() || c == '_' {
+        if ritsu_emit::ident::is_letter(c) || c == '_' {
             let start = i;
-            while i < s.len() && (s[i].is_alphanumeric() || s[i] == '_') {
+            while i < s.len() && (ritsu_emit::ident::is_letter_or_number(s[i]) || s[i] == '_') {
                 i += 1;
             }
             out.push(Tok::Ident(s[start..i].iter().collect()));

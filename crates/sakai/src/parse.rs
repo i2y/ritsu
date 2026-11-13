@@ -167,7 +167,8 @@ impl<'a> P<'a> {
             self.push("E002", l, col, tr!("`{name}` は予約語なので、名前にできません", "`{name}` is a keyword and cannot be a name"));
             return false;
         }
-        let bad = name.chars().enumerate().find(|(i, c)| !(c.is_alphanumeric() || *c == '_') || (*i == 0 && c.is_ascii_digit()));
+        // the letters and numbers of the tables' Unicode, whichever Rust built sakai
+        let bad = name.chars().enumerate().find(|(i, c)| !(ritsu_emit::ident::is_letter_or_number(*c) || *c == '_') || (*i == 0 && c.is_ascii_digit()));
         if name.is_empty() || bad.is_some() {
             let c = bad.map(|(_, c)| c.to_string()).unwrap_or_default();
             self.push("E001", l, col, tr!("名前「{name}」に使えない文字 `{c}` があります", "The name `{name}` has `{c}`, which a name cannot have"));

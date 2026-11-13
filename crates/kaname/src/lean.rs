@@ -168,12 +168,12 @@ struct Tok {
 
 /// The characters a name continues with, as Lean reads them.
 fn id_rest(c: char) -> bool {
-    c.is_alphanumeric() && !matches!(c, 'λ' | 'Π' | 'Σ') || matches!(c, '_' | '\'' | '!' | '?') || ('\u{2080}'..='\u{209C}').contains(&c) || ('\u{1D62}'..='\u{1D6A}').contains(&c)
+    ritsu_emit::ident::is_letter_or_number(c) && !matches!(c, 'λ' | 'Π' | 'Σ') || matches!(c, '_' | '\'' | '!' | '?') || ('\u{2080}'..='\u{209C}').contains(&c) || ('\u{1D62}'..='\u{1D6A}').contains(&c)
 }
 
 /// The characters a name starts with.
 fn id_start(c: char) -> bool {
-    (c.is_alphabetic() && !matches!(c, 'λ' | 'Π' | 'Σ')) || c == '_'
+    (ritsu_emit::ident::is_letter(c) && !matches!(c, 'λ' | 'Π' | 'Σ')) || c == '_'
 }
 
 /// Where a character literal that starts at `i` ends (its closing `'`): `'a'`, `'"'`, `'\n'`,

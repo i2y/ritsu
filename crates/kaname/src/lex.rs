@@ -129,15 +129,17 @@ pub struct Line {
     pub tokens: Vec<Token>,
 }
 
-/// Whether a character continues a name: letters of any script, digits, `_`.
+/// Whether a character continues a name: letters and numbers of any script, `_`. The letters and
+/// numbers are those of the tables' Unicode (ritsu-emit's `ident::is_letter_or_number`), whichever
+/// Rust built kaname.
 pub fn is_name_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
+    ritsu_emit::ident::is_letter_or_number(c) || c == '_'
 }
 
 /// Whether a character starts a name: a letter or `_` (rulec's reference §2), or ℃ and ℉, which a
 /// type's brackets take as a word (`temperature[℃]`).
 pub fn starts_name(c: char) -> bool {
-    c.is_alphabetic() || c == '_' || matches!(c, '℃' | '℉')
+    ritsu_emit::ident::is_letter(c) || c == '_' || matches!(c, '℃' | '℉')
 }
 
 /// A full-width digit as the digit it is.

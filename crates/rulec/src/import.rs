@@ -62,7 +62,7 @@ fn classify(raw: &str) -> Cell {
         // alphanumeric test alone turned a whole column of `120㎡` into an enum of strings.
         // They are folded to one spelling in `num_type`; this is what lets them reach it.
         let compat = |c: char| matches!(c, '℃' | '℉' | '㎡' | '㎢' | '㎠' | '㎥' | '㎤' | '㎖' | '°');
-        if unit.chars().all(|c| c.is_alphanumeric() || compat(c) || c == '%' || c == '_') {
+        if unit.chars().all(|c| ritsu_emit::ident::is_letter_or_number(c) || compat(c) || c == '%' || c == '_') {
             return Cell::Num(body[..end].to_string(), unit);
         }
     }

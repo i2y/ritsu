@@ -2094,6 +2094,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 // field — and one a language keeps as a keyword is written with `_` after it
                 // there (§15.210, `codegen::assign_identifiers`): said as an alias would be.
                 v.push((n.text.as_str(), &n.span, what, top, renamed));
+            } else if renamed && !crate::codegen::takes_everywhere(&n.text) {
+                // One with a character some language takes in no name is written with `_` for it
+                // (§15.311): said too.
+                v.push((n.text.as_str(), &n.span, what, top, renamed));
             }
         }
         // The rule's name and an enum's are types and functions, not renamed; an enum's values
@@ -2139,11 +2143,90 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 }
             }
         }
+        // A group's and a shape's names are no keyword's to move (§15.210), but one with no alias
+        // that has a character some language takes in no name is written with `_` for it, as a
+        // value's is (§15.311).
+        for (n, what) in f.groups.iter().map(|g| (&g.name, tr!("グループ", "group"))).chain(f.shapes.iter().map(|s| (&s.name, tr!("`shape`", "shape")))) {
+            if n.ascii.is_none() && !crate::codegen::takes_everywhere(&n.text) {
+                aliases.push((n.text.as_str(), &n.span, what, false, true));
+            }
+        }
+        // The public names, which E011 above holds to ASCII identifiers or their aliases: one with
+        // a character a language does not take is said there, and nothing is generated from it.
+        let public: std::collections::HashSet<&str> = f
+            .inputs
+            .iter()
+            .map(|i| i.name.text.as_str())
+            .chain(f.outputs.iter().map(|o| o.name.text.as_str()))
+            .chain(f.elements.iter().flat_map(|el| std::iter::once(el.name.text.as_str()).chain(el.fields.iter().map(|fd| fd.name.text.as_str()))))
+            .collect();
         let rule_alias = f.name.ascii.as_deref();
         // What the generated code writes for a name rulec makes an identifier for (§15.260): a
         // keyword's `_` after it, or a number after that where another name is written so already.
         let made = crate::codegen::made_identifiers(f);
         for (alias, sp, what, top, renames) in aliases {
+            // A name with a character some language takes in no name (§15.311): every language's
+            // generated code writes it with `_` for that character, and it compiles, under another
+            // name.
+            if renames && !crate::codegen::takes_everywhere(alias) {
+                // A name an `apply` or a contribution brings in (`<apply>:<name>`) takes the
+                // identifier its own file gives it (§15.260), and a public one is E011's.
+                if alias.contains(':') || public.contains(alias) {
+                    continue;
+                }
+                let base = crate::codegen::takeable(alias);
+                let written = made.values.get(alias).cloned().unwrap_or_else(|| base.clone());
+                let mut odd: Vec<String> = Vec::new();
+                for (i, ch) in alias.chars().enumerate() {
+                    let alone = if i == 0 { ch.to_string() } else { format!("_{ch}") };
+                    let shown = format!("`{ch}`");
+                    if !crate::codegen::takes_everywhere(&alone) && !odd.contains(&shown) {
+                        odd.push(shown);
+                    }
+                }
+                let odd = odd.join(if crate::i18n::ja() { "、" } else { ", " });
+                let langs: Vec<&str> = [
+                    ("Python", ritsu_emit::ident::python_takes(alias)),
+                    ("TypeScript", ritsu_emit::ident::typescript_takes(alias)),
+                    ("JavaScript", ritsu_emit::ident::typescript_takes(alias)),
+                    ("Rust", ritsu_emit::ident::rust_takes(alias)),
+                    ("Go", ritsu_emit::ident::go_takes(alias)),
+                ]
+                .into_iter()
+                .filter(|(_, t)| !t)
+                .map(|(l, _)| l)
+                .collect();
+                // `A・B・C` in Japanese, `A, B and C` in English, as the other W121 list them
+                let langs = match langs.split_last() {
+                    _ if crate::i18n::ja() => langs.join("・"),
+                    Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+                    _ => langs.join(""),
+                };
+                let mut d = Diag::warning(
+                    "W121",
+                    tr!(
+                        "`{alias}` の {odd} を名前に取らない言語があるので、生成コードでは `{written}` と書きます",
+                        "Some target languages take no {odd} in a name, so the generated code writes `{alias}` as `{written}`"
+                    ),
+                )
+                .at(at(sp.line))
+                .mark(sp.clone(), tr!("{what}の名前", "the {what}'s name"))
+                .note(tr!(
+                    "その字を名前に取らない言語には、{langs} があります。一つの名前を一つの識別子で書くので、生成コードは、どの言語でもこの名前を `{written}` と書きます。受け渡しする値の名前（入力の JSON のキーや記録）と、メッセージに書く名前は、宣言した名前のままです。",
+                    "Languages that take no such character in a name include {langs}. One name is one identifier, so every language's generated code writes this name as `{written}`; the name a value travels under (the keys of the input JSON, the records) and the name a message gives stay the one declared."
+                ));
+                if written != base {
+                    d = d.note(tr!(
+                        "`{base}` は、この規則のほかの名前の識別子です。一つの識別子で二つの名前は書けないので、生成コードは後ろに番号を付けます。",
+                        "`{base}` is the identifier of another name of this rule, and one identifier cannot be two names, so the generated code puts a number after it."
+                    ));
+                }
+                c.diags.push(d.note(tr!(
+                    "生成コードでの名前を自分で決めるなら、別名を付けてください（`{alias}(<別名>)`）。",
+                    "To choose the name the generated code uses yourself, give it an alias (`{alias}(<alias>)`)."
+                )));
+                continue;
+            }
             let mut kw: Vec<&str> = Vec::new();
             let mut hides: Vec<&str> = Vec::new();
             // The rule's alias also names a module or a package, which the standard library

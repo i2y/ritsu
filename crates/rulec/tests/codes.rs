@@ -144,10 +144,10 @@ fn 台帳の別の形の再現はその形を出す() {
     // heading, and the label of two rows (§15.262), and two enums whose types take one name; W121 with
     // two names Swift and Java spell alike, two SQLite reads as one column, two PostgreSQL cuts to
     // one, and a name Ruby reads as a constant (§15.263), a name the generated code uses itself and a
-    // name of `_` alone (§15.265); E011 with a sequence that has no ASCII alias (§15.265); E140
-    // with an output's range that cannot be checked (§15.268); E076 with each other way a rule and
-    // the contract it implements part (§15.274); E123 with inputs read with an aggregate of `from`
-    // (§15.281)
+    // name of `_` alone (§15.265), and a name with a character a target takes in no name (§15.311);
+    // E011 with a sequence that has no ASCII alias (§15.265); E140 with an output's range that cannot
+    // be checked (§15.268); E076 with each other way a rule and the contract it implements part
+    // (§15.274); E123 with inputs read with an aggregate of `from` (§15.281)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
     assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E076", "E102", "E103", "E108", "E121", "E123", "E140", "W121"]);
     // Each by its place among the entry's other forms; `None` is the last.
@@ -169,7 +169,8 @@ fn 台帳の別の形の再現はその形を出す() {
         ("W121", Some(2), [(Lang::En, "are one identifier in the code generated for SQL (PostgreSQL)"), (Lang::Ja, "は、SQL（PostgreSQL）の生成コードで同じ識別子になります")]),
         ("W121", Some(3), [(Lang::En, "`Base` starts with a capital letter, which the code generated for Ruby cannot take"), (Lang::Ja, "`Base` は大文字で始まるので、Ruby の生成コードでは使えません")]),
         ("W121", Some(4), [(Lang::En, "`trace` takes a name the code generated for Connect uses itself"), (Lang::Ja, "`記録` は、Connect の生成コードが自分で使う名前と同じになります")]),
-        ("W121", None, [(Lang::En, "`_` is a name the code generated for Rust, Go, Swift, Java and Wasm cannot take"), (Lang::Ja, "`_` は、Rust・Go・Swift・Java・Wasm の生成コードでは使えません")]),
+        ("W121", Some(5), [(Lang::En, "`_` is a name the code generated for Rust, Go, Swift, Java and Wasm cannot take"), (Lang::Ja, "`_` は、Rust・Go・Swift・Java・Wasm の生成コードでは使えません")]),
+        ("W121", None, [(Lang::En, "Some target languages take no `²` in a name, so the generated code writes `area_m²` as `area_m_`"), (Lang::Ja, "`面積㎡` の `㎡` を名前に取らない言語があるので、生成コードでは `面積_` と書きます")]),
         ("E011", None, [(Lang::En, "A public name has no ASCII alias"), (Lang::Ja, "公開される名前に ASCII の別名がありません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
         ("E123", None, [(Lang::En, "The contract lets `order.lines` through with values that break `constraint non_parts <= tools`"), (Lang::Ja, "契約は `order.lines` について、`constraint non_parts <= tools` を破る値も通します")]),

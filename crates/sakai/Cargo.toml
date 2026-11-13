@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
+ritsu-emit = { path = "../ritsu-emit" }
 ritsu-ports = { path = "../ritsu-ports" }
 ritsu-proto = { path = "../ritsu-proto" }
 # preserve_order: `sakai api` and `--format json` print their keys in the order DESIGN.md writes them

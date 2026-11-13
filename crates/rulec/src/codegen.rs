@@ -946,7 +946,8 @@ pub fn keyword_in(word: &str) -> Vec<&'static str> {
 /// fields of one element, the groups, the shapes, and what the items name (derived values,
 /// definitions, summaries, a fold's answer, the columns a table writes). Each occurrence, so one
 /// name may come more than once, with whether a keyword gives it `_` after it (§15.210), which it
-/// does not give a group's or a shape's.
+/// does not give a group's or a shape's. A character no language takes gives any of them `_` for
+/// it (§15.311).
 fn value_names(f: &RuleFile) -> Vec<(&Name, bool)> {
     let mut out: Vec<(&Name, bool)> = Vec::new();
     out.extend(f.inputs.iter().map(|i| (&i.name, true)));
@@ -1179,6 +1180,33 @@ fn free_identifier<const N: usize>(base: &str, after: usize, taken: &std::collec
     unreachable!("the numbers run out before the identifiers do")
 }
 
+/// Whether every language rulec writes code in takes `id` as a name by its characters: Python and
+/// Rust (XID_Start, then XID_Continue), TypeScript and JavaScript (ID_Start, then ID_Continue), and
+/// Go, whose names take no mark and no number but a decimal digit — by ritsu-emit's tables of
+/// Unicode 17.0 (`ident`). Java takes every name Go does, Swift every one of these, and Ruby and
+/// PHP every character outside ASCII. A name of rulec's is a letter or `_` and then any character
+/// up to the next that ends a word (`lex.rs`), so it can have one none of them takes: `²` (a
+/// number of No), `㎡`, a letter of a later Unicode.
+pub fn takes_everywhere(id: &str) -> bool {
+    ritsu_emit::ident::rust_takes(id) && ritsu_emit::ident::typescript_takes(id) && ritsu_emit::ident::go_takes(id)
+}
+
+/// The identifier made for a name with no alias that some language rulec writes does not take
+/// (§15.311): the name with `_` for each character that one does not take where it stands, `v`
+/// before one that is all `_`. `差²` is written `差_`, `℃値` `_値`, in every language alike, as a
+/// keyword's `_` is (§15.210): only the identifier moves.
+pub(crate) fn takeable(name: &str) -> String {
+    let s: String = name
+        .chars()
+        .enumerate()
+        .map(|(i, c)| {
+            let alone = if i == 0 { c.to_string() } else { format!("_{c}") };
+            if takes_everywhere(&alone) { c } else { '_' }
+        })
+        .collect();
+    if s.chars().all(|c| c == '_') { format!("v{s}") } else { s }
+}
+
 /// The identifiers rulec makes for a rule, by the name they are for, as [`assign_identifiers`]
 /// writes them in: the values, the tables and the enums. A name rulec does not make an identifier
 /// for — one with an alias, one written as itself — is not among them.
@@ -1195,8 +1223,10 @@ pub struct Made {
 /// A name the rule declares is written as its alias, else as itself, and those identifiers are the
 /// author's: they are taken first, as they are. Then come the ones rulec makes, in the order the
 /// names are declared: a name with no alias that a language rulec writes names in as they are
-/// keeps as a keyword, which takes `_` after it (§15.210), and everything an `apply` or a
-/// contribution brings in, which takes the identifier its own file gives it, after the apply's or
+/// keeps as a keyword, which takes `_` after it (§15.210), one with no alias that has a character
+/// some language rulec writes takes in no name, which takes `_` for that character ([`takeable`],
+/// §15.311; a group's and a shape's too, whose names no keyword moves), and everything an `apply`
+/// or a contribution brings in, which takes the identifier its own file gives it, after the apply's or
 /// the contribution's (`apply.rs`, `link.rs`). Each made one goes where no language spells it as
 /// one already taken — as it is, in camelCase, in PascalCase, with Java's and PHP's escapes, with
 /// case set aside, cut at PostgreSQL's 63 bytes — and is no language's keyword; else it takes the
@@ -1231,6 +1261,7 @@ pub fn made_identifiers(f: &RuleFile) -> Made {
             _ if brought_in(t) => brought.push((t, alias.get(t).map(|a| a.to_string()).unwrap_or_else(|| t.to_string()))),
             Some(a) => taken.extend(value_spellings(a)),
             None if escapes.contains(t) && t.is_ascii() && !keyword_in(t).is_empty() => escaped.push((t, format!("{t}_"))),
+            None if !takes_everywhere(t) => escaped.push((t, takeable(t))),
             None => taken.extend(value_spellings(t)),
         }
     }

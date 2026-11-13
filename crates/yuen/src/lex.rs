@@ -76,8 +76,10 @@ pub struct Line {
     pub bad: bool,
 }
 
+/// A letter or a number of the tables' Unicode (ritsu-emit's `ident::is_letter_or_number`),
+/// whichever Rust built yuen, or `_`.
 fn is_name_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
+    ritsu_emit::ident::is_letter_or_number(c) || c == '_'
 }
 
 fn digits_at(cs: &[char], i: usize, n: usize) -> bool {

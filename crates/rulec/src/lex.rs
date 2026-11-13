@@ -139,7 +139,7 @@ fn is_delim(c: char) -> bool {
 pub fn is_bare_word(s: &str) -> bool {
     let mut cs = s.chars();
     match cs.next() {
-        Some(c) if c.is_alphabetic() || c == '_' || matches!(c, '℃' | '℉') => !s.chars().any(is_delim),
+        Some(c) if ritsu_emit::ident::is_letter(c) || c == '_' || matches!(c, '℃' | '℉') => !s.chars().any(is_delim),
         _ => false,
     }
 }
@@ -371,7 +371,10 @@ pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag
         // ℃ and ℉ are the exception: Unicode files them as symbols rather than letters, and
         // a unit has to be writable where a type's brackets take a word (`temperature[℃]`)
         // as well as after a number. 円 and 銭 are Han and never needed this.
-        if !(c.is_alphabetic() || c == '_' || matches!(c, '℃' | '℉')) {
+        //
+        // A letter is one of the tables' Unicode (ritsu-emit's `ident::is_letter`), not of `char`'s,
+        // whose Unicode is the Rust's that built rulec: a source has the same names whichever did.
+        if !(ritsu_emit::ident::is_letter(c) || c == '_' || matches!(c, '℃' | '℉')) {
             return Err(Diag::error(
                 "E002",
                 tr!("読めない文字 U+{:04X} があります", "Unreadable character U+{:04X}", c as u32),

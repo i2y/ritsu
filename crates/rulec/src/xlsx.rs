@@ -90,7 +90,7 @@ fn read_format(code: &str) -> (Fmt, String) {
         return (Fmt::Date, String::new());
     }
     let lit = lit.trim().to_string();
-    if !lit.is_empty() && lit.chars().all(|c| c.is_alphanumeric()) {
+    if !lit.is_empty() && lit.chars().all(ritsu_emit::ident::is_letter_or_number) {
         return (Fmt::Plain, lit);
     }
     (Fmt::Plain, if yen { "円".into() } else { String::new() })

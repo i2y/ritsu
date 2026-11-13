@@ -5308,9 +5308,9 @@ Related codes: [E035](#e035), [E105](#e105)
 
 `warning` — **An identifier collides, or cannot be used, in a target language**
 
-**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034.
+**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). And for a name with no alias that has a character some target takes in no name (the `²` of `差²`, the `㎡` of `面積㎡`, the `%` of `rate%`, a vowel sign Go does not take): the generated code of every language then writes that character as `_` (`差_`), with a number after it in the same way, a group's and a shape's name alike. A public name (an input, an output, a sequence, a field of an element) of the kind takes an ASCII alias, and stops the check with E011. It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034.
 
-**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it.
+**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword or a character a target takes in no name. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it.
 
 **Smallest reproduction**:
 
@@ -5450,6 +5450,27 @@ policy unique
 | qty | -> fee |
 | <=5 | _      |
 | >5  | 2USD   |
+```
+
+**A name with a character a target takes in no name**:
+
+```rule
+rule area_fee v1
+
+inputs
+  width : number  range >=0 <=100
+  depth : number  range >=0 <=100
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define area_m² : number = width * depth
+
+table fee_by_area
+policy unique
+| area_m² | -> fee |
+| <=50    | 5USD   |
+| >50     | 9USD   |
 ```
 
 Related codes: [E009](#e009), [E011](#e011), [E034](#e034)
