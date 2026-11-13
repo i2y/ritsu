@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.55.1",
+  "ritsu": "0.55.2",
   "old": {
     "path": "example.com/acme/pricing@1.0.0",
     "module": "example.com/acme/pricing",

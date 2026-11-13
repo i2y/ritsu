@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.55.1",
+  "ritsu": "0.55.2",
   "flow": "orders/place_order.flow",
   "scenario": "orders/scenarios/charged.json",
   "target": "reference",
