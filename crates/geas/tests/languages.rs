@@ -9,6 +9,10 @@
 //! index as a tree (`git add -A`, `git write-tree`, no commit), with the paths a
 //! root holding `examples/<example>` gives them; `change.plain.diff` is
 //! `diff -u <file>.orig <file>` from the same root.
+//!
+//! Which lines are code is the compiler's to say: rustc 1.100 maps fewer lines of tally-rust than
+//! the rustcs before it (DESIGN §7.7), so a rustc before 1.100 is held to the goldens of
+//! `tally-rust/before-rustc-1.100/`, and 1.100 and later to those beside it.
 
 mod common;
 use common::*;
@@ -52,6 +56,21 @@ fn build(e: &Example, s: &Scratch) {
     };
     let out = cmd.current_dir(&dir).stdin(Stdio::null()).output().expect("start the build");
     assert!(out.status.success(), "the build of {} failed:\n{}", e.name, String::from_utf8_lossy(&out.stderr));
+}
+
+/// The goldens of an example: those of a rustc before 1.100 for tally-rust under one (DESIGN §7.7).
+fn golden_dir(e: &Example) -> String {
+    if e.name == "tally-rust" && rustc_minor().is_some_and(|m| m < 100) {
+        format!("en/languages/{}/before-rustc-1.100", e.name)
+    } else {
+        format!("en/languages/{}", e.name)
+    }
+}
+
+/// The minor version of the rustc on the PATH: 94 of `rustc 1.94.1 (…)`.
+fn rustc_minor() -> Option<u32> {
+    let out = Command::new("rustc").arg("--version").stdin(Stdio::null()).output().ok()?;
+    String::from_utf8_lossy(&out.stdout).split_whitespace().nth(1)?.split('.').nth(1)?.parse().ok()
 }
 
 /// Whether the example's toolchain is here; prints the SKIP line when it is not, or when the
@@ -116,7 +135,7 @@ fn end_to_end(e: &Example) {
         env.extend(go_env(&s));
     }
     let env_ref: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    let golden_dir = format!("en/languages/{}", e.name);
+    let golden_dir = golden_dir(e);
 
     // the record of the code before the change
     build(e, &s);

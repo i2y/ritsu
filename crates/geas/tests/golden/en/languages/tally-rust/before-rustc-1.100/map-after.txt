@@ -1,0 +1,6 @@
+ok 1 - adds its numbers
+ok 2 - adds nothing to zero
+ok 3 - refuses what is not a number
+ok 4 - says how to use it
+4 claims · 4 ok · 0 failed · journal: examples/tally-rust/.geas/tally.journal.jsonl
+map: 1 file · 25 lines of code, 17 run by some claim → examples/tally-rust/.geas/tally.map.jsonl

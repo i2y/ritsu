@@ -1,0 +1,14 @@
+diff: change.diff · records: before.map.jsonl (the code before the change), examples/tally-rust/.geas/tally.map.jsonl (the code after the change)
+claims the change touches:
+  1 - adds its numbers
+      examples/tally-rust/src/main.rs: 24
+      examples/tally-rust/src/main.rs: removed 25-28
+  2 - adds nothing to zero
+      examples/tally-rust/src/main.rs: 24
+      examples/tally-rust/src/main.rs: removed 25-28
+  4 - says how to use it
+      examples/tally-rust/src/main.rs: 13
+      examples/tally-rust/src/main.rs: removed 13-14
+changed code no claim runs:
+  examples/tally-rust/src/main.rs: 25
+4 claims · 3 touched · 1 changed line no claim runs
