@@ -1,5 +1,5 @@
 {
-  "dandori": "0.55.0",
+  "dandori": "0.55.1",
   "file": "hotel.flow",
   "workflow": {
     "name": "hotel_stay",

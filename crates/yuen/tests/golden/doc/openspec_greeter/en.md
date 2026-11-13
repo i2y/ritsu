@@ -1,6 +1,6 @@
 # openspec_greeter — where the requirements come from
 
-yuen 0.55.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.55.1 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `greeter.req` (openspec_greeter v1, `sha256:54e1d167deb692f2`)
 

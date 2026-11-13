@@ -503,7 +503,7 @@ optional. A sequence an `elements` declaration reads is an array of objects, and
 can give it. With `--format json`:
 
 ```json
-{"rulec":"0.55.0","file":"rules/member_tier_shipping.rule","rule":"member_tier_shipping",
+{"rulec":"0.55.1","file":"rules/member_tier_shipping.rule","rule":"member_tier_shipping",
  "input":{"member":"silver","campaign":"basic","subtotal":30},
  "answer":{"shipping":5,"effective":"silver","lifted":false}}
 ```
@@ -513,7 +513,7 @@ on the wire. An input the door refuses has no `answer`; it has `refused` and `er
 two keys of a line of `vectors/<alias>.refused.jsonl`:
 
 ```json
-{"rulec":"0.55.0","file":"rules/member_tier_shipping.rule","rule":"member_tier_shipping",
+{"rulec":"0.55.1","file":"rules/member_tier_shipping.rule","rule":"member_tier_shipping",
  "input":{"member":"silver","campaign":"platinum","subtotal":30},
  "refused":"input","error":"campaign is out of range"}
 ```
@@ -1083,7 +1083,7 @@ produces runs those very functions, so what it prints is the theorems applied to
 document. The tests hold both to forged certificates as well as to the corpus.
 
 ```json
-{"v":1,"rule":"coupon_stacking","alias":"coupon_stacking","version":"1","source_sha256":"200912693e01…","rulec":"0.55.0",
+{"v":1,"rule":"coupon_stacking","alias":"coupon_stacking","version":"1","source_sha256":"200912693e01…","rulec":"0.55.1",
  "ranges":{"disc_a":["0","100000"],"disc_b":["0","100000"],"rest_a":["-100000","1000000"],"rest_b":["-200000","1000000"],"total":["0","1000000"]},
  "constraints":[],"inputs":["total","disc_a","disc_b"],"walks":[],
  "values":[{"name":"rest_a","of":"derive","type":"money[JPY, incl_tax]","expr":{"op":"-","l":{"name":"total"},"r":{"name":"disc_a"}},
@@ -1294,7 +1294,7 @@ parsed form instead. A rule that does not pass `check` produces no certificate a
 ```console
 $ rulec certificate rules/health_insurance_premium.rule > cert.json
 $ python3 tools/recheck.py --rule rules/health_insurance_premium.rule cert.json
-health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — certificate by rulec 0.55.0
+health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — certificate by rulec 0.55.1
   units: 4 values keep the type the rule declares
   ranges: 2 columns a table writes numbers into hold every value their rows write
   int64: 4 values fit, and 10 integers on the way to them
@@ -1307,7 +1307,7 @@ health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — 
   every claim this program states was proved
 
 $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/health_insurance_premium.rule cert.json
-health_insurance_premium (0.55.0), re-checked against the Lean proofs
+health_insurance_premium (0.55.1), re-checked against the Lean proofs
   ranges: 2 columns a table writes numbers into hold every value their rows write
   values: 4 typed, 4 held to int64, and 10 integers on the way to them
   held: 2 columns and 3 outputs fit int64 where the code holds them

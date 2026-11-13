@@ -1,5 +1,5 @@
 {
-  "sekisho": "0.55.0",
+  "sekisho": "0.55.1",
   "old": {
     "file": "tests/diff/held.gate",
     "name": "held",
