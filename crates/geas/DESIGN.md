@@ -593,6 +593,16 @@ the record routes review and never narrows acceptance.
   run when the block its `}` closes ran, whatever the new condition does:
   in `tests/changes/tally-node`, the line that adds a `/health` route is
   shown as touching the two claims that add a number.
+- Which lines are code is the compiler's to say. rustc 1.100 maps no line
+  to the pattern of a match arm whose body is a block, which rustc 1.94 to
+  1.99 map to the pattern's line, counted when the arm is tried, nor to
+  the `}` that ends the arm's block: in tally-rust, `Err(why) => {`,
+  `"add" => {`, `other => {` and the `}` after `println!("{sum}");` are
+  code before 1.100 and not with it, and the example has 24 lines of code
+  before the change where it had 28 (measured, 2026-11-13).
+  `tests/languages.rs` holds a rustc before 1.100 to the goldens of
+  `tests/golden/en/languages/tally-rust/before-rustc-1.100/`, and 1.100
+  and later to those beside it.
 - Python and Node report only the files a run loaded; a file nothing
   loaded is known by its extension, not by its lines.
 - A process whose runtime the switches do not reach (a Go binary built

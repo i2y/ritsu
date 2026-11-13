@@ -1,11 +1,14 @@
 # The tables of the characters of the targets' names
 
 `src/xid.rs` is generated from two files of the Unicode Character Database 17.0.0, the version
-of the identifiers of rustc 1.94 to 1.97. A name of ritsu's languages takes a letter (Alphabetic)
-or `_` first, then letters, numbers (Nd, Nl, No) and `_`. For each kind of name a target takes,
-the file holds the characters of those that the target's names do not, first and after the
-first: Rust's and Python's (XID_Start and XID_Continue), TypeScript's (ID_Start and ID_Continue)
-and Go's (the letters, Lu, Ll, Lt, Lm and Lo, and the decimal digits, Nd). chobo's E063 stops a
+of the identifiers of rustc 1.94 to 1.100. A name of ritsu's languages takes a letter (Alphabetic)
+or `_` first, then letters, numbers (Nd, Nl, No) and `_`. The file holds the letters and the
+numbers of 17.0 (`LETTERS`, `NUMBERS`), and for each kind of name a target takes, the characters
+of those that the target's names do not, first and after the first: Rust's and Python's
+(XID_Start and XID_Continue), TypeScript's (ID_Start and ID_Continue) and Go's (the letters, Lu,
+Ll, Lt, Lm and Lo, and the decimal digits, Nd). The checks read the letters and numbers of the
+file, not those of `char`: the `char` of rustc 1.100 is of Unicode 18.0 and calls letters 12,833
+characters that rustc 1.100's names do not take, nor any target's yet. chobo's E063 stops a
 build on a name with one of the client's language, and its Rust clients read Rust's to write their
 names (chobo's DESIGN.md 14 and 18). kaname writes a name of a function's code as it is where the
 target takes it, and names it `v` where not (kaname's DESIGN.md 36.3).
@@ -30,9 +33,10 @@ and every one it may hold after its first, through `cargo check` where E063 lets
 one E063 keeps out is an error that names it. kaname's `tests/idents.rs` puts every character a
 name of kaname's may hold, first and after the first, through rustc, Python, tsc and Node, and Go,
 and each tool takes the names its table lets in and none it keeps out, but for the characters
-the tool's own Unicode does not have yet. When a new rustc and its `char` read a newer Unicode, a
-character on which E063 and rustc part fails the first test, and the tables are made again from
-the newer files.
+the tool's own Unicode does not have yet. When the identifiers of a new rustc read a newer
+Unicode, rustc takes characters E063 keeps out, the two tests fail, and the tables are made again
+from the newer files. A `char` that reads a newer Unicode alone, as rustc 1.100's does, changes
+nothing: its new letters are in neither table of letters and numbers, and E063 keeps them out.
 
 The Unicode Character Database is under the Unicode License v3;
 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES) gives it.
