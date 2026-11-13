@@ -36,12 +36,16 @@ fn names() {
 }
 
 /// The characters each target takes in a name (src/xid.rs): each table is ranges in order, apart,
-/// of characters a name of ritsu's languages holds where the table is read; and names that part
-/// the targets. kaname's tests/idents.rs holds the tables to the targets' tools.
+/// of characters a name of ritsu's languages holds where the table is read; the letters and numbers
+/// of the tables' Unicode are those of a `char` of it, and a `char` of a later one has them all; and
+/// names that part the targets. kaname's tests/idents.rs holds the tables to the targets' tools.
 #[test]
 fn the_characters_of_names() {
     use ritsu_emit::xid;
+    let held = |table: &[(u32, u32)], c: char| table.binary_search_by(|&(lo, hi)| if hi < c as u32 { std::cmp::Ordering::Less } else if lo > c as u32 { std::cmp::Ordering::Greater } else { std::cmp::Ordering::Equal }).is_ok();
     for (name, table, first) in [
+        ("LETTERS", xid::LETTERS, true),
+        ("NUMBERS", xid::NUMBERS, false),
         ("NOT_FIRST", xid::NOT_FIRST, true),
         ("NOT_AFTER", xid::NOT_AFTER, false),
         ("ID_NOT_FIRST", xid::ID_NOT_FIRST, true),
@@ -58,6 +62,14 @@ fn the_characters_of_names() {
         }
     }
     assert_eq!(xid::UNICODE, (17, 0, 0));
+    let later = (0..=0x10FFFFu32).filter_map(char::from_u32).filter(|&c| c.is_alphanumeric() && !held(xid::LETTERS, c) && !held(xid::NUMBERS, c)).count();
+    let alphabetic = (0..=0x10FFFFu32).filter_map(char::from_u32).filter(|&c| c.is_alphabetic() != held(xid::LETTERS, c)).count();
+    if char::UNICODE_VERSION == xid::UNICODE {
+        assert_eq!((later, alphabetic), (0, 0), "a `char` of the tables' Unicode has other letters or numbers");
+    } else {
+        // the loop above holds that a later one keeps every letter and number of the tables'
+        assert!(char::UNICODE_VERSION > xid::UNICODE, "the `char` of Unicode {:?} is older than the tables'", char::UNICODE_VERSION);
+    }
     // a name, and whether Rust, Python, TypeScript and Go take it
     for (n, takes) in [
         ("a_1", [true, true, true, true]),
@@ -72,6 +84,8 @@ fn the_characters_of_names() {
         ("a\u{345}", [true, true, true, false]),  // a combining letter, Mn
         ("\u{FF11}x", [false, false, false, false]),
         ("℃", [false, false, false, false]),
+        ("\u{558}", [false, false, false, false]),  // a letter of Unicode 18.0, which no target's names take yet
+        ("a\u{58B}", [false, false, false, false]),
     ] {
         let got = [ident::rust_takes(n), ident::python_takes(n), ident::typescript_takes(n), ident::go_takes(n)];
         assert_eq!(got, takes, "{n:?} ({})", n.chars().map(|c| format!("U+{:04X}", c as u32)).collect::<Vec<_>>().join(" "));

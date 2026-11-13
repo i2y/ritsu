@@ -74,11 +74,14 @@ pub fn go_takes(name: &str) -> bool {
     takes(name, crate::xid::GO_NOT_FIRST, crate::xid::GO_NOT_AFTER)
 }
 
-/// Whether a name begins with a letter or `_` that `not_first` does not hold, and goes on with
-/// letters, numbers and `_` that `not_after` does not.
+/// Whether a name begins with `_` or a letter that `not_first` does not hold, and goes on with `_`,
+/// letters and numbers that `not_after` does not: the letters and numbers of the tables' Unicode
+/// ([`crate::xid::LETTERS`], [`crate::xid::NUMBERS`]), not those of `char`, whose Unicode may be
+/// later and have letters no target's names take yet.
 fn takes(name: &str, not_first: &[(u32, u32)], not_after: &[(u32, u32)]) -> bool {
+    let letter = |c| held(crate::xid::LETTERS, c);
     let mut cs = name.chars();
-    matches!(cs.next(), Some(c) if c == '_' || (c.is_alphabetic() && !held(not_first, c))) && cs.all(|c| c == '_' || (c.is_alphanumeric() && !held(not_after, c)))
+    matches!(cs.next(), Some(c) if c == '_' || (letter(c) && !held(not_first, c))) && cs.all(|c| c == '_' || ((letter(c) || held(crate::xid::NUMBERS, c)) && !held(not_after, c)))
 }
 
 /// Whether one of the ranges of `table` holds `c`.

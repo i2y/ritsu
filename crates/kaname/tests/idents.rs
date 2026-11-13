@@ -140,7 +140,7 @@ fn rustc_takes_the_names_of_rust_s_table() {
     assert!(unnamed.is_empty(), "rustc takes {} of the names the table keeps out: {}", unnamed.len(), unnamed.join(" "));
     let rustc = ritsu_testkit::tools::version("rustc", "--version");
     let unicode = format!("{}.{}.{}", char::UNICODE_VERSION.0, char::UNICODE_VERSION.1, char::UNICODE_VERSION.2);
-    report(&rustc, &format!("Unicode {unicode}"), names.len(), (let_in, kept_out.len(), 0));
+    report(&rustc, &format!("its char of Unicode {unicode}"), names.len(), (let_in, kept_out.len(), 0));
 }
 
 #[test]

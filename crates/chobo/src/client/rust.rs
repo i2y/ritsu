@@ -88,15 +88,16 @@ pub fn ident(s: &str) -> String {
 }
 
 /// Whether a Rust name may begin with `c`, a character a name of chobo's may hold: `_`, or a letter
-/// that is XID_Start (xid.rs keeps out the letters that are not).
+/// of xid.rs's Unicode that is XID_Start (xid.rs keeps out the letters that are not). A letter only
+/// a later Unicode has, as the `char` of rustc 1.100 does, is not: rustc's names do not take it.
 pub fn begins(c: char) -> bool {
-    c == '_' || (c.is_alphabetic() && !has(xid::NOT_FIRST, c))
+    c == '_' || (has(xid::LETTERS, c) && !has(xid::NOT_FIRST, c))
 }
 
 /// Whether a Rust name may hold `c` after its first, `c` a character a name of chobo's may hold:
-/// `_`, or a letter or a number that is XID_Continue.
+/// `_`, or a letter or a number of xid.rs's Unicode that is XID_Continue.
 pub fn holds(c: char) -> bool {
-    c == '_' || (c.is_alphanumeric() && !has(xid::NOT_AFTER, c))
+    c == '_' || ((has(xid::LETTERS, c) || has(xid::NUMBERS, c)) && !has(xid::NOT_AFTER, c))
 }
 
 /// Whether one of the ranges of `table` has `c`.

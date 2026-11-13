@@ -10,9 +10,12 @@ with XID_Start or `_`, and goes on with XID_Continue; one of TypeScript's begins
 Ll, Lt, Lm and Lo) or `_`, and goes on with letters, decimal digits (Nd) and `_`. For each of the
 three, the script writes the characters of the first kind that are not of the target's, as two
 tables of ranges: those a name of the target does not begin with, and those it does not hold
-after its first. chobo's E063 reads the tables of each client's language, its Rust clients those of
-Rust, and kaname those of the target it writes. The files are not kept in the repository; tools/xid/README.md says
-where to get them, and the script refuses any but the two it was made from (their SHA-256).
+after its first. It writes the letters and the numbers of this version too: the `char` of a
+later rustc calls letters characters this version does not have, which no target's names take
+yet, so the checks read these and not `char`. chobo's E063 reads the tables of each client's
+language, its Rust clients those of Rust, and kaname those of the target it writes. The files are
+not kept in the repository; tools/xid/README.md says where to get them, and the script refuses any
+but the two it was made from (their SHA-256).
 """
 import hashlib
 import sys
@@ -92,7 +95,16 @@ def main():
          first - letter - {UNDERSCORE}, after - letter - gc["Nd"] - {UNDERSCORE}),
     ]
     v = ".".join(str(n) for n in VERSION)
-    tables, counts = [], []
+    letter_lines, letter_ranges = table("LETTERS", [
+        f"The letters of Unicode {v} (Alphabetic): what a name of ritsu's languages may begin with, `_`",
+        "aside. The `char` of a later Unicode has more, which no target's names take yet.",
+    ], core["Alphabetic"])
+    number_lines, number_ranges = table("NUMBERS", [
+        f"The numbers of Unicode {v} (Nd, Nl, No): with the letters, what a name of ritsu's languages may",
+        "hold after its first, `_` aside.",
+    ], numeric)
+    tables = ["", *letter_lines, "", *number_lines]
+    counts = [f"The letters: {len(core['Alphabetic'])} characters in {letter_ranges} ranges; the numbers: {len(numeric)} in {number_ranges}"]
     for prefix, whose, begins, holds, not_first, not_after in targets:
         first_lines, first_ranges = table(f"{prefix}NOT_FIRST", [
             f"The letters a name of ritsu's languages may begin with that a name of {whose} may not:",
@@ -105,13 +117,16 @@ def main():
         tables += ["", *first_lines, "", *after_lines]
         counts.append(f"{whose}: {len(not_first)} characters in {first_ranges} ranges begin none, {len(not_after)} in {after_ranges} are in none")
     lines = [
-        "//! The characters a name of ritsu's languages may hold that a name of a target may not. A name of",
-        "//! ritsu's languages takes a letter (Alphabetic) or `_` first, then letters, numbers (Nd, Nl, No)",
-        "//! and `_`. Rust and Python take XID_Start or `_` first, then XID_Continue; TypeScript ID_Start or",
-        "//! `_`, then ID_Continue; Go a letter (Lu, Ll, Lt, Lm, Lo) or `_`, then letters, decimal digits",
-        "//! (Nd) and `_`. chobo's E063 reads the tables of each client's language, its Rust clients those of",
-        "//! Rust, and kaname those of the target it writes ([`crate::ident::rust_takes`] and the three beside",
-        "//! it). Unicode 17.0 is the version of the identifiers of rustc 1.94 to 1.97, and of their `char`.",
+        "//! The characters a name of ritsu's languages may hold, and those of them a name of a target may",
+        "//! not. A name of ritsu's languages takes a letter (Alphabetic) or `_` first, then letters, numbers",
+        "//! (Nd, Nl, No) and `_`. Rust and Python take XID_Start or `_` first, then XID_Continue; TypeScript",
+        "//! ID_Start or `_`, then ID_Continue; Go a letter (Lu, Ll, Lt, Lm, Lo) or `_`, then letters, decimal",
+        "//! digits (Nd) and `_`. chobo's E063 reads the tables of each client's language, its Rust clients",
+        "//! those of Rust, and kaname those of the target it writes ([`crate::ident::rust_takes`] and the",
+        "//! three beside it). Unicode 17.0 is the version of the identifiers of rustc 1.94 to 1.100, and of",
+        "//! the `char` of rustc 1.94 to 1.99. The `char` of rustc 1.100 is of Unicode 18.0, whose new letters",
+        "//! rustc's names do not take, so the checks read [`LETTERS`] and [`NUMBERS`] and not `char`: a",
+        "//! character Unicode 17.0 does not have is in no target's names.",
         "//!",
         "//! Written by tools/xid/make_table.py; do not edit. The files it was made from, of the Unicode",
         f"//! Character Database {v}:",
