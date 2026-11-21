@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が shared/company.ringi（sha256:0b7a78fdf23df823）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が shared/company.ringi（sha256:0b7a78fdf23df823）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # Company
 
 The shape of the company's organization (fictional): the positions from the lowest, the kinds of teams from the widest, and the folder that holds the data of each version

@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.55.2",
+  "ritsu": "0.56.0",
   "base": {
     "rev": "one"
   },
@@ -76,7 +76,7 @@
             "file": "ゲート/上限.gate",
             "tool": "sekisho",
             "result": {
-              "sekisho": "0.55.2",
+              "sekisho": "0.56.0",
               "old": {
                 "file": "@desk@1.0.0/ゲート/上限.gate",
                 "name": "上限",
@@ -245,7 +245,7 @@
             "file": "暦/事務所.cal",
             "tool": "koyomi",
             "result": {
-              "koyomi": "0.55.2",
+              "koyomi": "0.56.0",
               "kind": "calendar",
               "old": {
                 "file": "@desk@1.0.0/暦/事務所.cal",
@@ -312,7 +312,7 @@
             "file": "暦/支払日.cal",
             "tool": "koyomi",
             "result": {
-              "koyomi": "0.55.2",
+              "koyomi": "0.56.0",
               "kind": "dates",
               "old": {
                 "file": "@desk@1.0.0/暦/支払日.cal",
@@ -520,7 +520,7 @@
           "file": "請求.cal",
           "tool": "koyomi",
           "result": {
-            "koyomi": "0.55.2",
+            "koyomi": "0.56.0",
             "kind": "dates",
             "old": {
               "file": "請求.cal (one の lock)",
@@ -594,7 +594,7 @@
           "file": "返金.gate",
           "tool": "sekisho",
           "result": {
-            "sekisho": "0.55.2",
+            "sekisho": "0.56.0",
             "old": {
               "file": "返金.gate (one の lock)",
               "name": "返金",

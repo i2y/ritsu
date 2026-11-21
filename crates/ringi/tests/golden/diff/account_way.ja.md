@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が account_old.ringi → account_new.ringi（sha256:e02e1a573cd8b3ff → 35eeade4c7b12ab8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が account_old.ringi → account_new.ringi（sha256:e02e1a573cd8b3ff → 35eeade4c7b12ab8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # アカウントの申請の変更
 
 申請の種類 `account`（v1）：`account_old.ringi` → `account_new.ringi`

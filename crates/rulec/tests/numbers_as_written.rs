@@ -356,7 +356,7 @@ fn the_sweep_finds_each_wrong_form() {
     assert_eq!(found("a total of 10_00JPY"), ["10_00"]);
     let fine = [
         "the stored integer reaches 10_000_000_000_000_000_000, past int64",
-        "pay_day = 2026-07-10 at 09:33, line 12:5, sha256:5ac7630d669d, 511051f7, version 0.55.2",
+        "pay_day = 2026-07-10 at 09:33, line 12:5, sha256:5ac7630d669d, 511051f7, version 0.56.0",
         "`,` separates the members of a set, so `2,000g` reads as two values; write `range <=10000000円`",
         "E10001, x100000, 1/100000, 5000JPY, 1000, 0.25%",
     ];

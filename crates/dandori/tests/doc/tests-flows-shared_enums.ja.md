@@ -63,7 +63,7 @@ flowchart TD
 <details>
 <summary><code>categories</code> · expense_categories v1 · <code>rules/expense_categories.rule</code></summary>
 
-<!-- rulec 0.55.2 が expense_categories.rule (sha256:2294d536388a) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.56.0 が expense_categories.rule (sha256:2294d536388a) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 列挙 expense_categories v1
 
 The categories of an expense claim, read by shared_enums.flow and by the two rules it calls, each with import enum
@@ -81,7 +81,7 @@ The categories of an expense claim, read by shared_enums.flow and by the two rul
 <details>
 <summary><code>manager</code> · needs_manager v1 · <code>rules/needs_manager.rule</code></summary>
 
-<!-- rulec 0.55.2 が needs_manager.rule (sha256:30b27a432b0b) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.56.0 が needs_manager.rule (sha256:30b27a432b0b) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 needs_manager v1
 
 Whether a manager reviews a claim, and the category it is reviewed as: training is reviewed as a purchase. Reads its category from expense_categories.rule
@@ -140,7 +140,7 @@ Whether a manager reviews a claim, and the category it is reviewed as: training 
 <details>
 <summary><code>accounting</code> · needs_accounting v1 · <code>rules/needs_accounting.rule</code></summary>
 
-<!-- rulec 0.55.2 が needs_accounting.rule (sha256:99c4cb5f5f21) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.56.0 が needs_accounting.rule (sha256:99c4cb5f5f21) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 needs_accounting v1
 
 Whether accounting checks a claim of a category. Reads its category from expense_categories.rule

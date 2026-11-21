@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が expense.ja.ringi（sha256:6fcdf162a1b59902）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が expense.ja.ringi（sha256:6fcdf162a1b59902）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # 経費の申請：いちばん長くかかる場合
 
 ファイル：`expense.ja.ringi`（申請の種類 `expense_ja` の版 1、sha256:6fcdf162a1b59902）

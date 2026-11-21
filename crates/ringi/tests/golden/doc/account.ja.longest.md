@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が account.ja.ringi（sha256:ba7d7372d9db0568）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が account.ja.ringi（sha256:ba7d7372d9db0568）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # アカウントの申請：いちばん長くかかる場合
 
 ファイル：`account.ja.ringi`（申請の種類 `account_ja` の版 1、sha256:ba7d7372d9db0568）

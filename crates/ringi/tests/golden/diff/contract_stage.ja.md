@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が contract_old.ringi → contract_new.ringi（sha256:8c5d7cdd20adf208 → 758f3dd25544c8e8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が contract_old.ringi → contract_new.ringi（sha256:8c5d7cdd20adf208 → 758f3dd25544c8e8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # 契約の確認の変更
 
 申請の種類 `contract`（v1 → v2）：`contract_old.ringi` → `contract_new.ringi`

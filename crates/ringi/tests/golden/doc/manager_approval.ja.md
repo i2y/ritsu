@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が shared/manager_approval.ringi（sha256:2f5a89113095fbf9）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が shared/manager_approval.ringi（sha256:2f5a89113095fbf9）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # Approval by the manager
 
 A route several requests share (fictional rules): the requester's manager approves, and the head of the department too when the request says it is long

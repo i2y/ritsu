@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が leave_old.ringi → leave_new.ringi（sha256:89a0c0eea22ee892 → 4fc8778c17fca43a）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が leave_old.ringi → leave_new.ringi（sha256:89a0c0eea22ee892 → 4fc8778c17fca43a）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # 休暇の申請の変更
 
 申請の種類 `leave`（v1 → v2）：`leave_old.ringi` → `leave_new.ringi`

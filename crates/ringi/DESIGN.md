@@ -3493,7 +3493,7 @@ flow は、サーバーの「チケットを開く」操作（`submit_<名前>`�
 ```text
 $ ritsu ringi check E301_no_row_over_100000_yen.ringi --format json --root .
 {
-  "ringi": "0.55.2",
+  "ringi": "0.56.0",
   "file": "E301_no_row_over_100000_yen.ringi",
   "ok": false,
   "summary": null,
@@ -3530,7 +3530,7 @@ rulec に尋ねて ringi が出す E105 と `only when` の E306 も、`witness`
 ```text
 $ ritsu ringi check E004_a_cell_not_in_who.ringi --format json --root .
 {
-  "ringi": "0.55.2",
+  "ringi": "0.56.0",
   "file": "E004_a_cell_not_in_who.ringi",
   "ok": false,
   "summary": null,
@@ -3756,7 +3756,7 @@ $ ritsu ringi simulate examples/purchase.ja.ringi --requester e3101 --on 2026-11
 ```text
 $ ritsu ringi api expense.ja.ringi --root .      （`examples/` で。頭と、フィールド一つ、物一つ、日を読むオフセット、`ticket` の頭と `time` と `holds` を抜いた）
 {
-  "ringi": "0.55.2",
+  "ringi": "0.56.0",
   "file": "expense.ja.ringi",
   "kind": "request",
   "name": "expense_ja",

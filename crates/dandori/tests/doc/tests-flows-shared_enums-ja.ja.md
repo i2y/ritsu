@@ -63,7 +63,7 @@ flowchart TD
 <details>
 <summary><code>区分表</code> · 経費の区分 v1 · <code>rules/経費の区分.rule</code></summary>
 
-<!-- rulec 0.55.2 が 経費の区分.rule (sha256:4b9f3eda9e3b) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.56.0 が 経費の区分.rule (sha256:4b9f3eda9e3b) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 列挙 経費の区分 v1
 
 経費の申請の区分。shared_enums.ja.flow と、そこから呼ぶ二つの規則が、それぞれ import enum で読む
@@ -81,7 +81,7 @@ flowchart TD
 <details>
 <summary><code>上長</code> · 上長の確認 v1 · <code>rules/上長の確認.rule</code></summary>
 
-<!-- rulec 0.55.2 が 上長の確認.rule (sha256:11a439634452) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.56.0 が 上長の確認.rule (sha256:11a439634452) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 上長の確認 v1
 
 申請を上長が確かめるかと、確かめるときの区分。研修は購入として確かめる。区分は 経費の区分.rule から読む
@@ -140,7 +140,7 @@ flowchart TD
 <details>
 <summary><code>経理</code> · 経理の確認 v1 · <code>rules/経理の確認.rule</code></summary>
 
-<!-- rulec 0.55.2 が 経理の確認.rule (sha256:b59fa2897fa7) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.56.0 が 経理の確認.rule (sha256:b59fa2897fa7) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 経理の確認 v1
 
 その区分の申請を経理が確かめるか。区分は 経費の区分.rule から読む

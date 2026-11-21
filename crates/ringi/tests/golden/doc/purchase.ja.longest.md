@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が purchase.ja.ringi（sha256:3cbe1c64e2a9c779）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が purchase.ja.ringi（sha256:3cbe1c64e2a9c779）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # 購買の稟議：いちばん長くかかる場合
 
 ファイル：`purchase.ja.ringi`（申請の種類 `purchase_ja` の版 1、sha256:3cbe1c64e2a9c779）

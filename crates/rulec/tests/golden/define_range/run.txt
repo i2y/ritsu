@@ -3,7 +3,7 @@ charged = 0JPY
 review = false
 $ rulec run card_fee.rule amount=1 --format json
 {
-  "rulec": "0.55.2",
+  "rulec": "0.56.0",
   "file": "card_fee.rule",
   "rule": "card_fee",
   "input": {
@@ -30,7 +30,7 @@ $ rulec run カード手数料.rule 金額=1
 確認 = false
 $ rulec run カード手数料.rule 金額=1 --format json
 {
-  "rulec": "0.55.2",
+  "rulec": "0.56.0",
   "file": "カード手数料.rule",
   "rule": "card_fee_ja",
   "input": {
@@ -57,7 +57,7 @@ amount = 10_003_000JPY
 free_shipping = true
 $ echo '{"lines":[{"quantity":2,"price":1500},{"quantity":10,"price":1000000}]}' | rulec run order_line_subtotals.rule --input - --format json
 {
-  "rulec": "0.55.2",
+  "rulec": "0.56.0",
   "file": "order_line_subtotals.rule",
   "rule": "order_line_subtotals",
   "input": {
@@ -87,7 +87,7 @@ $ echo '{"明細":[{"数量":2,"単価":1500},{"数量":10,"単価":1000000}]}' 
 送料無料 = true
 $ echo '{"明細":[{"数量":2,"単価":1500},{"数量":10,"単価":1000000}]}' | rulec run 明細の小計.rule --input - --format json
 {
-  "rulec": "0.55.2",
+  "rulec": "0.56.0",
   "file": "明細の小計.rule",
   "rule": "line_subtotals",
   "input": {
@@ -116,7 +116,7 @@ $ rulec run dice_total.rule first=1 second=1
 prize = small
 $ rulec run dice_total.rule first=1 second=1 --format json
 {
-  "rulec": "0.55.2",
+  "rulec": "0.56.0",
   "file": "dice_total.rule",
   "rule": "dice_total",
   "input": {
@@ -138,7 +138,7 @@ $ rulec run さいころの合計.rule 一つ目=1 二つ目=1
 景品 = 小
 $ rulec run さいころの合計.rule 一つ目=1 二つ目=1 --format json
 {
-  "rulec": "0.55.2",
+  "rulec": "0.56.0",
   "file": "さいころの合計.rule",
   "rule": "dice_total_ja",
   "input": {

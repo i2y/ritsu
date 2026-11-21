@@ -1,5 +1,5 @@
 {
-  "ringi": "0.55.2",
+  "ringi": "0.56.0",
   "file": "crates/ringi/examples/leave.ringi",
   "scenarios": [
     {

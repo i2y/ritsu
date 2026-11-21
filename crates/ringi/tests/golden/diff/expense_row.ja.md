@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が expense_old.ringi → expense_new.ringi（sha256:32e72f5f9d045dd9 → 0e9774a26b15e318）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が expense_old.ringi → expense_new.ringi（sha256:32e72f5f9d045dd9 → 0e9774a26b15e318）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # 経費の申請の変更
 
 申請の種類 `expense`（v1 → v2）：`expense_old.ringi` → `expense_new.ringi`

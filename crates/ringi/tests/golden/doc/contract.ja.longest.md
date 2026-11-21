@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が contract.ja.ringi（sha256:1ea3ccd997fa9160）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が contract.ja.ringi（sha256:1ea3ccd997fa9160）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # 契約の確認：いちばん長くかかる場合
 
 ファイル：`contract.ja.ringi`（申請の種類 `contract_ja` の版 1、sha256:1ea3ccd997fa9160）

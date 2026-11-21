@@ -1,4 +1,4 @@
-<!-- ringi 0.55.2 が shared/masters.ringi（sha256:a69d7e3d8e1df8c8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
+<!-- ringi 0.56.0 が shared/masters.ringi（sha256:a69d7e3d8e1df8c8）から生成したページです。読むためのもので、もとになるのは .ringi のほうです。ここを編集しても .ringi には戻せません。 -->
 # company_masters
 
 The lists the requests choose from or look up approvers in (fictional): account codes, vendors and the company's systems with their owners. Each row says from when and until when it may be chosen
